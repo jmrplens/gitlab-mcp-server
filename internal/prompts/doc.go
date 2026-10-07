@@ -21,6 +21,17 @@
 // shared helpers in this package to keep GitLab API access, pagination, and
 // Markdown assembly consistent across prompt families.
 //
+// # What a description promises
+//
+// A prompt reads one page of each list it gathers, of maxListItems (100)
+// items unless its description names another size, and the description states
+// that bound as "up to 100": TestEveryPrompt_StatesTheBoundOfEachListItReads
+// drives every registered prompt and holds the page sizes its requests name to
+// the bounds its description states. A look-back argument, days or
+// stale_days, is read by parseDaysArg, which refuses anything but a positive
+// integer with -32602 before the prompt asks GitLab anything. A project_id or
+// group_id is the path as written, since client-go escapes it on the way out.
+//
 // # Narrowing
 //
 // A prompt is a third request path to data a tool also returns, running handler

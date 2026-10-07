@@ -38,7 +38,7 @@ func registerMergeVelocityPrompt(server promptAdder, client *gitlabclient.Client
 	addPrompt(server, &mcp.Prompt{
 		Name:        "merge_velocity",
 		Title:       toolutil.TitleFromName("merge_velocity"),
-		Description: "Analyze MR throughput metrics for a project. Shows merge rate, average time-to-merge, and daily merged count chart. Ideal for tracking team delivery pace.",
+		Description: "Analyze MR throughput for a project from up to 100 MRs created in the period and since merged. Shows merge rate, average and median time-to-merge, and a daily merged count chart. Ideal for tracking team delivery pace.",
 		Icons:       toolutil.IconAnalytics,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -55,7 +55,10 @@ func handleMergeVelocity(ctx context.Context, client *gitlabclient.Client, req *
 	if projectID == "" {
 		return nil, toolutil.InvalidParams(errors.New("merge_velocity: project_id is required"))
 	}
-	days := parseDays(getArgOr(req.Params.Arguments, argDays, "30"), 30)
+	days, err := parseDaysArg(req.Params.Arguments, argDays, 30)
+	if err != nil {
+		return nil, err
+	}
 	since := sinceDate(days)
 
 	mrs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
@@ -87,7 +90,7 @@ func handleMergeVelocity(ctx context.Context, client *gitlabclient.Client, req *
 	b.WriteString(mdSummaryHeader)
 	b.WriteString("| Metric | Value |\n|--------|-------|\n")
 	fmt.Fprintf(&b, "| MRs merged | %d |\n", len(mrs))
-	// No guard on days: parseDays never returns less than one, so the
+	// No guard on days: parseDaysArg never returns less than one, so the
 	// `days > 0` that stood here was never false and the division is safe.
 	fmt.Fprintf(&b, "| Merge rate | %.1f MRs/week |\n", float64(len(mrs))/float64(days)*7)
 	if len(durations) > 0 {
@@ -148,7 +151,7 @@ func registerReleaseReadinessPrompt(server promptAdder, client *gitlabclient.Cli
 	addPrompt(server, &mcp.Prompt{
 		Name:        "release_readiness",
 		Title:       toolutil.TitleFromName("release_readiness"),
-		Description: "Check readiness of a release branch by analyzing open MRs targeting it, draft/conflict counts, and unresolved discussion threads.",
+		Description: "Check readiness of a release branch from up to 100 open MRs targeting it: draft/conflict counts, and the unresolved discussion threads among up to 100 discussions of each.",
 		Icons:       toolutil.IconRelease,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -253,7 +256,7 @@ func registerReleaseCadencePrompt(server promptAdder, client *gitlabclient.Clien
 	addPrompt(server, &mcp.Prompt{
 		Name:        "release_cadence",
 		Title:       toolutil.TitleFromName("release_cadence"),
-		Description: "Analyze release frequency for a project. Shows time between releases, average cadence, and release history chart.",
+		Description: "Analyze release frequency for a project from its up to 100 most recent releases. Shows the time between the releases of the period, average and median cadence, and a release history table.",
 		Icons:       toolutil.IconRelease,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -270,7 +273,10 @@ func handleReleaseCadence(ctx context.Context, client *gitlabclient.Client, req 
 	if projectID == "" {
 		return nil, toolutil.InvalidParams(errors.New("release_cadence: project_id is required"))
 	}
-	days := parseDays(getArgOr(req.Params.Arguments, argDays, "90"), 90)
+	days, err := parseDaysArg(req.Params.Arguments, argDays, 90)
+	if err != nil {
+		return nil, err
+	}
 	since := sinceDate(days)
 
 	releases, _, err := client.GL().Releases.ListReleases(projectID, &gl.ListReleasesOptions{
@@ -369,7 +375,7 @@ func registerWeeklyTeamRecapPrompt(server promptAdder, client *gitlabclient.Clie
 	addPrompt(server, &mcp.Prompt{
 		Name:        "weekly_team_recap",
 		Title:       toolutil.TitleFromName("weekly_team_recap"),
-		Description: "Generate a comprehensive weekly recap for a team. Combines merged MRs, open MRs, issues activity, and events into a single summary with Mermaid charts.",
+		Description: "Generate a weekly recap for a team: MRs created in the period and merged, by project, open MR and open issue counts, and open MR health (drafts, conflicts), all as tables, up to 100 per list.",
 		Icons:       toolutil.IconAnalytics,
 		Arguments: []*mcp.PromptArgument{
 			groupIDArg(),
@@ -386,7 +392,10 @@ func handleWeeklyTeamRecap(ctx context.Context, client *gitlabclient.Client, req
 	if groupID == "" {
 		return nil, toolutil.InvalidParams(errors.New("weekly_team_recap: group_id is required"))
 	}
-	days := parseDays(getArgOr(req.Params.Arguments, argDays, "7"), 7)
+	days, err := parseDaysArg(req.Params.Arguments, argDays, 7)
+	if err != nil {
+		return nil, err
+	}
 	since := sinceDate(days)
 
 	// Merged MRs in the recap period

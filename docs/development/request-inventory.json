@@ -171,7 +171,8 @@
       "method": "GET",
       "path": "/events",
       "query": [
-        "after"
+        "after",
+        "per_page"
       ]
     },
     {
@@ -273,7 +274,8 @@
       "method": "GET",
       "path": "/projects/:project_id/events",
       "query": [
-        "after"
+        "after",
+        "per_page"
       ],
       "identifiers": {
         ":project_id": 1
@@ -363,6 +365,9 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/diffs",
+      "query": [
+        "per_page"
+      ],
       "identifiers": {
         ":merge_request_id": 2,
         ":project_id": 1
@@ -387,6 +392,9 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/pipelines/:pipeline_id/jobs",
+      "query": [
+        "per_page"
+      ],
       "identifiers": {
         ":pipeline_id": 1,
         ":project_id": 1
@@ -439,6 +447,9 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/repository/branches",
+      "query": [
+        "per_page"
+      ],
       "identifiers": {
         ":project_id": 1
       }
@@ -513,7 +524,8 @@
       "method": "GET",
       "path": "/users/:user_id/events",
       "query": [
-        "after"
+        "after",
+        "per_page"
       ],
       "identifiers": {
         ":user_id": 1

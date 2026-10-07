@@ -388,8 +388,8 @@ func registerAuditProjectWorkflowPrompt(server promptAdder, client *gitlabclient
 		Name:  "audit_project_workflow",
 		Title: toolutil.TitleFromName("audit_project_workflow"),
 		Description: "Audit workflow configuration for a GitLab project: labels (names, colors, descriptions, open issue/MR counts), " +
-			"milestones (open/closed, due dates), and issue/MR templates. Identifies gaps like " +
-			"labels without descriptions, milestones without due dates, or missing templates.",
+			"milestones (open/closed, due dates), and issue/MR templates, up to 100 per list. " +
+			"Identifies gaps like labels without descriptions, milestones without due dates, or missing templates.",
 		Icons: toolutil.IconSecurity,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -551,8 +551,8 @@ func registerAuditProjectFullPrompt(server promptAdder, client *gitlabclient.Cli
 	addPrompt(server, &mcp.Prompt{
 		Name:  "audit_project_full",
 		Title: toolutil.TitleFromName("audit_project_full"),
-		Description: "Run a comprehensive audit of a GitLab project covering settings, branch protection, " +
-			"access management, labels, milestones, and templates in a single report. " +
+		Description: "Audit a GitLab project in one report: a quick scorecard, then settings, branch protection, " +
+			"access management, labels, active milestones, templates, webhooks, and push rules, up to 100 per list. " +
 			"Use this for a complete project health assessment with actionable recommendations.",
 		Icons: toolutil.IconSecurity,
 		Arguments: []*mcp.PromptArgument{

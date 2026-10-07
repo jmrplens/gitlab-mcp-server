@@ -1,14 +1,14 @@
 {
   "tokenizer": "cl100k_base",
   "shared": {
-    "full": 8852,
+    "full": 9498,
     "minimal": 170
   },
   "dynamic": {
     "visible_tools": 2,
     "tool_schema_tokens": 1624,
     "total_tokens": {
-      "full": 10476,
+      "full": 11122,
       "minimal": 1794
     },
     "reachable_actions": {

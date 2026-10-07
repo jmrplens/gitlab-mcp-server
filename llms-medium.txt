@@ -1654,7 +1654,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 
 - **URI Template**: `gitlab://project/{project_id}/commit/{sha}`
 - **MIME**: application/json
-- **Description**: Get details for a single commit by SHA. Returns short_id, title, message, author, committer, authored/committed dates, parent commits, web URL, and stats (additions, deletions and their total).
+- **Description**: Get details for a single commit by SHA. Returns id, short_id, title, message, author and committer names and emails, authored/committed dates, parent commits, web URL, and stats (additions, deletions and their total).
 
 ### deploy_key
 
@@ -1768,7 +1768,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 
 - **URI Template**: `gitlab://project/{project_id}/pipelines/latest`
 - **MIME**: application/json
-- **Description**: Get the most recent CI/CD pipeline for a GitLab project. Returns pipeline ID, status (running/pending/success/failed/canceled), ref, SHA, source, and web URL. Subscribable: subscriptions/listen (protocol 2026-07-28). Resources/subscribe on stateful sessions.
+- **Description**: Get the latest CI/CD pipeline of a GitLab project's default branch. Returns pipeline ID, status (running/pending/success/failed/canceled), ref, SHA, source, and web URL. Subscribable: subscriptions/listen (protocol 2026-07-28). Resources/subscribe on stateful sessions.
 
 ### release
 
@@ -1828,33 +1828,33 @@ Audit commit message quality between two refs. Scores Conventional Commit usage,
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 - `from` (required): Starting ref: tag name, branch name, or commit SHA
 - `to`: Ending ref: tag name, branch name, or commit SHA (defaults to HEAD if omitted)
 
 ### audit_project_full
 
-Run a comprehensive audit of a GitLab project covering settings, branch protection, access management, labels, milestones, and templates in a single report. Use this for a complete project health assessment with actionable recommendations.
+Audit a GitLab project in one report: a quick scorecard, then settings, branch protection, access management, labels, active milestones, templates, webhooks, and push rules, up to 100 per list. Use this for a complete project health assessment with actionable recommendations.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 
 ### audit_project_workflow
 
-Audit workflow configuration for a GitLab project: labels (names, colors, descriptions, open issue/MR counts), milestones (open/closed, due dates), and issue/MR templates. Identifies gaps like labels without descriptions, milestones without due dates, or missing templates.
+Audit workflow configuration for a GitLab project: labels (names, colors, descriptions, open issue/MR counts), milestones (open/closed, due dates), and issue/MR templates, up to 100 per list. Identifies gaps like labels without descriptions, milestones without due dates, or missing templates.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 
 ### branch_mr_summary
 
-List all MRs targeting a specific branch in a project. Shows readiness summary with conflict/draft/approval counts. Ideal for release branch reviews.
+List up to 100 MRs targeting a specific branch in a project. Shows a readiness summary with total, draft and conflict counts. Ideal for release branch reviews.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 - `target_branch` (required): Target branch name to filter MRs (e.g. 'develop_5.4.0')
 - `state`: State filter: opened, closed, merged, all (default: opened)
 
@@ -1864,288 +1864,288 @@ Compare commit and file differences between two Git refs. Use for release branch
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 - `from` (required): Source branch name, tag, or commit SHA to compare from
 - `to` (required): Target branch name, tag, or commit SHA to compare to
 
 ### daily_standup
 
-Generate a daily standup summary based on the user's GitLab activity in the last 24 hours: contribution events, authored MRs, assigned MRs, MRs under review, assigned issues, and created issues. Produces a comprehensive report with done/planned/blockers sections.
+Generate a daily standup summary for a user: contribution events of the last 24 hours, and the project's open MRs they authored, are assigned or review and open issues assigned to or created by them, up to 100 per list. Produces a report with done/planned/blockers sections.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 - `username`: GitLab username to generate the standup for (defaults to the authenticated user if omitted)
 
 ### generate_release_notes
 
-Generate comprehensive release notes from commits, merge requests, and file changes between two Git refs (tags, branches, or SHAs). Produces a structured document with commits, merged MRs with labels, contributors, and statistics for organizing into user-friendly release notes.
+Generate release notes from the commits, file changes, and merge requests between two Git refs (tags, branches, or SHAs). Produces a structured document with the commits, up to 100 MRs merged around the commits' dates with their labels, contributors, and statistics for organizing into user-friendly release notes.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 - `from` (required): Starting ref: tag name (e.g. 'v1.0.0'), branch name, or commit SHA
 - `to`: Ending ref: tag name, branch name, or commit SHA (defaults to HEAD if omitted)
 
 ### group_milestone_progress
 
-Track milestone progress across all projects in a group. Shows issue/MR completion per milestone with progress bars.
+Track the progress of up to 100 active group milestones across the group's projects. Shows issue/MR completion per milestone with progress bars, reading up to 100 issues and 100 MRs of each.
 
 **Arguments:**
 
-- `group_id` (required): GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')
+- `group_id` (required): GitLab group ID (numeric) or full path as written (e.g. 'my-group' or 'parent/child'), not URL-encoded
 
 ### group_mr_dashboard
 
-List merge requests across a GitLab group with optional state and target branch filters. Shows MRs grouped by project with blocker and readiness summary statistics.
+List up to 100 merge requests across a GitLab group with optional state and target branch filters. Shows MRs grouped by project with blocker and readiness summary statistics.
 
 **Arguments:**
 
-- `group_id` (required): GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')
+- `group_id` (required): GitLab group ID (numeric) or full path as written (e.g. 'my-group' or 'parent/child'), not URL-encoded
 - `state`: State filter: opened, closed, merged, all (default: opened)
 - `target_branch`: Target branch name to filter MRs (e.g. 'develop_5.4.0')
 
 ### label_distribution
 
-Analyze label usage distribution in a project. Shows open/closed issue counts and open MR counts per label. Zero additional API calls beyond label list.
+Analyze label usage distribution in a project from up to 100 labels. Shows open/closed issue counts and open MR counts per label. Zero additional API calls beyond the label list.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 
 ### merge_velocity
 
-Analyze MR throughput metrics for a project. Shows merge rate, average time-to-merge, and daily merged count chart. Ideal for tracking team delivery pace.
+Analyze MR throughput for a project from up to 100 MRs created in the period and since merged. Shows merge rate, average and median time-to-merge, and a daily merged count chart. Ideal for tracking team delivery pace.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
-- `days`: Number of days to look back (default: 30)
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
+- `days`: Number of days to look back, a positive integer (default: 30)
 
 ### milestone_progress
 
-Track milestone progress for a project. Shows issue/MR completion, progress bar, and due date risk. Omit milestone argument to see all active milestones.
+Track milestone progress for a project. Shows issue/MR completion, progress bar, and due date risk, reading up to 100 issues and 100 MRs of each milestone. Omit the milestone argument to see up to 100 active milestones.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
-- `milestone`: Specific milestone title (omit for all active)
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
+- `milestone`: Specific milestone title (omit for every active milestone, up to 100)
 
 ### mr_description_quality
 
-Score a merge request description for reviewer readiness. Checks context, linked work, test evidence, rollout/risk notes, checklists, and whether changed files suggest missing screenshots or migration notes.
+Score a merge request description for reviewer readiness. Checks context, linked work, test evidence, rollout/risk notes, checklists, and whether up to 100 changed files suggest missing screenshots or migration notes.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 - `merge_request_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
 
 ### mr_discussion_health
 
-Analyze unresolved discussion threads across open MRs in a project. Use this for review follow-up and merge-readiness cleanup, not approval-rule status.
+Analyze unresolved discussion threads across up to 20 open MRs in a project, the most recently created first, reading up to 100 discussions of each. Use this for review follow-up and merge-readiness cleanup, not approval-rule status.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 
 ### mr_risk_assessment
 
-Assess the risk level (LOW/MEDIUM/HIGH/CRITICAL) of a merge request based on size (lines added/removed), number of changed files, new/deleted files, sensitive file patterns (env, auth, migration, CI, security), and conflict status.
+Assess the risk level (LOW/MEDIUM/HIGH/CRITICAL) of a merge request from up to 100 changed files: size (lines added/removed), number of changed files, new/deleted files, sensitive file patterns (env, auth, migration, CI, security), and conflict status.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 - `merge_request_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
 
 ### my_activity_summary
 
-Generate a personal activity summary for a configurable time period. Includes contribution events breakdown, MRs created/merged/reviewed, issues created/closed, and a daily activity chart. Aggregates across all projects.
+Generate a personal activity summary for a configurable period, across all projects: contribution events by action, the counts of MRs authored that were created in the period and merged and of MRs reviewed that were updated in it, and a daily activity chart, up to 100 per list.
 
 **Arguments:**
 
-- `username`: GitLab username to query
-- `days`: Number of days to look back (default: 7)
+- `username`: GitLab username to query (defaults to the authenticated user if omitted)
+- `days`: Number of days to look back, a positive integer (default: 7)
 
 ### my_issues
 
-Show all issues assigned to you across all projects. Includes overdue detection and project grouping. Use this to see your full issue backlog without specifying a project.
+Show up to 100 issues assigned to you across all projects. Includes overdue detection and project grouping. Use this to see your issue backlog without specifying a project.
 
 **Arguments:**
 
-- `username`: GitLab username to query
+- `username`: GitLab username to query (defaults to the authenticated user if omitted)
 - `state`: State filter: opened, closed, all (default: opened)
 
 ### my_open_mrs
 
-Show all open merge requests across all projects where you are author or assignee. Results are grouped by project for easy scanning. Use this to get a personal MR dashboard without specifying a project.
+Show the open merge requests across all projects where you are author or assignee, up to 100 of each. Results are grouped by project for easy scanning. Use this to get a personal MR dashboard without specifying a project.
 
 **Arguments:**
 
-- `username`: GitLab username to query
+- `username`: GitLab username to query (defaults to the authenticated user if omitted)
 
 ### my_pending_reviews
 
-Show all open merge requests where you are assigned as reviewer across all projects. Helps track which MRs are waiting for your review. Results grouped by project.
+Show up to 100 open merge requests across all projects where you are assigned as reviewer. Helps track which MRs are waiting for your review. Results grouped by project.
 
 **Arguments:**
 
-- `username`: GitLab username to query
+- `username`: GitLab username to query (defaults to the authenticated user if omitted)
 
 ### project_activity_report
 
-Generate a project activity report including recent events, merged MRs, and open issues. Shows daily activity chart and contributor breakdown.
+Generate a project activity report: the counts of events, open MRs, open issues and MRs created in the period and merged, event and contributor breakdowns, a table of those merged MRs, and a daily activity chart, up to 100 per list.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
-- `days`: Number of days to look back (default: 7)
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
+- `days`: Number of days to look back, a positive integer (default: 7)
 
 ### project_contributors
 
-Rank project contributors by commits, additions, and deletions. Uses the repository contributors API for accurate stats.
+Rank up to 100 project contributors by commits, additions, and deletions. Uses the repository contributors API for accurate stats.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 
 ### project_health_check
 
-Comprehensive project health assessment combining latest pipeline status, open merge requests, and branch hygiene (merged/stale branch counts). Provides actionable recommendations for project maintenance.
+Project health assessment combining the latest pipeline of the default branch, up to 100 open merge requests, and branch hygiene (merged/stale counts among up to 100 branches). Provides actionable recommendations for project maintenance.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 
 ### release_cadence
 
-Analyze release frequency for a project. Shows time between releases, average cadence, and release history chart.
+Analyze release frequency for a project from its up to 100 most recent releases. Shows the time between the releases of the period, average and median cadence, and a release history table.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
-- `days`: Number of days to look back (default: 90)
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
+- `days`: Number of days to look back, a positive integer (default: 90)
 
 ### release_readiness
 
-Check readiness of a release branch by analyzing open MRs targeting it, draft/conflict counts, and unresolved discussion threads.
+Check readiness of a release branch from up to 100 open MRs targeting it: draft/conflict counts, and the unresolved discussion threads among up to 100 discussions of each.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 - `branch`: Target release branch (default: main)
 
 ### review_mr
 
-Generate a structured code review for a merge request. Files are categorized by risk (high-risk, business logic, tests, documentation) with per-file metrics, branch context, and a review plan. Full diffs are included without truncation.
+Generate a structured code review for a merge request, reading up to 100 changed files. Files are categorized by risk (high-risk, business logic, tests, documentation) with per-file metrics, branch context, and a review plan. The diff of each file read is included without truncation.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 - `merge_request_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
 
 ### reviewer_workload
 
-Analyze review distribution across group members. Shows how many open MRs each member is reviewing and identifies imbalances. Useful for managers to ensure fair review distribution.
+Analyze review distribution across up to 100 direct members of a group, from up to 100 open group MRs. Shows how many of them each member is reviewing and identifies imbalances. Useful for managers to ensure fair review distribution.
 
 **Arguments:**
 
-- `group_id` (required): GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')
+- `group_id` (required): GitLab group ID (numeric) or full path as written (e.g. 'my-group' or 'parent/child'), not URL-encoded
 
 ### stale_items_report
 
-Find MRs and issues in a project that haven't been updated for a configurable number of days. Helps identify forgotten or blocked items.
+Find up to 100 open MRs and 100 open issues in a project that haven't been updated for a configurable number of days. Helps identify forgotten or blocked items.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
-- `stale_days`: Days without update to consider stale (default: 14)
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
+- `stale_days`: Days without update to consider stale, a positive integer (default: 14)
 
 ### suggest_mr_reviewers
 
-Suggest suitable merge request reviewers based on the files changed and the list of active project members. Excludes the MR author and asks the model to consider ownership, approval-rule fit, and workload balance.
+Suggest suitable merge request reviewers based on up to 100 changed files and the active ones among up to 100 project members, inherited members included. Excludes the MR author and asks the model to consider ownership, approval-rule fit, and workload balance.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 - `merge_request_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
 
 ### summarize_mr_changes
 
-Summarize the changed files and key modifications in a merge request. Lists each file with its change type (new/modified/deleted/renamed). Use this to quickly understand the scope of a merge request.
+Summarize the changed files and key modifications in a merge request, reading up to 100 changed files. Lists each file with its change type (new/modified/deleted/renamed). Use this to quickly understand the scope of a merge request.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 - `merge_request_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
 
 ### summarize_open_mrs
 
-Summarize all open merge requests in a project including title, author, branches, age in days, and merge status. Highlights stale MRs (>7 days) and blockers. For one target branch, use branch_mr_summary.
+Summarize up to 100 open merge requests in a project, the most recently created first, including title, author, branches, age in days, and merge status. Highlights stale MRs (>7 days) and blockers. For one target branch, use branch_mr_summary.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 
 ### summarize_pipeline_status
 
-Summarize the latest CI/CD pipeline status for a project. Groups jobs by outcome (failed/passed/other) and includes failure reasons for debugging.
+Summarize the latest CI/CD pipeline of a project's default branch. Groups up to 100 of its jobs by outcome (failed/passed/other) and includes failure reasons for debugging.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 
 ### team_member_workload
 
-Generate a comprehensive workload summary for a specific team member over a configurable time period. Includes contribution events, authored and assigned merge requests, MRs under review, authored and assigned issues. Use this for team management and capacity planning.
+Generate a workload summary for a team member over a configurable period: contribution events, the project's open MRs they authored, are assigned or review, MRs they authored that were created in the period and merged, and open authored and assigned issues, up to 100 per list. Use this for team management and capacity planning.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 - `username` (required): GitLab username of the team member to analyze
-- `days`: Number of days to look back for activity (default: 7)
+- `days`: Number of days to look back, a positive integer (default: 7)
 
 ### team_overview
 
-Generate a team dashboard showing all group members with their open MR counts and recently merged MRs. Includes a workload distribution pie chart. Requires a GitLab group ID.
+Generate a team dashboard of up to 100 direct members of a group, each with the counts of their open MRs, of the open MRs they review and of their MRs created in the period and merged, from up to 100 open group MRs and 100 created in the period and merged. Includes a workload distribution pie chart. Requires a GitLab group ID.
 
 **Arguments:**
 
-- `group_id` (required): GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')
-- `days`: Number of days to look back (default: 7)
+- `group_id` (required): GitLab group ID (numeric) or full path as written (e.g. 'my-group' or 'parent/child'), not URL-encoded
+- `days`: Number of days to look back, a positive integer (default: 7)
 
 ### unassigned_items
 
-Find open MRs and issues in a project that have no assignee. Helps identify ownership gaps and items needing attention.
+Find up to 100 open MRs and 100 open issues in a project that have no assignee. Helps identify ownership gaps and items needing attention.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 
 ### user_activity_report
 
-Generate a detailed activity report for a specific user: contribution events, merged MRs, reviewed MRs, daily activity chart. Designed for managers to review team member productivity.
+Generate an activity report for a user: contribution events, MRs they authored that were created in the period and merged, open MRs they review that were updated in it, and a daily activity chart, up to 100 per list. Designed for managers to review team member productivity.
 
 **Arguments:**
 
 - `username` (required): GitLab username to report on
-- `days`: Number of days to look back (default: 7)
+- `days`: Number of days to look back, a positive integer (default: 7)
 
 ### user_stats
 
-Generate comprehensive user statistics from GitLab: contribution events breakdown, merge request stats (authored/assigned/reviewed by state), issue stats (authored/assigned by state), daily activity trends, and a Mermaid activity chart. Use this for performance reviews, productivity tracking, or personal dashboards.
+Generate statistics for a user: contribution events across all projects with their breakdown, daily activity trends and a Mermaid activity chart, and the project's merge request stats (authored/assigned/reviewed by state) and issue stats (authored/assigned by state), up to 100 per list. Use this for performance reviews, productivity tracking, or personal dashboards.
 
 **Arguments:**
 
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `project_id` (required): Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded
 - `username`: GitLab username to generate stats for (defaults to the authenticated user if omitted)
-- `days`: Number of days to look back for activity (default: 30)
+- `days`: Number of days to look back, a positive integer (default: 30)
 
 ### weekly_team_recap
 
-Generate a comprehensive weekly recap for a team. Combines merged MRs, open MRs, issues activity, and events into a single summary with Mermaid charts.
+Generate a weekly recap for a team: MRs created in the period and merged, by project, open MR and open issue counts, and open MR health (drafts, conflicts), all as tables, up to 100 per list.
 
 **Arguments:**
 
-- `group_id` (required): GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')
-- `days`: Number of days to look back (default: 7)
+- `group_id` (required): GitLab group ID (numeric) or full path as written (e.g. 'my-group' or 'parent/child'), not URL-encoded
+- `days`: Number of days to look back, a positive integer (default: 7)
 

@@ -99,7 +99,7 @@
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
@@ -118,12 +118,12 @@
     {
       "name": "audit_project_full",
       "title": "Audit Project Full",
-      "description": "Run a comprehensive audit of a GitLab project covering settings, branch protection, access management, labels, milestones, and templates in a single report. Use this for a complete project health assessment with actionable recommendations.",
+      "description": "Audit a GitLab project in one report: a quick scorecard, then settings, branch protection, access management, labels, active milestones, templates, webhooks, and push rules, up to 100 per list. Use this for a complete project health assessment with actionable recommendations.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         }
       ]
@@ -131,12 +131,12 @@
     {
       "name": "audit_project_workflow",
       "title": "Audit Project Workflow",
-      "description": "Audit workflow configuration for a GitLab project: labels (names, colors, descriptions, open issue/MR counts), milestones (open/closed, due dates), and issue/MR templates. Identifies gaps like labels without descriptions, milestones without due dates, or missing templates.",
+      "description": "Audit workflow configuration for a GitLab project: labels (names, colors, descriptions, open issue/MR counts), milestones (open/closed, due dates), and issue/MR templates, up to 100 per list. Identifies gaps like labels without descriptions, milestones without due dates, or missing templates.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         }
       ]
@@ -144,12 +144,12 @@
     {
       "name": "branch_mr_summary",
       "title": "Branch MR Summary",
-      "description": "List all MRs targeting a specific branch in a project. Shows readiness summary with conflict/draft/approval counts. Ideal for release branch reviews.",
+      "description": "List up to 100 MRs targeting a specific branch in a project. Shows a readiness summary with total, draft and conflict counts. Ideal for release branch reviews.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
@@ -173,7 +173,7 @@
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
@@ -193,12 +193,12 @@
     {
       "name": "daily_standup",
       "title": "Daily Standup",
-      "description": "Generate a daily standup summary based on the user's GitLab activity in the last 24 hours: contribution events, authored MRs, assigned MRs, MRs under review, assigned issues, and created issues. Produces a comprehensive report with done/planned/blockers sections.",
+      "description": "Generate a daily standup summary for a user: contribution events of the last 24 hours, and the project's open MRs they authored, are assigned or review and open issues assigned to or created by them, up to 100 per list. Produces a report with done/planned/blockers sections.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
@@ -211,12 +211,12 @@
     {
       "name": "generate_release_notes",
       "title": "Generate Release Notes",
-      "description": "Generate comprehensive release notes from commits, merge requests, and file changes between two Git refs (tags, branches, or SHAs). Produces a structured document with commits, merged MRs with labels, contributors, and statistics for organizing into user-friendly release notes.",
+      "description": "Generate release notes from the commits, file changes, and merge requests between two Git refs (tags, branches, or SHAs). Produces a structured document with the commits, up to 100 MRs merged around the commits' dates with their labels, contributors, and statistics for organizing into user-friendly release notes.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
@@ -235,12 +235,12 @@
     {
       "name": "group_milestone_progress",
       "title": "Group Milestone Progress",
-      "description": "Track milestone progress across all projects in a group. Shows issue/MR completion per milestone with progress bars.",
+      "description": "Track the progress of up to 100 active group milestones across the group's projects. Shows issue/MR completion per milestone with progress bars, reading up to 100 issues and 100 MRs of each.",
       "arguments": [
         {
           "name": "group_id",
           "title": "Group ID",
-          "description": "GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')",
+          "description": "GitLab group ID (numeric) or full path as written (e.g. 'my-group' or 'parent/child'), not URL-encoded",
           "required": true
         }
       ]
@@ -248,12 +248,12 @@
     {
       "name": "group_mr_dashboard",
       "title": "Group MR Dashboard",
-      "description": "List merge requests across a GitLab group with optional state and target branch filters. Shows MRs grouped by project with blocker and readiness summary statistics.",
+      "description": "List up to 100 merge requests across a GitLab group with optional state and target branch filters. Shows MRs grouped by project with blocker and readiness summary statistics.",
       "arguments": [
         {
           "name": "group_id",
           "title": "Group ID",
-          "description": "GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')",
+          "description": "GitLab group ID (numeric) or full path as written (e.g. 'my-group' or 'parent/child'), not URL-encoded",
           "required": true
         },
         {
@@ -271,12 +271,12 @@
     {
       "name": "label_distribution",
       "title": "Label Distribution",
-      "description": "Analyze label usage distribution in a project. Shows open/closed issue counts and open MR counts per label. Zero additional API calls beyond label list.",
+      "description": "Analyze label usage distribution in a project from up to 100 labels. Shows open/closed issue counts and open MR counts per label. Zero additional API calls beyond the label list.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         }
       ]
@@ -284,48 +284,48 @@
     {
       "name": "merge_velocity",
       "title": "Merge Velocity",
-      "description": "Analyze MR throughput metrics for a project. Shows merge rate, average time-to-merge, and daily merged count chart. Ideal for tracking team delivery pace.",
+      "description": "Analyze MR throughput for a project from up to 100 MRs created in the period and since merged. Shows merge rate, average and median time-to-merge, and a daily merged count chart. Ideal for tracking team delivery pace.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
           "name": "days",
           "title": "Days",
-          "description": "Number of days to look back (default: 30)"
+          "description": "Number of days to look back, a positive integer (default: 30)"
         }
       ]
     },
     {
       "name": "milestone_progress",
       "title": "Milestone Progress",
-      "description": "Track milestone progress for a project. Shows issue/MR completion, progress bar, and due date risk. Omit milestone argument to see all active milestones.",
+      "description": "Track milestone progress for a project. Shows issue/MR completion, progress bar, and due date risk, reading up to 100 issues and 100 MRs of each milestone. Omit the milestone argument to see up to 100 active milestones.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
           "name": "milestone",
           "title": "Milestone",
-          "description": "Specific milestone title (omit for all active)"
+          "description": "Specific milestone title (omit for every active milestone, up to 100)"
         }
       ]
     },
     {
       "name": "mr_description_quality",
       "title": "MR Description Quality",
-      "description": "Score a merge request description for reviewer readiness. Checks context, linked work, test evidence, rollout/risk notes, checklists, and whether changed files suggest missing screenshots or migration notes.",
+      "description": "Score a merge request description for reviewer readiness. Checks context, linked work, test evidence, rollout/risk notes, checklists, and whether up to 100 changed files suggest missing screenshots or migration notes.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
@@ -339,12 +339,12 @@
     {
       "name": "mr_discussion_health",
       "title": "MR Discussion Health",
-      "description": "Analyze unresolved discussion threads across open MRs in a project. Use this for review follow-up and merge-readiness cleanup, not approval-rule status.",
+      "description": "Analyze unresolved discussion threads across up to 20 open MRs in a project, the most recently created first, reading up to 100 discussions of each. Use this for review follow-up and merge-readiness cleanup, not approval-rule status.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         }
       ]
@@ -352,12 +352,12 @@
     {
       "name": "mr_risk_assessment",
       "title": "MR Risk Assessment",
-      "description": "Assess the risk level (LOW/MEDIUM/HIGH/CRITICAL) of a merge request based on size (lines added/removed), number of changed files, new/deleted files, sensitive file patterns (env, auth, migration, CI, security), and conflict status.",
+      "description": "Assess the risk level (LOW/MEDIUM/HIGH/CRITICAL) of a merge request from up to 100 changed files: size (lines added/removed), number of changed files, new/deleted files, sensitive file patterns (env, auth, migration, CI, security), and conflict status.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
@@ -371,29 +371,29 @@
     {
       "name": "my_activity_summary",
       "title": "My Activity Summary",
-      "description": "Generate a personal activity summary for a configurable time period. Includes contribution events breakdown, MRs created/merged/reviewed, issues created/closed, and a daily activity chart. Aggregates across all projects.",
+      "description": "Generate a personal activity summary for a configurable period, across all projects: contribution events by action, the counts of MRs authored that were created in the period and merged and of MRs reviewed that were updated in it, and a daily activity chart, up to 100 per list.",
       "arguments": [
         {
           "name": "username",
           "title": "Username",
-          "description": "GitLab username to query"
+          "description": "GitLab username to query (defaults to the authenticated user if omitted)"
         },
         {
           "name": "days",
           "title": "Days",
-          "description": "Number of days to look back (default: 7)"
+          "description": "Number of days to look back, a positive integer (default: 7)"
         }
       ]
     },
     {
       "name": "my_issues",
       "title": "My Issues",
-      "description": "Show all issues assigned to you across all projects. Includes overdue detection and project grouping. Use this to see your full issue backlog without specifying a project.",
+      "description": "Show up to 100 issues assigned to you across all projects. Includes overdue detection and project grouping. Use this to see your issue backlog without specifying a project.",
       "arguments": [
         {
           "name": "username",
           "title": "Username",
-          "description": "GitLab username to query"
+          "description": "GitLab username to query (defaults to the authenticated user if omitted)"
         },
         {
           "name": "state",
@@ -405,54 +405,54 @@
     {
       "name": "my_open_mrs",
       "title": "My Open MRs",
-      "description": "Show all open merge requests across all projects where you are author or assignee. Results are grouped by project for easy scanning. Use this to get a personal MR dashboard without specifying a project.",
+      "description": "Show the open merge requests across all projects where you are author or assignee, up to 100 of each. Results are grouped by project for easy scanning. Use this to get a personal MR dashboard without specifying a project.",
       "arguments": [
         {
           "name": "username",
           "title": "Username",
-          "description": "GitLab username to query"
+          "description": "GitLab username to query (defaults to the authenticated user if omitted)"
         }
       ]
     },
     {
       "name": "my_pending_reviews",
       "title": "My Pending Reviews",
-      "description": "Show all open merge requests where you are assigned as reviewer across all projects. Helps track which MRs are waiting for your review. Results grouped by project.",
+      "description": "Show up to 100 open merge requests across all projects where you are assigned as reviewer. Helps track which MRs are waiting for your review. Results grouped by project.",
       "arguments": [
         {
           "name": "username",
           "title": "Username",
-          "description": "GitLab username to query"
+          "description": "GitLab username to query (defaults to the authenticated user if omitted)"
         }
       ]
     },
     {
       "name": "project_activity_report",
       "title": "Project Activity Report",
-      "description": "Generate a project activity report including recent events, merged MRs, and open issues. Shows daily activity chart and contributor breakdown.",
+      "description": "Generate a project activity report: the counts of events, open MRs, open issues and MRs created in the period and merged, event and contributor breakdowns, a table of those merged MRs, and a daily activity chart, up to 100 per list.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
           "name": "days",
           "title": "Days",
-          "description": "Number of days to look back (default: 7)"
+          "description": "Number of days to look back, a positive integer (default: 7)"
         }
       ]
     },
     {
       "name": "project_contributors",
       "title": "Project Contributors",
-      "description": "Rank project contributors by commits, additions, and deletions. Uses the repository contributors API for accurate stats.",
+      "description": "Rank up to 100 project contributors by commits, additions, and deletions. Uses the repository contributors API for accurate stats.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         }
       ]
@@ -460,12 +460,12 @@
     {
       "name": "project_health_check",
       "title": "Project Health Check",
-      "description": "Comprehensive project health assessment combining latest pipeline status, open merge requests, and branch hygiene (merged/stale branch counts). Provides actionable recommendations for project maintenance.",
+      "description": "Project health assessment combining the latest pipeline of the default branch, up to 100 open merge requests, and branch hygiene (merged/stale counts among up to 100 branches). Provides actionable recommendations for project maintenance.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         }
       ]
@@ -473,30 +473,30 @@
     {
       "name": "release_cadence",
       "title": "Release Cadence",
-      "description": "Analyze release frequency for a project. Shows time between releases, average cadence, and release history chart.",
+      "description": "Analyze release frequency for a project from its up to 100 most recent releases. Shows the time between the releases of the period, average and median cadence, and a release history table.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
           "name": "days",
           "title": "Days",
-          "description": "Number of days to look back (default: 90)"
+          "description": "Number of days to look back, a positive integer (default: 90)"
         }
       ]
     },
     {
       "name": "release_readiness",
       "title": "Release Readiness",
-      "description": "Check readiness of a release branch by analyzing open MRs targeting it, draft/conflict counts, and unresolved discussion threads.",
+      "description": "Check readiness of a release branch from up to 100 open MRs targeting it: draft/conflict counts, and the unresolved discussion threads among up to 100 discussions of each.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
@@ -509,12 +509,12 @@
     {
       "name": "review_mr",
       "title": "Review MR",
-      "description": "Generate a structured code review for a merge request. Files are categorized by risk (high-risk, business logic, tests, documentation) with per-file metrics, branch context, and a review plan. Full diffs are included without truncation.",
+      "description": "Generate a structured code review for a merge request, reading up to 100 changed files. Files are categorized by risk (high-risk, business logic, tests, documentation) with per-file metrics, branch context, and a review plan. The diff of each file read is included without truncation.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
@@ -528,12 +528,12 @@
     {
       "name": "reviewer_workload",
       "title": "Reviewer Workload",
-      "description": "Analyze review distribution across group members. Shows how many open MRs each member is reviewing and identifies imbalances. Useful for managers to ensure fair review distribution.",
+      "description": "Analyze review distribution across up to 100 direct members of a group, from up to 100 open group MRs. Shows how many of them each member is reviewing and identifies imbalances. Useful for managers to ensure fair review distribution.",
       "arguments": [
         {
           "name": "group_id",
           "title": "Group ID",
-          "description": "GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')",
+          "description": "GitLab group ID (numeric) or full path as written (e.g. 'my-group' or 'parent/child'), not URL-encoded",
           "required": true
         }
       ]
@@ -541,30 +541,30 @@
     {
       "name": "stale_items_report",
       "title": "Stale Items Report",
-      "description": "Find MRs and issues in a project that haven't been updated for a configurable number of days. Helps identify forgotten or blocked items.",
+      "description": "Find up to 100 open MRs and 100 open issues in a project that haven't been updated for a configurable number of days. Helps identify forgotten or blocked items.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
           "name": "stale_days",
           "title": "Stale Days",
-          "description": "Days without update to consider stale (default: 14)"
+          "description": "Days without update to consider stale, a positive integer (default: 14)"
         }
       ]
     },
     {
       "name": "suggest_mr_reviewers",
       "title": "Suggest MR Reviewers",
-      "description": "Suggest suitable merge request reviewers based on the files changed and the list of active project members. Excludes the MR author and asks the model to consider ownership, approval-rule fit, and workload balance.",
+      "description": "Suggest suitable merge request reviewers based on up to 100 changed files and the active ones among up to 100 project members, inherited members included. Excludes the MR author and asks the model to consider ownership, approval-rule fit, and workload balance.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
@@ -578,12 +578,12 @@
     {
       "name": "summarize_mr_changes",
       "title": "Summarize MR Changes",
-      "description": "Summarize the changed files and key modifications in a merge request. Lists each file with its change type (new/modified/deleted/renamed). Use this to quickly understand the scope of a merge request.",
+      "description": "Summarize the changed files and key modifications in a merge request, reading up to 100 changed files. Lists each file with its change type (new/modified/deleted/renamed). Use this to quickly understand the scope of a merge request.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
@@ -597,12 +597,12 @@
     {
       "name": "summarize_open_mrs",
       "title": "Summarize Open MRs",
-      "description": "Summarize all open merge requests in a project including title, author, branches, age in days, and merge status. Highlights stale MRs (>7 days) and blockers. For one target branch, use branch_mr_summary.",
+      "description": "Summarize up to 100 open merge requests in a project, the most recently created first, including title, author, branches, age in days, and merge status. Highlights stale MRs (>7 days) and blockers. For one target branch, use branch_mr_summary.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         }
       ]
@@ -610,12 +610,12 @@
     {
       "name": "summarize_pipeline_status",
       "title": "Summarize Pipeline Status",
-      "description": "Summarize the latest CI/CD pipeline status for a project. Groups jobs by outcome (failed/passed/other) and includes failure reasons for debugging.",
+      "description": "Summarize the latest CI/CD pipeline of a project's default branch. Groups up to 100 of its jobs by outcome (failed/passed/other) and includes failure reasons for debugging.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         }
       ]
@@ -623,12 +623,12 @@
     {
       "name": "team_member_workload",
       "title": "Team Member Workload",
-      "description": "Generate a comprehensive workload summary for a specific team member over a configurable time period. Includes contribution events, authored and assigned merge requests, MRs under review, authored and assigned issues. Use this for team management and capacity planning.",
+      "description": "Generate a workload summary for a team member over a configurable period: contribution events, the project's open MRs they authored, are assigned or review, MRs they authored that were created in the period and merged, and open authored and assigned issues, up to 100 per list. Use this for team management and capacity planning.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
@@ -640,37 +640,37 @@
         {
           "name": "days",
           "title": "Days",
-          "description": "Number of days to look back for activity (default: 7)"
+          "description": "Number of days to look back, a positive integer (default: 7)"
         }
       ]
     },
     {
       "name": "team_overview",
       "title": "Team Overview",
-      "description": "Generate a team dashboard showing all group members with their open MR counts and recently merged MRs. Includes a workload distribution pie chart. Requires a GitLab group ID.",
+      "description": "Generate a team dashboard of up to 100 direct members of a group, each with the counts of their open MRs, of the open MRs they review and of their MRs created in the period and merged, from up to 100 open group MRs and 100 created in the period and merged. Includes a workload distribution pie chart. Requires a GitLab group ID.",
       "arguments": [
         {
           "name": "group_id",
           "title": "Group ID",
-          "description": "GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')",
+          "description": "GitLab group ID (numeric) or full path as written (e.g. 'my-group' or 'parent/child'), not URL-encoded",
           "required": true
         },
         {
           "name": "days",
           "title": "Days",
-          "description": "Number of days to look back (default: 7)"
+          "description": "Number of days to look back, a positive integer (default: 7)"
         }
       ]
     },
     {
       "name": "unassigned_items",
       "title": "Unassigned Items",
-      "description": "Find open MRs and issues in a project that have no assignee. Helps identify ownership gaps and items needing attention.",
+      "description": "Find up to 100 open MRs and 100 open issues in a project that have no assignee. Helps identify ownership gaps and items needing attention.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         }
       ]
@@ -678,7 +678,7 @@
     {
       "name": "user_activity_report",
       "title": "User Activity Report",
-      "description": "Generate a detailed activity report for a specific user: contribution events, merged MRs, reviewed MRs, daily activity chart. Designed for managers to review team member productivity.",
+      "description": "Generate an activity report for a user: contribution events, MRs they authored that were created in the period and merged, open MRs they review that were updated in it, and a daily activity chart, up to 100 per list. Designed for managers to review team member productivity.",
       "arguments": [
         {
           "name": "username",
@@ -689,19 +689,19 @@
         {
           "name": "days",
           "title": "Days",
-          "description": "Number of days to look back (default: 7)"
+          "description": "Number of days to look back, a positive integer (default: 7)"
         }
       ]
     },
     {
       "name": "user_stats",
       "title": "User Stats",
-      "description": "Generate comprehensive user statistics from GitLab: contribution events breakdown, merge request stats (authored/assigned/reviewed by state), issue stats (authored/assigned by state), daily activity trends, and a Mermaid activity chart. Use this for performance reviews, productivity tracking, or personal dashboards.",
+      "description": "Generate statistics for a user: contribution events across all projects with their breakdown, daily activity trends and a Mermaid activity chart, and the project's merge request stats (authored/assigned/reviewed by state) and issue stats (authored/assigned by state), up to 100 per list. Use this for performance reviews, productivity tracking, or personal dashboards.",
       "arguments": [
         {
           "name": "project_id",
           "title": "Project ID",
-          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "description": "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded",
           "required": true
         },
         {
@@ -712,25 +712,25 @@
         {
           "name": "days",
           "title": "Days",
-          "description": "Number of days to look back for activity (default: 30)"
+          "description": "Number of days to look back, a positive integer (default: 30)"
         }
       ]
     },
     {
       "name": "weekly_team_recap",
       "title": "Weekly Team Recap",
-      "description": "Generate a comprehensive weekly recap for a team. Combines merged MRs, open MRs, issues activity, and events into a single summary with Mermaid charts.",
+      "description": "Generate a weekly recap for a team: MRs created in the period and merged, by project, open MR and open issue counts, and open MR health (drafts, conflicts), all as tables, up to 100 per list.",
       "arguments": [
         {
           "name": "group_id",
           "title": "Group ID",
-          "description": "GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')",
+          "description": "GitLab group ID (numeric) or full path as written (e.g. 'my-group' or 'parent/child'), not URL-encoded",
           "required": true
         },
         {
           "name": "days",
           "title": "Days",
-          "description": "Number of days to look back (default: 7)"
+          "description": "Number of days to look back, a positive integer (default: 7)"
         }
       ]
     }

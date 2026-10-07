@@ -19,7 +19,7 @@ func registerMyOpenMRsPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "my_open_mrs",
 		Title:       toolutil.TitleFromName("my_open_mrs"),
-		Description: "Show all open merge requests across all projects where you are author or assignee. Results are grouped by project for easy scanning. Use this to get a personal MR dashboard without specifying a project.",
+		Description: "Show the open merge requests across all projects where you are author or assignee, up to 100 of each. Results are grouped by project for easy scanning. Use this to get a personal MR dashboard without specifying a project.",
 		Icons:       toolutil.IconMR,
 		Arguments: []*mcp.PromptArgument{
 			usernameArg(),
@@ -119,7 +119,7 @@ func registerMyPendingReviewsPrompt(server promptAdder, client *gitlabclient.Cli
 	addPrompt(server, &mcp.Prompt{
 		Name:        "my_pending_reviews",
 		Title:       toolutil.TitleFromName("my_pending_reviews"),
-		Description: "Show all open merge requests where you are assigned as reviewer across all projects. Helps track which MRs are waiting for your review. Results grouped by project.",
+		Description: "Show up to 100 open merge requests across all projects where you are assigned as reviewer. Helps track which MRs are waiting for your review. Results grouped by project.",
 		Icons:       toolutil.IconMR,
 		Arguments: []*mcp.PromptArgument{
 			usernameArg(),
@@ -175,7 +175,7 @@ func registerMyIssuesPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "my_issues",
 		Title:       toolutil.TitleFromName("my_issues"),
-		Description: "Show all issues assigned to you across all projects. Includes overdue detection and project grouping. Use this to see your full issue backlog without specifying a project.",
+		Description: "Show up to 100 issues assigned to you across all projects. Includes overdue detection and project grouping. Use this to see your issue backlog without specifying a project.",
 		Icons:       toolutil.IconIssue,
 		Arguments: []*mcp.PromptArgument{
 			usernameArg(),
@@ -248,7 +248,7 @@ func registerMyActivitySummaryPrompt(server promptAdder, client *gitlabclient.Cl
 	addPrompt(server, &mcp.Prompt{
 		Name:        "my_activity_summary",
 		Title:       toolutil.TitleFromName("my_activity_summary"),
-		Description: "Generate a personal activity summary for a configurable time period. Includes contribution events breakdown, MRs created/merged/reviewed, issues created/closed, and a daily activity chart. Aggregates across all projects.",
+		Description: "Generate a personal activity summary for a configurable period, across all projects: contribution events by action, the counts of MRs authored that were created in the period and merged and of MRs reviewed that were updated in it, and a daily activity chart, up to 100 per list.",
 		Icons:       toolutil.IconUser,
 		Arguments: []*mcp.PromptArgument{
 			usernameArg(),
@@ -262,12 +262,15 @@ func registerMyActivitySummaryPrompt(server promptAdder, client *gitlabclient.Cl
 // handleMyActivitySummary aggregates user activity across all projects.
 func handleMyActivitySummary(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	args := req.Params.Arguments
+	days, err := parseDaysArg(args, argDays, 7)
+	if err != nil {
+		return nil, err
+	}
 	username, userID, isCurrentUser, err := resolveUser(ctx, client, args[argUsername])
 	if err != nil {
 		return nil, err
 	}
 
-	days := parseDays(args[argDays], 7)
 	since := sinceDate(days)
 
 	// Fetch contribution events

@@ -70,6 +70,7 @@ for the fork, branch, fix, test and MR workflow.
   - [Commit declares extended_trailers a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists)
   - [The Orbit schema format is sent as `format`, and its llm answer is not modelled](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled)
   - [OrbitGraphStatusProjects does not model the projects the indexer gave up on](#orbitgraphstatusprojects-does-not-model-the-projects-the-indexer-gave-up-on)
+  - [GroupMilestone does not model the milestone's web URL](#groupmilestone-does-not-model-the-milestones-web-url)
   - [No client-go helper returns the RFC 6750 fields of a token refusal](#no-client-go-helper-returns-the-rfc-6750-fields-of-a-token-refusal)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
@@ -298,6 +299,7 @@ readable without opening the tracker:
 | 92 | gitlab-org/gitlab | [The REST API page does not say a non-GET request to a moved project's old path is answered 405](#the-rest-api-page-does-not-say-a-non-get-request-to-a-moved-projects-old-path-is-answered-405) | Yes, by the merge request | Yes, [gitlab-org/gitlab!259297](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259297), merged | **Yes, unreleased**: in milestone 19.5 | No | Not yet, with [issue 1133](https://github.com/jmrplens/gitlab-mcp-server/issues/1133) |
 | 93 | client-go | [`OrbitGraphStatusProjects` does not model the projects the indexer gave up on](#orbitgraphstatusprojects-does-not-model-the-projects-the-indexer-gave-up-on) | No | No | No | No | Yes |
 | 94 | gitlab-org/gitlab | [A board name GitLab cannot save is answered as a success](#a-board-name-gitlab-cannot-save-is-answered-as-a-success) | No | No | No | No | None taken |
+| 95 | client-go | [`GroupMilestone` does not model the milestone's web URL](#groupmilestone-does-not-model-the-milestones-web-url) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -741,6 +743,14 @@ trailer and its page is approved. Row 24's merge request reads as it did that
 morning. No release moved anything: GitLab 19.4.1, with no 19.5 tag yet, and
 go-sdk v1.8.0 are still each project's newest release, so every merge
 recorded here as unreleased still is.
+
+Row 95 was added on 2026-10-07, for the change that closes
+[issue 1169](https://github.com/jmrplens/gitlab-mcp-server/issues/1169), which
+gives the group milestone resource the web URL the group milestone tools
+already read from the captured response. The gap behind both had no row.
+client-go's `main`, read the same day at `000e81ea` (2026-10-01), still
+declares no such field, and no merge request or issue of that project
+proposes one. No other row was read.
 
 ## GitLab client (`gitlab.com/gitlab-org/api/client-go`)
 
@@ -4234,6 +4244,50 @@ reported as a key GitLab sends that the output did not publish.
 
 **Effort**: small. Add `Gaps int64` with `json:"gaps"` to
 `OrbitGraphStatusProjects`, and the key to the graph status decode test.
+
+### GroupMilestone does not model the milestone's web URL
+
+- **Reported**: no. It joins the gaps held for the next joint client-go merge
+  request, the one [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes, and like every item here it waits on the maintainer's approval.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. The field is read from the captured response beside
+  the SDK's decode
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)),
+  through `toolutil.CapturedMilestone` and `toolutil.CapturedMilestones`
+  (`internal/toolutil/sent_shapes.go`), in two places: the four group
+  milestone handlers that return a milestone (`List`, `Get`, `Create` and
+  `Update` in `internal/tools/groupmilestones/group_milestones.go`), and the
+  `gitlab://group/{group_id}/milestone/{milestone_iid}` resource
+  (`registerGroupMilestoneResource` in `internal/resources/resources.go`).
+  `TestGroupMilestones_UnreadableCapturedWebURL` holds the handlers' failure,
+  and `TestGroupMilestoneResource_PublishesTheWebURLGitLabSends` and
+  `TestGroupMilestoneResource_AnAnswerTheCaptureCannotDecode_IsAnError` the
+  resource's read and its failure. Both retire when the SDK models the field.
+
+**Where**: `GroupMilestone` in client-go v3.15.0's `group_milestones.go`,
+which models `id`, `iid`, `group_id`, `title`, `description`, `start_date`,
+`due_date`, `state`, `updated_at`, `created_at` and `expired`. The project
+milestone struct, `Milestone` in `milestones.go`, does carry `web_url`.
+
+**What**: every group milestone route (`lib/api/group_milestones.rb`, through
+`lib/api/milestone_responses.rb`) presents `Entities::Milestone`, and
+`lib/api/entities/milestone.rb` exposes `web_url` with no condition, built by
+`Gitlab::UrlBuilder` (lines 17 to 19 at `v19.4.1-ee`). The live record agrees:
+`API::Entities::Milestone` carries `web_url` with no condition. So every group
+milestone GitLab sends carries its page, and the decode drops it.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`) during
+the field-by-field review, which put the group milestone tools on the
+captured read without a row here; and again for
+[issue 1169](https://github.com/jmrplens/gitlab-mcp-server/issues/1169),
+whose group milestone resource described a web URL it always left empty.
+
+**Effort**: trivial. Add `WebURL string` with `json:"web_url"` to
+`GroupMilestone`, and the key to the group milestone decode tests.
 
 ### No client-go helper returns the RFC 6750 fields of a token refusal
 

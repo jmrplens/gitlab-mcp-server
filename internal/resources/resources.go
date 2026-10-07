@@ -236,21 +236,26 @@ type TagResourceOutput struct {
 
 // CommitResourceOutput is the JSON payload returned by the
 // "gitlab://project/{id}/commit/{sha}" resource. It contains the
-// commit's full ID, short ID, title, full message, author name and
-// email, authored/committed timestamps, parent commit IDs, web URL,
-// and optional [CommitStatsOutput] with addition/deletion totals.
+// commit's full ID, short ID, title, full message, author and committer
+// names and emails, authored/committed timestamps, parent commit IDs, web
+// URL, and optional [CommitStatsOutput] with addition/deletion totals.
+//
+// The committer is the one the description always named and the handler
+// never published, while GitLab sends it on every commit (issue 1169).
 type CommitResourceOutput struct {
-	ID            string             `json:"id"`
-	ShortID       string             `json:"short_id"`
-	Title         string             `json:"title"`
-	Message       string             `json:"message"`
-	AuthorName    string             `json:"author_name"`
-	AuthorEmail   string             `json:"author_email"`
-	AuthoredDate  string             `json:"authored_date,omitempty"`
-	CommittedDate string             `json:"committed_date,omitempty"`
-	WebURL        string             `json:"web_url"`
-	ParentIDs     []string           `json:"parent_ids,omitempty"`
-	Stats         *CommitStatsOutput `json:"stats,omitempty"`
+	ID             string             `json:"id"`
+	ShortID        string             `json:"short_id"`
+	Title          string             `json:"title"`
+	Message        string             `json:"message"`
+	AuthorName     string             `json:"author_name"`
+	AuthorEmail    string             `json:"author_email"`
+	CommitterName  string             `json:"committer_name"`
+	CommitterEmail string             `json:"committer_email"`
+	AuthoredDate   string             `json:"authored_date,omitempty"`
+	CommittedDate  string             `json:"committed_date,omitempty"`
+	WebURL         string             `json:"web_url"`
+	ParentIDs      []string           `json:"parent_ids,omitempty"`
+	Stats          *CommitStatsOutput `json:"stats,omitempty"`
 }
 
 // CommitStatsOutput holds line addition and deletion totals for a
@@ -667,14 +672,19 @@ func registerProjectMembersResource(server registrar, base *gitlabclient.Client)
 
 // registerLatestPipelineResource registers the
 // "gitlab://project/{project_id}/pipelines/latest" template resource that
-// returns the most recent CI/CD pipeline for a GitLab project.
+// returns the latest CI/CD pipeline of a project's default branch.
+//
+// The route is asked with no ref, and GitLab answers that with the latest
+// pipeline of the default branch. The description used to promise the
+// project's most recent pipeline, which is another one whenever a branch other
+// than the default ran last (issue 1169).
 func registerLatestPipelineResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/pipelines/latest",
 		Name:        "latest_pipeline",
 		Title:       "Latest Pipeline",
 		MIMEType:    mimeJSON,
-		Description: "Get the most recent CI/CD pipeline for a GitLab project. Returns pipeline ID, status (running/pending/success/failed/canceled), ref, SHA, source, and web URL.",
+		Description: "Get the latest CI/CD pipeline of a GitLab project's default branch. Returns pipeline ID, status (running/pending/success/failed/canceled), ref, SHA, source, and web URL.",
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconPipeline,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -1186,7 +1196,7 @@ func registerCommitResource(server registrar, base *gitlabclient.Client) {
 		Name:        "commit",
 		Title:       "Commit Details",
 		MIMEType:    mimeJSON,
-		Description: "Get details for a single commit by SHA. Returns short_id, title, message, author, committer, authored/committed dates, parent commits, web URL, and stats (additions, deletions and their total).",
+		Description: "Get details for a single commit by SHA. Returns id, short_id, title, message, author and committer names and emails, authored/committed dates, parent commits, web URL, and stats (additions, deletions and their total).",
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconCommit,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -1200,14 +1210,16 @@ func registerCommitResource(server registrar, base *gitlabclient.Client) {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		out := CommitResourceOutput{
-			ID:          c.ID,
-			ShortID:     c.ShortID,
-			Title:       c.Title,
-			Message:     c.Message,
-			AuthorName:  c.AuthorName,
-			AuthorEmail: c.AuthorEmail,
-			WebURL:      c.WebURL,
-			ParentIDs:   c.ParentIDs,
+			ID:             c.ID,
+			ShortID:        c.ShortID,
+			Title:          c.Title,
+			Message:        c.Message,
+			AuthorName:     c.AuthorName,
+			AuthorEmail:    c.AuthorEmail,
+			CommitterName:  c.CommitterName,
+			CommitterEmail: c.CommitterEmail,
+			WebURL:         c.WebURL,
+			ParentIDs:      c.ParentIDs,
 		}
 		if c.AuthoredDate != nil {
 			out.AuthoredDate = c.AuthoredDate.UTC().Format(timeFormatISO)
@@ -2196,6 +2208,12 @@ func registerBoardResource(server registrar, base *gitlabclient.Client) {
 // registerGroupMilestoneResource registers the
 // "gitlab://group/{group_id}/milestone/{milestone_iid}" template
 // resource, which returns details for a single group milestone by IID.
+//
+// The web URL is read from the captured response (ADR-0021): client-go's
+// GroupMilestone carries no web_url, while GitLab's milestone entity sends it
+// on every milestone, so the resource published an empty one beside a
+// description naming it (issue 1169). The group milestone tools read the same
+// field the same way.
 func registerGroupMilestoneResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://group/{group_id}/milestone/{milestone_iid}",
@@ -2216,12 +2234,17 @@ func registerGroupMilestoneResource(server registrar, base *gitlabclient.Client)
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		iids := []int64{iid}
+		ctx, captured := gitlabclient.WithResponseCapture(ctx)
 		ms, _, err := client.GL().GroupMilestones.ListGroupMilestones(groupID, &gl.ListGroupMilestonesOptions{IIDs: &iids}, gl.WithContext(ctx))
 		if err != nil {
 			return nil, wrapErr("failed to resolve group milestone IID", err)
 		}
 		if len(ms) == 0 {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+		}
+		extras, err := toolutil.CapturedMilestones(captured, len(ms))
+		if err != nil {
+			return nil, wrapErr("failed to read the group milestone's web URL", err)
 		}
 		m := ms[0]
 		out := MilestoneResourceOutput{
@@ -2230,6 +2253,7 @@ func registerGroupMilestoneResource(server registrar, base *gitlabclient.Client)
 			Title:       m.Title,
 			Description: m.Description,
 			State:       m.State,
+			WebURL:      extras[0].WebURL,
 		}
 		if m.DueDate != nil {
 			out.DueDate = m.DueDate.String()

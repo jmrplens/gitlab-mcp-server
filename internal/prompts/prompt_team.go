@@ -47,7 +47,7 @@ func registerUserActivityReportPrompt(server promptAdder, client *gitlabclient.C
 	addPrompt(server, &mcp.Prompt{
 		Name:        "user_activity_report",
 		Title:       toolutil.TitleFromName("user_activity_report"),
-		Description: "Generate a detailed activity report for a specific user: contribution events, merged MRs, reviewed MRs, daily activity chart. Designed for managers to review team member productivity.",
+		Description: "Generate an activity report for a user: contribution events, MRs they authored that were created in the period and merged, open MRs they review that were updated in it, and a daily activity chart, up to 100 per list. Designed for managers to review team member productivity.",
 		Icons:       toolutil.IconUser,
 		Arguments: []*mcp.PromptArgument{
 			{Name: argUsername, Title: toolutil.TitleFromName(argUsername), Description: "GitLab username to report on", Required: true},
@@ -64,13 +64,16 @@ func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, 
 	if username == "" {
 		return nil, toolutil.InvalidParams(errors.New("user_activity_report: username is required"))
 	}
+	days, err := parseDaysArg(req.Params.Arguments, argDays, 7)
+	if err != nil {
+		return nil, err
+	}
 
 	resolvedUser, userID, isSelf, err := resolveUser(ctx, client, username)
 	if err != nil {
 		return nil, fmt.Errorf("user_activity_report: %w", err)
 	}
 
-	days := parseDays(getArgOr(req.Params.Arguments, argDays, "7"), 7)
 	since := sinceDate(days)
 
 	// Contribution events
@@ -179,7 +182,7 @@ func registerTeamOverviewPrompt(server promptAdder, client *gitlabclient.Client)
 	addPrompt(server, &mcp.Prompt{
 		Name:        "team_overview",
 		Title:       toolutil.TitleFromName("team_overview"),
-		Description: "Generate a team dashboard showing all group members with their open MR counts and recently merged MRs. Includes a workload distribution pie chart. Requires a GitLab group ID.",
+		Description: "Generate a team dashboard of up to 100 direct members of a group, each with the counts of their open MRs, of the open MRs they review and of their MRs created in the period and merged, from up to 100 open group MRs and 100 created in the period and merged. Includes a workload distribution pie chart. Requires a GitLab group ID.",
 		Icons:       toolutil.IconGroup,
 		Arguments: []*mcp.PromptArgument{
 			groupIDArg(),
@@ -196,12 +199,16 @@ func handleTeamOverview(ctx context.Context, client *gitlabclient.Client, req *m
 	if groupID == "" {
 		return nil, toolutil.InvalidParams(errors.New("team_overview: group_id is required"))
 	}
-	days := parseDays(getArgOr(req.Params.Arguments, argDays, "7"), 7)
+	days, err := parseDaysArg(req.Params.Arguments, argDays, 7)
+	if err != nil {
+		return nil, err
+	}
 	since := sinceDate(days)
 
-	// Group members
+	// The group's direct members, one page of the size every prompt list
+	// reads. It was 50 while the description promised every member.
 	members, _, err := client.GL().Groups.ListGroupMembers(groupID, &gl.ListGroupMembersOptions{
-		PerPage: 50,
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("team_overview: failed to list group members: %w", err)
@@ -308,7 +315,7 @@ func registerGroupMRDashboardPrompt(server promptAdder, client *gitlabclient.Cli
 	addPrompt(server, &mcp.Prompt{
 		Name:        "group_mr_dashboard",
 		Title:       toolutil.TitleFromName("group_mr_dashboard"),
-		Description: "List merge requests across a GitLab group with optional state and target branch filters. Shows MRs grouped by project with blocker and readiness summary statistics.",
+		Description: "List up to 100 merge requests across a GitLab group with optional state and target branch filters. Shows MRs grouped by project with blocker and readiness summary statistics.",
 		Icons:       toolutil.IconMR,
 		Arguments: []*mcp.PromptArgument{
 			groupIDArg(),
@@ -391,7 +398,7 @@ func registerReviewerWorkloadPrompt(server promptAdder, client *gitlabclient.Cli
 	addPrompt(server, &mcp.Prompt{
 		Name:        "reviewer_workload",
 		Title:       toolutil.TitleFromName("reviewer_workload"),
-		Description: "Analyze review distribution across group members. Shows how many open MRs each member is reviewing and identifies imbalances. Useful for managers to ensure fair review distribution.",
+		Description: "Analyze review distribution across up to 100 direct members of a group, from up to 100 open group MRs. Shows how many of them each member is reviewing and identifies imbalances. Useful for managers to ensure fair review distribution.",
 		Icons:       toolutil.IconUser,
 		Arguments: []*mcp.PromptArgument{
 			groupIDArg(),
@@ -408,9 +415,9 @@ func handleReviewerWorkload(ctx context.Context, client *gitlabclient.Client, re
 		return nil, toolutil.InvalidParams(errors.New("reviewer_workload: group_id is required"))
 	}
 
-	// Group members
+	// The group's direct members, at the page size every prompt list reads.
 	members, _, err := client.GL().Groups.ListGroupMembers(groupID, &gl.ListGroupMembersOptions{
-		PerPage: 50,
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("reviewer_workload: failed to list group members: %w", err)

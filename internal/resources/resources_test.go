@@ -780,6 +780,90 @@ func TestCommitResource_Success(t *testing.T) {
 	}
 }
 
+// templateDescription returns the description the session lists for the
+// resource template of the given name.
+func templateDescription(t *testing.T, session *mcp.ClientSession, name string) string {
+	t.Helper()
+	listed, err := session.ListResourceTemplates(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListResourceTemplates: %v", err)
+	}
+	for _, tmpl := range listed.ResourceTemplates {
+		if tmpl.Name == name {
+			return tmpl.Description
+		}
+	}
+	t.Fatalf("no resource template named %s is listed", name)
+	return ""
+}
+
+// TestCommitResource_PublishesTheCommitterItsDescriptionNames holds the commit
+// resource to the committer its description has always named. The handler
+// published the author's name and email and no committer, while GitLab sends
+// both on every commit and client-go decodes both (issue 1169).
+func TestCommitResource_PublishesTheCommitterItsDescriptionNames(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/repository/commits/abc123" {
+			respondJSON(w, http.StatusOK, `{"id":"abc123def456","short_id":"abc123","title":"Fix bug",`+
+				`"author_name":"alice","author_email":"alice@example.com",`+
+				`"committer_name":"bob","committer_email":"bob@example.com"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	if desc := templateDescription(t, session, "commit"); !strings.Contains(desc, "committer") {
+		t.Errorf("description = %q, want it to name the committer", desc)
+	}
+	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://project/42/commit/abc123"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var got map[string]any
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &got); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	for key, want := range map[string]string{"committer_name": "bob", "committer_email": "bob@example.com"} {
+		t.Run(key, func(t *testing.T) {
+			if got[key] != want {
+				t.Errorf("%s = %v, want %q", key, got[key], want)
+			}
+		})
+	}
+}
+
+// TestLatestPipelineResource_DescribesTheDefaultBranchItReads holds the
+// latest_pipeline resource's description to the request its handler sends.
+//
+// The handler asks GitLab's latest-pipeline route with no ref, and GitLab
+// answers that with the latest pipeline of the project's default branch. The
+// description promised the project's most recent pipeline, which is another
+// pipeline whenever a branch other than the default ran last (issue 1169).
+func TestLatestPipelineResource_DescribesTheDefaultBranchItReads(t *testing.T) {
+	var refs atomic.Int64
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/pipelines/latest" {
+			if r.URL.Query().Has("ref") {
+				refs.Add(1)
+			}
+			respondJSON(w, http.StatusOK, `{"id":100,"status":"success","ref":"main"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	desc := templateDescription(t, session, "latest_pipeline")
+	if !strings.Contains(desc, "default branch") || strings.Contains(desc, "most recent CI/CD pipeline for a GitLab project") {
+		t.Errorf("description = %q, want the default branch named as what it reads", desc)
+	}
+	if _, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://project/42/pipelines/latest"}); err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if n := refs.Load(); n != 0 {
+		t.Errorf("%d request(s) named a ref, so GitLab read another branch than the description names", n)
+	}
+}
+
 // TestCommitResource_NotFound verifies that an unknown commit returns a
 // resource-not-found error.
 func TestCommitResource_NotFound(t *testing.T) {
@@ -1721,6 +1805,63 @@ func TestMilestoneResource_WithDueDate(t *testing.T) {
 	}
 	if milestone.DueDate == "" {
 		t.Error("expected DueDate to be set")
+	}
+}
+
+// TestGroupMilestoneResource_PublishesTheWebURLGitLabSends holds the group
+// milestone resource to the web URL its description names.
+//
+// client-go's GroupMilestone carries no web_url, so the handler published an
+// empty string for every group milestone while GitLab's milestone entity sends
+// the page on every one. It is read from the captured response beside the
+// SDK's decode, as the group milestone tools already read it (issue 1169).
+func TestGroupMilestoneResource_PublishesTheWebURLGitLabSends(t *testing.T) {
+	const page = "https://gitlab.example.com/groups/team/-/milestones/5"
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/99/milestones" {
+			respondJSON(w, http.StatusOK, `[{"id":100,"iid":5,"group_id":99,"title":"v1.0","state":"active","web_url":"`+page+`"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	if desc := templateDescription(t, session, "group_milestone"); !strings.Contains(desc, "web URL") {
+		t.Errorf("description = %q, want it to name the web URL", desc)
+	}
+	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://group/99/milestone/5"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var m MilestoneResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &m); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if m.WebURL != page {
+		t.Errorf("web_url = %q, want %q", m.WebURL, page)
+	}
+}
+
+// TestGroupMilestoneResource_AnAnswerTheCaptureCannotDecode_IsAnError covers
+// the read of the captured response failing where the SDK's decode succeeded.
+// A web_url that is not a string is ignored by client-go, which models no such
+// field, and refused by the capture reader, so the resource reports the fault
+// rather than publishing the milestone without its page.
+func TestGroupMilestoneResource_AnAnswerTheCaptureCannotDecode_IsAnError(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/99/milestones" {
+			respondJSON(w, http.StatusOK, `[{"id":100,"iid":5,"title":"v1.0","web_url":5}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://group/99/milestone/5"})
+	if err == nil {
+		t.Fatal("a group milestone whose web_url does not decode was read without an error")
+	}
+	var rpcErr *jsonrpc.Error
+	if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.CodeInternalError {
+		t.Errorf("err = %v, want a JSON-RPC internal error", err)
 	}
 }
 

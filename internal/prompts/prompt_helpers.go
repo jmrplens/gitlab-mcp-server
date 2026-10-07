@@ -68,13 +68,14 @@ const (
 	argGroupID      = "group_id"
 	argUsername     = "username"
 	argDays         = "days"
+	argStaleDays    = "stale_days"
 	argState        = "state"
 	argTargetBranch = "target_branch"
 	argMilestone    = "milestone"
 
-	descGroupID      = "GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')"
-	descUsername     = "GitLab username to query"
-	descDays         = "Number of days to look back (default: %d)"
+	descGroupID      = "GitLab group ID (numeric) or full path as written (e.g. 'my-group' or 'parent/child'), not URL-encoded"
+	descUsername     = "GitLab username to query (defaults to the authenticated user if omitted)"
+	descDays         = "Number of days to look back, a positive integer (default: %d)"
 	descState        = "State filter: %s (default: %s)"
 	descTargetBranch = "Target branch name to filter MRs (e.g. 'develop_5.4.0')"
 
@@ -84,6 +85,12 @@ const (
 	statesIssue        = "opened, closed, all"
 	statesMergeRequest = "opened, closed, merged, all"
 
+	// maxListItems is the page size every list a prompt reads asks for, and
+	// GitLab's maximum. A prompt reads one page of each list, so this is how
+	// much of it the report covers, and each description says so as "up to
+	// 100" (TestEveryPrompt_StatesTheBoundOfEachListItReads). A request naming
+	// no page size gets GitLab's default of 20, which is what the core prompts
+	// read until issue 1169 while their descriptions promised every item.
 	maxListItems = 100
 )
 
@@ -164,17 +171,26 @@ func targetBranchArg(required bool) *mcp.PromptArgument {
 	}
 }
 
-// parseDays converts a string days argument to an int. Returns defaultDays
-// if the string is empty or cannot be parsed as a positive integer.
-func parseDays(s string, defaultDays int) int {
+// parseDaysArg reads the look-back argument name: its default when the caller
+// left it out, and an invalid-params refusal when it is not a positive
+// integer.
+//
+// One rule for every prompt taking a count of days. Two of them used to refuse
+// a malformed value and the rest used their default in silence, so the same
+// typo was an error from one prompt and a report on a period nobody asked for
+// from another (issue 1169). Refusing is the reading that tells the caller,
+// and the handlers call this before any request, since the count decides what
+// they ask GitLab.
+func parseDaysArg(args map[string]string, name string, defaultDays int) (int, error) {
+	s := args[name]
 	if s == "" {
-		return defaultDays
+		return defaultDays, nil
 	}
 	d, err := strconv.Atoi(s)
 	if err != nil || d <= 0 {
-		return defaultDays
+		return 0, toolutil.InvalidParams(fmt.Errorf("argument '%s' must be a positive integer, got %q", name, s))
 	}
-	return d
+	return d, nil
 }
 
 // sinceDate returns a time.Time that is the given number of days in the past,
