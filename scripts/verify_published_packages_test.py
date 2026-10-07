@@ -16,6 +16,16 @@ asserted here:
   * a digest that does not match the signed checksums.txt is reported the
     first time it is seen, with no second attempt to launder it.
 
+The waiting comes from two allowances, and what tells them apart is pinned
+too. npm and PyPI share a budget of seconds slept. NuGet has a deadline of its
+own, counted in wall-clock time from the start of the run, because nuget.org
+validates a push for many minutes while the other two are being waited for:
+3.1.0 failed here because the one shared budget was spent, 13 of its 16 waits
+by npm's lag and the other 3 by NuGet's first runtime package, and the
+pointer's index, which lists the older versions until the new one is served,
+was never asked twice. The tests drive a clock of their own, so a deadline of
+forty minutes costs no time at all.
+
 The NuGet packages are also held whole to the digests the nuget job attested,
 once nuget.org's repository signature is removed, so the unsigning is pinned
 here against packages signed the way nuget.org signs them, against every
@@ -97,6 +107,53 @@ class FakeOpener:
         return self.calls.count(url)
 
 
+class FakeClock:
+    """A monotonic clock that moves only when something sleeps on it, or when
+    a test moves it to stand for time spent elsewhere."""
+
+    def __init__(self):
+        self.now = 0.0
+        self.slept = []
+
+    def __call__(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.slept.append(seconds)
+        self.now += seconds
+
+
+class ClockedOpener:
+    """Stands in for urlopen with answers that change with the time.
+
+    Each URL maps to a list of (from, outcome) pairs in ascending order: the
+    answer at a moment is the outcome of the last pair whose from has passed,
+    and a URL with no pair that has passed yet answers 404, which is how a
+    registry answers a version it does not serve yet.
+    """
+
+    def __init__(self, clock, script):
+        self.clock = clock
+        self.script = script
+        self.calls = []
+
+    def __call__(self, request, timeout=None):
+        url = request.full_url if hasattr(request, "full_url") else request
+        self.calls.append(url)
+        outcome = None
+        for since, answer in self.script.get(url, []):
+            if since <= self.clock():
+                outcome = answer
+        if outcome is None:
+            raise http_error(url)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return Response(outcome)
+
+    def count(self, url):
+        return self.calls.count(url)
+
+
 class RetryBudgetTest(unittest.TestCase):
     """The budget is an allowance of sleep, shared by every download."""
 
@@ -117,6 +174,71 @@ class RetryBudgetTest(unittest.TestCase):
     def test_a_zero_delay_never_waits(self):
         budget = vpp.RetryBudget(seconds=600, delay=0, sleep=lambda _: self.fail("slept"))
         self.assertFalse(budget.wait())
+
+
+class RetryDeadlineTest(unittest.TestCase):
+    """NuGet's allowance is an instant on the clock, not an amount of sleep:
+    whatever time passes before its check begins is time nuget.org spent
+    validating, and it counts."""
+
+    def test_it_stops_when_a_wait_would_end_past_the_deadline(self):
+        clock = FakeClock()
+        deadline = vpp.RetryDeadline(seconds=10, delay=4, clock=clock, sleep=clock.sleep)
+        self.assertTrue(deadline.wait())
+        self.assertTrue(deadline.wait())
+        self.assertFalse(deadline.wait(), "a third 4s wait would end at 12s, past the 10s deadline")
+        self.assertEqual(clock.slept, [4, 4])
+        self.assertEqual(deadline.waits, 2)
+        self.assertEqual(deadline.remaining, 2)
+
+    def test_time_spent_before_the_first_wait_is_counted(self):
+        """Counted from the run's start, not from the first wait: eighty
+        seconds spent on npm leave twenty of a hundred."""
+        clock = FakeClock()
+        deadline = vpp.RetryDeadline(seconds=100, delay=30, clock=clock, sleep=clock.sleep)
+        clock.now = 80
+        self.assertEqual(deadline.remaining, 20)
+        self.assertFalse(deadline.wait())
+        self.assertEqual(clock.slept, [])
+
+    def test_a_deadline_long_past_has_nothing_left(self):
+        clock = FakeClock()
+        deadline = vpp.RetryDeadline(seconds=10, delay=1, clock=clock, sleep=clock.sleep)
+        clock.now = 50
+        self.assertEqual(deadline.remaining, 0)
+        self.assertFalse(deadline.wait())
+
+    def test_a_zero_deadline_or_delay_never_waits(self):
+        cases = [("no deadline", 0, 20), ("no delay", 600, 0)]
+        for name, seconds, delay in cases:
+            with self.subTest(name):
+                clock = FakeClock()
+                deadline = vpp.RetryDeadline(seconds=seconds, delay=delay, clock=clock,
+                                             sleep=lambda _: self.fail("slept"))
+                self.assertFalse(deadline.wait())
+                self.assertEqual(deadline.waits, 0)
+
+    def test_fetch_spends_it_like_a_budget(self):
+        """fetch() takes either allowance: a 404 that clears inside the
+        deadline is waited out, one that does not is a FetchError."""
+        url = vpp.nuget_package_url(f"{vpp.NUGET_ID}.linux-x64", "1.0.0")
+        real_urlopen = vpp.urllib.request.urlopen
+        self.addCleanup(setattr, vpp.urllib.request, "urlopen", real_urlopen)
+        cases = [("served at 90s", 90, b"package"), ("served at 900s", 900, None)]
+        for name, served_at, want in cases:
+            with self.subTest(name):
+                clock = FakeClock()
+                vpp.urllib.request.urlopen = ClockedOpener(clock, {url: [(served_at, b"package")]})
+                deadline = vpp.RetryDeadline(seconds=600, delay=30, clock=clock, sleep=clock.sleep)
+                with contextlib.redirect_stdout(io.StringIO()):
+                    if want is None:
+                        with self.assertRaises(vpp.FetchError) as caught:
+                            vpp.fetch(url, deadline)
+                        self.assertIn("after 21 attempt(s)", str(caught.exception))
+                        self.assertEqual(clock.now, 600)
+                    else:
+                        self.assertEqual(vpp.fetch(url, deadline), want)
+                        self.assertEqual(clock.now, 90)
 
 
 class FetchRetryTest(unittest.TestCase):
@@ -348,6 +470,74 @@ class MismatchIsNotRetriedTest(unittest.TestCase):
         vpp.check_nuget(self.VERSION, self.digests, problems, vpp.RetryBudget(seconds=0))
         self.assertEqual(len(problems), 1, problems)
         self.assertIn("is not listed on nuget.org", problems[0])
+
+
+class NugetListingLagTest(unittest.TestCase):
+    """While nuget.org validates a push, the pointer's flat-container index
+    answers 200 with the versions it already serves. That is the same lag a
+    404 is, so it is waited for from NuGet's deadline, and a finding only once
+    the deadline is spent."""
+
+    VERSION = "1.0.0"
+    INDEX = f"{vpp.NUGET_FLAT}/{vpp.NUGET_ID}/index.json"
+
+    def setUp(self):
+        self.real_urlopen = vpp.urllib.request.urlopen
+        self.addCleanup(setattr, vpp.urllib.request, "urlopen", self.real_urlopen)
+        self.binary = b"\x7fELFthe bytes the release signed"
+        self.digests = {asset: hashlib.sha256(self.binary).hexdigest() for asset in vpp.NUGET_ASSETS.values()}
+        self.clock = FakeClock()
+
+    def serve(self, listed_at):
+        """Serve the runtime packages from the start, and list the version in
+        the pointer's index from listed_at on (never, when it is None)."""
+        index = [(0, b'{"versions": ["0.9.0"]}')]
+        if listed_at is not None:
+            index.append((listed_at, b'{"versions": ["0.9.0", "%s"]}' % self.VERSION.encode()))
+        script = {self.INDEX: index}
+        for rid in vpp.NUGET_ASSETS:
+            script[vpp.nuget_package_url(f"{vpp.NUGET_ID}.{rid}", self.VERSION)] = [(0, nupkg(rid, self.binary))]
+        opener = ClockedOpener(self.clock, script)
+        vpp.urllib.request.urlopen = opener
+        return opener
+
+    def check(self, seconds):
+        deadline = vpp.RetryDeadline(seconds=seconds, delay=30, clock=self.clock, sleep=self.clock.sleep)
+        problems = []
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            vpp.check_nuget(self.VERSION, self.digests, problems, deadline)
+        return problems, deadline, out.getvalue()
+
+    def test_a_pointer_listing_that_appears_after_a_few_attempts_passes(self):
+        opener = self.serve(listed_at=90)
+        problems, deadline, out = self.check(seconds=2400)
+        self.assertEqual(problems, [])
+        self.assertEqual(opener.count(self.INDEX), 4, "listed on the fourth reading, after three waits")
+        self.assertEqual(deadline.waits, 3)
+        self.assertIn(f"version {self.VERSION} is not listed yet; retrying (attempt 2)", out)
+        self.assertIn(f"lists {self.VERSION}", out)
+
+    def test_a_pointer_listing_that_never_appears_is_a_finding_once_the_deadline_is_spent(self):
+        opener = self.serve(listed_at=None)
+        problems, deadline, _ = self.check(seconds=100)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("is not listed on nuget.org", problems[0])
+        self.assertIn("after 4 attempt(s)", problems[0])
+        self.assertEqual(opener.count(self.INDEX), 4)
+        self.assertEqual(deadline.waits, 3)
+        self.assertEqual(self.clock.now, 90, "no wait that would end past the deadline")
+
+    def test_an_index_that_cannot_be_read_is_a_finding_and_is_not_read_twice(self):
+        """A body that is not JSON is an answer, not lag: nothing about waiting
+        changes what nuget.org said."""
+        opener = self.serve(listed_at=None)
+        opener.script[self.INDEX] = [(0, b"<html>not an index</html>")]
+        problems, deadline, _ = self.check(seconds=2400)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn(f"nuget {vpp.NUGET_ID}: could not list the published versions", problems[0])
+        self.assertEqual(opener.count(self.INDEX), 1)
+        self.assertEqual(deadline.waits, 0)
 
 
 class NoticesTest(unittest.TestCase):
@@ -780,6 +970,136 @@ class MainTest(NugetFixture):
         code, out = self.run_main()
         self.assertEqual(code, 0, out)
         self.assertNotIn(f"names no {vpp.NOTICES}", out)
+
+
+class WaitAllowancesTest(unittest.TestCase):
+    """main() gives npm and PyPI one budget of sleep and NuGet a deadline of
+    its own counted from the start of the run, and --retry-budget 0 turns both
+    off. The timeline is a harsher variant of 3.1.0's, measured from the
+    step's start. On 3.1.0 npm's lag took 13 of the 16 waits and NuGet's
+    first runtime package the other 3; here two npm platform packages answer
+    404 for about eight minutes, so npm spends the whole budget, and nuget.org
+    serves the seven packages 23 minutes in, as it did on 3.1.0."""
+
+    VERSION = "1.0.0"
+    INDEX = f"{vpp.NUGET_FLAT}/{vpp.NUGET_ID}/index.json"
+    NPM_LAGGING = ("linux-arm64", "win32-arm64")
+
+    def setUp(self):
+        self.real_urlopen = vpp.urllib.request.urlopen
+        self.addCleanup(setattr, vpp.urllib.request, "urlopen", self.real_urlopen)
+        self.binary = b"\x7fELFthe bytes the release signed"
+        signed = hashlib.sha256(self.binary).hexdigest()
+        assets = set(vpp.NPM_ASSETS.values()) | set(vpp.NUGET_ASSETS.values())
+        self.digests = {asset: signed for asset in assets}
+        self.clock = FakeClock()
+        self.runtime_urls = [vpp.nuget_package_url(f"{vpp.NUGET_ID}.{rid}", self.VERSION) for rid in vpp.NUGET_ASSETS]
+
+    def serve(self, npm_lag_until, nuget_at, nuget_binary=None):
+        """Serve the npm packages, NPM_LAGGING from npm_lag_until on and the
+        rest at once, and the NuGet packages and the pointer's listing from
+        nuget_at on (never, when it is None), carrying nuget_binary when one is
+        named."""
+        script = {self.INDEX: [(0, b'{"versions": ["0.9.0"]}')]}
+        for suffix in vpp.NPM_ASSETS:
+            quoted = vpp.urllib.parse.quote(f"{vpp.NPM_SCOPE}/gitlab-mcp-server-{suffix}", safe="")
+            tarball_url = f"https://registry.npmjs.org/{quoted}/-/{suffix}-{self.VERSION}.tgz"
+            since = npm_lag_until if suffix in self.NPM_LAGGING else 0
+            script[f"https://registry.npmjs.org/{quoted}/{self.VERSION}"] = [
+                (since, b'{"dist": {"tarball": "%s"}}' % tarball_url.encode())
+            ]
+            script[tarball_url] = [(0, npm_tarball(self.binary))]
+        if nuget_at is not None:
+            script[self.INDEX].append((nuget_at, b'{"versions": ["0.9.0", "%s"]}' % self.VERSION.encode()))
+            for rid in vpp.NUGET_ASSETS:
+                url = vpp.nuget_package_url(f"{vpp.NUGET_ID}.{rid}", self.VERSION)
+                script[url] = [(nuget_at, nupkg(rid, nuget_binary or self.binary))]
+        opener = ClockedOpener(self.clock, script)
+        vpp.urllib.request.urlopen = opener
+        return opener
+
+    def run_main(self, *extra, sleep=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            checksums = os.path.join(tmp, "checksums.txt")
+            with open(checksums, "w", encoding="utf-8") as fh:
+                for asset, digest in sorted(self.digests.items()):
+                    fh.write(f"{digest}  {asset}\n")
+            argv = ["--skip-pypi", "--retry-delay", "30", *extra, self.VERSION, checksums]
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                try:
+                    vpp.main(argv, clock=self.clock, sleep=sleep or self.clock.sleep)
+                    code = 0
+                except SystemExit as exc:
+                    code = exc.code
+            return code, out.getvalue()
+
+    def test_an_npm_lag_spends_npm_allowance_without_touching_nugets(self):
+        """npm spends all 480s of its budget; NuGet then waits until 1380s,
+        inside its 2400s deadline. With one shared budget, NuGet would have
+        had nothing left and the pointer would have been read once."""
+        opener = self.serve(npm_lag_until=470, nuget_at=1380)
+        code, out = self.run_main("--retry-budget", "480", "--nuget-deadline", "2400")
+        self.assertEqual(code, 0, out)
+        npm_waits = 16
+        self.assertEqual(self.clock.slept[:npm_waits], [30] * npm_waits, "npm spent its whole budget")
+        self.assertEqual(sum(self.clock.slept), 1380)
+        self.assertEqual(opener.count(self.INDEX), 31, "read at 480s, then every 30s until 1380s")
+        for url in self.runtime_urls:
+            with self.subTest(url):
+                self.assertEqual(opener.count(url), 1, "served by the time the pointer was listed")
+        self.assertEqual(out.count("  ok  nuget "), len(vpp.NUGET_ASSETS) + 1, out)
+
+    def test_the_nuget_deadline_is_counted_from_the_start_of_the_run(self):
+        """npm's 480s are the first 480s of NuGet's 600, so NuGet waits four
+        times, not twenty, and every NuGet check then fails promptly."""
+        opener = self.serve(npm_lag_until=470, nuget_at=700)
+        code, out = self.run_main("--retry-budget", "480", "--nuget-deadline", "600")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(self.clock.now, 600)
+        self.assertEqual(opener.count(self.INDEX), 5)
+        self.assertIn(f"version {self.VERSION} is not listed on nuget.org (still unlisted after 5 attempt(s))", out)
+        for url in self.runtime_urls:
+            with self.subTest(url):
+                self.assertEqual(opener.count(url), 1, "the deadline was spent, so one attempt each")
+        self.assertIn("npm and PyPI retried 16 time(s); 0s of their 480s retry budget was left unspent.", out)
+        self.assertIn("NuGet retried 4 time(s); 0s of its 600s deadline, counted from the start of this run, "
+                      "was left.", out)
+        # Every NuGet wait here was spent reading an index that answered 200
+        # without the version, so the summary cannot say only that a download
+        # never came back.
+        self.assertIn("An allowance spent to zero means a registry never served the version "
+                      "(a download never came back, or the pointer's index never listed it)", out)
+
+    def test_a_zero_retry_budget_disables_every_wait_nugets_included(self):
+        """The out-of-band run: nothing is waited for, NuGet included, so an
+        unpublished NuGet version is reported on the first look."""
+        opener = self.serve(npm_lag_until=0, nuget_at=None)
+        code, out = self.run_main("--retry-budget", "0", "--nuget-deadline", "2400",
+                                  sleep=lambda _: self.fail("waited although --retry-budget is 0"))
+        self.assertEqual(code, 1, out)
+        self.assertEqual(opener.count(self.INDEX), 1)
+        for url in self.runtime_urls:
+            with self.subTest(url):
+                self.assertEqual(opener.count(url), 1)
+        self.assertNotIn("retried", out)
+
+    def test_a_nuget_digest_mismatch_fails_at_once_whatever_the_deadline(self):
+        opener = self.serve(npm_lag_until=0, nuget_at=0, nuget_binary=b"\x7fELFsomething else entirely")
+        code, out = self.run_main("--retry-budget", "480", "--nuget-deadline", "2400",
+                                  sleep=lambda _: self.fail("a mismatch was retried"))
+        self.assertEqual(code, 1, out)
+        self.assertEqual(out.count("carries sha256"), len(vpp.NUGET_ASSETS), out)
+        for url in self.runtime_urls:
+            with self.subTest(url):
+                self.assertEqual(opener.count(url), 1)
+
+    def test_the_defaults_are_the_ones_stated(self):
+        """The release job passes its values explicitly; a run by hand gets
+        these, and the NuGet deadline is the one sized on 3.1.0's 23 minutes."""
+        self.assertEqual(vpp.RETRY_BUDGET, 600)
+        self.assertEqual(vpp.RETRY_DELAY, 20)
+        self.assertEqual(vpp.NUGET_DEADLINE, 2400)
 
 
 if __name__ == "__main__":

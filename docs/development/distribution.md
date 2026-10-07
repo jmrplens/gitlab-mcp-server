@@ -260,7 +260,20 @@ binaries as a variable (`NPM_BINARIES`, `PYPI_BINARIES`, `NUGET_BINARIES`).
 npm, PyPI and NuGet packages back out of their registries and compares the
 binaries inside them with the signed `checksums.txt`, and the Homebrew tap,
 the winget pull request, the MCP Registry entry and the manifest commit to
-`main` all wait on it.
+`main` all wait on it. It runs minutes after the pushes, so a version a
+registry does not serve yet is waited for rather than reported, from two
+allowances. npm and PyPI share a budget of seconds slept between attempts
+(`--retry-budget`, 480 in the release job). NuGet has a deadline of its own
+(`--nuget-deadline`, 40 minutes), counted from the start of the run, because
+nuget.org validates every push before it serves it, and does so while the
+other two are waited for: on 3.1.0 the last package was served 23 minutes
+after the step started, which one shared budget of eight minutes could not
+cover. The pointer's index lists the versions already published until the
+new one is served, so an index that does not list it yet is waited for too.
+The job's timeout (50 minutes) is sized to outlast the deadline and the
+downloads after it. A digest that does not match is reported at once,
+whatever is left to wait, and `--retry-budget 0`, the out-of-band run days
+later, waits for nothing.
 
 Two details that the per-channel pages on the site do not carry:
 
