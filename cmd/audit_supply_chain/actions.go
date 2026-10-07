@@ -220,6 +220,11 @@ func inputText(value any) string {
 	}
 }
 
+// localActionKey prefixes what a local action is remembered by, both in the
+// walk's seen set and among the findings already reported, so it never
+// collides with a remote action of the same spelling.
+const localActionKey = "local "
+
 // judgeLocalAction opens an action from a directory of the workspace, which
 // is this repository as it was checked out. A directory that holds no action
 // is one written at run time or none at all, and either way what it runs
@@ -227,10 +232,10 @@ func inputText(value any) string {
 // accepts it.
 func (a *supplyChainAudit) judgeLocalAction(walk actionWalk, where, uses, writer string) []string {
 	directory := path.Clean(strings.TrimPrefix(uses, "./"))
-	if walk.seen["local "+directory] {
+	if walk.seen[localActionKey+directory] {
 		return nil
 	}
-	walk.seen["local "+directory] = true
+	walk.seen[localActionKey+directory] = true
 	if filepath.IsLocal(filepath.FromSlash(directory)) {
 		for _, name := range metadataNames {
 			metadata := path.Join(directory, name)
@@ -246,7 +251,7 @@ func (a *supplyChainAudit) judgeLocalAction(walk actionWalk, where, uses, writer
 		a.unjudgedUsed[key] = true
 		return nil
 	}
-	return a.once("local "+key, fmt.Sprintf(
+	return a.once(localActionKey+key, fmt.Sprintf(
 		"%s: uses: %s names no action.yml or action.yaml in this repository, so what it runs cannot be judged", where, uses,
 	))
 }
