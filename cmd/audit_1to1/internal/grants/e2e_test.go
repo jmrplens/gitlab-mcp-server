@@ -160,6 +160,33 @@ func TestE2ECheck_Routes_EachIsAccountedForOrALead(t *testing.T) {
 	}
 }
 
+// TestAccountFor_EachRequestIsAskedOfARouteItDoesNotSend verifies a request
+// accounts for no route it does not send: a GraphQL request for a REST route,
+// a request placed by a pattern for a method alone of another verb, and for a
+// route of its own verb its pattern does not cover.
+func TestAccountFor_EachRequestIsAskedOfARouteItDoesNotSend(t *testing.T) {
+	placed := rest("GET /projects/:id/integrations/apple-app-store", actionrequests.ClassAlternative)
+	placed.Derived = "GET /projects/:/integrations/:"
+	cases := []struct {
+		name    string
+		request actionrequests.RecordRequest
+		route   string
+		want    routeVerdict
+	}{
+		{name: "a GraphQL request and a REST route", request: graphQL("query project (x)", actionrequests.ClassMandatory, "project"), route: "GET /projects/:id", want: routeNotDerived},
+		{name: "a placed request and another method alone", request: placed, route: "PUT", want: routeUnnamed},
+		{name: "a placed request and a route its pattern misses", request: placed, route: "GET /groups/:id/integrations/slack", want: routeNotDerived},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			action := actionrequests.RecordAction{ID: "a.b", Requests: []actionrequests.RecordRequest{tc.request}, Paths: [][]int{{0}}}
+			if got := accountFor(action, tc.route); got != tc.want {
+				t.Errorf("accountFor(%s) = %v, want %v", tc.route, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestPatternCovers_TheMethodAndEverySpelledSegment verifies the pattern match
 // a declaration's route is read by.
 func TestPatternCovers_TheMethodAndEverySpelledSegment(t *testing.T) {

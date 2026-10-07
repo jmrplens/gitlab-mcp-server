@@ -50,12 +50,72 @@ type Group struct {
 	Any   Boundary
 }
 
+// ClassicScope is what a classic personal access token, or an OAuth token,
+// needs for a request or an action: which of GitLab's two API scopes lets it
+// through. The values are ordered by strength, so a token carrying one scope
+// reaches everything at or below it ([ClassicScope.ReachableWith]).
+//
+// GitLab accepts api for every route and read_api for a GET or a HEAD only
+// (lib/api/api.rb:60-61 at v19.4.1-ee), except where a route grants read_api
+// for every method; over GraphQL it accepts read_api for a query and refuses
+// it a mutation. Two values are below read_api because no scope of the token
+// decides them: a request GitLab authenticates by another credential the
+// caller passes, and an action that sends GitLab nothing.
+type ClassicScope uint8
+
+// The classic scopes an action or a request can need, weakest first.
+const (
+	// ClassicUnknown is the zero value: no row says what the action needs.
+	ClassicUnknown ClassicScope = iota
+	// ClassicNoRequest is an action that sends GitLab nothing.
+	ClassicNoRequest
+	// ClassicOtherCredential is a request GitLab authenticates by another
+	// credential passed as a parameter (a runner's or a trigger's token),
+	// never reading the token this server holds.
+	ClassicOtherCredential
+	// ClassicReadAPI is read_api, which api covers too.
+	ClassicReadAPI
+	// ClassicAPI is api.
+	ClassicAPI
+)
+
+// classicNames spells each classic scope, indexed by its value.
+var classicNames = [...]string{"unknown", "no-request", "other-credential", "read_api", "api"}
+
+// String spells the scope as the committed records write it: a scope by its
+// GitLab name, the two values no scope decides by what they are.
+func (s ClassicScope) String() string {
+	if int(s) < len(classicNames) {
+		return classicNames[s]
+	}
+	return classicNames[ClassicUnknown]
+}
+
+// ParseClassicScope reads a scope as [ClassicScope.String] spells it, and
+// reports false for anything else, the spelling of [ClassicUnknown] included.
+func ParseClassicScope(name string) (ClassicScope, bool) {
+	for scope := ClassicNoRequest; int(scope) < len(classicNames); scope++ {
+		if classicNames[scope] == name {
+			return scope, true
+		}
+	}
+	return ClassicUnknown, false
+}
+
+// ReachableWith reports whether a token whose strongest API scope is token
+// reaches what needs s: s is known and no stronger than the token's.
+func (s ClassicScope) ReachableWith(token ClassicScope) bool {
+	return s != ClassicUnknown && s <= token
+}
+
 // Operation is one wire request: a REST route or a GraphQL operation.
 type Operation struct {
 	// Name is the route as the live record spells it ("POST
 	// /projects/:id/merge_requests/:merge_request_iid/approve"), or a GraphQL
 	// operation's kind and root field with the document it comes from.
 	Name string
+	// Classic is the classic scope GitLab requires for the request.
+	Classic ClassicScope
 	// Groups are indices into [Table.Groups]: a REST route's primary group and
 	// additional scopes, or a GraphQL mutation's own groups.
 	Groups []uint32
@@ -99,6 +159,11 @@ type Element struct {
 type Requirement struct {
 	// ID is the canonical action ID.
 	ID string
+	// Classic is the classic scope the action needs: of every way it can run,
+	// a fine-grained denied one included, the one needing the least, where a
+	// way needs the most any of its mandatory requests needs. The scopes its
+	// catalog group demands besides (admin_mode) are not held here.
+	Classic ClassicScope
 	// Paths are sets of indices into [Table.Operations], the mandatory
 	// operations of each input-selected way the action can run.
 	Paths [][]uint32

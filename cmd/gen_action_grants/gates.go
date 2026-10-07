@@ -7,6 +7,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_action_grants/internal/derive"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_action_grants/internal/join"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 )
@@ -40,6 +41,101 @@ func gateFindings(derived []derive.Action, joined []join.Action, record *apilive
 	}
 	slices.Sort(findings)
 	return slices.Compact(findings)
+}
+
+// classicFindings holds the classic scope of every joined action to the two
+// rules a diff of the table would not show:
+//
+//  4. every way of running an action needs the same classic scope, and no
+//     optional request needs more than the action, since a read_api token is
+//     served or withheld an action whole while GitLab judges each request;
+//  5. an action the catalog classifies as a read is one a read_api token
+//     reaches, and a write one it does not, since the classification decides
+//     read-only mode and safe mode while the reach decides what a read_api
+//     token is served.
+//
+// An action a declaration answers passes its gate, and a declaration that
+// answers nothing is a finding.
+func classicFindings(joined []join.Action, catalog []actionrequests.Action, variations, disagreements []classicDeclaration) []string {
+	readOnly := make(map[string]bool, len(catalog))
+	for _, action := range catalog {
+		readOnly[action.ID] = action.ReadOnly
+	}
+	varied, departed := declaredActions(variations), declaredActions(disagreements)
+	var findings []string
+	for i := range joined {
+		act := &joined[i]
+		if act.Row == nil {
+			continue
+		}
+		if variation := classicVariation(act); variation != "" && !settled(varied, act.ID) {
+			findings = append(findings, "gate 4: "+variation)
+		}
+		if reach := act.Row.Classic.ReachableWith(finegrained.ClassicReadAPI); reach != readOnly[act.ID] && !settled(departed, act.ID) {
+			findings = append(findings, fmt.Sprintf(
+				"gate 5: %s is classified read-only=%t and a read_api token reaching it is %t; declare why the two depart",
+				act.ID, readOnly[act.ID], reach,
+			))
+		}
+	}
+	findings = append(findings, unsettled("gate 4", varied)...)
+	findings = append(findings, unsettled("gate 5", departed)...)
+	slices.Sort(findings)
+	return findings
+}
+
+// classicVariation says how one action's classic scope varies, "" when it
+// does not: two ways of running it needing different scopes, or an optional
+// request needing more than the action.
+func classicVariation(act *join.Action) string {
+	var ways []string
+	for _, path := range act.Paths {
+		way := join.WayClassic(act.Requests, path).String()
+		if !slices.Contains(ways, way) {
+			ways = append(ways, way)
+		}
+	}
+	if len(ways) > 1 {
+		return fmt.Sprintf("%s runs ways needing %s; a read_api token would be served or withheld it whole", act.ID, strings.Join(ways, " and "))
+	}
+	for i := range act.Requests {
+		request := &act.Requests[i]
+		if request.Class == derive.ClassOptional && request.Classic > act.Row.Classic {
+			return fmt.Sprintf("%s may send %s, which needs %s, more than the %s the action needs", act.ID, request.Key(), request.Classic, act.Row.Classic)
+		}
+	}
+	return ""
+}
+
+// declaredActions indexes declarations by action, each marked unused until a
+// finding it answers is met.
+func declaredActions(declarations []classicDeclaration) map[string]bool {
+	used := make(map[string]bool, len(declarations))
+	for _, declaration := range declarations {
+		used[declaration.Action] = false
+	}
+	return used
+}
+
+// settled reports whether a declaration of the action answers its finding,
+// marking the declaration used when one does.
+func settled(declared map[string]bool, id string) bool {
+	_, ok := declared[id]
+	if ok {
+		declared[id] = true
+	}
+	return ok
+}
+
+// unsettled reports each declaration of a gate that answered no finding.
+func unsettled(gate string, declared map[string]bool) []string {
+	var findings []string
+	for id, used := range declared {
+		if !used {
+			findings = append(findings, fmt.Sprintf("%s: the declaration of %s answers nothing; remove it", gate, id))
+		}
+	}
+	return findings
 }
 
 // unheldDenials reports each denial of a row, of the action or of one way of

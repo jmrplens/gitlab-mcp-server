@@ -139,7 +139,7 @@ func TestInconsistencies_EachDisagreement_IsNamedWithTheWayOut(t *testing.T) {
 			bend: func(table *finegrained.Table, record *actionrequests.Record, _ *apilive.Document) {
 				table.Actions = table.Actions[1:]
 				record.Actions = append(record.Actions, actionrequests.RecordAction{ID: "zz.new"})
-				table.Actions = append(table.Actions, finegrained.Requirement{ID: "zz.other"})
+				table.Actions = append(table.Actions, finegrained.Requirement{ID: "zz.other", Classic: finegrained.ClassicAPI})
 			},
 			wants: []string{
 				"branch.protected_list has an entry in the request record and no row in the table; run `make gen-action-grants`",
@@ -150,6 +150,7 @@ func TestInconsistencies_EachDisagreement_IsNamedWithTheWayOut(t *testing.T) {
 			},
 		},
 	}
+	cases = append(cases, classicCases()...)
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			table, record, live := fixtureTable(), fixtureRecord(), fixtureLive()
@@ -159,6 +160,173 @@ func TestInconsistencies_EachDisagreement_IsNamedWithTheWayOut(t *testing.T) {
 				t.Errorf("inconsistencies =\n%s\nwant\n%s", strings.Join(found, "\n"), strings.Join(testCase.wants, "\n"))
 			}
 		})
+	}
+}
+
+// classicCase bends the fixture one way the classic half of the table can
+// disagree, or one way it may depart from the rule and still agree.
+type classicCase = struct {
+	name  string
+	bend  func(table *finegrained.Table, record *actionrequests.Record, live *apilive.Document)
+	wants []string
+}
+
+// tableOp and tableRow are the fixture table's operation and row of one name,
+// which a case bends in place.
+func tableOp(table *finegrained.Table, name string) *finegrained.Operation {
+	for i := range table.Operations {
+		if table.Operations[i].Name == name {
+			return &table.Operations[i]
+		}
+	}
+	return nil
+}
+
+// tableRow is the fixture table's row of one action.
+func tableRow(table *finegrained.Table, id string) *finegrained.Requirement {
+	return table.Requirement(id)
+}
+
+// recordAction is the fixture record's entry of one action.
+func recordAction(record *actionrequests.Record, id string) *actionrequests.RecordAction {
+	for i := range record.Actions {
+		if record.Actions[i].ID == id {
+			return &record.Actions[i]
+		}
+	}
+	return nil
+}
+
+// classicCases are the classic half of the gate: a GET and a HEAD said to need
+// api, a mutation said to need read_api, a query said to need api with and
+// without the request record naming it as selecting a field only api is
+// answered, and a query the record names so that the table says needs
+// read_api; a route GitLab authenticates by another credential said to need
+// api, another credential said of a route with no such skip, a POST needing
+// read_api and a route declaring nothing, both of which pass; a row with no
+// known scope, one the record disagrees with, one needing more than the least
+// of its ways and one needing less with no way denied, and one needing less
+// beside a denied way, which passes.
+func classicCases() []classicCase {
+	const issuesQuery = "query project (issuesQuery)"
+	apiOnly := func(record *actionrequests.Record) {
+		recordAction(record, "issue.list").Requests[0].ClassicDeclaration = actionrequests.ClassicAPIOnlyField + " Issue.createNoteEmail"
+	}
+	queryNeedsAPI := func(table *finegrained.Table, record *actionrequests.Record) {
+		tableOp(table, issuesQuery).Classic = finegrained.ClassicAPI
+		tableRow(table, "issue.list").Classic = finegrained.ClassicAPI
+		recordAction(record, "issue.list").Classic = "api"
+	}
+	return []classicCase{
+		{
+			name: "a_get_said_to_need_api",
+			bend: func(table *finegrained.Table, record *actionrequests.Record, _ *apilive.Document) {
+				tableOp(table, "GET /projects/:id/protected_branches").Classic = finegrained.ClassicAPI
+				tableRow(table, "branch.protected_list").Classic = finegrained.ClassicAPI
+				recordAction(record, "branch.protected_list").Classic = "api"
+			},
+			wants: []string{"the table says GET /projects/:id/protected_branches needs api and GitLab accepts read_api for a GET; run `make gen-action-grants`"},
+		},
+		{
+			name: "a_head_said_to_need_api",
+			bend: func(table *finegrained.Table, _ *actionrequests.Record, live *apilive.Document) {
+				live.Routes = append(live.Routes, route("HEAD", "/raw", held("project", "read_issue")))
+				table.Operations = append(table.Operations, finegrained.Operation{Name: "HEAD /raw", Classic: finegrained.ClassicAPI, Groups: []uint32{0}})
+			},
+			wants: []string{"the table says HEAD /raw needs api and GitLab accepts read_api for a HEAD; run `make gen-action-grants`"},
+		},
+		{
+			name: "a_mutation_said_to_need_read_api",
+			bend: func(table *finegrained.Table, _ *actionrequests.Record, _ *apilive.Document) {
+				table.Operations = append(table.Operations, finegrained.Operation{Name: "mutation bulkUpdate (bulkUpdate)", Classic: finegrained.ClassicReadAPI})
+			},
+			wants: []string{"the table says mutation bulkUpdate (bulkUpdate) needs read_api and a mutation needs api; run `make gen-action-grants`"},
+		},
+		{
+			name: "a_query_said_to_need_api",
+			bend: func(table *finegrained.Table, record *actionrequests.Record, _ *apilive.Document) {
+				queryNeedsAPI(table, record)
+			},
+			wants: []string{"the table says query project (issuesQuery) needs api and a query needs read_api; run `make gen-action-grants`"},
+		},
+		{
+			name: "a_query_the_record_names_as_selecting_an_api_only_field",
+			bend: func(table *finegrained.Table, record *actionrequests.Record, _ *apilive.Document) {
+				queryNeedsAPI(table, record)
+				apiOnly(record)
+			},
+		},
+		{
+			name: "an_api_only_query_said_to_need_read_api",
+			bend: func(_ *finegrained.Table, record *actionrequests.Record, _ *apilive.Document) {
+				apiOnly(record)
+			},
+			wants: []string{"the table says query project (issuesQuery) needs read_api and the request record says the query selects a field GitLab answers only to api; run `make gen-action-grants`"},
+		},
+		{
+			name: "a_runner_route_said_to_need_api",
+			bend: func(table *finegrained.Table, _ *actionrequests.Record, live *apilive.Document) {
+				live.Routes = append(live.Routes, route("POST", "/runners", &apilive.RouteAuthorization{Skip: "runner_token_auth"}))
+				table.Operations = append(table.Operations, finegrained.Operation{Name: "POST /runners", Classic: finegrained.ClassicAPI, Skip: true})
+			},
+			wants: []string{"the table says POST /runners needs api and the live record's skip reason runner_token_auth says GitLab authenticates it by another credential; run `make gen-action-grants`"},
+		},
+		{
+			name: "another_credential_said_of_a_route_with_no_such_skip",
+			bend: func(table *finegrained.Table, record *actionrequests.Record, _ *apilive.Document) {
+				tableOp(table, "POST /projects/:id/things").Classic = finegrained.ClassicOtherCredential
+				tableRow(table, "issue.thing").Classic = finegrained.ClassicOtherCredential
+				recordAction(record, "issue.thing").Classic = "other-credential"
+			},
+			wants: []string{"the table says POST /projects/:id/things needs other-credential and a POST with the skip reason \"\" needs read_api or api; run `make gen-action-grants`"},
+		},
+		{
+			name: "a_post_needing_read_api_and_a_route_declaring_nothing",
+			bend: func(table *finegrained.Table, record *actionrequests.Record, live *apilive.Document) {
+				tableOp(table, "POST /projects/:id/things").Classic = finegrained.ClassicReadAPI
+				tableRow(table, "issue.thing").Classic = finegrained.ClassicReadAPI
+				recordAction(record, "issue.thing").Classic = "read_api"
+				live.Routes = append(live.Routes, route("DELETE", "/gone", nil))
+				table.Operations = append(table.Operations, finegrained.Operation{Name: "DELETE /gone", Classic: finegrained.ClassicAPI})
+			},
+		},
+		{
+			name: "a_row_with_no_known_scope",
+			bend: func(table *finegrained.Table, _ *actionrequests.Record, _ *apilive.Document) {
+				tableRow(table, "later.get").Classic = finegrained.ClassicUnknown
+			},
+			wants: []string{"later.get needs no known classic scope in the table; run `make gen-action-grants`"},
+		},
+		{
+			name: "a_row_the_record_disagrees_with",
+			bend: func(_ *finegrained.Table, record *actionrequests.Record, _ *apilive.Document) {
+				recordAction(record, "later.get").Classic = "api"
+			},
+			wants: []string{"the table says later.get needs read_api and the request record says api; run `make gen-action-grants`"},
+		},
+		{
+			name: "a_row_needing_more_than_its_ways",
+			bend: func(table *finegrained.Table, record *actionrequests.Record, _ *apilive.Document) {
+				tableRow(table, "issue.get").Classic = finegrained.ClassicAPI
+				recordAction(record, "issue.get").Classic = "api"
+			},
+			wants: []string{"the table says issue.get needs api and the least of its ways needs read_api; run `make gen-action-grants`"},
+		},
+		{
+			name: "a_row_needing_less_than_its_ways",
+			bend: func(table *finegrained.Table, record *actionrequests.Record, _ *apilive.Document) {
+				tableRow(table, "issue.update").Classic = finegrained.ClassicReadAPI
+				recordAction(record, "issue.update").Classic = "read_api"
+			},
+			wants: []string{"the table says issue.update needs read_api and the least of its ways needs api; run `make gen-action-grants`"},
+		},
+		{
+			name: "a_row_needing_less_beside_a_denied_way",
+			bend: func(table *finegrained.Table, record *actionrequests.Record, _ *apilive.Document) {
+				tableRow(table, "namespace.list").Classic = finegrained.ClassicNoRequest
+				recordAction(record, "namespace.list").Classic = "no-request"
+			},
+		},
 	}
 }
 

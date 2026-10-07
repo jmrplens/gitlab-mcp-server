@@ -31,8 +31,14 @@
 // joined from another record or left behind by one, and every answer below
 // would be read from it. What a GraphQL operation demands is not read back,
 // since that needs the documents walked against the schema, which is the
-// derivation's work. It runs where the other committed-artifact gates run,
-// under the FRESHNESS deferral in CI.
+// derivation's work. The classic scope the table carries for a classic or
+// OAuth token is read back too: every REST GET or HEAD and every GraphQL query
+// needs read_api, unless the request record names the query as selecting a
+// field GitLab answers only to api, every mutation api, every route whose
+// skip reason says GitLab authenticates another credential no scope of the
+// token, and every row a known scope that the request record agrees with and
+// that no way of the action undercuts. It runs where the other
+// committed-artifact gates run, under the FRESHNESS deferral in CI.
 //
 // # What it reports and never gates
 //
@@ -53,5 +59,9 @@
 // inventory names a package and never an action, a count is a floor, and a
 // route a trace reached that the derivation does not name is a positive claim
 // that the derivation under-approximates the action, read from a record the
-// run does not commit.
+// run does not commit. Beside them, the classic view: the actions per classic
+// scope, the routes that are not a GET a read_api token is served (the ones
+// the derivation declares GitLab grants read_api, which no record here can
+// confirm), and the actions whose read or write classification departs from
+// what read_api reaches.
 package grants

@@ -23,6 +23,9 @@ type Action struct {
 	Tool string
 	// ReadOnly is the catalog's classification of the action.
 	ReadOnly bool
+	// Group is the tool name of the catalog group the action belongs to,
+	// which the scopes a group demands are keyed by.
+	Group string
 }
 
 // catalogs is the catalog builder, a variable so a test can make it fail.
@@ -56,6 +59,7 @@ func Catalog() ([]Action, error) {
 				Owner:    action.OwnerPackage,
 				Tool:     strings.TrimSpace(action.IndividualTool.Name),
 				ReadOnly: action.ReadOnly,
+				Group:    action.ToolName,
 			})
 		}
 	}

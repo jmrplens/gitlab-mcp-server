@@ -2,6 +2,7 @@ package finegrained
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -87,6 +88,35 @@ func TestRouteTemplate_NamesTheTableRouteARequestReached(t *testing.T) {
 				t.Errorf("RouteTemplate(%s %s) = %q, %t; want %q, %t", tc.method, tc.path, got, known, tc.want, tc.known)
 			}
 		})
+	}
+}
+
+// TestRoutes_IndexesTheRESTTemplatesAlone verifies the index holds a method
+// for each REST template and none for a GraphQL operation, whose name has a
+// space and no path after it, or for a name with nothing after the method.
+func TestRoutes_IndexesTheRESTTemplatesAlone(t *testing.T) {
+	index := routeTable().routes()
+	if len(index[http.MethodGet]) == 0 || len(index[http.MethodHead]) != 1 {
+		t.Errorf("the index holds %d GET and %d HEAD variants, want the table's", len(index[http.MethodGet]), len(index[http.MethodHead]))
+	}
+	if _, found := index["query"]; found || len(index) != 2 {
+		t.Errorf("the index holds the methods %v, want GET and HEAD alone", index)
+	}
+}
+
+// TestMatchSegments_APlaceholderTakesOneSegmentThatIsNotEmpty verifies a
+// placeholder is filled by a segment holding something and not by an empty
+// one, which the path reader never hands it but the matcher refuses on its
+// own. The segments are split from paths rather than written as slice
+// literals, so gosec does not carry a literal length into the matcher's
+// wildcard loop (a G602 false positive).
+func TestMatchSegments_APlaceholderTakesOneSegmentThatIsNotEmpty(t *testing.T) {
+	template := strings.Split("/projects/:id", "/")
+	if !matchSegments(template, strings.Split("/projects/1", "/")) {
+		t.Error("a placeholder refused a segment holding an identifier")
+	}
+	if matchSegments(template, strings.Split("/projects/", "/")) {
+		t.Error("a placeholder took an empty segment")
 	}
 }
 

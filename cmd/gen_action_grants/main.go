@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	gqlast "github.com/vektah/gqlparser/v2/ast"
 
@@ -21,7 +22,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sdkroutes"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 )
 
 const (
@@ -60,7 +63,7 @@ func runMain(args []string, stderr io.Writer) int {
 	check := fs.Bool("check", false, "verify the three generated artifacts are current without writing them")
 	checkDerivation := fs.Bool("check-derivation", false,
 		"derive every action and fail on any finding: an action not derived or declared, a route or element the record does not place, "+
-			"a stale declaration or directive, and the three gates; writes nothing")
+			"a stale declaration or directive, and the five gates; writes nothing")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -94,9 +97,11 @@ type sources struct {
 	record  func(root string) (*apilive.Document, error)
 	schema  func() (*gqlast.Schema, error)
 	// requests and grants are the declaration tables the derivation and the
-	// join take.
-	requests []derive.Declaration
-	grants   join.Declarations
+	// join take, and variations and disagreements the ones gates 4 and 5 do.
+	requests      []derive.Declaration
+	grants        join.Declarations
+	variations    []classicDeclaration
+	disagreements []classicDeclaration
 }
 
 // newSources returns the inputs runMain reads, behind a variable so a test
@@ -111,12 +116,22 @@ func liveSources() sources {
 		load: func(root string, overlay map[string][]byte) (*actionrequests.Program, error) {
 			return actionrequests.Load(root, loadPatterns, overlay)
 		},
-		sdk:      readSDK,
-		record:   readRecord,
-		schema:   graphqlschema.Schema,
-		requests: requestDeclarations,
-		grants:   grantDeclarations,
+		sdk:           readSDK,
+		record:        readRecord,
+		schema:        graphqlschema.Schema,
+		requests:      requestDeclarations,
+		grants:        withClassic(grantDeclarations, classicRoutes),
+		variations:    classicVariations,
+		disagreements: annotationDisagreements,
 	}
+}
+
+// withClassic is a join's declarations with the classic routes beside them,
+// the two tables kept apart in the source because they answer different
+// questions about the same requests.
+func withClassic(grants join.Declarations, classic []join.ClassicDeclaration) join.Declarations {
+	grants.Classic = classic
+	return grants
 }
 
 // readSDK reads client-go's routes and documents from the module the loaded
@@ -139,8 +154,10 @@ func readRecord(root string) (*apilive.Document, error) {
 	return &record, nil
 }
 
-// outcome is one run's derivation and join.
+// outcome is one run's derivation and join, with the catalog it was derived
+// for.
 type outcome struct {
+	catalog  []actionrequests.Action
 	derived  derive.Result
 	joined   join.Result
 	findings []string
@@ -173,7 +190,7 @@ func run(progress io.Writer, root string, opts options, in sources) error {
 		content []byte
 	}
 	artifacts := []artifact{
-		{requestsPath, renderRequests(result.joined.Actions)},
+		{requestsPath, renderRequests(result.joined.Actions, groupScopes(result.catalog))},
 		{tablePath, renderTable(table)},
 	}
 	// The reference is the third artifact, written once per language of the
@@ -218,13 +235,17 @@ func deriveAndJoin(root string, in sources) (outcome, error) {
 	// since an action it cannot place whole is one it gives no row.
 	findings := append(append([]string{}, derived.Findings...), joined.Findings...)
 	findings = append(findings, gateFindings(derived.Actions, joined.Actions, record)...)
-	return outcome{derived: derived, joined: joined, findings: findings}, nil
+	findings = append(findings, classicFindings(joined.Actions, actions, in.variations, in.disagreements)...)
+	return outcome{catalog: actions, derived: derived, joined: joined, findings: findings}, nil
 }
 
-// summarize prints the figures a reader checks a run by.
+// summarize prints the figures a reader checks a run by: the fine-grained
+// counts, then how many rows need each classic scope and the actions whose
+// read or write classification departs from what read_api reaches.
 func summarize(progress io.Writer, result *outcome) {
 	table := &result.joined.Table
 	denied, degraded := 0, 0
+	classic := map[finegrained.ClassicScope]int{}
 	for i := range table.Actions {
 		if table.Actions[i].Denied != nil {
 			denied++
@@ -232,9 +253,53 @@ func summarize(progress io.Writer, result *outcome) {
 		if len(table.Actions[i].Degraded) > 0 {
 			degraded++
 		}
+		classic[table.Actions[i].Classic]++
 	}
 	fmt.Fprintf(progress, "%d actions derived, %d rows at GitLab %s: %d denied to every fine-grained token, %d served with parts always empty; "+
 		"%d operations, %d groups, %d GraphQL elements, %d element signatures read from the pinned schema\n",
 		len(result.derived.Actions), len(table.Actions), table.Version, denied, degraded,
 		len(table.Operations), len(table.Groups), len(table.Elements), result.joined.Fallbacks)
+	fmt.Fprintf(progress, "classic scope: %d api, %d read_api, %d other-credential, %d no-request; read_api reaches %d actions, "+
+		"and these depart from their read-only classification: %s\n",
+		classic[finegrained.ClassicAPI], classic[finegrained.ClassicReadAPI], classic[finegrained.ClassicOtherCredential],
+		classic[finegrained.ClassicNoRequest], len(table.Actions)-classic[finegrained.ClassicAPI]-classic[finegrained.ClassicUnknown],
+		movement(table, result.catalog))
+}
+
+// movement lists the actions a read_api token reaches that the catalog
+// classifies as writes, and the reads it does not reach, "none" when there
+// are none.
+func movement(table *finegrained.Table, catalog []actionrequests.Action) string {
+	readOnly := make(map[string]bool, len(catalog))
+	for _, action := range catalog {
+		readOnly[action.ID] = action.ReadOnly
+	}
+	var moved []string
+	for i := range table.Actions {
+		row := &table.Actions[i]
+		if reach := row.Classic.ReachableWith(finegrained.ClassicReadAPI); reach != readOnly[row.ID] {
+			verb := "withheld"
+			if reach {
+				verb = "served"
+			}
+			moved = append(moved, row.ID+" "+verb)
+		}
+	}
+	if len(moved) == 0 {
+		return "none"
+	}
+	return strings.Join(moved, ", ")
+}
+
+// groupScopes reads, per action, the scopes its catalog group demands
+// besides the classic one, which the server's scope filter decides per group
+// (tools.MetaToolScopes).
+func groupScopes(catalog []actionrequests.Action) map[string][]string {
+	scopes := make(map[string][]string, len(catalog))
+	for _, action := range catalog {
+		if required := tools.MetaToolScopes[action.Group]; len(required) > 0 {
+			scopes[action.ID] = required
+		}
+	}
+	return scopes
 }

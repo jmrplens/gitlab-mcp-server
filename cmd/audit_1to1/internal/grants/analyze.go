@@ -39,6 +39,10 @@ type Report struct {
 	// Worklist is issue 1055's: the undeclared GraphQL elements this server
 	// reaches.
 	Worklist []WorklistEntry `json:"graphql_worklist"`
+	// Classic is what a classic or OAuth token needs: the actions per scope,
+	// the routes that are not a GET a read_api token is served, and the
+	// actions whose read or write classification departs from that reach.
+	Classic ClassicView `json:"classic"`
 	// InventoryCheck and E2E are the two cross-checks of the derivation.
 	InventoryCheck InventoryCheck `json:"inventory_check"`
 	E2E            E2ECheck       `json:"e2e_check"`
@@ -87,6 +91,9 @@ type Summary struct {
 	DerivedGraphQLRecorded      int `json:"derived_graphql_requests_recorded"`
 	E2EActionsCompared          int `json:"e2e_actions_compared"`
 	E2EActionsConsistent        int `json:"e2e_actions_consistent"`
+	// ReachedByReadAPI counts the actions a classic token carrying read_api
+	// and not api is served, before the tier and the group scopes narrow it.
+	ReachedByReadAPI int `json:"reached_by_read_api"`
 	// Inconsistencies counts the gate's findings.
 	Inconsistencies int `json:"inconsistencies"`
 }
@@ -164,6 +171,7 @@ func buildReport(root string, opts Options) (Report, error) {
 	crossCheck := inventoryCheck(inventory.Requests, record, &live, owners)
 	e2e := e2eCheck(opts.E2ECallsDir, record)
 	found := inconsistencies(table, record, &live, actions)
+	classic := classicView(table, actions)
 
 	report := Report{
 		SchemaVersion:    shared.SchemaVersion,
@@ -177,10 +185,12 @@ func buildReport(root string, opts Options) (Report, error) {
 		Degraded:         view.degraded,
 		PublicOperations: view.public,
 		Worklist:         elements,
+		Classic:          classic,
 		InventoryCheck:   crossCheck,
 		E2E:              e2e,
 		Summary:          summarize(table, &view, elements, &crossCheck, &e2e, found),
 	}
+	report.Summary.ReachedByReadAPI = classic.ReachedByReadAPI
 	if report.Inconsistencies == nil {
 		report.Inconsistencies = []string{}
 	}

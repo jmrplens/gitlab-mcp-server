@@ -48,6 +48,20 @@
 // leaves part of it empty, answers null or removes items over GraphQL without
 // saying so.
 //
+// # The classic scope the same requests decide
+//
+// The requests that decide what a fine-grained token needs decide what a
+// classic personal access token or an OAuth token needs too, so the table
+// carries that as well: a [ClassicScope] per [Operation], read from the
+// request (a REST GET or HEAD and a GraphQL query need read_api, anything
+// else api, a route GitLab grants otherwise declared where it is derived),
+// and one per [Requirement], the way of running the action that needs the
+// least. The server narrows a token carrying read_api and not api to the
+// actions [ClassicScope.ReachableWith] says read_api reaches (ADR-0026), and
+// the tool reference prints the value per action. The scopes a catalog group
+// demands besides, admin_mode, stay where they are decided, in
+// internal/tools.MetaToolScopes.
+//
 // # A leaf beside the register
 //
 // The package imports the standard library and internal/tenancy alone, so

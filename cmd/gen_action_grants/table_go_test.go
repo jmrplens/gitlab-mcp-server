@@ -35,16 +35,16 @@ func TestRenderTable_KeyedLiteralsOfEveryField(t *testing.T) {
 			{Perms: []uint16{0}, Any: finegrained.AllBoundaries},
 		},
 		Operations: []finegrained.Operation{
-			{Name: "GET /a", Groups: []uint32{0}},
-			{Name: "mutation m (x.Y)", Skip: true, Spine: []uint32{0}, OffSpine: []uint32{1}},
+			{Name: "GET /a", Classic: finegrained.ClassicReadAPI, Groups: []uint32{0}},
+			{Name: "mutation m (x.Y)", Classic: finegrained.ClassicAPI, Skip: true, Spine: []uint32{0}, OffSpine: []uint32{1}},
 		},
 		Elements: []finegrained.Element{
 			{Path: "m.thing", Type: "Thing", Groups: []uint32{0}, Effect: finegrained.EffectNull},
 			{Path: "m.either", Type: "Either", Members: []string{"A", "B"}, Undeclared: true, Effect: finegrained.EffectRemoved},
 		},
 		Actions: []finegrained.Requirement{
-			{ID: "a.denied", Denied: &finegrained.Denial{Cause: finegrained.CauseRESTTodo, Element: "GET /a", Effect: finegrained.EffectRefused}},
-			{ID: "a.read", Paths: [][]uint32{{0}, {0, 1}}, Degraded: []uint32{1}, GraphQL: true, Collection: true},
+			{ID: "a.denied", Classic: finegrained.ClassicOtherCredential, Denied: &finegrained.Denial{Cause: finegrained.CauseRESTTodo, Element: "GET /a", Effect: finegrained.EffectRefused}},
+			{ID: "a.read", Classic: finegrained.ClassicNoRequest, Paths: [][]uint32{{0}, {0, 1}}, Degraded: []uint32{1}, GraphQL: true, Collection: true},
 			{ID: "a.some", Paths: [][]uint32{{0}}, DeniedWays: []finegrained.Denial{
 				{Cause: finegrained.CauseTypeUndeclared, Element: "Namespace", Effect: finegrained.EffectNull},
 				{Cause: finegrained.CauseRESTUndeclared, Element: "GET /b", Effect: finegrained.EffectRefused},
@@ -78,17 +78,17 @@ func TestRenderTable_KeyedLiteralsOfEveryField(t *testing.T) {
 		{Perms: []uint16{0}, Any: finegrained.BoundaryProject | finegrained.BoundaryGroup | finegrained.BoundaryUser | finegrained.BoundaryInstance},
 	},
 	Operations: []finegrained.Operation{
-		{Name: "GET /a", Groups: []uint32{0}},
-		{Name: "mutation m (x.Y)", Skip: true, Spine: []uint32{0}, OffSpine: []uint32{1}},
+		{Name: "GET /a", Classic: finegrained.ClassicReadAPI, Groups: []uint32{0}},
+		{Name: "mutation m (x.Y)", Classic: finegrained.ClassicAPI, Skip: true, Spine: []uint32{0}, OffSpine: []uint32{1}},
 	},
 	Elements: []finegrained.Element{
 		{Path: "m.thing", Type: "Thing", Groups: []uint32{0}, Effect: finegrained.EffectNull},
 		{Path: "m.either", Type: "Either", Members: []string{"A", "B"}, Undeclared: true, Effect: finegrained.EffectRemoved},
 	},
 	Actions: []finegrained.Requirement{
-		{ID: "a.denied", Denied: &finegrained.Denial{Cause: finegrained.CauseRESTTodo, Element: "GET /a", Effect: finegrained.EffectRefused}},
-		{ID: "a.read", Paths: [][]uint32{{0}, {0, 1}}, Degraded: []uint32{1}, GraphQL: true, Collection: true},
-		{ID: "a.some", Paths: [][]uint32{{0}}, DeniedWays: []finegrained.Denial{{Cause: finegrained.CauseTypeUndeclared, Element: "Namespace", Effect: finegrained.EffectNull}, {Cause: finegrained.CauseRESTUndeclared, Element: "GET /b", Effect: finegrained.EffectRefused}}},
+		{ID: "a.denied", Classic: finegrained.ClassicOtherCredential, Denied: &finegrained.Denial{Cause: finegrained.CauseRESTTodo, Element: "GET /a", Effect: finegrained.EffectRefused}},
+		{ID: "a.read", Classic: finegrained.ClassicNoRequest, Paths: [][]uint32{{0}, {0, 1}}, Degraded: []uint32{1}, GraphQL: true, Collection: true},
+		{ID: "a.some", Classic: finegrained.ClassicUnknown, Paths: [][]uint32{{0}}, DeniedWays: []finegrained.Denial{{Cause: finegrained.CauseTypeUndeclared, Element: "Namespace", Effect: finegrained.EffectNull}, {Cause: finegrained.CauseRESTUndeclared, Element: "GET /b", Effect: finegrained.EffectRefused}}},
 	},
 }
 `
@@ -107,6 +107,38 @@ func TestConstantOf_AValueWithNoConstant_Panics(t *testing.T) {
 		}
 	}()
 	constantOf(effectConstants, finegrained.Effect("vanished"))
+}
+
+// TestClassicConstants_NameEveryClassicScope verifies the writer spells each
+// classic scope by the constant that names it, and stops on a value past the
+// last one, naming it.
+func TestClassicConstants_NameEveryClassicScope(t *testing.T) {
+	want := []struct {
+		scope finegrained.ClassicScope
+		name  string
+	}{
+		{finegrained.ClassicUnknown, "finegrained.ClassicUnknown"},
+		{finegrained.ClassicNoRequest, "finegrained.ClassicNoRequest"},
+		{finegrained.ClassicOtherCredential, "finegrained.ClassicOtherCredential"},
+		{finegrained.ClassicReadAPI, "finegrained.ClassicReadAPI"},
+		{finegrained.ClassicAPI, "finegrained.ClassicAPI"},
+	}
+	if len(classicConstants) != len(want) {
+		t.Errorf("the writer names %d classic scopes, want %d", len(classicConstants), len(want))
+	}
+	for _, tc := range want {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := constantOf(classicConstants, tc.scope); got != tc.name {
+				t.Errorf("ClassicScope(%d) is written as %q, want %q", tc.scope, got, tc.name)
+			}
+		})
+	}
+	defer func() {
+		if recovered := recover(); recovered == nil || !strings.Contains(recovered.(string), `finegrained.ClassicScope "unknown" has no constant`) {
+			t.Errorf("recovered %v, want the panic naming the scope", recovered)
+		}
+	}()
+	constantOf(classicConstants, finegrained.ClassicAPI+1)
 }
 
 // readTypedConstants files every constant of one source file whose declared

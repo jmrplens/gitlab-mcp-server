@@ -25,6 +25,7 @@ type Query {
   namespace(fullPath: ID!): Namespace
   vulnerability(id: ID!): Vulnerability
   workItem(id: ID!): WorkItem
+  edge: IssueEdge
   users: UserCoreConnection
   plain: Plain
   viewer: UserCore!
@@ -751,5 +752,223 @@ func TestJoin_NoAnonymousPolicy_IsUnknown(t *testing.T) {
 	record.Granular.PublicAnonymous = nil
 	if table := Join(record, fixtureSchema(t), nil, Declarations{}).Table; table.PublicKnown {
 		t.Error("a record with no anonymous policy reads as one that knows it")
+	}
+}
+
+// classicSDL is the schema the classic fixture's documents validate against:
+// a read, a write, and the two fields GitLab answers only to api.
+const classicSDL = `
+schema { query: Query mutation: Mutation }
+type Query { issue(id: ID!): Issue workItem(id: ID!): WorkItem version: String }
+type Mutation { noteCreate(body: String): NotePayload }
+type NotePayload { errors: [String!]! }
+type Issue { id: ID! title: String createNoteEmail: String }
+type WorkItem { id: ID! createNoteEmail: String }
+`
+
+// classicRecord is the live record the classic fixture is joined to: one
+// route per way a route's method and skip reason meet the declarations.
+func classicRecord() *apilive.Document {
+	skipped := func(reason string) *apilive.RouteAuthorization { return &apilive.RouteAuthorization{Skip: reason} }
+	return &apilive.Document{
+		Source: apilive.Source{Version: "19.4.1-ee"},
+		Routes: []apilive.Route{
+			route("GET", "/projects/:id", authorized("project", "read_project")),
+			route("HEAD", "/projects/:id/raw", authorized("project", "read_project")),
+			route("POST", "/projects/:id/things", authorized("project", "read_project")),
+			route("POST", "/markdown", authorized("project", "read_project")),
+			route("DELETE", "/tokens/self", authorized("project", "read_project")),
+			route("POST", "/runners", skipped("runner_token_auth")),
+			route("POST", "/projects/:id/trigger/pipeline", skipped("trigger_token_auth")),
+			route("DELETE", "/runners", skipped("runner_token_auth")),
+			route("POST", "/runners/forged", skipped("public_endpoint")),
+			route("POST", "/runners/wrongly", skipped("runner_token_auth")),
+			route("PUT", "/projects/:id/api", authorized("project", "read_project")),
+			route("GET", "/projects/:id/declared", authorized("project", "read_project")),
+			route("GET", "/runners/discovery", skipped("runner_token_auth")),
+		},
+		Granular: &apilive.Granular{
+			Assignable:      []apilive.Assignable{assignable("read_project", "Project: Read", []string{"project"}, "read_project")},
+			RawToAssignable: map[string]apilive.AssignableMatch{"read_project": {First: "read_project", FirstAvailable: "read_project"}},
+		},
+		GraphQLAuthz: &apilive.GraphQLAuthz{Types: map[string]apilive.GraphQLType{}},
+	}
+}
+
+// classicDeclarations declare one route per category, one each that departs
+// from the record or agrees with the rule, and one no action sends.
+func classicDeclarations() Declarations {
+	return Declarations{Classic: []ClassicDeclaration{
+		{Route: "POST /markdown", Category: "read-api-every-method", Scope: finegrained.ClassicReadAPI},
+		{Route: "DELETE /tokens/self", Category: "every-scope", Scope: finegrained.ClassicReadAPI},
+		{Route: "POST /runners", Category: "credential-not-read", Scope: finegrained.ClassicOtherCredential},
+		{Route: "POST /projects/:id/trigger/pipeline", Category: "credential-not-read", Scope: finegrained.ClassicOtherCredential},
+		{Route: "POST /runners/forged", Category: "credential-not-read", Scope: finegrained.ClassicOtherCredential},
+		{Route: "POST /runners/wrongly", Category: "read-api-every-method", Scope: finegrained.ClassicReadAPI},
+		{Route: "PUT /projects/:id/api", Category: "read-api-every-method", Scope: finegrained.ClassicAPI},
+		{Route: "GET /projects/:id/declared", Category: "read-api-every-method", Scope: finegrained.ClassicReadAPI},
+		{Route: "POST /never", Category: "every-scope", Scope: finegrained.ClassicReadAPI},
+	}}
+}
+
+// TestJoin_Classic_ReadsGitLabsRuleAndItsDeclarations verifies the classic
+// scope of each request and each action: read_api for a GET, a HEAD and a
+// GraphQL query, api for any other method and for a mutation or a query
+// selecting a field GitLab answers only to api; each declared route taking
+// its declaration's scope and category; a route GitLab authenticates by
+// another credential reported when nothing declares it, a declaration of one
+// held to the route's skip reason in both directions, and a declaration that
+// agrees with the rule or that no action sends reported stale. An action
+// needs the least of its ways, a way the most of its requests, a way no
+// fine-grained token passes counted, a way sending nothing no request, and
+// an action with no way at all nothing known.
+func TestJoin_Classic_ReadsGitLabsRuleAndItsDeclarations(t *testing.T) {
+	schema, err := graphqlschema.Load([]byte(classicSDL))
+	if err != nil {
+		t.Fatalf("load the classic schema: %v", err)
+	}
+	apiOnly := graphQL(`query { issue(id: "1") { title createNoteEmail } workItem(id: "1") { createNoteEmail } again: issue(id: "2") { createNoteEmail } }`)
+	actions := []derive.Action{
+		action("c.get", rest("GET", "/projects/:")),
+		action("c.head", rest("HEAD", "/projects/:/raw")),
+		action("c.post", rest("POST", "/projects/:/things")),
+		action("c.markdown", rest("POST", "/markdown")),
+		action("c.self", rest("DELETE", "/tokens/self")),
+		action("c.register", rest("POST", "/runners")),
+		action("c.trigger", rest("POST", "/projects/:/trigger/pipeline")),
+		action("c.unregister", rest("DELETE", "/runners")),
+		action("c.forged", rest("POST", "/runners/forged")),
+		action("c.wrongly", rest("POST", "/runners/wrongly")),
+		action("c.api", rest("PUT", "/projects/:/api")),
+		action("c.declared", rest("GET", "/projects/:/declared")),
+		action("c.discovery", rest("GET", "/runners/discovery")),
+		action("c.query", graphQL(`query { issue(id: "1") { id title } }`)),
+		action("c.api_only", apiOnly),
+		action("c.mutation", graphQL(`mutation { noteCreate(body: "b") { errors } }`)),
+		{ID: "c.ways", Uses: []derive.Use{rest("GET", "/projects/:"), rest("POST", "/projects/:/things")}, Paths: [][]int{{1}, {0, 1}, {0}}},
+		{ID: "c.nothing", Declaration: "sends-nothing", Paths: [][]int{{}}},
+		{ID: "c.no_way"},
+	}
+	result := Join(classicRecord(), schema, actions, classicDeclarations())
+	want := map[string]struct {
+		classic  finegrained.ClassicScope
+		declared string
+	}{
+		"c.get":        {finegrained.ClassicReadAPI, ""},
+		"c.head":       {finegrained.ClassicReadAPI, ""},
+		"c.post":       {finegrained.ClassicAPI, ""},
+		"c.markdown":   {finegrained.ClassicReadAPI, "read-api-every-method"},
+		"c.self":       {finegrained.ClassicReadAPI, "every-scope"},
+		"c.register":   {finegrained.ClassicOtherCredential, "credential-not-read"},
+		"c.trigger":    {finegrained.ClassicOtherCredential, "credential-not-read"},
+		"c.unregister": {finegrained.ClassicAPI, ""},
+		"c.forged":     {finegrained.ClassicOtherCredential, "credential-not-read"},
+		"c.wrongly":    {finegrained.ClassicReadAPI, "read-api-every-method"},
+		"c.api":        {finegrained.ClassicAPI, ""},
+		"c.declared":   {finegrained.ClassicReadAPI, ""},
+		"c.discovery":  {finegrained.ClassicReadAPI, ""},
+		"c.query":      {finegrained.ClassicReadAPI, ""},
+		"c.api_only":   {finegrained.ClassicAPI, "api-only-field Issue.createNoteEmail, WorkItem.createNoteEmail"},
+		"c.mutation":   {finegrained.ClassicAPI, ""},
+	}
+	for id, expected := range want {
+		t.Run(id, func(t *testing.T) {
+			act := joined(t, result, id)
+			request := act.Requests[0]
+			if request.Classic != expected.classic || request.ClassicDeclaration != expected.declared {
+				t.Errorf("the request needs %v decided by %q, want %v decided by %q", request.Classic, request.ClassicDeclaration, expected.classic, expected.declared)
+			}
+			if op := result.Table.Operations[request.Operation]; op.Classic != expected.classic {
+				t.Errorf("the table's operation needs %v, want %v", op.Classic, expected.classic)
+			}
+			if act.Row.Classic != expected.classic {
+				t.Errorf("the row needs %v, want %v", act.Row.Classic, expected.classic)
+			}
+		})
+	}
+	rows := map[string]finegrained.ClassicScope{
+		"c.ways": finegrained.ClassicReadAPI, "c.nothing": finegrained.ClassicNoRequest, "c.no_way": finegrained.ClassicUnknown,
+	}
+	for id, expected := range rows {
+		t.Run(id, func(t *testing.T) {
+			if got := joined(t, result, id).Row.Classic; got != expected {
+				t.Errorf("the row needs %v, want %v", got, expected)
+			}
+		})
+	}
+	wantFindings := []string{
+		"DELETE /runners skips the fine-grained check as runner_token_auth, so GitLab authenticates it by another credential; declare the classic scope it needs",
+		"the credential-not-read classic declaration of POST /runners/forged says other-credential, and the live record's skip reason for it is \"public_endpoint\"",
+		"the every-scope classic declaration of POST /never answers nothing: no action sends the route",
+		"the read-api-every-method classic declaration of GET /projects/:id/declared answers nothing: GitLab's rule already gives a GET read_api",
+		"the read-api-every-method classic declaration of POST /runners/wrongly says read_api, and the live record's skip reason for it is \"runner_token_auth\"",
+		"the read-api-every-method classic declaration of PUT /projects/:id/api answers nothing: GitLab's rule already gives a PUT api",
+	}
+	if !slices.Equal(result.Findings, wantFindings) {
+		t.Errorf("findings =\n%s\nwant\n%s", strings.Join(result.Findings, "\n"), strings.Join(wantFindings, "\n"))
+	}
+}
+
+// TestJoin_Classic_CountsAWayNoFineGrainedTokenPasses verifies an action is
+// held to the scope of a way no fine-grained token passes when that way needs
+// the least: a classic token is asked for its scopes and never for a grant.
+func TestJoin_Classic_CountsAWayNoFineGrainedTokenPasses(t *testing.T) {
+	act := joined(t, Join(fixtureRecord(), fixtureSchema(t), []derive.Action{
+		{ID: "c.denied_read", Uses: []derive.Use{rest("GET", "/projects/:/later"), rest("POST", "/projects/:/things")}, Paths: [][]int{{0}, {1}}},
+	}, Declarations{}), "c.denied_read")
+	if act.Row.Classic != finegrained.ClassicReadAPI || len(act.Row.DeniedWays) != 1 {
+		t.Errorf("the row needs %v with denied ways %v, want read_api beside one denied way", act.Row.Classic, act.Row.DeniedWays)
+	}
+}
+
+// TestJoin_RouteDeclarationAcrossTheReadAPILine_IsAFinding verifies a route
+// declaration is held to the side of GitLab's scope rule the derived route's
+// own method falls on: a POST declared to carry a GET route's authorization
+// would otherwise be handed read_api, since the classic scope is read from
+// the named route. HEAD carrying GET's, the one shape declared today, stays
+// on its side and is no finding, which the fixture's own findings hold.
+func TestJoin_RouteDeclarationAcrossTheReadAPILine_IsAFinding(t *testing.T) {
+	result := Join(fixtureRecord(), fixtureSchema(t), []derive.Action{action("rest.crossed", rest("POST", "/projects/:/crossed"))}, Declarations{
+		Routes: []RouteDeclaration{{Route: "POST /projects/:/crossed", Category: "slug-from-input", Use: "GET /projects/:id/issues"}},
+	})
+	want := "the slug-from-input declaration of POST /projects/:/crossed names GET /projects/:id/issues, which GitLab's scope rule reads on the other side of read_api from a POST"
+	if !slices.Contains(result.Findings, want) {
+		t.Errorf("findings =\n%s\nwant one to be\n%s", strings.Join(result.Findings, "\n"), want)
+	}
+}
+
+// TestJoin_AnEdgesNodeOnTheSpine_IsACollection verifies the items of a
+// connection make the answer a collection when they are reached through an
+// edge's node with no list above them, the one way the spine meets a
+// connection's items before it meets a list.
+func TestJoin_AnEdgesNodeOnTheSpine_IsACollection(t *testing.T) {
+	result := Join(fixtureRecord(), fixtureSchema(t), []derive.Action{action("graphql.edge", graphQL(`query { edge { node { id } } }`))}, Declarations{})
+	if act := joined(t, result, "graphql.edge"); act.Row == nil || !act.Row.Collection {
+		t.Errorf("an edge's node on the spine joins to %+v, want a collection", act.Row)
+	}
+}
+
+// TestWayClassic_IsTheStrongestRequestOfTheWay verifies a way needs the most
+// any of its requests needs, and a way sending nothing no request.
+func TestWayClassic_IsTheStrongestRequestOfTheWay(t *testing.T) {
+	requests := []Request{
+		{Classic: finegrained.ClassicReadAPI}, {Classic: finegrained.ClassicAPI}, {Classic: finegrained.ClassicOtherCredential},
+	}
+	cases := []struct {
+		name string
+		path []int
+		want finegrained.ClassicScope
+	}{
+		{name: "nothing", path: nil, want: finegrained.ClassicNoRequest},
+		{name: "one", path: []int{2}, want: finegrained.ClassicOtherCredential},
+		{name: "strongest last", path: []int{2, 0, 1}, want: finegrained.ClassicAPI},
+		{name: "strongest first", path: []int{1, 0}, want: finegrained.ClassicAPI},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := WayClassic(requests, tc.path); got != tc.want {
+				t.Errorf("WayClassic(%v) = %v, want %v", tc.path, got, tc.want)
+			}
+		})
 	}
 }

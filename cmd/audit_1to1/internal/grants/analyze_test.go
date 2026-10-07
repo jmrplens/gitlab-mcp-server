@@ -51,14 +51,14 @@ func fixtureTable() *finegrained.Table {
 			{Perms: []uint16{permReadProtectedBranch}, Any: finegrained.BoundaryProject},
 		},
 		Operations: []finegrained.Operation{
-			{Name: "GET /projects/:id/issues", Groups: []uint32{0}},
-			{Name: "PUT /projects/:id/issues/:issue_iid", Groups: []uint32{1}},
-			{Name: "GET /namespaces", Groups: []uint32{2}},
-			{Name: "query project (issuesQuery)", Spine: []uint32{0}, OffSpine: []uint32{1}},
-			{Name: "GET /topics", Skip: true},
-			{Name: "POST /projects/:id/things", Groups: []uint32{0, 2}},
-			{Name: "PATCH /projects/:id/issues", Groups: []uint32{3}},
-			{Name: "GET /projects/:id/protected_branches", Groups: []uint32{4}},
+			{Name: "GET /projects/:id/issues", Classic: finegrained.ClassicReadAPI, Groups: []uint32{0}},
+			{Name: "PUT /projects/:id/issues/:issue_iid", Classic: finegrained.ClassicAPI, Groups: []uint32{1}},
+			{Name: "GET /namespaces", Classic: finegrained.ClassicReadAPI, Groups: []uint32{2}},
+			{Name: "query project (issuesQuery)", Classic: finegrained.ClassicReadAPI, Spine: []uint32{0}, OffSpine: []uint32{1}},
+			{Name: "GET /topics", Classic: finegrained.ClassicReadAPI, Skip: true},
+			{Name: "POST /projects/:id/things", Classic: finegrained.ClassicAPI, Groups: []uint32{0, 2}},
+			{Name: "PATCH /projects/:id/issues", Classic: finegrained.ClassicAPI, Groups: []uint32{3}},
+			{Name: "GET /projects/:id/protected_branches", Classic: finegrained.ClassicReadAPI, Groups: []uint32{4}},
 		},
 		Elements: []finegrained.Element{
 			{Path: "project", Type: "Project", Groups: []uint32{0}},
@@ -66,24 +66,30 @@ func fixtureTable() *finegrained.Table {
 			{Path: "project.issues.nodes.links", Type: "VulnerabilityIssueLink", Undeclared: true, Effect: finegrained.EffectRemoved},
 		},
 		Actions: []finegrained.Requirement{
-			{ID: "branch.protected_list", Paths: [][]uint32{{7}}},
-			{ID: "branch.rule_list", Denied: &finegrained.Denial{Cause: finegrained.CauseTypeUndeclared, Element: "BranchRule", Effect: finegrained.EffectRemoved}, GraphQL: true, Collection: true},
-			{ID: "issue.bulk", Paths: [][]uint32{{6}}},
-			{ID: "issue.get", Paths: [][]uint32{{0}}},
-			{ID: "issue.list", Paths: [][]uint32{{3}}, Degraded: []uint32{2}, GraphQL: true, Collection: true},
-			{ID: "issue.thing", Paths: [][]uint32{{5}}},
-			{ID: "issue.update", Paths: [][]uint32{{0, 1}}},
-			{ID: "later.get", Denied: &finegrained.Denial{Cause: finegrained.CauseRESTTodo, Element: "GET /later", Effect: finegrained.EffectRefused}},
+			{ID: "branch.protected_list", Classic: finegrained.ClassicReadAPI, Paths: [][]uint32{{7}}},
 			{
-				ID: "namespace.list", Paths: [][]uint32{{2}},
+				ID: "branch.rule_list", Classic: finegrained.ClassicReadAPI,
+				Denied: &finegrained.Denial{Cause: finegrained.CauseTypeUndeclared, Element: "BranchRule", Effect: finegrained.EffectRemoved}, GraphQL: true, Collection: true,
+			},
+			{ID: "issue.bulk", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{6}}},
+			{ID: "issue.get", Classic: finegrained.ClassicReadAPI, Paths: [][]uint32{{0}}},
+			{ID: "issue.list", Classic: finegrained.ClassicReadAPI, Paths: [][]uint32{{3}}, Degraded: []uint32{2}, GraphQL: true, Collection: true},
+			{ID: "issue.thing", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{5}}},
+			{ID: "issue.update", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{0, 1}}},
+			{ID: "later.get", Classic: finegrained.ClassicReadAPI, Denied: &finegrained.Denial{Cause: finegrained.CauseRESTTodo, Element: "GET /later", Effect: finegrained.EffectRefused}},
+			{
+				ID: "namespace.list", Classic: finegrained.ClassicReadAPI, Paths: [][]uint32{{2}},
 				DeniedWays: []finegrained.Denial{
 					{Cause: finegrained.CauseTypeUndeclared, Element: "Namespace", Effect: finegrained.EffectNull},
 					{Cause: finegrained.CauseRESTUndeclared, Element: "GET /nothing", Effect: finegrained.EffectRefused},
 				},
 				GraphQL: true,
 			},
-			{ID: "security.bulk", Denied: &finegrained.Denial{Cause: finegrained.CauseMutationUndeclared, Element: "bulkUpdate", Effect: finegrained.EffectRefused}, GraphQL: true},
-			{ID: "topic.list", Paths: [][]uint32{{4}}},
+			{
+				ID: "security.bulk", Classic: finegrained.ClassicAPI,
+				Denied: &finegrained.Denial{Cause: finegrained.CauseMutationUndeclared, Element: "bulkUpdate", Effect: finegrained.EffectRefused}, GraphQL: true,
+			},
+			{ID: "topic.list", Classic: finegrained.ClassicReadAPI, Paths: [][]uint32{{4}}},
 		},
 	}
 }
@@ -163,6 +169,7 @@ func graphQL(operation, class string, roots ...string) actionrequests.RecordRequ
 
 // fixtureRecord is the request record the fixture table was joined from.
 func fixtureRecord() actionrequests.Record {
+	const readAPI = "read_api"
 	mandatory := actionrequests.ClassMandatory
 	directed := rest("PUT /projects/:id/issues/:issue_iid", mandatory)
 	directed.Directives = []string{"mandatory: the update runs after the read"}
@@ -170,17 +177,17 @@ func fixtureRecord() actionrequests.Record {
 	placed.Derived = "GET /projects/:/integrations/:"
 	placed.Declaration = "slug-route"
 	return actionrequests.Record{Note: actionrequests.RecordNote, Actions: []actionrequests.RecordAction{
-		{ID: "branch.protected_list", Requests: []actionrequests.RecordRequest{rest("GET /projects/:id/protected_branches", mandatory)}, Paths: [][]int{{0}}},
-		{ID: "branch.rule_list", Requests: []actionrequests.RecordRequest{graphQL("query project (branchRules)", mandatory, "project")}, Paths: [][]int{{0}}},
-		{ID: "issue.bulk", Requests: []actionrequests.RecordRequest{rest("PATCH /projects/:id/issues", mandatory)}, Paths: [][]int{{0}}},
-		{ID: "issue.get", Requests: []actionrequests.RecordRequest{rest("GET /projects/:id/issues", mandatory), placed}, Paths: [][]int{{0}, {0, 1}}},
-		{ID: "issue.list", Requests: []actionrequests.RecordRequest{graphQL("query project (issuesQuery)", mandatory, "project")}, Paths: [][]int{{0}}},
-		{ID: "issue.thing", Requests: []actionrequests.RecordRequest{rest("POST /projects/:id/things", mandatory)}, Paths: [][]int{{0}}},
-		{ID: "issue.update", Requests: []actionrequests.RecordRequest{rest("GET /projects/:id/issues", mandatory), directed}, Paths: [][]int{{0, 1}}},
-		{ID: "later.get", Requests: []actionrequests.RecordRequest{rest("GET /later", mandatory)}, Paths: [][]int{{0}}},
-		{ID: "namespace.list", Requests: []actionrequests.RecordRequest{rest("GET /namespaces", actionrequests.ClassAlternative), {Kind: actionrequests.KindUnresolved, Reason: "raw-path namespaces.List", Class: actionrequests.ClassAlternative, Declaration: "sdk-path-sprintf"}}, Paths: [][]int{{0}, {1}}},
-		{ID: "security.bulk", Requests: []actionrequests.RecordRequest{graphQL("mutation bulkUpdate (bulkUpdate)", mandatory, "bulkUpdate")}, Paths: [][]int{{0}}},
-		{ID: "topic.list", Declaration: "sends-nothing", Paths: [][]int{{}}},
+		{ID: "branch.protected_list", Classic: readAPI, Requests: []actionrequests.RecordRequest{rest("GET /projects/:id/protected_branches", mandatory)}, Paths: [][]int{{0}}},
+		{ID: "branch.rule_list", Classic: readAPI, Requests: []actionrequests.RecordRequest{graphQL("query project (branchRules)", mandatory, "project")}, Paths: [][]int{{0}}},
+		{ID: "issue.bulk", Classic: "api", Requests: []actionrequests.RecordRequest{rest("PATCH /projects/:id/issues", mandatory)}, Paths: [][]int{{0}}},
+		{ID: "issue.get", Classic: readAPI, Requests: []actionrequests.RecordRequest{rest("GET /projects/:id/issues", mandatory), placed}, Paths: [][]int{{0}, {0, 1}}},
+		{ID: "issue.list", Classic: readAPI, Requests: []actionrequests.RecordRequest{graphQL("query project (issuesQuery)", mandatory, "project")}, Paths: [][]int{{0}}},
+		{ID: "issue.thing", Classic: "api", Requests: []actionrequests.RecordRequest{rest("POST /projects/:id/things", mandatory)}, Paths: [][]int{{0}}},
+		{ID: "issue.update", Classic: "api", Requests: []actionrequests.RecordRequest{rest("GET /projects/:id/issues", mandatory), directed}, Paths: [][]int{{0, 1}}},
+		{ID: "later.get", Classic: readAPI, Requests: []actionrequests.RecordRequest{rest("GET /later", mandatory)}, Paths: [][]int{{0}}},
+		{ID: "namespace.list", Classic: readAPI, Requests: []actionrequests.RecordRequest{rest("GET /namespaces", actionrequests.ClassAlternative), {Kind: actionrequests.KindUnresolved, Reason: "raw-path namespaces.List", Class: actionrequests.ClassAlternative, Declaration: "sdk-path-sprintf"}}, Paths: [][]int{{0}, {1}}},
+		{ID: "security.bulk", Classic: "api", Requests: []actionrequests.RecordRequest{graphQL("mutation bulkUpdate (bulkUpdate)", mandatory, "bulkUpdate")}, Paths: [][]int{{0}}},
+		{ID: "topic.list", Classic: readAPI, Declaration: "sends-nothing", Paths: [][]int{{}}},
 	}}
 }
 
@@ -267,7 +274,7 @@ func TestRun_TheFixture_ReportsEveryPartAndPassesTheGate(t *testing.T) {
 		Degraded: 1, ShapedByDirective: 1, ShapedByDeclaration: 3, PublicOperations: 3, PublicKnown: true,
 		WorklistElements: 4, WorklistLeads: 3,
 		InventoryRESTRows: 1, InventoryRESTRowsDerived: 1, DerivedREST: 8, DerivedRESTRecorded: 1,
-		DerivedGraphQL: 3, DerivedGraphQLRecorded: 0,
+		DerivedGraphQL: 3, DerivedGraphQLRecorded: 0, ReachedByReadAPI: 7,
 	}
 	if report.Summary != want {
 		t.Errorf("Summary = %+v\nwant %+v", report.Summary, want)
