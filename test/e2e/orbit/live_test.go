@@ -24,6 +24,9 @@
 //
 //   - GITLAB_COM_TOKEN — a GitLab.com personal access token with api scope,
 //     used to authenticate every request.
+//   - GITLAB_COM_READ_API_TOKEN: optional. A GitLab.com personal access
+//     token carrying read_api and not api; with it, one more test measures
+//     that the query route accepts that scope.
 //   - ORBIT_FIXTURES_NAMESPACE — optional. Overrides the default `plens1`
 //     namespace against which the fixture-driven subtests run. Set this
 //     when developing against your own GitLab.com namespace.
@@ -59,6 +62,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -67,12 +71,8 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
-	// Import the orbit package under test. The test lives in
-	// test/e2e/orbit/ (external test package) so it can also be
-	// runnable on its own against any GitLab instance with the
-	// `orbitlive` build tag, without pulling in the full e2e
-	// suite from test/e2e/gitlab/.
-	orbit "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/orbit"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	orbit "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/orbit" // the package under test, imported from outside it (see Layout above)
 )
 
 // liveGitLabComURL is the base URL for the real GitLab.com REST API
@@ -692,6 +692,123 @@ func liveLLMSchema(ctx context.Context, client *gitlabclient.Client, input orbit
 // allow the indexer to catch up.
 func TestOrbitLiveGitLabCom_Fixtures(t *testing.T) {
 	testOrbitLiveFixtures(t)
+}
+
+// TestOrbitLiveGitLabCom_ReadAPIToken_PassesTheQueryScopeCheck measures what
+// the server's classic scope derivation declares without a GitLab.com
+// measurement: that the POST /orbit/query route accepts a token carrying
+// read_api alone, as ee/lib/api/orbit/data.rb grants it at v19.4.1-ee
+// (ADR-0026). It runs only with GITLAB_COM_READ_API_TOKEN, a developer's
+// GitLab.com token carrying read_api and not api, since nothing mints one
+// and GITLAB_COM_TOKEN carries api. GitLab's scope check runs before the
+// route does anything, so an answer that is not insufficient_scope, an
+// answer or a refusal for any other reason, is the scope check passed.
+// [refusedForScope] tells the two apart, and
+// TestRefusedForScope_ThroughTheQueryHandler_ReadsGitLabsAnswer holds it able
+// to fail.
+func TestOrbitLiveGitLabCom_ReadAPIToken_PassesTheQueryScopeCheck(t *testing.T) {
+	token := os.Getenv("GITLAB_COM_READ_API_TOKEN")
+	if token == "" {
+		t.Skip("GITLAB_COM_READ_API_TOKEN not set; skipping the read_api measurement of the query route")
+	}
+	client, err := gitlabclient.NewClientWithToken(liveGitLabComURL, token, false)
+	if err != nil {
+		t.Fatalf("NewClientWithToken: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	out, err := orbit.Query(ctx, client, readAPIQuery())
+	if refusedForScope(err) {
+		t.Fatalf("GitLab.com refused POST /orbit/query to a read_api token for its scope, which the derivation declares it accepts: %v", err)
+	}
+	if err != nil {
+		t.Logf("the scope check passed and the route answered otherwise: %v", err)
+		return
+	}
+	t.Logf("a read_api token queried the graph: query_type=%s row_count=%d", out.QueryType, out.RowCount)
+}
+
+// readAPIQuery is the query the read_api measurement sends: the id of the
+// fixture project, found by its path as every query here finds one, which is
+// about the least the route can be asked, in version 12 of the DSL.
+func readAPIQuery() orbit.QueryInput {
+	path := projectPath(orbitFixturesNamespace(), kgFixturesProjectPath)
+	return orbit.QueryInput{
+		Query: map[string]any{
+			"query_type": "traversal",
+			"nodes":      []any{node("proj", "Project", map[string]any{"filters": map[string]any{"full_path": path}, "columns": []any{"id"}})},
+		},
+	}
+}
+
+// refusedForScope reports whether err carries GitLab's refusal of the calling
+// token for its scopes: a 403 whose body carries the RFC 6750 code
+// insufficient_scope, or whose challenge does. The rendered error cannot be
+// read for it, because the handler's error bounds and sanitizes GitLab's body
+// and leaves out one that names the scope it wanted, which is exactly the
+// body GitLab answers this refusal with; the answer is read from the response
+// the error wraps instead.
+func refusedForScope(err error) bool {
+	var response *gl.ErrorResponse
+	if !errors.As(err, &response) || response.Response == nil || response.Response.StatusCode != http.StatusForbidden {
+		return false
+	}
+	if strings.Contains(response.Response.Header.Get("WWW-Authenticate"), `error="insufficient_scope"`) {
+		return true
+	}
+	var body struct {
+		Error string `json:"error"`
+	}
+	return json.Unmarshal(response.Body, &body) == nil && body.Error == "insufficient_scope"
+}
+
+// TestRefusedForScope_ThroughTheQueryHandler_ReadsGitLabsAnswer holds the
+// discriminator of the read_api measurement able to fail: the query handler
+// is run against a stand-in answering POST /orbit/query the way GitLab
+// answers a token whose scopes do not reach a route, with the body this
+// repository records for that refusal and with the challenge alone, and with
+// the answers that are not that refusal. It needs no network and no token.
+func TestRefusedForScope_ThroughTheQueryHandler_ReadsGitLabsAnswer(t *testing.T) {
+	const scopeBody = `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"api"}`
+	tests := []struct {
+		name      string
+		status    int
+		challenge string
+		body      string
+		want      bool
+	}{
+		{name: "the body GitLab refuses a scope with", status: http.StatusForbidden, body: scopeBody, want: true},
+		{name: "the challenge alone", status: http.StatusForbidden, challenge: `Bearer realm="", error="insufficient_scope"`, body: `{"message":"403 Forbidden"}`, want: true},
+		{name: "a permission refusal", status: http.StatusForbidden, body: `{"message":"403 Forbidden"}`},
+		{name: "a fine-grained refusal", status: http.StatusForbidden, body: `{"error":"insufficient_granular_scope","error_description":"Access denied"}`},
+		{name: "the code on another status", status: http.StatusBadRequest, body: scopeBody},
+		{name: "a route GitLab does not serve", status: http.StatusNotFound, body: `{"message":"404 Not Found"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/orbit/query") {
+					t.Errorf("request = %s %s, want POST /orbit/query", r.Method, r.URL.Path)
+				}
+				if tt.challenge != "" {
+					w.Header().Set("WWW-Authenticate", tt.challenge)
+				}
+				testutil.RespondJSON(w, tt.status, tt.body)
+			}))
+			_, err := orbit.Query(context.Background(), client, readAPIQuery())
+			if err == nil {
+				t.Fatal("orbit.Query() error = nil, want the stand-in's refusal")
+			}
+			if got := refusedForScope(err); got != tt.want {
+				t.Errorf("refusedForScope(%v) = %t, want %t", err, got, tt.want)
+			}
+		})
+	}
+	t.Run("an error that wraps no response", func(t *testing.T) {
+		if refusedForScope(errors.New("dial tcp: connection refused")) || refusedForScope(nil) {
+			t.Error("refusedForScope() = true for an error that carries no answer from GitLab")
+		}
+	})
 }
 
 // testOrbitLiveFixtures exercises the four query_type variants
