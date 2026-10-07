@@ -800,7 +800,14 @@ jobs:
   site-build:
     name: "📚 Site build"
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # A healthy run of this job, apart from the Chromium step, took 115 s at
+    # the 95th percentile and 143 s at most (32 successful runs, 2026-10-06 to
+    # 2026-10-07). The Chromium step is capped at 17 minutes below, so the job
+    # needs about 19.5 at worst; 25 leaves the rest for a slow cache restore or
+    # a slow build. The 20 it had was not what failed on 2026-10-07: the apt
+    # run inside that step had no end, and a longer timeout would only have
+    # been reached later.
+    timeout-minutes: 25
     steps:
       # Like site-lint, this job installs the site's dependencies and runs code
       # this repository did not write, so it holds no credential beyond the
@@ -837,8 +844,17 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('site/pnpm-lock.yaml') }}
+      # The browser alone, then a launch; apt only if the launch fails, and
+      # then bounded. `--with-deps` ran apt-get update and install on every run
+      # whatever the cache held, and on 2026-10-07 an apt run that never ended
+      # took three of these jobs to their timeout with every cache hit. The
+      # script says why it is built this way. Its bounds add up to 970 s, just
+      # over 16 minutes, with every one of them reached; the step is capped
+      # above that, so that a failure ends with the script's message rather
+      # than the cap.
       - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 17
+        run: ../scripts/ensure-playwright-chromium.sh
         working-directory: site
       - name: Build the site
         run: pnpm run build
@@ -1047,6 +1063,13 @@ jobs:
       # scripts/check-doc-links.mjs, in a throwaway git repository holding a
       # stand-in site, and holds it to refusing a link to a site page, a
       # heading or a served file that is not there, under both addresses.
+      # scripts/ensure_playwright_chromium_sh_test.py runs the site builds'
+      # Chromium step, scripts/ensure-playwright-chromium.sh, against a
+      # stand-in pnpm, node, sudo and dpkg, and holds it to leaving apt alone
+      # when the browser launches, to running install-deps as root inside its
+      # timeout, to finishing what dpkg was left doing before a retry, to
+      # failing within its bounds when apt hangs, and the two workflows to
+      # capping the step above those bounds.
       # shellcheck, bash, git, jq, zip, unzip and wget come from the runner
       # image.
       # Off CI a test skips when one is missing; here, where GitHub sets CI,
