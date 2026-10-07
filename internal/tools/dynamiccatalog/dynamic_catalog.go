@@ -24,8 +24,10 @@ import (
 // the standalone actions joined, and the dynamic execute tool is exempt from
 // the per-tool safe-mode wrapping the individual surface gets; so in safe mode
 // the standalone writes, the interactive creation flows among them, kept their
-// real handlers. Read-only mode never had that gap, because the standalone
-// builder takes it as an option.
+// real handlers. Read-only mode and the narrowing of a credential carrying
+// read_api and not api are applied to the standalone actions after they join,
+// by the same function the filter applies them with, so what they withhold is
+// in the bookkeeping too.
 //
 // The catalog is assembled once per distinct configuration and shared (see
 // [gitlabtools.ShareCatalog]); what is returned is that catalog bound to
@@ -71,12 +73,16 @@ func build(client *gitlabclient.Client, dotcom bool, cfg *config.ServerConfig) (
 		return nil, gitlabtools.WithheldActions{}, fmt.Errorf("filter dynamic action catalog: %w", filterErr)
 	}
 	withStandalone, standaloneErr := addStandaloneCatalog(filtered, client, dynamictools.StandaloneOptions{
-		ReadOnly:     cfg.ReadOnly,
 		ExcludeTools: cfg.ExcludeTools,
 	})
 	if standaloneErr != nil {
 		return nil, gitlabtools.WithheldActions{}, fmt.Errorf("add standalone dynamic actions: %w", standaloneErr)
 	}
+	// Read-only mode and the read_api narrowing again, over the standalone
+	// actions now joined, so a guided flow either withholds is answered with
+	// its cause like any other action rather than as unknown. The actions the
+	// filter above already narrowed are kept as they were.
+	withStandalone, withheld = gitlabtools.NarrowForReading(withStandalone, cfg, withheld)
 	// Validated here and again after the safe-mode rewrite, because
 	// buildActionCatalog validates only what it built: the standalone and
 	// interactive groups join afterwards, and the rewrite replaces the

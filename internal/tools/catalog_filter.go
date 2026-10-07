@@ -17,14 +17,18 @@ import (
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 )
 
 // WithheldActions records the catalog actions a filter removed, split by whose
 // decision it was. Only the token-scope half is something the caller can act
-// on, so the two must not be merged into one message.
+// on, so the two must not be merged into one message, and that half names the
+// scopes each action needs that the credential lacks, so the message can say
+// which to reauthorize with.
 type WithheldActions struct {
-	ByTokenScope []string
+	ByTokenScope []actioncatalog.ScopeWithheld
 	ByOperator   []string
 	// ExcludedByName are the actions --exclude-tools removed. They are kept
 	// apart from the two above and never reach the dynamic registry's
@@ -38,8 +42,19 @@ type WithheldActions struct {
 
 // FilterActionCatalog applies a deployment's narrowing to a catalog, in the
 // order that keeps the causes apart: the operator's exclusions first, then the
-// credential's scopes, then read-only mode, then safe-mode previews. The
-// returned bookkeeping names what the scope and read-only steps removed.
+// scopes the credential's catalog groups demand (admin_mode), then read-only
+// mode, then the API scope a credential carrying read_api and not api reaches
+// (ADR-0026), then safe-mode previews. The returned bookkeeping names what the
+// scope, read-only and reach steps removed.
+//
+// Read-only mode runs before the reach step so that an action both would
+// remove is reported as the operator's: a write in a read-only deployment is
+// not the credential's to fix, and blaming it would send a caller to
+// reauthorize for nothing. What the reach step removes after it is what
+// GitLab refuses read_api although the catalog classifies it as a read. The
+// group step runs before both and removes writes too, so a write it removes
+// from a read-only deployment is filed under the operator for the same
+// reason, whatever scope the credential lacks besides.
 func FilterActionCatalog(catalog *actioncatalog.Catalog, cfg *config.ServerConfig) (*actioncatalog.Catalog, WithheldActions, error) {
 	var withheld WithheldActions
 	// Tools the operator excluded by name are not "withheld": the point of the
@@ -55,21 +70,8 @@ func FilterActionCatalog(catalog *actioncatalog.Catalog, cfg *config.ServerConfi
 	if err != nil {
 		return nil, WithheldActions{}, err
 	}
-	withheld.ByTokenScope = RemovedActionKeys(filtered, scoped)
-	filtered = scoped
-	if cfg.ReadOnly {
-		// Filter at action granularity, not group granularity: a domain that
-		// mixes reads and writes must keep its read actions reachable instead
-		// of disappearing with them.
-		readable := filtered.FilterReadOnlyActions()
-		removed := RemovedActionKeys(filtered, readable)
-		if cfg.ReadOnlyFromTokenScope {
-			withheld.ByTokenScope = append(withheld.ByTokenScope, removed...)
-		} else {
-			withheld.ByOperator = append(withheld.ByOperator, removed...)
-		}
-		filtered = readable
-	}
+	withheld.ByTokenScope, withheld.ByOperator = groupScopeWithheld(filtered, scoped, cfg)
+	filtered, withheld = NarrowForReading(scoped, cfg, withheld)
 	if cfg.SafeMode {
 		// Same granularity argument: dispatcher tools cover reads and writes
 		// alike, so safe mode is applied per action in the catalog rather than
@@ -142,6 +144,76 @@ func warnExclusionsNamingNothing(unmatched []string) {
 		"entries", strings.Join(namedNothing, ", "))
 }
 
+// NarrowForReading applies the two narrowings that turn on whether an action
+// writes, in the order [FilterActionCatalog] runs them: read-only mode, which
+// keeps the actions the catalog classifies as reads and files the rest under
+// the operator, then the reach of a credential carrying read_api and not api,
+// which keeps the actions GitLab accepts from read_api and files the rest
+// under the token's scope. It adds to withheld what each removed and returns
+// it with the narrowed catalog.
+//
+// It is exported for the dynamic surface, which adds the standalone utilities
+// after the catalog is filtered and applies these two to the whole catalog
+// again so that a guided flow they withhold is reported with its cause rather
+// than as unknown. Both steps keep what they already kept, so the actions the
+// first pass narrowed are not filed twice.
+func NarrowForReading(catalog *actioncatalog.Catalog, cfg *config.ServerConfig, withheld WithheldActions) (*actioncatalog.Catalog, WithheldActions) {
+	if cfg.ReadOnly {
+		// Filter at action granularity, not group granularity: a domain that
+		// mixes reads and writes must keep its read actions reachable instead
+		// of disappearing with them.
+		readable := catalog.FilterReadOnlyActions()
+		withheld.ByOperator = append(withheld.ByOperator, RemovedActionKeys(catalog, readable)...)
+		catalog = readable
+	}
+	if cfg.ReadAPIOnly {
+		reachable := catalog.FilterReachableWith(finegrained.ClassicReadAPI)
+		withheld.ByTokenScope = append(withheld.ByTokenScope, scopeWithheld(catalog, reachable, cfg)...)
+		catalog = reachable
+	}
+	return catalog, withheld
+}
+
+// groupScopeWithheld files what the group step of [FilterActionCatalog]
+// removed: under the operator every write of a read-only deployment, which
+// read-only mode would withhold whatever the credential carried, and the rest
+// under the token's scope as [scopeWithheld] files it.
+func groupScopeWithheld(before, after *actioncatalog.Catalog, cfg *config.ServerConfig) (byScope []actioncatalog.ScopeWithheld, byOperator []string) {
+	for _, action := range removedActions(before, after) {
+		if cfg.ReadOnly && !action.ReadOnly {
+			byOperator = append(byOperator, actionKeys(action)...)
+			continue
+		}
+		byScope = append(byScope, actionScopeWithheld(action, cfg)...)
+	}
+	return byScope, byOperator
+}
+
+// scopeWithheld lists, as [RemovedActionKeys] does, every key of an action a
+// scope step removed, each with the scopes the credential lacks for it, kept
+// apart by who asks for them: api when GitLab requires it for what the action
+// sends and the credential was narrowed to read_api, and those the action's
+// catalog group demands before this server serves it ([MetaToolScopes]).
+func scopeWithheld(before, after *actioncatalog.Catalog, cfg *config.ServerConfig) []actioncatalog.ScopeWithheld {
+	var withheld []actioncatalog.ScopeWithheld
+	for _, action := range removedActions(before, after) {
+		withheld = append(withheld, actionScopeWithheld(action, cfg)...)
+	}
+	return withheld
+}
+
+// actionScopeWithheld is every key of one action, each with the scopes the
+// credential lacks for it, as [scopeWithheld] reports them.
+func actionScopeWithheld(action actioncatalog.Action, cfg *config.ServerConfig) []actioncatalog.ScopeWithheld {
+	byGitLab, byServer := gitlabclient.MissingClassicScopes(action.ClassicNeed(), MetaToolScopes[action.ToolName], cfg.TokenScopes, cfg.ReadAPIOnly)
+	keys := actionKeys(action)
+	withheld := make([]actioncatalog.ScopeWithheld, 0, len(keys))
+	for _, key := range keys {
+		withheld = append(withheld, actioncatalog.ScopeWithheld{ID: key, ByGitLab: byGitLab, ByServer: byServer})
+	}
+	return withheld
+}
+
 // RemovedActionKeys lists every canonical action ID, and every alias resolving
 // to one, that `before` carried and `after` does not.
 //
@@ -150,6 +222,15 @@ func warnExclusionsNamingNothing(unmatched []string) {
 // catalog used to: answering only the canonical form leaves the alias reported
 // as a typo, which is the misdiagnosis this exists to prevent.
 func RemovedActionKeys(before, after *actioncatalog.Catalog) []string {
+	var keys []string
+	for _, action := range removedActions(before, after) {
+		keys = append(keys, actionKeys(action)...)
+	}
+	return keys
+}
+
+// removedActions lists the actions `before` carried and `after` does not.
+func removedActions(before, after *actioncatalog.Catalog) []actioncatalog.Action {
 	if before == nil || after == nil {
 		return nil
 	}
@@ -157,20 +238,25 @@ func RemovedActionKeys(before, after *actioncatalog.Catalog) []string {
 	for _, action := range after.Actions() {
 		kept[action.ID] = struct{}{}
 	}
-	var keys []string
+	var removed []actioncatalog.Action
 	for _, action := range before.Actions() {
-		if _, ok := kept[action.ID]; ok {
-			continue
+		if _, ok := kept[action.ID]; !ok {
+			removed = append(removed, action)
 		}
-		keys = append(keys, string(action.ID))
-		keys = append(keys, action.Aliases...)
-		// Compatibility aliases resolve in the dynamic registry exactly as the
-		// declared ones do, so a caller working from an older action name
-		// would otherwise be told the action is unknown, the misdiagnosis
-		// this whole path exists to prevent.
-		for _, alias := range action.Compatibility.ActionAliases {
-			keys = append(keys, alias.Alias)
-		}
+	}
+	return removed
+}
+
+// actionKeys are the names a caller may ask for an action by: its canonical
+// ID and every alias that resolves to it.
+func actionKeys(action actioncatalog.Action) []string {
+	keys := append([]string{string(action.ID)}, action.Aliases...)
+	// Compatibility aliases resolve in the dynamic registry exactly as the
+	// declared ones do, so a caller working from an older action name would
+	// otherwise be told the action is unknown, the misdiagnosis this whole
+	// path exists to prevent.
+	for _, alias := range action.Compatibility.ActionAliases {
+		keys = append(keys, alias.Alias)
 	}
 	return keys
 }

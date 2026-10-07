@@ -77,6 +77,7 @@ const (
 	pkgClientCompat  = "internal/clientcompat"
 	pkgCompletions   = "internal/completions"
 	pkgTools         = "internal/tools"
+	pkgActionCatalog = "internal/tools/actioncatalog"
 	pkgVisibility    = "internal/tools/toolvisibility"
 	pkgDynamic       = "internal/tools/dynamic"
 	pkgFinegrained   = "internal/finegrained"

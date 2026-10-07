@@ -14,10 +14,28 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/surfaces"
 )
+
+// TestStandaloneToolsBeyond_NamesTheFlowsReadAPIDoesNotReach verifies the
+// standalone tools a token carrying read_api and not api loses are the four
+// guided creation flows, each of which posts, sorted, and never the project
+// discovery helper, which reads; a token carrying api loses none.
+func TestStandaloneToolsBeyond_NamesTheFlowsReadAPIDoesNotReach(t *testing.T) {
+	want := []string{
+		"gitlab_interactive_issue_create", "gitlab_interactive_mr_create",
+		"gitlab_interactive_project_create", "gitlab_interactive_release_create",
+	}
+	if got := StandaloneToolsBeyond(finegrained.ClassicReadAPI); !slices.Equal(got, want) {
+		t.Errorf("StandaloneToolsBeyond(read_api) = %v, want %v", got, want)
+	}
+	if got := StandaloneToolsBeyond(finegrained.ClassicAPI); len(got) != 0 {
+		t.Errorf("StandaloneToolsBeyond(api) = %v, want none", got)
+	}
+}
 
 // TestRegisterSurfaceTools_UnprojectableSpec_PanicsNamingTheTool verifies the
 // failure mode a malformed surface tool spec has to have.

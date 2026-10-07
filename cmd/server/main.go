@@ -276,7 +276,7 @@ func main() {
 	flag.BoolVar(&hcfg.safeMode, "safe-mode", false, "Intercept mutating tools and return a preview instead of executing")
 	flag.BoolVar(&hcfg.embeddedResources, "embedded-resources", true, "Embed canonical MCP resource URIs in get_* tool results")
 	flag.StringVar(&hcfg.excludeTools, "exclude-tools", "", "Comma-separated tool names, group names or canonical action IDs to exclude, on every surface")
-	flag.BoolVar(&hcfg.ignoreScopes, "ignore-scopes", false, "Skip the scope filter and the read-only narrowing; the read_api minimum still applies")
+	flag.BoolVar(&hcfg.ignoreScopes, "ignore-scopes", false, "Skip the scope filter and the read_api narrowing; the read_api minimum still applies")
 	flag.IntVar(&hcfg.maxHTTPClients, "max-http-clients", config.DefaultMaxHTTPClients, "Maximum unique (token, GitLab URL) server entries kept in the pool; bounds pooled entries, not sessions or the requests they hold, which the process bounds on its own")
 	flag.DurationVar(&hcfg.sessionTimeout, "session-timeout", config.DefaultSessionTimeout, "Idle MCP session timeout; applies to --stateless=false only (under the default stateless transport each POST's session ends with its response). A session no client deletes keeps one of the process's session slots until it expires, and with 0 until its credential's pool entry is evicted")
 	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval; 0 stops the periodic check, but an entry whose credential is older than "+serverpool.DefaultMaxCredentialAge.String()+" is still rebuilt")
@@ -533,7 +533,7 @@ FLAGS
                             private, loopback or CGNAT address (default false). Cloud metadata addresses stay
                             refused
   -tier string              Force licensing tier: free|ce|premium|ultimate; omit to detect per server entry
-  -ignore-scopes            Skip the scope filter and read-only narrowing; read_api is still the minimum (default false)
+  -ignore-scopes            Skip the scope filter and read_api narrowing; read_api is still the minimum (default false)
   -upload-max-file-size s   Largest local file the upload and file-read tools accept: a byte count, or one
                             with a KB, MB or GB suffix (default 2GB, at most 1024GB)
 
@@ -636,7 +636,7 @@ ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_MCP_EMBEDDED_RESOURCES     Embed canonical MCP resource links in get_* results (default true)
   GITLAB_MCP_EXCLUDE_TOOLS          Comma-separated tool names, group names or canonical action IDs
                                     to exclude, on every surface (default empty)
-  GITLAB_MCP_IGNORE_SCOPES          Skip the scope filter and read-only narrowing; read_api is still
+  GITLAB_MCP_IGNORE_SCOPES          Skip the scope filter and read_api narrowing; read_api is still
                                     the minimum (default false)
   GITLAB_MCP_UPLOAD_MAX_FILE_SIZE   Largest local file the upload and file-read tools accept: a byte
                                     count, or one with a KB, MB or GB suffix (default 2GB, at most 1024GB)
@@ -1662,10 +1662,11 @@ func prepareStdioCatalog(
 	}
 
 	// Narrow the surface by the scopes detected above the way the HTTP pool
-	// does per entry (ADR-0018): a token that cannot write is served the
-	// read-only catalog, which withholds every write action and says why,
-	// instead of listing actions GitLab would refuse one by one with its own
-	// 403. --ignore-scopes skips this and the scope filter.
+	// does per entry (ADR-0018, ADR-0026): a token carrying read_api and not
+	// api is served the actions GitLab accepts from read_api, which withholds
+	// the rest and says why, instead of listing actions GitLab would refuse
+	// one by one with its own 403. --ignore-scopes skips this and the scope
+	// filter.
 	if !cfg.IgnoreScopes {
 		serverCfg.TokenScopes = facts.Scopes
 		if serverCfg.TokenScopes == nil {
@@ -2046,7 +2047,7 @@ func newServerShell(
 		// Named tools differ per surface, so the guidance is built for the
 		// surface this server actually registers: a dynamic-mode model can
 		// only see gitlab_find_action and gitlab_execute_action.
-		Instructions: buildInstructions(toolSurface, capabilitySurface, settings.transport, cfg.Stateless, cfg.ReadOnly),
+		Instructions: buildInstructions(toolSurface, capabilitySurface, settings.transport, cfg.Stateless, cfg.ReadOnly || cfg.ReadAPIOnly),
 		Logger:       sdkLogger(),
 		Capabilities: serverCapabilities,
 		// Session IDs are the SDK's own random ones. They used to carry a tag
@@ -4879,7 +4880,7 @@ func serveStdio(ctx context.Context, server *mcp.Server) error {
 	// gate: it is the one a client speaks over, and the one that can arrive
 	// before the catalog exists. Everything else this process connects to the
 	// same server is registration inspecting itself. See readiness.go.
-	err := server.Run(withReadinessGate(ctx), &mcp.IOTransport{Reader: reader, Writer: writer})
+	err := runStdioServer(server, withReadinessGate(ctx), &mcp.IOTransport{Reader: reader, Writer: writer})
 	if err == nil {
 		return nil
 	}
@@ -4906,6 +4907,17 @@ func serveStdio(ctx context.Context, server *mcp.Server) error {
 	}
 	return fmt.Errorf("mcp server error: %w", err)
 }
+
+// runStdioServer runs the stdio session; it is [mcp.Server.Run] everywhere
+// but in a test of [serveStdio].
+//
+// It is replaceable because the hang-up that serveStdio recognizes from its
+// reader is reached only by timing: the SDK reports a client closing its pipe
+// as an error only when a response was still being written as the pipe went
+// away, and as a clean return otherwise. A test that closed the pipe under a
+// real session took that branch on some runs and not on others, so whether it
+// ran said nothing about the code.
+var runStdioServer = (*mcp.Server).Run
 
 // countRegisteredTools returns the number of tools registered on the server
 // by connecting an ephemeral in-memory client session and calling ListTools.

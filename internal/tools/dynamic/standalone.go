@@ -9,8 +9,14 @@ import (
 
 // StandaloneOptions controls which standalone tools are added to the canonical
 // dynamic action catalog.
+//
+// It carries the operator's exclusions and nothing about read-only mode or a
+// token's scope. Both are applied to the standalone actions after they join
+// the catalog, by tools.NarrowForReading (internal/tools/dynamiccatalog), which
+// files what it removes as withheld; a read-only switch here removed the
+// guided flows before that bookkeeping could see them, so the dynamic surface
+// answered one as unknown rather than as withheld.
 type StandaloneOptions struct {
-	ReadOnly     bool
 	ExcludeTools []string
 }
 
@@ -35,7 +41,6 @@ func AddStandaloneCatalog(catalog *actioncatalog.Catalog, client *gitlabclient.C
 		catalog = catalog.Clone()
 	}
 	return surfaces.AddToolCatalog(catalog, surfaces.StandaloneToolSpecs(client), surfaces.CatalogOptions{
-		ReadOnlyOnly:     opts.ReadOnly,
 		ExcludeToolNames: opts.ExcludeTools,
 	})
 }

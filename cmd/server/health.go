@@ -189,7 +189,8 @@ func shortCommit(commit string) string {
 // per credential, since a node pinned to free and a node detecting the tier
 // hold the same Tier and serve different catalogs to a Premium token. Scope
 // detection is a setting for the same reason: skipping it registers every
-// tool for a read_api token that would otherwise get the read-only surface.
+// tool for a read_api token that would otherwise be served what read_api
+// reaches.
 //
 // The digest is a fingerprint for comparison, not a secret. The settings it
 // covers are few and public, so whoever reads it can work out which

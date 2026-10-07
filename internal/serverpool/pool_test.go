@@ -904,16 +904,17 @@ func TestGetOrCreate_DetectsScopesPerToken(t *testing.T) {
 	}
 }
 
-// TestGetOrCreate_ReadOnlyTokenGetsAReadOnlySurface verifies the half of the
-// per-action write gate that actually protects GitLab: a token whose scopes
-// cannot write is served a read-only entry, whatever the deployment's own
-// mode is.
+// TestGetOrCreate_ReadAPITokenIsNarrowedToWhatReadAPIReaches verifies the half
+// of the per-action write gate that actually protects GitLab: a token whose
+// scopes carry read_api and not api is served an entry narrowed to what
+// read_api reaches, whatever the deployment's own mode is, and the operator's
+// read-only switch is left as the deployment set it.
 //
 // This is what makes admitting a read_api token safe. The door no longer
 // demands the deployment's scope, so the narrowing has to happen here — and
 // per entry, since an entry is per token: one client's read_api credential
 // must not narrow another client's api credential.
-func TestGetOrCreate_ReadOnlyTokenGetsAReadOnlySurface(t *testing.T) {
+func TestGetOrCreate_ReadAPITokenIsNarrowedToWhatReadAPIReaches(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, r *http.Request) {
 		token := r.Header.Get("PRIVATE-TOKEN")
@@ -942,22 +943,22 @@ func TestGetOrCreate_ReadOnlyTokenGetsAReadOnlySurface(t *testing.T) {
 	pool := New(cfg, factory)
 
 	tests := []struct {
-		name         string
-		token        string
-		scopeKey     string
-		wantReadOnly bool
+		name            string
+		token           string
+		scopeKey        string
+		wantReadAPIOnly bool
 	}{
 		{
-			name:         "a token that cannot write gets a read-only surface",
-			token:        "glpat-read",
-			scopeKey:     "read_api",
-			wantReadOnly: true,
+			name:            "a token that cannot write is narrowed to what read_api reaches",
+			token:           "glpat-read",
+			scopeKey:        "read_api",
+			wantReadAPIOnly: true,
 		},
 		{
-			name:         "a write-capable token keeps the full surface",
-			token:        "glpat-api",
-			scopeKey:     "api",
-			wantReadOnly: false,
+			name:            "a write-capable token keeps the full surface",
+			token:           "glpat-api",
+			scopeKey:        "api",
+			wantReadAPIOnly: false,
 		},
 	}
 	for _, tt := range tests {
@@ -969,8 +970,9 @@ func TestGetOrCreate_ReadOnlyTokenGetsAReadOnlySurface(t *testing.T) {
 			if !ok {
 				t.Fatalf("no entry was built for scopes %q; built: %v", tt.scopeKey, built)
 			}
-			if entryCfg.ReadOnly != tt.wantReadOnly {
-				t.Errorf("ReadOnly = %v, want %v for scopes %q", entryCfg.ReadOnly, tt.wantReadOnly, tt.scopeKey)
+			if entryCfg.ReadAPIOnly != tt.wantReadAPIOnly || entryCfg.ReadOnly {
+				t.Errorf("ReadAPIOnly = %v and ReadOnly = %v, want %v and false for scopes %q",
+					entryCfg.ReadAPIOnly, entryCfg.ReadOnly, tt.wantReadAPIOnly, tt.scopeKey)
 			}
 		})
 	}
@@ -978,7 +980,7 @@ func TestGetOrCreate_ReadOnlyTokenGetsAReadOnlySurface(t *testing.T) {
 	// Narrowing one entry must never reach the shared deployment config: an
 	// entry is per token, so one client's read_api credential cannot narrow
 	// another client's api one.
-	if cfg.ReadOnly {
+	if cfg.ReadOnly || cfg.ServerConfig().ReadAPIOnly {
 		t.Error("narrowing one entry mutated the shared deployment config")
 	}
 }
@@ -1002,10 +1004,10 @@ func TestGetOrCreate_UsesScopesTheCallerAlreadyResolved(t *testing.T) {
 
 	cfg := testConfig(srv.URL)
 	cfg.IgnoreScopes = false
-	var gotReadOnly bool
+	var gotReadAPIOnly bool
 	var gotScopes []string
 	factory := func(_ *gitlabclient.Client, entryCfg *config.ServerConfig) (*mcp.Server, error) {
-		gotReadOnly = entryCfg.ReadOnly
+		gotReadAPIOnly = entryCfg.ReadAPIOnly
 		gotScopes = append([]string(nil), entryCfg.TokenScopes...)
 		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
 	}
@@ -1015,8 +1017,8 @@ func TestGetOrCreate_UsesScopesTheCallerAlreadyResolved(t *testing.T) {
 		t.Fatalf("GetOrCreateWithScopes() error: %v", err)
 	}
 
-	if !gotReadOnly {
-		t.Error("an entry built from read_api scopes must be read-only")
+	if !gotReadAPIOnly {
+		t.Error("an entry built from read_api scopes must be narrowed to what read_api reaches")
 	}
 	if len(gotScopes) != 1 || gotScopes[0] != "read_api" {
 		t.Errorf("TokenScopes = %v, want [read_api]", gotScopes)
@@ -5722,7 +5724,8 @@ func TestAdmitted_WithTheCeilingDisabled_AdmitsHoweverOldTheCheckIs(t *testing.T
 // the one field on the created-entry log line that records what the pool
 // learned about the token rather than what it was configured with.
 //
-// Scope detection decides whether the entry is narrowed to read-only, and the
+// Scope detection decides whether the entry is narrowed to what read_api
+// reaches, and the
 // narrowing is invisible from outside: a client is simply served a smaller
 // catalog. This line is what tells an operator which of the two happened, so a
 // value that no longer tracks the entry's own TokenScopes would report the
@@ -5955,7 +5958,7 @@ func TestGetOrCreate_FineGrainedTokenThatMayReadItsGrant_IsServedWhatItReaches(t
 }
 
 // TestGetOrCreate_FineGrainedTokenUnderIgnoreScopes_IsStillJudged verifies
-// --ignore-scopes skips the scope filter and the read-only narrowing and
+// --ignore-scopes skips the scope filter and the read_api narrowing and
 // nothing else: the token is still asked about, so a fine-grained token's
 // client still carries its authority, while the entry's configuration holds no
 // scopes.

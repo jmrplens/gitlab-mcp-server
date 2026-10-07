@@ -352,13 +352,18 @@ func addStandaloneActions(actions map[ActionID]struct{}, inst *instance, serverC
 // asks, rather than restated: a copy of the rule here is how the harness came
 // to encode the binary's old one, the registered name alone, which removed no
 // flow for the group name or the canonical ID (issue 911). The read-only mode
-// is the configuration's own, which already carries the narrowing a
-// credential that cannot write imposes.
+// is the operator's, and a credential carrying read_api and not api removes
+// the tools [gitlabtools.StandaloneToolsBeyond] names, the list the pass
+// itself removes, for the same reason.
 func standaloneActions(projected *projection, serverCfg *config.ServerConfig) map[ActionID]struct{} {
 	excluded, _ := gitlabtools.ExcludedStandaloneTools(serverCfg.ExcludeTools)
+	var beyondReadAPI []string
+	if serverCfg.ReadAPIOnly {
+		beyondReadAPI = gitlabtools.StandaloneToolsBeyond(finegrained.ClassicReadAPI)
+	}
 	actions := make(map[ActionID]struct{})
 	for id, action := range projected.actions {
-		if !action.standalone || slices.Contains(excluded, action.metaTool) {
+		if !action.standalone || slices.Contains(excluded, action.metaTool) || slices.Contains(beyondReadAPI, action.metaTool) {
 			continue
 		}
 		if serverCfg.ReadOnly && !action.readOnly {
@@ -454,10 +459,10 @@ func serverConfigFor(inst *instance, cfg ServerConfig, cred credentialFacts) *co
 		// surface.
 		MetaParamSchema: string(cfg.MetaParamSchema),
 	}
-	// The same call the binary makes, in the same place: a credential that
-	// cannot write is served a read-only surface whatever the deployment
-	// asked for, and an expectation built without it would name write tools
-	// the server never registered.
+	// The same call the binary makes, in the same place: a credential
+	// carrying read_api and not api is served what read_api reaches whatever
+	// the deployment asked for, and an expectation built without it would
+	// name tools the server never registered.
 	gitlabclient.NarrowToTokenScope(serverCfg)
 	return serverCfg
 }

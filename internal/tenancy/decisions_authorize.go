@@ -29,23 +29,33 @@ func authorizeDecisions() []Decision {
 
 	return []Decision{
 		{
+			// What read_api reaches is not the read-only surface: it is decided
+			// per action from the requests the action sends, which the
+			// generated table carries (ADR-0026), so a read GitLab refuses
+			// read_api is withheld and a write GitLab accepts from it (one
+			// authenticated by another credential the caller passes, one that
+			// writes a file on the server's machine) is served. The operator's
+			// read-only (AUT-004) is a separate narrowing applied before this
+			// one.
+			//
 			// A fine-grained token is the exception, and why F-17 left this row:
 			// its scope list is the single value granular, which says nothing
 			// about what it may do, so it is unknown authority (INV-008) and
-			// never narrowed to the read-only surface by that list; the
-			// operator's read-only (AUT-004) still applies to it. GitLab judges
-			// its writes per call against the permissions it was granted
-			// (issue 952, ADR-0024).
+			// never narrowed by that list; the operator's read-only (AUT-004)
+			// still applies to it. GitLab judges its writes per call against
+			// the permissions it was granted (issue 952, ADR-0024).
 			ID: "AUT-001", Question: Authorize, Kind: Rule, Class: ClassC, Disposition: Ruled,
-			Resource: "the read-only surface a credential without the api scope is served, a fine-grained token excepted",
+			Resource: "the actions a credential carrying read_api and not api is served: those GitLab accepts from read_api, derived per action from what it sends; a fine-grained token excepted",
 			Key:      KeyEntry, StdioKey: KeyProcess,
-			Decided:  []string{"ADR-0018", "ADR-0024", "issue 952"},
+			Decided:  []string{"ADR-0018", "ADR-0024", "ADR-0026", "issue 952"},
 			Refusals: narrowed(WidenScope),
 			Sites: []Site{
 				enforce(pkgGitLab, "FineGrained"),
 				enforce(pkgGitLab, "WriteCapable"),
 				enforce(pkgGitLab, "NarrowToTokenScope"),
 				enforce(pkgTools, "FilterActionCatalog"),
+				enforce(pkgActionCatalog, "Catalog.FilterReachableWith"),
+				enforce(pkgVisibility, "Apply"),
 				withheld,
 			},
 		},

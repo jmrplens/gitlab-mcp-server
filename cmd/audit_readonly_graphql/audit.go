@@ -211,8 +211,8 @@ func mutationFinding(position positioner, act action, matched []actionrequests.S
 		fmt.Fprintf(&builder, "    %s sends %s at %s\n",
 			mutation.fn.Name(), documentName(mutation.doc), relative(position(mutation.doc.Pos), root))
 	}
-	builder.WriteString("    A read-only action must not reach a mutation: --read-only and the surface served to a\n")
-	builder.WriteString("    read_api token both keep it, so the write would run where a write is supposed to be impossible.\n")
+	builder.WriteString("    A read-only action must not reach a mutation: --read-only keeps it, so the write would run\n")
+	builder.WriteString("    on a deployment whose operator asked for none.\n")
 	builder.WriteString("    Reclassify the action as mutating, or declare the exception with " + exceptionDirective + ".")
 	return finding{action: act.ID, message: builder.String()}
 }

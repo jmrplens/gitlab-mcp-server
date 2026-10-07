@@ -1,9 +1,9 @@
 //go:build stdioe2e
 
 // token_scope_test.go drives the narrowing a token's scope imposes over the
-// real binary on stdio: a read_api token is served the read-only surface, the
+// real binary on stdio: a read_api token is served what read_api reaches, the
 // way the HTTP pool already served it per entry, and the dynamic surface names
-// the token as the reason a write action is withheld. Scope detection is
+// the scope the token lacks as the reason a write action is withheld. Scope detection is
 // stdio startup configuration, which is exactly what the in-process suites
 // cannot see.
 package stdioe2e
@@ -41,22 +41,28 @@ func resultText(t *testing.T, got map[string]any) string {
 	return b.String()
 }
 
-// TestTokenScope_ReadAPITokenIsServedTheReadOnlySurface verifies that stdio
+// readAPILogLine is what the process logs when it narrows a token carrying
+// read_api and not api.
+const readAPILogLine = "token carries read_api without api; serving the actions GitLab accepts from read_api"
+
+// TestTokenScope_ReadAPITokenIsServedWhatReadAPIReaches verifies that stdio
 // narrows the catalog to what the token can call, as HTTP mode does per pool
-// entry: with read_api the individual surface lists the reads and none of the
-// writes, and the log says why. The api token beside it is the control that
-// proves the writes are removed by the scope and not by something else.
-func TestTokenScope_ReadAPITokenIsServedTheReadOnlySurface(t *testing.T) {
+// entry: with read_api the individual surface lists the issue reads and the
+// package download, which writes only a local file and which GitLab serves to
+// read_api, and neither the issue creation nor the CI lint, a read GitLab
+// refuses read_api, nor a guided creation flow; and the log says why. The api
+// token beside it is the control that proves the removals come from the scope
+// and not from something else.
+func TestTokenScope_ReadAPITokenIsServedWhatReadAPIReaches(t *testing.T) {
 	tests := []struct {
-		name       string
-		scopes     []string
-		env        map[string]string
-		wantCreate bool
-		wantLog    bool
+		name     string
+		scopes   []string
+		env      map[string]string
+		narrowed bool
 	}{
-		{name: "read_api", scopes: []string{"read_api"}, wantCreate: false, wantLog: true},
-		{name: "api", scopes: []string{"api"}, wantCreate: true},
-		{name: "read_api with scope detection ignored", scopes: []string{"read_api"}, env: map[string]string{"GITLAB_MCP_IGNORE_SCOPES": "true"}, wantCreate: true},
+		{name: "read_api", scopes: []string{"read_api"}, narrowed: true},
+		{name: "api", scopes: []string{"api"}},
+		{name: "read_api with scope detection ignored", scopes: []string{"read_api"}, env: map[string]string{"GITLAB_MCP_IGNORE_SCOPES": "true"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -68,14 +74,18 @@ func TestTokenScope_ReadAPITokenIsServedTheReadOnlySurface(t *testing.T) {
 			s := startSession(t, env)
 
 			names := toolNames(t, s.call(t, request(1, "tools/list", "")))
-			if !contains(names, "gitlab_issue_get") {
-				t.Errorf("gitlab_issue_get is not listed: the reads must stay whatever the scope")
+			if !contains(names, "gitlab_issue_get") || !contains(names, "gitlab_package_download") {
+				t.Errorf("gitlab_issue_get or gitlab_package_download is not listed: what read_api reaches must stay whatever the scope")
 			}
-			if listed := contains(names, "gitlab_issue_create"); listed != tt.wantCreate {
-				t.Errorf("gitlab_issue_create listed = %v, want %v with scopes %v", listed, tt.wantCreate, tt.scopes)
+			for _, name := range []string{"gitlab_issue_create", "gitlab_ci_lint", "gitlab_interactive_issue_create"} {
+				t.Run(name, func(t *testing.T) {
+					if listed := contains(names, name); listed == tt.narrowed {
+						t.Errorf("%s listed = %v with scopes %v, want %v", name, listed, tt.scopes, !tt.narrowed)
+					}
+				})
 			}
-			if logged := strings.Contains(s.stderrText(), "token cannot write"); logged != tt.wantLog {
-				t.Errorf("startup log says the token cannot write = %v, want %v\nstderr: %s", logged, tt.wantLog, s.stderrText())
+			if logged := strings.Contains(s.stderrText(), readAPILogLine); logged != tt.narrowed {
+				t.Errorf("startup log says the token carries read_api without api = %v, want %v\nstderr: %s", logged, tt.narrowed, s.stderrText())
 			}
 		})
 	}
@@ -174,8 +184,9 @@ func assertServesNothingBelowTheMinimum(t *testing.T, s *session) {
 // personal access token, whose scope list is the single value granular, is
 // served as unknown authority rather than as a token that cannot write: every
 // write stays listed, the groups that need admin_mode stay listed, and the log
-// never says the token cannot write. GitLab judges each call against the
-// permissions the token was granted, and a write it lacks is GitLab's own 403.
+// never says the token was narrowed to what read_api reaches. GitLab judges
+// each call against the permissions the token was granted, and a write it
+// lacks is GitLab's own 403.
 //
 // The api row is the control for the admin tool: a classic token without
 // admin_mode loses it, so its presence under the fine-grained token is the scope
@@ -204,8 +215,8 @@ func TestTokenScope_FineGrainedTokenIsNotReadOnly(t *testing.T) {
 			if listed := contains(names, "gitlab_get_settings"); listed != tt.wantAdmin {
 				t.Errorf("gitlab_get_settings listed = %v, want %v with scopes %v", listed, tt.wantAdmin, tt.scopes)
 			}
-			if strings.Contains(s.stderrText(), "token cannot write") {
-				t.Errorf("startup log says the token cannot write with scopes %v\nstderr: %s", tt.scopes, s.stderrText())
+			if strings.Contains(s.stderrText(), readAPILogLine) {
+				t.Errorf("startup log says the token carries read_api without api with scopes %v\nstderr: %s", tt.scopes, s.stderrText())
 			}
 		})
 	}
@@ -559,7 +570,7 @@ func TestTokenScope_FineGrainedWriteReachesGitLab(t *testing.T) {
 
 	got := s.call(t, request(1, "tools/call", `{"name":"gitlab_execute_action","arguments":{"action":"issue.create","params":{"project_id":"42","title":"sent to GitLab"}}}`))
 	text := resultText(t, got)
-	if strings.Contains(text, "does not carry a GitLab scope that covers it") {
+	if strings.Contains(text, "and the credential in use does not carry") {
 		t.Fatalf("issue.create under a fine-grained token was withheld by scope: %q", text)
 	}
 	if !served(got) {
@@ -582,7 +593,7 @@ func TestTokenScope_DynamicSurfaceNamesTheTokenAsTheReason(t *testing.T) {
 
 	got := s.call(t, request(1, "tools/call", `{"name":"gitlab_execute_action","arguments":{"action":"issue.create","params":{"project_id":"42","title":"never created"}}}`))
 	text := resultText(t, got)
-	if !strings.Contains(text, "does not carry a GitLab scope that covers it") {
+	if !strings.Contains(text, "GitLab requires the api scope for it and the credential in use does not carry it") {
 		t.Fatalf("issue.create under read_api answered %q, want the scope named as the reason", text)
 	}
 	if strings.Contains(text, "unknown action") {

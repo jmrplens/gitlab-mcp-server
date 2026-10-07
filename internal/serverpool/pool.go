@@ -1615,7 +1615,7 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 	// verifier already asked the same instance about the same token, and
 	// asking GitLab a second question it cannot answer would only lose the
 	// answer. It is asked under --ignore-scopes too: that flag skips the scope
-	// filter and the read-only narrowing, and the token's kind decides what a
+	// filter and the read_api narrowing, and the token's kind decides what a
 	// fine-grained token is withheld, which is not scope filtering, so
 	// skipping the request would silently serve such a token every action.
 	// What the verifier handed in is asked about too when its kind is
@@ -1634,7 +1634,7 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 	}
 	// A token whose own description names no scope that reaches the API, a
 	// read_user one among them, is refused here, under --ignore-scopes too:
-	// that flag skips the scope filter and the read-only narrowing, never the
+	// that flag skips the scope filter and the read_api narrowing, never the
 	// minimum (issue 952). Scopes nothing answered for are not below it.
 	if gitlabclient.BelowMinimum(facts) {
 		return nil, facts, fmt.Errorf("%w", ErrCredentialBelowMinimum)
@@ -1658,7 +1658,7 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 		return entryCfg, facts, nil
 	}
 	entryCfg.TokenScopes = facts.Scopes
-	applyScopeReadOnly(entryCfg)
+	applyTokenScope(entryCfg)
 	return entryCfg, facts, nil
 }
 
@@ -1778,22 +1778,23 @@ func redetectKind(ctx context.Context, entry *Entry) (belowMinimum bool) {
 	return false
 }
 
-// applyScopeReadOnly narrows an entry to read-only when its token cannot
-// write, which is what makes the write check a property of the action rather
-// than of the deployment.
+// applyTokenScope narrows an entry to what its token reaches when the token
+// carries read_api and not api, which is what makes the write check a
+// property of the action rather than of the deployment.
 //
 // A deployment that serves writes had to demand a write-capable token from
 // everyone, because the only check ran at the door: a read_api token was
 // refused at initialize, before it could so much as list the tools it was
-// perfectly entitled to call. The tools themselves already carry the
-// distinction — every action declares whether it mutates, and --read-only
-// already projects a catalog from it — so the entry a read-only token gets
-// is simply that catalog. Nothing new decides what may write; the existing
-// decision is moved to where the authority is actually known.
+// perfectly entitled to call (ADR-0018). What read_api reaches is decided per
+// action from the requests it sends, which the generated table carries
+// (ADR-0026), so the entry such a token gets is the catalog of the actions
+// GitLab accepts from read_api. Nothing new decides what GitLab accepts; the
+// decision is read from what the action sends and applied where the
+// authority is actually known.
 //
 // The narrowing is per pool entry, and an entry is per token, so one client's
 // read_api token cannot narrow another client's api token.
-func applyScopeReadOnly(entryCfg *config.ServerConfig) {
+func applyTokenScope(entryCfg *config.ServerConfig) {
 	gitlabclient.NarrowToTokenScope(entryCfg)
 }
 

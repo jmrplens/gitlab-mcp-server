@@ -1,5 +1,5 @@
 // visibility_test.go pins the one pass that decides which registered tool a
-// narrowed deployment serves: what each of its three steps removes or wraps,
+// narrowed deployment serves: what each of its four steps removes or wraps,
 // what it leaves alone, which tools safe mode exempts on each surface, and
 // what happens on a server it cannot list.
 package toolvisibility
@@ -398,6 +398,7 @@ func TestApply_WithoutAServer_ChangesNothingAndSaysWhy(t *testing.T) {
 		want string
 	}{
 		{name: "exclusions", cfg: &config.ServerConfig{ExcludeTools: []string{"gitlab_issue"}}, want: "exclude-tools: list registered tools failed"},
+		{name: "read_api", cfg: &config.ServerConfig{ReadAPIOnly: true}, want: "read-api: list registered tools failed"},
 		{name: "read-only", cfg: &config.ServerConfig{ReadOnly: true}, want: "RemoveNonReadOnlyTools: list registered tools failed"},
 		{name: "safe mode", cfg: &config.ServerConfig{SafeMode: true}, want: "WrapMutatingToolsForSafeMode: list registered tools failed"},
 	}
@@ -496,6 +497,130 @@ func TestApply_MetaSurface_ReachesTheInteractiveFlows(t *testing.T) {
 	})
 }
 
+// TestApply_ReadAPIOnly_WithdrawsTheStandaloneToolsReadAPIDoesNotReach
+// verifies the read_api step against the registration cmd/server makes on the
+// meta surface. The four guided flows each end in a write GitLab answers only
+// from api, so a credential carrying read_api and not api is not served them;
+// project discovery reads GitLab with GETs and stays, and so does the catalog
+// dispatcher, whose actions the assembler already narrowed and whose read
+// still reaches GitLab. The step names the tools by the per-action rule and
+// never by their annotation, so a read-only hint keeps nothing here.
+func TestApply_ReadAPIOnly_WithdrawsTheStandaloneToolsReadAPIDoesNotReach(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/issues") {
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"iid":1,"title":"reached gitlab"}]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+	logged := testutil.CaptureSlog(t)
+	cfg := &config.ServerConfig{ReadAPIOnly: true, Tier: edition.Free}
+	catalog, _, err := gitlabtools.SharedMetaCatalog(client, cfg)
+	if err != nil {
+		t.Fatalf("SharedMetaCatalog() error = %v", err)
+	}
+	server := newServer()
+	gitlabtools.RegisterMetaCatalog(server, catalog)
+	gitlabtools.RegisterMetaStandaloneTools(server, client)
+
+	Apply(t.Context(), server, cfg, config.ToolSurfaceMeta, catalog)
+
+	names := listNames(t, server)
+	for _, flow := range interactiveTools {
+		t.Run(flow, func(t *testing.T) {
+			if slices.Contains(names, flow) {
+				t.Errorf("tools/list still serves %s to a read_api credential", flow)
+			}
+		})
+	}
+	for _, kept := range []string{"gitlab_discover_project", "gitlab_issue"} {
+		t.Run(kept, func(t *testing.T) {
+			if !slices.Contains(names, kept) {
+				t.Errorf("tools/list = %v, want %s kept", names, kept)
+			}
+		})
+	}
+	if text := callText(t, server, "gitlab_issue", map[string]any{"action": "list", "params": map[string]any{"project_id": "1"}}); !strings.Contains(text, "reached gitlab") {
+		t.Errorf("gitlab_issue list answered %q, want the issue the mock GitLab serves", text)
+	}
+	if !strings.Contains(logged.String(), `"removed":4`) {
+		t.Errorf("log = %q, want the four flows counted as removed", logged.String())
+	}
+}
+
+// TestApply_ReadAPIOnlyUnderSafeMode_PreviewsTheWritesOnTheIndividualSurface
+// verifies safe mode over the read_api narrowing on the individual surface,
+// registered the way cmd/server registers it. Each of the five tools a
+// read_api credential is served whose action the catalog classifies as a
+// write (ADR-0026) answers with a preview naming it, and none reaches GitLab.
+// The individual surface previews per tool in this pass rather than in the
+// catalog, so this is the one place that keeps those writes, the revocation
+// and the runner deletion destructive among them, from running in a
+// safe-mode session.
+func TestApply_ReadAPIOnlyUnderSafeMode_PreviewsTheWritesOnTheIndividualSurface(t *testing.T) {
+	var reached atomic.Int64
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached.Add(1)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+	cfg := &config.ServerConfig{Tier: edition.Free, SafeMode: true, ReadAPIOnly: true, TokenScopes: []string{"read_api"}}
+	catalog, _, err := gitlabtools.SharedIndividualCatalog(client, cfg)
+	if err != nil {
+		t.Fatalf("SharedIndividualCatalog() error = %v", err)
+	}
+	server := newServer()
+	gitlabtools.RegisterIndividualCatalogTools(server, catalog, gitlabtools.IndividualCatalogRegisterOptions{
+		IncludeStandaloneUtilities: true,
+		SchemaCacheKey:             gitlabtools.IndividualSchemaCacheKey(cfg.Tier),
+	})
+	gitlabtools.RegisterMetaStandaloneTools(server, client)
+
+	Apply(t.Context(), server, cfg, config.ToolSurfaceIndividual, catalog)
+
+	calls := []struct {
+		tool string
+		args map[string]any
+	}{
+		{tool: "gitlab_package_download", args: map[string]any{
+			"project_id": "1", "package_name": "pkg", "package_version": "1.0.0", "file_name": "file.txt", "output_path": "/tmp/file.txt",
+		}},
+		{tool: "gitlab_personal_access_token_revoke_self", args: map[string]any{}},
+		{tool: "gitlab_pipeline_trigger_run", args: map[string]any{"project_id": "1", "ref": "main", "token": "trigger-token"}},
+		{tool: "gitlab_runner_register", args: map[string]any{"token": "registration-token"}},
+		{tool: "gitlab_runner_delete_by_token", args: map[string]any{"token": "runner-token"}},
+	}
+	for _, call := range calls {
+		t.Run(call.tool, func(t *testing.T) {
+			if preview := previewOf(t, callText(t, server, call.tool, call.args)); preview.Tool != call.tool {
+				t.Errorf("preview of %s = %+v, want it to name the tool", call.tool, preview)
+			}
+		})
+	}
+	if n := reached.Load(); n != 0 {
+		t.Errorf("GitLab was reached %d times in safe mode, want none", n)
+	}
+}
+
+// TestApply_ReadAPIOnly_RemovesNothingTheSurfaceDidNotRegister verifies the
+// step on a surface that registers no standalone tool, the dynamic one: its
+// two tools are kept, and the count says nothing was removed, since the step
+// asks for names the server does not hold.
+func TestApply_ReadAPIOnly_RemovesNothingTheSurfaceDidNotRegister(t *testing.T) {
+	logged := testutil.CaptureSlog(t)
+	server := newServer()
+	addTool(server, "gitlab_find_action", true)
+	addTool(server, "gitlab_execute_action", false)
+
+	Apply(t.Context(), server, &config.ServerConfig{ReadAPIOnly: true}, config.ToolSurfaceDynamic, nil)
+
+	if got := listNames(t, server); !slices.Equal(got, []string{"gitlab_execute_action", "gitlab_find_action"}) {
+		t.Errorf("tools/list = %v, want both dynamic tools kept", got)
+	}
+	if !strings.Contains(logged.String(), `"removed":0`) {
+		t.Errorf("log = %q, want nothing counted as removed", logged.String())
+	}
+}
+
 // TestApply_ExcludeTools_MatchesAWholeNameAndNotAPrefix verifies the word the
 // first step's contract rests on: an entry is matched against a registered
 // name in full, so it removes that one tool and no relative of it.
@@ -556,7 +681,7 @@ func TestApply_ExcludeTools_MatchingNothingLeavesEveryToolRegistered(t *testing.
 }
 
 // TestApply_ExcludeTools_AppliesUnderReadOnlyAndSafeMode verifies the order the
-// three steps run in, which each of the tests above exercises one step at a
+// steps run in, which each of the tests above exercises one step at a
 // time and none of them pins: the exclusions are applied first, so a name the
 // operator removed is gone whichever narrowing mode is also on.
 //

@@ -276,7 +276,7 @@ func TestBearerGuard_BlockedAddress_RefusesAVerifiedTokenThatIsUnderScoped(t *te
 // TestBearerGuard_BlockedAddress_StillServesAVerifiedReadAPIToken holds the
 // exemption to the scope the door admits rather than the one the deployment
 // advertises. A deployment serving writes advertises api and still serves a
-// read_api token, on the read-only surface (ADR-0018), so such a token is one
+// read_api token what read_api reaches (ADR-0018), so such a token is one
 // it is already serving and a neighbor's spray must not take it away. Judged
 // on the advertised scope instead, the block would cover every read-only
 // credential the deployment had admitted.
@@ -745,8 +745,9 @@ func TestBearerGuard_UnclassifiedError_IsTreatedAsUpstream(t *testing.T) {
 // token lock its own address out.
 //
 // The bar is "no API scope", not "not the deployment's scope". A read_api
-// token on a deployment that writes is admitted and served a read-only
-// surface; see TestBearerGuard_ReadAPIToken_IsAdmittedByAWritingDeployment.
+// token on a deployment that writes is admitted and served what GitLab
+// accepts from read_api (ADR-0026); see
+// TestBearerGuard_ReadAPIToken_IsAdmittedByAWritingDeployment.
 func TestBearerGuard_NoAPIScope_IsForbiddenNotUnauthorized(t *testing.T) {
 	t.Parallel()
 
@@ -818,7 +819,8 @@ func TestBearerGuard_PreflightIsNotAnAuthenticationFailure(t *testing.T) {
 // list the tools it was entitled to call.
 //
 // Admission now asks only for what every action needs. What the token may DO
-// is settled per action, by the read-only surface the pool builds for it.
+// is settled per action, by the surface the pool builds for it from what
+// GitLab accepts from read_api.
 func TestBearerGuard_ReadAPIToken_IsAdmittedByAWritingDeployment(t *testing.T) {
 	t.Parallel()
 

@@ -169,17 +169,15 @@ type createdServerKey struct {
 	tier              edition.Tier
 	tierExplicit      bool
 	readOnly          bool
-	// readOnlyFromTokenScope belongs in the key because it does not change
-	// which actions are registered, only what the surface says about the ones
-	// it withheld. Two configs that differ solely here build genuinely
-	// different servers, so a cache that ignored it handed one test the other's
-	// wording.
-	readOnlyFromTokenScope bool
-	safeMode               bool
-	metaParamSchema        string
-	rateLimitRPS           float64
-	rateLimitBurst         int
-	clientCompat           bool
+	// readAPIOnly belongs in the key because it changes which actions are
+	// registered and what the surface says about the ones it withheld, so a
+	// cache that ignored it handed one test the other's surface.
+	readAPIOnly     bool
+	safeMode        bool
+	metaParamSchema string
+	rateLimitRPS    float64
+	rateLimitBurst  int
+	clientCompat    bool
 	// descriptionSubs keeps the cache honest for tests that set the
 	// substitution env var: createServer reads it at build time, so two
 	// builds under different values are different servers.
@@ -234,18 +232,18 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 		return createServerWithin(t, client, cfg)
 	}
 	key := createdServerKey{
-		toolSurface:            cfg.ToolSurface,
-		capabilitySurface:      cfg.CapabilitySurface,
-		tier:                   cfg.Tier,
-		tierExplicit:           cfg.TierExplicit,
-		readOnly:               cfg.ReadOnly,
-		readOnlyFromTokenScope: cfg.ReadOnlyFromTokenScope,
-		safeMode:               cfg.SafeMode,
-		metaParamSchema:        cfg.MetaParamSchema,
-		rateLimitRPS:           cfg.RateLimitRPS,
-		rateLimitBurst:         cfg.RateLimitBurst,
-		clientCompat:           clientcompat.Enabled(),
-		descriptionSubs:        os.Getenv(gatewaycompat.EnvVar),
+		toolSurface:       cfg.ToolSurface,
+		capabilitySurface: cfg.CapabilitySurface,
+		tier:              cfg.Tier,
+		tierExplicit:      cfg.TierExplicit,
+		readOnly:          cfg.ReadOnly,
+		readAPIOnly:       cfg.ReadAPIOnly,
+		safeMode:          cfg.SafeMode,
+		metaParamSchema:   cfg.MetaParamSchema,
+		rateLimitRPS:      cfg.RateLimitRPS,
+		rateLimitBurst:    cfg.RateLimitBurst,
+		clientCompat:      clientcompat.Enabled(),
+		descriptionSubs:   os.Getenv(gatewaycompat.EnvVar),
 	}
 	createdServersMu.Lock()
 	defer createdServersMu.Unlock()
@@ -2140,17 +2138,25 @@ func TestCreateServer_TheHandshakeCarriesEachIdentityFieldInItsPlace(t *testing.
 // side: whether the HTTP transport is stateless and whether the surface is
 // read-only. Each case turns exactly one of them on, so the instructions a
 // client receives are that setting's and not its neighbor's.
+//
+// A surface is read-only for the instructions in two ways: the operator's
+// switch, and a token carrying read_api and not api, whose surface has lost
+// every call the write sections teach (ADR-0026). The third case holds the
+// second reading, which a configuration with only the operator's switch could
+// not tell apart from either operand alone.
 func TestCreateServer_InstructionsFollowTheStatelessAndReadOnlySettings(t *testing.T) {
 	for _, tc := range []struct {
-		name                string
-		stateless, readOnly bool
+		name                             string
+		stateless, readOnly, readAPIOnly bool
 	}{
 		{name: "stateless", stateless: true},
 		{name: "read-only", readOnly: true},
+		{name: "read_api token", readAPIOnly: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			want := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, mcpotel.TransportTCP, tc.stateless, tc.readOnly)
-			if buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, mcpotel.TransportTCP, tc.readOnly, tc.stateless) == want {
+			readOnly := tc.readOnly || tc.readAPIOnly
+			want := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, mcpotel.TransportTCP, tc.stateless, readOnly)
+			if buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, mcpotel.TransportTCP, readOnly, tc.stateless) == want {
 				t.Fatal("both readings of the two settings build the same instructions, so this case cannot tell them apart")
 			}
 			server, err := createServer(t.Context(), newMockGitLabClient(t), &config.ServerConfig{
@@ -2158,6 +2164,7 @@ func TestCreateServer_InstructionsFollowTheStatelessAndReadOnlySettings(t *testi
 				CapabilitySurface: config.CapabilitySurfaceFull,
 				Stateless:         tc.stateless,
 				ReadOnly:          tc.readOnly,
+				ReadAPIOnly:       tc.readAPIOnly,
 			}, withTransport(mcpotel.TransportTCP))
 			if err != nil {
 				t.Fatalf("createServer() error: %v", err)
@@ -3326,9 +3333,12 @@ func TestCreateServer_ToolManifestRoutesAreServerScoped(t *testing.T) {
 // the way both transports build it: the scopes are narrowed into the
 // configuration first, by gitlabclient.NarrowToTokenScope, which the HTTP pool
 // applies per entry and stdio once at startup, and createServer then builds
-// the read-only catalog that configuration names (ADR-0018). createServer
-// narrows nothing on its own, so a configuration handed to it with read_api
-// and no narrowing keeps every write tool, and that is the control below.
+// the catalog of what read_api reaches that configuration names (ADR-0018,
+// ADR-0026): the project read and the package download, which writes only a
+// local file, and neither the project creation nor the CI lint, a read GitLab
+// refuses read_api, nor a guided creation flow. createServer narrows nothing
+// on its own, so a configuration handed to it with read_api and no narrowing
+// keeps every write tool, and that is the control below.
 //
 // This test used to look for gitlab_create_project on an unnarrowed server, a
 // name nothing registers, so the loop matched nothing and the test passed
@@ -3345,11 +3355,16 @@ func TestCreateServer_FilteringModes(t *testing.T) {
 		t.Fatal("NarrowToTokenScope did not narrow a read_api token, so the assertions below would be about the wrong configuration")
 	}
 	readAPINames := listedToolNames(t, client, readAPICfg)
-	if _, listed := readAPINames["gitlab_project_create"]; listed {
-		t.Error("a narrowed read_api configuration lists gitlab_project_create, the mutating project creation tool")
+	served := map[string]bool{
+		"gitlab_project_create": false, "gitlab_ci_lint": false, "gitlab_interactive_issue_create": false,
+		"gitlab_project_get": true, "gitlab_package_download": true,
 	}
-	if _, listed := readAPINames["gitlab_project_get"]; !listed {
-		t.Error("a narrowed read_api configuration does not list gitlab_project_get, so the absence above proves nothing")
+	for name, want := range served {
+		t.Run(name, func(t *testing.T) {
+			if _, listed := readAPINames[name]; listed != want {
+				t.Errorf("a narrowed read_api configuration lists %s: %t, want %t", name, listed, want)
+			}
+		})
 	}
 
 	// The control: the same scopes with no narrowing keep the write tool,
@@ -4726,22 +4741,24 @@ func TestPrepareStdioCatalog_VersionRefusedToAFineGrainedToken_StartsWhole(t *te
 }
 
 // TestPrepareStdioCatalog_TokenScopes_NarrowTheSurfaceOrSayWhyNot covers the
-// scope step of stdio startup. A token GitLab reports as read_api is served the
-// read-only catalog (ADR-0018); a token whose scopes cannot be read is served
+// scope step of stdio startup. A token GitLab reports as read_api is served
+// what read_api reaches (ADR-0018, ADR-0026), which narrows the catalog
+// without touching the operator's read-only switch; a token whose scopes
+// cannot be read is served
 // everything and the operator is told why at debug level; and a deployment
 // that ignores scopes still asks what the token is, since its kind decides
 // what a fine-grained token is withheld, and narrows nothing by its scopes.
 func TestPrepareStdioCatalog_TokenScopes_NarrowTheSurfaceOrSayWhyNot(t *testing.T) {
 	cases := []struct {
-		name         string
-		ignore       bool
-		answers      bool
-		wantScopes   []string
-		wantReadOnly bool
-		wantAsked    bool
-		wantNote     bool
+		name            string
+		ignore          bool
+		answers         bool
+		wantScopes      []string
+		wantReadAPIOnly bool
+		wantAsked       bool
+		wantNote        bool
 	}{
-		{name: "a read_api token", answers: true, wantScopes: []string{"read_api"}, wantReadOnly: true, wantAsked: true},
+		{name: "a read_api token", answers: true, wantScopes: []string{"read_api"}, wantReadAPIOnly: true, wantAsked: true},
 		{name: "scopes that cannot be read", wantAsked: true, wantNote: true},
 		{name: "scopes ignored", ignore: true, answers: true, wantAsked: true},
 	}
@@ -4767,8 +4784,8 @@ func TestPrepareStdioCatalog_TokenScopes_NarrowTheSurfaceOrSayWhyNot(t *testing.
 			if !slices.Equal(serverCfg.TokenScopes, tc.wantScopes) {
 				t.Errorf("token scopes = %v, want %v", serverCfg.TokenScopes, tc.wantScopes)
 			}
-			if serverCfg.ReadOnly != tc.wantReadOnly {
-				t.Errorf("read-only = %t, want %t", serverCfg.ReadOnly, tc.wantReadOnly)
+			if serverCfg.ReadAPIOnly != tc.wantReadAPIOnly || serverCfg.ReadOnly {
+				t.Errorf("read_api only, read-only = %t, %t, want %t, false", serverCfg.ReadAPIOnly, serverCfg.ReadOnly, tc.wantReadAPIOnly)
 			}
 			if asked := scopeReads.Load() > 0; asked != tc.wantAsked {
 				t.Errorf("scopes asked = %t, want %t", asked, tc.wantAsked)
@@ -7022,7 +7039,7 @@ func TestServeHTTP_OAuthMode_APoolRefusal_ChallengesLikeTheGuard(t *testing.T) {
 // TestServeHTTP_OAuthMode_AReadAPIToken_IsAdmittedByAWritingDeployment covers
 // the scope the door demands (ADR-0018): the minimum every action needs, not
 // the scope a writing deployment recommends. A read_api token is admitted and
-// served a read-only surface; demanding api at the door would refuse it at
+// served what read_api reaches; demanding api at the door would refuse it at
 // initialize, before the per-action gating that exists for it could apply.
 func TestServeHTTP_OAuthMode_AReadAPIToken_IsAdmittedByAWritingDeployment(t *testing.T) {
 	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -10815,9 +10832,9 @@ func TestRateLimit_StdioLeavesItOffUnlessAsked(t *testing.T) {
 // catalog built without it produces a fluent, confident, wrong answer.
 func TestDynamicSurface_ScopeNarrowedWriteReportsTheCredential(t *testing.T) {
 	session := modeTestSession(t, &config.ServerConfig{
-		ToolSurface:            config.ToolSurfaceDynamic,
-		ReadOnly:               true,
-		ReadOnlyFromTokenScope: true,
+		ToolSurface: config.ToolSurfaceDynamic,
+		ReadAPIOnly: true,
+		TokenScopes: []string{"read_api"},
 	})
 
 	text := callModeTool(t, session, "gitlab_execute_action", map[string]any{
@@ -14217,6 +14234,43 @@ func TestServeStdio_AnyOtherEnd_IsReportedAsAFailure(t *testing.T) {
 		}
 	case <-time.After(testHTTPLivenessTimeout):
 		t.Fatal("serveStdio did not return after its context expired")
+	}
+}
+
+// TestServeStdio_ClientHangsUpMidCall_ExitsCleanly pins the shutdown that a
+// client closing its pipe reaches only by timing: the client hangs up while a
+// response is still being written, and the SDK reports the session's end as an
+// error. That error carries the EOF as text, so errors.Is cannot find it, and
+// serveStdio has to recognize the hang-up from what its own reader saw.
+//
+// A real session takes that path on some runs and the clean return on others,
+// which left the branch measured by chance, so the session is replaced by one
+// that reads the client's stdin to its end and then fails the way the SDK
+// does. A context that is never cancelled keeps the signal case from
+// answering for it.
+func TestServeStdio_ClientHangsUpMidCall_ExitsCleanly(t *testing.T) {
+	closedStdin(t)
+	original := runStdioServer
+	t.Cleanup(func() { runStdioServer = original })
+	var consumed bool
+	runStdioServer = func(_ *mcp.Server, _ context.Context, transport mcp.Transport) error {
+		stdio, ok := transport.(*mcp.IOTransport)
+		if !ok {
+			return fmt.Errorf("transport is %T, want *mcp.IOTransport", transport)
+		}
+		if _, err := io.Copy(io.Discard, stdio.Reader); err != nil {
+			return err
+		}
+		consumed = true
+		return errors.New("server is closing: EOF")
+	}
+
+	server := newTestMCPServer(t)
+	if err := serveStdio(context.Background(), server); err != nil {
+		t.Errorf("serveStdio() = %v, want a clean exit: the client hung up, which the stdio binding calls a graceful shutdown", err)
+	}
+	if !consumed {
+		t.Error("the session never read stdin to its end, so the hang-up was not what ended it")
 	}
 }
 

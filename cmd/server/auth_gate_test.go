@@ -2305,9 +2305,9 @@ func TestMCPServerGate_OAuthMode_BuildsTheEntryOnTheScopesTheBearerCarried(t *te
 	}
 
 	entry := gateTestEntry(t, pool, "gloas-read-only", stub)
-	if cfg := entry.Config(); !cfg.ReadOnly || !slices.Equal(cfg.TokenScopes, []string{"read_api"}) {
-		t.Errorf("entry built with scopes %v, read-only %v; want the bearer's [read_api] and a read-only surface",
-			cfg.TokenScopes, cfg.ReadOnly)
+	if cfg := entry.Config(); !cfg.ReadAPIOnly || !slices.Equal(cfg.TokenScopes, []string{"read_api"}) {
+		t.Errorf("entry built with scopes %v, read_api only %v; want the bearer's [read_api] and the surface read_api reaches",
+			cfg.TokenScopes, cfg.ReadAPIOnly)
 	}
 }
 

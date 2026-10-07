@@ -24,7 +24,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -802,68 +801,37 @@ func TestWithheld_ReadOnlyMode_IsDeclinedOnEverySurface(t *testing.T) {
 	}
 }
 
-// TestServerConfig_NarrowedBy_RecordsTheModeTheCredentialImposed pins when a
-// session is recorded as read-only without having asked for it.
-//
-// Only a narrowing the token caused moves the mode, and only from the
-// default: an operator's read-only mode is already read-only, and a safe-mode
-// session with a narrowed token stays recorded as safe, since that is the
-// mode the previews its tests see come from.
-func TestServerConfig_NarrowedBy_RecordsTheModeTheCredentialImposed(t *testing.T) {
-	cases := []struct {
-		name     string
-		mode     Mode
-		narrowed bool
-		want     Mode
-	}{
-		{name: "default and narrowed", mode: ModeDefault, narrowed: true, want: ModeReadOnly},
-		{name: "default and write-capable", mode: ModeDefault, narrowed: false, want: ModeDefault},
-		{name: "read-only already", mode: ModeReadOnly, narrowed: true, want: ModeReadOnly},
-		{name: "safe and narrowed", mode: ModeSafe, narrowed: true, want: ModeSafe},
-	}
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			cfg := ServerConfig{Mode: testCase.mode}.normalized()
-			serverCfg := &config.ServerConfig{ReadOnly: testCase.narrowed, ReadOnlyFromTokenScope: testCase.narrowed}
-
-			if got := cfg.narrowedBy(serverCfg).Mode; got != testCase.want {
-				t.Errorf("narrowedBy() mode = %s, want %s", got, testCase.want)
-			}
-		})
-	}
-}
-
-// TestSession_ReadAPICredential_IsServedReadOnlyByTheBinary checks the
-// narrowing end to end: a token whose scopes cannot write is served a
-// read-only surface by the binary whatever the session asked for, the served
-// set the assemblers predict with NarrowToTokenScope is what tools/list says,
-// and the session is recorded as read-only so its refusals are filed under
-// the mode that produced them.
+// TestSession_ReadAPICredential_IsServedWhatReadAPIReachesByTheBinary checks
+// the narrowing end to end: a token carrying read_api and not api is served
+// what read_api reaches by the binary whatever the session asked for, the
+// served set the assemblers predict with NarrowToTokenScope is what
+// tools/list says, and the session records the narrowing beside its mode, the
+// default one, since the narrowing is the credential's and not an operator's
+// mode: it serves package.download, which writes a file on the server's
+// machine, and withholds template.lint, which reads and which GitLab refuses
+// read_api.
 //
 // The child is told nothing about the narrowing. GITLAB_MCP_READ_ONLY is what
 // was asked for, which is false, so a served set that matches is the binary's
 // own reading of the token's scopes and not the harness's.
-func TestSession_ReadAPICredential_IsServedReadOnlyByTheBinary(t *testing.T) {
+func TestSession_ReadAPICredential_IsServedWhatReadAPIReachesByTheBinary(t *testing.T) {
 	inst := instanceForStub(t, startScopedStubGitLab(t, []string{"read_api"}))
 	env := newEnv(t, inst)
 	session := env.Session(ServerConfig{Surface: SurfaceDynamic, Private: true})
 
-	if got := session.Mode(); got != ModeReadOnly {
-		t.Fatalf("a read_api session is recorded in %s mode, want %s", got, ModeReadOnly)
+	if got := session.Mode(); got != ModeDefault || !session.ReadAPIOnly() {
+		t.Fatalf("a read_api session is recorded in %s mode, read_api only %t; want %s and true", got, session.ReadAPIOnly(), ModeDefault)
 	}
-	if !strings.Contains(session.Label(), string(ModeReadOnly)) {
-		t.Errorf("the session label %q does not say the session is read-only", session.Label())
+	if session.Serves("project.delete") || session.Serves("template.lint") {
+		t.Error("the narrowed session serves project.delete or template.lint, which GitLab refuses read_api")
 	}
-	if session.Serves("project.delete") {
-		t.Error("the narrowed session serves project.delete")
-	}
-	if !session.Serves("project.get") {
-		t.Error("the narrowed session does not serve project.get, which reads")
+	if !session.Serves("project.get") || !session.Serves("package.download") {
+		t.Error("the narrowed session does not serve project.get or package.download, which read_api reaches")
 	}
 
 	said := Withheld(session, "project.delete", map[string]any{"project_id": "group/project"})
-	if !strings.Contains(said, "does not carry a GitLab scope") {
-		t.Errorf("the refusal does not name the credential as the cause: %q", said)
+	if !strings.Contains(said, "GitLab requires the api scope") {
+		t.Errorf("the refusal does not name the scope the credential lacks: %q", said)
 	}
 }
 

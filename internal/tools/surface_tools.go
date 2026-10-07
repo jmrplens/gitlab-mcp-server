@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/surfaces"
@@ -53,6 +55,25 @@ func ExcludedStandaloneTools(excludeTools []string) (toolNames, unmatched []stri
 		panic(fmt.Errorf("resolve --exclude-tools against the standalone utilities: %w", err))
 	}
 	return slices.Sorted(maps.Keys(excluded)), unmatched
+}
+
+// StandaloneToolsBeyond names the standalone utility tools whose action needs
+// a classic scope a token whose strongest scope is token does not reach,
+// judged by the same rule as every catalog action
+// ([actioncatalog.ClassicNeedOf]): what the generated table derived from the
+// requests the action sends, never its annotation. The meta and individual
+// surfaces register these tools outside the catalog, so the read_api
+// narrowing reaches them only through this list, which the pass over
+// registered tools removes (internal/tools/toolvisibility).
+func StandaloneToolsBeyond(token finegrained.ClassicScope) []string {
+	var names []string
+	for _, spec := range standaloneSpecs() {
+		if !actioncatalog.ClassicNeedOf(spec.BaseDomain+"."+spec.ActionName, spec.ReadOnly).ReachableWith(token) {
+			names = append(names, strings.TrimSpace(spec.Name))
+		}
+	}
+	slices.Sort(names)
+	return names
 }
 
 // standaloneSpecs is the standalone utilities' spec list, built once per

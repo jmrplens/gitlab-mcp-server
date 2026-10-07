@@ -2,7 +2,7 @@
 //
 // Each unique GitLab Personal Access Token and GitLab URL pair gets its own
 // [Entry]: a GitLab client, the configuration resolved for it (detected token
-// scopes, detected CE/EE edition, any read-only narrowing), the user it belongs
+// scopes, detected CE/EE edition, any read_api narrowing), the user it belongs
 // to, and an opaque [Entry.Owner] that names it wherever a shared component has
 // to say whose work it is doing. The MCP server an entry is served by is *not*
 // its own: one server is built per configuration shape and answers for every

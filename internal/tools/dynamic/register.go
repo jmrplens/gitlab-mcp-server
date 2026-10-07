@@ -315,7 +315,9 @@ type Registry struct {
 	// was filtered. They are separate because only the first is something the
 	// caller can resolve: a narrow credential can be reauthorized, an operator
 	// running the deployment read-only cannot be argued with by the client.
-	withheldByScope    map[string]struct{}
+	// The first maps each key to the scopes the credential lacks for it, kept
+	// apart by who asks for them, which the answer names.
+	withheldByScope    map[string]actioncatalog.ScopeWithheld
 	withheldByOperator map[string]struct{}
 }
 
@@ -324,19 +326,41 @@ type RegistryOption func(*Registry)
 
 // WithWithheldActions tells the registry which action keys were filtered out of
 // the catalog before it was handed over, split by cause: byTokenScope for
-// actions the credential itself cannot reach, byOperator for actions a
-// deployment-wide setting removed. A key is a canonical action ID or any alias
-// that used to resolve to one.
+// actions the credential itself cannot reach, each with the scopes it lacks
+// for it, byOperator for actions a deployment-wide setting removed. A key is a
+// canonical action ID or any alias that used to resolve to one.
 //
 // Without this the dynamic surface answers a withheld action with "unknown
 // action" plus near-miss suggestions, which reads as "this server cannot do
 // that" — so a model concludes the capability is absent instead of reporting
 // that the credential needs widening.
-func WithWithheldActions(byTokenScope, byOperator []string) RegistryOption {
+func WithWithheldActions(byTokenScope []actioncatalog.ScopeWithheld, byOperator []string) RegistryOption {
 	return func(r *Registry) {
-		r.withheldByScope = withheldKeySet(byTokenScope)
+		r.withheldByScope = withheldScopes(byTokenScope)
 		r.withheldByOperator = withheldKeySet(byOperator)
 	}
+}
+
+// withheldScopes indexes the actions a credential's scopes withheld by key,
+// each with the scopes it lacks. An entry naming none is recorded as lacking
+// api for GitLab, the scope every classic narrowing of a write lacks, so the
+// answer always names something to reauthorize with.
+func withheldScopes(withheld []actioncatalog.ScopeWithheld) map[string]actioncatalog.ScopeWithheld {
+	if len(withheld) == 0 {
+		return nil
+	}
+	scopes := make(map[string]actioncatalog.ScopeWithheld, len(withheld))
+	for _, entry := range withheld {
+		key := strings.ToLower(strings.TrimSpace(entry.ID))
+		if key == "" {
+			continue
+		}
+		if len(entry.Missing()) == 0 {
+			entry.ByGitLab = []string{"api"}
+		}
+		scopes[key] = entry
+	}
+	return scopes
 }
 
 func withheldKeySet(keys []string) map[string]struct{} {
@@ -2820,15 +2844,59 @@ func (r *Registry) unknownActionMessage(toolName, action string) string {
 // are all real read-only actions, so the answer looks authoritative, and the
 // reader concludes the server lacks the capability instead of learning that the
 // credential is what is narrow.
+//
+// The scope answer names the scopes the credential lacks for this action, and
+// who asks for each, since only one of them is GitLab: api when GitLab refuses
+// read_api for what the action sends, and admin_mode when this server serves
+// the action's catalog group only to a credential carrying it, which GitLab
+// does not ask of every action in such a group, nor of any on an instance
+// with Admin Mode off. A token lacking only admin_mode was told to reauthorize
+// with api until ADR-0026, which sent a caller that already held api round in
+// a circle, and was then told GitLab required admin_mode for reads GitLab
+// serves any authenticated token.
 func (r *Registry) withheldActionMessage(toolName, action string) (string, bool) {
 	key := strings.ToLower(strings.TrimSpace(action))
-	if _, ok := r.withheldByScope[key]; ok {
-		return fmt.Sprintf("%s: action %q exists but is not available to this session: the credential in use does not carry a GitLab scope that covers it, so a narrowed action surface was built for it. Reauthorize with the api scope to use it; do not report the capability as missing.", toolName, action), true
+	if withheld, ok := r.withheldByScope[key]; ok {
+		scopes, _ := scopeWords(withheld.Missing())
+		return fmt.Sprintf("%s: action %q exists but is not available to this session: %s, so a narrowed action surface was built for it. Reauthorize with %s to use it; do not report the capability as missing.", toolName, action, scopeCauses(withheld), scopes), true
 	}
 	if _, ok := r.withheldByOperator[key]; ok {
 		return fmt.Sprintf("%s: action %q exists but is not available: this deployment is configured to withhold it, so a narrowed action surface was built. Ask the operator to enable it; do not report the capability as missing.", toolName, action), true
 	}
 	return "", false
+}
+
+// scopeCauses says who asks for each scope a credential lacks for an action,
+// GitLab for what the action sends and this server for the group the action
+// belongs to, and that the credential carries none of them: "GitLab requires
+// the api scope for it and the credential in use does not carry it", or both
+// causes before a shared ending. Every entry names at least one scope, since
+// [withheldScopes] records GitLab's api for one that names none.
+func scopeCauses(withheld actioncatalog.ScopeWithheld) string {
+	var causes []string
+	if len(withheld.ByGitLab) > 0 {
+		gitlab, _ := scopeWords(withheld.ByGitLab)
+		causes = append(causes, "GitLab requires "+gitlab+" for it")
+	}
+	if len(withheld.ByServer) > 0 {
+		server, _ := scopeWords(withheld.ByServer)
+		causes = append(causes, "this server serves this action's group only to a credential carrying "+server)
+	}
+	_, pronoun := scopeWords(withheld.Missing())
+	if len(causes) == 1 {
+		return causes[0] + " and the credential in use does not carry " + pronoun
+	}
+	return strings.Join(causes, ", ") + ", and the credential in use does not carry " + pronoun
+}
+
+// scopeWords spells scopes as the withheld answer names them, "the api scope"
+// or "the admin_mode and api scopes", with the pronoun that refers back to
+// them.
+func scopeWords(scopes []string) (named, pronoun string) {
+	if len(scopes) == 1 {
+		return "the " + scopes[0] + " scope", "it"
+	}
+	return "the " + strings.Join(scopes, " and ") + " scopes", "them"
 }
 
 func (r *Registry) ambiguousAliasTargets(action string) []string {

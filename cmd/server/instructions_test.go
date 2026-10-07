@@ -206,8 +206,9 @@ func TestBuildInstructions_EachOperationIsNamedInItsOwnStep(t *testing.T) {
 // The instructions land in the model's system prompt, so guidance about a call
 // the same session's tools/list does not offer is worse than silence. The
 // trigger that matters needs no operator flag at all: a read_api credential is
-// served a read-only surface per pool entry (ADR-0018), so an ordinary
-// deployment reached this.
+// served what read_api reaches per pool entry (ADR-0018, ADR-0026), which
+// removes every post these sections teach, so an ordinary deployment reached
+// this.
 //
 // Safe mode is deliberately not covered, and must not be: it wraps rather than
 // removes, so the actions still exist there and answer with a preview.

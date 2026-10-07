@@ -140,11 +140,14 @@ type bearerGuard struct {
 	// It is deliberately not the deployment's own scope. Admission asks for
 	// what every action needs; whether a given action may write is decided
 	// against the surface the pool built for this token's real authority, so
-	// a read_api token gets a read-only catalog instead of a closed door.
+	// a read_api token gets the actions GitLab accepts from read_api instead
+	// of a closed door.
 	minimumScope string
-	// advertisedScope is the scope the challenge recommends: the one that
-	// buys this deployment's full surface. A client asking for less is
-	// served less, not refused, so this is guidance rather than the check.
+	// advertisedScope is the scope the challenge recommends,
+	// [oauth.RequiredScope]: api on a deployment that writes, and read_api on
+	// one that never does, where it leaves out the two reads GitLab answers
+	// only from api. A client asking for less is served less, not refused, so
+	// this is guidance rather than the check.
 	advertisedScope string
 }
 

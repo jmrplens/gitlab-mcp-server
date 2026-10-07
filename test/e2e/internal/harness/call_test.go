@@ -70,7 +70,7 @@ func TestClassify_EveryRefusal_LandsInItsOwnClass(t *testing.T) {
 		},
 		{
 			name:        "withheld by the credential",
-			text:        `gitlab_execute_action: action "admin.metadata_get" exists but is not available to this session: the credential in use does not carry a GitLab scope that covers it, so a narrowed action surface was built for it. Reauthorize with the api scope to use it; do not report the capability as missing.`,
+			text:        `gitlab_execute_action: action "admin.metadata_get" exists but is not available to this session: this server serves this action's group only to a credential carrying the admin_mode scope and the credential in use does not carry it, so a narrowed action surface was built for it. Reauthorize with the admin_mode scope to use it; do not report the capability as missing.`,
 			wantFailure: FailureUnknownAction,
 			wantOutcome: e2ecalls.RefusedOutcome(toolutil.RefusalUnknownAction),
 		},

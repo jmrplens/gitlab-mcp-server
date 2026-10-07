@@ -50,8 +50,8 @@ func oauthServer(t *testing.T, gitlabURL string, extra ...string) *server {
 // every user grant write access it can never use; a writing deployment
 // advertising both would have a client ask for both, which GitLab refuses from
 // an application that has only one of them. A read_api token is still
-// admitted by a writing deployment and served the read-only surface; the
-// client that wants one names read_api itself.
+// admitted by a writing deployment and served the actions GitLab accepts from
+// read_api; the client that wants one names read_api itself.
 func TestOAuth_MetadataAdvertisesTheScopesItAccepts(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
 
@@ -654,15 +654,19 @@ func TestOAuth_ReadAPITokenIsAdmitted(t *testing.T) {
 	}
 }
 
-// TestOAuth_ReadAPITokenGetsAReadOnlySurface is the other half: admitting the
-// token is only safe because what it may DO is settled per action.
+// TestOAuth_ReadAPITokenIsServedWhatReadAPIReaches is the other half:
+// admitting the token is only safe because what it may DO is settled per
+// action, by what GitLab accepts from read_api for each.
 //
 // The deployment runs the default dynamic surface, where the tool COUNT does
-// not move — there are two tools either way — so the question is which actions
-// each credential can reach through them. An api token must find a mutating
-// action; a read_api token must not. If both found it, the door would have
-// been opened without the office being locked.
-func TestOAuth_ReadAPITokenGetsAReadOnlySurface(t *testing.T) {
+// not move (there are two tools either way), so the question is which actions
+// each credential can reach through them. Three actions decide it. An api
+// token must find a write and a read_api token must not, or the door would
+// have been opened without the office being locked; a read_api token must not
+// find the CI lint either, a read GitLab answers only from api because it is
+// sent as a POST; and it must find the package download, which writes to the
+// local disk and reads GitLab with a GET, and which a read-only surface hid.
+func TestOAuth_ReadAPITokenIsServedWhatReadAPIReaches(t *testing.T) {
 	gitlab := startScopedFakeGitLab(t, map[string][]string{
 		"gloas-read-only": {"read_api"},
 		"gloas-full":      {"api"},
@@ -688,14 +692,28 @@ func TestOAuth_ReadAPITokenGetsAReadOnlySurface(t *testing.T) {
 	const mutating = "issue_create"
 
 	full := findAction("gloas-full", "create issue")
-	readOnly := findAction("gloas-read-only", "create issue")
+	readAPI := findAction("gloas-read-only", "create issue")
 
 	if !strings.Contains(full, mutating) {
 		t.Fatalf("an api token must be able to find %q; got: %s", mutating, truncate(full))
 	}
-	if strings.Contains(readOnly, mutating) {
+	if strings.Contains(readAPI, mutating) {
 		t.Errorf("a read_api token reached the mutating action %q — the per-action write gate is not applied: %s",
-			mutating, truncate(readOnly))
+			mutating, truncate(readAPI))
+	}
+
+	// The CI lint is a read sent as a POST, which GitLab answers only from api.
+	const lint = `"id":"template.lint"`
+	if found := findAction("gloas-full", "lint ci configuration"); !strings.Contains(found, lint) {
+		t.Fatalf("an api token must be able to find %s; got: %s", lint, truncate(found))
+	}
+	if found := findAction("gloas-read-only", "lint ci configuration"); strings.Contains(found, lint) {
+		t.Errorf("a read_api token reached %s, which GitLab refuses it: %s", lint, truncate(found))
+	}
+	// The package download writes a local file and reads GitLab with a GET.
+	const download = `"id":"package.download"`
+	if found := findAction("gloas-read-only", "download package file"); !strings.Contains(found, download) {
+		t.Errorf("a read_api token must be able to find %s, which GitLab serves it: %s", download, truncate(found))
 	}
 }
 

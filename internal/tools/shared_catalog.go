@@ -14,7 +14,8 @@
 // the tier, the instance class (GitLab.com carries the Orbit actions), whether
 // the maintenance group is included, and, for the filtered surfaces, the
 // operator's exclusions, the scopes of the token that can change the catalog,
-// read-only mode with its cause, and safe mode.
+// read-only mode, whether the token carries read_api without api, and safe
+// mode.
 //
 // None of the caches here evicts, and neither do the three that key on a
 // catalog pointer (the dynamic registry shape, the tool manifest snapshot and
@@ -40,6 +41,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 )
@@ -143,13 +145,13 @@ func BaseCatalogKey(tier edition.Tier, dotcom, includeMCP bool) string {
 // legibly.
 //
 //gitlab:allow-raw cfg.ReadOnly: a cache key component, compared and never read
-//gitlab:allow-raw cfg.ReadOnlyFromTokenScope: a cache key component, compared and never read
+//gitlab:allow-raw cfg.ReadAPIOnly: a cache key component, compared and never read
 //gitlab:allow-raw cfg.SafeMode: a cache key component, compared and never read
 func CatalogFilterKey(cfg *config.ServerConfig) string {
-	return fmt.Sprintf("exclude=%s|%s|readonly=%t|readonlyFromScope=%t|safe=%t",
+	return fmt.Sprintf("exclude=%s|%s|readonly=%t|readAPIOnly=%t|safe=%t",
 		strings.Join(cfg.ExcludeTools, ","),
 		scopeCatalogKey(cfg.TokenScopes),
-		cfg.ReadOnly, cfg.ReadOnlyFromTokenScope, cfg.SafeMode)
+		cfg.ReadOnly, cfg.ReadAPIOnly, cfg.SafeMode)
 }
 
 // scopeCatalogKey names the part of a token's scopes that changes a catalog:
@@ -232,15 +234,24 @@ func SharedMetaCatalog(client *gitlabclient.Client, cfg *config.ServerConfig) (*
 // the worse half to leave: a model reads tools/list to decide what is possible,
 // and concluded the capability was there.
 //
+// The reach of a credential carrying read_api and not api is applied here
+// too, after the group scopes, for the same reason: the individual surface's
+// read-only pass after registration reads each tool's annotation, which is the
+// operator's rule, while what read_api reaches is decided per action from what
+// it sends (ADR-0026), which only the catalog carries.
+//
 // Only the withheld-by-exclusion IDs are returned, and deliberately: they
 // narrow the resource and prompt surfaces, because an action the operator
 // removed must not stay readable through a second request path. A scope-removed
 // action needs no such treatment, since the credential that cannot call it
 // cannot read it either, and the two filtered surfaces make the same split.
+//
+//gitlab:allow-raw cfg.ReadAPIOnly: a cache key component, compared and never read
 func SharedIndividualCatalog(client *gitlabclient.Client, cfg *config.ServerConfig) (*actioncatalog.Catalog, []string, error) {
 	dotcom := client.IsGitLabDotCom()
 	key := "individual|" + BaseCatalogKey(cfg.Tier, dotcom, true) +
-		"|exclude=" + strings.Join(cfg.ExcludeTools, ",") + "|" + scopeCatalogKey(cfg.TokenScopes)
+		"|exclude=" + strings.Join(cfg.ExcludeTools, ",") + "|" + scopeCatalogKey(cfg.TokenScopes) +
+		"|readAPIOnly=" + strconv.FormatBool(cfg.ReadAPIOnly)
 	catalog, withheld, err := ShareCatalog(key, func() (*actioncatalog.Catalog, WithheldActions, error) {
 		base, baseErr := sharedBaseCatalog(dotcom, ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true})
 		if baseErr != nil {
@@ -255,6 +266,9 @@ func SharedIndividualCatalog(client *gitlabclient.Client, cfg *config.ServerConf
 		scoped, scopeErr := scopeFilterCatalog(ExcludeFromCatalog(base, cfg.ExcludeTools), cfg.TokenScopes)
 		if scopeErr != nil {
 			return nil, WithheldActions{}, fmt.Errorf("filter individual action catalog: %w", scopeErr)
+		}
+		if cfg.ReadAPIOnly {
+			scoped = scoped.FilterReachableWith(finegrained.ClassicReadAPI)
 		}
 		return scoped, WithheldActions{ExcludedByName: excluded}, nil
 	})

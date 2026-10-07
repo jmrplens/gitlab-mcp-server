@@ -567,11 +567,12 @@ func TestAddStandaloneRoutes_AddsDynamicActions(t *testing.T) {
 	}
 }
 
-// TestAddStandaloneRoutes_HonorsReadOnlyAndExclusions verifies that standalone
-// route registration respects read-only mode and explicit tool exclusions.
-func TestAddStandaloneRoutes_HonorsReadOnlyAndExclusions(t *testing.T) {
+// TestAddStandaloneRoutes_HonorsExclusions verifies that standalone route
+// registration respects explicit tool exclusions and removes nothing else:
+// a guided flow stays routable here, since read-only mode is applied to it
+// after it joins the catalog, where the removal is filed as withheld.
+func TestAddStandaloneRoutes_HonorsExclusions(t *testing.T) {
 	routes, err := AddStandaloneRoutes(nil, nil, StandaloneOptions{
-		ReadOnly:     true,
 		ExcludeTools: []string{"gitlab_discover_project"},
 	})
 	if err != nil {
@@ -582,8 +583,8 @@ func TestAddStandaloneRoutes_HonorsReadOnlyAndExclusions(t *testing.T) {
 	if _, ok := registry.resolveAction("discover_project.resolve"); ok {
 		t.Fatal("discover_project.resolve is present, want excluded")
 	}
-	if _, ok := registry.resolveAction("interactive.issue_create"); ok {
-		t.Fatal("interactive.issue_create is present in read-only mode")
+	if _, ok := registry.resolveAction("interactive.issue_create"); !ok {
+		t.Fatal("interactive.issue_create is missing, and no exclusion named it")
 	}
 }
 
@@ -9271,9 +9272,9 @@ func executeText(t *testing.T, registry *Registry, action string) string {
 func TestExecute_WithheldActionNamesTheCauseInsteadOfCallingItUnknown(t *testing.T) {
 	t.Run("token scope says reauthorize", func(t *testing.T) {
 		registry := newCatalogRegistry(narrowedCatalog(t),
-			WithWithheldActions([]string{"project.hook_add"}, nil))
+			WithWithheldActions(withheldForScopes(gitlabAPI, nil, "project.hook_add"), nil))
 		text := executeText(t, registry, "project.hook_add")
-		for _, want := range []string{"exists but is not available", "credential in use", "api scope"} {
+		for _, want := range []string{"exists but is not available", "credential in use", "GitLab requires the api scope", "Reauthorize with the api scope"} {
 			t.Run(want, func(t *testing.T) {
 				if !strings.Contains(text, want) {
 					t.Errorf("Execute() error text = %q, want it to contain %q", text, want)
@@ -9303,7 +9304,7 @@ func TestExecute_WithheldActionNamesTheCauseInsteadOfCallingItUnknown(t *testing
 
 	t.Run("an alias of a withheld action is withheld too", func(t *testing.T) {
 		registry := newCatalogRegistry(narrowedCatalog(t),
-			WithWithheldActions([]string{"project.hook_add", "add project hook"}, nil))
+			WithWithheldActions(withheldForScopes(gitlabAPI, nil, "project.hook_add", "add project hook"), nil))
 		text := executeText(t, registry, "Add Project Hook")
 		if !strings.Contains(text, "exists but is not available") {
 			t.Errorf("Execute() error text = %q, want the withheld explanation for an alias", text)
@@ -9317,6 +9318,77 @@ func TestExecute_WithheldActionNamesTheCauseInsteadOfCallingItUnknown(t *testing
 			t.Errorf("Execute() error text = %q, want the unknown-action message when nothing was withheld", text)
 		}
 	})
+}
+
+// gitlabAPI is the half of a scope-withheld entry that says GitLab requires
+// api for what the action sends.
+var gitlabAPI = []string{"api"}
+
+// withheldForScopes is the token-scope bookkeeping for keys a credential
+// lacks the same scopes for, those GitLab requires and those this server's
+// group filter demands.
+func withheldForScopes(byGitLab, byServer []string, keys ...string) []actioncatalog.ScopeWithheld {
+	withheld := make([]actioncatalog.ScopeWithheld, 0, len(keys))
+	for _, key := range keys {
+		withheld = append(withheld, actioncatalog.ScopeWithheld{ID: key, ByGitLab: byGitLab, ByServer: byServer})
+	}
+	return withheld
+}
+
+// TestExecute_WithheldByScope_NamesEveryScopeTheCredentialLacks pins the
+// scopes the answer tells a caller to reauthorize with, and who it says asks
+// for each: api alone, as GitLab's requirement; admin_mode alone, as this
+// server's demand for the action's group, never as GitLab's, since GitLab
+// serves some actions of such a group to any authenticated token (and a token
+// that carries api and was told to reauthorize with api went round in a
+// circle); both, each with its cause and the plural; two scopes of one cause
+// with the plural; and GitLab's api for an entry that names none, so the
+// answer always names something. An entry with no key withholds nothing.
+func TestExecute_WithheldByScope_NamesEveryScopeTheCredentialLacks(t *testing.T) {
+	admin := []string{"admin_mode"}
+	cases := []struct {
+		name     string
+		byGitLab []string
+		byServer []string
+		want     string
+		absent   string
+	}{
+		{
+			name: "api", byGitLab: gitlabAPI,
+			want:   "GitLab requires the api scope for it and the credential in use does not carry it, so a narrowed action surface was built for it. Reauthorize with the api scope to use it",
+			absent: "this server serves",
+		},
+		{
+			name: "admin_mode", byServer: admin,
+			want:   "this server serves this action's group only to a credential carrying the admin_mode scope and the credential in use does not carry it, so a narrowed action surface was built for it. Reauthorize with the admin_mode scope to use it",
+			absent: "GitLab requires",
+		},
+		{
+			name: "both", byGitLab: gitlabAPI, byServer: admin,
+			want: "GitLab requires the api scope for it, this server serves this action's group only to a credential carrying the admin_mode scope, and the credential in use does not carry them, so a narrowed action surface was built for it. Reauthorize with the admin_mode and api scopes to use it",
+		},
+		{
+			name: "two scopes this server demands", byServer: []string{"admin_mode", "sudo"},
+			want:   "only to a credential carrying the admin_mode and sudo scopes and the credential in use does not carry them, so",
+			absent: "GitLab requires",
+		},
+		{
+			name: "none named",
+			want: "GitLab requires the api scope for it and the credential in use does not carry it, so a narrowed action surface was built for it. Reauthorize with the api scope to use it",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := newCatalogRegistry(narrowedCatalog(t), WithWithheldActions(withheldForScopes(tc.byGitLab, tc.byServer, "project.hook_add", " "), nil))
+			text := executeText(t, registry, "project.hook_add")
+			if !strings.Contains(text, tc.want) || tc.absent != "" && strings.Contains(text, tc.absent) {
+				t.Errorf("Execute() error text = %q, want it to contain %q and not %q", text, tc.want, tc.absent)
+			}
+			if _, blank := registry.withheldByScope[""]; blank {
+				t.Error("an entry with no key was recorded as withheld")
+			}
+		})
+	}
 }
 
 // crossLinkCatalog builds a catalog whose one described action points at every
@@ -9388,7 +9460,7 @@ func TestDescribe_RelatedActions_CanonicalizeWhatResolvesAndDropWhatCannotBeExpl
 	})
 
 	t.Run("withheld by token scope", func(t *testing.T) {
-		registry := newCatalogRegistry(crossLinkCatalog(t), WithWithheldActions([]string{"widget.hidden"}, nil))
+		registry := newCatalogRegistry(crossLinkCatalog(t), WithWithheldActions(withheldForScopes(gitlabAPI, nil, "widget.hidden"), nil))
 		want := []string{"widget.audit", "widget.repair", "widget.hidden"}
 		if got := crossLinks(t, registry); !slices.Equal(got, want) {
 			t.Fatalf("RelatedActions = %v, want %v: a scope-withheld link stays, since asking for it explains the narrowing", got, want)
@@ -9404,7 +9476,7 @@ func TestDescribe_RelatedActions_CanonicalizeWhatResolvesAndDropWhatCannotBeExpl
 	})
 
 	t.Run("an action no filter reported stays dropped", func(t *testing.T) {
-		registry := newCatalogRegistry(crossLinkCatalog(t), WithWithheldActions([]string{"widget.hidden"}, nil))
+		registry := newCatalogRegistry(crossLinkCatalog(t), WithWithheldActions(withheldForScopes(gitlabAPI, nil, "widget.hidden"), nil))
 		if got := crossLinks(t, registry); slices.Contains(got, "widget.retired") {
 			t.Fatalf("RelatedActions = %v, must not carry widget.retired: nothing here could answer for it", got)
 		}
