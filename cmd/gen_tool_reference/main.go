@@ -14,7 +14,9 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
 
 const (
@@ -70,25 +72,32 @@ func runMain(args []string, stdout, stderr io.Writer) int {
 }
 
 // source is everything a run reads: where the repository is, the catalogs and
-// the surfaces the pages describe, the scope requirements of the groups, and
-// the hand-written data file. A test hands run a small one.
+// the surfaces the pages describe, the scope requirements of the groups, the
+// table the catalog's token requirements point into with the routes of it
+// GitLab refuses to an OAuth token, and the hand-written data file. A test
+// hands run a small one.
 type source struct {
-	root     func() (string, error)
-	builds   func() ([]build, error)
-	surfaces func() surfaceNames
-	scopes   map[string][]string
-	domains  []byte
+	root         func() (string, error)
+	builds       func() ([]build, error)
+	surfaces     func() surfaceNames
+	scopes       map[string][]string
+	grants       *finegrained.Table
+	oauthRefused []oauthRefusedRoute
+	domains      []byte
 }
 
 // defaultSource is the source the command reads: the repository it runs in,
-// the catalogs this binary builds, and the embedded data file.
+// the catalogs this binary builds, the action grants table compiled into it,
+// the OAuth refusals declared here, and the embedded data file.
 func defaultSource() source {
 	return source{
-		root:     mcpsurface.ProjectRoot,
-		builds:   defaultBuilds,
-		surfaces: defaultSurfaces,
-		scopes:   tools.MetaToolScopes,
-		domains:  domainsJSON,
+		root:         mcpsurface.ProjectRoot,
+		builds:       defaultBuilds,
+		surfaces:     defaultSurfaces,
+		scopes:       tools.MetaToolScopes,
+		grants:       actiongrants.Table(),
+		oauthRefused: oauthRefusedRoutes,
+		domains:      domainsJSON,
 	}
 }
 
@@ -108,7 +117,7 @@ func run(src source, check bool, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	ref, err := assemble(builds, src.surfaces(), src.scopes)
+	ref, err := assemble(builds, src.surfaces(), src.scopes, src.grants, src.oauthRefused)
 	if err != nil {
 		return err
 	}

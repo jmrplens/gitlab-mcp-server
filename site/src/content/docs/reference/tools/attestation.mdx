@@ -32,11 +32,11 @@ How many of these actions an instance serves at each tier, out of a total of 2:
 - **Premium**: 0
 - **Ultimate**: 2
 
-Read-only actions: 2 of 2, the ones a deployment in read-only mode keeps.
+Read-only actions: 2 of 2, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 2 of the 2.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served.
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`.
 
 | Action                                         | Individual                    |
 | ---------------------------------------------- | ----------------------------- |
@@ -50,6 +50,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_attestation`, action `download`
 - **Individual tool**: `gitlab_download_attestation`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Attestation: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#attestation))
 - **Behavior**: read-only, idempotent
 
 | Parameter         | Type             | Mandatory | Description                      |
@@ -64,6 +66,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_attestation`, action `list`
 - **Individual tool**: `gitlab_list_attestations`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Attestation: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#attestation))
 - **Behavior**: read-only, idempotent
 
 | Parameter        | Type             | Mandatory | Description                                                                                                                                                                               |

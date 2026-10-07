@@ -9,6 +9,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 )
 
@@ -43,7 +44,7 @@ func renderPages(ref reference, data domains) []page {
 		order := sidebarOrder(data, lang)
 		pages = append(pages, page{path: lang.dir + "/index" + pageExtension, content: []byte(renderIndex(ref, data, lang, order))})
 		for _, group := range ref.groups {
-			content := renderGroup(group, data.Groups[group.tool], lang, order[group.tool], targets)
+			content := renderGroup(group, data.Groups[group.tool], lang, order[group.tool], targets, ref.version)
 			pages = append(pages, page{path: lang.dir + "/" + group.slug + pageExtension, content: []byte(content)})
 		}
 	}
@@ -148,8 +149,9 @@ func renderIndex(ref reference, data domains, lang language, order map[string]in
 	return strings.TrimRight(b.String(), "\n") + "\n"
 }
 
-// renderGroup renders the page of one group.
-func renderGroup(group *refGroup, d domain, lang language, order int, targets map[string]string) string {
+// renderGroup renders the page of one group. version is the GitLab release
+// the token requirements were recorded from.
+func renderGroup(group *refGroup, d domain, lang language, order int, targets map[string]string, version string) string {
 	var b strings.Builder
 	frontmatter(&b, d.Title[lang.code], d.Description[lang.code], order, lang)
 	paragraph(&b, lang.generatedNote)
@@ -169,7 +171,7 @@ func renderGroup(group *refGroup, d domain, lang language, order int, targets ma
 		paragraph(&b, text)
 	}
 	paragraph(&b, "## "+lang.headingActions)
-	paragraph(&b, actionsIntro(group, lang))
+	paragraph(&b, actionsIntro(group, lang, version))
 	paragraph(&b, summaryTable(group, lang))
 	for _, action := range group.actions {
 		writeAction(&b, action, lang, func(id string) string { return link(id, group.slug, targets) })
@@ -203,7 +205,8 @@ func callLines(group *refGroup, lang language) string {
 }
 
 // availability says which tiers serve how many of the group's actions, what a
-// token or a client needs for them, and how many of them only read.
+// token or a client needs for them, how many of them only read, and how many
+// of them a token carrying read_api and not api is served.
 func availability(group *refGroup, lang language) []string {
 	total := len(group.actions)
 	var blocks []string
@@ -222,22 +225,21 @@ func availability(group *refGroup, lang language) []string {
 		blocks = append(blocks, lines[0], strings.Join(lines[1:], "\n"))
 	}
 	if len(group.scopes) > 0 {
-		quoted := make([]string, 0, len(group.scopes))
-		for _, scope := range group.scopes {
-			quoted = append(quoted, "`"+scope+"`")
-		}
-		blocks = append(blocks, fmt.Sprintf(lang.scope, strings.Join(quoted, lang.scopeJoin)))
+		blocks = append(blocks, fmt.Sprintf(lang.scope, quoteJoin(group.scopes, lang.scopeJoin)))
 	}
 	for _, capability := range group.capabilities {
 		blocks = append(blocks, lang.capabilities[capability])
 	}
-	readOnly := 0
+	readOnly, readAPI := 0, 0
 	for _, action := range group.actions {
 		if action.readOnly {
 			readOnly++
 		}
+		if action.classic.ReachableWith(finegrained.ClassicReadAPI) {
+			readAPI++
+		}
 	}
-	return append(blocks, fmt.Sprintf(lang.readOnlyCount, readOnly, total))
+	return append(blocks, fmt.Sprintf(lang.readOnlyCount, readOnly, total, readAPI, total))
 }
 
 // everywhere reports whether every build serves every action of the group.
@@ -253,9 +255,10 @@ func everywhere(group *refGroup) bool {
 }
 
 // actionsIntro opens the list of actions: whose words the descriptions are,
-// and the notes the group's actions call for.
-func actionsIntro(group *refGroup, lang language) string {
-	text := lang.actionsIntro
+// which GitLab release the token lines were recorded from, and the notes the
+// group's actions call for.
+func actionsIntro(group *refGroup, lang language, version string) string {
+	text := lang.actionsIntro + " " + fmt.Sprintf(lang.requirementIntro, version)
 	destructive, tiered := false, false
 	for _, action := range group.actions {
 		destructive = destructive || action.destructive
@@ -313,8 +316,9 @@ func summaryTable(group *refGroup, lang language) string {
 }
 
 // writeAction writes the section of one action: its served description, the
-// tools that reach it, its tier and behavior, and its parameters. linkTo is
-// where the page links another action to.
+// tools that reach it, its tier, what a classic and a fine-grained token need
+// for it, its behavior, and its parameters. linkTo is where the page links
+// another action to.
 func writeAction(b *strings.Builder, action *refAction, lang language, linkTo func(string) string) {
 	paragraph(b, "### `"+action.id+"`")
 	paragraph(b, quote(action.description, linkTo))
@@ -331,7 +335,11 @@ func writeAction(b *strings.Builder, action *refAction, lang language, linkTo fu
 	if action.dotcomOnly {
 		tier = fmt.Sprintf(lang.factDotcomOnly, tier)
 	}
-	facts = append(facts, fmt.Sprintf(lang.factTier, tier), fmt.Sprintf(lang.factBehavior, behavior(action, lang)))
+	facts = append(facts,
+		fmt.Sprintf(lang.factTier, tier),
+		fmt.Sprintf(lang.factClassic, classicText(action, lang)),
+		fmt.Sprintf(lang.factFineGrained, fineGrainedText(action, lang)),
+		fmt.Sprintf(lang.factBehavior, behavior(action, lang)))
 	paragraph(b, strings.Join(facts, "\n"))
 	if len(action.params) == 0 {
 		paragraph(b, lang.noParameters)
@@ -349,6 +357,59 @@ func writeAction(b *strings.Builder, action *refAction, lang language, linkTo fu
 		}
 		paragraph(b, fmt.Sprintf(lang.oneOf, strings.Join(sets, lang.oneOfJoin)))
 	}
+}
+
+// classicText is the scope a classic or OAuth token needs for an action: api,
+// or read_api, which an api token carries too; then the scopes this server
+// demands of a token before it lists the action's group, which are the
+// server's requirement and not GitLab's; then why a scope the action does not
+// judge is still asked for, when GitLab reads another credential or nothing
+// at all; then the routes it sends that GitLab refuses to an OAuth token,
+// whatever scope that token carries.
+func classicText(action *refAction, lang language) string {
+	first := lang.classicReadAPI
+	if action.classic == finegrained.ClassicAPI {
+		first = lang.classicAPI
+	}
+	var text strings.Builder
+	text.WriteString(first)
+	if len(action.scopes) > 0 {
+		fmt.Fprintf(&text, lang.classicGroupScopes, quoteJoin(action.scopes, lang.scopeJoin))
+	}
+	switch action.classic {
+	case finegrained.ClassicOtherCredential:
+		text.WriteString(lang.classicOtherAuthentication)
+	case finegrained.ClassicNoRequest:
+		text.WriteString(lang.classicNoRequest)
+	}
+	if len(action.oauthRefused) > 0 {
+		clause := lang.classicOAuthRefusedSome
+		if action.oauthRefusedEveryWay {
+			clause = lang.classicOAuthRefused
+		}
+		fmt.Fprintf(&text, clause, quoteJoin(action.oauthRefused, lang.scopeJoin))
+	}
+	return text.String()
+}
+
+// quoteJoin writes each of items as code and joins them with join.
+func quoteJoin(items []string, join string) string {
+	quoted := make([]string, len(items))
+	for i, item := range items {
+		quoted[i] = "`" + item + "`"
+	}
+	return strings.Join(quoted, join)
+}
+
+// fineGrainedText is what a fine-grained token needs for an action, in the
+// words the permissions page writes it in, the parts of the answer it may be
+// served empty, and a link to the action's domain on that page.
+func fineGrainedText(action *refAction, lang language) string {
+	text := lang.words.NeedsText(action.fineGrained)
+	if empty := lang.words.ServedEmptyText(action.fineGrained); empty != "" {
+		text += fmt.Sprintf(lang.servedEmpty, empty)
+	}
+	return text + fmt.Sprintf(lang.permissionsLink, action.domain)
 }
 
 // behavior names an action's annotations in lang.

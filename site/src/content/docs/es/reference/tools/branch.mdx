@@ -30,11 +30,11 @@ Gestión de ramas de un proyecto: leer y listar ramas, crear una a partir de una
 
 Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
 
-Acciones de solo lectura: 5 de 11, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 5 de 11, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 5 de las 11.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)). Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)). Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.
 
 | Acción                                               | Individual                       |
 | ---------------------------------------------------- | -------------------------------- |
@@ -57,6 +57,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_branch`, acción `create`
 - **Herramienta individual**: `gitlab_branch_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Branch: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                                                  |
@@ -72,6 +74,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_branch`, acción `delete`
 - **Herramienta individual**: `gitlab_branch_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Branch: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
@@ -86,6 +90,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_branch`, acción `delete_merged`
 - **Herramienta individual**: `gitlab_branch_delete_merged`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Branch: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -99,6 +105,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_branch`, acción `get`
 - **Herramienta individual**: `gitlab_branch_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Branch: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                                                |
@@ -113,6 +121,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_branch`, acción `get_protected`
 - **Herramienta individual**: `gitlab_protected_branch_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Protected Branch: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
@@ -127,6 +137,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_branch`, acción `list`
 - **Herramienta individual**: `gitlab_branch_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Branch: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -148,6 +160,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_branch`, acción `list_protected`
 - **Herramienta individual**: `gitlab_protected_branches_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Protected Branch: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -168,6 +182,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_branch`, acción `protect`
 - **Herramienta individual**: `gitlab_branch_protect`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Branch: Protect en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                                | Tipo                              | Requerido | Descripción                                                                                                                                           |
@@ -190,6 +206,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_branch`, acción `rule_list`
 - **Herramienta individual**: `gitlab_list_branch_rules`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `BranchRule`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro      | Tipo      | Requerido | Descripción                                                       |
@@ -205,6 +223,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_branch`, acción `unprotect`
 - **Herramienta individual**: `gitlab_branch_unprotect`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Branch: Protect en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                            |
@@ -219,6 +239,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_branch`, acción `update_protected`
 - **Herramienta individual**: `gitlab_protected_branch_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Protected Branch: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                                | Tipo             | Requerido | Descripción                                                                         |

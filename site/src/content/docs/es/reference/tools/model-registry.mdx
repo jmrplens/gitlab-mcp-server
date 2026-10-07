@@ -25,11 +25,11 @@ El registro de modelos guarda modelos de aprendizaje automático y sus versiones
 
 Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
 
-Acciones de solo lectura: 1 de 1, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 1 de 1, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 1 de las 1.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`.
 
 | Acción                                               | Individual                         |
 | ---------------------------------------------------- | ---------------------------------- |
@@ -42,6 +42,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_model_registry`, acción `download`
 - **Herramienta individual**: `gitlab_download_ml_model_package`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Model Version: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#model_registry))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro          | Tipo             | Requerido | Descripción                                                                                                                                   |

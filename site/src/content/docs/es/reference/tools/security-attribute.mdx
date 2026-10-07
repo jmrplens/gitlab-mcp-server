@@ -31,11 +31,11 @@ Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 5:
 - **Premium**: 0
 - **Ultimate**: 5
 
-Acciones de solo lectura: 0 de 5, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 0 de 5, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 0 de las 5.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
 
 | Acción                                                                   | Individual                                  |
 | ------------------------------------------------------------------------ | ------------------------------------------- |
@@ -52,6 +52,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_security_attribute`, acción `bulk_update`
 - **Herramienta individual**: `gitlab_bulk_update_security_attributes`
 - **Nivel**: Ultimate
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para la mutación `bulkUpdateSecurityAttributes`, y la rechaza ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#security_attribute))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro       | Tipo        | Requerido | Descripción                               |
@@ -70,6 +72,8 @@ Además necesita al menos uno de estos: `group_ids`; `project_ids`.
 - **Meta-herramienta**: `gitlab_security_attribute`, acción `create`
 - **Herramienta individual**: `gitlab_create_security_attribute`
 - **Nivel**: Ultimate
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `SecurityAttribute` en la respuesta, así que la escritura se confirma y su respuesta se pierde ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#security_attribute))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro      | Tipo       | Requerido | Descripción                   |
@@ -85,6 +89,8 @@ Además necesita al menos uno de estos: `group_ids`; `project_ids`.
 - **Meta-herramienta**: `gitlab_security_attribute`, acción `delete`
 - **Herramienta individual**: `gitlab_delete_security_attribute`
 - **Nivel**: Ultimate
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Security Attribute: Delete en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#security_attribute))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro      | Tipo      | Requerido | Descripción                   |
@@ -98,6 +104,8 @@ Además necesita al menos uno de estos: `group_ids`; `project_ids`.
 - **Meta-herramienta**: `gitlab_security_attribute`, acción `project_update`
 - **Herramienta individual**: `gitlab_update_project_security_attributes`
 - **Nivel**: Ultimate
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Security Attribute: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#security_attribute))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro              | Tipo        | Requerido | Descripción                      |
@@ -115,6 +123,8 @@ Además necesita al menos uno de estos: `add_attribute_ids`; `remove_attribute_i
 - **Meta-herramienta**: `gitlab_security_attribute`, acción `update`
 - **Herramienta individual**: `gitlab_update_security_attribute`
 - **Nivel**: Ultimate
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `SecurityAttribute` en la respuesta, así que la escritura se confirma y su respuesta se pierde ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#security_attribute))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro      | Tipo      | Requerido | Descripción                                                |

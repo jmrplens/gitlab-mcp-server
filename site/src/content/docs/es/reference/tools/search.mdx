@@ -27,11 +27,11 @@ Búsqueda de texto completo, una acción por tipo de resultado: código, merge r
 
 Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
 
-Acciones de solo lectura: 10 de 10, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 10 de 10, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 10 de las 10.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`.
 
 | Acción                                           | Individual                     |
 | ------------------------------------------------ | ------------------------------ |
@@ -53,6 +53,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_search`, acción `code`
 - **Herramienta individual**: `gitlab_search_code`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -72,6 +74,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_search`, acción `commits`
 - **Herramienta individual**: `gitlab_search_commits`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -90,6 +94,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_search`, acción `issues`
 - **Herramienta individual**: `gitlab_search_issues`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -108,6 +114,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_search`, acción `merge_requests`
 - **Herramienta individual**: `gitlab_search_merge_requests`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -126,6 +134,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_search`, acción `milestones`
 - **Herramienta individual**: `gitlab_search_milestones`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -144,6 +154,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_search`, acción `notes`
 - **Herramienta individual**: `gitlab_search_notes`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Global Search: Use en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -161,6 +173,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_search`, acción `projects`
 - **Herramienta individual**: `gitlab_search_projects`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: una de: Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -178,6 +192,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_search`, acción `snippets`
 - **Herramienta individual**: `gitlab_search_snippets`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -194,6 +210,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_search`, acción `users`
 - **Herramienta individual**: `gitlab_search_users`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -212,6 +230,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_search`, acción `wiki`
 - **Herramienta individual**: `gitlab_search_wiki`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |

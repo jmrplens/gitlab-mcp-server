@@ -31,11 +31,11 @@ How many of these actions an instance serves at each tier, out of a total of 3:
 - **Premium**: 0
 - **Ultimate**: 3
 
-Read-only actions: 0 of 3, the ones a deployment in read-only mode keeps.
+Read-only actions: 0 of 3, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 0 of the 3.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
 
 | Action                                                 | Individual                        |
 | ------------------------------------------------------ | --------------------------------- |
@@ -50,6 +50,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_security_category`, action `create`
 - **Individual tool**: `gitlab_create_security_category`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `SecurityCategory` in the answer, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#security_category))
 - **Behavior**: writes, not idempotent
 
 | Parameter            | Type      | Mandatory | Description                                                  |
@@ -66,6 +68,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_security_category`, action `delete`
 - **Individual tool**: `gitlab_delete_security_category`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Security Attribute: Delete at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#security_category))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter     | Type      | Mandatory | Description                  |
@@ -79,6 +83,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_security_category`, action `update`
 - **Individual tool**: `gitlab_update_security_category`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `SecurityCategory` in the answer, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#security_category))
 - **Behavior**: writes, idempotent
 
 | Parameter      | Type      | Mandatory | Description                       |

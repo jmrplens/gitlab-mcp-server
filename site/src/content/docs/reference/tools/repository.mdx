@@ -30,11 +30,11 @@ Commits: list, read and create them, read a commit's diff, refs, merge requests 
 
 Every tier serves the whole group, on self-managed instances and on GitLab.com alike.
 
-Read-only actions: 27 of 41, the ones a deployment in read-only mode keeps.
+Read-only actions: 27 of 41, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 27 of the 41.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
 
 | Action                                                                                 | Individual                              |
 | -------------------------------------------------------------------------------------- | --------------------------------------- |
@@ -87,6 +87,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `archive`
 - **Individual tool**: `gitlab_repository_archive`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`); the action sends GitLab no request
+- **Fine-grained token**: no permission ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                                      |
@@ -103,6 +105,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `blob`
 - **Individual tool**: `gitlab_repository_blob`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                 |
@@ -117,6 +121,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `changelog_add`
 - **Individual tool**: `gitlab_repository_changelog_add`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Repository: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: writes, not idempotent
 
 | Parameter     | Type             | Mandatory | Description                                                                  |
@@ -139,6 +145,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `changelog_generate`
 - **Individual tool**: `gitlab_repository_changelog_generate`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type             | Mandatory | Description                                                                  |
@@ -158,6 +166,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_cherry_pick`
 - **Individual tool**: `gitlab_commit_cherry_pick`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Commit: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                  |
@@ -175,6 +185,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_comment_create`
 - **Individual tool**: `gitlab_commit_comment_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Commit: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type                    | Mandatory | Description                                   |
@@ -193,6 +205,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_comments`
 - **Individual tool**: `gitlab_commit_comments`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Commit: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -213,6 +227,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_create`
 - **Individual tool**: `gitlab_commit_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Commit: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: writes, not idempotent
 
 | Parameter        | Type             | Mandatory | Description                                                                                   |
@@ -236,6 +252,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_diff`
 - **Individual tool**: `gitlab_commit_diff`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Commit: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -257,6 +275,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_discussion_add_note`
 - **Individual tool**: `gitlab_add_commit_discussion_note`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Commit: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: writes, not idempotent
 
 | Parameter       | Type             | Mandatory | Description                                                                                           |
@@ -274,6 +294,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_discussion_create`
 - **Individual tool**: `gitlab_create_commit_discussion`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Commit: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                                                                 |
@@ -291,6 +313,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_discussion_delete_note`
 - **Individual tool**: `gitlab_delete_commit_discussion_note`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Commit: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter       | Type             | Mandatory | Description                    |
@@ -307,6 +331,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_discussion_get`
 - **Individual tool**: `gitlab_get_commit_discussion`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Commit: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter       | Type             | Mandatory | Description                    |
@@ -322,6 +348,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_discussion_list`
 - **Individual tool**: `gitlab_list_commit_discussions`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Commit: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -342,6 +370,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_discussion_update_note`
 - **Individual tool**: `gitlab_update_commit_discussion_note`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Commit: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: writes, idempotent
 
 | Parameter       | Type             | Mandatory | Description                                                                                           |
@@ -360,6 +390,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_get`
 - **Individual tool**: `gitlab_commit_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Commit: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                                    |
@@ -375,6 +407,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_list`
 - **Individual tool**: `gitlab_commit_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Commit: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter      | Type                     | Mandatory | Description                                                                                                                                       |
@@ -403,6 +437,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_merge_requests`
 - **Individual tool**: `gitlab_commit_merge_requests`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Commit: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                                                                           |
@@ -419,6 +455,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_refs`
 - **Individual tool**: `gitlab_commit_refs`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Commit: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                              | Mandatory | Description                                                                                                                                       |
@@ -440,6 +478,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_revert`
 - **Individual tool**: `gitlab_commit_revert`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Commit: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -455,6 +495,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_signature`
 - **Individual tool**: `gitlab_commit_signature`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Commit: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -469,6 +511,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_status_set`
 - **Individual tool**: `gitlab_commit_status_set`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Commit Status: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: writes, idempotent
 
 | Parameter     | Type                                                                        | Mandatory | Description                                               |
@@ -491,6 +535,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `commit_statuses`
 - **Individual tool**: `gitlab_commit_statuses`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Commit: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type                     | Mandatory | Description                                                                                                                                       |
@@ -516,6 +562,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `compare`
 - **Individual tool**: `gitlab_repository_compare`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter         | Type             | Mandatory | Description                                                          |
@@ -534,6 +582,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `contributors`
 - **Individual tool**: `gitlab_repository_contributors`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                                  | Mandatory | Description                                                                                                                                       |
@@ -553,6 +603,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `file_blame`
 - **Individual tool**: `gitlab_file_blame`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type             | Mandatory | Description                                             |
@@ -570,6 +622,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `file_create`
 - **Individual tool**: `gitlab_file_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Repository: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: writes, not idempotent
 
 | Parameter          | Type                        | Mandatory | Description                                                        |
@@ -592,6 +646,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `file_delete`
 - **Individual tool**: `gitlab_file_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Repository: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter        | Type             | Mandatory | Description                                 |
@@ -612,6 +668,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `file_get`
 - **Individual tool**: `gitlab_file_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                           |
@@ -627,6 +685,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `file_history`
 - **Individual tool**: `gitlab_commit_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Commit: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter      | Type                     | Mandatory | Description                                                                                                                                       |
@@ -655,6 +715,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `file_metadata`
 - **Individual tool**: `gitlab_file_metadata`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                             |
@@ -670,6 +732,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `file_raw`
 - **Individual tool**: `gitlab_file_raw`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                           |
@@ -686,6 +750,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `file_raw_metadata`
 - **Individual tool**: `gitlab_file_raw_metadata`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                           |
@@ -702,6 +768,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `file_update`
 - **Individual tool**: `gitlab_file_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Repository: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: writes, idempotent
 
 | Parameter          | Type                        | Mandatory | Description                                      |
@@ -725,6 +793,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `list_submodules`
 - **Individual tool**: `gitlab_list_repository_submodules`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                  |
@@ -739,6 +809,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `markdown_render`
 - **Individual tool**: `gitlab_render_markdown`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Markdown: Render at project or user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter | Type      | Mandatory | Description                                                |
@@ -754,6 +826,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `merge_base`
 - **Individual tool**: `gitlab_repository_merge_base`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                              |
@@ -768,6 +842,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `raw_blob`
 - **Individual tool**: `gitlab_repository_raw_blob`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                 |
@@ -782,6 +858,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `read_submodule_file`
 - **Individual tool**: `gitlab_read_repository_submodule_file`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter        | Type             | Mandatory | Description                                                             |
@@ -798,6 +876,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `tree`
 - **Individual tool**: `gitlab_repository_tree`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: read-only, idempotent
 
 | Parameter          | Type                     | Mandatory | Description                                                                                                                                                         |
@@ -821,6 +901,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_repository`, action `update_submodule`
 - **Individual tool**: `gitlab_update_repository_submodule`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Repository Submodule: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: writes, idempotent
 
 | Parameter        | Type             | Mandatory | Description                                |

@@ -31,11 +31,11 @@ How many of these actions an instance serves at each tier, out of a total of 6:
 - **Premium**: 0 on a self-managed instance, 6 on GitLab.com
 - **Ultimate**: 0 on a self-managed instance, 6 on GitLab.com
 
-Read-only actions: 6 of 6, the ones a deployment in read-only mode keeps.
+Read-only actions: 6 of 6, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 6 of the 6.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served.
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`.
 
 | Action                                     | Individual                  |
 | ------------------------------------------ | --------------------------- |
@@ -53,6 +53,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_orbit`, action `dsl`
 - **Individual tool**: `gitlab_orbit_dsl`
 - **Tier**: Premium, GitLab.com only
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Knowledge Graph: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
 - **Behavior**: read-only, idempotent
 
 | Parameter         | Type     | Mandatory | Description                                                                                        |
@@ -66,6 +68,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_orbit`, action `graph_status`
 - **Individual tool**: `gitlab_orbit_graph_status`
 - **Tier**: Premium, GitLab.com only
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Knowledge Graph: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
 - **Behavior**: read-only, idempotent
 
 | Parameter         | Type      | Mandatory | Description                                                                                             |
@@ -82,6 +86,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_orbit`, action `query`
 - **Individual tool**: `gitlab_orbit_query`
 - **Tier**: Premium, GitLab.com only
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Knowledge Graph: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
 - **Behavior**: read-only, idempotent
 
 | Parameter         | Type     | Mandatory | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -96,6 +102,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_orbit`, action `schema`
 - **Individual tool**: `gitlab_orbit_schema`
 - **Tier**: Premium, GitLab.com only
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Knowledge Graph: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
 - **Behavior**: read-only, idempotent
 
 | Parameter         | Type       | Mandatory | Description                                                                                               |
@@ -111,6 +119,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_orbit`, action `status`
 - **Individual tool**: `gitlab_orbit_status`
 - **Tier**: Premium, GitLab.com only
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Knowledge Graph: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
 - **Behavior**: read-only, idempotent
 
 | Parameter         | Type     | Mandatory | Description                                                                                        |
@@ -124,6 +134,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_orbit`, action `tools`
 - **Individual tool**: `gitlab_orbit_tools`
 - **Tier**: Premium, GitLab.com only
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Knowledge Graph: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
 - **Behavior**: read-only, idempotent
 
 No parameters.

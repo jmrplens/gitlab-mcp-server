@@ -27,11 +27,11 @@ Dos acciones de solo lectura sobre este servidor y no sobre los datos de GitLab.
 
 Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
 
-Acciones de solo lectura: 2 de 2, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 2 de 2, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 2 de las 2.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`.
 
 | Acción                                       | Individual             |
 | -------------------------------------------- | ---------------------- |
@@ -45,6 +45,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_server`, acción `health_check`
 - **Herramienta individual**: ninguna, la superficie individual no sirve esta acción
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Metadata: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#server))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -56,6 +58,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_server`, acción `status`
 - **Herramienta individual**: `gitlab_server_status`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Metadata: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#server))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.

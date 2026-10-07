@@ -27,11 +27,11 @@ Una release envuelve un tag con sus notas, hitos y recursos descargables. Estas 
 
 Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
 
-Acciones de solo lectura: 5 de 12, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 5 de 12, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 5 de las 12.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
 
 | Acción                                                   | Individual                         |
 | -------------------------------------------------------- | ---------------------------------- |
@@ -55,6 +55,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_release`, acción `create`
 - **Herramienta individual**: `gitlab_release_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Release: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                                                                                                          |
@@ -76,6 +78,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_release`, acción `delete`
 - **Herramienta individual**: `gitlab_release_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Release: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                       |
@@ -90,6 +94,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_release`, acción `get`
 - **Herramienta individual**: `gitlab_release_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Release: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -104,6 +110,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_release`, acción `get_latest`
 - **Herramienta individual**: `gitlab_release_latest`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Release: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -117,6 +125,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_release`, acción `link_create`
 - **Herramienta individual**: `gitlab_release_link_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Release Link: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro           | Tipo                                              | Requerido | Descripción                                                                                                              |
@@ -136,6 +146,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_release`, acción `link_create_batch`
 - **Herramienta individual**: `gitlab_release_link_create_batch`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Release Link: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                                                            |
@@ -151,6 +163,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_release`, acción `link_delete`
 - **Herramienta individual**: `gitlab_release_link_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Release Link: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                      |
@@ -166,6 +180,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_release`, acción `link_get`
 - **Herramienta individual**: `gitlab_release_link_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Release Link: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -181,6 +197,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_release`, acción `link_list`
 - **Herramienta individual**: `gitlab_release_link_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Release Link: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -201,6 +219,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_release`, acción `link_update`
 - **Herramienta individual**: `gitlab_release_link_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Release Link: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro           | Tipo                                              | Requerido | Descripción                                                                                         |
@@ -221,6 +241,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_release`, acción `list`
 - **Herramienta individual**: `gitlab_release_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Release: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                  | Tipo                                   | Requerido | Descripción                                                                                                                                       |
@@ -241,6 +263,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_release`, acción `update`
 - **Herramienta individual**: `gitlab_release_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Release: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                                    |

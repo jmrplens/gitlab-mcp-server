@@ -31,11 +31,11 @@ Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 4:
 - **Premium**: 4
 - **Ultimate**: 4
 
-Acciones de solo lectura: 2 de 4, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 2 de 4, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 2 de las 4.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
 
 | Acción                                   | Individual                          |
 | ---------------------------------------- | ----------------------------------- |
@@ -51,6 +51,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_group_scim`, acción `delete`
 - **Herramienta individual**: `gitlab_delete_group_scim_identity`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: SCIM Identity: Delete en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#group_scim))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro  | Tipo             | Requerido | Descripción                   |
@@ -65,6 +67,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_group_scim`, acción `get`
 - **Herramienta individual**: `gitlab_get_group_scim_identity`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: SCIM Identity: Read en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#group_scim))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo             | Requerido | Descripción                   |
@@ -79,6 +83,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_group_scim`, acción `list`
 - **Herramienta individual**: `gitlab_list_group_scim_identities`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: SCIM Identity: Read en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#group_scim))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo             | Requerido | Descripción                  |
@@ -92,6 +98,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_group_scim`, acción `update`
 - **Herramienta individual**: `gitlab_update_group_scim_identity`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: SCIM Identity: Update en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#group_scim))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                   |

@@ -9,7 +9,7 @@ Lo que necesita un token de acceso personal de grano fino para cada acción que 
 
 Una acción para la que GitLab no declara nada no se puede ejecutar con un token de grano fino en esta versión, diga lo que diga la concesión: el motivo está en la segunda columna, y la salida es un token de acceso personal clásico. **Se sirve vacío** nombra una parte de la respuesta que GitLab omite para un token de grano fino mientras sirve el resto: siempre, o salvo que la concesión tenga también lo que figura tras ella. Cada parte se escribe como la selección GraphQL que llega a ella desde el campo que pide la acción.
 
-Los tokens de acceso personal clásicos no se juzgan aquí: sus scopes deciden lo que pueden hacer, como hasta ahora. El mismo requisito se sirve para cada acción en el bloque `fine_grained` de su detalle `gitlab://tools/{id}`. [Tokens de grano fino](/gitlab-mcp-server/es/operations/fine-grained-tokens/) explica cómo crear un token, qué necesita de él el servidor al arrancar y cómo se lee un rechazo.
+Esta tabla juzga solo los tokens de grano fino. El scope que necesita para cada acción un token de acceso personal clásico o un token OAuth, `read_api` o `api`, figura en la entrada de la acción en la [referencia de herramientas](/gitlab-mcp-server/es/reference/tools/), junto a su nivel y a la línea que esta tabla recoge para ella. El requisito de grano fino también se sirve para cada acción en el bloque `fine_grained` de su detalle `gitlab://tools/{id}`. [Tokens de grano fino](/gitlab-mcp-server/es/operations/fine-grained-tokens/) explica cómo crear un token, qué necesita de él el servidor al arrancar y cómo se lee un rechazo.
 
 ## `access`
 

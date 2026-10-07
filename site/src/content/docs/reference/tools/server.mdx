@@ -27,11 +27,11 @@ Two read-only actions about this server rather than about GitLab's data. `server
 
 Every tier serves the whole group, on self-managed instances and on GitLab.com alike.
 
-Read-only actions: 2 of 2, the ones a deployment in read-only mode keeps.
+Read-only actions: 2 of 2, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 2 of the 2.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served.
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`.
 
 | Action                                       | Individual             |
 | -------------------------------------------- | ---------------------- |
@@ -45,6 +45,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_server`, action `health_check`
 - **Individual tool**: none, the individual surface does not serve this action
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Metadata: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#server))
 - **Behavior**: read-only, idempotent
 
 No parameters.
@@ -56,6 +58,8 @@ No parameters.
 - **Meta-tool**: `gitlab_server`, action `status`
 - **Individual tool**: `gitlab_server_status`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Metadata: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#server))
 - **Behavior**: read-only, idempotent
 
 No parameters.

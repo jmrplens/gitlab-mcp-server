@@ -27,11 +27,11 @@ Tag management in one project: list, read, create and delete tags, read the GPG 
 
 Every tier serves the whole group, on self-managed instances and on GitLab.com alike.
 
-Read-only actions: 5 of 9, the ones a deployment in read-only mode keeps.
+Read-only actions: 5 of 9, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 5 of the 9.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
 
 | Action                                     | Individual                  |
 | ------------------------------------------ | --------------------------- |
@@ -52,6 +52,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_tag`, action `create`
 - **Individual tool**: `gitlab_tag_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Repository Tag: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                    |
@@ -68,6 +70,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_tag`, action `delete`
 - **Individual tool**: `gitlab_tag_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Repository Tag: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -82,6 +86,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_tag`, action `get`
 - **Individual tool**: `gitlab_tag_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Repository Tag: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -96,6 +102,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_tag`, action `get_protected`
 - **Individual tool**: `gitlab_tag_get_protected`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Protected Tag: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -110,6 +118,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_tag`, action `get_signature`
 - **Individual tool**: `gitlab_tag_get_signature`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Repository Tag: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                        |
@@ -124,6 +134,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_tag`, action `list`
 - **Individual tool**: `gitlab_tag_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Repository Tag: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                                    | Mandatory | Description                                                                                                                                       |
@@ -144,6 +156,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_tag`, action `list_protected`
 - **Individual tool**: `gitlab_tag_list_protected`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Protected Tag: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -163,6 +177,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_tag`, action `protect`
 - **Individual tool**: `gitlab_tag_protect`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Tag: Protect at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Behavior**: writes, not idempotent
 
 | Parameter             | Type             | Mandatory | Description                                                                  |
@@ -179,6 +195,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_tag`, action `unprotect`
 - **Individual tool**: `gitlab_tag_unprotect`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Tag: Protect at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                            |

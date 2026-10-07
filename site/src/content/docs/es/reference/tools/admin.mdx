@@ -32,11 +32,11 @@ Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas 
 
 Solo se lista para un token que tenga `admin_mode`: el servidor quita el grupo de todas las superficies a un token cuyos ámbitos conoce y que no lo tiene.
 
-Acciones de solo lectura: 41 de 92, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 41 de 92, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 41 de las 92.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
 
 | Acción                                                                           | Individual                                |
 | -------------------------------------------------------------------------------- | ----------------------------------------- |
@@ -140,6 +140,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_admin`, acción `alert_metric_image_delete`
 - **Herramienta individual**: `gitlab_delete_alert_metric_image`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Alert Metric Image: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -155,6 +157,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_admin`, acción `alert_metric_image_list`
 - **Herramienta individual**: `gitlab_list_alert_metric_images`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Alert Metric Image: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -175,6 +179,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_admin`, acción `alert_metric_image_update`
 - **Herramienta individual**: `gitlab_update_alert_metric_image`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Alert Metric Image: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                     |
@@ -192,6 +198,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_admin`, acción `alert_metric_image_upload`
 - **Herramienta individual**: `gitlab_upload_alert_metric_image`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Alert Metric Image: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro        | Tipo             | Requerido | Descripción                                                                                                                                                  |
@@ -211,6 +219,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_admin`, acción `app_statistics_get`
 - **Herramienta individual**: `gitlab_get_application_statistics`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Statistic: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -222,6 +232,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `appearance_get`
 - **Herramienta individual**: `gitlab_get_appearance`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Application Appearance: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -233,6 +245,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `appearance_update`
 - **Herramienta individual**: `gitlab_update_appearance`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Application Appearance: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                         | Tipo      | Requerido | Descripción                                                      |
@@ -264,6 +278,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `application_create`
 - **Herramienta individual**: `gitlab_create_application`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: OAuth Application: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro      | Tipo      | Requerido | Descripción                         |
@@ -280,6 +296,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `application_delete`
 - **Herramienta individual**: `gitlab_delete_application`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: OAuth Application: Delete en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción              |
@@ -293,6 +311,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `application_list`
 - **Herramienta individual**: `gitlab_list_applications`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: OAuth Application: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -311,6 +331,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `application_renew_secret`
 - **Herramienta individual**: `gitlab_renew_application_secret`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: OAuth Application: Renew Secret en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                                   |
@@ -324,6 +346,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `broadcast_message_create`
 - **Herramienta individual**: `gitlab_create_broadcast_message`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Broadcast Message: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro              | Tipo                                                                                                                   | Requerido | Descripción                                                                                                                                             |
@@ -346,6 +370,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `broadcast_message_delete`
 - **Herramienta individual**: `gitlab_delete_broadcast_message`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Broadcast Message: Delete en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción          |
@@ -359,6 +385,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `broadcast_message_get`
 - **Herramienta individual**: `gitlab_get_broadcast_message`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción          |
@@ -372,6 +400,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `broadcast_message_list`
 - **Herramienta individual**: `gitlab_list_broadcast_messages`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -390,6 +420,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `broadcast_message_update`
 - **Herramienta individual**: `gitlab_update_broadcast_message`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Broadcast Message: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro              | Tipo                                                                                                                   | Requerido | Descripción                                                                                                                                             |
@@ -413,6 +445,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `bulk_import_cancel`
 - **Herramienta individual**: `gitlab_cancel_bulk_import`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Import: Cancel en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción    |
@@ -426,6 +460,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `bulk_import_entity_failures`
 - **Herramienta individual**: `gitlab_list_bulk_import_entity_failures`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Import: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro        | Tipo      | Requerido | Descripción                      |
@@ -440,6 +476,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `bulk_import_entity_get`
 - **Herramienta individual**: `gitlab_get_bulk_import_entity`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Import: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro        | Tipo      | Requerido | Descripción                      |
@@ -454,6 +492,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `bulk_import_entity_list`
 - **Herramienta individual**: `gitlab_list_bulk_import_entities`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Import: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro        | Tipo                                                                         | Requerido | Descripción                                                                                                                                       |
@@ -474,6 +514,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `bulk_import_get`
 - **Herramienta individual**: `gitlab_get_bulk_import`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Import: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción    |
@@ -487,6 +529,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `bulk_import_list`
 - **Herramienta individual**: `gitlab_list_bulk_imports`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Import: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                                                                         | Requerido | Descripción                                                                                                                                       |
@@ -506,6 +550,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `bulk_import_start`
 - **Herramienta individual**: `gitlab_start_bulk_import`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Import: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro       | Tipo       | Requerido | Descripción                                            |
@@ -520,6 +566,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `cluster_agent_delete`
 - **Herramienta individual**: `gitlab_delete_cluster_agent`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Cluster Agent: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -534,6 +582,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `cluster_agent_get`
 - **Herramienta individual**: `gitlab_get_cluster_agent`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Cluster Agent: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -548,6 +598,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `cluster_agent_list`
 - **Herramienta individual**: `gitlab_list_cluster_agents`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Cluster Agent: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -567,6 +619,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `cluster_agent_register`
 - **Herramienta individual**: `gitlab_register_cluster_agent`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Cluster Agent: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -581,6 +635,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `cluster_agent_token_create`
 - **Herramienta individual**: `gitlab_create_cluster_agent_token`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Cluster Agent Token: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
@@ -597,6 +653,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `cluster_agent_token_get`
 - **Herramienta individual**: `gitlab_get_cluster_agent_token`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Cluster Agent Token: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -612,6 +670,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `cluster_agent_token_list`
 - **Herramienta individual**: `gitlab_list_cluster_agent_tokens`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Cluster Agent Token: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -632,6 +692,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `cluster_agent_token_revoke`
 - **Herramienta individual**: `gitlab_revoke_cluster_agent_token`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Cluster Agent Token: Revoke en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -647,6 +709,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `custom_attr_delete`
 - **Herramienta individual**: `gitlab_delete_custom_attribute`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: una de: Custom Attribute: Delete en instancia **o** Custom Attribute: Delete en grupo **o** Custom Attribute: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro       | Tipo                                  | Requerido | Descripción                            |
@@ -662,6 +726,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `custom_attr_get`
 - **Herramienta individual**: `gitlab_get_custom_attribute`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: una de: Custom Attribute: Read en instancia **o** Custom Attribute: Read en grupo **o** Custom Attribute: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo                                  | Requerido | Descripción                            |
@@ -677,6 +743,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `custom_attr_list`
 - **Herramienta individual**: `gitlab_list_custom_attributes`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: una de: Custom Attribute: Read en instancia **o** Custom Attribute: Read en grupo **o** Custom Attribute: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo                                  | Requerido | Descripción                            |
@@ -691,6 +759,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `custom_attr_set`
 - **Herramienta individual**: `gitlab_set_custom_attribute`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: una de: Custom Attribute: Update en instancia **o** Custom Attribute: Update en grupo **o** Custom Attribute: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro       | Tipo                                  | Requerido | Descripción                            |
@@ -707,6 +777,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `db_migration_mark`
 - **Herramienta individual**: `gitlab_mark_migration`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Database Migration: Mark en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro  | Tipo      | Requerido | Descripción                                          |
@@ -721,6 +793,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `dependency_proxy_delete`
 - **Herramienta individual**: `gitlab_purge_dependency_proxy`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Dependency Proxy Cache: Purge en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro  | Tipo             | Requerido | Descripción                  |
@@ -734,6 +808,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `error_tracking_create`
 - **Herramienta individual**: `gitlab_create_error_tracking_client_key`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Error Tracking Client Key: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -747,6 +823,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `error_tracking_delete`
 - **Herramienta individual**: `gitlab_delete_error_tracking_client_key`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Error Tracking Client Key: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -761,6 +839,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `error_tracking_get_settings`
 - **Herramienta individual**: `gitlab_get_error_tracking_settings`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Error Tracking Setting: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -774,6 +854,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `error_tracking_list`
 - **Herramienta individual**: `gitlab_list_error_tracking_client_keys`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Error Tracking Client Key: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -793,6 +875,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `error_tracking_update_settings`
 - **Herramienta individual**: `gitlab_enable_disable_error_tracking`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Error Tracking Setting: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                      |
@@ -808,6 +892,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `feature_delete`
 - **Herramienta individual**: `gitlab_delete_feature_flag`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Feature: Delete en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción                 |
@@ -821,6 +907,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `feature_list`
 - **Herramienta individual**: `gitlab_list_features`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Feature: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -832,6 +920,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `feature_list_definitions`
 - **Herramienta individual**: `gitlab_list_feature_definitions`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Feature: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -843,6 +933,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `feature_set`
 - **Herramienta individual**: `gitlab_set_feature_flag`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Feature: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro       | Tipo                                                    | Requerido | Descripción                                                                      |
@@ -865,6 +957,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `import_bitbucket`
 - **Herramienta individual**: `gitlab_import_from_bitbucket_cloud`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Import: Create en grupo o usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                | Tipo     | Requerido | Descripción                                                                                                                                                                   |
@@ -884,6 +978,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `import_bitbucket_server`
 - **Herramienta individual**: `gitlab_import_from_bitbucket_server`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Import: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                   | Tipo                                   | Requerido | Descripción                                                                                                        |
@@ -904,6 +1000,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `import_cancel_github`
 - **Herramienta individual**: `gitlab_cancel_github_import`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Import: Cancel en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo      | Requerido | Descripción                                   |
@@ -917,6 +1015,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `import_gists`
 - **Herramienta individual**: `gitlab_import_github_gists`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Import: Create en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro               | Tipo     | Requerido | Descripción                                                                                              |
@@ -930,6 +1030,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `import_github`
 - **Herramienta individual**: `gitlab_import_from_github`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Import: Create en grupo o usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro               | Tipo                                   | Requerido | Descripción                                                                                              |
@@ -949,6 +1051,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `license_add`
 - **Herramienta individual**: `gitlab_add_license`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: License: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción                         |
@@ -962,6 +1066,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `license_delete`
 - **Herramienta individual**: `gitlab_delete_license`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: License: Delete en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción          |
@@ -975,6 +1081,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `license_get`
 - **Herramienta individual**: `gitlab_get_license`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: License: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -986,6 +1094,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `metadata_get`
 - **Herramienta individual**: `gitlab_get_metadata`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Metadata: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -997,6 +1107,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `plan_limits_change`
 - **Herramienta individual**: `gitlab_change_plan_limits`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Plan Limit: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                        | Tipo      | Requerido | Descripción                                                                       |
@@ -1018,6 +1130,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `plan_limits_get`
 - **Herramienta individual**: `gitlab_get_plan_limits`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Plan Limit: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro   | Tipo     | Requerido | Descripción                                                                       |
@@ -1031,6 +1145,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `secure_file_create`
 - **Herramienta individual**: `gitlab_create_secure_file`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Secure File: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro        | Tipo             | Requerido | Descripción                                                                                                                                            |
@@ -1047,6 +1163,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `secure_file_delete`
 - **Herramienta individual**: `gitlab_remove_secure_file`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Secure File: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1061,6 +1179,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `secure_file_get`
 - **Herramienta individual**: `gitlab_show_secure_file`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Secure File: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1075,6 +1195,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `secure_file_list`
 - **Herramienta individual**: `gitlab_list_secure_files`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Secure File: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -1094,6 +1216,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `settings_get`
 - **Herramienta individual**: `gitlab_get_settings`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Application Setting: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -1105,6 +1229,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `settings_update`
 - **Herramienta individual**: `gitlab_update_settings`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Application Setting: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro  | Tipo     | Requerido | Descripción                                                                                                                                                                                                                                                                |
@@ -1118,6 +1244,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `sidekiq_compound_metrics`
 - **Herramienta individual**: `gitlab_get_sidekiq_compound_metrics`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Sidekiq Metric: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -1129,6 +1257,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `sidekiq_job_stats`
 - **Herramienta individual**: `gitlab_get_sidekiq_job_stats`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Sidekiq Metric: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -1140,6 +1270,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `sidekiq_process_metrics`
 - **Herramienta individual**: `gitlab_get_sidekiq_process_metrics`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Sidekiq Metric: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -1151,6 +1283,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `sidekiq_queue_metrics`
 - **Herramienta individual**: `gitlab_get_sidekiq_queue_metrics`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Sidekiq Metric: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -1162,6 +1296,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `system_hook_add`
 - **Herramienta individual**: `gitlab_add_system_hook`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Webhook: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                   | Tipo      | Requerido | Descripción                                                             |
@@ -1187,6 +1323,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `system_hook_delete`
 - **Herramienta individual**: `gitlab_delete_system_hook`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Webhook: Delete en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción              |
@@ -1200,6 +1338,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `system_hook_delete_url_variable`
 - **Herramienta individual**: `gitlab_delete_system_hook_url_variable`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Webhook: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                     |
@@ -1214,6 +1354,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `system_hook_edit`
 - **Herramienta individual**: `gitlab_edit_system_hook`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Webhook: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                   | Tipo      | Requerido | Descripción                                                                     |
@@ -1240,6 +1382,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `system_hook_get`
 - **Herramienta individual**: `gitlab_get_system_hook`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Webhook: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción    |
@@ -1253,6 +1397,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `system_hook_list`
 - **Herramienta individual**: `gitlab_list_system_hooks`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Webhook: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo      | Requerido | Descripción                                                                                                           |
@@ -1267,6 +1413,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `system_hook_set_url_variable`
 - **Herramienta individual**: `gitlab_set_system_hook_url_variable`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Webhook: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                                                                                |
@@ -1282,6 +1430,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `system_hook_test`
 - **Herramienta individual**: `gitlab_test_system_hook`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Webhook: Trigger en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción            |
@@ -1295,6 +1445,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `terraform_state_delete`
 - **Herramienta individual**: `gitlab_delete_terraform_state`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Terraform State: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1309,6 +1461,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `terraform_state_get`
 - **Herramienta individual**: `gitlab_get_terraform_state`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Project: Read en proyecto; Terraform State: Read en proyecto; se sirve vacío: `project { terraformState { latestVersion } }` (sin Terraform State: Read en proyecto) ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro      | Tipo     | Requerido | Descripción                            |
@@ -1323,6 +1477,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `terraform_state_list`
 - **Herramienta individual**: `gitlab_list_terraform_states`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Project: Read en proyecto; Terraform State: Read en proyecto; se sirve vacío: `project { terraformStates { nodes { latestVersion } } }` (sin Terraform State: Read en proyecto) ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro      | Tipo     | Requerido | Descripción                            |
@@ -1336,6 +1492,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `terraform_state_lock`
 - **Herramienta individual**: `gitlab_lock_terraform_state`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Terraform State: Lock en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1350,6 +1508,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `terraform_state_unlock`
 - **Herramienta individual**: `gitlab_unlock_terraform_state`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Terraform State: Lock en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                                            |
@@ -1364,6 +1524,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `terraform_version_delete`
 - **Herramienta individual**: `gitlab_delete_terraform_state_version`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Terraform State: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1379,6 +1541,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `topic_create`
 - **Herramienta individual**: `gitlab_create_topic`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Topic: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro     | Tipo     | Requerido | Descripción                              |
@@ -1394,6 +1558,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `topic_delete`
 - **Herramienta individual**: `gitlab_delete_topic`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Topic: Delete en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro  | Tipo      | Requerido | Descripción |
@@ -1407,6 +1573,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `topic_get`
 - **Herramienta individual**: `gitlab_get_topic`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo      | Requerido | Descripción |
@@ -1420,6 +1588,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `topic_list`
 - **Herramienta individual**: `gitlab_list_topics`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -1439,6 +1609,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `topic_update`
 - **Herramienta individual**: `gitlab_update_topic`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Topic: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro     | Tipo      | Requerido | Descripción           |
@@ -1455,6 +1627,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `usage_data_metric_definitions`
 - **Herramienta individual**: `gitlab_get_metric_definitions`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -1466,6 +1640,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `usage_data_non_sql_metrics`
 - **Herramienta individual**: `gitlab_get_non_sql_metrics`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Usage Data Metric: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -1477,6 +1653,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `usage_data_queries`
 - **Herramienta individual**: `gitlab_get_usage_queries`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Usage Data Query: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -1488,6 +1666,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `usage_data_service_ping`
 - **Herramienta individual**: `gitlab_get_service_ping`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Service Ping: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -1499,6 +1679,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `usage_data_track_event`
 - **Herramienta individual**: `gitlab_track_event`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Internal Event: Track en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro               | Tipo      | Requerido | Descripción                                                    |
@@ -1516,6 +1698,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_admin`, acción `usage_data_track_events`
 - **Herramienta individual**: `gitlab_track_events`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Internal Event: Track en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro | Tipo       | Requerido | Descripción              |

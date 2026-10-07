@@ -34,11 +34,11 @@ How many of these actions an instance serves at each tier, out of a total of 23:
 - **Premium**: 23
 - **Ultimate**: 23
 
-Read-only actions: 9 of 23, the ones a deployment in read-only mode keeps.
+Read-only actions: 9 of 23, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 9 of the 23.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
 
 | Action                                                                                 | Tier    | Individual                               |
 | -------------------------------------------------------------------------------------- | ------- | ---------------------------------------- |
@@ -73,6 +73,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `create`
 - **Individual tool**: `gitlab_environment_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Environment: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: writes, not idempotent
 
 | Parameter              | Type                                                                  | Mandatory | Description                                                          |
@@ -94,6 +96,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `delete`
 - **Individual tool**: `gitlab_environment_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Environment: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter        | Type             | Mandatory | Description                    |
@@ -108,6 +112,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `deployment_approve_or_reject`
 - **Individual tool**: `gitlab_deployment_approve_or_reject`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Deployment: Approve at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: writes, idempotent
 
 | Parameter        | Type                              | Mandatory | Description                                                                           |
@@ -125,6 +131,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `deployment_create`
 - **Individual tool**: `gitlab_deployment_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Deployment: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: writes, not idempotent
 
 | Parameter     | Type                                                  | Mandatory | Description                                                                                                                     |
@@ -143,6 +151,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `deployment_delete`
 - **Individual tool**: `gitlab_deployment_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Deployment: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter       | Type             | Mandatory | Description                    |
@@ -157,6 +167,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `deployment_get`
 - **Individual tool**: `gitlab_deployment_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Deployment: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: read-only, idempotent
 
 | Parameter       | Type             | Mandatory | Description                    |
@@ -171,6 +183,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `deployment_list`
 - **Individual tool**: `gitlab_deployment_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Deployment: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: read-only, idempotent
 
 | Parameter         | Type                                                                        | Mandatory | Description                                                                                                                                       |
@@ -196,6 +210,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `deployment_merge_requests`
 - **Individual tool**: `gitlab_list_deployment_merge_requests`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Deployment: Read, Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: read-only, idempotent
 
 | Parameter               | Type                                                                                                                     | Mandatory | Description                                                                                                                                       |
@@ -242,6 +258,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `deployment_update`
 - **Individual tool**: `gitlab_deployment_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Deployment: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: writes, idempotent
 
 | Parameter       | Type                                                  | Mandatory | Description                                                     |
@@ -257,6 +275,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `freeze_create`
 - **Individual tool**: `gitlab_create_freeze_period`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Freeze Period: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: writes, not idempotent
 
 | Parameter       | Type             | Mandatory | Description                                           |
@@ -273,6 +293,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `freeze_delete`
 - **Individual tool**: `gitlab_delete_freeze_period`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Freeze Period: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter          | Type             | Mandatory | Description                    |
@@ -287,6 +309,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `freeze_get`
 - **Individual tool**: `gitlab_get_freeze_period`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Freeze Period: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: read-only, idempotent
 
 | Parameter          | Type             | Mandatory | Description                    |
@@ -301,6 +325,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `freeze_list`
 - **Individual tool**: `gitlab_list_freeze_periods`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Freeze Period: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -320,6 +346,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `freeze_update`
 - **Individual tool**: `gitlab_update_freeze_period`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Freeze Period: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: writes, idempotent
 
 | Parameter          | Type             | Mandatory | Description                      |
@@ -337,6 +365,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `get`
 - **Individual tool**: `gitlab_environment_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Environment: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: read-only, idempotent
 
 | Parameter        | Type             | Mandatory | Description                    |
@@ -351,6 +381,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `list`
 - **Individual tool**: `gitlab_environment_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Environment: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                                          | Mandatory | Description                                                                                                                                       |
@@ -373,6 +405,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `protected_get`
 - **Individual tool**: `gitlab_protected_environment_get`
 - **Tier**: Premium
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Protected Environment: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type             | Mandatory | Description                    |
@@ -387,6 +421,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `protected_list`
 - **Individual tool**: `gitlab_protected_environment_list`
 - **Tier**: Premium
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Protected Environment: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -406,6 +442,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `protected_protect`
 - **Individual tool**: `gitlab_protected_environment_protect`
 - **Tier**: Premium
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Protected Environment: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: writes, not idempotent
 
 | Parameter                 | Type             | Mandatory | Description                    |
@@ -423,6 +461,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `protected_unprotect`
 - **Individual tool**: `gitlab_protected_environment_unprotect`
 - **Tier**: Premium
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Protected Environment: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter     | Type             | Mandatory | Description                    |
@@ -437,6 +477,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `protected_update`
 - **Individual tool**: `gitlab_protected_environment_update`
 - **Tier**: Premium
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Protected Environment: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: writes, idempotent
 
 | Parameter                 | Type             | Mandatory | Description                    |
@@ -455,6 +497,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `stop`
 - **Individual tool**: `gitlab_environment_stop`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Environment: Stop at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter        | Type             | Mandatory | Description                                           |
@@ -470,6 +514,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_environment`, action `update`
 - **Individual tool**: `gitlab_environment_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Environment: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Behavior**: writes, idempotent
 
 | Parameter              | Type                                                                  | Mandatory | Description                                                          |

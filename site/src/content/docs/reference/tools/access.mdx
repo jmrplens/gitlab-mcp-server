@@ -30,11 +30,11 @@ Creating a personal access token is a user action rather than one of these (see 
 
 Every tier serves the whole group, on self-managed instances and on GitLab.com alike.
 
-Read-only actions: 19 of 48, the ones a deployment in read-only mode keeps.
+Read-only actions: 19 of 48, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 20 of the 48.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)). A parameter followed by a tier in parentheses is served only from that tier on.
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)). A parameter followed by a tier in parentheses is served only from that tier on.
 
 | Action                                                                       | Individual                                 |
 | ---------------------------------------------------------------------------- | ------------------------------------------ |
@@ -94,6 +94,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `approve_group`
 - **Individual tool**: `gitlab_access_request_approve_group`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Access Request: Approve at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, idempotent
 
 | Parameter      | Type             | Mandatory | Description                                                                                                                                                                          |
@@ -109,6 +111,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `approve_project`
 - **Individual tool**: `gitlab_access_request_approve_project`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Access Request: Approve at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, idempotent
 
 | Parameter      | Type             | Mandatory | Description                                                                                                                                                                          |
@@ -124,6 +128,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deny_group`
 - **Individual tool**: `gitlab_access_request_deny_group`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Access Request: Delete at group or user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter  | Type             | Mandatory | Description                     |
@@ -138,6 +144,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deny_project`
 - **Individual tool**: `gitlab_access_request_deny_project`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Access Request: Delete at project or user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                     |
@@ -152,6 +160,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deploy_key_add`
 - **Individual tool**: `gitlab_deploy_key_add`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Deploy Key: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                             |
@@ -169,6 +179,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deploy_key_add_instance`
 - **Individual tool**: `gitlab_deploy_key_add_instance`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Deploy Key: Create at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type     | Mandatory | Description              |
@@ -184,6 +196,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deploy_key_delete`
 - **Individual tool**: `gitlab_deploy_key_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Deploy Key: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter       | Type             | Mandatory | Description                                                                 |
@@ -198,6 +212,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deploy_key_enable`
 - **Individual tool**: `gitlab_deploy_key_enable`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Deploy Key: Enable at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, idempotent
 
 | Parameter       | Type             | Mandatory | Description                                         |
@@ -212,6 +228,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deploy_key_get`
 - **Individual tool**: `gitlab_deploy_key_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Deploy Key: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter       | Type             | Mandatory | Description                                                                 |
@@ -226,6 +244,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deploy_key_list_all`
 - **Individual tool**: `gitlab_deploy_key_list_all`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Deploy Key: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -245,6 +265,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deploy_key_list_project`
 - **Individual tool**: `gitlab_deploy_key_list_project`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Deploy Key: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -264,6 +286,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deploy_key_list_user_project`
 - **Individual tool**: `gitlab_deploy_key_list_user_project`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Deploy Key: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -283,6 +307,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deploy_key_update`
 - **Individual tool**: `gitlab_deploy_key_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Deploy Key: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, idempotent
 
 | Parameter       | Type             | Mandatory | Description                                                                 |
@@ -299,6 +325,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deploy_token_create_group`
 - **Individual tool**: `gitlab_deploy_token_create_group`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Deploy Token: Create at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                                                                     |
@@ -316,6 +344,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deploy_token_create_project`
 - **Individual tool**: `gitlab_deploy_token_create_project`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Deploy Token: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                                                                     |
@@ -333,6 +363,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deploy_token_delete_group`
 - **Individual tool**: `gitlab_deploy_token_delete_group`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Deploy Token: Delete at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter         | Type             | Mandatory | Description                  |
@@ -347,6 +379,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deploy_token_delete_project`
 - **Individual tool**: `gitlab_deploy_token_delete_project`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Deploy Token: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter         | Type             | Mandatory | Description                    |
@@ -361,6 +395,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deploy_token_get_group`
 - **Individual tool**: `gitlab_deploy_token_get_group`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Deploy Token: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter         | Type             | Mandatory | Description                  |
@@ -375,6 +411,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deploy_token_get_project`
 - **Individual tool**: `gitlab_deploy_token_get_project`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Deploy Token: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter         | Type             | Mandatory | Description                    |
@@ -389,6 +427,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_access`, action `deploy_token_list_all`
 - **Individual tool**: `gitlab_deploy_token_list_all`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Deploy Token: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 No parameters.
@@ -400,6 +440,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `deploy_token_list_group`
 - **Individual tool**: `gitlab_deploy_token_list_group`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Deploy Token: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -419,6 +461,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `deploy_token_list_project`
 - **Individual tool**: `gitlab_deploy_token_list_project`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Deploy Token: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -438,6 +482,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `invite_group`
 - **Individual tool**: `gitlab_group_invite`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Invitation: Create at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, not idempotent
 
 | Parameter                   | Type             | Mandatory | Description                                                                                                                                                                       |
@@ -458,6 +504,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `invite_list_group`
 - **Individual tool**: `gitlab_group_invite_list_pending`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Invitation: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -478,6 +526,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `invite_list_project`
 - **Individual tool**: `gitlab_project_invite_list_pending`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Invitation: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -498,6 +548,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `invite_project`
 - **Individual tool**: `gitlab_project_invite`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Invitation: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, not idempotent
 
 | Parameter                   | Type             | Mandatory | Description                                                                                                                                                                       |
@@ -518,6 +570,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `request_group`
 - **Individual tool**: `gitlab_access_request_request_group`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Access Request: Create at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, not idempotent
 
 | Parameter  | Type             | Mandatory | Description      |
@@ -531,6 +585,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `request_list_group`
 - **Individual tool**: `gitlab_access_request_list_group`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Access Request: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -550,6 +606,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `request_list_project`
 - **Individual tool**: `gitlab_access_request_list_project`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Access Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -569,6 +627,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `request_project`
 - **Individual tool**: `gitlab_access_request_request_project`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Access Request: Create at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description        |
@@ -582,6 +642,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_group_create`
 - **Individual tool**: `gitlab_group_access_token_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Resource Access Token: Create at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, not idempotent
 
 | Parameter      | Type             | Mandatory | Description                                                                                                                                                                                                                      |
@@ -600,6 +662,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_group_get`
 - **Individual tool**: `gitlab_group_access_token_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Resource Access Token: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter  | Type             | Mandatory | Description                  |
@@ -614,6 +678,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_group_list`
 - **Individual tool**: `gitlab_group_access_token_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Resource Access Token: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter          | Type                                                                                                                                | Mandatory | Description                                                                                                                                       |
@@ -642,6 +708,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_group_revoke`
 - **Individual tool**: `gitlab_group_access_token_revoke`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Resource Access Token: Delete at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter  | Type             | Mandatory | Description                  |
@@ -656,6 +724,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_group_rotate`
 - **Individual tool**: `gitlab_group_access_token_rotate`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Resource Access Token: Rotate at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                          |
@@ -671,6 +741,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_group_rotate_self`
 - **Individual tool**: `gitlab_group_access_token_rotate_self`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`; not an OAuth token, which GitLab refuses on `POST /groups/:id/access_tokens/self/rotate`
+- **Fine-grained token**: Resource Access Token: Rotate at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                          |
@@ -685,6 +757,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_personal_get`
 - **Individual tool**: `gitlab_personal_access_token_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`); GitLab refuses an OAuth token on `GET /personal_access_tokens/self`, which this action sends for some inputs
+- **Fine-grained token**: Personal Access Token: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter  | Type      | Mandatory | Description                                         |
@@ -698,6 +772,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_personal_list`
 - **Individual tool**: `gitlab_personal_access_token_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Personal Access Token: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter          | Type                                                                                                                                | Mandatory | Description                                                                                                                                       |
@@ -726,6 +802,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_personal_revoke`
 - **Individual tool**: `gitlab_personal_access_token_revoke`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Personal Access Token: Revoke at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter  | Type      | Mandatory | Description               |
@@ -739,6 +817,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_personal_revoke_self`
 - **Individual tool**: `gitlab_personal_access_token_revoke_self`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`); not an OAuth token, which GitLab refuses on `DELETE /personal_access_tokens/self`
+- **Fine-grained token**: Personal Access Token: Revoke at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 No parameters.
@@ -750,6 +830,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_personal_rotate`
 - **Individual tool**: `gitlab_personal_access_token_rotate`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Personal Access Token: Rotate at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type      | Mandatory | Description                          |
@@ -764,6 +846,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_personal_rotate_self`
 - **Individual tool**: `gitlab_personal_access_token_rotate_self`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`; not an OAuth token, which GitLab refuses on `POST /personal_access_tokens/self/rotate`
+- **Fine-grained token**: Personal Access Token: Rotate at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type     | Mandatory | Description                          |
@@ -777,6 +861,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_project_create`
 - **Individual tool**: `gitlab_project_access_token_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Resource Access Token: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, not idempotent
 
 | Parameter      | Type             | Mandatory | Description                                                                                                                                                                                                                          |
@@ -795,6 +881,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_project_get`
 - **Individual tool**: `gitlab_project_access_token_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Resource Access Token: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -809,6 +897,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_project_list`
 - **Individual tool**: `gitlab_project_access_token_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Resource Access Token: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                                                                                                                                | Mandatory | Description                                                                                                                                       |
@@ -829,6 +919,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_project_revoke`
 - **Individual tool**: `gitlab_project_access_token_revoke`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Resource Access Token: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -843,6 +935,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_project_rotate`
 - **Individual tool**: `gitlab_project_access_token_rotate`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Resource Access Token: Rotate at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                          |
@@ -858,6 +952,8 @@ No parameters.
 - **Meta-tool**: `gitlab_access`, action `token_project_rotate_self`
 - **Individual tool**: `gitlab_project_access_token_rotate_self`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`; not an OAuth token, which GitLab refuses on `POST /projects/:id/access_tokens/self/rotate`
+- **Fine-grained token**: Resource Access Token: Rotate at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                          |

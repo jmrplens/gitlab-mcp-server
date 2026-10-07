@@ -33,11 +33,11 @@ Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 4:
 
 Solo se lista para un token que tenga `admin_mode`: el servidor quita el grupo de todas las superficies a un token cuyos ámbitos conoce y que no lo tiene.
 
-Acciones de solo lectura: 2 de 4, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 2 de 4, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 2 de las 4.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
 
 | Acción                                         | Individual                    |
 | ---------------------------------------------- | ----------------------------- |
@@ -53,6 +53,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project_alias`, acción `create`
 - **Herramienta individual**: `gitlab_create_project_alias`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Alias: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project_alias))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo      | Requerido | Descripción                     |
@@ -67,6 +69,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project_alias`, acción `delete`
 - **Herramienta individual**: `gitlab_delete_project_alias`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Alias: Delete en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project_alias))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción              |
@@ -80,6 +84,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project_alias`, acción `get`
 - **Herramienta individual**: `gitlab_get_project_alias`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Alias: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project_alias))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción               |
@@ -93,6 +99,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project_alias`, acción `list`
 - **Herramienta individual**: `gitlab_list_project_aliases`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Alias: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project_alias))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo      | Requerido | Descripción                                                                                                           |

@@ -30,11 +30,11 @@ Pipeline schedules (with their variables, running one now and taking one over), 
 
 Every tier serves the whole group, on self-managed instances and on GitLab.com alike.
 
-Read-only actions: 15 of 33, the ones a deployment in read-only mode keeps.
+Read-only actions: 15 of 33, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 16 of the 33.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
 
 | Action                                                                                     | Individual                                          |
 | ------------------------------------------------------------------------------------------ | --------------------------------------------------- |
@@ -79,6 +79,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `cancel`
 - **Individual tool**: `gitlab_pipeline_cancel`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Pipeline: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, idempotent
 
 | Parameter     | Type             | Mandatory | Description                    |
@@ -93,6 +95,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `create`
 - **Individual tool**: `gitlab_pipeline_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Pipeline: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                                                                                                                            |
@@ -109,6 +113,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `delete`
 - **Individual tool**: `gitlab_pipeline_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Pipeline: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter     | Type             | Mandatory | Description                    |
@@ -123,6 +129,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `get`
 - **Individual tool**: `gitlab_pipeline_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Pipeline: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type             | Mandatory | Description                    |
@@ -137,6 +145,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `latest`
 - **Individual tool**: `gitlab_pipeline_latest`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Pipeline: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: read-only, idempotent
 
 | Parameter        | Type                                                                                                                                                                                                                                                         | Mandatory | Description                                                                                                                                                                                                                                                                    |
@@ -168,6 +178,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `list`
 - **Individual tool**: `gitlab_pipeline_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Pipeline: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: read-only, idempotent
 
 | Parameter        | Type                                                                                                                                                                                                                                                         | Mandatory | Description                                                                                                                                                                                                                                     |
@@ -199,6 +211,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `resource_group_edit`
 - **Individual tool**: `gitlab_edit_resource_group`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Resource Group: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, idempotent
 
 | Parameter      | Type                                                                         | Mandatory | Description                                                                |
@@ -214,6 +228,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `resource_group_get`
 - **Individual tool**: `gitlab_get_resource_group`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Resource Group: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -228,6 +244,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `resource_group_list`
 - **Individual tool**: `gitlab_list_resource_groups`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Resource Group: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                                                                           |
@@ -243,6 +261,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `resource_group_upcoming_jobs`
 - **Individual tool**: `gitlab_list_resource_group_upcoming_jobs`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Job: Read, Resource Group: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                                                                           |
@@ -259,6 +279,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `retry`
 - **Individual tool**: `gitlab_pipeline_retry`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Pipeline: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, idempotent
 
 | Parameter     | Type             | Mandatory | Description                    |
@@ -273,6 +295,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `schedule_create`
 - **Individual tool**: `gitlab_pipeline_schedule_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Pipeline Schedule: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, not idempotent
 
 | Parameter       | Type             | Mandatory | Description                                                            |
@@ -292,6 +316,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `schedule_create_variable`
 - **Individual tool**: `gitlab_pipeline_schedule_create_variable`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Pipeline Schedule: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, not idempotent
 
 | Parameter       | Type                         | Mandatory | Description                                                |
@@ -309,6 +335,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `schedule_delete`
 - **Individual tool**: `gitlab_pipeline_schedule_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Pipeline Schedule: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter     | Type             | Mandatory | Description                    |
@@ -323,6 +351,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `schedule_delete_variable`
 - **Individual tool**: `gitlab_pipeline_schedule_delete_variable`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Pipeline Schedule: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter     | Type             | Mandatory | Description                    |
@@ -338,6 +368,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `schedule_edit_variable`
 - **Individual tool**: `gitlab_pipeline_schedule_edit_variable`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Pipeline Schedule: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, idempotent
 
 | Parameter       | Type                         | Mandatory | Description                                                   |
@@ -355,6 +387,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `schedule_get`
 - **Individual tool**: `gitlab_pipeline_schedule_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Pipeline Schedule: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type             | Mandatory | Description                    |
@@ -369,6 +403,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `schedule_list`
 - **Individual tool**: `gitlab_pipeline_schedule_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Pipeline Schedule: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                            | Mandatory | Description                                                                                                                                       |
@@ -389,6 +425,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `schedule_list_triggered_pipelines`
 - **Individual tool**: `gitlab_pipeline_schedule_list_triggered_pipelines`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Pipeline: Read, Pipeline Schedule: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type                     | Mandatory | Description                                                                                                                                       |
@@ -409,6 +447,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `schedule_run`
 - **Individual tool**: `gitlab_pipeline_schedule_run`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Pipeline Schedule: Read at project; Pipeline Schedule: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, idempotent
 
 | Parameter     | Type             | Mandatory | Description                    |
@@ -423,6 +463,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `schedule_take_ownership`
 - **Individual tool**: `gitlab_pipeline_schedule_take_ownership`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Pipeline Schedule: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, idempotent
 
 | Parameter     | Type             | Mandatory | Description                    |
@@ -437,6 +479,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `schedule_update`
 - **Individual tool**: `gitlab_pipeline_schedule_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Pipeline Schedule: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, idempotent
 
 | Parameter       | Type             | Mandatory | Description                                                                              |
@@ -457,6 +501,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `test_report`
 - **Individual tool**: `gitlab_pipeline_test_report`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Pipeline: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type             | Mandatory | Description                    |
@@ -471,6 +517,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `test_report_summary`
 - **Individual tool**: `gitlab_pipeline_test_report_summary`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Pipeline: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type             | Mandatory | Description                    |
@@ -485,6 +533,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `trigger_create`
 - **Individual tool**: `gitlab_pipeline_trigger_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Trigger: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, not idempotent
 
 | Parameter     | Type             | Mandatory | Description               |
@@ -499,6 +549,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `trigger_delete`
 - **Individual tool**: `gitlab_pipeline_trigger_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Trigger: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description         |
@@ -513,6 +565,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `trigger_get`
 - **Individual tool**: `gitlab_pipeline_trigger_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Trigger: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description         |
@@ -527,6 +581,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `trigger_list`
 - **Individual tool**: `gitlab_pipeline_trigger_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Trigger: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -546,6 +602,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `trigger_run`
 - **Individual tool**: `gitlab_pipeline_trigger_run`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`); GitLab authenticates the token this action sends as a parameter and does not judge this one's scope
+- **Fine-grained token**: a request GitLab does not judge by the grant ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                                                                                  |
@@ -563,6 +621,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `trigger_update`
 - **Individual tool**: `gitlab_pipeline_trigger_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Trigger: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, idempotent
 
 | Parameter     | Type             | Mandatory | Description                   |
@@ -578,6 +638,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `update_metadata`
 - **Individual tool**: `gitlab_pipeline_update_metadata`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Pipeline: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: writes, idempotent
 
 | Parameter     | Type             | Mandatory | Description                    |
@@ -593,6 +655,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `variables`
 - **Individual tool**: `gitlab_pipeline_variables`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Pipeline: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type             | Mandatory | Description                    |
@@ -607,6 +671,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_pipeline`, action `wait`
 - **Individual tool**: `gitlab_pipeline_wait`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Pipeline: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Behavior**: read-only, idempotent
 
 | Parameter          | Type             | Mandatory | Description                                                                                                                     |

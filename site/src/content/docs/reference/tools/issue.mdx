@@ -36,11 +36,11 @@ How many of these actions an instance serves at each tier, out of a total of 71:
 - **Premium**: 71
 - **Ultimate**: 71
 
-Read-only actions: 38 of 71, the ones a deployment in read-only mode keeps.
+Read-only actions: 38 of 71, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 38 of the 71.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)). A parameter followed by a tier in parentheses is served only from that tier on.
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)). A parameter followed by a tier in parentheses is served only from that tier on.
 
 | Action                                                                             | Tier    | Individual                                |
 | ---------------------------------------------------------------------------------- | ------- | ----------------------------------------- |
@@ -123,6 +123,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `create`
 - **Individual tool**: `gitlab_issue_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, not idempotent
 
 | Parameter                                 | Type                                                | Mandatory | Description                                                                                                   |
@@ -151,6 +153,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `create_todo`
 - **Individual tool**: `gitlab_issue_create_todo`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Todo: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -165,6 +169,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `delete`
 - **Individual tool**: `gitlab_issue_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                                            |
@@ -179,6 +185,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `discussion_add_note`
 - **Individual tool**: `gitlab_add_issue_discussion_note`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, not idempotent
 
 | Parameter       | Type             | Mandatory | Description                                                                                           |
@@ -196,6 +204,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `discussion_create`
 - **Individual tool**: `gitlab_create_issue_discussion`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                                                                 |
@@ -212,6 +222,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `discussion_delete_note`
 - **Individual tool**: `gitlab_delete_issue_discussion_note`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter       | Type             | Mandatory | Description                    |
@@ -228,6 +240,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `discussion_get`
 - **Individual tool**: `gitlab_get_issue_discussion`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter       | Type             | Mandatory | Description                    |
@@ -243,6 +257,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `discussion_list`
 - **Individual tool**: `gitlab_list_issue_discussions`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -263,6 +279,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `discussion_update_note`
 - **Individual tool**: `gitlab_update_issue_discussion_note`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, idempotent
 
 | Parameter       | Type             | Mandatory | Description                                                                                           |
@@ -281,6 +299,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `emoji_issue_create`
 - **Individual tool**: `gitlab_issue_emoji_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                               |
@@ -296,6 +316,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `emoji_issue_delete`
 - **Individual tool**: `gitlab_issue_emoji_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                            |
@@ -311,6 +333,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `emoji_issue_get`
 - **Individual tool**: `gitlab_issue_emoji_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                            |
@@ -326,6 +350,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `emoji_issue_list`
 - **Individual tool**: `gitlab_issue_emoji_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -346,6 +372,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `emoji_issue_note_create`
 - **Individual tool**: `gitlab_issue_note_emoji_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                               |
@@ -362,6 +390,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `emoji_issue_note_delete`
 - **Individual tool**: `gitlab_issue_note_emoji_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                            |
@@ -378,6 +408,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `emoji_issue_note_get`
 - **Individual tool**: `gitlab_issue_note_emoji_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                            |
@@ -394,6 +426,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `emoji_issue_note_list`
 - **Individual tool**: `gitlab_issue_note_emoji_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -415,6 +449,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `event_issue_iteration_get`
 - **Individual tool**: `gitlab_issue_iteration_event_get`
 - **Tier**: Premium
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter            | Type             | Mandatory | Description                    |
@@ -430,6 +466,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `event_issue_iteration_list`
 - **Individual tool**: `gitlab_issue_iteration_event_list`
 - **Tier**: Premium
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -450,6 +488,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `event_issue_label_get`
 - **Individual tool**: `gitlab_issue_label_event_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter        | Type             | Mandatory | Description                    |
@@ -465,6 +505,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `event_issue_label_list`
 - **Individual tool**: `gitlab_issue_label_event_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -485,6 +527,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `event_issue_milestone_get`
 - **Individual tool**: `gitlab_issue_milestone_event_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter            | Type             | Mandatory | Description                    |
@@ -500,6 +544,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `event_issue_milestone_list`
 - **Individual tool**: `gitlab_issue_milestone_event_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -520,6 +566,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `event_issue_state_get`
 - **Individual tool**: `gitlab_issue_state_event_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter        | Type             | Mandatory | Description                    |
@@ -535,6 +583,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `event_issue_state_list`
 - **Individual tool**: `gitlab_issue_state_event_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -555,6 +605,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `event_issue_weight_list`
 - **Individual tool**: `gitlab_issue_weight_event_list`
 - **Tier**: Premium
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -575,6 +627,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `get`
 - **Individual tool**: `gitlab_issue_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                            |
@@ -589,6 +643,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `get_by_id`
 - **Individual tool**: `gitlab_issue_get_by_id`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter  | Type      | Mandatory | Description                                      |
@@ -602,6 +658,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `iteration_list_group`
 - **Individual tool**: `gitlab_list_group_iterations`
 - **Tier**: Premium
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter           | Type                                                        | Mandatory | Description                                                                                                                                       |
@@ -624,6 +682,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `iteration_list_project`
 - **Individual tool**: `gitlab_list_project_iterations`
 - **Tier**: Premium
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter           | Type                                                        | Mandatory | Description                                                                                                           |
@@ -642,6 +702,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `link_create`
 - **Individual tool**: `gitlab_issue_link_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, not idempotent
 
 | Parameter           | Type             | Mandatory | Description                                               |
@@ -659,6 +721,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `link_delete`
 - **Individual tool**: `gitlab_issue_link_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter       | Type             | Mandatory | Description                    |
@@ -674,6 +738,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `link_get`
 - **Individual tool**: `gitlab_issue_link_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter       | Type             | Mandatory | Description                    |
@@ -689,6 +755,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `link_list`
 - **Individual tool**: `gitlab_issue_link_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -703,6 +771,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `list`
 - **Individual tool**: `gitlab_issue_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter                | Type                                                                                                                                                         | Mandatory | Description                                                                                                                                       |
@@ -751,6 +821,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `list_all`
 - **Individual tool**: `gitlab_issue_list_all`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter                | Type                                                                                                                                                         | Mandatory | Description                                                                                                                                                   |
@@ -799,6 +871,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `list_group`
 - **Individual tool**: `gitlab_issue_list_group`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter                | Type                                                                                                                                                         | Mandatory | Description                                                                                                                                       |
@@ -848,6 +922,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `move`
 - **Individual tool**: `gitlab_issue_move`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, idempotent
 
 | Parameter       | Type             | Mandatory | Description                           |
@@ -863,6 +939,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `mrs_closing`
 - **Individual tool**: `gitlab_issue_mrs_closing`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -883,6 +961,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `mrs_related`
 - **Individual tool**: `gitlab_issue_mrs_related`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -903,6 +983,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `note_create`
 - **Individual tool**: `gitlab_issue_note_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                                                                                                             |
@@ -920,6 +1002,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `note_delete`
 - **Individual tool**: `gitlab_issue_note_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -935,6 +1019,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `note_get`
 - **Individual tool**: `gitlab_issue_note_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -950,6 +1036,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `note_list`
 - **Individual tool**: `gitlab_issue_note_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                                  | Mandatory | Description                                                                                                                                       |
@@ -970,6 +1058,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `note_update`
 - **Individual tool**: `gitlab_issue_note_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, idempotent
 
 | Parameter    | Type             | Mandatory | Description                            |
@@ -986,6 +1076,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `participants`
 - **Individual tool**: `gitlab_issue_participants`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                                                                           |
@@ -1002,6 +1094,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `reorder`
 - **Individual tool**: `gitlab_issue_reorder`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, idempotent
 
 | Parameter        | Type             | Mandatory | Description                    |
@@ -1018,6 +1112,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `spent_time_add`
 - **Individual tool**: `gitlab_issue_spent_time_add`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                                  |
@@ -1034,6 +1130,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `spent_time_reset`
 - **Individual tool**: `gitlab_issue_spent_time_reset`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                            |
@@ -1048,6 +1146,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `statistics_get`
 - **Individual tool**: `gitlab_get_issue_statistics`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter           | Type                                                   | Mandatory | Description                                                                                                                                                  |
@@ -1076,6 +1176,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `statistics_get_group`
 - **Individual tool**: `gitlab_get_group_issue_statistics`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter           | Type                                                | Mandatory | Description                                                   |
@@ -1104,6 +1206,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `statistics_get_project`
 - **Individual tool**: `gitlab_get_project_issue_statistics`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter           | Type                                                | Mandatory | Description                                                   |
@@ -1132,6 +1236,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `subscribe`
 - **Individual tool**: `gitlab_issue_subscribe`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Issue: Subscribe at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -1146,6 +1252,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `time_estimate_reset`
 - **Individual tool**: `gitlab_issue_time_estimate_reset`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                            |
@@ -1160,6 +1268,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `time_estimate_set`
 - **Individual tool**: `gitlab_issue_time_estimate_set`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                |
@@ -1175,6 +1285,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `time_stats_get`
 - **Individual tool**: `gitlab_issue_time_stats_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                            |
@@ -1189,6 +1301,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `unsubscribe`
 - **Individual tool**: `gitlab_issue_unsubscribe`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Issue: Subscribe at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -1203,6 +1317,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `update`
 - **Individual tool**: `gitlab_issue_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, idempotent
 
 | Parameter           | Type                                                | Mandatory | Description                                                               |
@@ -1233,6 +1349,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `work_item_create`
 - **Individual tool**: `gitlab_create_work_item`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `WorkItemType` in the answer, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, not idempotent
 
 | Parameter                  | Type                                                             | Mandatory | Description                                                                                                                                                          |
@@ -1265,6 +1383,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `work_item_delete`
 - **Individual tool**: `gitlab_delete_work_item`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `Namespace`, which the answer is made of ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter       | Type      | Mandatory | Description                                                  |
@@ -1279,6 +1399,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `work_item_get`
 - **Individual tool**: `gitlab_get_work_item`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `Namespace`, which the answer is made of ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter       | Type      | Mandatory | Description                                                  |
@@ -1293,6 +1415,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `work_item_list`
 - **Individual tool**: `gitlab_list_work_items`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `Namespace`, which the answer is made of ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter                         | Type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Mandatory | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -1348,6 +1472,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `work_item_saved_view_create`
 - **Individual tool**: `gitlab_work_item_saved_view_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `WorkItemSavedViewType` in the answer, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, not idempotent
 
 | Parameter          | Type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Mandatory | Description                                                                                                                                                                                                                                                    |
@@ -1367,6 +1493,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `work_item_saved_view_delete`
 - **Individual tool**: `gitlab_work_item_saved_view_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item Saved View: Delete at project or group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter       | Type      | Mandatory | Description                            |
@@ -1380,6 +1508,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `work_item_saved_view_get`
 - **Individual tool**: `gitlab_work_item_saved_view_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `Namespace`, which the answer is made of ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter        | Type      | Mandatory | Description                                                                                        |
@@ -1394,6 +1524,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `work_item_saved_view_list`
 - **Individual tool**: `gitlab_work_item_saved_view_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `Namespace`, which the answer is made of ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter        | Type      | Mandatory | Description                                                                                                                             |
@@ -1411,6 +1543,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `work_item_saved_view_subscribe`
 - **Individual tool**: `gitlab_work_item_saved_view_subscribe`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `WorkItemSavedViewType` in the answer, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, idempotent
 
 | Parameter       | Type      | Mandatory | Description                                  |
@@ -1424,6 +1558,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `work_item_saved_view_unsubscribe`
 - **Individual tool**: `gitlab_work_item_saved_view_unsubscribe`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `WorkItemSavedViewType` in the answer, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, idempotent
 
 | Parameter       | Type      | Mandatory | Description                                      |
@@ -1437,6 +1573,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `work_item_saved_view_update`
 - **Individual tool**: `gitlab_work_item_saved_view_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `WorkItemSavedViewType` in the answer, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, idempotent
 
 | Parameter          | Type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Mandatory | Description                                                                                                                                                                                                           |
@@ -1456,6 +1594,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `work_item_type_list`
 - **Individual tool**: `gitlab_list_work_item_types`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `Namespace`, which the answer is made of ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: read-only, idempotent
 
 | Parameter        | Type                                                                                                            | Mandatory | Description                                                                                                                             |
@@ -1475,6 +1615,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_issue`, action `work_item_update`
 - **Individual tool**: `gitlab_update_work_item`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `Namespace`, which the answer is made of ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
 - **Behavior**: writes, idempotent
 
 | Parameter                  | Type                                                             | Mandatory | Description                                                                                                                                                       |

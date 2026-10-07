@@ -9,7 +9,7 @@ What a fine-grained personal access token needs for each action this server offe
 
 An action GitLab declares nothing for cannot be run with a fine-grained token at this release, whatever the grant says: the reason is in the second column, and a classic personal access token is the way out. **Served empty** names a part of the answer GitLab leaves out for a fine-grained token while the rest is served: always, or unless the grant also holds what follows it. Each part is written as the GraphQL selection that reaches it from the field the action asks for.
 
-Classic personal access tokens are not judged here: their scopes decide what they can do, as before. The same requirement is served for each action in the `fine_grained` block of its `gitlab://tools/{id}` detail. [Fine-grained tokens](/gitlab-mcp-server/operations/fine-grained-tokens/) covers creating a token, what the server needs from it at startup, and how a refusal reads.
+This table judges fine-grained tokens alone. The scope a classic personal access token or an OAuth token needs for each action, `read_api` or `api`, is printed on the action's entry in the [tool reference](/gitlab-mcp-server/reference/tools/), beside its tier and the line this table holds for it. The fine-grained requirement is also served for each action in the `fine_grained` block of its `gitlab://tools/{id}` detail. [Fine-grained tokens](/gitlab-mcp-server/operations/fine-grained-tokens/) covers creating a token, what the server needs from it at startup, and how a refusal reads.
 
 ## `access`
 
