@@ -523,7 +523,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `project.board_list_create`
 
-> Create a board list (column) scoped to a label, assignee, milestone, or iteration. Returns: the created list with its scope, position, and issue limits. See also: [`project.board_list_get`](#projectboard_list_get), [`project.board_list_update`](#projectboard_list_update), [`project.board_list_list`](#projectboard_list_list).
+> Create a board list (column) scoped to a label, or on Premium and Ultimate to an assignee, milestone, or iteration. Returns: the created list with its scope, position, and issue limits. See also: [`project.board_list_get`](#projectboard_list_get), [`project.board_list_update`](#projectboard_list_update), [`project.board_list_list`](#projectboard_list_list).
 
 - **Meta-herramienta**: `gitlab_project`, acción `board_list_create`
 - **Herramienta individual**: `gitlab_board_list_create`
@@ -532,14 +532,14 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro      | Tipo             | Requerido | Descripción                              |
-| -------------- | ---------------- | --------- | ---------------------------------------- |
-| `board_id`     | `integer`        | sí        | Board ID                                 |
-| `project_id`   | `string/integer` | sí        | Project ID or path                       |
-| `assignee_id`  | `integer`        | no        | Assignee ID to create an assignee list   |
-| `iteration_id` | `integer`        | no        | Iteration ID to create an iteration list |
-| `label_id`     | `integer`        | no        | Label ID to create a label list          |
-| `milestone_id` | `integer`        | no        | Milestone ID to create a milestone list  |
+| Parámetro                | Tipo             | Requerido | Descripción                              |
+| ------------------------ | ---------------- | --------- | ---------------------------------------- |
+| `board_id`               | `integer`        | sí        | Board ID                                 |
+| `project_id`             | `string/integer` | sí        | Project ID or path                       |
+| `assignee_id` (Premium)  | `integer`        | no        | User ID to create an assignee list       |
+| `iteration_id` (Premium) | `integer`        | no        | Iteration ID to create an iteration list |
+| `label_id`               | `integer`        | no        | Label ID to create a label list          |
+| `milestone_id` (Premium) | `integer`        | no        | Milestone ID to create a milestone list  |
 
 ### `project.board_list_delete`
 
@@ -617,7 +617,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `project.board_update`
 
-> Update an issue board's name, scope (assignee, milestone, labels, weight), or list visibility. Returns: the updated board with its project, scope, and lists. See also: [`project.board_get`](#projectboard_get), [`project.board_delete`](#projectboard_delete), [`project.board_list`](#projectboard_list).
+> Update an issue board's name or list visibility, and on Premium and Ultimate its scope (assignee, milestone, labels, weight). Returns: the updated board with its project, scope, and lists. See also: [`project.board_get`](#projectboard_get), [`project.board_delete`](#projectboard_delete), [`project.board_list`](#projectboard_list).
 
 - **Meta-herramienta**: `gitlab_project`, acción `board_update`
 - **Herramienta individual**: `gitlab_board_update`
@@ -626,17 +626,17 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Work Item: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro           | Tipo             | Requerido | Descripción             |
-| ------------------- | ---------------- | --------- | ----------------------- |
-| `board_id`          | `integer`        | sí        | Board ID                |
-| `project_id`        | `string/integer` | sí        | Project ID or path      |
-| `assignee_id`       | `integer`        | no        | Assignee user ID        |
-| `hide_backlog_list` | `boolean`        | no        | Hide the Open list      |
-| `hide_closed_list`  | `boolean`        | no        | Hide the Closed list    |
-| `labels`            | `string[]`       | no        | Board scope label names |
-| `milestone_id`      | `integer`        | no        | Milestone ID            |
-| `name`              | `string`         | no        | Board name              |
-| `weight`            | `integer`        | no        | Board scope weight      |
+| Parámetro                | Tipo             | Requerido | Descripción                                    |
+| ------------------------ | ---------------- | --------- | ---------------------------------------------- |
+| `board_id`               | `integer`        | sí        | Board ID                                       |
+| `project_id`             | `string/integer` | sí        | Project ID or path                             |
+| `assignee_id` (Premium)  | `integer`        | no        | User ID of the assignee the board is scoped to |
+| `hide_backlog_list`      | `boolean`        | no        | Hide the Open list                             |
+| `hide_closed_list`       | `boolean`        | no        | Hide the Closed list                           |
+| `labels` (Premium)       | `string[]`       | no        | Label names the board is scoped to             |
+| `milestone_id` (Premium) | `integer`        | no        | Milestone ID the board is scoped to            |
+| `name`                   | `string`         | no        | Board name                                     |
+| `weight` (Premium)       | `integer`        | no        | Weight from 0 to 9 the board is scoped to      |
 
 ### `project.create`
 

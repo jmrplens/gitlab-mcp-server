@@ -19,6 +19,34 @@
 // owner domain, the doc tier distribution against that current gating so the
 // per-action tier-assignment waves can be planned and later verified.
 //
+// A badge grades an endpoint and never one of its parameters, and GitLab marks
+// a paid parameter of a Free endpoint in the parameter's own table row
+// instead: "Premium and Ultimate only" beside a board update's scope, "Ultimate
+// only" beside a member's custom role. Reading badges alone, this auditor
+// passed eleven such board inputs that every tier was offered (issue 1233), so
+// it reads those rows too (param_tiers.go). Each section of a page is split
+// into the endpoints its code blocks spell and the rows of its request tables,
+// a table whose header has a Required column, that name a tier; the routes
+// each action sends, read from docs/development/action-requests.json, join a
+// section to the actions that call it, a route Grape records with an optional
+// group ("(-/)search") in each of its forms; and a row whose parameter the
+// input schema of a lower tier carries, read from the catalogs built at Free,
+// Premium and Ultimate, is a finding naming the action, the route, the
+// parameter, both tiers and the page.
+//
+// What the parameter pass cannot see is stated here rather than discovered: a
+// row under a subheading of its endpoint (the options of a nested parameter)
+// has no endpoint in its section and is not joined; a parameter our input
+// names differently from GitLab is not matched; an action whose requests are
+// GraphQL or that the record could not resolve has no route to join; a row
+// whose tier names another key of the value ("`member_role_id` is Ultimate
+// only" beside `allowed_to_merge`) or that GitLab.com serves on Free as well
+// grades nothing; and only the owner page and the override page an action is
+// redirected to are read, so a route documented on a third page is not seen.
+// A finding is a lead rather than a verdict, since a row can mark a whole
+// parameter for a tier that gates only some of its values, and the report
+// gates nothing.
+//
 // Usage:
 //
 //	go run ./cmd/audit_edition_tier/                 # full report to stdout

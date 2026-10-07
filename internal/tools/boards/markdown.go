@@ -154,7 +154,7 @@ func FormatBoardMarkdown(out BoardOutput) string {
 	writeBoardListsTable(c, out.Lists)
 	c.End(
 		toolutil.HintAction(actionBoardListCreate, "add a column to this board"),
-		toolutil.HintAction(actionBoardUpdate, "change this board's name or scope"),
+		toolutil.HintAction(actionBoardUpdate, "rename this board or toggle its Open and Closed lists, and on Premium and Ultimate change its scope"),
 		toolutil.HintAction(actionBoardDelete, "remove this board"),
 	)
 	return b.String()

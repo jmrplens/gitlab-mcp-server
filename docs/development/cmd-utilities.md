@@ -673,7 +673,7 @@ The JSON report is a list with one entry per runtime: the run and session rows, 
 
 ### audit_edition_tier
 
-Reports the doc-grounded licensing tier (Free/Premium/Ultimate) of every action, parsed from GitLab API doc Tier badges, and compares it against the action's current binary CE/EE gating.
+Reports the doc-grounded licensing tier (Free/Premium/Ultimate) of every action, parsed from GitLab API doc Tier badges, and compares it against the action's current binary CE/EE gating. It also grades request parameters: GitLab marks a paid parameter of a Free endpoint in the parameter's own table row ("Premium and Ultimate only"), which no badge carries, and reading badges alone is how eleven board inputs every tier was offered went unreported until [issue 1233](https://github.com/jmrplens/gitlab-mcp-server/issues/1233).
 
 #### Usage
 
@@ -697,7 +697,13 @@ go run ./cmd/audit_edition_tier/ -offline
 
 #### Output
 
-A JSON report with per-action tier classification and doc-vs-binary discrepancies.
+A JSON report (schema version 2) with per-action tier classification and doc-vs-binary discrepancies, and per domain the parameter findings: `param_findings` lists each request parameter a page marks for a paid tier that the input schema of a lower tier offers, with the action, the route, the tier the row names, the lowest tier offering it and the page, and `param_rows_joined` counts the tier-marked rows compared at all, so a domain with no finding still says whether anything was read. The summary carries both totals. A domain with a finding needs work whatever its page tier, so `-gaps-only` keeps it.
+
+#### How a parameter row is joined
+
+Each section of a page, from one heading to the next, is split into the endpoints its code blocks spell and the rows of its request tables (a table whose header has a Required column, so a response attribute marked Premium is not read as a parameter) that name a tier: "Premium and Ultimate only", "Ultimate only", "Available on Premium and Ultimate", "(in the Premium and Ultimate tier)" and the older `**(PREMIUM ALL)**` badge. The routes each action sends come from `docs/development/action-requests.json`, so a missing record stops the run rather than grading nothing; a route matches an endpoint of the same method and path shape, a placeholder on both sides matching whatever either side names it, and a route Grape records with an optional group (`GET /projects/:id/(-/)search`) matches in each of its forms, with the group and without it. The tier each parameter is offered at is read from the catalogs built at Free, Premium and Ultimate, which is the schema a client of each tier is served after the tier filter prunes it, not the input struct.
+
+What it cannot see: a row under a subheading of its endpoint (the options of a nested parameter) has no endpoint in its section; a parameter our input names differently from GitLab is not matched; an action whose requests are GraphQL, or that the record could not resolve, has no route; a row whose tier names another key of the value ("`member_role_id` is Ultimate only" beside `allowed_to_merge`), or that GitLab.com also serves on Free, grades nothing; and only the owner page and the override page are read. A finding is a lead rather than a verdict, because a row can mark a whole parameter for a tier that gates only some of its values: `issue.create` takes `assignee_ids` on Free with one assignee, while the row marks the whole parameter Premium and Ultimate only.
 
 #### Make targets
 

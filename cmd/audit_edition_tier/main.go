@@ -17,10 +17,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 )
 
-const schemaVersion = 1
+// schemaVersion is 2 since the report grades request parameters as well
+// (param_rows_joined and param_findings, issue 1233).
+const schemaVersion = 2
 
 // tier is the canonical 3-tier licensing level, mirroring internal/edition.Tier
 // but kept local so the auditor has no dependency on runtime config.
@@ -45,8 +48,8 @@ func (t tier) String() string {
 
 // parseEditionTier maps an action's Edition metadata string to its tier.
 // Empty/"core"/unknown is Free; "premium" and "ultimate" map to their tiers.
-func parseEditionTier(edition string) tier {
-	switch strings.ToLower(strings.TrimSpace(edition)) {
+func parseEditionTier(value string) tier {
+	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "premium":
 		return tierPremium
 	case "ultimate":
@@ -118,10 +121,17 @@ func runMain(args []string, stdout, stderr io.Writer) int {
 	// Cancel the doc-fetch sweep on Ctrl+C so a slow refresh aborts promptly.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+	routes, err := readActionRoutes(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "%v\n", err)
+		return 1
+	}
+
 	opts := apidocs.Options{Refresh: *refresh, Offline: *offline, MaxAge: *maxAge}
 	userOpts := opts
 	userOpts.BaseURL = apidocs.DefaultUserDocBaseURL
 	res := newDocResolver(apidocs.New(root, opts), apidocs.New(root, userOpts))
+	res.routes = routes
 	if runErr := run(ctx, res, *gapsOnly, *outputPath, stdout); runErr != nil {
 		fmt.Fprintf(stderr, "%v\n", runErr)
 		return 1
@@ -148,15 +158,13 @@ func run(ctx context.Context, res *docResolver, gapsOnly bool, outputPath string
 		rep.Domains = filtered
 	}
 
-	// No test reaches this failure and none should pretend to: report is
-	// strings, ints, bools, slices of those and one map[string]int, with no
-	// any, no channel, no func, no cycle and no MarshalJSON of its own, so
-	// encoding/json has nothing here it can refuse. The branch stays because
-	// discarding the error would be worse than never running it.
-	data, err := json.MarshalIndent(rep, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal report: %w", err)
-	}
+	// The marshal cannot fail: report is strings, ints, bools, slices of those
+	// and one map[string]int, with no any, no channel, no func, no cycle and no
+	// MarshalJSON of its own, so encoding/json has nothing here it can refuse,
+	// which TestReport_TypeGraph_HoldsNothingEncodingJSONCanRefuse holds. Such
+	// a failure is cmdutil.Must's to report rather than a branch no input
+	// reaches.
+	data := cmdutil.Must(json.MarshalIndent(rep, "", "  "))
 	// The stdout half is the one spelling of this convention docgen.WriteReport
 	// does not own: the destination here is a writer the caller injects, which
 	// is what lets the tests read that branch back without swapping os.Stdout,
@@ -190,6 +198,11 @@ type reportSummary struct {
 	CurrentEnterprise int            `json:"current_enterprise"`
 	TierMismatches    int            `json:"tier_mismatches"`
 	Classification    map[string]int `json:"classification"`
+	// ParamRowsJoined counts the tier-marked request parameter rows joined to
+	// an action that sends their route, and ParamFindings the ones whose
+	// parameter a lower tier's input schema offers.
+	ParamRowsJoined int `json:"param_rows_joined"`
+	ParamFindings   int `json:"param_findings"`
 }
 
 // domainReport summarizes one owner domain (one doc area).
@@ -207,6 +220,8 @@ type domainReport struct {
 	DocFetched        bool           `json:"doc_fetched"`
 	Note              string         `json:"note,omitempty"`
 	ActionDetails     []actionDetail `json:"action_details,omitempty"`
+	ParamRowsJoined   int            `json:"param_rows_joined,omitempty"`
+	ParamFindings     []paramFinding `json:"param_findings,omitempty"`
 }
 
 type actionDetail struct {
@@ -221,18 +236,22 @@ type actionDetail struct {
 
 // docResolver fetches documentation pages for tier grading: the owner domain
 // pages under doc/api/ and the override pages referenced by actionDocOverrides
-// (which may live outside doc/api/). Override page tiers are memoized so each
-// page is fetched and parsed once per run.
+// (which may live outside doc/api/). Override pages are memoized so each page
+// is fetched and parsed once per run. routes holds the REST routes each action
+// sends, keyed by canonical action ID, which is what joins a page's parameter
+// rows to an action; a resolver without them grades no parameter.
 type docResolver struct {
-	api  *apidocs.Fetcher
-	user *apidocs.Fetcher
-	memo map[docRef]docPage
+	api    *apidocs.Fetcher
+	user   *apidocs.Fetcher
+	memo   map[docRef]docPage
+	routes map[string][]string
 }
 
 // docPage is the memoized parse result of one override page.
 type docPage struct {
-	tier tier
-	err  error
+	tier     tier
+	sections []docSection
+	err      error
 }
 
 func newDocResolver(api, user *apidocs.Fetcher) *docResolver {
@@ -241,8 +260,14 @@ func newDocResolver(api, user *apidocs.Fetcher) *docResolver {
 
 // pageTier returns the page-level tier badge of the referenced doc page.
 func (r *docResolver) pageTier(ctx context.Context, ref docRef) (tier, error) {
+	p := r.page(ctx, ref)
+	return p.tier, p.err
+}
+
+// page fetches and parses the referenced doc page once per run.
+func (r *docResolver) page(ctx context.Context, ref docRef) docPage {
 	if p, ok := r.memo[ref]; ok {
-		return p.tier, p.err
+		return p
 	}
 	fetcher := r.api
 	if ref.userDoc {
@@ -254,9 +279,10 @@ func (r *docResolver) pageTier(ctx context.Context, ref docRef) (tier, error) {
 		p.err = err
 	} else {
 		p.tier, _ = parseDocTiers(content)
+		p.sections = parseParamSections(content)
 	}
 	r.memo[ref] = p
-	return p.tier, p.err
+	return p
 }
 
 // expectedTierForAction returns the doc-grounded minimum tier expected for an
@@ -299,6 +325,13 @@ func buildReport(ctx context.Context, res *docResolver) (*report, error) {
 	if err != nil {
 		return nil, fmt.Errorf("build EE catalog: %w", err)
 	}
+	// The Premium build is read for its input schemas alone: it is what tells
+	// an Ultimate parameter a Premium client is offered from one it is not.
+	premiumCatalog, err := buildCatalog(nil, tools.ActionCatalogOptions{Tier: edition.Premium, IncludeMCP: true})
+	if err != nil {
+		return nil, fmt.Errorf("build Premium catalog: %w", err)
+	}
+	offered := offeredTiers(ceCatalog, premiumCatalog, eeCatalog)
 	ceIDs := make(map[string]struct{})
 	for _, a := range ceCatalog.Actions() {
 		ceIDs[string(a.ID)] = struct{}{}
@@ -346,7 +379,7 @@ func buildReport(ctx context.Context, res *docResolver) (*report, error) {
 	sort.Strings(pkgNames)
 
 	for _, pkg := range pkgNames {
-		dr := buildDomainReport(ctx, pkg, domains[pkg].actions, res)
+		dr := buildDomainReport(ctx, pkg, domains[pkg].actions, res, offered)
 		if !dr.DocFetched && dr.Note == "no doc-area mapping" {
 			unmapped[pkg] = struct{}{}
 		}
@@ -355,6 +388,8 @@ func buildReport(ctx context.Context, res *docResolver) (*report, error) {
 		rep.Summary.CurrentEnterprise += dr.CurrentEnterprise
 		rep.Summary.Classification[dr.Classification]++
 		rep.Summary.TierMismatches += dr.Mismatches
+		rep.Summary.ParamRowsJoined += dr.ParamRowsJoined
+		rep.Summary.ParamFindings += len(dr.ParamFindings)
 		if dr.NeedsWork {
 			rep.Summary.DomainsNeedWork++
 		}
@@ -369,14 +404,17 @@ func buildReport(ctx context.Context, res *docResolver) (*report, error) {
 }
 
 // buildDomainReport assembles the report for one owner package: it resolves the
-// doc area, fetches and parses the tier badges, tallies the current gating, and
-// classifies the domain for wave planning.
-func buildDomainReport(ctx context.Context, pkg string, actions []actionDetail, res *docResolver) domainReport {
-	sort.Slice(actions, func(i, j int) bool { return actions[i].ID < actions[j].ID })
+// doc area, fetches and parses the tier badges, tallies the current gating,
+// grades the request parameters the page marks for a paid tier against the
+// tier each action's input schema first offers them at (offered, from
+// [offeredTiers]), and classifies the domain for wave planning.
+func buildDomainReport(ctx context.Context, pkg string, actions []actionDetail, res *docResolver, offered map[string]map[string]tier) domainReport {
+	slices.SortFunc(actions, func(a, b actionDetail) int { return strings.Compare(a.ID, b.ID) })
 
 	docArea, mapped := docAreaForPackage(pkg)
 	pageTier := tierFree
 	var overrideTiers []tier
+	var sections []docSection
 	docFetched := false
 	note := ""
 	switch {
@@ -389,6 +427,7 @@ func buildDomainReport(ctx context.Context, pkg string, actions []actionDetail, 
 		} else {
 			docFetched = true
 			pageTier, overrideTiers = parseDocTiers(content)
+			sections = parseParamSections(content)
 		}
 	}
 
@@ -420,7 +459,7 @@ func buildDomainReport(ctx context.Context, pkg string, actions []actionDetail, 
 		if _, ok := docOverrideForAction(a.ID); ok && exp != pageTier && !slices.Contains(overrideTiers, exp) {
 			overrideTiers = append(overrideTiers, exp)
 		}
-		if edition := parseEditionTier(a.Edition); edition != exp {
+		if declared := parseEditionTier(a.Edition); declared != exp {
 			a.Mismatch = true
 			dr.Mismatches++
 		}
@@ -430,6 +469,11 @@ func buildDomainReport(ctx context.Context, pkg string, actions []actionDetail, 
 		dr.OverrideTiers = append(dr.OverrideTiers, ot.String())
 	}
 	dr.Classification, dr.NeedsWork = classifyDomain(dr, overrideTiers, pageTier, docFetched)
+	if docFetched {
+		owner := pageSections{ref: docRef{area: docArea}, sections: sections}
+		dr.ParamFindings, dr.ParamRowsJoined = res.gradeParams(ctx, owner, dr.ActionDetails, offered)
+		dr.NeedsWork = dr.NeedsWork || len(dr.ParamFindings) > 0
+	}
 	return dr
 }
 
@@ -455,17 +499,19 @@ func classifyDomain(dr domainReport, overrides []tier, page tier, fetched bool) 
 			hasHigherOverride = true
 		}
 	}
-	switch {
-	case page == tierFree && !hasHigherOverride:
+	// A chain of ifs rather than a tagless switch: a case expression carries no
+	// statement counter of its own, so gremlins reports every mutant of one as
+	// not covered whatever the tests drive.
+	if page == tierFree && !hasHigherOverride {
 		// Whole domain is Free. Needs work only if something is currently gated EE.
 		return "green", dr.CurrentEnterprise > 0
-	case len(overrides) == 0 || allOverridesEqualPage:
+	}
+	if len(overrides) == 0 || allOverridesEqualPage {
 		// Uniform non-Free domain. Needs work to split premium vs ultimate and/or
 		// to set the Tier field where currently undifferentiated.
 		return "uniform-ee", true
-	default:
-		return "mixed", true
 	}
+	return "mixed", true
 }
 
 // parseDocTiers extracts the page-level tier and the set of distinct

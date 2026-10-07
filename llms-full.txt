@@ -2757,7 +2757,7 @@ Action guidance:
 - group_board_get_list: Inspect one column of a group issue board, including its label, assignee, and iteration scope.
 - group_board_list: Browse the issue boards configured for a group to see how the group plans and tracks work.
 - group_board_list_lists: Enumerate the columns of a group issue board to see how its workflow stages are arranged.
-- group_board_update: Rename a group issue board or retune its assignee, milestone, label, and weight scope.
+- group_board_update: Rename a group issue board, and on Premium and Ultimate retune its assignee, milestone, label, and weight scope.
 - group_board_update_list: Move a column to a new position in a group issue board to reorder its workflow stages.
 - group_export_download: Download the finished export archive for a group as a base64-encoded .tar.gz. Use this only after group_export_schedule has completed. The call fails until the archive is ready.
 - group_export_schedule: Start an asynchronous export of a whole group (subgroups, projects, and metadata) into a downloadable archive. Use this first, then poll and download with group_export_download once GitLab finishes building the archive.
@@ -2836,7 +2836,6 @@ Parameter guidance:
 - group_board_list.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - group_board_list_lists.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - group_board_update.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- group_board_update.milestone_id: milestone_id. Source: Milestone ID (project- or group-scoped, depending on the endpoint).
 - group_board_update_list.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - group_export_download.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - group_export_schedule.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
@@ -7501,12 +7500,12 @@ Action guidance:
 - board_delete: Permanently remove an issue board from a project when the team no longer tracks work on that kanban view.
 - board_get: Fetch one issue board by its ID to inspect its scope filters and the ordered columns it contains.
 - board_list: List every issue board configured in a project to see how the team's kanban work is organized.
-- board_list_create: Add a new column to an issue board scoped to a label, assignee, milestone, or iteration to capture a workflow stage.
+- board_list_create: Add a new column to an issue board scoped to a label, or on Premium and Ultimate to an assignee, milestone, or iteration, to capture a workflow stage.
 - board_list_delete: Permanently remove a column from an issue board when that kanban workflow stage is no longer needed.
 - board_list_get: Fetch one column of an issue board to inspect its label, assignee, milestone, or iteration scope and issue limits.
 - board_list_list: Enumerate the columns of an issue board in order to see how the kanban workflow stages are arranged.
 - board_list_update: Move an issue board column to a new position to reorder the kanban workflow stages.
-- board_update: Rename an issue board or retune its assignee, milestone, label, and weight scope, or toggle the Open and Closed columns.
+- board_update: Rename an issue board or toggle its Open and Closed columns, and on Premium and Ultimate retune its assignee, milestone, label, and weight scope.
 - create: Create a new project in a namespace you can write to. Provide name (and optionally path, namespace_id, visibility, description). Use create_for_user to create on behalf of another user as admin.
 - create_for_user: Create a project owned by a specific user (admin only). Provide user_id and name. The project is created in that user's personal namespace.
 - create_fork_relation: Create a fork relationship linking a project to an upstream source project. Send project_id and the upstream fork_id (or forked_from_id). The response is the downstream project itself.
@@ -7627,13 +7626,11 @@ Parameter guidance:
 - board_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - board_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - board_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- board_list_create.milestone_id: milestone_id. Source: Milestone ID (project- or group-scoped, depending on the endpoint).
 - board_list_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - board_list_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - board_list_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - board_list_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - board_list_update.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- board_update.milestone_id: milestone_id. Source: Milestone ID (project- or group-scoped, depending on the endpoint).
 - board_update.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - create.namespace_id: scope_namespace. Source: Namespace ID (numeric) of the target group or user namespace.
 - create.path: path_component. Source: Path component relative to the project or repository root (no leading slash).
@@ -14053,11 +14050,11 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_board_list_create
 
-Create a board list (column) scoped to a label, assignee, milestone, or iteration. Returns: the created list with its scope, position, and issue limits. See also: gitlab_board_list_get, gitlab_board_list_update, gitlab_board_list_lists.
+Create a board list (column) scoped to a label, or on Premium and Ultimate to an assignee, milestone, or iteration. Returns: the created list with its scope, position, and issue limits. See also: gitlab_board_list_get, gitlab_board_list_update, gitlab_board_list_lists.
 
 **Parameters:**
 
-- `assignee_id` (integer): Assignee ID to create an assignee list
+- `assignee_id` (integer): User ID to create an assignee list
 - `board_id` (integer) (required): Board ID
 - `iteration_id` (integer): Iteration ID to create an iteration list
 - `label_id` (integer): Label ID to create a label list
@@ -14123,19 +14120,19 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_board_update
 
-Update an issue board's name, scope (assignee, milestone, labels, weight), or list visibility. Returns: the updated board with its project, scope, and lists. See also: gitlab_board_get, gitlab_board_delete, gitlab_board_list.
+Update an issue board's name or list visibility, and on Premium and Ultimate its scope (assignee, milestone, labels, weight). Returns: the updated board with its project, scope, and lists. See also: gitlab_board_get, gitlab_board_delete, gitlab_board_list.
 
 **Parameters:**
 
-- `assignee_id` (integer): Assignee user ID
+- `assignee_id` (integer): User ID of the assignee the board is scoped to
 - `board_id` (integer) (required): Board ID
 - `hide_backlog_list` (boolean): Hide the Open list
 - `hide_closed_list` (boolean): Hide the Closed list
-- `labels` (array of strings): Board scope label names
-- `milestone_id` (integer): Milestone ID
+- `labels` (array of strings): Label names the board is scoped to
+- `milestone_id` (integer): Milestone ID the board is scoped to
 - `name` (string): Board name
 - `project_id` (string or integer) (required): Project ID or path
-- `weight` (integer): Board scope weight
+- `weight` (integer): Weight from 0 to 9 the board is scoped to
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -18138,17 +18135,17 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_board_update
 
-Update a group issue board's name and scope (assignee, milestone, labels, weight). Returns: the updated board with its group, milestone, labels, and lists. See also: gitlab_group_board_get, gitlab_group_board_list.
+Update a group issue board's name, and on Premium and Ultimate its scope (assignee, milestone, labels, weight). Returns: the updated board with its group, milestone, labels, and lists. See also: gitlab_group_board_get, gitlab_group_board_list.
 
 **Parameters:**
 
-- `assignee_id` (integer): Assignee user ID
+- `assignee_id` (integer): User ID of the assignee the board is scoped to
 - `board_id` (integer) (required): Board ID
 - `group_id` (string or integer) (required): Group ID or path
-- `labels` (array of strings): Board scope labels
-- `milestone_id` (integer): Milestone ID
+- `labels` (array of strings): Label names the board is scoped to
+- `milestone_id` (integer): Milestone ID the board is scoped to
 - `name` (string): Board name
-- `weight` (integer): Board scope weight
+- `weight` (integer): Weight from 0 to 9 the board is scoped to
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 

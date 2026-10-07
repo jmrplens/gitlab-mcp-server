@@ -628,11 +628,11 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_board_list_create
 
-Create a board list (column) scoped to a label, assignee, milestone, or iteration. Returns: the created list with its scope, position, and issue limits. See also: gitlab_board_list_get, gitlab_board_list_update, gitlab_board_list_lists.
+Create a board list (column) scoped to a label, or on Premium and Ultimate to an assignee, milestone, or iteration. Returns: the created list with its scope, position, and issue limits. See also: gitlab_board_list_get, gitlab_board_list_update, gitlab_board_list_lists.
 
 **Parameters:**
 
-- `assignee_id` (integer): Assignee ID to create an assignee list
+- `assignee_id` (integer): User ID to create an assignee list
 - `board_id` (integer) (required): Board ID
 - `iteration_id` (integer): Iteration ID to create an iteration list
 - `label_id` (integer): Label ID to create a label list
@@ -698,19 +698,19 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_board_update
 
-Update an issue board's name, scope (assignee, milestone, labels, weight), or list visibility. Returns: the updated board with its project, scope, and lists. See also: gitlab_board_get, gitlab_board_delete, gitlab_board_list.
+Update an issue board's name or list visibility, and on Premium and Ultimate its scope (assignee, milestone, labels, weight). Returns: the updated board with its project, scope, and lists. See also: gitlab_board_get, gitlab_board_delete, gitlab_board_list.
 
 **Parameters:**
 
-- `assignee_id` (integer): Assignee user ID
+- `assignee_id` (integer): User ID of the assignee the board is scoped to
 - `board_id` (integer) (required): Board ID
 - `hide_backlog_list` (boolean): Hide the Open list
 - `hide_closed_list` (boolean): Hide the Closed list
-- `labels` (array of strings): Board scope label names
-- `milestone_id` (integer): Milestone ID
+- `labels` (array of strings): Label names the board is scoped to
+- `milestone_id` (integer): Milestone ID the board is scoped to
 - `name` (string): Board name
 - `project_id` (string or integer) (required): Project ID or path
-- `weight` (integer): Board scope weight
+- `weight` (integer): Weight from 0 to 9 the board is scoped to
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -4713,17 +4713,17 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_board_update
 
-Update a group issue board's name and scope (assignee, milestone, labels, weight). Returns: the updated board with its group, milestone, labels, and lists. See also: gitlab_group_board_get, gitlab_group_board_list.
+Update a group issue board's name, and on Premium and Ultimate its scope (assignee, milestone, labels, weight). Returns: the updated board with its group, milestone, labels, and lists. See also: gitlab_group_board_get, gitlab_group_board_list.
 
 **Parameters:**
 
-- `assignee_id` (integer): Assignee user ID
+- `assignee_id` (integer): User ID of the assignee the board is scoped to
 - `board_id` (integer) (required): Board ID
 - `group_id` (string or integer) (required): Group ID or path
-- `labels` (array of strings): Board scope labels
-- `milestone_id` (integer): Milestone ID
+- `labels` (array of strings): Label names the board is scoped to
+- `milestone_id` (integer): Milestone ID the board is scoped to
 - `name` (string): Board name
-- `weight` (integer): Board scope weight
+- `weight` (integer): Weight from 0 to 9 the board is scoped to
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 

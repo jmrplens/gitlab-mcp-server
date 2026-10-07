@@ -381,15 +381,21 @@ func CreateBoard(ctx context.Context, client *gitlabclient.Client, input CreateB
 	return convertBoard(board, extra), nil
 }
 
-// UpdateBoardInput represents input for updating a board.
+// UpdateBoardInput represents input for updating a board. The four scope
+// fields are tagged Premium because doc/api/boards.md marks them "Premium and
+// Ultimate only": a Free instance updates the board and leaves the scope out,
+// so the Free schema does not offer them. Weight is a pointer because 0 is a
+// scope of its own: GitLab reads only nil and -1 as no weight scope
+// (EMPTY_SCOPE_STATE in ee/app/models/ee/board.rb), and an issue created on a
+// board scoped to 0 gets weight 0.
 type UpdateBoardInput struct {
 	ProjectID       toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	BoardID         int64                `json:"board_id" jsonschema:"Board ID,required"`
 	Name            string               `json:"name,omitempty" jsonschema:"Board name"`
-	AssigneeID      int64                `json:"assignee_id,omitempty" jsonschema:"Assignee user ID"`
-	MilestoneID     int64                `json:"milestone_id,omitempty" jsonschema:"Milestone ID"`
-	Labels          []string             `json:"labels,omitempty" jsonschema:"Board scope label names"`
-	Weight          int64                `json:"weight,omitempty" jsonschema:"Board scope weight"`
+	AssigneeID      int64                `json:"assignee_id,omitempty" tier:"premium" jsonschema:"User ID of the assignee the board is scoped to"`
+	MilestoneID     int64                `json:"milestone_id,omitempty" tier:"premium" jsonschema:"Milestone ID the board is scoped to"`
+	Labels          []string             `json:"labels,omitempty" tier:"premium" jsonschema:"Label names the board is scoped to"`
+	Weight          *int64               `json:"weight,omitempty" tier:"premium" jsonschema:"Weight from 0 to 9 the board is scoped to"`
 	HideBacklogList *bool                `json:"hide_backlog_list,omitempty" jsonschema:"Hide the Open list"`
 	HideClosedList  *bool                `json:"hide_closed_list,omitempty" jsonschema:"Hide the Closed list"`
 }
@@ -416,8 +422,8 @@ func UpdateBoard(ctx context.Context, client *gitlabclient.Client, input UpdateB
 		lbls := gl.LabelOptions(input.Labels)
 		opts.Labels = &lbls
 	}
-	if input.Weight != 0 {
-		opts.Weight = new(input.Weight)
+	if input.Weight != nil {
+		opts.Weight = input.Weight
 	}
 	if input.HideBacklogList != nil {
 		opts.HideBacklogList = input.HideBacklogList
@@ -527,14 +533,17 @@ func GetBoardList(ctx context.Context, client *gitlabclient.Client, input GetBoa
 	return convertBoardList(list), nil
 }
 
-// CreateBoardListInput represents input for creating a board list.
+// CreateBoardListInput represents input for creating a board list. The
+// assignee, milestone and iteration list types are tagged Premium because
+// doc/api/boards.md marks them "Premium and Ultimate only": a Free instance
+// creates a label list from label_id and refuses the other three.
 type CreateBoardListInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	BoardID     int64                `json:"board_id" jsonschema:"Board ID,required"`
 	LabelID     int64                `json:"label_id,omitempty" jsonschema:"Label ID to create a label list"`
-	AssigneeID  int64                `json:"assignee_id,omitempty" jsonschema:"Assignee ID to create an assignee list"`
-	MilestoneID int64                `json:"milestone_id,omitempty" jsonschema:"Milestone ID to create a milestone list"`
-	IterationID int64                `json:"iteration_id,omitempty" jsonschema:"Iteration ID to create an iteration list"`
+	AssigneeID  int64                `json:"assignee_id,omitempty" tier:"premium" jsonschema:"User ID to create an assignee list"`
+	MilestoneID int64                `json:"milestone_id,omitempty" tier:"premium" jsonschema:"Milestone ID to create a milestone list"`
+	IterationID int64                `json:"iteration_id,omitempty" tier:"premium" jsonschema:"Iteration ID to create an iteration list"`
 }
 
 // CreateBoardList creates a new board list.

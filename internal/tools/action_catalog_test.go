@@ -1009,6 +1009,60 @@ func TestCentralTierFilter_Invariants(t *testing.T) {
 	}
 }
 
+// TestCentralTierFilter_BoardScopeInputsArePremium holds the board inputs
+// GitLab documents as Premium and Ultimate only to the tier the input schema
+// serves them from (issue 1233). doc/api/boards.md and doc/api/group_boards.md
+// mark the assignee, milestone, labels and weight a board update scopes the
+// board to, and the assignee, milestone and iteration a list create makes a
+// column of, "Premium and Ultimate only". A Free instance updates the board and
+// leaves out the scope it was asked for, and refuses a list create that names
+// no label, so a Free schema offering them invites a call whose answer is
+// either a silent omission or a refusal. The fields beside them that every tier
+// takes stay on the Free schema, which is what tells a tag on the right fields
+// from a tag on the whole input.
+func TestCentralTierFilter_BoardScopeInputsArePremium(t *testing.T) {
+	free := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+	premium := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Premium, IncludeMCP: true})
+	const (
+		projectBoardUpdate = actioncatalog.ActionID("project.board_update")
+		groupBoardUpdate   = actioncatalog.ActionID("group.group_board_update")
+		projectListCreate  = actioncatalog.ActionID("project.board_list_create")
+	)
+	cases := []struct {
+		name        string
+		id          actioncatalog.ActionID
+		field       string
+		premiumOnly bool
+	}{
+		{name: "board_update_assignee_id", id: projectBoardUpdate, field: "assignee_id", premiumOnly: true},
+		{name: "board_update_milestone_id", id: projectBoardUpdate, field: "milestone_id", premiumOnly: true},
+		{name: "board_update_labels", id: projectBoardUpdate, field: "labels", premiumOnly: true},
+		{name: "board_update_weight", id: projectBoardUpdate, field: "weight", premiumOnly: true},
+		{name: "board_update_name", id: projectBoardUpdate, field: "name"},
+		{name: "board_update_hide_backlog_list", id: projectBoardUpdate, field: "hide_backlog_list"},
+		{name: "board_update_hide_closed_list", id: projectBoardUpdate, field: "hide_closed_list"},
+		{name: "group_board_update_assignee_id", id: groupBoardUpdate, field: "assignee_id", premiumOnly: true},
+		{name: "group_board_update_milestone_id", id: groupBoardUpdate, field: "milestone_id", premiumOnly: true},
+		{name: "group_board_update_labels", id: groupBoardUpdate, field: "labels", premiumOnly: true},
+		{name: "group_board_update_weight", id: groupBoardUpdate, field: "weight", premiumOnly: true},
+		{name: "group_board_update_name", id: groupBoardUpdate, field: "name"},
+		{name: "board_list_create_assignee_id", id: projectListCreate, field: "assignee_id", premiumOnly: true},
+		{name: "board_list_create_milestone_id", id: projectListCreate, field: "milestone_id", premiumOnly: true},
+		{name: "board_list_create_iteration_id", id: projectListCreate, field: "iteration_id", premiumOnly: true},
+		{name: "board_list_create_label_id", id: projectListCreate, field: "label_id"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := actionHasInputProp(t, free, tc.id, tc.field); got == tc.premiumOnly {
+				t.Errorf("Free %s input schema advertises %q = %t, want %t", tc.id, tc.field, got, !tc.premiumOnly)
+			}
+			if !actionHasInputProp(t, premium, tc.id, tc.field) {
+				t.Errorf("Premium %s input schema must include %q", tc.id, tc.field)
+			}
+		})
+	}
+}
+
 // TestCentralTierFilter_OutputSchemasArePrunedLenientlyPerTier is the output
 // half of the tier filter, across the three tiers built in one process.
 //

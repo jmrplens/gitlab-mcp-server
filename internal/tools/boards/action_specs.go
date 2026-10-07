@@ -45,8 +45,8 @@ var boardMetaByTool = map[string]boardMeta{
 		related:     []string{actionBoardGet, "project.board_update", actionBoardList},
 	},
 	"gitlab_board_update": {
-		description: "Update an issue board's name, scope (assignee, milestone, labels, weight), or list visibility. Returns: the updated board with its project, scope, and lists. See also: gitlab_board_get, gitlab_board_delete, gitlab_board_list.",
-		usage:       "Rename an issue board or retune its assignee, milestone, label, and weight scope, or toggle the Open and Closed columns.",
+		description: "Update an issue board's name or list visibility, and on Premium and Ultimate its scope (assignee, milestone, labels, weight). Returns: the updated board with its project, scope, and lists. See also: gitlab_board_get, gitlab_board_delete, gitlab_board_list.",
+		usage:       "Rename an issue board or toggle its Open and Closed columns, and on Premium and Ultimate retune its assignee, milestone, label, and weight scope.",
 		aliases:     []string{"rename an issue board", "change board scope filters", "edit a kanban board's settings"},
 		related:     []string{actionBoardGet, "project.board_delete", actionBoardList},
 	},
@@ -69,8 +69,8 @@ var boardMetaByTool = map[string]boardMeta{
 		related:     []string{actionBoardListList, "project.board_list_update", "project.board_list_delete"},
 	},
 	"gitlab_board_list_create": {
-		description: "Create a board list (column) scoped to a label, assignee, milestone, or iteration. Returns: the created list with its scope, position, and issue limits. See also: gitlab_board_list_get, gitlab_board_list_update, gitlab_board_list_lists.",
-		usage:       "Add a new column to an issue board scoped to a label, assignee, milestone, or iteration to capture a workflow stage.",
+		description: "Create a board list (column) scoped to a label, or on Premium and Ultimate to an assignee, milestone, or iteration. Returns: the created list with its scope, position, and issue limits. See also: gitlab_board_list_get, gitlab_board_list_update, gitlab_board_list_lists.",
+		usage:       "Add a new column to an issue board scoped to a label, or on Premium and Ultimate to an assignee, milestone, or iteration, to capture a workflow stage.",
 		aliases:     []string{"add a column to an issue board", "create a board list for a label", "add a kanban stage to a board"},
 		related:     []string{actionBoardListGet, "project.board_list_update", actionBoardListList},
 	},

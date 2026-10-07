@@ -202,7 +202,7 @@ func TestUpdateGroupBoard_Success(t *testing.T) {
 
 	out, err := UpdateGroupBoard(context.Background(), client, UpdateGroupBoardInput{
 		GroupID: toolutil.StringOrInt("42"), BoardID: 1, Name: "Updated",
-		Labels: []string{"bug"}, AssigneeID: 3, MilestoneID: 5, Weight: 2,
+		Labels: []string{"bug"}, AssigneeID: 3, MilestoneID: 5, Weight: new(int64(2)),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -230,7 +230,11 @@ func TestUpdateGroupBoard_SendsOnlyTheFieldTheCallerSet(t *testing.T) {
 		{"assignee", UpdateGroupBoardInput{AssigneeID: 7}, map[string]any{"assignee_id": float64(7)}},
 		{"milestone", UpdateGroupBoardInput{MilestoneID: 9}, map[string]any{"milestone_id": float64(9)}},
 		{"labels", UpdateGroupBoardInput{Labels: []string{"bug", "urgent"}}, map[string]any{"labels": "bug,urgent"}},
-		{"weight", UpdateGroupBoardInput{Weight: 3}, map[string]any{"weight": float64(3)}},
+		{"weight", UpdateGroupBoardInput{Weight: new(int64(3))}, map[string]any{"weight": float64(3)}},
+		// GitLab scopes a board to weight 0 as it does to any other weight
+		// (EMPTY_SCOPE_STATE in ee/app/models/ee/board.rb is nil and -1), so a
+		// zero the caller set is sent rather than read as unset.
+		{"weight zero", UpdateGroupBoardInput{Weight: new(int64(0))}, map[string]any{"weight": float64(0)}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -570,7 +574,7 @@ func TestFormatGroupBoardMarkdown_AllFields(t *testing.T) {
 		"| 11 | Iteration: Sprint 3 | 1 | - | - |\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'group.group_board_create_list' to add a column to this board\n" +
-		"- Use action 'group.group_board_update' to change this board's name or scope\n" +
+		"- Use action 'group.group_board_update' to rename this board, and on Premium and Ultimate change its scope\n" +
 		"- Use action 'group.group_board_delete' to remove this board\n"
 	if md != want {
 		t.Errorf("FormatGroupBoardMarkdown()\n got %q\nwant %q", md, want)
@@ -822,7 +826,7 @@ func TestUpdateGroupBoard_RefusalOfWhatWasSent_ReportedInGitLabsWordsWithNoHint(
 				testutil.RespondJSON(w, tt.status, tt.body)
 			}))
 
-			_, err := UpdateGroupBoard(t.Context(), client, UpdateGroupBoardInput{GroupID: "42", BoardID: 1, Name: "x", Weight: 3})
+			_, err := UpdateGroupBoard(t.Context(), client, UpdateGroupBoardInput{GroupID: "42", BoardID: 1, Name: "x", Weight: new(int64(3))})
 			if err == nil {
 				t.Fatal(errExpectedAPI)
 			}
@@ -1138,7 +1142,7 @@ func TestFormatGroupBoardMarkdown_Minimal(t *testing.T) {
 		"- **Hide Closed**: " + toolutil.EmojiCross + "\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'group.group_board_create_list' to add a column to this board\n" +
-		"- Use action 'group.group_board_update' to change this board's name or scope\n" +
+		"- Use action 'group.group_board_update' to rename this board, and on Premium and Ultimate change its scope\n" +
 		"- Use action 'group.group_board_delete' to remove this board\n"
 	if md != want {
 		t.Errorf("FormatGroupBoardMarkdown()\n got %q\nwant %q", md, want)
@@ -1373,7 +1377,7 @@ func TestMarkdownHelpers_NilFallbacks(t *testing.T) {
 		"| 9 |  | 0 | - | - |\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'group.group_board_create_list' to add a column to this board\n" +
-		"- Use action 'group.group_board_update' to change this board's name or scope\n" +
+		"- Use action 'group.group_board_update' to rename this board, and on Premium and Ultimate change its scope\n" +
 		"- Use action 'group.group_board_delete' to remove this board\n"
 	if md != want {
 		t.Errorf("FormatGroupBoardMarkdown()\n got %q\nwant %q", md, want)
