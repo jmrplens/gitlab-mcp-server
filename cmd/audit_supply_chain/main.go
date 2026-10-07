@@ -36,19 +36,15 @@ var exactVersion = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
 // supportedMajor picks the `N.x` cell out of a SECURITY.md table row.
 var supportedMajor = regexp.MustCompile("`(\\d+)\\.x`")
 
-// scriptReference finds the scripts/<file> paths a run: block invokes, so their
-// contents are audited alongside the block itself.
-var scriptReference = regexp.MustCompile(`scripts/[A-Za-z0-9_.-]+\.(?:sh|mjs|py|ps1)`)
-
 // pipInstall is the positive half of the pip rule. RE2 has no lookahead, so the
 // original pattern's negative lookahead is applied separately by
 // [pipInstallWithoutHashes] against the remainder of the matched line.
 var pipInstall = regexp.MustCompile(`\bpip\s+install\b`)
 
 // credentialedPermissions are the permissions that make a job worth attacking:
-// one mints the repository's signing and publishing identity, the other can
-// rewrite the repository.
-var credentialedPermissions = []string{"contents", "id-token"}
+// one can rewrite the repository, one mints the repository's signing and
+// publishing identity, and one pushes the image server.json pins to ghcr.io.
+var credentialedPermissions = []string{"contents", "id-token", "packages"}
 
 // cooldownEcosystems are the ecosystems where an explicit cooldown is
 // meaningful. docker-compose is exempt: its images are :latest test fixtures
@@ -75,33 +71,39 @@ const workflowDir = ".github/workflows"
 // display is the finding's rendering of the rule, kept byte-identical to the
 // Python auditor's repr of the original regular expression so a message this
 // program prints is the message that program printed. why explains the finding
-// to whoever has to act on it, and match decides it.
+// to whoever has to act on it, match decides it, and name is how a declaration
+// in [declaredRunTimeCode] names the rule it excuses.
 type unlockedRule struct {
 	match   func(text string) bool
+	name    string
 	display string
 	why     string
 }
 
 // unlockedCode is the rule set applied to every run: block of a credentialed
-// job and to every scripts/ file such a block invokes.
+// job and to every script and make recipe such a block reaches.
 var unlockedCode = []unlockedRule{
 	{
 		match:   regexpMatcher(regexp.MustCompile(`\bnpx\b`)),
+		name:    "npx",
 		display: `'\\bnpx\\b'`,
 		why:     "npx resolves a dependency tree at run time (use a lockfile and npm ci, or drop the CLI)",
 	},
 	{
 		match:   regexpMatcher(regexp.MustCompile(`@latest\b`)),
+		name:    "latest",
 		display: `'@latest\\b'`,
 		why:     "@latest is whatever the registry serves at that moment",
 	},
 	{
 		match:   regexpMatcher(regexp.MustCompile(`curl[^\n|]*\|\s*(?:ba)?sh\b`)),
+		name:    "curl-pipe-shell",
 		display: `'curl[^\\n|]*\\|\\s*(?:ba)?sh\\b'`,
 		why:     "piping a download into a shell runs unreviewed code",
 	},
 	{
 		match:   pipInstallWithoutHashes,
+		name:    "pip-unhashed",
 		display: `'\\bpip\\s+install\\b(?![^\\n]*--require-hashes)'`,
 		why:     "pip install without --require-hashes resolves at run time",
 	},
@@ -228,7 +230,7 @@ func jobsKeyOrder(root *yaml.Node) []string {
 		if jobs.Kind != yaml.MappingNode {
 			return nil
 		}
-		order := make([]string, 0, len(jobs.Content)/2)
+		var order []string
 		for key := 0; key+1 < len(jobs.Content); key += 2 {
 			order = append(order, jobs.Content[key].Value)
 		}
@@ -298,7 +300,7 @@ func jobPermissions(doc, job map[string]any) map[string]any {
 	if shorthand, ok := permissions.(string); ok {
 		// "write-all" / "read-all" shorthand.
 		if shorthand == "write-all" {
-			return map[string]any{"contents": "write", "id-token": "write"}
+			return map[string]any{"contents": "write", "id-token": "write", "packages": "write"}
 		}
 		return map[string]any{}
 	}
@@ -309,7 +311,8 @@ func jobPermissions(doc, job map[string]any) map[string]any {
 }
 
 // isCredentialed reports whether a job's effective permissions grant one of the
-// two writes the hardening rules exist for.
+// three writes the hardening rules exist for. A secret that can write makes a
+// job credentialed too; [supplyChainAudit.checkWorkflowJobs] adds that.
 func isCredentialed(doc, job map[string]any) bool {
 	permissions := jobPermissions(doc, job)
 	return slices.ContainsFunc(credentialedPermissions, func(name string) bool {
@@ -350,25 +353,48 @@ func stripComments(text string) string {
 	return strings.Join(kept, "\n")
 }
 
-// referencedScripts returns the scripts/<file> paths a run block invokes, in
-// sorted order and without repeats, so their contents are audited too.
-func referencedScripts(runText string) []string {
-	var found []string
-	for _, match := range scriptReference.FindAllString(runText, -1) {
-		if !slices.Contains(found, match) {
-			found = append(found, match)
-		}
+// tables are the declarations an audit holds the repository to.
+type tables struct {
+	secrets      map[string]secretDeclaration
+	declarations map[string]declaration
+}
+
+// supplyChainAudit is one audit of one repository root: the tables it judges
+// by and what it learns about them across every workflow.
+//
+// secretsRead and excused are what the table rules are judged on once every
+// workflow has been read: a secret no workflow reads and a declaration that
+// excused nothing are both stale. makefiles holds each Makefile parsed once,
+// keyed by its repository-relative path, since every job that runs make reads
+// the same rules.
+type supplyChainAudit struct {
+	tables
+
+	secretsRead map[string]bool
+	excused     map[string]bool
+	makefiles   map[string]map[string]*makeRule
+	root        string
+}
+
+// newAudit starts an audit of root against the given tables.
+func newAudit(root string, declared tables) *supplyChainAudit {
+	return &supplyChainAudit{
+		tables:      declared,
+		secretsRead: map[string]bool{},
+		excused:     map[string]bool{},
+		makefiles:   map[string]map[string]*makeRule{},
+		root:        root,
 	}
-	sort.Strings(found)
-	return found
 }
 
 // checkCredentialedJob reports everything a job holding a write credential runs
-// that this repository does not pin.
-func checkCredentialedJob(pathLabel, jobID string, job map[string]any, root string, doc map[string]any) []string {
+// that this repository does not pin: in its own steps, and in every script and
+// make recipe those steps reach, however deep.
+func (a *supplyChainAudit) checkCredentialedJob(pathLabel, jobID string, job, doc map[string]any) []string {
 	var problems []string
 	steps, _ := job["steps"].([]any)
-	seenScripts := map[string]bool{}
+	jobLabel := pathLabel + ": job " + jobID
+	seen := map[string]bool{}
 	for index, rawStep := range steps {
 		step, ok := rawStep.(map[string]any)
 		if !ok {
@@ -377,7 +403,7 @@ func checkCredentialedJob(pathLabel, jobID string, job map[string]any, root stri
 		rawUses, _ := step["uses"].(string)
 		uses, _, _ := strings.Cut(rawUses, "@")
 		with, _ := step["with"].(map[string]any)
-		where := fmt.Sprintf("%s: job %s: step %d", pathLabel, jobID, index)
+		where := fmt.Sprintf("%s: step %d", jobLabel, index)
 
 		problems = append(problems, checkStepAction(where, uses, with, doc)...)
 
@@ -388,9 +414,33 @@ func checkCredentialedJob(pathLabel, jobID string, job map[string]any, root stri
 				problems = append(problems, fmt.Sprintf("%s: run block matches %s: %s", where, rule.display, rule.why))
 			}
 		}
-		problems = append(problems, checkReferencedScripts(pathLabel, jobID, root, runText, seenScripts)...)
+		reached := reach{job: jobLabel, origin: where, directory: runDirectory(doc, job, step)}
+		problems = append(problems, a.followReferences(reached, runText, seen)...)
 	}
 	return problems
+}
+
+// runDirectory is the repository-relative directory a step's run block runs
+// in: its own working-directory, else the job's default, else the workflow's,
+// else the checkout itself, which is the order GitHub applies them in.
+func runDirectory(doc, job, step map[string]any) string {
+	if directory, ok := step["working-directory"].(string); ok {
+		return directory
+	}
+	if directory, ok := defaultRunDirectory(job); ok {
+		return directory
+	}
+	directory, _ := defaultRunDirectory(doc)
+	return directory
+}
+
+// defaultRunDirectory reads defaults.run.working-directory off a job or a
+// workflow.
+func defaultRunDirectory(holder map[string]any) (string, bool) {
+	defaults, _ := holder["defaults"].(map[string]any)
+	run, _ := defaults["run"].(map[string]any)
+	directory, ok := run["working-directory"].(string)
+	return directory, ok
 }
 
 // checkStepAction applies the per-action rules: the checkout that must not
@@ -439,51 +489,47 @@ func persistCredentialsDisabled(with map[string]any) bool {
 	}
 }
 
-// checkReferencedScripts applies the run-time-code rules to each scripts/ file
-// the job invokes, once per job however many steps mention it.
-func checkReferencedScripts(pathLabel, jobID, root, runText string, seenScripts map[string]bool) []string {
-	var problems []string
-	for _, relative := range referencedScripts(runText) {
-		if seenScripts[relative] {
-			continue
-		}
-		seenScripts[relative] = true
-		scriptPath := filepath.Join(root, filepath.FromSlash(relative))
-		info, statErr := os.Stat(scriptPath)
-		if statErr != nil || !info.Mode().IsRegular() {
-			continue
-		}
-		data, readErr := os.ReadFile(scriptPath) //#nosec G304 -- an audit tool reading a scripts/ file this repository's own workflows invoke.
-		if readErr != nil {
-			continue
-		}
-		body := stripComments(string(data))
-		for _, rule := range unlockedCode {
-			if rule.match(body) {
-				problems = append(problems, fmt.Sprintf(
-					"%s: job %s: %s matches %s: %s", pathLabel, jobID, relative, rule.display, rule.why,
-				))
-			}
-		}
-	}
-	return problems
-}
-
 // checkWorkflowJobs applies the credentialed-job rules to every job in a
-// workflow that holds a write credential.
+// workflow that holds a write credential, through its permissions or through a
+// secret it reads, and holds every secret any job reads to the secret table.
+//
+// A job reading a secret the table does not declare, or every secret at once,
+// is judged as credentialed: the audit cannot say what it holds, and the
+// finding that names the read is what gets it declared.
 //
 // jobOrder carries the document order when the caller parsed a file; a document
 // built in a test carries none, and the keys are then sorted so the findings
 // are still deterministic.
-func checkWorkflowJobs(pathLabel string, doc map[string]any, root string, jobOrder []string) []string {
+func (a *supplyChainAudit) checkWorkflowJobs(pathLabel string, doc map[string]any, jobOrder []string) []string {
 	jobs, _ := doc["jobs"].(map[string]any)
 	var problems []string
 	for _, jobID := range orderedKeys(jobs, jobOrder) {
 		job, ok := jobs[jobID].(map[string]any)
-		if !ok || !isCredentialed(doc, job) {
+		if !ok {
 			continue
 		}
-		problems = append(problems, checkCredentialedJob(pathLabel, jobID, job, root, doc)...)
+		names, wholesale := jobSecrets(doc, job)
+		credentialed := isCredentialed(doc, job) || len(wholesale) > 0
+		for _, name := range names {
+			a.secretsRead[name] = true
+			declared, known := a.secrets[name]
+			if !known {
+				problems = append(problems, fmt.Sprintf(
+					"%s: job %s: reads secrets.%s, which the secret table does not declare: say whether it can write and where",
+					pathLabel, jobID, name,
+				))
+			}
+			credentialed = credentialed || !known || declared.writes
+		}
+		for _, expression := range wholesale {
+			problems = append(problems, fmt.Sprintf(
+				"%s: job %s: reads ${{ %s }}, which hands over every secret at once and cannot be judged against the secret table",
+				pathLabel, jobID, expression,
+			))
+		}
+		if credentialed {
+			problems = append(problems, a.checkCredentialedJob(pathLabel, jobID, job, doc)...)
+		}
 	}
 	return problems
 }
@@ -642,8 +688,8 @@ func checkInstallers(installSh, installPS1 string) []string {
 
 // audit runs every check against a repository root and returns the findings in
 // a stable order.
-func audit(root string) ([]string, error) {
-	problems, err := auditWorkflows(root)
+func audit(root string, declared tables) ([]string, error) {
+	problems, err := auditWorkflows(root, declared)
 	if err != nil {
 		return nil, err
 	}
@@ -677,19 +723,20 @@ func audit(root string) ([]string, error) {
 
 // auditWorkflows applies the pinning rule and the credentialed-job rules to
 // every workflow file.
-func auditWorkflows(root string) ([]string, error) {
+func auditWorkflows(root string, declared tables) ([]string, error) {
 	workflows, err := loadWorkflows(root)
 	if err != nil {
 		return nil, err
 	}
+	auditor := newAudit(root, declared)
 	var problems []string
 	for _, file := range workflows {
 		problems = append(problems, checkPinnedUses(file.path, file.text)...)
 		if file.doc != nil {
-			problems = append(problems, checkWorkflowJobs(file.path, file.doc, root, file.jobOrder)...)
+			problems = append(problems, auditor.checkWorkflowJobs(file.path, file.doc, file.jobOrder)...)
 		}
 	}
-	return problems, nil
+	return append(problems, auditor.tableProblems()...), nil
 }
 
 // readTextFile reads one of the repository's own configuration files.
@@ -841,8 +888,12 @@ func pythonList(items []string) string {
 	return "[" + strings.Join(rendered, ", ") + "]"
 }
 
+// osExit is a seam over os.Exit, so a test can observe the status main exits
+// with instead of the test process terminating on it.
+var osExit = os.Exit
+
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	osExit(run(os.Args[1:], os.Stdout, os.Stderr, repositoryTables()))
 }
 
 // run parses the command line, audits the repository and returns the process
@@ -852,7 +903,7 @@ func main() {
 // One non-zero code covers both outcomes because that is what the Python
 // auditor exposed: it exited 1 on findings and, on a missing file or a broken
 // parse, died of an uncaught exception, which is also 1.
-func run(args []string, stdout, stderr io.Writer) int {
+func run(args []string, stdout, stderr io.Writer, declared tables) int {
 	flags := flag.NewFlagSet("audit_supply_chain", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	rootFlag := flags.String("root", "", "repository root (default: the module root at or above the working directory)")
@@ -868,7 +919,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "audit_supply_chain: %v\n", err)
 		return 1
 	}
-	problems, err := audit(root)
+	problems, err := audit(root, declared)
 	if err != nil {
 		fmt.Fprintf(stderr, "audit_supply_chain: %v\n", err)
 		return 1

@@ -374,9 +374,13 @@ jobs:
     timeout-minutes: 15
     needs: [coverage]
     steps:
+      # The scan holds SONAR_TOKEN, which can publish to the SonarCloud
+      # project, so the checkout leaves no credential behind for the steps
+      # after it; the scan reads the history it fetched and pushes nothing.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: coverage
