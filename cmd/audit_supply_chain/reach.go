@@ -15,12 +15,21 @@ import (
 // all read under the name they are run by.
 //
 // The first group is what roots the path, when something does. A variable in
-// front of it ($ROOT, ${repo_root}, $(CURDIR)) and the workspace expression
-// GitHub checks the repository out into are read as the repository root, which
-// is what every such spelling in this tree means. A leading slash is an
-// absolute path or the tail of a URL, neither of which names a file in this
-// repository. The second group is the path under that root.
-var scriptPath = regexp.MustCompile(`(\$\{\{\s*github\.workspace\s*\}\}/|\$[({]?[A-Za-z_][A-Za-z0-9_]*[)}]?/|/)?((?:[A-Za-z0-9_.-]+/)*scripts/[A-Za-z0-9_.-]+\.(?:sh|mjs|py|ps1))\b`)
+// front of it ($ROOT, ${repo_root}, $(CURDIR), PowerShell's $env:ROOT) and the
+// workspace expression GitHub checks the repository out into are read as the
+// repository root, which is what every such spelling in this tree means; the
+// one exception is the directory of the action a step belongs to
+// (GITHUB_ACTION_PATH, ${{ github.action_path }}), which [actionPathPrefix]
+// recognizes. A leading slash is an absolute path or the tail of a URL,
+// neither of which names a file in this repository. The second group is the
+// path under that root.
+var scriptPath = regexp.MustCompile(`(\$\{\{\s*github\.(?:workspace|action_path)\s*\}\}/|\$[({]?(?:(?i:env):)?[A-Za-z_][A-Za-z0-9_]*[)}]?/|/)?((?:[A-Za-z0-9_.-]+/)*scripts/[A-Za-z0-9_.-]+\.(?:sh|mjs|py|ps1))\b`)
+
+// actionPathPrefix is a [scriptPath] root that names the directory of the
+// action whose step is running, in each spelling a step can write it: the
+// workflow expression, the environment variable in a POSIX shell, and the
+// same variable through PowerShell's env: drive.
+var actionPathPrefix = regexp.MustCompile(`^(?:\$\{\{\s*github\.action_path\s*\}\}|\$[({]?(?:(?i:env):)?GITHUB_ACTION_PATH[)}]?)/$`)
 
 // ownPath is how a shell script names its own path: $0, or BASH_SOURCE when it
 // may be sourced rather than run.
@@ -29,12 +38,12 @@ const ownPath = `\$\{?(?:0|BASH_SOURCE(?:\[0\])?)\}?`
 // variableScript finds a script path rooted in a variable, a workflow
 // expression or the location of the script that names it, whose path does not
 // run through a scripts/ directory, since scriptPath reads those:
-// "$HERE/helper.sh", "${SCRIPT_DIR}/lib/x.sh", "$(dirname "$0")/x.sh" and
-// ${{ runner.temp }}/x.sh.
+// "$HERE/helper.sh", "${SCRIPT_DIR}/lib/x.sh", "$(dirname "$0")/x.sh",
+// ${{ runner.temp }}/x.sh and PowerShell's "$env:GITHUB_ACTION_PATH/x.ps1".
 //
 // Group 1 is the root as written, group 2 the inside of a workflow
 // expression, group 3 a variable's name, and group 4 the path under the root.
-var variableScript = regexp.MustCompile(`(\$\{\{\s*([^}]*?)\s*\}\}|\$[({]?([A-Za-z_][A-Za-z0-9_]*|[0-9])[)}]?|\$\([ \t]*dirname[ \t]+"?` +
+var variableScript = regexp.MustCompile(`(\$\{\{\s*([^}]*?)\s*\}\}|\$[({]?(?:(?i:env):)?([A-Za-z_][A-Za-z0-9_]*|[0-9])[)}]?|\$\([ \t]*dirname[ \t]+"?` +
 	ownPath + `"?[ \t]*\))"?/((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.(?:sh|mjs|py|ps1))\b`)
 
 // selfDirectory is a shell assignment of a script's own directory, or of one
@@ -44,17 +53,41 @@ var variableScript = regexp.MustCompile(`(\$\{\{\s*([^}]*?)\s*\}\}|\$[({]?([A-Za
 var selfDirectory = regexp.MustCompile(`(?m)^[ \t]*(?:(?:export|local|readonly|declare(?:[ \t]+-[A-Za-z]+)*)[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=.*?dirname[ \t]+"?` +
 	ownPath + `"?[ \t]*\)((?:/\.\.)*)(?:["' \t)]|$)`)
 
+// place is where a file lives: in this repository, or in the directory of a
+// pinned action at its commit, which the record holds. path is relative to the
+// repository root or to that directory.
+type place struct {
+	action string
+	path   string
+}
+
+// String is how a finding and a declaration name the file: its path in this
+// repository, or the action's pinned reference and the path under it.
+func (p place) String() string {
+	if p.action == "" {
+		return p.path
+	}
+	return p.action + "/" + p.path
+}
+
+// under is the place path names below p.
+func (p place) under(written string) place {
+	return place{action: p.action, path: path.Join(p.path, written)}
+}
+
 // reach is where a text sits, for the findings about it and the references it
 // makes: the job reading it, the place that wrote the text (a step, or the
-// file or target it is the body of), the directory it runs in, the file or
-// target that reached it, empty for a run block, and the script it is the
-// body of, empty for a run block or a recipe.
+// file or target it is the body of), the directory of this repository it runs
+// in, the file or target that reached it, empty for a run block, the script it
+// is the body of, empty for a run block or a recipe, and the directory of the
+// action whose step started it, nil outside an action.
 type reach struct {
+	actionDir *place
 	job       string
 	origin    string
 	directory string
 	via       string
-	file      string
+	file      place
 }
 
 // label is how a finding names a file or target: by itself when a run block
@@ -67,35 +100,58 @@ func (r reach) label(subject string) string {
 }
 
 // inside is the reach of the body of subject, which runs in directory and is
-// the script file named, or no file.
-func (r reach) inside(subject, directory, file string) reach {
-	return reach{job: r.job, origin: r.job + ": " + r.label(subject), directory: directory, via: subject, file: file}
+// the script file named, or no file. The action a step belongs to stays the
+// action of everything that step reaches, since the runner exports its
+// directory to every process the step starts.
+func (r reach) inside(subject, directory string, file place) reach {
+	return reach{
+		actionDir: r.actionDir, job: r.job, origin: r.job + ": " + r.label(subject),
+		directory: directory, via: subject, file: file,
+	}
+}
+
+// actionRoot is the directory of the action whose step this text belongs to,
+// and false outside an action, where the runner sets no such directory.
+func (r reach) actionRoot() (place, bool) {
+	if r.actionDir == nil {
+		return place{}, false
+	}
+	return *r.actionDir, true
 }
 
 // rootOf is the directory a variableScript match is read from, and false when
 // this audit cannot know it.
 //
 // The workspace GitHub checks the repository out into is the root, in either
-// spelling. A script's own location, through dirname of its own path, a
-// variable it assigns from that, or $PSScriptRoot in PowerShell, is the
-// directory of the file being read, and names nothing in a run block or a
-// recipe. Every other variable holds a value only the run knows.
-func (r reach) rootOf(match []string, text string) (string, bool) {
+// spelling, and the action path is the directory of the action whose step is
+// running, in either spelling, when there is one. A script's own location,
+// through dirname of its own path, a variable it assigns from that, or
+// $PSScriptRoot in PowerShell, is the directory of the file being read, in
+// this repository or in the action that holds it, and names nothing in a run
+// block or a recipe. Every other variable holds a value only the run knows.
+func (r reach) rootOf(match []string, text string) (place, bool) {
 	expression, name := match[2], match[3]
 	if strings.HasPrefix(match[1], "${{") {
-		return "", expression == "github.workspace"
+		if expression == "github.action_path" {
+			return r.actionRoot()
+		}
+		return place{}, expression == "github.workspace"
 	}
-	if name == "GITHUB_WORKSPACE" {
-		return "", true
+	switch name {
+	case "GITHUB_WORKSPACE":
+		return place{}, true
+	case "GITHUB_ACTION_PATH":
+		return r.actionRoot()
 	}
-	if r.file == "" {
-		return "", false
+	if r.file.path == "" {
+		return place{}, false
 	}
+	directory := place{action: r.file.action, path: path.Dir(r.file.path)}
 	if name == "" {
-		return path.Dir(r.file), true
+		return directory, true
 	}
-	levels, own := selfDirectories(text, r.file)[name]
-	return path.Join(path.Dir(r.file), strings.Repeat("../", levels)), own
+	levels, own := selfDirectories(text, r.file.path)[name]
+	return directory.under(strings.Repeat("../", levels)), own
 }
 
 // selfDirectories names the variables a script holds its own directory in,
@@ -123,7 +179,11 @@ func selfDirectories(text, file string) map[string]int {
 func (a *supplyChainAudit) followReferences(at reach, text string, seen map[string]bool) []string {
 	var problems []string
 	for _, match := range scriptPath.FindAllStringSubmatch(text, -1) {
-		resolved, local := resolveReference(match[1], match[2], at.directory)
+		resolved, local, known := at.resolveReference(match[1], match[2])
+		if !known {
+			problems = append(problems, unrootedProblem(at, match[0], strings.TrimSuffix(match[1], "/")))
+			continue
+		}
 		problems = append(problems, a.readScript(at, match[0], resolved, local, seen)...)
 	}
 	for _, match := range variableScript.FindAllStringSubmatch(text, -1) {
@@ -132,14 +192,11 @@ func (a *supplyChainAudit) followReferences(at reach, text string, seen map[stri
 		}
 		root, known := at.rootOf(match, text)
 		if !known {
-			problems = append(problems, fmt.Sprintf(
-				"%s: %s is rooted in %s, which this audit cannot resolve, so what it runs cannot be judged",
-				at.origin, match[0], match[1],
-			))
+			problems = append(problems, unrootedProblem(at, match[0], match[1]))
 			continue
 		}
-		resolved := path.Join(root, match[4])
-		problems = append(problems, a.readScript(at, match[0], resolved, filepath.IsLocal(filepath.FromSlash(resolved)), seen)...)
+		resolved := root.under(match[4])
+		problems = append(problems, a.readScript(at, match[0], resolved, filepath.IsLocal(filepath.FromSlash(resolved.path)), seen)...)
 	}
 	invocations, unread := scanMake(text)
 	for _, wrapper := range unread {
@@ -164,41 +221,85 @@ func (a *supplyChainAudit) followReferences(at reach, text string, seen map[stri
 	return problems
 }
 
-// resolveReference turns a script path as written into the repository-relative
-// path it names, and reports false for one that names nothing in the
-// repository: an absolute path, a URL, or a relative path that climbs out.
-func resolveReference(prefix, written, directory string) (string, bool) {
+// unrootedProblem is the finding a script path rooted in a value only the run
+// knows carries.
+func unrootedProblem(at reach, written, root string) string {
+	return fmt.Sprintf("%s: %s is rooted in %s, which this audit cannot resolve, so what it runs cannot be judged",
+		at.origin, written, root)
+}
+
+// resolveReference turns a scripts/ path as written into the place it names,
+// and reports whether that is a file the audit may read, and whether its root
+// is one the audit knows at all.
+//
+// A path with nothing in front of it runs in the text's working directory of
+// this repository, which is where a step's commands run, an action's own
+// included. The action path is the directory of the action whose step is
+// running, and unknown outside one. Any other root is the repository root. A
+// leading slash names nothing in the repository: an absolute path or a URL;
+// neither does a relative path that climbs out.
+func (r reach) resolveReference(prefix, written string) (resolved place, local, known bool) {
 	if prefix == "/" {
-		return prefix + written, false
+		return place{path: prefix + written}, false, true
 	}
-	if prefix != "" {
-		directory = ""
+	base := place{path: r.directory}
+	if actionPathPrefix.MatchString(prefix) {
+		root, inAction := r.actionRoot()
+		if !inAction {
+			return place{}, false, false
+		}
+		base = root
+	} else if prefix != "" {
+		base = place{}
 	}
-	resolved := path.Join(directory, written)
-	return resolved, filepath.IsLocal(filepath.FromSlash(resolved))
+	resolved = base.under(written)
+	return resolved, filepath.IsLocal(filepath.FromSlash(resolved.path)), true
 }
 
 // readScript judges one script a job reaches and follows what it runs, or
 // reports it when it is not a file this audit can read. A script this job has
 // read already is not read again.
-func (a *supplyChainAudit) readScript(at reach, written, resolved string, local bool, seen map[string]bool) []string {
-	if seen[resolved] {
+func (a *supplyChainAudit) readScript(at reach, written string, resolved place, local bool, seen map[string]bool) []string {
+	subject := resolved.String()
+	if seen[subject] {
 		return nil
 	}
-	seen[resolved] = true
-	body, readable := "", false
-	if local {
-		body, readable = readRegularFile(filepath.Join(a.root, filepath.FromSlash(resolved)))
+	seen[subject] = true
+	body, readable, recorded := a.readPlace(resolved, local)
+	if !recorded {
+		return []string{fmt.Sprintf(
+			"%s: %s resolves to %s, which %s holds no record of, so what it runs cannot be judged; run %s",
+			at.origin, written, subject, actionRecordPath, recordCommand,
+		)}
 	}
 	if !readable {
+		where := "in this repository"
+		if resolved.action != "" {
+			where = "in that action"
+		}
 		return []string{fmt.Sprintf(
-			"%s: %s resolves to %s, which is not a readable file in this repository, so what it runs cannot be judged",
-			at.origin, written, resolved,
+			"%s: %s resolves to %s, which is not a readable file %s, so what it runs cannot be judged",
+			at.origin, written, subject, where,
 		)}
 	}
 	body = stripComments(body)
-	problems := a.matchFile(at, resolved, body)
-	return append(problems, a.followReferences(at.inside(resolved, at.directory, resolved), body, seen)...)
+	problems := a.matchFile(at, subject, body)
+	return append(problems, a.followReferences(at.inside(subject, at.directory, resolved), body, seen)...)
+}
+
+// readPlace reads a file a job reaches: from this repository, or from the
+// record of the action that holds it. recorded is false only for an action's
+// file the record has no answer for, which is a different finding from one the
+// record says the commit does not have.
+func (a *supplyChainAudit) readPlace(target place, local bool) (body string, readable, recorded bool) {
+	if !local {
+		return "", false, true
+	}
+	if target.action == "" {
+		body, readable = readRegularFile(filepath.Join(a.root, filepath.FromSlash(target.path)))
+		return body, readable, true
+	}
+	return a.store.file(target.action, target.path)
 }
 
 // followTarget judges one make target a job reaches: its recipe, the targets
@@ -221,7 +322,7 @@ func (a *supplyChainAudit) followTarget(at reach, run makeRun, target string, in
 	}
 	recipe := stripComments(strings.Join(rule.recipe, "\n"))
 	problems := a.matchFile(at, subject, recipe)
-	inside := at.inside(subject, run.directory, "")
+	inside := at.inside(subject, run.directory, place{})
 	for _, prerequisite := range rule.prerequisites {
 		problems = append(problems, a.followTarget(inside, run, prerequisite, false, seen)...)
 	}
