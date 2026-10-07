@@ -209,6 +209,41 @@ func convertBoardList(l *gl.BoardList, extra toolutil.BoardListExtra) BoardListO
 }
 
 // ---------------------------------------------------------------------------
+// Refusals
+// ---------------------------------------------------------------------------.
+
+// The hints a permission refusal of a group board write carries, written from
+// what GitLab answers at v19.4.1-ee (lib/api/group_boards.rb,
+// ee/lib/ee/api/group_boards.rb, lib/api/boards_responses.rb and the roles
+// under config/authz/roles). Every write is authorized on admin_issue_board or
+// admin_issue_board_list, which config/authz/roles/planner.yml grants on a
+// group and GroupPolicy withholds from every role while the group or an
+// ancestor is archived. Creating and deleting a board then call forbidden!
+// unless the group has multiple group issue boards, a Premium feature, with
+// the same plain 403, so those two name the license beside the role. Nothing
+// else checks one, and GitLab deletes a group's last board like any other.
+const (
+	groupBoardCreateHint = "creating a group issue board through the API needs GitLab Premium or Ultimate as well as at least the Planner role on the group, and GitLab refuses it to every role while the group or one of its parent groups is archived"
+	groupBoardUpdateHint = "updating a group issue board needs at least the Planner role on the group, and GitLab refuses it to every role while the group or one of its parent groups is archived"
+	groupBoardDeleteHint = "deleting a group issue board through the API needs GitLab Premium or Ultimate as well as at least the Planner role on the group, and GitLab refuses it to every role while the group or one of its parent groups is archived"
+	groupBoardListsHint  = "managing the lists of a group issue board needs at least the Planner role on the group, and GitLab refuses it to every role while the group or one of its parent groups is archived"
+)
+
+// groupBoardRefusal wraps GitLab's refusal of a group board write: a
+// permission refusal, the plain 401 or 403 [toolutil.IsPermissionRefusal]
+// recognizes, carries permissionHint, a 404 carries notFoundHint, and
+// anything else GitLab's own message. The permission hint is keyed on the
+// refusal rather than on a status, since a 403 naming an RFC 6750 code
+// refuses the token's scope rather than the caller's role or license, and
+// some routes answer a missing permission with 401.
+func groupBoardRefusal(operation string, err error, permissionHint, notFoundHint string) error {
+	if toolutil.IsPermissionRefusal(err) {
+		return toolutil.WrapErrWithHint(operation, err, permissionHint)
+	}
+	return toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, notFoundHint)
+}
+
+// ---------------------------------------------------------------------------
 // Formatters
 // ---------------------------------------------------------------------------.
 
@@ -243,10 +278,10 @@ func ListGroupBoards(ctx context.Context, client *gitlabclient.Client, input Lis
 	// surfaced.
 	boards, resp, err := rawListGroupBoards(ctx, client, string(input.GroupID), opts)
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return ListGroupBoardsOutput{}, toolutil.WrapErrWithHint("group_board_list", err,
-				"group issue boards require GitLab Premium or Ultimate (multiple boards per group); on Free tier groups have a single implicit board only")
-		}
+		// No license or role hint: GET /groups/:id/boards checks no license,
+		// and read_issue_board, which it is authorized on, is granted to
+		// everyone who can read the group, so a group the caller cannot read
+		// is the 404 below.
 		return ListGroupBoardsOutput{}, toolutil.WrapErrWithStatusHint("group_board_list", err, http.StatusNotFound,
 			"verify the group exists with group.get")
 	}
@@ -304,15 +339,10 @@ func CreateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Cr
 	// surfaced on the created board.
 	board, _, err := rawCreateGroupBoard(ctx, client, string(input.GroupID), opts)
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return GroupBoardOutput{}, toolutil.WrapErrWithHint("group_board_create", err,
-				"creating multiple group issue boards requires GitLab Premium or Ultimate, plus Reporter role on the group")
-		}
-		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return GroupBoardOutput{}, toolutil.WrapErrWithHint("group_board_create", err,
-				"name is required and must be unique within the group; verify all referenced milestone/iteration/label IDs exist via project.milestone_list / group.group_label_list")
-		}
-		return GroupBoardOutput{}, toolutil.WrapErrWithStatusHint("group_board_create", err, http.StatusNotFound,
+		// A 400 is Grape's for a name left out, which the check above already
+		// refuses, so it is reported in GitLab's words: board names need not be
+		// unique, and this input names no milestone, iteration or label.
+		return GroupBoardOutput{}, groupBoardRefusal("group_board_create", err, groupBoardCreateHint,
 			"verify the group exists with group.get")
 	}
 	return convertGroupBoardAPI(board), nil
@@ -359,15 +389,21 @@ func UpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Up
 	// surfaced on the updated board.
 	board, _, err := rawUpdateGroupBoard(ctx, client, string(input.GroupID), input.BoardID, opts)
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return GroupBoardOutput{}, toolutil.WrapErrWithHint("group_board_update", err,
-				"updating board scope (assignee, milestone, iteration, labels, weight) requires GitLab Premium or Ultimate; basic name updates require Reporter role")
-		}
-		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return GroupBoardOutput{}, toolutil.WrapErrWithHint("group_board_update", err,
-				"verify referenced assignee_id (user.get), milestone_id (project.milestone_list), and label IDs exist; weight is 0-9")
-		}
-		return GroupBoardOutput{}, toolutil.WrapErrWithStatusHint("group_board_update", err, http.StatusNotFound,
+		// Nothing this input sends is refused, so no hint is written for one
+		// and anything but a permission refusal or a 404 is reported in
+		// GitLab's words. update_board in API::BoardsResponses answers 400
+		// only when the board it checks does not validate, and the board it
+		// checks is not the one it updated: its board helper runs
+		// board_parent.boards.find on every call, so the check and the answer
+		// each load the stored board again. A name the update cannot save
+		// (over 255 characters) is therefore answered 200 with the board
+		// GitLab kept and the rename dropped (register row 94 of
+		// docs/development/upstream-bugs.md). The scope is never refused
+		// either: Boards::UpdateService drops a milestone the group cannot
+		// use, clears the assignee for an id no user has, creates a label for
+		// a title the group does not have, and drops all of them where scoped
+		// boards are not licensed.
+		return GroupBoardOutput{}, groupBoardRefusal("group_board_update", err, groupBoardUpdateHint,
 			"board_id not found. Use group.group_board_list to verify")
 	}
 	return convertGroupBoardAPI(board), nil
@@ -389,11 +425,7 @@ func DeleteGroupBoard(ctx context.Context, client *gitlabclient.Client, input De
 	}
 	_, err := client.GL().GroupIssueBoards.DeleteIssueBoard(string(input.GroupID), input.BoardID, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return toolutil.WrapErrWithHint("group_board_delete", err,
-				"deleting boards requires GitLab Premium/Ultimate plus Reporter role; the group's last/default board cannot be deleted")
-		}
-		return toolutil.WrapErrWithStatusHint("group_board_delete", err, http.StatusNotFound,
+		return groupBoardRefusal("group_board_delete", err, groupBoardDeleteHint,
 			"board_id already deleted or never existed")
 	}
 	return nil
@@ -533,8 +565,7 @@ func createGroupBoardListError(err error) error {
 			"label_id must name a label of this group or of one of its parent groups (group.group_label_list with include_ancestor_groups lists them, and a project label is answered as not found), and a board holds one list per label, so GitLab answers that the label has already been taken when this board already has a list for that label (group.group_board_list_lists shows them)")
 	}
 	if toolutil.IsPermissionRefusal(err) {
-		return toolutil.WrapErrWithHint("group_board_list_create", err,
-			"creating a list on a group issue board needs at least the Planner role on the group, and GitLab refuses it to every role while the group or one of its parent groups is archived")
+		return toolutil.WrapErrWithHint("group_board_list_create", err, groupBoardListsHint)
 	}
 	return toolutil.WrapErrWithMessage("group_board_list_create", err)
 }
@@ -567,7 +598,7 @@ func UpdateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 		string(input.GroupID), input.BoardID, input.ListID, opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_update", err, http.StatusNotFound,
+		return BoardListOutput{}, groupBoardRefusal("group_board_list_update", err, groupBoardListsHint,
 			"list_id not found on this board (only the position can be updated; recreate the list to change its scope)")
 	}
 	extra, err := toolutil.CapturedBoardList(captured)
@@ -597,7 +628,7 @@ func DeleteGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 	}
 	_, err := client.GL().GroupIssueBoards.DeleteGroupIssueBoardList(string(input.GroupID), input.BoardID, input.ListID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("group_board_list_delete", err, http.StatusNotFound,
+		return groupBoardRefusal("group_board_list_delete", err, groupBoardListsHint,
 			"list_id already deleted or never existed on this board")
 	}
 	return nil

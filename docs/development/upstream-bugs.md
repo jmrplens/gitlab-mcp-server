@@ -120,6 +120,7 @@ for the fork, branch, fix, test and MR workflow.
   - [A declared mutation whose payload type declares nothing commits the write and answers null](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null)
   - [WorkItem declares the project boundary only, so a group's work item is null to a fine-grained token](#workitem-declares-the-project-boundary-only-so-a-groups-work-item-is-null-to-a-fine-grained-token)
   - [The pending-permission check exempts every type named `*Edge` or `*Payload`](#the-pending-permission-check-exempts-every-type-named-edge-or-payload)
+  - [A board name GitLab cannot save is answered as a success](#a-board-name-gitlab-cannot-save-is-answered-as-a-success)
 - [GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)](#gitlab-orbit-gitlab-orgorbitknowledge-graph)
   - [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types)
   - [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both)
@@ -296,6 +297,7 @@ readable without opening the tracker:
 | 91 | gitlab-org/gitlab | [`available_for_permission` ignores `available_for`](#available_for_permission-ignores-available_for) | No | No | No | No | Not needed; the live record names the first permission a token can be granted |
 | 92 | gitlab-org/gitlab | [The REST API page does not say a non-GET request to a moved project's old path is answered 405](#the-rest-api-page-does-not-say-a-non-get-request-to-a-moved-projects-old-path-is-answered-405) | Yes, by the merge request | Yes, [gitlab-org/gitlab!259297](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259297), merged | **Yes, unreleased**: in milestone 19.5 | No | Not yet, with [issue 1133](https://github.com/jmrplens/gitlab-mcp-server/issues/1133) |
 | 93 | client-go | [`OrbitGraphStatusProjects` does not model the projects the indexer gave up on](#orbitgraphstatusprojects-does-not-model-the-projects-the-indexer-gave-up-on) | No | No | No | No | Yes |
+| 94 | gitlab-org/gitlab | [A board name GitLab cannot save is answered as a success](#a-board-name-gitlab-cannot-save-is-answered-as-a-success) | No | No | No | No | None taken |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -8839,6 +8841,78 @@ rule computes, which the record holds beside `authorization_todo.txt`.
 (the types graphql-ruby builds for a connection) rather than by their name,
 so a hand-written type ending in `Edge` or `Payload` is checked like any
 other.
+
+### A board name GitLab cannot save is answered as a success
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no, but the answer is false: a caller told the board was
+  created or renamed goes on as if it were.
+- **Workaround**: none taken. Neither answer says the write was dropped, and
+  a length check of this server's own would copy a model validation the API
+  pages do not state. The handlers report what GitLab answers: `UpdateBoard`
+  in `internal/tools/boards/boards.go` and `UpdateGroupBoard` in
+  `internal/tools/groupboards/group_boards.go` return the board as GitLab
+  kept it, and `CreateBoard` and `CreateGroupBoard` beside them return a
+  board whose ID is 0.
+  `TestUpdateGroupBoard_NameGitLabCannotSave_ReturnsTheBoardGitLabKept` holds
+  the update half. What retires it is GitLab sending the 400 `update_board`
+  already has for a board that does not validate, and `create_board`
+  rendering the service's error.
+
+**Where**: `lib/api/boards_responses.rb` at `v19.4.1-ee` (the `board`,
+`create_board` and `update_board` helpers), which `lib/api/boards.rb` and
+`lib/api/group_boards.rb` both include; `app/models/board.rb:14`;
+`app/services/boards/create_service.rb` and
+`app/services/boards/update_service.rb`.
+
+**What**: `Board` validates a changed name at 255 characters at most
+(`validates :name, presence: true, length: { maximum: 255, if:
+:name_changed? }`), and nothing else checks it: the routes declare `name` a
+plain `String`, the column is an unbounded `character varying`, and neither
+API page states a limit. A longer name therefore fails only in the model, and
+every route that sets it answers as if it had not:
+
+- `PUT /projects/:id/boards/:board_id` and `PUT /groups/:id/boards/:board_id`
+  run `update_board`, which hands `board` to `Boards::UpdateService#execute`
+  (an `update` of the record, which returns false and saves nothing), then
+  asks `board.valid?` and presents `board`. But `board` is a helper,
+  `board_parent.boards.find(params[:board_id])`, that is not memoized, and
+  `has_many :boards` (`app/models/project.rb:233`, `app/models/group.rb:111`)
+  loads a new record on each `find`, so the check and the answer each read
+  the stored board, which is valid because its name did not change. GitLab
+  answers 200 with the board as it was, every other field of the request
+  dropped with the name since the update is one save, and the
+  `bad_request!("Failed to save board ...")` branch is reached by nothing the
+  route accepts.
+- `POST /projects/:id/boards` and `POST /groups/:id/boards` run
+  `create_board`, which presents `response.payload[:board]` whatever the
+  response says. `Boards::CreateService#create_board!` builds the board with
+  a `create` on the parent's board collection and, when it was not persisted,
+  returns `ServiceResponse.error` with the unsaved board in its payload, so
+  GitLab answers 201 with a board whose `id` is `null`, and nothing is
+  created.
+
+No spec of GitLab's covers either. `spec/requests/api/boards_spec.rb` drives a
+create 400 only for a missing name, which Grape answers before the helper
+runs, and `spec/requests/api/group_boards_spec.rb` and the shared board
+examples (`spec/support/shared_examples/requests/api/boards_shared_examples.rb`)
+only a list create 400. The GraphQL board mutations report both failures in
+their `errors` field (`app/graphql/mutations/boards/update.rb` and
+`create.rb`), since the update reads the errors of the record it updated and
+the create checks the service's response.
+
+**How we found it**: reviewing the fix for
+[issue 1213](https://github.com/jmrplens/gitlab-mcp-server/issues/1213), which
+had given the group board update a hint for a 400 naming the name length.
+Following that 400 back through `update_board` showed GitLab never sends it,
+and `create_board` beside it presents the unsaved record the same way.
+
+**Proposal**: memoize the `board` helper, so the check in `update_board` reads
+the record the service updated and the 400 already written for it is sent;
+and have `create_board` render the service's error with a 400 when the
+response is not a success, rather than presenting the unsaved board.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 

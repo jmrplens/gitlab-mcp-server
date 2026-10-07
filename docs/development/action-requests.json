@@ -18134,7 +18134,7 @@
           "route": "GET /projects/:id/boards/:board_id",
           "class": "mandatory",
           "sites": [
-            "boards.rawGetBoard"
+            "boards.newRawRequest"
           ]
         }
       ],
@@ -18251,7 +18251,7 @@
           "route": "GET /projects/:id/boards/:board_id/lists",
           "class": "mandatory",
           "sites": [
-            "boards.rawListBoardLists"
+            "boards.newRawRequest"
           ]
         }
       ],

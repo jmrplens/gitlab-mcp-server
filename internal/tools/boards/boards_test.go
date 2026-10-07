@@ -6,12 +6,16 @@ package boards
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/go-retryablehttp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -1065,19 +1069,85 @@ func TestCreateBoardList_ServerError(t *testing.T) {
 	}
 }
 
-// TestCreateBoardList_BadRequest verifies the CreateBoardList_BadRequest handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestCreateBoardList_BadRequest(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
-	}))
-	_, err := CreateBoardList(context.Background(), client, CreateBoardListInput{ProjectID: "10", BoardID: 1, LabelID: 20})
-	if err == nil {
-		t.Fatal(errExpectedErr)
+// TestCreateBoardList_BadRequest_HintFollowsGitLabsAnswer verifies the hint
+// each 400 of a column creation carries, read from what GitLab answers at
+// v19.4.1-ee. Every refusal the route makes for what it was sent is a 400:
+// API::BoardsResponses#create_list renders the service's first error with
+// that status, and Grape answers its own parameter rules with it. A list type
+// the instance's license or the project's plan lacks is one of them
+// (EE::Boards::Lists::CreateService#license_validation_error, "Assignee lists
+// not available with your current license"), so the license hint is keyed on
+// that message and not on a 403, which the route only answers for a role.
+// GitLab writes that message in the caller's preferred language, though
+// (API::Helpers#current_user sets the locale, and locale/es, de and ja among
+// others translate it), so a 400 refusing an assignee, milestone or iteration
+// list in other words gets the scope hint with the license named beside it:
+// the handler cannot tell a translated license refusal from "Assignee not
+// found", and the scope hint alone would send a caller after IDs. A 400
+// refusing a label list, or one that asked for no list type, gets the scope
+// hint alone and names no license, since no license gates a label list: a
+// Community Edition route requires label_id, an Enterprise one takes exactly
+// one of the four, the ID has to name something the project can use ("Label
+// not found"), and a board holds one list per label, assignee, milestone or
+// iteration ("Label has already been taken").
+func TestCreateBoardList_BadRequest_HintFollowsGitLabsAnswer(t *testing.T) {
+	const (
+		licenseHint   = "assignee, milestone and iteration lists need GitLab Premium or Ultimate"
+		scopeHint     = "exactly one of label_id, assignee_id, milestone_id or iteration_id"
+		licenseClause = "On an instance whose license or plan does not include them, assignee, milestone and iteration lists are refused with a 400 as well, in the language set in the caller's GitLab preferences"
+	)
+	licenseWords := regexp.MustCompile(`(?i)premium|ultimate|licen[cs]e`)
+	assignee := CreateBoardListInput{ProjectID: "10", BoardID: 1, AssigneeID: 3}
+	milestone := CreateBoardListInput{ProjectID: "10", BoardID: 1, MilestoneID: 4}
+	iteration := CreateBoardListInput{ProjectID: "10", BoardID: 1, IterationID: 5}
+	label := CreateBoardListInput{ProjectID: "10", BoardID: 1, LabelID: 20}
+	tests := []struct {
+		name  string
+		input CreateBoardListInput
+		body  string
+		// license: the license hint alone; clause: the scope hint with the
+		// license named beside it; scope: the scope hint, naming no license.
+		want string
+	}{
+		{"assignee list unlicensed", assignee, `{"message":{"error":"Assignee lists not available with your current license"}}`, "license"},
+		{"milestone list unlicensed", milestone, `{"message":{"error":"Milestone lists not available with your current license"}}`, "license"},
+		{"iteration list unlicensed", iteration, `{"message":{"error":"Iteration lists not available with your current license"}}`, "license"},
+		{"assignee list unlicensed in Spanish", assignee, `{"message":{"error":"Las listas de personas asignadas no están disponibles con su licencia actual"}}`, "clause"},
+		{"milestone list unlicensed in German", milestone, `{"message":{"error":"Meilensteinlisten sind mit deiner momentanen Lizenz nicht verfügbar"}}`, "clause"},
+		{"iteration list unlicensed in Japanese", iteration, `{"message":{"error":"現在のライセンスではイテレーション一覧は利用できません"}}`, "clause"},
+		{"assignee not found", assignee, `{"message":{"error":"Assignee not found"}}`, "clause"},
+		{"community edition requires label_id", assignee, `{"error":"label_id is missing"}`, "clause"},
+		{"more than one of the four", CreateBoardListInput{ProjectID: "10", BoardID: 1, LabelID: 20, MilestoneID: 4}, `{"error":"label_id, milestone_id, iteration_id, assignee_id are mutually exclusive"}`, "clause"},
+		{"label not found", label, `{"message":{"error":"Label not found"}}`, "scope"},
+		{"label already taken", label, `{"message":{"error":"Label has already been taken"}}`, "scope"},
+		{"none of the four", CreateBoardListInput{ProjectID: "10", BoardID: 1}, `{"error":"label_id, milestone_id, iteration_id, assignee_id are missing, exactly one parameter must be provided"}`, "scope"},
 	}
-	if !strings.Contains(err.Error(), "exactly one") {
-		t.Fatalf("error = %v, want exactly-one hint", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusBadRequest, tt.body)
+			}))
+
+			_, err := CreateBoardList(t.Context(), client, tt.input)
+			if err == nil {
+				t.Fatal(errExpectedErr)
+			}
+			hint := suggestionOf(err.Error())
+			if got, want := strings.Contains(hint, licenseHint), tt.want == "license"; got != want {
+				t.Errorf("hint %q of %q carries the license hint = %v, want %v", hint, err.Error(), got, want)
+			}
+			if got, want := strings.Contains(hint, scopeHint), tt.want != "license"; got != want {
+				t.Errorf("hint %q of %q carries the scope hint = %v, want %v", hint, err.Error(), got, want)
+			}
+			if got, want := strings.Contains(hint, licenseClause), tt.want == "clause"; got != want {
+				t.Errorf("hint %q of %q names the license beside the scope = %v, want %v", hint, err.Error(), got, want)
+			}
+			if tt.want == "scope" {
+				if word := licenseWords.FindString(hint); word != "" {
+					t.Errorf("hint %q names %q, although no license gates what was asked for", hint, word)
+				}
+			}
+		})
 	}
 }
 
@@ -2021,4 +2091,195 @@ func TestBoards_UnreadableCapturedGroup(t *testing.T) {
 			return err
 		}},
 	})
+}
+
+// TestBoards_RawRequestConstructionFails_HandlersReturnTheError verifies that
+// both reads issuing a raw request return the error building it fails with,
+// rather than sending anything. No valid input reaches the branch, since
+// PathEscape sanitizes everything interpolated into the path, so the
+// constructor seam is stubbed, and the handler behind the client refuses any
+// request that arrives anyway.
+func TestBoards_RawRequestConstructionFails_HandlersReturnTheError(t *testing.T) {
+	construction := errors.New("construction boom")
+	orig := newRawRequest
+	newRawRequest = func(context.Context, *gitlabclient.Client, string, string, any) (*retryablehttp.Request, error) {
+		return nil, construction
+	}
+	t.Cleanup(func() { newRawRequest = orig })
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+	if _, err := GetBoard(t.Context(), client, GetBoardInput{ProjectID: "10", BoardID: 1}); !errors.Is(err, construction) {
+		t.Errorf("GetBoard error = %v, want the construction error", err)
+	}
+	if _, err := ListBoardLists(t.Context(), client, ListBoardListsInput{ProjectID: "10", BoardID: 1}); !errors.Is(err, construction) {
+		t.Errorf("ListBoardLists error = %v, want the construction error", err)
+	}
+}
+
+// projectBoardRefusals are the answers GitLab gives a project board route
+// that refuses the caller, written as GitLab writes them at v19.4.1-ee:
+// authorize! renders a plain 403, some routes answer a missing permission
+// with a plain 401 (register row 55), the API guard names an RFC 6750 code
+// when what is missing is the token's scope and states its reason when it
+// refuses the account itself, and a project or board the caller cannot see
+// is a 404. Only the first two can be a role the caller lacks, which is what
+// [toolutil.IsPermissionRefusal] answers and what permission marks.
+var projectBoardRefusals = []struct {
+	name       string
+	status     int
+	body       string
+	permission bool
+}{
+	{"plain 403", http.StatusForbidden, `{"message":"403 Forbidden"}`, true},
+	{"plain 401", http.StatusUnauthorized, `{"message":"401 Unauthorized"}`, true},
+	{"403 insufficient scope", http.StatusForbidden, `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token."}`, false},
+	{"403 blocked account", http.StatusForbidden, `{"message":"403 Forbidden - Your account has been blocked."}`, false},
+	{"404 project", http.StatusNotFound, `{"message":"404 Project Not Found"}`, false},
+}
+
+// requestLine finds where the request line starts in an error the wrappers
+// compose, which is where a suggestion ends.
+var requestLine = regexp.MustCompile(`: (GET|POST|PUT|DELETE) http`)
+
+// suggestionOf returns the hint a wrapped error carries, the text between
+// "Suggestion: " and the request line, or "" when it carries none. The tests
+// judge the hint alone, because the classification before it is
+// [toolutil.ClassifyError]'s, written for every route at once, and it is not
+// this package's to word.
+func suggestionOf(msg string) string {
+	_, hint, found := strings.Cut(msg, "Suggestion: ")
+	if !found {
+		return ""
+	}
+	if loc := requestLine.FindStringIndex(hint); loc != nil {
+		hint = hint[:loc[0]]
+	}
+	return hint
+}
+
+// projectBoardRoute calls one route of the package against client and returns
+// the error it answers with.
+type projectBoardRoute struct {
+	name string
+	call func(context.Context, *gitlabclient.Client) error
+}
+
+// TestProjectBoardWrites_Refused_RoleHintFollowsThePermissionRefusal verifies
+// the hint every write route of a project issue board carries when GitLab
+// refuses it, read from lib/api/boards.rb at v19.4.1-ee. Creating, updating
+// and deleting a board are authorized on admin_issue_board and the three list
+// writes on admin_issue_board_list, and config/authz/roles/planner.yml grants
+// both, so the role hint names Planner and is keyed on the permission
+// refusal, never on a status. No license is checked on these routes:
+// Project#multiple_issue_boards_available? is true on every tier (GitLab's
+// issue board page: multiple boards for a project in all tiers), the scope
+// fields of an
+// update are dropped without a refusal where scoped boards are not licensed,
+// and a list type the license lacks is a 400, which
+// [TestCreateBoardList_BadRequest_HintFollowsGitLabsAnswer] holds. GitLab
+// deletes a project's last board as readily as any other, so no hint may
+// claim otherwise, and none may name Reporter or Maintainer, which every
+// earlier hint did.
+func TestProjectBoardWrites_Refused_RoleHintFollowsThePermissionRefusal(t *testing.T) {
+	const roleHint = "needs at least the Planner role on the project"
+	wrong := regexp.MustCompile(`(?i)premium|ultimate|licen[cs]e|reporter|maintainer|default board|free tier`)
+	routes := []projectBoardRoute{
+		{"board create", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := CreateBoard(ctx, c, CreateBoardInput{ProjectID: "10", Name: "x"})
+			return err
+		}},
+		{"board update", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := UpdateBoard(ctx, c, UpdateBoardInput{ProjectID: "10", BoardID: 1, AssigneeID: 3})
+			return err
+		}},
+		{"board delete", func(ctx context.Context, c *gitlabclient.Client) error {
+			return DeleteBoard(ctx, c, DeleteBoardInput{ProjectID: "10", BoardID: 1})
+		}},
+		{"list create", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := CreateBoardList(ctx, c, CreateBoardListInput{ProjectID: "10", BoardID: 1, AssigneeID: 3})
+			return err
+		}},
+		{"list update", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := UpdateBoardList(ctx, c, UpdateBoardListInput{ProjectID: "10", BoardID: 1, ListID: 100, Position: 2})
+			return err
+		}},
+		{"list delete", func(ctx context.Context, c *gitlabclient.Client) error {
+			return DeleteBoardList(ctx, c, DeleteBoardListInput{ProjectID: "10", BoardID: 1, ListID: 100})
+		}},
+	}
+	for _, route := range routes {
+		for _, refusal := range projectBoardRefusals {
+			t.Run(route.name+"/"+refusal.name, func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, refusal.status, refusal.body)
+				}))
+
+				err := route.call(t.Context(), client)
+				if err == nil {
+					t.Fatal(errExpectedErr)
+				}
+				hint := suggestionOf(err.Error())
+				if got := strings.Contains(hint, roleHint); got != refusal.permission {
+					t.Errorf("hint %q of %q carries the role hint = %v, want %v", hint, err.Error(), got, refusal.permission)
+				}
+				if word := wrong.FindString(hint); word != "" {
+					t.Errorf("hint %q names %q, which is not why GitLab refuses this route", hint, word)
+				}
+			})
+		}
+	}
+}
+
+// TestProjectBoardReads_Refused_AccessHintFollowsThePermissionRefusal
+// verifies the hint the four read routes of a project issue board carry when
+// GitLab refuses them. Each is authorized on read_issue_board, which every
+// role from Guest holds, and which ProjectPolicy withholds while the project's
+// issues feature is disabled, or limited to project members and the caller is
+// not one (the project:features:work_items permission group), so a permission
+// refusal of a read is the issues feature and gets that hint. A project the
+// caller cannot see is a 404, which used to carry a sentence about enabling
+// issue boards in the project settings: there is no such setting, and GitLab
+// does not answer a disabled feature with a 404.
+func TestProjectBoardReads_Refused_AccessHintFollowsThePermissionRefusal(t *testing.T) {
+	const accessHint = "a project's issue boards follow its issues feature"
+	wrong := regexp.MustCompile(`(?i)planner|reporter|premium|ultimate|licen[cs]e|project settings`)
+	routes := []projectBoardRoute{
+		{"board list", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListBoards(ctx, c, ListBoardsInput{ProjectID: "10"})
+			return err
+		}},
+		{"board get", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetBoard(ctx, c, GetBoardInput{ProjectID: "10", BoardID: 1})
+			return err
+		}},
+		{"list list", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListBoardLists(ctx, c, ListBoardListsInput{ProjectID: "10", BoardID: 1})
+			return err
+		}},
+		{"list get", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetBoardList(ctx, c, GetBoardListInput{ProjectID: "10", BoardID: 1, ListID: 100})
+			return err
+		}},
+	}
+	for _, route := range routes {
+		for _, refusal := range projectBoardRefusals {
+			t.Run(route.name+"/"+refusal.name, func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, refusal.status, refusal.body)
+				}))
+
+				err := route.call(t.Context(), client)
+				if err == nil {
+					t.Fatal(errExpectedErr)
+				}
+				hint := suggestionOf(err.Error())
+				if got := strings.Contains(hint, accessHint); got != refusal.permission {
+					t.Errorf("hint %q of %q carries the access hint = %v, want %v", hint, err.Error(), got, refusal.permission)
+				}
+				if word := wrong.FindString(hint); word != "" {
+					t.Errorf("hint %q names %q, which is not why GitLab refuses this route", hint, word)
+				}
+			})
+		}
+	}
 }

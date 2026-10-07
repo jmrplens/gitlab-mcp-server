@@ -728,24 +728,36 @@ func TestCreateGroupBoard_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoard_ValidationAPIError verifies that a refused creation
-// carries the name-and-scope hint. GitLab answers a rejected board name with
-// 400 on some paths and 422 on others, and the handler owes the same guidance
-// for both, so each code is driven rather than whichever one the fixture
-// happened to pick.
-func TestCreateGroupBoard_ValidationAPIError(t *testing.T) {
-	for _, status := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity} {
-		t.Run(http.StatusText(status), func(t *testing.T) {
+// TestCreateGroupBoard_BadRequest_ClaimsNothingTheRouteDoesNotCheck verifies
+// that a 400 from the group board create route is reported in GitLab's words
+// with no hint of ours. The route takes a name and nothing else, and the only
+// 400 it gives is Grape's for a name left out ("name is missing"), which the
+// handler refuses before asking: a board name need not be unique (Board
+// orders boards of one name by id), and the input offers no milestone,
+// iteration or label to verify, which is what the hint this replaced claimed.
+// A 422 is not an answer this route gives, so it is reported the same way.
+func TestCreateGroupBoard_BadRequest_ClaimsNothingTheRouteDoesNotCheck(t *testing.T) {
+	notChecked := regexp.MustCompile(`(?i)unique|milestone|iteration|label|Suggestion:`)
+	tests := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"name left out", http.StatusBadRequest, `{"error":"name is missing"}`},
+		{"422 is not this route's", http.StatusUnprocessableEntity, `{"message":"Unprocessable"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, status, `{"message":"Name has already been taken"}`)
+				testutil.RespondJSON(w, tt.status, tt.body)
 			}))
 
-			_, err := CreateGroupBoard(context.Background(), client, CreateGroupBoardInput{GroupID: "42", Name: "board"})
+			_, err := CreateGroupBoard(t.Context(), client, CreateGroupBoardInput{GroupID: "42", Name: "board"})
 			if err == nil {
 				t.Fatal(errExpectedAPI)
 			}
-			if !strings.Contains(err.Error(), "unique within the group") {
-				t.Fatalf("error = %q, want validation hint", err.Error())
+			if claim := notChecked.FindString(err.Error()); claim != "" {
+				t.Errorf("error %q says %q, which the route does not check", err.Error(), claim)
 			}
 		})
 	}
@@ -780,25 +792,82 @@ func TestUpdateGroupBoard_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoard_ValidationAPIError verifies validation failures include
-// guidance about referenced assignee, milestone, label, and weight values,
-// under either code GitLab refuses a board scope with: 400 and 422 share the
-// branch, so each is driven rather than only the one the fixture picked.
-func TestUpdateGroupBoard_ValidationAPIError(t *testing.T) {
-	for _, status := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity} {
-		t.Run(http.StatusText(status), func(t *testing.T) {
+// TestUpdateGroupBoard_RefusalOfWhatWasSent_ReportedInGitLabsWordsWithNoHint
+// verifies that a 400 or 422 from the group board update route is reported
+// with GitLab's own message and no hint. Nothing this input sends is refused
+// there: update_board in API::BoardsResponses answers 400 only when the board
+// it checks does not validate, and it checks a copy it loads again rather
+// than the one it updated, so a name the update could not save is answered
+// 200 (see TestUpdateGroupBoard_NameGitLabCannotSave_ReturnsTheBoardGitLabKept).
+// Boards::UpdateService refuses none of the scope either: it drops a
+// milestone the group cannot use, clears the assignee for an id no user has
+// and creates a label for a title the group does not have yet. The hints this
+// replaced described checks GitLab does not make, sending a model to verify
+// those IDs, to keep the weight between 0 and 9 and to shorten the name, so
+// any hint here would be a claim about a refusal GitLab never sends. The 400
+// body is Grape's own shape for a parameter it refuses.
+func TestUpdateGroupBoard_RefusalOfWhatWasSent_ReportedInGitLabsWordsWithNoHint(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		want   string
+	}{
+		{"400", http.StatusBadRequest, `{"error":"weight is invalid"}`, "weight is invalid"},
+		{"422 is not this route's", http.StatusUnprocessableEntity, `{"message":"Unprocessable"}`, "Unprocessable"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, status, `{"message":"Invalid board scope"}`)
+				testutil.RespondJSON(w, tt.status, tt.body)
 			}))
 
-			_, err := UpdateGroupBoard(context.Background(), client, UpdateGroupBoardInput{GroupID: "42", BoardID: 1, Name: "x"})
+			_, err := UpdateGroupBoard(t.Context(), client, UpdateGroupBoardInput{GroupID: "42", BoardID: 1, Name: "x", Weight: 3})
 			if err == nil {
 				t.Fatal(errExpectedAPI)
 			}
-			if !strings.Contains(err.Error(), "referenced assignee_id") {
-				t.Fatalf("error = %q, want validation hint", err.Error())
+			msg := err.Error()
+			if !strings.Contains(msg, tt.want) {
+				t.Errorf("error %q does not carry GitLab's message %q", msg, tt.want)
+			}
+			if strings.Contains(msg, "Suggestion:") {
+				t.Errorf("error %q carries a hint, although GitLab refuses nothing this input sends", msg)
 			}
 		})
+	}
+}
+
+// TestUpdateGroupBoard_NameGitLabCannotSave_ReturnsTheBoardGitLabKept pins
+// what the group board update route answers a name GitLab cannot save, and
+// what the handler makes of it. Board validates a changed name at 255
+// characters at most (app/models/board.rb), so Boards::UpdateService's update
+// of a longer one saves nothing; update_board then reads the board twice
+// more, through a helper that loads it anew each time, and finds the stored
+// copy valid, so GitLab answers 200 with the board as it was (register row
+// 94 of docs/development/upstream-bugs.md). The handler sends the name it was
+// given and reports the board GitLab answered with, the old name included,
+// rather than the name it asked for.
+func TestUpdateGroupBoard_NameGitLabCannotSave_ReturnsTheBoardGitLabKept(t *testing.T) {
+	longName := strings.Repeat("n", 256)
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode the update body: %v", err)
+		}
+		if body.Name != longName {
+			t.Errorf("sent name of %d characters, want the %d the caller gave", len(body.Name), len(longName))
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"Sprint","hide_backlog_list":false,"hide_closed_list":false,"lists":[]}`)
+	}))
+
+	out, err := UpdateGroupBoard(t.Context(), client, UpdateGroupBoardInput{GroupID: "42", BoardID: 1, Name: longName})
+	if err != nil {
+		t.Fatalf("UpdateGroupBoard() error = %v, want the board GitLab answered with", err)
+	}
+	if out.ID != 1 || out.Name != "Sprint" {
+		t.Errorf("UpdateGroupBoard() = board %d %q, want board 1 with the name GitLab kept, %q", out.ID, out.Name, "Sprint")
 	}
 }
 
@@ -1647,5 +1716,146 @@ func TestRawRequestConstructionFailures(t *testing.T) {
 	}
 	if _, err := UpdateGroupBoard(ctx, client, UpdateGroupBoardInput{GroupID: "42", BoardID: 1}); err == nil {
 		t.Error("UpdateGroupBoard: expected construction error")
+	}
+}
+
+// requestLine finds where the request line starts in an error the wrappers
+// compose, which is where a suggestion ends.
+var requestLine = regexp.MustCompile(`: (GET|POST|PUT|DELETE) http`)
+
+// suggestionOf returns the hint a wrapped error carries, the text between
+// "Suggestion: " and the request line, or "" when it carries none. The tests
+// judge the hint alone, because the classification before it is
+// [toolutil.ClassifyError]'s, written for every route at once, and it is not
+// this package's to word.
+func suggestionOf(msg string) string {
+	_, hint, found := strings.Cut(msg, "Suggestion: ")
+	if !found {
+		return ""
+	}
+	if loc := requestLine.FindStringIndex(hint); loc != nil {
+		hint = hint[:loc[0]]
+	}
+	return hint
+}
+
+// groupBoardRefusals are the answers GitLab gives a group board route that
+// refuses the caller, written as GitLab writes them at v19.4.1-ee: authorize!
+// and forbidden! render a plain 403, some routes answer a missing permission
+// with a plain 401 (register row 55), the API guard names an RFC 6750 code
+// when what is missing is the token's scope and states its reason when it
+// refuses the account itself, and a group or board the caller cannot see is a
+// 404. Only the first two can be a role or a license the caller lacks, which
+// is what [toolutil.IsPermissionRefusal] answers and what permission marks.
+var groupBoardRefusals = []struct {
+	name       string
+	status     int
+	body       string
+	permission bool
+}{
+	{"plain 403", http.StatusForbidden, `{"message":"403 Forbidden"}`, true},
+	{"plain 401", http.StatusUnauthorized, `{"message":"401 Unauthorized"}`, true},
+	{"403 insufficient scope", http.StatusForbidden, `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token."}`, false},
+	{"403 blocked account", http.StatusForbidden, `{"message":"403 Forbidden - Your account has been blocked."}`, false},
+	{"404 group", http.StatusNotFound, `{"message":"404 Group Not Found"}`, false},
+}
+
+// TestListGroupBoards_Refused_NamesNoLicenseOrRole verifies that a refusal of
+// the group board list carries no license or role hint. GET
+// /groups/:id/boards is authorized on read_issue_board, which GroupPolicy
+// grants to everyone who can read the group, and it checks no license: a
+// group on any tier lists its boards, so the hint this replaced, keyed on a
+// 403 and saying group boards need Premium, described a refusal GitLab does
+// not make. A group the caller cannot read is a 404 and keeps its hint.
+func TestListGroupBoards_Refused_NamesNoLicenseOrRole(t *testing.T) {
+	wrong := regexp.MustCompile(`(?i)premium|ultimate|licen[cs]e|reporter|planner|implicit board|free tier`)
+	for _, refusal := range groupBoardRefusals {
+		t.Run(refusal.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, refusal.status, refusal.body)
+			}))
+
+			_, err := ListGroupBoards(t.Context(), client, ListGroupBoardsInput{GroupID: "42"})
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			hint := suggestionOf(err.Error())
+			if word := wrong.FindString(hint); word != "" {
+				t.Errorf("hint %q names %q, which is not why GitLab refuses this route", hint, word)
+			}
+			if got, want := hint != "", refusal.status == http.StatusNotFound; got != want {
+				t.Errorf("error %q carries a hint = %v, want %v", err.Error(), got, want)
+			}
+		})
+	}
+}
+
+// TestGroupBoardWrites_Refused_RoleHintFollowsThePermissionRefusal verifies
+// the hint every write route of a group issue board carries when GitLab
+// refuses it, read from lib/api/group_boards.rb, ee/lib/ee/api/group_boards.rb
+// and lib/api/boards_responses.rb at v19.4.1-ee. Each is authorized on
+// admin_issue_board or admin_issue_board_list, which
+// config/authz/roles/planner.yml grants on a group, so the role hint names
+// Planner and is keyed on the permission refusal, never on a status. Creating
+// and deleting a board also call forbidden! unless the group has multiple
+// group issue boards, a Premium feature, with the same plain 403, so those two
+// hints name the license beside the role. Updating checks no license (the
+// scope fields are dropped where scoped boards are not licensed), the list
+// routes check none either, and GitLab deletes a group's last board as
+// readily as any other, so none of those may say otherwise, and no hint may
+// name Reporter, which every earlier one did.
+func TestGroupBoardWrites_Refused_RoleHintFollowsThePermissionRefusal(t *testing.T) {
+	const (
+		roleHint    = "at least the Planner role on the group"
+		licenseHint = "GitLab Premium or Ultimate"
+	)
+	wrong := regexp.MustCompile(`(?i)reporter|maintainer|default board|last board|free tier`)
+	routes := []struct {
+		name     string
+		licensed bool
+		call     func(context.Context, *gitlabclient.Client) error
+	}{
+		{"board create", true, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := CreateGroupBoard(ctx, c, CreateGroupBoardInput{GroupID: "42", Name: "board"})
+			return err
+		}},
+		{"board update", false, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := UpdateGroupBoard(ctx, c, UpdateGroupBoardInput{GroupID: "42", BoardID: 1, AssigneeID: 3})
+			return err
+		}},
+		{"board delete", true, func(ctx context.Context, c *gitlabclient.Client) error {
+			return DeleteGroupBoard(ctx, c, DeleteGroupBoardInput{GroupID: "42", BoardID: 1})
+		}},
+		{"list update", false, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := UpdateGroupBoardList(ctx, c, UpdateGroupBoardListInput{GroupID: "42", BoardID: 1, ListID: 10, Position: 2})
+			return err
+		}},
+		{"list delete", false, func(ctx context.Context, c *gitlabclient.Client) error {
+			return DeleteGroupBoardList(ctx, c, DeleteGroupBoardListInput{GroupID: "42", BoardID: 1, ListID: 10})
+		}},
+	}
+	for _, route := range routes {
+		for _, refusal := range groupBoardRefusals {
+			t.Run(route.name+"/"+refusal.name, func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, refusal.status, refusal.body)
+				}))
+
+				err := route.call(t.Context(), client)
+				if err == nil {
+					t.Fatal(errExpectedAPI)
+				}
+				hint := suggestionOf(err.Error())
+				if got := strings.Contains(hint, roleHint); got != refusal.permission {
+					t.Errorf("hint %q of %q carries the role hint = %v, want %v", hint, err.Error(), got, refusal.permission)
+				}
+				if got, want := strings.Contains(hint, licenseHint), refusal.permission && route.licensed; got != want {
+					t.Errorf("hint %q of %q carries the license hint = %v, want %v", hint, err.Error(), got, want)
+				}
+				if word := wrong.FindString(hint); word != "" {
+					t.Errorf("hint %q names %q, which is not why GitLab refuses this route", hint, word)
+				}
+			})
+		}
 	}
 }
