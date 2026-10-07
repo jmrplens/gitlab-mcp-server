@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted — 2026-08-28.
+Accepted, 2026-08-28. Refined by
+[ADR-0026](adr-0026-read-api-token-served-what-gitlab-accepts.md) on 2026-10-06: the admission
+rule stands, and a token that cannot write is no longer served the read-only surface but the
+actions whose requests GitLab accepts from `read_api`, derived per action.
 
 ## Context
 
@@ -67,7 +70,13 @@ action.**
   access token is not such a token. Its scope list is the single value
   `granular`, which names no authority, so it is unknown authority rather than
   read-only, and what it is served is decided per action by its grant
-  ([ADR-0024](adr-0024-fine-grained-token-authority-per-action.md)).]
+  ([ADR-0024](adr-0024-fine-grained-token-authority-per-action.md)).] [Since
+  ADR-0026 the narrowing no longer sets `ServerConfig.ReadOnly`, which is the
+  operator's switch alone: `NarrowToTokenScope` sets `ReadAPIOnly`, and the
+  token is served the actions whose requests GitLab accepts from `read_api`.
+  Two reads GitLab answers only from `api` leave its surface, and five actions
+  the classification calls writes join it, since GitLab serves them to
+  `read_api`.]
 - `oauth.RequiredScope` keeps its name but changes role: it is what the
   `WWW-Authenticate` challenge **recommends** on a 401, not what admission
   requires. The `insufficient_scope` 403 names `MinimumScope` instead: RFC 6750

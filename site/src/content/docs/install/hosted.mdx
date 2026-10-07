@@ -52,13 +52,13 @@ cannot use, so every action would fail.
 
 ## Tokens and what they unlock
 
-| Credential                      | Result                                                                                                                                                              |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Token with the `api` scope      | The full tool surface.                                                                                                                                              |
-| Token with the `read_api` scope | Admitted and served a read-only tool surface. The write check is per action, so a credential that cannot change anything is a supported way in, not a rejected one. |
-| `PRIVATE-TOKEN` header          | Not accepted. It is the legacy-mode header; the endpoint is Bearer-only.                                                                                            |
-| `GITLAB-URL` header             | Ignored. The instance is fixed to `https://gitlab.com`, so a self-managed instance cannot be reached through this endpoint.                                         |
-| No credential                   | Any method answers `401` with `WWW-Authenticate: Bearer ... resource_metadata=...`, the challenge an OAuth client follows.                                          |
+| Credential                      | Result                                                                                                                                                                                                                           |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Token with the `api` scope      | The full tool surface.                                                                                                                                                                                                           |
+| Token with the `read_api` scope | Admitted and served the actions GitLab accepts from `read_api`. The check is per action, so a credential GitLab accepts no write from, a personal access token revoking itself aside, is a supported way in, not a rejected one. |
+| `PRIVATE-TOKEN` header          | Not accepted. It is the legacy-mode header; the endpoint is Bearer-only.                                                                                                                                                         |
+| `GITLAB-URL` header             | Ignored. The instance is fixed to `https://gitlab.com`, so a self-managed instance cannot be reached through this endpoint.                                                                                                      |
+| No credential                   | Any method answers `401` with `WWW-Authenticate: Bearer ... resource_metadata=...`, the challenge an OAuth client follows.                                                                                                       |
 
 Use a token scoped to what you actually need. A hosted endpoint sees every
 request you send through it; `read_api` is the right choice when you only

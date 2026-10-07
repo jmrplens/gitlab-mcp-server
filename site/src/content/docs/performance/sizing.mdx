@@ -90,8 +90,8 @@ Three things bound that measurement, and all three matter when you apply it:
 
 A **shape** is everything that decides what a server registers: tool surface,
 capability surface, meta parameter-schema mode, tier and whether it was pinned,
-GitLab.com or self-managed, read-only including the narrowing a `read_api` token
-causes, safe mode, excluded tools, token scopes, and whether the transport is
+GitLab.com or self-managed, read-only, the narrowing a `read_api` token causes,
+safe mode, excluded tools, token scopes, and whether the transport is
 stateless. Every credential hashing to one shape is served by one MCP server.
 
 A process holding one registered shape and one credential has a live heap of
@@ -104,14 +104,14 @@ resident there.
 How many shapes a deployment produces is small and bounded, and you control most
 of it:
 
-| Input               | Values in one deployment                                                               |
-| ------------------- | -------------------------------------------------------------------------------------- |
-| Tier                | 1 with `--tier` pinned; up to 3 (free, premium, ultimate) when detected per credential |
-| Token scopes        | 2, because only `admin_mode` changes the catalog                                       |
-| Scope detection     | 2, or 1 with `--ignore-scopes`                                                         |
-| Read-only narrowing | 2 when the operator did not set `--read-only`, 1 when they did                         |
-| GitLab.com or not   | 1, or 2 for a deployment publishing both                                               |
-| Everything else     | 1 each; they are process settings                                                      |
+| Input                | Values in one deployment                                                               |
+| -------------------- | -------------------------------------------------------------------------------------- |
+| Tier                 | 1 with `--tier` pinned; up to 3 (free, premium, ultimate) when detected per credential |
+| Token scopes         | 2, because only `admin_mode` changes the catalog                                       |
+| Scope detection      | 2, or 1 with `--ignore-scopes`                                                         |
+| `read_api` narrowing | 2, or 1 with `--ignore-scopes`; `--read-only` does not collapse it                     |
+| GitLab.com or not    | 1, or 2 for a deployment publishing both                                               |
+| Everything else      | 1 each; they are process settings                                                      |
 
 A deployment with `--tier` pinned and `--ignore-scopes` produces exactly one
 shape. A typical one produces two to eight, and the worst case is under fifty.
@@ -157,7 +157,7 @@ measurement did not cross.
 Five hundred developers, an editor each, on the default dynamic surface, against
 one Ultimate self-managed instance, with `--tier=ultimate` pinned.
 
-**Memory.** With the tier pinned, only token scopes and read-only narrowing can
+**Memory.** With the tier pinned, only token scopes and the `read_api` narrowing can
 still split the shape (the table above), so one to a few catalogs, and exactly
 one with `--ignore-scopes` as well; a process holding one is about 39 MiB of
 live heap. Five hundred

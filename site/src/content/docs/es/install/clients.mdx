@@ -61,7 +61,7 @@ claude mcp add gitlab \
   https://mcp.jmrp.io/gitlab
 ```
 
-Todas las entradas OAuth de abajo funcionan igual con esa URL y el ID de la tarjeta en lugar del tuyo, y Claude Desktop la añade como conector personalizado con el ID de la tarjeta como su cliente OAuth. Sin OAuth, envía un token de acceso personal de GitLab.com como `Authorization: Bearer`; el endpoint funciona en modo OAuth, así que allí se rechaza `PRIVATE-TOKEN`, y `GITLAB-URL` se ignora porque la instancia está fijada a `https://gitlab.com`. Un token `read_api`, o un cliente fijado al scope `read_api`, se admite y recibe la superficie de herramientas de solo lectura. Las propiedades y salvedades del endpoint están en [Endpoint alojado](/gitlab-mcp-server/es/install/hosted/).
+Todas las entradas OAuth de abajo funcionan igual con esa URL y el ID de la tarjeta en lugar del tuyo, y Claude Desktop la añade como conector personalizado con el ID de la tarjeta como su cliente OAuth. Sin OAuth, envía un token de acceso personal de GitLab.com como `Authorization: Bearer`; el endpoint funciona en modo OAuth, así que allí se rechaza `PRIVATE-TOKEN`, y `GITLAB-URL` se ignora porque la instancia está fijada a `https://gitlab.com`. Un token `read_api`, o un cliente fijado al scope `read_api`, se admite y recibe las acciones que GitLab acepta con `read_api`. Las propiedades y salvedades del endpoint están en [Endpoint alojado](/gitlab-mcp-server/es/install/hosted/).
 
 ## VS Code (GitHub Copilot)
 
@@ -207,7 +207,7 @@ Exporta `GITLAB_TOKEN` en la shell desde la que arrancas `claude`. Contra un des
 
 El comando `claude mcp add` con `--client-id` y `--callback-port 8090` está en [Paso 4: configurar los clientes](/gitlab-mcp-server/es/operations/oauth-app/#paso-4-configurar-los-clientes). El puerto debe coincidir con la URI de redirección registrada en la aplicación, `http://localhost:8090/callback`: GitLab compara un callback `localhost` de forma exacta, puerto y ruta incluidos ([Paso 2](/gitlab-mcp-server/es/operations/oauth-app/#paso-2-registrar-las-uri-de-redirección)). Sin `--client-id`, Claude Code recurre al registro dinámico de clientes y obtiene un token que este servidor rechaza.
 
-Cuando `oauth.scopes` no está definido, Claude Code pide a GitLab el scope que el servidor nombra en su desafío `401` o en sus metadatos RFC 9728. Para obtener una credencial de solo lectura de un despliegue que puede escribir, fija `read_api` en `oauth.scopes`, una cadena separada por espacios para la que `claude mcp add` no tiene flag; la aplicación debe tener `read_api` marcado, y el token se admite y recibe la superficie de herramientas de solo lectura:
+Cuando `oauth.scopes` no está definido, Claude Code pide a GitLab el scope que el servidor nombra en su desafío `401` o en sus metadatos RFC 9728. Para obtener una credencial de solo lectura de un despliegue que puede escribir, fija `read_api` en `oauth.scopes`, una cadena separada por espacios para la que `claude mcp add` no tiene flag; la aplicación debe tener `read_api` marcado, y el token se admite y recibe las acciones que GitLab acepta con `read_api`:
 
 ```bash
 claude mcp add-json gitlab '{"type":"http","url":"https://mcp.example.com/mcp","oauth":{"clientId":"YOUR_GITLAB_APPLICATION_ID","callbackPort":8090,"scopes":"read_api"}}'

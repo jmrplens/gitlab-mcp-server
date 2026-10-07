@@ -31,8 +31,8 @@ Two facts about the grant decide most of this page:
   does not reach part of the answer.
 
 GitLab MCP Server reads such a token as **unknown authority**, never as read-only: its
-`granular` scope says nothing about writes, so it is not narrowed to the read-only
-surface a `read_api` token gets, and the five groups that need the `admin_mode` scope
+`granular` scope says nothing about writes, so it is not narrowed to the actions a
+`read_api` token is served, and the five groups that need the `admin_mode` scope
 stay in its catalog. The grant decides what each session is shown instead, as the rest
 of this page describes
 ([ADR-0024](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0024-fine-grained-token-authority-per-action.md)
@@ -44,6 +44,25 @@ GitLab 18.10. The permissions this server knows are the ones GitLab 19.4.1 decla
 and the grant is judged on an instance that reports a 19.4 release
 ([GitLab.com and other releases](#gitlabcom-and-other-releases)).
 :::
+
+## Classic and fine-grained tokens, action by action
+
+Each action's entry in the [tool reference](/gitlab-mcp-server/reference/tools/) carries
+two token lines beside its tier. **Classic or OAuth token** names the scope GitLab
+requires for the requests the action sends: `read_api`, which an `api` token carries too,
+for an action that sends only REST `GET`s, GraphQL queries and the few routes GitLab opens
+to `read_api` on every method, or whose requests GitLab authenticates by a trigger,
+registration or runner token the caller passes; `api` for one that sends anything else.
+The line also names `admin_mode` for the administration groups, which this server lists
+only to a token carrying it, and any route the action sends that GitLab refuses to an
+OAuth token whatever its scope; on an instance with Admin Mode turned on, GitLab asks
+`admin_mode` of every action only an administrator may run as well. A classic token
+carrying `read_api` and not `api` is served exactly the actions whose line names
+`read_api`, provided it carries any other scope the line names. **Fine-grained token** is
+the action's line of the [fine-grained permissions](/gitlab-mcp-server/reference/fine-grained-permissions/)
+table: the permissions a grant has to hold, at which boundary, and the parts of the answer
+GitLab may leave empty. Both lines are generated from the one record of what each action
+sends, so a change to an action moves both.
 
 ## What the server needs at startup
 
@@ -383,7 +402,7 @@ The rest of the door is in [HTTP Server](/gitlab-mcp-server/operations/http-serv
 ## `--ignore-scopes` and a fine-grained token
 
 `--ignore-scopes` (`GITLAB_MCP_IGNORE_SCOPES=true`) skips the scope filter and the
-read-only narrowing. It does not skip reading what kind of token the server holds, and
+`read_api` narrowing. It does not skip reading what kind of token the server holds, and
 it does not turn off anything this page describes: the grant is a different question
 from the scopes, and skipping it would serve a fine-grained session the whole catalog
 with no word of what its grant leaves out. Nor does it skip the admission minimum, so

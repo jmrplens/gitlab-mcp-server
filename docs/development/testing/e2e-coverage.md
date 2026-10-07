@@ -36,8 +36,8 @@ further down.
 
 | Runtime | Edition/tier        | Measured   | Catalog actions |           L1 |          L2 |          L3 | Test calls |
 | ------- | ------------------- | ---------- | --------------: | -----------: | ----------: | ----------: | ---------: |
-| `ce`    | community/free      | 2026-10-03 |             872 |  834 (95.6%) | 730 (83.7%) | 714 (81.9%) |       3530 |
-| `ee`    | enterprise/ultimate | 2026-10-03 |            1092 | 1028 (94.1%) | 924 (84.6%) | 908 (83.2%) |       4617 |
+| `ce`    | community/free      | 2026-10-07 |             872 |  834 (95.6%) | 732 (83.9%) | 716 (82.1%) |       3554 |
+| `ee`    | enterprise/ultimate | 2026-10-07 |            1092 | 1028 (94.1%) | 926 (84.8%) | 910 (83.3%) |       4621 |
 
 The actions behind each level are listed by id in `docs/development/e2e-coverage.json`, under `levels.l1`, `levels.l2` and `levels.l3`.
 
@@ -45,10 +45,10 @@ The actions behind each level are listed by id in `docs/development/e2e-coverage
 
 | Runtime | Package  | Requires | Status  | GitLab    | Tier confirmed | Commit         |
 | ------- | -------- | -------- | ------- | --------- | -------------- | -------------- |
-| `ce`    | `ce`     | free     | started | 19.4.1    | no             | `1ecae82fa58e` |
-| `ce`    | `common` | any      | started | 19.4.1    | no             | `1ecae82fa58e` |
-| `ee`    | `common` | any      | started | 19.4.1-ee | yes            | `1ecae82fa58e` |
-| `ee`    | `ee`     | licensed | started | 19.4.1-ee | yes            | `1ecae82fa58e` |
+| `ce`    | `ce`     | free     | started | 19.4.1    | no             | `6cce9fd87f6e` |
+| `ce`    | `common` | any      | started | 19.4.1    | no             | `6cce9fd87f6e` |
+| `ee`    | `common` | any      | started | 19.4.1-ee | yes            | `6cce9fd87f6e` |
+| `ee`    | `ee`     | licensed | started | 19.4.1-ee | yes            | `6cce9fd87f6e` |
 
 A tier that is not confirmed came from a setting rather than from the instance license, which means the catalog the share is divided by may hold actions that instance would refuse. An unlicensed GitLab reports no license at all, so the `ce` half is expected to read `no` here.
 
@@ -85,15 +85,15 @@ The server registers its resources, prompts, completions and subscribable kinds 
 
 | Surface      | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |
 | ------------ | -------: | ---------: | ---------: | --------------: | -----------: | -----------: | -----------: | ---------: | ---------: | ------: | -----: | -----: |
-| `dynamic`    |      730 |          0 |         27 |              17 |           17 |            0 |            0 |          0 |          0 |       0 |      0 |     81 |
-| `meta`       |      805 |          0 |          5 |              16 |           18 |            0 |            0 |          0 |          0 |       0 |      0 |     28 |
-| `individual` |      733 |          0 |         22 |              15 |           18 |            0 |            0 |          0 |          4 |       0 |      0 |     80 |
+| `dynamic`    |      732 |          0 |         26 |              17 |           18 |            0 |            0 |          0 |          0 |       0 |      0 |     79 |
+| `meta`       |      807 |          0 |          5 |              16 |           18 |            0 |            0 |          0 |          0 |       0 |      0 |     26 |
+| `individual` |      733 |          0 |         22 |              14 |           19 |            0 |            0 |          0 |          4 |       0 |      0 |     80 |
 
 What each capability surface served, which is what the `resources`, `prompts`, `completions` and `subscriptions` rows beneath are counted against (`tool_manifest` is counted per shape and capability surface, `elicitation` and `modes` per shape; none has a figure here):
 
 | Capability surface | Sessions | Shapes | Resources | Prompts | Completions | Subscribable kinds |
 | ------------------ | -------: | -----: | --------: | ------: | ----------: | -----------------: |
-| `full`             |       35 |      9 |        43 |      37 |         129 |                 26 |
+| `full`             |       38 |      9 |        43 |      37 |         129 |                 26 |
 | `minimal`          |       16 |      3 |         0 |       0 |           1 |                  0 |
 
 | Capability      | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |
@@ -114,15 +114,15 @@ Called outside what any session listed, and so counted in none of the rows above
 
 | Surface      | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |
 | ------------ | -------: | ---------: | ---------: | --------------: | -----------: | -----------: | -----------: | ---------: | ---------: | ------: | -----: | -----: |
-| `dynamic`    |      924 |          0 |         27 |              24 |           41 |            0 |            0 |          0 |          0 |       0 |      0 |     76 |
-| `meta`       |      999 |          0 |          5 |              22 |           42 |            0 |            0 |          0 |          0 |       0 |      0 |     24 |
-| `individual` |      927 |          0 |         22 |              21 |           42 |            0 |            0 |          0 |          4 |       0 |      0 |     76 |
+| `dynamic`    |      926 |          0 |         26 |              24 |           42 |            0 |            0 |          0 |          0 |       0 |      0 |     74 |
+| `meta`       |     1001 |          0 |          5 |              22 |           43 |            0 |            0 |          0 |          0 |       0 |      0 |     21 |
+| `individual` |      927 |          0 |         22 |              21 |           43 |            0 |            0 |          0 |          4 |       0 |      0 |     75 |
 
 What each capability surface served, which is what the `resources`, `prompts`, `completions` and `subscriptions` rows beneath are counted against (`tool_manifest` is counted per shape and capability surface, `elicitation` and `modes` per shape; none has a figure here):
 
 | Capability surface | Sessions | Shapes | Resources | Prompts | Completions | Subscribable kinds |
 | ------------------ | -------: | -----: | --------: | ------: | ----------: | -----------------: |
-| `full`             |       38 |      9 |        43 |      37 |         129 |                 26 |
+| `full`             |       44 |      9 |        43 |      37 |         129 |                 26 |
 | `minimal`          |       16 |      3 |         0 |       0 |           1 |                  0 |
 
 | Capability      | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |

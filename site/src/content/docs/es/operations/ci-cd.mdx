@@ -57,7 +57,7 @@ sequenceDiagram
 
    Para fijar una release en lugar de seguir la más reciente, sustituye `releases/latest/download/` por `releases/download/v<versión>/`, como muestra [Binario nativo](/gitlab-mcp-server/es/install/binary/#descarga-manual).
 
-2. **Crea un Project Access Token** (recomendado sobre PATs personales para CI) en **Settings > Access Tokens** del proyecto. Dale `api` para todas las herramientas que pueda invocar el job, o `read_api` para un job que solo lee (acciones de listar, obtener y buscar): el servidor responde a un token `read_api` con su superficie de solo lectura. Fija una fecha de expiración; 90 días como máximo es un buen valor por defecto.
+2. **Crea un Project Access Token** (recomendado sobre PATs personales para CI) en **Settings > Access Tokens** del proyecto. Dale `api` para todas las herramientas que pueda invocar el job, o `read_api` para un job que solo lee (acciones de listar, obtener y buscar): el servidor sirve a un token `read_api` las acciones que GitLab acepta con él, lo que deja fuera validar contenido de CI pasado en línea (`template.lint`). Fija una fecha de expiración; 90 días como máximo es un buen valor por defecto.
 
 3. **Almacena el token** como variable CI/CD enmascarada llamada `MCP_PAT`, como describe [Almacenar el token](#almacenar-el-token).
 
@@ -656,14 +656,16 @@ Para la referencia completa de herramientas, consulta [Resumen de herramientas](
 
 ### Scope mínimo para el flujo
 
-Ajusta el scope del token a lo que hace el job. Un token `read_api` recibe la superficie de solo lectura, así que una escritura que el job no necesitaba ni siquiera aparece en la lista ([Scopes del token](/gitlab-mcp-server/es/operations/security/#scopes-del-token)):
+Ajusta el scope del token a lo que hace el job. Un token `read_api` recibe las acciones que GitLab acepta con `read_api`, así que una acción que el job no podría ejecutar ni siquiera aparece en la lista ([Scopes del token](/gitlab-mcp-server/es/operations/security/#scopes-del-token)). Lo decide la petición que envía la acción, no si escribe: validar contenido de CI que el job pasa en línea es una lectura, y aun así GitLab solo la responde con `api`, porque se envía como `POST`, mientras que validar la configuración que el proyecto tiene confirmada es un `GET` y basta con `read_api`. La entrada de cada acción en la [referencia de herramientas](/gitlab-mcp-server/es/reference/tools/) dice qué scope necesita:
 
-| Flujo                              | Scope necesario |
-| ---------------------------------- | --------------- |
-| Listar issues, MRs, pipelines      | `read_api`      |
-| Publicar comentarios, crear issues | `api`           |
-| Gestionar releases, paquetes       | `api`           |
-| Flujo completo de revisión de MRs  | `api`           |
+| Flujo                                     | Scope necesario |
+| ----------------------------------------- | --------------- |
+| Listar issues, MRs, pipelines             | `read_api`      |
+| Validar la configuración de CI confirmada | `read_api`      |
+| Validar contenido de CI pasado en línea   | `api`           |
+| Publicar comentarios, crear issues        | `api`           |
+| Gestionar releases, paquetes              | `api`           |
+| Flujo completo de revisión de MRs         | `api`           |
 
 ### Group Access Tokens
 

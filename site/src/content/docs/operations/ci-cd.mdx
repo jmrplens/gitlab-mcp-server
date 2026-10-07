@@ -57,7 +57,7 @@ sequenceDiagram
 
    To pin a release instead of following the newest one, replace `releases/latest/download/` with `releases/download/v<version>/`, as [Native binary](/gitlab-mcp-server/install/binary/#download-by-hand) shows.
 
-2. **Create a Project Access Token** (recommended over personal PATs for CI) under the project's **Settings > Access Tokens**. Give it `api` for every tool the job may call, or `read_api` for a job that only reads (list, get and search actions): the server answers a `read_api` token with its read-only surface. Set an expiry date; 90 days at most is a sound default.
+2. **Create a Project Access Token** (recommended over personal PATs for CI) under the project's **Settings > Access Tokens**. Give it `api` for every tool the job may call, or `read_api` for a job that only reads (list, get and search actions): the server serves a `read_api` token the actions GitLab accepts from it, which leaves out linting inline CI content (`template.lint`). Set an expiry date; 90 days at most is a sound default.
 
 3. **Store the token** as a masked CI/CD variable named `MCP_PAT`, as [Storing the token](#storing-the-token) describes.
 
@@ -655,14 +655,16 @@ For the complete tool reference, see [Tools Overview](/gitlab-mcp-server/tools/o
 
 ### Minimal scope for the workflow
 
-Match the token's scope to what the job does. A `read_api` token is served the read-only surface, so a write the job did not need is not even listed ([Token scopes](/gitlab-mcp-server/operations/security/#token-scopes)):
+Match the token's scope to what the job does. A `read_api` token is served the actions GitLab accepts from `read_api`, so an action the job could not run is not even listed ([Token scopes](/gitlab-mcp-server/operations/security/#token-scopes)). That is decided by the request an action sends, not by whether it writes: linting CI content the job passes inline reads, and GitLab still answers it only from `api`, because it is sent as a `POST`, while linting the configuration the project has committed is a `GET` and takes `read_api`. Each action's entry in the [tool reference](/gitlab-mcp-server/reference/tools/) says which scope it needs:
 
-| Workflow                     | Required scope |
-| ---------------------------- | -------------- |
-| List issues, MRs, pipelines  | `read_api`     |
-| Post comments, create issues | `api`          |
-| Manage releases, packages    | `api`          |
-| Full MR review workflow      | `api`          |
+| Workflow                            | Required scope |
+| ----------------------------------- | -------------- |
+| List issues, MRs, pipelines         | `read_api`     |
+| Lint the committed CI configuration | `read_api`     |
+| Lint CI content passed inline       | `api`          |
+| Post comments, create issues        | `api`          |
+| Manage releases, packages           | `api`          |
+| Full MR review workflow             | `api`          |
 
 ### Group Access Tokens
 

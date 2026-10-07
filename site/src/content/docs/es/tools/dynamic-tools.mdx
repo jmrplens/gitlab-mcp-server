@@ -243,10 +243,10 @@ Una llamada que supera esta comprobación y aun así lleva un valor que la acci�
 
 Una acción que el catálogo contiene pero que esta sesión no puede ejecutar nunca se responde como desconocida, porque un modelo al que se le dice «unknown action» concluye que el servidor carece de esa capacidad. Execute nombra la causa:
 
-- **Los scopes de la credencial.** A un token `read_api` solo se le sirven las lecturas, y los grupos de administración necesitan `admin_mode`. Una llamada a una acción que los scopes retienen recibe el mensaje siguiente. La salida que nombra es el scope `api`; para una acción de administración, el scope que le falta a la credencial es `admin_mode`.
+- **Los scopes de la credencial.** A un token `read_api` se le sirven las acciones que GitLab acepta con `read_api`, juzgadas acción por acción a partir de lo que envía cada una, y los grupos de administración necesitan `admin_mode`. Una llamada a una acción que los scopes retienen recibe el mensaje siguiente, que nombra los scopes que le faltan a la credencial para esa acción y quién pide cada uno: GitLab pide `api` para lo que envía la acción, y este servidor pide `admin_mode` antes de servir un grupo de administración, cosa que GitLab no exige a todas sus acciones. Una escritura de administración con un token `read_api` recibe los dos, como en `GitLab requires the api scope for it, this server serves this action's group only to a credential carrying the admin_mode scope, and the credential in use does not carry them`. Como GitLab acepta `read_api` para cinco acciones que escriben, `gitlab_execute_action` lleva `readOnlyHint: false` y `destructiveHint: true` en una sesión `read_api`, igual que con un token `api`.
 
   ```text
-  gitlab_execute_action: action "issue.create" exists but is not available to this session: the credential in use does not carry a GitLab scope that covers it, so a narrowed action surface was built for it. Reauthorize with the api scope to use it; do not report the capability as missing.
+  gitlab_execute_action: action "issue.create" exists but is not available to this session: GitLab requires the api scope for it and the credential in use does not carry it, so a narrowed action surface was built for it. Reauthorize with the api scope to use it; do not report the capability as missing.
   ```
 
 - **El operador.** Una escritura que el modo de solo lectura eliminó (`GITLAB_MCP_READ_ONLY=true` o `--read-only`) recibe:
@@ -259,7 +259,7 @@ Una acción que el catálogo contiene pero que esta sesión no puede ejecutar nu
 
 Una acción eliminada por nombre con `GITLAB_MCP_EXCLUDE_TOOLS` (`--exclude-tools`) nunca se notifica así: el operador pidió que no existiera, así que execute la responde como desconocida. Lo mismo ocurre con una acción por encima del tier de la instancia, que ni siquiera está en el catálogo.
 
-Find sigue la misma división. Un recorte por scopes o por solo lectura elimina las acciones del catálogo en el que busca find. Una sesión de grano fino busca en todo el catálogo y deja fuera de sus resultados las acciones que su concesión no lista antes de aplicar `limit`, así que la siguiente mejor coincidencia ocupa su lugar, mientras que execute las sigue resolviendo: rechaza con el motivo una acción que la concesión no deja pasar, y entrega el resto a GitLab, que puede servir alguna sobre un proyecto o grupo público. Un enlace de `related_actions` a una acción retenida se conserva, porque seguirlo explica el recorte; un enlace a una acción por encima del tier o excluida por nombre se descarta.
+Find sigue la misma división. Un recorte por scopes o por el modo de solo lectura del operador elimina las acciones del catálogo en el que busca find. Una sesión de grano fino busca en todo el catálogo y deja fuera de sus resultados las acciones que su concesión no lista antes de aplicar `limit`, así que la siguiente mejor coincidencia ocupa su lugar, mientras que execute las sigue resolviendo: rechaza con el motivo una acción que la concesión no deja pasar, y entrega el resto a GitLab, que puede servir alguna sobre un proyecto o grupo público. Un enlace de `related_actions` a una acción retenida se conserva, porque seguirlo explica el recorte; un enlace a una acción por encima del tier o excluida por nombre se descarta.
 
 ## ¿Cómo encuentra acciones la búsqueda?
 

@@ -37,7 +37,7 @@ head:
             "@type": "HowToStep",
             "position": 1,
             "name": "Crear un personal access token",
-            "text": "En GitLab, selecciona tu avatar y luego Edit profile, Access y Personal access tokens, y crea un token nuevo con el scope api. Cópialo: lo necesitas para la configuración. Para una configuración de solo lectura, usa un token con el scope read_api: el servidor lo detecta y sirve solo las acciones de lectura.",
+            "text": "En GitLab, selecciona tu avatar y luego Edit profile, Access y Personal access tokens, y crea un token nuevo con el scope api. Cópialo: lo necesitas para la configuración. Para una configuración de solo lectura, usa un token con el scope read_api, que el servidor detecta y al que sirve las acciones que GitLab acepta con él, y activa GITLAB_MCP_READ_ONLY=true para retener también las pocas escrituras que GitLab acepta con read_api.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/es/getting-started/#crear-un-personal-access-token"
           },
           {
@@ -58,20 +58,20 @@ head:
             "@type": "HowToStep",
             "position": 4,
             "name": "Verificar la configuración",
-            "text": "Abre tu cliente de IA y pregunta \"¿Quién soy en GitLab?\". El servidor devuelve tu perfil de usuario de GitLab, confirmando que la conexión funciona. Si obtienes errores de conexión, comprueba que GITLAB_URL es correcta y accesible, que el token tiene el scope api (o read_api, solo para acciones de lectura), y que los certificados autofirmados se gestionan con GITLAB_MCP_SKIP_TLS_VERIFY=true.",
+            "text": "Abre tu cliente de IA y pregunta \"¿Quién soy en GitLab?\". El servidor devuelve tu perfil de usuario de GitLab, confirmando que la conexión funciona. Si obtienes errores de conexión, comprueba que GITLAB_URL es correcta y accesible, que el token tiene el scope api (o read_api, para las acciones que GitLab acepta con él), y que los certificados autofirmados se gestionan con GITLAB_MCP_SKIP_TLS_VERIFY=true.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/es/getting-started/#verificar-la-configuración"
           }
         ]
       }
 faq:
   - q: "¿Qué scope de token necesita GitLab MCP Server?"
-    a: "GitLab MCP Server necesita un Personal Access Token con el scope **`api`** para acceso completo de lectura y escritura a la API REST y GraphQL de GitLab. Para una configuración de solo lectura, crea un token con el scope **`read_api`**: el servidor detecta el scope al arrancar y sirve solo las acciones de lectura, y `GITLAB_MCP_READ_ONLY=true` hace lo mismo con un token que podría escribir. Crea tokens en GitLab desde tu avatar, en **Edit profile** > **Access** > **Personal access tokens**."
+    a: "GitLab MCP Server necesita un Personal Access Token con el scope **`api`** para acceso completo de lectura y escritura a la API REST y GraphQL de GitLab. Para una configuración de solo lectura, crea un token con el scope **`read_api`**, que el servidor detecta al arrancar y al que sirve las acciones que GitLab acepta con él, y activa `GITLAB_MCP_READ_ONLY=true`, que retiene toda escritura lleve el token lo que lleve, incluidas las pocas que GitLab acepta con `read_api`. Crea tokens en GitLab desde tu avatar, en **Edit profile** > **Access** > **Personal access tokens**."
   - q: "¿Cómo conecto a una instancia de GitLab autogestionada?"
     a: "Apunta `GITLAB_URL` a tu instancia, por ejemplo `GITLAB_URL=https://gitlab.example.com`. `GITLAB_URL` usa `https://gitlab.com` por defecto, así que solo la estableces para instancias autogestionadas Community o Enterprise Edition. Si la instancia usa un certificado autofirmado o de CA interna, establece también `GITLAB_MCP_SKIP_TLS_VERIFY=true` para omitir la verificación del certificado en una red de confianza."
   - q: "¿Qué modo de herramientas usa GitLab MCP Server por defecto?"
     a: "Por defecto, GitLab MCP Server funciona en **modo dinámico**, que expone solo dos herramientas — `gitlab_find_action` y `gitlab_execute_action` — para mantener pequeño el contexto del cliente de IA sin dejar de alcanzar cualquier operación de GitLab. Establece `GITLAB_MCP_TOOL_SURFACE=meta` para meta-herramientas consolidadas por dominio, o `GITLAB_MCP_TOOL_SURFACE=individual` para una herramienta por operación."
   - q: "¿Por qué mi cliente de IA no se conecta?"
-    a: "Una conexión fallida suele significar que GitLab MCP Server no puede alcanzar GitLab o no puede autenticarse. Comprueba que `GITLAB_URL` es correcta y accesible desde tu máquina, que el token tiene el scope `api` (o `read_api`, al que solo se le sirven las acciones de lectura) y no ha caducado, y que los certificados autofirmados se gestionan estableciendo `GITLAB_MCP_SKIP_TLS_VERIFY=true`."
+    a: "Una conexión fallida suele significar que GitLab MCP Server no puede alcanzar GitLab o no puede autenticarse. Comprueba que `GITLAB_URL` es correcta y accesible desde tu máquina, que el token tiene el scope `api` (o `read_api`, al que se le sirven las acciones que GitLab acepta con él) y no ha caducado, y que los certificados autofirmados se gestionan estableciendo `GITLAB_MCP_SKIP_TLS_VERIFY=true`."
 ---
 
 import { CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
@@ -107,7 +107,7 @@ Antes de comenzar, asegúrate de tener:
 3. Copia el token — lo necesitarás para la configuración
 
 :::tip
-Para configuraciones de solo lectura, usa un token con el scope `read_api`: el servidor detecta el scope al arrancar y sirve solo las acciones de lectura, tanto en stdio como en modo HTTP. Si aun así se le pide ejecutar una acción de escritura, `gitlab_execute_action` responde que la acción existe y que el scope del token no la cubre, en lugar de decir que no la conoce. `GITLAB_MCP_READ_ONLY=true` sirve la misma superficie de solo lectura a un token que podría escribir, y `gitlab_execute_action` responde entonces que es el despliegue, y no el token, quien retiene la acción.
+Para configuraciones de solo lectura, usa un token con el scope `read_api`: el servidor detecta el scope al arrancar y sirve las acciones que GitLab acepta con él, tanto en stdio como en modo HTTP. Si se le pide ejecutar una acción que GitLab solo responde con `api`, `gitlab_execute_action` responde que la acción existe y que GitLab exige para ella el scope `api`, en lugar de decir que no la conoce. GitLab acepta `read_api` para unas pocas acciones que escriben, como descargar un paquete a un fichero local, así que una configuración que no deba escribir nada activa también `GITLAB_MCP_READ_ONLY=true`; ese interruptor sirve la superficie de solo lectura menos lo que no alcanza el scope del token, y `gitlab_execute_action` responde entonces que es el despliegue quien retiene una escritura, mientras que las dos lecturas que GitLab solo responde con `api`, `template.lint` y `project.dependency_firewall_evaluate`, se siguen respondiendo como retenidas por el scope `api`. La entrada de cada acción en la [referencia de herramientas](/gitlab-mcp-server/es/reference/tools/) dice qué scope necesita.
 :::
 
 ## Instalación rápida
@@ -299,7 +299,7 @@ Hay una instancia pública en **`https://mcp.jmrp.io/gitlab`** — nada que inst
 }
 ```
 
-El endpoint funciona en modo OAuth, así que la credencial viaja en `Authorization: Bearer`: un token de acceso personal de GitLab sirve ahí, verificado igual que uno de OAuth. Viaja en cada petición y nunca se guarda en el servidor. Un cliente que hable el flujo OAuth no necesita cabecera alguna: el `401` lleva un desafío `WWW-Authenticate: Bearer` (RFC 6750) que nombra el documento de metadatos RFC 9728, y lo sigue para autorizar en el navegador. `PRIVATE-TOKEN` es la cabecera del modo legacy y aquí no se acepta; la instancia está fijada a `https://gitlab.com`, así que `GITLAB-URL` se ignora. Un token `read_api` se acepta y recibe una superficie de herramientas de solo lectura.
+El endpoint funciona en modo OAuth, así que la credencial viaja en `Authorization: Bearer`: un token de acceso personal de GitLab sirve ahí, verificado igual que uno de OAuth. Viaja en cada petición y nunca se guarda en el servidor. Un cliente que hable el flujo OAuth no necesita cabecera alguna: el `401` lleva un desafío `WWW-Authenticate: Bearer` (RFC 6750) que nombra el documento de metadatos RFC 9728, y lo sigue para autorizar en el navegador. `PRIVATE-TOKEN` es la cabecera del modo legacy y aquí no se acepta; la instancia está fijada a `https://gitlab.com`, así que `GITLAB-URL` se ignora. Un token `read_api` se acepta y recibe las acciones que GitLab acepta con él.
 
 Hay dos páginas que lo ponen aún más fácil. La [ficha del servidor](https://mcp.jmrp.io/es/servers/gitlab/) enumera el catálogo completo sin credencial alguna y trae configuración lista para copiar para Claude Code, Cursor y VS Code — incluido el client ID de OAuth que esos clientes necesitan. El [inspector del navegador](https://mcp.jmrp.io/es/inspector/?server=gitlab) llama a ese mismo endpoint en modo solo lectura desde una pestaña: inicias sesión con OAuth, eliges una herramienta y lees el JSON-RPC en crudo que devuelve — sin instalar nada.
 
@@ -771,7 +771,7 @@ No necesitas conocer IDs de proyecto, endpoints ni JSON: el asistente los resuel
 Si obtienes errores de conexión, comprueba:
 
 - Que `GITLAB_URL` es correcta y accesible desde tu máquina
-- Que el token tiene el scope `api`, o `read_api` solo para acciones de lectura
+- Que el token tiene el scope `api`, o `read_api` para las acciones que GitLab acepta con él
 - Para certificados autofirmados, establece `GITLAB_MCP_SKIP_TLS_VERIFY=true`
 
 :::

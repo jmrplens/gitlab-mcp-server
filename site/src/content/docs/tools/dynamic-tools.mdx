@@ -243,10 +243,10 @@ A call that passes this check and still carries a value the action cannot take i
 
 An action the catalog holds but this session may not run is never answered as unknown, since a model told "unknown action" concludes that the server lacks the capability. Execute names the cause instead:
 
-- **The credential's scopes.** A `read_api` token is served the reads only, and the administration groups need `admin_mode`. A call to an action the scopes withheld is answered with the message below. The way out it names is the `api` scope; for an administration action, `admin_mode` is the scope the credential lacks.
+- **The credential's scopes.** A `read_api` token is served the actions GitLab accepts from `read_api`, judged per action from what each sends, and the administration groups need `admin_mode`. A call to an action the scopes withheld is answered with the message below, which names the scopes the credential lacks for that action and who asks for each: GitLab asks `api` of what the action sends, and this server asks `admin_mode` before it serves an administration group, which GitLab does not ask of every action in it. An administration write on a `read_api` token is answered with both, as in `GitLab requires the api scope for it, this server serves this action's group only to a credential carrying the admin_mode scope, and the credential in use does not carry them`. Because GitLab accepts `read_api` for five actions that write, `gitlab_execute_action` carries `readOnlyHint: false` and `destructiveHint: true` in a `read_api` session, as it does for an `api` token.
 
   ```text
-  gitlab_execute_action: action "issue.create" exists but is not available to this session: the credential in use does not carry a GitLab scope that covers it, so a narrowed action surface was built for it. Reauthorize with the api scope to use it; do not report the capability as missing.
+  gitlab_execute_action: action "issue.create" exists but is not available to this session: GitLab requires the api scope for it and the credential in use does not carry it, so a narrowed action surface was built for it. Reauthorize with the api scope to use it; do not report the capability as missing.
   ```
 
 - **The operator.** A write that read-only mode removed (`GITLAB_MCP_READ_ONLY=true` or `--read-only`) is answered:
@@ -259,7 +259,7 @@ An action the catalog holds but this session may not run is never answered as un
 
 An action removed by name with `GITLAB_MCP_EXCLUDE_TOOLS` (`--exclude-tools`) is never reported this way: the operator asked for it not to exist, so execute answers it as unknown. So is an action above the instance's tier, which is not in the catalog at all.
 
-Find follows the same split. A scope or read-only narrowing removes the actions from the catalog find searches. A fine-grained session searches the whole catalog and has the actions its grant does not list left out of its results before `limit` is applied, so the next best match takes their place, while execute still resolves them: it refuses with the reason an action the grant does not let through, and hands the rest to GitLab, which may serve one on a public project or group. A `related_actions` link to a withheld action is kept, since following it explains the narrowing; a link to an action above the tier or excluded by name is dropped.
+Find follows the same split. A scope narrowing or the operator's read-only mode removes the actions from the catalog find searches. A fine-grained session searches the whole catalog and has the actions its grant does not list left out of its results before `limit` is applied, so the next best match takes their place, while execute still resolves them: it refuses with the reason an action the grant does not let through, and hands the rest to GitLab, which may serve one on a public project or group. A `related_actions` link to a withheld action is kept, since following it explains the narrowing; a link to an action above the tier or excluded by name is dropped.
 
 ## How does search find actions?
 

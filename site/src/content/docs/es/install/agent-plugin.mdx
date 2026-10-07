@@ -62,7 +62,7 @@ que no definas no cuestan nada y el servidor aplica su valor por defecto:
 | Variable                          | Obligatoria | Valor si no se define                                                                                       |
 | --------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------- |
 | `GITLAB_URL`                      | No          | `https://gitlab.com`; defínela para una instancia autogestionada                                            |
-| `GITLAB_TOKEN`                    | Sí          | ninguno: un token de acceso personal (`api`, o `read_api` para una superficie de solo lectura)              |
+| `GITLAB_TOKEN`                    | Sí          | ninguno: un token de acceso personal (`api`, o `read_api` para las acciones que GitLab acepta con él)       |
 | `GITLAB_MCP_SKIP_TLS_VERIFY`      | No          | `false`                                                                                                     |
 | `GITLAB_MCP_TOOL_SURFACE`         | No          | `dynamic` (las alternativas son `meta` e `individual`)                                                      |
 | `GITLAB_MCP_CAPABILITY_SURFACE`   | No          | `full` (`minimal` conserva solo el manifiesto `gitlab://tools`)                                             |

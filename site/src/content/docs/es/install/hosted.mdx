@@ -54,13 +54,13 @@ que este servidor no puede usar, así que todas las acciones fallarían.
 
 ## Tokens y qué desbloquea cada uno
 
-| Credencial                    | Resultado                                                                                                                                                                                                      |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Token con el scope `api`      | La superficie de herramientas completa.                                                                                                                                                                        |
-| Token con el scope `read_api` | Se admite y recibe una superficie de herramientas de solo lectura. La comprobación de escritura es por acción, así que una credencial que no puede cambiar nada es una vía de entrada soportada, no rechazada. |
-| Cabecera `PRIVATE-TOKEN`      | No se acepta. Es la cabecera del modo legacy; el endpoint solo admite Bearer.                                                                                                                                  |
-| Cabecera `GITLAB-URL`         | Se ignora. La instancia está fijada a `https://gitlab.com`, así que una instancia autogestionada no se puede alcanzar a través de este endpoint.                                                               |
-| Sin credencial                | Cualquier método responde `401` con `WWW-Authenticate: Bearer ... resource_metadata=...`, el desafío que sigue un cliente OAuth.                                                                               |
+| Credencial                    | Resultado                                                                                                                                                                                                                                                                     |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Token con el scope `api`      | La superficie de herramientas completa.                                                                                                                                                                                                                                       |
+| Token con el scope `read_api` | Se admite y recibe las acciones que GitLab acepta con `read_api`. La comprobación es por acción, así que una credencial a la que GitLab no acepta ninguna escritura, salvo que un personal access token se revoque a sí mismo, es una vía de entrada soportada, no rechazada. |
+| Cabecera `PRIVATE-TOKEN`      | No se acepta. Es la cabecera del modo legacy; el endpoint solo admite Bearer.                                                                                                                                                                                                 |
+| Cabecera `GITLAB-URL`         | Se ignora. La instancia está fijada a `https://gitlab.com`, así que una instancia autogestionada no se puede alcanzar a través de este endpoint.                                                                                                                              |
+| Sin credencial                | Cualquier método responde `401` con `WWW-Authenticate: Bearer ... resource_metadata=...`, el desafío que sigue un cliente OAuth.                                                                                                                                              |
 
 Usa un token con el alcance que realmente necesites. Un endpoint alojado ve
 todas las peticiones que le envías; `read_api` es la elección correcta

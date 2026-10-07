@@ -90,8 +90,8 @@ Tres cosas acotan esa medida, y las tres importan al aplicarla:
 
 Una **forma** es todo lo que decide qué registra un servidor: superficie de
 herramientas, superficie de capacidades, modo de esquema de parámetros de las
-meta-herramientas, tier y si se fijó, GitLab.com o autogestionado, solo lectura
-incluida la restricción que provoca un token `read_api`, modo seguro,
+meta-herramientas, tier y si se fijó, GitLab.com o autogestionado, solo lectura,
+la reducción que provoca un token `read_api`, modo seguro,
 herramientas excluidas, ámbitos del token y si el transporte es sin estado. Toda
 credencial cuyo hash caiga en una forma la sirve un único servidor MCP.
 
@@ -105,14 +105,14 @@ HTTP sin ninguna credencial, y por tanto sin forma registrada, ocupa allí entre
 Cuántas formas produce un despliegue es un número pequeño y acotado, y la mayor
 parte la controlas tú:
 
-| Entrada                    | Valores en un despliegue                                                                  |
-| -------------------------- | ----------------------------------------------------------------------------------------- |
-| Tier                       | 1 con `--tier` fijado; hasta 3 (free, premium, ultimate) cuando se detecta por credencial |
-| Ámbitos del token          | 2, porque solo `admin_mode` cambia el catálogo                                            |
-| Detección de ámbitos       | 2, o 1 con `--ignore-scopes`                                                              |
-| Restricción a solo lectura | 2 cuando el operador no fijó `--read-only`, 1 cuando sí                                   |
-| GitLab.com o no            | 1, o 2 en un despliegue que publica ambos                                                 |
-| Todo lo demás              | 1 cada uno; son ajustes de proceso                                                        |
+| Entrada                  | Valores en un despliegue                                                                  |
+| ------------------------ | ----------------------------------------------------------------------------------------- |
+| Tier                     | 1 con `--tier` fijado; hasta 3 (free, premium, ultimate) cuando se detecta por credencial |
+| Ámbitos del token        | 2, porque solo `admin_mode` cambia el catálogo                                            |
+| Detección de ámbitos     | 2, o 1 con `--ignore-scopes`                                                              |
+| Reducción por `read_api` | 2, o 1 con `--ignore-scopes`; `--read-only` no la reduce a uno                            |
+| GitLab.com o no          | 1, o 2 en un despliegue que publica ambos                                                 |
+| Todo lo demás            | 1 cada uno; son ajustes de proceso                                                        |
 
 Un despliegue con `--tier` fijado y `--ignore-scopes` produce exactamente una
 forma. Uno típico produce entre dos y ocho, y el peor caso no llega a cincuenta.
@@ -162,8 +162,8 @@ Quinientas personas desarrollando, un editor cada una, en la superficie dinámic
 por defecto, contra una instancia Ultimate autogestionada, con `--tier=ultimate`
 fijado.
 
-**Memoria.** Con el nivel fijado, solo los ámbitos del token y el
-estrechamiento a solo lectura pueden seguir dividiendo la forma (la tabla de
+**Memoria.** Con el nivel fijado, solo los ámbitos del token y la
+reducción de un token `read_api` pueden seguir dividiendo la forma (la tabla de
 arriba), así que de uno a unos pocos catálogos, y exactamente uno si además se
 pasa `--ignore-scopes`; un proceso con uno ocupa unos 39 MiB de heap vivo.
 Quinientas
