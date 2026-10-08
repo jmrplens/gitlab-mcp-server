@@ -120,7 +120,7 @@ Add these to the `env` block (and, for Docker, a matching `-e NAME` in
 
 | Variable                 | Default   | Purpose                                                                                          |
 | ------------------------ | --------- | ------------------------------------------------------------------------------------------------ |
-| `GITLAB_MCP_TOOL_SURFACE`           | `dynamic` | Tool surface: `dynamic` (2 find/execute tools, lowest token use), `meta` (one tool per domain group: 34 on Free, up to 52 on GitLab.com Ultimate), `individual` (one tool per action) |
+| `GITLAB_MCP_TOOL_SURFACE`           | `dynamic` | Tool surface: `dynamic` (2 find/execute tools, lowest token use), `meta` (one tool per domain group: 34 on Free, up to 52 on GitLab.com Ultimate, fewer for a token without `admin_mode`; see Step 4), `individual` (one tool per action) |
 | `GITLAB_MCP_TIER`            | detected  | Force `free`, `premium`, or `ultimate`, used as written. Unset, the tier is detected from the instance license, then from the plans of the namespaces the token administers, and falls back to `free` |
 | `GITLAB_MCP_READ_ONLY`       | `false`   | Remove every mutating action; reads keep working                                                  |
 | `GITLAB_MCP_SAFE_MODE`       | `false`   | Mutating actions answer with a preview card (the action and the arguments it would send) instead of executing |
@@ -149,9 +149,9 @@ Full reference: <https://jmrp.io/docs/gitlab-mcp-server/configuration/>
 
 ## Troubleshooting
 
-- **401 Unauthorized on the smoke test**: GitLab refused the token itself:
-  it is mistyped, expired or revoked, or was issued by another instance than
-  `GITLAB_URL`. Ask the user for a new token. A 401 from only some actions,
+- **401 Unauthorized on the smoke test**: GitLab refused the token itself,
+  because it is mistyped, expired or revoked, or belongs to an instance other
+  than the one `GITLAB_URL` names. Ask the user for a new token. A 401 from only some actions,
   while the smoke test works, is GitLab refusing a permission on those
   routes rather than the token.
 - **Every tool, resource and prompt request fails with JSON-RPC error

@@ -31,7 +31,7 @@ HTTP transport (remote/shared use). The image's default command is `--transport 
 docker run --rm -p 8080:8080 -e GITLAB_URL=https://gitlab.com jmrplens/gitlab-mcp-server:latest
 ```
 
-Any argument after the image name replaces the default command, so naming the instance as a flag brings `--http` and `--http-addr` back with it:
+Any argument after the image name replaces the default command, so naming the instance as a flag means naming the transport again with `--http` (the `--http-addr` below is the image's own; the default `:8080` listens on the same port):
 
 ```bash
 docker run --rm -p 8080:8080 jmrplens/gitlab-mcp-server:latest \
