@@ -277,8 +277,8 @@ send its GraphQL request instead, GitLab answers that request empty, and the ans
 carries a note saying so.
 
 The [fine-grained permissions reference](/gitlab-mcp-server/reference/fine-grained-permissions/)
-names the reason for each. Making GitLab declare the missing permissions is
-[issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055), and serving
+names the reason for each. Making GitLab declare the missing permissions is tracked in
+[row 87 of the upstream register](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission), and serving
 over REST what GraphQL cannot reach is
 [issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054).
 

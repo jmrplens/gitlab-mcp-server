@@ -459,7 +459,7 @@ func buildDomainReport(ctx context.Context, pkg string, actions []actionDetail, 
 		if _, ok := docOverrideForAction(a.ID); ok && exp != pageTier && !slices.Contains(overrideTiers, exp) {
 			overrideTiers = append(overrideTiers, exp)
 		}
-		if declared := parseEditionTier(a.Edition); declared != exp {
+		if parseEditionTier(a.Edition) != exp {
 			a.Mismatch = true
 			dr.Mismatches++
 		}

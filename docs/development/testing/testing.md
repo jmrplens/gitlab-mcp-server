@@ -20,13 +20,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 20,922 |
-| Unit test functions                                   | 19,454 |
-| E2E test functions                                    |  1,468 |
-| cmd test functions                                    |  4,672 |
-| Test files (internal/)                                |    698 |
-| Test files (cmd/)                                     |    322 |
-| Test files (test/e2e/)                                |    409 |
+| Total test functions                                  | 20,979 |
+| Unit test functions                                   | 19,510 |
+| E2E test functions                                    |  1,469 |
+| cmd test functions                                    |  4,714 |
+| Test files (internal/)                                |    699 |
+| Test files (cmd/)                                     |    325 |
+| Test files (test/e2e/)                                |    410 |
 | Tool sub-packages tested                              |    180 |
 | Core packages tested                                  |     32 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  99.9% |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,226 | 63.2% |
-| `TestFunc` (no underscore)             |    911 |  4.4% |
-| `TestFunc_Scenario_Expected` (3+ part) |  6,785 | 32.4% |
+| `TestFunc_Scenario` (2-part)           | 13,218 | 63.0% |
+| `TestFunc` (no underscore)             |    911 |  4.3% |
+| `TestFunc_Scenario_Expected` (3+ part) |  6,850 | 32.7% |
 
 ## Test Distribution
 
@@ -48,11 +48,11 @@
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          3,826 |        225 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            394 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (180) |         10,562 |        457 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,468 |        409 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          4,672 |        322 | server entry point and developer command utilities                                              |
-| **Total**               |     **20,922** |  **1,429** |                                                                                                 |
+| Tools orchestration     |            395 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Tool sub-packages (180) |         10,575 |        458 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,469 |        410 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          4,714 |        325 | server entry point and developer command utilities                                              |
+| **Total**               |     **20,979** |  **1,434** |                                                                                                 |
 
 ### Core Packages
 
@@ -105,9 +105,9 @@
 | packages          |   177 |   100.0% |    10 |
 | commits           |   150 |   100.0% |    13 |
 | jobs              |   150 |   100.0% |    17 |
+| pipelines         |   143 |   100.0% |    12 |
 | search            |   136 |   100.0% |    10 |
 | awardemoji        |   130 |   100.0% |    24 |
-| pipelines         |   130 |   100.0% |    12 |
 | resourceevents    |   129 |   100.0% |    17 |
 | runners           |   128 |   100.0% |    19 |
 | workitems         |   128 |    99.8% |     6 |
@@ -253,7 +253,7 @@
 | orbit                   |         70 |          3 |   100.0% |         6 |
 | packages                |        177 |          6 |   100.0% |        10 |
 | pages                   |         64 |          2 |   100.0% |         9 |
-| pipelines               |        130 |          4 |   100.0% |        12 |
+| pipelines               |        143 |          5 |   100.0% |        12 |
 | pipelineschedules       |        108 |          4 |   100.0% |        11 |
 | pipelinetriggers        |         70 |          2 |   100.0% |         6 |
 | planlimits              |         16 |          1 |   100.0% |         2 |
@@ -309,7 +309,7 @@
 | wikis                   |         71 |          2 |   100.0% |         6 |
 | workitems               |        128 |          5 |    99.8% |         6 |
 | workitemsavedviews      |         59 |          4 |   100.0% |         7 |
-| **Total**               | **10,562** |    **457** |          | **1,190** |
+| **Total**               | **10,575** |    **458** |          | **1,190** |
 
 </details>
 
@@ -337,7 +337,7 @@
 | cmd/audit_doc_tool_names                  |   100.0% |
 | cmd/audit_dynamic_aliases                 |   100.0% |
 | cmd/audit_e2e_coverage                    |   100.0% |
-| cmd/audit_edition_tier                    |    99.6% |
+| cmd/audit_edition_tier                    |   100.0% |
 | cmd/audit_gateway_chars                   |   100.0% |
 | cmd/audit_graphql_documents               |    93.8% |
 | cmd/audit_graphql_shapes                  |   100.0% |

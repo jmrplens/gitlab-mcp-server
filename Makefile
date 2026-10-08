@@ -1823,9 +1823,10 @@ audit-1to1-grants:
 ## every action's permissions in GitLab's words with the directive or declaration that
 ## shaped its requests, the actions no fine-grained token reaches by cause, the parts of an
 ## answer served empty, the REST operations a public project or group serves with no grant,
-## issue 1055's GraphQL worklist with its REST leads, and the derivation held to the request
-## inventory and, when a Docker run left shards under $(E2E_CALLS_DIR), to each action's
-## request count. It reports and gates on nothing audit-1to1-grants does not.
+## the GraphQL worklist of upstream register row 87 with its REST leads, and the derivation
+## held to the request inventory and, when a Docker run left shards under $(E2E_CALLS_DIR),
+## to each action's request count. It reports and gates on nothing audit-1to1-grants does
+## not.
 audit-1to1-grants-report:
 	@mkdir -p plan
 	go run ./cmd/audit_1to1/ -scope=grants $(if $(wildcard $(E2E_CALLS_DIR)),-e2e-calls $(E2E_CALLS_DIR)) -output plan/1to1-grants.json
