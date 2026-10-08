@@ -262,7 +262,9 @@ func serveOnUnixSocket(t *testing.T, handler http.Handler) string {
 
 // TestRunProbe_ExplicitTarget covers a target given on the command line
 // against each kind of listener, plus the answers a probe must not take for
-// healthy and the exit code a malformed target earns.
+// healthy and the exit code a malformed target earns. A target nothing listens
+// on is TestRunProbe_ATargetNothingListensOn_IsReportedRefused, which cannot
+// run in parallel as these do.
 func TestRunProbe_ExplicitTarget(t *testing.T) {
 	t.Parallel()
 
@@ -272,9 +274,6 @@ func TestRunProbe_ExplicitTarget(t *testing.T) {
 	t.Cleanup(unhealthy.Close)
 	tlsServer := httptest.NewTLSServer(healthMux(http.StatusOK))
 	t.Cleanup(tlsServer.Close)
-	closed := httptest.NewServer(healthMux(http.StatusOK))
-	closedURL := closed.URL
-	closed.Close()
 
 	cases := []struct {
 		name     string
@@ -286,7 +285,6 @@ func TestRunProbe_ExplicitTarget(t *testing.T) {
 		{name: "host:port", target: strings.TrimPrefix(healthy.URL, "http://"), wantCode: probeHealthy, wantSaid: "answered"},
 		{name: "TLS without a pin gets the standard verification, which a self-signed listener fails", target: tlsServer.URL, wantCode: probeUnhealthy, wantSaid: "x509"},
 		{name: "a 503 is not healthy", target: unhealthy.URL, wantCode: probeUnhealthy, wantSaid: "503"},
-		{name: "nothing listening", target: closedURL, wantCode: probeUnhealthy, wantSaid: "refused"},
 		{name: "a target that does not parse", target: "not a target", wantCode: probeUsage, wantSaid: "not a URL"},
 	}
 	for _, tc := range cases {
@@ -301,6 +299,31 @@ func TestRunProbe_ExplicitTarget(t *testing.T) {
 				t.Errorf("runProbe(%q) said %q, want it to mention %q", tc.target, said.String(), tc.wantSaid)
 			}
 		})
+	}
+}
+
+// TestRunProbe_ATargetNothingListensOn_IsReportedRefused covers an explicit
+// target with no listener behind it: the probe is unhealthy and says the
+// connection was refused, which tells an operator that nothing is there rather
+// than that something there misbehaved.
+//
+// It does not run in parallel, for the reason deadUnixSocket gives: a sibling
+// starting a process keeps the closed listener open in its child until the
+// child's exec, and a connect that lands there is reset instead of refused.
+// That reset was measured here, once in 3000 runs beside the package's tests
+// that start processes.
+func TestRunProbe_ATargetNothingListensOn_IsReportedRefused(t *testing.T) {
+	closed := httptest.NewServer(healthMux(http.StatusOK))
+	target := closed.URL
+	closed.Close()
+
+	var said bytes.Buffer
+	code := runProbe(t.Context(), []string{target}, "", probeDeps{}, &said)
+	if code != probeUnhealthy {
+		t.Errorf("runProbe(%q) = %d, want %d: %s", target, code, probeUnhealthy, said.String())
+	}
+	if !strings.Contains(said.String(), "refused") {
+		t.Errorf("runProbe(%q) said %q, want it to mention %q", target, said.String(), "refused")
 	}
 }
 

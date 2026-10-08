@@ -26,6 +26,26 @@ func serverBuildArgs(out string) []string {
 // on a machine that has just compiled these tests.
 const serverBuildTimeout = 15 * time.Minute
 
+// callTimeout bounds how long call waits for its response, under the detector.
+// A call made while the catalog is still being registered waits for it, so
+// this is a registration's bound, for the reason registrationTimeout gives.
+const callTimeout = 3 * time.Minute
+
+// registrationTimeout bounds a wait that ends only once the server has
+// registered its catalog, under the detector: the answer to a request the
+// server holds until then, read by a test that sent the request itself rather
+// than through call, or the log line that says the catalog is ready.
+//
+// An instrumented server registers the individual surface ten to fourteen
+// times more slowly than an ordinary one, on one core: the first tools/list
+// of a fine-grained token's individual-surface start is answered about 20
+// seconds after the process starts on an idle five-core machine and was
+// past 30 on a CI runner a third slower per core, where the ordinary build
+// answers it in under two. Three minutes still turns a server that never
+// finishes into a failure naming what was awaited, rather than the package
+// timeout.
+const registrationTimeout = 3 * time.Minute
+
 // raceEnviron is the extra environment an instrumented server is started with.
 //
 // Without halt_on_error the race runtime prints its report to stderr and lets

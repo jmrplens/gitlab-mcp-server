@@ -90,12 +90,11 @@ const (
 
 // testHTTPClient avoids http.DefaultClient in tests so that stalled mock
 // servers cannot hang the entire test suite indefinitely.
-// The 30-second timeout matches testHTTPLivenessTimeout's reasoning: a
-// healthy server answers in milliseconds, and the budget only matters on
-// the first request of a process under the race detector, where building
-// the pool entry's full catalog alone can exceed ten seconds. A passing
-// test is never slowed by the larger value.
-var testHTTPClient = &http.Client{Timeout: 30 * time.Second}
+// The timeout is a registration's: a healthy server answers in milliseconds,
+// and the budget only matters on the first request of a process under the
+// race detector, where building the pool entry's full catalog alone can
+// exceed ten seconds. A passing test is never slowed by the larger value.
+var testHTTPClient = &http.Client{Timeout: testCatalogBuildTimeout}
 
 // TestMain spends, before any test runs, the one delegation each OpenTelemetry
 // global allows. The first provider a process installs becomes the permanent
@@ -3461,10 +3460,13 @@ func listedToolNames(t *testing.T, client *gitlabclient.Client, cfg *config.Serv
 	return names
 }
 
-// TestCreateServer_ToolManifestInspectionError verifies createServer remains
-// usable when the best-effort visible-tool inspection for the tool manifest
-// fails, covering the defensive warning path.
+// TestCreateServer_ToolManifestInspectionError verifies what a registration
+// does when the one listing of its own tools fails: it says so in one warning
+// naming the manifest it cannot serve, leaves gitlab://tools out, and serves
+// everything else, since the listing only ever read the tools that registration
+// had already put in place.
 func TestCreateServer_ToolManifestInspectionError(t *testing.T) {
+	logged := captureLogMessages(t)
 	client := newMockGitLabClient(t)
 	replaceRegistrationHook(t, &listRegisteredToolsForInspection, func(_ *mcp.Server, _ string) ([]*mcp.Tool, error) {
 		return nil, errors.New("forced inspection failure")
@@ -3472,19 +3474,35 @@ func TestCreateServer_ToolManifestInspectionError(t *testing.T) {
 
 	// Build directly: the stubbed inspection hook must not be captured into
 	// (or satisfied from) the shared mustCreateServer cache.
-	server, err := createServer(t.Context(), client, &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta})
+	server, err := createServer(t.Context(), client, &config.ServerConfig{
+		ToolSurface:       config.ToolSurfaceMeta,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+	})
 	if err != nil {
 		t.Fatalf("createServer() error: %v", err)
 	}
+	if want := "failed to list registered tools; gitlab://tools is not served"; !logged(want) {
+		t.Errorf("registration did not warn %q when its listing failed", want)
+	}
+
 	session := newInMemorySession(t, server)
 	if _, readErr := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools"}); readErr == nil {
-		t.Fatal("tool manifest should be omitted when inspection fails")
+		t.Error("tool manifest should be omitted when inspection fails")
+	}
+	if names, _ := listedNames(t, session); !slices.Contains(names, "gitlab_issue") {
+		t.Errorf("tools/list = %v, want the meta tools registered before the listing failed", names)
+	}
+	if _, readErr := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://guides/git-workflow"}); readErr != nil {
+		t.Errorf("read gitlab://guides/git-workflow: %v; a failed listing should cost the manifest and nothing else", readErr)
+	}
+	if prompts, listErr := session.ListPrompts(t.Context(), nil); listErr != nil || len(prompts.Prompts) == 0 {
+		t.Errorf("prompts/list = %v, %v; want the prompts served", prompts, listErr)
 	}
 }
 
 // TestListRegisteredTools_ErrorPaths verifies defensive error wrapping for
-// the in-memory MCP inspection helper used by tool counting and schema route
-// filtering.
+// the in-memory MCP inspection helper a registration lists its own tools
+// through, once, for the count it logs and the gitlab://tools manifest.
 func TestListRegisteredTools_ErrorPaths(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "inspection-errors", Version: "0"}, nil)
 	forcedErr := errors.New("forced failure")
@@ -3534,10 +3552,10 @@ func TestListRegisteredTools_ErrorPaths(t *testing.T) {
 // would not.
 func settleShapeRegistrations(t *testing.T) {
 	t.Helper()
-	deadline := time.Now().Add(testHTTPLivenessTimeout)
+	deadline := time.Now().Add(testCatalogBuildTimeout)
 	for shapeRegistrationsRunning.Load() > 0 {
 		if time.Now().After(deadline) {
-			t.Fatalf("a shape registration was still running after %s", testHTTPLivenessTimeout)
+			t.Fatalf("a shape registration was still running after %s", testCatalogBuildTimeout)
 		}
 		time.Sleep(time.Millisecond)
 	}
@@ -3546,7 +3564,7 @@ func settleShapeRegistrations(t *testing.T) {
 // replaceRegistrationHook sets *hook to replacement for the rest of the test
 // and puts the original back when it ends, each only once no shape
 // registration is running. Every hook a registration reads (the three catalog
-// builds and the in-memory inspection the tool count and the manifest make) is
+// builds and the in-memory inspection the tool count and the manifest share) is
 // replaced through it, so the replacement never races a registration an
 // earlier test's server left running, nor the restore one this test's left.
 func replaceRegistrationHook[T any](t *testing.T, hook *T, replacement T) {
@@ -3775,7 +3793,7 @@ func TestRunStdio_StartupOutlivingTheClient_IsCutOffAtTheDrain(t *testing.T) {
 		t.Error("runStdio returned without noting that startup was still running")
 	}
 
-	deadline := time.Now().Add(testHTTPLivenessTimeout)
+	deadline := time.Now().Add(testCatalogBuildTimeout)
 	for !logged("tool catalog ready") {
 		if time.Now().After(deadline) {
 			t.Fatal("the startup goroutine never finished its catalog build")
@@ -3886,10 +3904,12 @@ func stdoutLines(t *testing.T) (lines <-chan string, stop func()) {
 }
 
 // awaitResponse returns the first JSON-RPC response carrying id, skipping
-// anything else the server writes in between.
+// anything else the server writes in between. Its bound is a registration's,
+// because a listing sent during startup is held until the catalog is
+// registered.
 func awaitResponse(t *testing.T, lines <-chan string, id int) string {
 	t.Helper()
-	timeout := time.After(testHTTPLivenessTimeout)
+	timeout := time.After(testCatalogBuildTimeout)
 	for {
 		select {
 		case line := <-lines:
@@ -4195,7 +4215,9 @@ func TestBuildServerCard_InMemoryFailures_AreWrapped(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.arrange(t)
-			err := buildServerCardWithin(t, cfg, testHTTPLivenessTimeout)
+			// A registration's bound: buildServerCard registers a whole
+			// server before it opens the session these failures are in.
+			err := buildServerCardWithin(t, cfg, testCatalogBuildTimeout)
 			if !errors.Is(err, forced) || !strings.Contains(err.Error(), tc.name) {
 				t.Errorf("buildServerCard() = %v, want the %s failure named", err, tc.name)
 			}
@@ -5120,15 +5142,16 @@ func TestNewServerShell_RateLimitAndProgressNotifications(t *testing.T) {
 // TestCreateServer_StartupInspectionIsNotChargedToTheCatalogBucket pins the
 // mark on the hook every startup goes through.
 //
-// Registration speaks MCP to the server it is building: it counts the
-// registered tools, applies the exclusion and visibility passes and builds the
-// gitlab://tools manifest, each over an in-memory session that travels the
-// same receiving middlewares a client's requests do.
-// Once tools/list is metered, those listings are charged to the deployment's
-// own bucket unless connectInspectionServer marks them, and on the tightest
-// configuration an operator can pass the second one is refused: the manifest
-// resource then fails to build, before any client has connected, and the
-// server comes up missing gitlab://tools.
+// Registration speaks MCP to the server it is building: it lists the
+// registered tools once, for the count it logs and the gitlab://tools manifest
+// it builds, over an in-memory session that travels the same receiving
+// middlewares a client's requests do.
+// Once tools/list is metered, that listing is charged to the deployment's own
+// bucket unless connectInspectionServer marks it, and on the tightest
+// configuration an operator can pass the bucket holds one listing: startup
+// would spend it before any client had connected, and the client's first
+// tools/list would be refused. When registration listed twice the second was
+// the one refused, and the manifest failed to build instead.
 //
 // The equivalent assertion in internal/toolutil covers ListRegisteredTools,
 // which only a read-only or safe-mode startup reaches. This one covers the
@@ -5150,24 +5173,65 @@ func TestCreateServer_StartupInspectionIsNotChargedToTheCatalogBucket(t *testing
 	if err != nil {
 		t.Fatalf("createServer() error: %v", err)
 	}
-	for _, message := range []string{
-		"failed to build tool manifest resource",
-		"failed to count registered tools",
-	} {
-		t.Run(message, func(t *testing.T) {
-			if logged(message) {
-				t.Errorf("startup logged %q; its own listings are being charged to the catalog bucket", message)
-			}
-		})
+	if message := "failed to list registered tools"; logged(message) {
+		t.Errorf("startup logged %q; its own listing is being charged to the catalog bucket", message)
 	}
 
 	session := newInMemorySession(t, server)
+	// The client's listing first: the catalog bucket holds one, so this is
+	// what fails if startup spent it.
+	if _, listErr := session.ListTools(t.Context(), nil); listErr != nil {
+		t.Errorf("the client's first tools/list was refused (%v); startup spent the catalog bucket's one listing", listErr)
+	}
 	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools"})
 	if err != nil {
 		t.Fatalf("read gitlab://tools: %v", err)
 	}
 	if len(result.Contents) == 0 || !strings.Contains(result.Contents[0].Text, "entries") {
 		t.Error("gitlab://tools came back empty, so the manifest was built from a refused listing")
+	}
+}
+
+// TestCreateServer_StartupSelfInspection_ListsTheToolsOnce pins what a
+// registration spends looking at its own surface: one tools/list, whose answer
+// is both the count it logs and the tools the gitlab://tools manifest is built
+// from.
+//
+// A listing marshals every registered tool's schemas, about a quarter of a
+// second for the individual surface's thousand tools and some three seconds of
+// an instrumented build, and registration used to make a second one only to
+// log how many tools it had. That listing was the margin the individual
+// surface's registration ran out of under the race detector on a slower CI
+// runner. The count is held to the tools a client is listed afterwards, so it
+// cannot be taken from anything but the listing either.
+func TestCreateServer_StartupSelfInspection_ListsTheToolsOnce(t *testing.T) {
+	logs := captureFineGrainedLogs(t)
+	var listings atomic.Int64
+	replaceRegistrationHook(t, &listInspectionTools, func(session *mcp.ClientSession, ctx context.Context) (*mcp.ListToolsResult, error) {
+		listings.Add(1)
+		return session.ListTools(ctx, nil)
+	})
+
+	// createServer rather than mustCreateServer, whose cache would hand back a
+	// server registered before anything here counted.
+	server, err := createServer(t.Context(), newMockGitLabClient(t), &config.ServerConfig{
+		ToolSurface:       config.ToolSurfaceMeta,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+	})
+	if err != nil {
+		t.Fatalf("createServer() error: %v", err)
+	}
+	if got := listings.Load(); got != 1 {
+		t.Errorf("registration listed its own tools %d times, want 1: the count and the manifest share one listing", got)
+	}
+
+	_, listed := listedNames(t, newInMemorySession(t, server))
+	if want := fmt.Sprintf(`msg="registered meta-tools" tools=%d`, len(listed)); !strings.Contains(logs.String(), want) {
+		t.Errorf("registration did not log the %d tools a client is listed (want %q):\n%s", len(listed), want, logs.String())
+	}
+	session := newInMemorySession(t, server)
+	if _, readErr := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools"}); readErr != nil {
+		t.Errorf("read gitlab://tools: %v; the manifest was not built from the one listing", readErr)
 	}
 }
 
@@ -6421,7 +6485,10 @@ const readinessConsecutiveSuccesses = 2
 // milliseconds, so a larger budget never slows a passing test and only
 // tolerates scheduling stalls under the race detector or on a loaded CI
 // runner. Using a single shared value keeps these waits deterministic instead
-// of flaking against a tight fixed 5s budget.
+// of flaking against a tight fixed 5s budget. A wait on a whole registration
+// is not a liveness transition and takes testCatalogBuildTimeout instead,
+// since under the race detector the largest surface takes tens of seconds to
+// register.
 const testHTTPLivenessTimeout = 30 * time.Second
 
 // readAndCloseBody consumes the response body and closes it immediately,
@@ -7665,12 +7732,12 @@ func TestRemoveNonReadOnlyTools(t *testing.T) {
 		t.Errorf("RemoveNonReadOnlyTools removed %d tools, want 1", removed)
 	}
 
-	count, err := countRegisteredTools(server)
+	remaining, err := listRegisteredTools(server, "readonly-removal")
 	if err != nil {
-		t.Fatalf("countRegisteredTools: %v", err)
+		t.Fatalf("listRegisteredTools: %v", err)
 	}
-	if count != 1 {
-		t.Errorf("after removal: %d tools, want 1", count)
+	if len(remaining) != 1 {
+		t.Errorf("after removal: %d tools, want 1", len(remaining))
 	}
 }
 
