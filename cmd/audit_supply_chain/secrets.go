@@ -81,7 +81,10 @@ var declaredSecrets = map[string]secretDeclaration{
 
 // repositoryTables are the tables this repository's own audit judges by.
 func repositoryTables() tables {
-	return tables{secrets: declaredSecrets, declarations: declaredRunTimeCode}
+	return tables{
+		secrets: declaredSecrets, declarations: declaredRunTimeCode,
+		unjudged: declaredUnjudgedActions, guarded: declaredGuardedMatches,
+	}
 }
 
 // workflowExpression finds the ${{ }} expressions of a workflow value, the

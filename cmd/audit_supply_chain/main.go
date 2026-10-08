@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -15,6 +16,7 @@ import (
 
 	yaml "go.yaml.in/yaml/v3"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
 
@@ -107,6 +109,150 @@ var unlockedCode = []unlockedRule{
 		display: `'\\bpip\\s+install\\b(?![^\\n]*--require-hashes)'`,
 		why:     "pip install without --require-hashes resolves at run time",
 	},
+	{
+		match:   regexpMatcher(cargoBinstall),
+		name:    "cargo-binstall",
+		display: `'\\bcargo[ -]binstall\\b'`,
+		why: "cargo binstall installs a prebuilt binary from a release asset or QuickInstall whatever version " +
+			"it names, which nothing committed here fixes (download the binary and hold it to a recorded SHA-256)",
+	},
+	{
+		match:   cargoInstallUnlocked,
+		name:    "cargo-install",
+		display: `'\\bcargo\\s+install\\b'`,
+		why: "cargo install resolves a crate and its dependencies at run time unless its command carries " +
+			"--locked and an exact version or a --path",
+	},
+	{
+		match:   goInstallUnpinned,
+		name:    "go-install",
+		display: `'\\bgo\\s+install\\b'`,
+		why: "go install at anything but an exact version or a full commit (a branch, a version query, " +
+			"a value only the run knows) resolves at run time",
+	},
+	{
+		match:   regexpMatcher(downloadInvokeExpression),
+		name:    "invoke-expression",
+		display: `'(?i)\\b(?:iex|invoke-expression)\\b'`,
+		why: "handing a download (iwr, irm, Invoke-WebRequest, Invoke-RestMethod, DownloadString) to " +
+			"Invoke-Expression on the same line runs unreviewed code",
+	},
+}
+
+// cargoBinstall is cargo-binstall run as cargo's subcommand or by its own
+// name, and not the name inside a URL or an archive that downloads it.
+var cargoBinstall = regexp.MustCompile(`(?m)\bcargo(?:[ \t]+binstall|-binstall(?:\.exe)?)(?:[ \t]|$)`)
+
+// downloadInvokeExpression is a download PowerShell runs as code on the same
+// line: piped into Invoke-Expression, or handed to it as its argument.
+// PowerShell's names are case-insensitive, and so is the match.
+var downloadInvokeExpression = regexp.MustCompile(
+	`(?i)\b(?:iwr|irm|invoke-webrequest|invoke-restmethod)\b[^\n|]*\|\s*(?:iex|invoke-expression)\b` +
+		`|\b(?:iex|invoke-expression)\b[^\n]*\b(?:iwr|irm|invoke-webrequest|invoke-restmethod|downloadstring)\b`,
+)
+
+// cargoInstall and goInstall find an install and the rest of its line, which
+// installCommand cuts at the first shell separator so a word of the next
+// command is not read as an argument of this one.
+var (
+	cargoInstall = regexp.MustCompile(`(?m)\bcargo[ \t]+install\b(.*)$`)
+	goInstall    = regexp.MustCompile(`(?m)\bgo[ \t]+install\b(.*)$`)
+)
+
+// exactCrateVersion is a version cargo install reads as exactly one release:
+// MAJOR.MINOR.PATCH with an optional pre-release and build, bare or behind the
+// = requirement operator, since cargo reads a bare version as exact there.
+var exactCrateVersion = regexp.MustCompile(`^=?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$`)
+
+// exactModuleVersion is a version go install fetches exactly one module
+// content for: a semantic version, a pseudo-version included, or a full
+// commit, all of which the checksum database fixes.
+var exactModuleVersion = regexp.MustCompile(`^(?:v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|[0-9a-f]{40})$`)
+
+// installArguments returns the words of every install expression finds in
+// text, each cut at the first shell separator and stripped of the quotes and
+// parentheses around it.
+func installArguments(expression *regexp.Regexp, text string) [][]string {
+	var commands [][]string
+	for _, match := range expression.FindAllStringSubmatch(text, -1) {
+		rest := match[1]
+		if end := strings.IndexAny(rest, ";&|"); end >= 0 {
+			rest = rest[:end]
+		}
+		var words []string
+		for field := range strings.FieldsSeq(rest) {
+			words = append(words, strings.Trim(field, `"'()`))
+		}
+		commands = append(commands, words)
+	}
+	return commands
+}
+
+// cargoInstallUnlocked reports whether text runs a cargo install that does not
+// carry both --locked and either an exact version or a --path on its command.
+//
+// crates.io never lets a version be republished, and --locked builds it with
+// the dependency versions it was published with, so the two together fix what
+// is built; a --path builds the checkout's own crate. Anything else, a newest
+// release or a requirement such as ^2.16, is resolved when the job runs.
+func cargoInstallUnlocked(text string) bool {
+	for _, words := range installArguments(cargoInstall, text) {
+		locked, fixed := false, false
+		for index, word := range words {
+			if word == "--locked" {
+				locked = true
+				continue
+			}
+			if fixesCrate(words, index) {
+				fixed = true
+			}
+		}
+		if !locked || !fixed {
+			return true
+		}
+	}
+	return false
+}
+
+// fixesCrate reports whether the word at index of a cargo install's words
+// fixes what it builds: a --path, or an exact version after a crate's @,
+// after --version= or --vers=, or as the word after --version or --vers.
+func fixesCrate(words []string, index int) bool {
+	word := words[index]
+	if word == "--path" || strings.HasPrefix(word, "--path=") || exactCrateVersion.MatchString(crateVersion(word)) {
+		return true
+	}
+	return (word == "--version" || word == "--vers") && index+1 < len(words) && exactCrateVersion.MatchString(words[index+1])
+}
+
+// crateVersion is the version a word of a cargo install names: the value of
+// --version= or --vers=, or what follows a crate's @, and nothing otherwise.
+func crateVersion(word string) string {
+	for _, option := range []string{"--version=", "--vers="} {
+		if value, found := strings.CutPrefix(word, option); found {
+			return value
+		}
+	}
+	_, version, _ := strings.Cut(word, "@")
+	return version
+}
+
+// goInstallUnpinned reports whether text runs a go install of a module at
+// anything but an exact version or a full commit: a branch, a version query
+// such as v1, or a variable whose value only the run knows. A package named
+// without a version is built at the version go.mod requires, which go.sum
+// fixes, and @latest is left to the latest rule so one install is one
+// finding.
+func goInstallUnpinned(text string) bool {
+	for _, words := range installArguments(goInstall, text) {
+		for _, word := range words {
+			_, version, versioned := strings.Cut(word, "@")
+			if versioned && version != "latest" && !exactModuleVersion.MatchString(version) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // regexpMatcher adapts a compiled expression to [unlockedRule].match.
@@ -357,33 +503,45 @@ func stripComments(text string) string {
 type tables struct {
 	secrets      map[string]secretDeclaration
 	declarations map[string]declaration
+	unjudged     map[string]declaration
+	guarded      map[string]guardedMatch
 }
 
 // supplyChainAudit is one audit of one repository root: the tables it judges
 // by and what it learns about them across every workflow.
 //
-// secretsRead and excused are what the table rules are judged on once every
-// workflow has been read: a secret no workflow reads and a declaration that
-// excused nothing are both stale. makefiles holds each Makefile parsed once,
-// keyed by its repository-relative path, since every job that runs make reads
-// the same rules.
+// secretsRead, excused, unjudgedUsed and guardedUsed are what the table rules
+// are judged on once every workflow has been read: a secret no workflow reads
+// and a declaration that excused nothing are both stale. makefiles holds each
+// Makefile parsed once, keyed by its repository-relative path, since every job
+// that runs make reads the same rules. store answers what a pinned action's
+// commit holds, and is nil in an audit built for one job rule's unit test;
+// reported holds the findings about an action that are made once however many
+// steps reach it.
 type supplyChainAudit struct {
 	tables
 
-	secretsRead map[string]bool
-	excused     map[string]bool
-	makefiles   map[string]map[string]*makeRule
-	root        string
+	store        *actionStore
+	secretsRead  map[string]bool
+	excused      map[string]bool
+	unjudgedUsed map[string]bool
+	guardedUsed  map[string]bool
+	reported     map[string]bool
+	makefiles    map[string]map[string]*makeRule
+	root         string
 }
 
 // newAudit starts an audit of root against the given tables.
 func newAudit(root string, declared tables) *supplyChainAudit {
 	return &supplyChainAudit{
-		tables:      declared,
-		secretsRead: map[string]bool{},
-		excused:     map[string]bool{},
-		makefiles:   map[string]map[string]*makeRule{},
-		root:        root,
+		tables:       declared,
+		secretsRead:  map[string]bool{},
+		excused:      map[string]bool{},
+		unjudgedUsed: map[string]bool{},
+		guardedUsed:  map[string]bool{},
+		reported:     map[string]bool{},
+		makefiles:    map[string]map[string]*makeRule{},
+		root:         root,
 	}
 }
 
@@ -391,10 +549,15 @@ func newAudit(root string, declared tables) *supplyChainAudit {
 // that this repository does not pin: in its own steps, and in every script and
 // make recipe those steps reach, however deep.
 func (a *supplyChainAudit) checkCredentialedJob(pathLabel, jobID string, job, doc map[string]any) []string {
+	return a.judgeCredentialedJob(pathLabel, jobID, job, doc, map[string]bool{})
+}
+
+// judgeCredentialedJob is [supplyChainAudit.checkCredentialedJob] with what
+// the job has read already, which the walk through its actions shares.
+func (a *supplyChainAudit) judgeCredentialedJob(pathLabel, jobID string, job, doc map[string]any, seen map[string]bool) []string {
 	var problems []string
 	steps, _ := job["steps"].([]any)
 	jobLabel := pathLabel + ": job " + jobID
-	seen := map[string]bool{}
 	for index, rawStep := range steps {
 		step, ok := rawStep.(map[string]any)
 		if !ok {
@@ -527,9 +690,11 @@ func (a *supplyChainAudit) checkWorkflowJobs(pathLabel string, doc map[string]an
 				pathLabel, jobID, expression,
 			))
 		}
+		seen := map[string]bool{}
 		if credentialed {
-			problems = append(problems, a.checkCredentialedJob(pathLabel, jobID, job, doc)...)
+			problems = append(problems, a.judgeCredentialedJob(pathLabel, jobID, job, doc, seen)...)
 		}
+		problems = append(problems, a.checkJobActions(pathLabel, jobID, job, doc, credentialed, seen)...)
 	}
 	return problems
 }
@@ -686,10 +851,21 @@ func checkInstallers(installSh, installPS1 string) []string {
 	return problems
 }
 
-// audit runs every check against a repository root and returns the findings in
-// a stable order.
+// audit runs every check against a repository root, judging the actions its
+// workflows pin from the committed record, and returns the findings in a
+// stable order.
 func audit(root string, declared tables) ([]string, error) {
-	problems, err := auditWorkflows(root, declared)
+	record, err := loadActionRecord(root)
+	if err != nil {
+		return nil, err
+	}
+	return auditWith(root, declared, newOfflineStore(record))
+}
+
+// auditWith runs every check against a repository root, reading what its
+// pinned actions hold through store.
+func auditWith(root string, declared tables, store *actionStore) ([]string, error) {
+	problems, err := auditWorkflows(root, declared, store)
 	if err != nil {
 		return nil, err
 	}
@@ -722,13 +898,15 @@ func audit(root string, declared tables) ([]string, error) {
 }
 
 // auditWorkflows applies the pinning rule and the credentialed-job rules to
-// every workflow file.
-func auditWorkflows(root string, declared tables) ([]string, error) {
+// every workflow file and to the actions their steps name, then holds the
+// tables and the record to what was read.
+func auditWorkflows(root string, declared tables, store *actionStore) ([]string, error) {
 	workflows, err := loadWorkflows(root)
 	if err != nil {
 		return nil, err
 	}
 	auditor := newAudit(root, declared)
+	auditor.store = store
 	var problems []string
 	for _, file := range workflows {
 		problems = append(problems, checkPinnedUses(file.path, file.text)...)
@@ -736,7 +914,47 @@ func auditWorkflows(root string, declared tables) ([]string, error) {
 			problems = append(problems, auditor.checkWorkflowJobs(file.path, file.doc, file.jobOrder)...)
 		}
 	}
-	return append(problems, auditor.tableProblems()...), nil
+	problems = append(problems, auditor.tableProblems()...)
+	return append(problems, store.staleProblems()...), nil
+}
+
+// recordAndAudit refreshes the record from the network and audits against
+// it: every action the workflows reach is fetched at its commit, and every file
+// a credentialed job's steps read from an action's directory, so the record
+// written is exactly what the audit read. A fetch that fails stops the run
+// before anything is written, since a record built on a guess would be judged
+// as the truth by every later run.
+func recordAndAudit(root string, declared tables, stdout io.Writer) ([]string, error) {
+	store := newRecordingStore(newRecordFetcher())
+	problems, err := auditWith(root, declared, store)
+	if err != nil {
+		return nil, err
+	}
+	if store.err != nil {
+		return nil, fmt.Errorf("record: %w", store.err)
+	}
+	target := filepath.Join(root, filepath.FromSlash(actionRecordPath))
+	if writeErr := docgen.WriteOrCheck(target, renderActionRecord(store.record), false, recordCommand); writeErr != nil {
+		return nil, writeErr
+	}
+	fmt.Fprintf(stdout, "recorded %d actions in %s\n", len(store.record.Actions), actionRecordPath)
+	return problems, nil
+}
+
+// rawContentBase is where -record reads a pinned commit's files: GitHub serves
+// every file of a public repository at a commit there, with no token.
+const rawContentBase = "https://raw.githubusercontent.com"
+
+// recordClient is the HTTP client -record fetches with, bounded so a host
+// that stops answering ends the run rather than hanging it.
+func recordClient() *http.Client {
+	return &http.Client{Timeout: recordFetchTimeout}
+}
+
+// newRecordFetcher is a seam over how -record reaches the network, so a test
+// can serve a commit's files itself.
+var newRecordFetcher = func() fetchFunc {
+	return rawFetcher(recordClient(), rawContentBase)
 }
 
 // readTextFile reads one of the repository's own configuration files.
@@ -907,6 +1125,8 @@ func run(args []string, stdout, stderr io.Writer, declared tables) int {
 	flags := flag.NewFlagSet("audit_supply_chain", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	rootFlag := flags.String("root", "", "repository root (default: the module root at or above the working directory)")
+	recordFlag := flags.Bool("record", false, "fetch what every pinned action the workflows reach holds at its commit, "+
+		"rewrite "+actionRecordPath+" with it, then audit against it (needs the network; the default run reads the record offline)")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -919,7 +1139,12 @@ func run(args []string, stdout, stderr io.Writer, declared tables) int {
 		fmt.Fprintf(stderr, "audit_supply_chain: %v\n", err)
 		return 1
 	}
-	problems, err := audit(root, declared)
+	var problems []string
+	if *recordFlag {
+		problems, err = recordAndAudit(root, declared, stdout)
+	} else {
+		problems, err = audit(root, declared)
+	}
 	if err != nil {
 		fmt.Fprintf(stderr, "audit_supply_chain: %v\n", err)
 		return 1

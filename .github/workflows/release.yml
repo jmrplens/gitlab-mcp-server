@@ -1874,38 +1874,157 @@ jobs:
     # version whose published packages do not match the signed checksums must
     # not be announced to a third-party repository. It needed only `release`
     # until now, so a failed verification still submitted the manifest.
-    needs: [release, verify-published]
-    # Nothing here can run dry: the sync writes to the fork and the releaser
-    # opens a pull request against microsoft/winget-pkgs, so a rehearsal skips
-    # the job whole. env is not readable at job level, hence the event test.
-    if: github.event_name != 'workflow_dispatch'
-    permissions: {} # both steps authenticate with WINGET_TOKEN, not GITHUB_TOKEN
+    needs: [preflight, release, verify-published]
+    # A rehearsal runs this job too, and everything in it but the three steps
+    # that write: the fork sync, the submission and the cleanup are skipped,
+    # and komac builds the manifests dry instead.
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+      WINGET_IDENTIFIER: jmrplens.gitlab-mcp-server
+      # komac is what talks to winget-pkgs. Until 3.2.0 it ran inside
+      # vedantmgoyal9/winget-releaser, which was pinned to a commit while that
+      # commit installed cargo-binstall from its main branch and then whatever
+      # komac release was newest, with no version and no digest, in the job
+      # holding WINGET_TOKEN (issue 1232). It is fetched here instead, at the
+      # version 3.1.0's submission ran (2.16.0), and held to the SHA-256 of
+      # each Windows build, read from the release and checked against its
+      # SHA256SUMS when recorded. komac publishes no signature and no build
+      # provenance (its release workflow signs nothing and the attestation API
+      # holds none for these digests), so the recorded digest is the whole of
+      # the check. Dependabot cannot see these lines: a bump is a hand edit of
+      # all three.
+      KOMAC_VERSION: "2.16.0"
+      KOMAC_SHA256_X64: "bdc45baf028f750da7519cc8a5f2eab5dfef46dfe88650eeb0d0a9bf51446e4f"
+      KOMAC_SHA256_ARM64: "fce7e4debdc3b21c09d6205375c5944c02cc1bd0aa3839d5c758ff50d2ddd4b0"
+    # Every write authenticates with WINGET_TOKEN. The job's own token reads
+    # only public data: the release this run names, and in a rehearsal what
+    # komac reads of winget-pkgs and of this repository to build the
+    # manifests.
+    permissions: {}
     steps:
       # Publishes a version-update PR to microsoft/winget-pkgs via the
-      # jmrplens/winget-pkgs fork. Only works once the initial package
-      # manifest (jmrplens.gitlab-mcp-server) has been merged upstream —
-      # continue-on-error keeps releases green until then and if Microsoft's
-      # validation service hiccups.
+      # jmrplens/winget-pkgs fork.
       #
       # The fork MUST be synced first: komac creates its branch on the fork,
-      # and a stale fork fails with "Ref cannot be created" — which the
-      # releaser's continue-on-error then hides. That exact combination
+      # and a stale fork fails with "Ref cannot be created", which the
+      # submission's continue-on-error then hides. That exact combination
       # silently skipped the 2.7.2 and 2.7.3 submissions (fork 24 days
       # behind). This step is deliberately blocking: if the sync fails
-      # (409 divergence, 422), the releaser would fail against the stale
-      # fork anyway and hide it — a red winget job is the visibility that
+      # (409 divergence, 422), the submission would fail against the stale
+      # fork anyway and hide it. A red winget job is the visibility that
       # was missing, and nothing downstream depends on this job.
       - name: Sync winget-pkgs fork with upstream
+        if: env.REHEARSAL != 'true'
         env:
           GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
         run: gh api -X POST repos/jmrplens/winget-pkgs/merge-upstream -f branch=master
-      # Pinned to a commit SHA (like every other action here): an
-      # individually-maintained action that receives WINGET_TOKEN — a mutable
-      # tag would let a compromised release exfiltrate it.
-      - uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
+
+      # Not under continue-on-error: a binary that does not hash to the
+      # recorded digest is the one failure this job must never hide.
+      - name: Install komac
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          switch ($env:RUNNER_ARCH) {
+            'X64' { $target = 'x86_64-pc-windows-msvc'; $expected = $env:KOMAC_SHA256_X64 }
+            'ARM64' { $target = 'aarch64-pc-windows-msvc'; $expected = $env:KOMAC_SHA256_ARM64 }
+            default {
+              Write-Output "::error::no komac $env:KOMAC_VERSION digest is recorded for a $env:RUNNER_ARCH runner"
+              exit 1
+            }
+          }
+          $asset = "komac-$env:KOMAC_VERSION-$target.exe"
+          $directory = Join-Path $env:RUNNER_TEMP 'komac'
+          New-Item -ItemType Directory -Force -Path $directory | Out-Null
+          $binary = Join-Path $directory 'komac.exe'
+          Invoke-WebRequest -UseBasicParsing -OutFile $binary `
+            -Uri "https://github.com/russellbanks/Komac/releases/download/v$env:KOMAC_VERSION/$asset"
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $binary).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) {
+            Remove-Item -LiteralPath $binary
+            Write-Output "::error::$asset hashes to $actual, not the recorded $expected"
+            exit 1
+          }
+          & $binary --version
+          "KOMAC=$binary" >> $env:GITHUB_ENV
+
+      # What winget-releaser computed from its inputs, read the same way: the
+      # version is the tag without its v, and the installers are the release
+      # assets matching '-windows-(amd64|arm64)\.exe$' with PowerShell's
+      # -match, in the order the API lists them. A rehearsal publishes no
+      # release, so it reads the latest published one, and the dry run below
+      # builds that version's manifests from that version's installers.
+      - name: Name the version and its installers
+        id: installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $endpoint = "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG"
+          if ($env:REHEARSAL -eq 'true') {
+            $endpoint = "repos/$env:GITHUB_REPOSITORY/releases/latest"
+          }
+          $release = gh api $endpoint | ConvertFrom-Json
+          $urls = @($release.assets.Where({ $_.name -match '-windows-(amd64|arm64)\.exe$' }).browser_download_url)
+          if ($urls.Count -eq 0) {
+            Write-Output "::error::release $($release.tag_name) carries no asset matching -windows-(amd64|arm64).exe"
+            exit 1
+          }
+          "version=$($release.tag_name -replace '^v')" >> $env:GITHUB_OUTPUT
+          "urls=$($urls -join ' ')" >> $env:GITHUB_OUTPUT
+
+      # The command winget-releaser ran, with its arguments. Two of its
+      # variables are left out: KOMAC_CREATED_WITH and its URL, which would
+      # stamp every manifest and the pull request with "WinGet Releaser", a
+      # tool this job no longer runs; without them komac names itself and
+      # its version. continue-on-error is kept from the step that ran the
+      # action, which carried it so that a hiccup of Microsoft's validation
+      # service leaves the release green; it now covers only this step and
+      # the cleanup, so a failed install or a release with no Windows
+      # installer turns the job red instead of being hidden with them.
+      - name: Submit the version to winget-pkgs
+        id: submit
+        if: env.REHEARSAL != 'true'
         continue-on-error: true
-        with:
-          identifier: jmrplens.gitlab-mcp-server
-          installers-regex: '-windows-(amd64|arm64)\.exe$'
-          release-tag: ${{ github.ref_name }}
-          token: ${{ secrets.WINGET_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          KOMAC_FORK_OWNER: jmrplens
+          VERSION: ${{ steps.installers.outputs.version }}
+          URLS: ${{ steps.installers.outputs.urls }}
+        run: |
+          & $env:KOMAC update $env:WINGET_IDENTIFIER --version $env:VERSION --submit --urls @($env:URLS -split ' ')
+
+      # Deletes the fork's branches whose pull request was merged. The action
+      # ran it only after a submission that succeeded, since a composite stops
+      # at its first failed step. CI is set on every runner, which komac reads
+      # as --all, so it asks nothing.
+      - name: Delete merged branches from the fork
+        if: env.REHEARSAL != 'true' && steps.submit.outcome == 'success'
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          KOMAC_FORK_OWNER: jmrplens
+        run: |
+          & $env:KOMAC cleanup --only-merged
+
+      # The rehearsal's half: the same command with --dry-run. komac 2.16.0
+      # still reads everything a submission reads, winget-pkgs' versions and
+      # the pull requests already open for this one, the previous version's
+      # manifests, the release the installers belong to and the installers
+      # themselves, then builds and prints the manifests; --dry-run takes
+      # precedence over --submit, so it exits there without creating a branch
+      # or a pull request, and an open pull request for the version does not
+      # stop it. It holds the job's own token rather than WINGET_TOKEN, since
+      # it writes nothing and reads only public repositories, and it is not
+      # under continue-on-error, since a dry run that fails is what a
+      # rehearsal exists to show.
+      - name: Build the manifests without submitting them
+        if: env.REHEARSAL == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          KOMAC_FORK_OWNER: jmrplens
+          VERSION: ${{ steps.installers.outputs.version }}
+          URLS: ${{ steps.installers.outputs.urls }}
+        run: |
+          & $env:KOMAC update $env:WINGET_IDENTIFIER --version $env:VERSION --submit --urls @($env:URLS -split ' ') --dry-run

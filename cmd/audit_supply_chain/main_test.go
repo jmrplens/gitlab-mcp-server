@@ -7,11 +7,13 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"maps"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	yaml "go.yaml.in/yaml/v3"
 
@@ -573,6 +575,89 @@ func TestPipInstallWithoutHashes_Line_DecidesTheMatch(t *testing.T) {
 
 			if got := pipInstallWithoutHashes(testCase.run); got != testCase.want {
 				t.Errorf("pipInstallWithoutHashes(%q) = %t, want %t", testCase.run, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestUnlockedCode_PackageInstalls_AreJudgedByWhatTheyFix verifies which
+// rules a package install, or a download handed to PowerShell, matches.
+//
+// winget-releaser ran `cargo binstall komac -y` in the job holding
+// WINGET_TOKEN, which installs whatever komac release is newest, and none of
+// the rules could see it. A version does not fix what cargo binstall runs,
+// since it downloads a prebuilt binary from a release asset or QuickInstall;
+// cargo install and go install are fixed by an exact version (with --locked
+// for cargo), because a crates.io version and a Go module version cannot be
+// republished. @latest stays the latest rule's alone, so one install is one
+// finding.
+func TestUnlockedCode_PackageInstalls_AreJudgedByWhatTheyFix(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		text string
+		want string
+	}{
+		{name: "cargo binstall as winget-releaser ran it", text: "cargo binstall komac -y", want: "cargo-binstall"},
+		{name: "cargo binstall at an exact version", text: "cargo binstall komac@2.16.0 --no-confirm", want: "cargo-binstall"},
+		{name: "cargo binstall at the end of the text", text: "cargo binstall", want: "cargo-binstall"},
+		{name: "cargo-binstall run by its own name", text: "cargo-binstall --no-confirm komac", want: "cargo-binstall"},
+		{name: "cargo-binstall.exe", text: "& cargo-binstall.exe komac", want: "cargo-binstall"},
+		{name: "cargo-binstall named in a download URL", text: "curl -fsSLO https://github.com/cargo-bins/cargo-binstall/releases/download/v1.15.0/cargo-binstall-x86_64-unknown-linux-musl.tgz"},
+		{name: "cargo install of the newest release", text: "cargo install komac", want: "cargo-install"},
+		{name: "cargo install at an exact version without --locked", text: "cargo install komac --version 2.16.0", want: "cargo-install"},
+		{name: "cargo install locked at no version", text: "cargo install --locked komac", want: "cargo-install"},
+		{name: "cargo install locked at a requirement", text: "cargo install --locked komac --version ^2.16", want: "cargo-install"},
+		{name: "cargo install locked at a range", text: "cargo install --locked komac --version '>=2.16.0'", want: "cargo-install"},
+		{name: "cargo install locked at an exact version", text: "cargo install --locked komac --version 2.16.0"},
+		{name: "cargo install locked at an equals version", text: "cargo install --locked --version=2.16.0 komac"},
+		{name: "cargo install locked at the short spelling", text: "cargo install --locked --vers =2.16.0 komac"},
+		{name: "cargo install locked at crate@version", text: "cargo install --locked komac@=2.16.0-rc.1"},
+		{name: "cargo install locked from a local path", text: "cargo install --locked --path ."},
+		{name: "cargo install locked from a path given with =", text: "cargo install --path=crates/tool --locked"},
+		{name: "cargo install from a path without --locked", text: "cargo install --path .", want: "cargo-install"},
+		{name: "cargo install with --version and no value", text: "cargo install --locked komac --version", want: "cargo-install"},
+		{name: "--locked on another command of the line", text: "cargo install komac --version 2.16.0; echo --locked", want: "cargo-install"},
+		{name: "--locked on the next line", text: "cargo install komac --version 2.16.0 \\\n  --locked", want: "cargo-install"},
+		{name: "one locked install and one that is not", text: "cargo install --locked a --version 1.0.0\ncargo install b", want: "cargo-install"},
+		{name: "go install at a branch", text: "go install github.com/sigstore/cosign/v3/cmd/cosign@main", want: "go-install"},
+		{name: "go install at a version query", text: "go install example.test/tool@v1", want: "go-install"},
+		{name: "go install at a short commit", text: "go install example.test/tool@0123abc", want: "go-install"},
+		{name: "go install at a make variable", text: "\tgo install example.test/tool@$(TOOL_VERSION)", want: "go-install"},
+		{name: "go install at a shell variable", text: `GOBIN="$dir" go install "example.test/tool@${VERSION}"`, want: "go-install"},
+		{name: "go install at an exact version", text: "go install example.test/tool@v1.2.3"},
+		{name: "go install at a prerelease", text: "go install example.test/tool@v1.2.3-rc.1+build.5"},
+		{name: "go install at a pseudo-version", text: "go install example.test/tool@v0.0.0-20260101000000-0123456789ab"},
+		{name: "go install at a commit", text: "go install example.test/tool@" + testSHA},
+		{name: "go install at an exact version in quotes", text: `(go install 'example.test/tool@v1.2.3')`},
+		{name: "go install of what go.mod requires", text: "go install gotest.tools/gotestsum"},
+		{name: "an @ after the install ends", text: "go install example.test/tool@v1.2.3 && echo user@host | cat; ssh git@host"},
+		{name: "a separator right after install", text: "go install;echo user@main"},
+		{name: "go install at latest is the latest rule's", text: "go install example.test/tool@latest", want: "latest"},
+		{name: "go install at latest and a branch", text: "go install a.test/x@latest b.test/y@main", want: "latest go-install"},
+		{name: "a download piped to iex", text: "iwr https://example.test/i.ps1 -UseBasicParsing | iex", want: "invoke-expression"},
+		{name: "Invoke-RestMethod piped to Invoke-Expression", text: "Invoke-RestMethod -Uri $u | Invoke-Expression", want: "invoke-expression"},
+		{name: "irm piped to iex in capitals", text: "IRM https://example.test/i.ps1 | IEX", want: "invoke-expression"},
+		{name: "iex of a download string", text: "iex ((New-Object Net.WebClient).DownloadString('https://example.test/i.ps1'))", want: "invoke-expression"},
+		{name: "Invoke-Expression of a request", text: "Invoke-Expression (Invoke-WebRequest -Uri $u -UseBasicParsing).Content", want: "invoke-expression"},
+		{name: "a download written to a file", text: "Invoke-WebRequest -UseBasicParsing -OutFile $binary -Uri $u"},
+		{name: "iex of a local string", text: "iex $command"},
+		{name: "a download and iex on different lines", text: "$s = irm $u\niex $s"},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var matched []string
+			for _, rule := range unlockedCode {
+				if rule.match(testCase.text) {
+					matched = append(matched, rule.name)
+				}
+			}
+			if got := strings.Join(matched, " "); got != testCase.want {
+				t.Errorf("rules matching %q = %q, want %q", testCase.text, got, testCase.want)
 			}
 		})
 	}
@@ -1629,7 +1714,7 @@ func TestAuditWorkflows_SecretTable_IsHeldToTheWorkflows(t *testing.T) {
 		"UNREAD": {writes: true, where: "pushes somewhere"},
 	}}
 
-	problems, err := auditWorkflows(root, declared)
+	problems, err := auditTree(root, declared)
 	if err != nil {
 		t.Fatalf("auditWorkflows: %v", err)
 	}
@@ -1661,20 +1746,20 @@ func TestAuditWorkflows_Declarations_AreHeldToTheTree(t *testing.T) {
 		"scripts/unknown.mjs latest": {category: "trust-me", reason: "it is fine"},
 	}}
 
-	problems, err := auditWorkflows(root, declared)
+	problems, err := auditTree(root, declared)
 	if err != nil {
 		t.Fatalf("auditWorkflows: %v", err)
 	}
 	const label = "cmd/audit_supply_chain/declarations.go: "
 	want := []string{
-		label + `" npx" is not a path and a rule name (npx, latest, curl-pipe-shell, pip-unhashed) separated by one space`,
+		label + `" npx" is not a path and a rule name (` + ruleNameList + `) separated by one space`,
 		label + `"scripts/blank.mjs latest" gives no reason`,
 		label + `"scripts/blank.mjs latest" excuses nothing: no credentialed job reaches that file matching that rule`,
 		label + `"scripts/stale.mjs npx" excuses nothing: no credentialed job reaches that file matching that rule`,
 		label + `"scripts/unknown.mjs latest": the category "trust-me" is not one this command defines`,
 		label + `"scripts/unknown.mjs latest" excuses nothing: no credentialed job reaches that file matching that rule`,
-		label + `"scripts/used.mjs" is not a path and a rule name (npx, latest, curl-pipe-shell, pip-unhashed) separated by one space`,
-		label + `"scripts/used.mjs npm" is not a path and a rule name (npx, latest, curl-pipe-shell, pip-unhashed) separated by one space`,
+		label + `"scripts/used.mjs" is not a path and a rule name (` + ruleNameList + `) separated by one space`,
+		label + `"scripts/used.mjs npm" is not a path and a rule name (` + ruleNameList + `) separated by one space`,
 	}
 	if strings.Join(problems, "\n") != strings.Join(want, "\n") {
 		t.Errorf("auditWorkflows() =\n%s\nwant\n%s", strings.Join(problems, "\n"), strings.Join(want, "\n"))
@@ -2489,7 +2574,7 @@ func TestAuditWorkflows_NonMappingWorkflow_KeepsPinningOnly(t *testing.T) {
 	root := t.TempDir()
 	writeWorkflow(t, root, "list.yml", "- uses: actions/checkout@v7\n")
 
-	problems, err := auditWorkflows(root, tables{})
+	problems, err := auditTree(root, tables{})
 	if err != nil {
 		t.Fatalf("auditWorkflows: %v", err)
 	}
@@ -2823,6 +2908,114 @@ func TestRun_UnreadableRoot_ExitsNonZero(t *testing.T) {
 	if !strings.Contains(stderr.String(), "audit_supply_chain:") {
 		t.Errorf("run() stderr = %q, want the failure named on stderr", stderr.String())
 	}
+}
+
+// TestRun_Record_WritesWhatTheAuditReadThenAudits verifies -record end to end:
+// it fetches every action the workflows reach and every file a credentialed
+// job reads from one, writes exactly that as the record, audits against it,
+// and leaves a record the offline run then passes on.
+//
+// It swaps the fetcher seam, so it does not run in parallel.
+func TestRun_Record_WritesWhatTheAuditReadThenAudits(t *testing.T) {
+	root := brokenRepository(t)
+	writeWorkflow(t, root, "ci.yml", "jobs:\n  release:\n    permissions:\n      contents: write\n    steps:\n      - uses: "+composedKey+"\n")
+	served := map[string]string{
+		"example/composite/" + testSHA + "/action.yml": "runs:\n  using: composite\n  steps:\n    - run: bash \"$GITHUB_ACTION_PATH/run.sh\"\n      shell: bash\n",
+		"example/composite/" + testSHA + "/run.sh":     "echo run\n",
+	}
+	useRecordFetcher(t, func(repository, sha, filePath string) (string, bool, error) {
+		body, found := served[repository+"/"+sha+"/"+filePath]
+		return body, found, nil
+	})
+
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"--root", root, "-record"}, &stdout, &stderr, tables{}); code != 0 {
+		t.Fatalf("run(-record) = %d, want 0 (stdout %q, stderr %q)", code, stdout.String(), stderr.String())
+	}
+	if !strings.HasPrefix(stdout.String(), "recorded 1 actions in "+actionRecordPath+"\nsupply-chain audit passed") {
+		t.Errorf("run(-record) stdout = %q, want the count, then the verdict", stdout.String())
+	}
+	record, err := loadActionRecord(root)
+	if err != nil {
+		t.Fatalf("loadActionRecord: %v", err)
+	}
+	recorded := record.Actions[composedKey]
+	if len(record.Actions) != 1 || recorded.Metadata != "action.yml" || recorded.Files["run.sh"].text() != "echo run\n" {
+		t.Errorf("record = %#v, want the composite action and the one file its step reads", record)
+	}
+
+	stdout.Reset()
+	if code := run([]string{"--root", root}, &stdout, &stderr, tables{}); code != 0 {
+		t.Errorf("run() on the recorded tree = %d, want 0 (stdout %q)", code, stdout.String())
+	}
+}
+
+// TestRun_Record_Failure_WritesNothing verifies the three ways -record stops
+// without writing a record: a fetch that fails, an audit that cannot be
+// performed, and a record that cannot be written. A record half built from a
+// network that answered only part of the time would be read as the truth by
+// every offline run after it.
+//
+// It swaps the fetcher seam, so it does not run in parallel.
+func TestRun_Record_Failure_WritesNothing(t *testing.T) {
+	useRecordFetcher(t, func(string, string, string) (string, bool, error) {
+		return "", false, errors.New("network down")
+	})
+	failing := brokenRepository(t)
+	writeWorkflow(t, failing, "ci.yml", "jobs:\n  lint:\n    steps:\n      - uses: "+composedKey+"\n")
+	unwritable := brokenRepository(t)
+	writeFile(t, unwritable, "docs/development", "a file where the record's directory belongs\n")
+
+	cases := []struct {
+		name   string
+		root   string
+		stderr string
+	}{
+		{name: "a fetch that fails", root: failing, stderr: "record: network down"},
+		{name: "an audit that cannot run", root: t.TempDir(), stderr: "read "},
+		{name: "a record that cannot be written", root: unwritable, stderr: filepath.Join("docs", "development")},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if code := run([]string{"--root", testCase.root, "-record"}, &stdout, &stderr, tables{}); code != 1 {
+				t.Errorf("run(-record) = %d, want 1 (stdout %q)", code, stdout.String())
+			}
+			if !strings.Contains(stderr.String(), testCase.stderr) {
+				t.Errorf("run(-record) stderr = %q, want it to mention %q", stderr.String(), testCase.stderr)
+			}
+			if _, err := os.Stat(filepath.Join(testCase.root, filepath.FromSlash(actionRecordPath))); err == nil {
+				t.Errorf("run(-record) wrote %s although it failed", actionRecordPath)
+			}
+		})
+	}
+}
+
+// TestRecordFetcher_Default_ReadsRawGitHubWithATimeout verifies the fetcher
+// -record uses when no test replaces it: a client bounded by its timeout, so a
+// host that stops answering ends the run instead of hanging it.
+func TestRecordFetcher_Default_ReadsRawGitHubWithATimeout(t *testing.T) {
+	t.Parallel()
+
+	if got := recordClient().Timeout; got != 30*time.Second {
+		t.Errorf("recordClient().Timeout = %v, want 30s", got)
+	}
+	if newRecordFetcher() == nil {
+		t.Error("newRecordFetcher() = nil")
+	}
+	if rawContentBase != "https://raw.githubusercontent.com" {
+		t.Errorf("rawContentBase = %q", rawContentBase)
+	}
+}
+
+// useRecordFetcher replaces the fetcher -record uses for the rest of the test.
+func useRecordFetcher(t *testing.T, fetch fetchFunc) {
+	t.Helper()
+
+	previous := newRecordFetcher
+	t.Cleanup(func() { newRecordFetcher = previous })
+	newRecordFetcher = func() fetchFunc { return fetch }
 }
 
 // TestRun_BadFlag_ExitsNonZero verifies that an unknown flag is refused rather
@@ -3163,7 +3356,16 @@ const (
 	npxFinding    = `'\\bnpx\\b': npx resolves a dependency tree at run time (use a lockfile and npm ci, or drop the CLI)`
 	latestFinding = `'@latest\\b': @latest is whatever the registry serves at that moment`
 	curlFinding   = `'curl[^\\n|]*\\|\\s*(?:ba)?sh\\b': piping a download into a shell runs unreviewed code`
+
+	cargoBinstallFinding = `'\\bcargo[ -]binstall\\b': cargo binstall installs a prebuilt binary from a release asset or ` +
+		`QuickInstall whatever version it names, which nothing committed here fixes (download the binary and hold it ` +
+		`to a recorded SHA-256)`
+	goInstallFinding = `'\\bgo\\s+install\\b': go install at anything but an exact version or a full commit (a branch, ` +
+		`a version query, a value only the run knows) resolves at run time`
 )
+
+// The names a declaration may give a rule, as a declaration finding lists them.
+const ruleNameList = "npx, latest, curl-pipe-shell, pip-unhashed, cargo-binstall, cargo-install, go-install, invoke-expression"
 
 // renderMake renders what scanMake reads in a text: each invocation as its -C
 // directories, its -f makefiles, its refusal in parentheses and its targets in
