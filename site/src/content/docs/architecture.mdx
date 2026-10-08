@@ -6,7 +6,7 @@ faq:
   - q: "What is the difference between stdio and HTTP transport modes?"
     a: "Stdio mode is the default for single-user setups: the AI client spawns the server as a child process and communicates over stdin/stdout using JSON-RPC, with the token supplied as an environment variable that never leaves the local machine. HTTP mode serves multiple users from one process, isolating each user's session by token and URL in an LRU pool with configurable session limits and timeouts. Both modes expose the same tools and call the same GitLab APIs; they differ only in how the AI client connects."
   - q: "What does GitLab MCP Server do?"
-    a: "GitLab MCP Server is a single static binary that sits between an AI client and a GitLab instance. It receives MCP tool calls, translates them into authenticated GitLab REST API v4 or GraphQL requests, executes them, and returns each result in two forms: structured JSON that matches the tool's output schema, and Markdown written for the model to read. The server adds no GitLab features of its own: it exposes existing GitLab operations as MCP tools through the [Model Context Protocol](https://modelcontextprotocol.io/)."
+    a: "GitLab MCP Server is a single self-contained binary that sits between an AI client and a GitLab instance. It receives MCP tool calls, translates them into authenticated GitLab REST API v4 or GraphQL requests, executes them, and returns each result in two forms: structured JSON that matches the tool's output schema, and Markdown written for the model to read. The server adds no GitLab features of its own: it exposes existing GitLab operations as MCP tools through the [Model Context Protocol](https://modelcontextprotocol.io/)."
   - q: "What is the canonical action catalog?"
     a: "The canonical action catalog is the single internal definition of every ordinary GitLab operation. All three visible tool surfaces (meta-tools, individual tools, and the dynamic find/execute tools) are projections of this catalog, so they share the same schemas, destructive classification, read-only and scope filtering, safe mode, and Markdown formatting. How a destructive call is confirmed differs in one way: the default dynamic surface never prompts, so it needs `confirm: true` on every one unless `GITLAB_MCP_YOLO_MODE` skips the confirmation, as it does on every surface. Catalog entries are tier-aware: each action is tagged with the lowest GitLab edition (`free`, `premium`, or `ultimate`) that exposes it, and premium or ultimate-only actions are pruned when the resolved tier is lower."
   - q: "How does GitLab MCP Server keep my GitLab token secure?"
@@ -31,7 +31,7 @@ graph LR
     AI -->|formatted answer| U
 ```
 
-The server is a single static binary that:
+The server is a single self-contained binary that:
 
 1. **Receives** MCP tool calls from the AI client (e.g., "list open merge requests")
 2. **Translates** them into GitLab REST API v4 or GraphQL requests with proper authentication: REST for most actions, and [GraphQL](#graphql) where GitLab has deprecated the REST API, offers none, or answers the question only there

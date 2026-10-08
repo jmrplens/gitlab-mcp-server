@@ -1031,7 +1031,7 @@ Size the host from the HTTP server's resident set, not from the binary, and size
 | HTTP, per additional pooled credential   |     30 to 53 KiB | Settled live heap, the credential held rather than calling        |
 | HTTP, per additional calling credential  | 0.81 to 4.27 MiB | Peak resident set, with two to four requests in flight throughout |
 | stdio, one process per client            |   106 to 277 MiB | It starts building its catalog at once, so it has no idle state   |
-| Binary on disk                           |           ~55 MB | Single static binary, no runtime dependencies                     |
+| Binary on disk                           |           ~55 MB | Single self-contained binary, no runtime to install               |
 
 Three things follow from this.
 

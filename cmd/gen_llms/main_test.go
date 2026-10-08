@@ -263,7 +263,7 @@ func TestRun_WritesLLMSTxt(t *testing.T) {
 	}
 	requireFragments(t, got, []string{
 		"# gitlab-mcp-server\n\n> A Model Context Protocol (MCP) server",
-		"gitlab-mcp-server v9.9.9-test is a single static binary",
+		"gitlab-mcp-server v9.9.9-test is a single self-contained binary (Go, no runtime to install)",
 		"up to 3 individual MCP tools across 2 GitLab API domains, 2 base meta-tools, 3 self-managed enterprise meta-tools, 4 GitLab.com Enterprise meta-tools,\n",
 		"a default 2-tool dynamic find/execute surface, 2 resources, 1 prompts, and 4 MCP capabilities",
 		"Tool domains:\n\nIssue, Project.\n\n",

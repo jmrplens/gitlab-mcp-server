@@ -6,7 +6,7 @@ faq:
   - q: "¿Qué es el catálogo de acciones canónico?"
     a: "El catálogo de acciones canónico es la única definición interna de cada operación ordinaria de GitLab. Las tres superficies visibles de herramientas (meta-herramientas, herramientas individuales y las herramientas dinámicas de búsqueda y ejecución) son proyecciones de este catálogo, por lo que comparten los mismos esquemas, la clasificación destructiva, el filtrado de solo lectura y por scopes, el modo seguro y el formato Markdown. Lo que difiere, en un solo punto, es cómo se confirma una llamada destructiva: la superficie dinámica por defecto nunca pregunta, así que exige `confirm: true` en cada una salvo que `GITLAB_MCP_YOLO_MODE` omita la confirmación, como hace en todas las superficies. Las entradas del catálogo son conscientes del tier: cada acción se etiqueta con la edición de GitLab más baja (`free`, `premium` o `ultimate`) que la expone, y las acciones solo de premium o ultimate se podan cuando el tier resuelto es inferior."
   - q: "¿Qué hace GitLab MCP Server?"
-    a: "GitLab MCP Server es un binario estático único que se sitúa entre un cliente de IA y una instancia de GitLab. Recibe llamadas de herramientas MCP, las traduce en peticiones autenticadas a la API REST v4 o GraphQL de GitLab, las ejecuta y devuelve cada resultado de dos formas: JSON estructurado que se ajusta al schema de salida de la herramienta, y Markdown escrito para que lo lea el modelo. El servidor no añade funcionalidades propias de GitLab: expone las operaciones de GitLab existentes como herramientas MCP a través del [Model Context Protocol](https://modelcontextprotocol.io/)."
+    a: "GitLab MCP Server es un único binario autocontenido que se sitúa entre un cliente de IA y una instancia de GitLab. Recibe llamadas de herramientas MCP, las traduce en peticiones autenticadas a la API REST v4 o GraphQL de GitLab, las ejecuta y devuelve cada resultado de dos formas: JSON estructurado que se ajusta al schema de salida de la herramienta, y Markdown escrito para que lo lea el modelo. El servidor no añade funcionalidades propias de GitLab: expone las operaciones de GitLab existentes como herramientas MCP a través del [Model Context Protocol](https://modelcontextprotocol.io/)."
   - q: "¿Cuál es la diferencia entre los modos de transporte stdio y HTTP?"
     a: "El modo stdio es el predeterminado para configuraciones de un solo usuario: el cliente de IA inicia el servidor como proceso hijo y se comunica por stdin/stdout usando JSON-RPC, con el token suministrado como variable de entorno que nunca sale de la máquina local. El modo HTTP atiende a múltiples usuarios desde un único proceso, aislando la sesión de cada usuario por token y URL en un pool LRU con límites de sesión y tiempos de espera configurables. Ambos modos exponen las mismas herramientas y llaman a las mismas APIs de GitLab; solo se diferencian en cómo se conecta el cliente de IA."
   - q: "¿Cómo mantiene GitLab MCP Server seguro mi token de GitLab?"
@@ -31,7 +31,7 @@ graph LR
     AI -->|respuesta formateada| U
 ```
 
-El servidor es un binario estático único que:
+El servidor es un único binario autocontenido que:
 
 1. **Recibe** llamadas de herramientas MCP desde el cliente de IA (p. ej., "listar merge requests abiertas")
 2. **Traduce** las llamadas en peticiones a la API REST v4 o GraphQL de GitLab con la autenticación adecuada: REST para la mayoría de las acciones, y [GraphQL](#graphql) donde GitLab ha declarado obsoleta la API REST, no ofrece ninguna o solo responde a la pregunta allí
