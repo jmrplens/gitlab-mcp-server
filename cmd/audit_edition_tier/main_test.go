@@ -18,8 +18,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 )
@@ -546,7 +548,7 @@ func TestBuildDomainReport_ActionsOutOfOrder_AreReportedByAscendingID(t *testing
 		{ID: "branch.create", OwnerPkg: "branches", CurrentGate: "free"},
 		{ID: "branch.protect", OwnerPkg: "branches", CurrentGate: "free"},
 	}
-	dr := buildDomainReport(context.Background(), "branches", unsorted, res)
+	dr := buildDomainReport(context.Background(), "branches", unsorted, res, nil)
 
 	got := make([]string, 0, len(dr.ActionDetails))
 	for _, a := range dr.ActionDetails {
@@ -578,7 +580,7 @@ func TestBuildDomainReport_OverridePageAgreeingWithTheOwnerPage_RecordsNoOverrid
 	actions := []actionDetail{
 		{ID: "group.hook_list", OwnerPkg: "groups", CurrentGate: "enterprise", Edition: "premium"},
 	}
-	dr := buildDomainReport(context.Background(), "groups", actions, res)
+	dr := buildDomainReport(context.Background(), "groups", actions, res, nil)
 
 	if dr.PageTier != "premium" {
 		t.Fatalf("page tier = %q, want premium", dr.PageTier)
@@ -943,9 +945,9 @@ func assertFileGapsOnly(t *testing.T, ctx context.Context) {
 }
 
 // stubCatalogs points the buildCatalog seam at the two catalogs given, CE for
-// the Enterprise:false call and EE for the Enterprise:true one, and returns a
-// pointer to the number of times it was asked for one. The real seam is
-// restored when the test ends.
+// the Enterprise:false calls (the Free build and the Premium one) and EE for
+// the Enterprise:true one, and returns a pointer to the number of times it was
+// asked for one. The real seam is restored when the test ends.
 func stubCatalogs(t *testing.T, ce, ee *actioncatalog.Catalog, err error) *int {
 	t.Helper()
 	calls := 0
@@ -1272,7 +1274,7 @@ func TestDocResolver_TwoFetchers_EachPageIsReadFromItsOwnSource(t *testing.T) {
 	})
 	t.Run("owner_page_is_read_through_the_api_fetcher", func(t *testing.T) {
 		actions := []actionDetail{{ID: "group.get", OwnerPkg: "groups", CurrentGate: "free"}}
-		dr := buildDomainReport(ctx, "groups", actions, newResolver(t))
+		dr := buildDomainReport(ctx, "groups", actions, newResolver(t), nil)
 		if !dr.DocFetched || dr.PageTier != "free" {
 			t.Errorf("groups = fetched %v, page %q; want fetched, page free from the API cache", dr.DocFetched, dr.PageTier)
 		}
@@ -1465,7 +1467,7 @@ func TestBuildDomainReport_OverrideTiersFromBothSources_ListedLowestFirst(t *tes
 	seedDoc(t, dir, "group_webhooks", premiumBadgeDoc)
 	actions := []actionDetail{{ID: "group.hook_list", OwnerPkg: "groups", CurrentGate: "enterprise", Edition: "premium"}}
 
-	dr := buildDomainReport(context.Background(), "groups", actions, newOfflineResolver(t, dir))
+	dr := buildDomainReport(context.Background(), "groups", actions, newOfflineResolver(t, dir), nil)
 
 	if want := []string{"premium", "ultimate"}; !slices.Equal(dr.OverrideTiers, want) {
 		t.Errorf("override tiers = %v, want %v", dr.OverrideTiers, want)
@@ -1502,13 +1504,16 @@ func TestExpectedTierForAction_ExceptionAndOverrideOnOneAction_ExceptionWins(t *
 }
 
 // fakeModuleRoot returns a new directory holding a go.mod of a module that is
-// not this one, which is all cmdutil.RepositoryRoot looks for.
+// not this one, which is all cmdutil.RepositoryRoot looks for, and an action
+// request record naming one action that sends nothing, which is the least the
+// command reads before it builds a report.
 func fakeModuleRoot(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/fakeroot\n"), 0o600); err != nil {
 		t.Fatalf("write go.mod: %v", err)
 	}
+	seedRecord(t, root, actionrequests.RecordAction{ID: "project.get"})
 	return root
 }
 
@@ -1798,12 +1803,13 @@ func marshalsItself(typ reflect.Type) bool {
 }
 
 // TestReport_TypeGraph_HoldsNothingEncodingJSONCanRefuse holds the property
-// that makes run's marshal error unreachable, since no test can reach that
-// branch itself: every type the report is built from is a struct, a string, an
+// that lets run hand its marshal to cmdutil.Must, since no test can make the
+// marshal fail: every type the report is built from is a struct, a string, an
 // int, a bool, a slice or a string-keyed map of those, and none of them
 // marshals itself. A field of another kind (a float that can hold NaN, an
-// interface, a channel) or a MarshalJSON of its own would make the branch
-// reachable, and this is the test that says so when it happens.
+// interface, a channel) or a MarshalJSON of its own would make a failure
+// possible and the panic a report of it, and this is the test that says so
+// when it happens.
 func TestReport_TypeGraph_HoldsNothingEncodingJSONCanRefuse(t *testing.T) {
 	seen := map[reflect.Type]bool{}
 	var walk func(path string, typ reflect.Type)

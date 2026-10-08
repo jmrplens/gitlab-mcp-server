@@ -496,12 +496,12 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 - gitlab_board_delete: Delete an issue board permanently.
 - gitlab_board_get: Get a single issue board by board_id.
 - gitlab_board_list: List a project's issue boards with pagination.
-- gitlab_board_list_create: Create a board list (column) scoped to a label, assignee, milestone, or iteration.
+- gitlab_board_list_create: Create a board list (column) scoped to a label, or on Premium and Ultimate to an assignee, milestone, or iteration.
 - gitlab_board_list_delete: Delete a board list (column) permanently.
 - gitlab_board_list_get: Get a single board list by list_id.
 - gitlab_board_list_lists: List the lists (columns) in an issue board with pagination.
 - gitlab_board_list_update: Reorder a board list to a new position.
-- gitlab_board_update: Update an issue board's name, scope (assignee, milestone, labels, weight), or list visibility.
+- gitlab_board_update: Update an issue board's name or list visibility, and on Premium and Ultimate its scope (assignee, milestone, labels, weight).
 - gitlab_branch_create: Create a branch from a source ref (branch, tag, or commit SHA).
 - gitlab_branch_delete: Delete a single branch by name.
 - gitlab_branch_delete_merged: Delete all branches merged into the default branch.
@@ -805,7 +805,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 - gitlab_group_board_list_get: Get a single list (column) of a group issue board.
 - gitlab_group_board_list_lists: List the lists (columns) of a group issue board with pagination.
 - gitlab_group_board_list_update: Reorder a list (column) within a group issue board.
-- gitlab_group_board_update: Update a group issue board's name and scope (assignee, milestone, labels, weight).
+- gitlab_group_board_update: Update a group issue board's name, and on Premium and Ultimate its scope (assignee, milestone, labels, weight).
 - gitlab_group_create: Create a GitLab group or subgroup.
 - gitlab_group_delete: Delete a GitLab group and its projects.
 - gitlab_group_delete_push_rule: Delete a GitLab group's push rules.

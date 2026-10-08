@@ -7132,12 +7132,12 @@
   },
   {
     "name": "gitlab_board_list_create",
-    "description": "Create a board list (column) scoped to a label, assignee, milestone, or iteration. Returns: the created list with its scope, position, and issue limits. See also: gitlab_board_list_get, gitlab_board_list_update, gitlab_board_list_lists.",
+    "description": "Create a board list (column) scoped to a label, or on Premium and Ultimate to an assignee, milestone, or iteration. Returns: the created list with its scope, position, and issue limits. See also: gitlab_board_list_get, gitlab_board_list_update, gitlab_board_list_lists.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "assignee_id": {
-          "description": "Assignee ID to create an assignee list",
+          "description": "User ID to create an assignee list",
           "type": "integer"
         },
         "board_id": {
@@ -8189,12 +8189,12 @@
   },
   {
     "name": "gitlab_board_update",
-    "description": "Update an issue board's name, scope (assignee, milestone, labels, weight), or list visibility. Returns: the updated board with its project, scope, and lists. See also: gitlab_board_get, gitlab_board_delete, gitlab_board_list.",
+    "description": "Update an issue board's name or list visibility, and on Premium and Ultimate its scope (assignee, milestone, labels, weight). Returns: the updated board with its project, scope, and lists. See also: gitlab_board_get, gitlab_board_delete, gitlab_board_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "assignee_id": {
-          "description": "Assignee user ID",
+          "description": "User ID of the assignee the board is scoped to",
           "type": "integer"
         },
         "board_id": {
@@ -8216,7 +8216,7 @@
           ]
         },
         "labels": {
-          "description": "Board scope label names",
+          "description": "Label names the board is scoped to",
           "items": {
             "type": "string"
           },
@@ -8226,7 +8226,7 @@
           ]
         },
         "milestone_id": {
-          "description": "Milestone ID",
+          "description": "Milestone ID the board is scoped to",
           "type": "integer"
         },
         "name": {
@@ -8241,8 +8241,11 @@
           ]
         },
         "weight": {
-          "description": "Board scope weight",
-          "type": "integer"
+          "description": "Weight from 0 to 9 the board is scoped to",
+          "type": [
+            "null",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -57042,12 +57045,12 @@
   },
   {
     "name": "gitlab_group_board_update",
-    "description": "Update a group issue board's name and scope (assignee, milestone, labels, weight). Returns: the updated board with its group, milestone, labels, and lists. See also: gitlab_group_board_get, gitlab_group_board_list.",
+    "description": "Update a group issue board's name, and on Premium and Ultimate its scope (assignee, milestone, labels, weight). Returns: the updated board with its group, milestone, labels, and lists. See also: gitlab_group_board_get, gitlab_group_board_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "assignee_id": {
-          "description": "Assignee user ID",
+          "description": "User ID of the assignee the board is scoped to",
           "type": "integer"
         },
         "board_id": {
@@ -57062,7 +57065,7 @@
           ]
         },
         "labels": {
-          "description": "Board scope labels",
+          "description": "Label names the board is scoped to",
           "items": {
             "type": "string"
           },
@@ -57072,7 +57075,7 @@
           ]
         },
         "milestone_id": {
-          "description": "Milestone ID",
+          "description": "Milestone ID the board is scoped to",
           "type": "integer"
         },
         "name": {
@@ -57080,8 +57083,11 @@
           "type": "string"
         },
         "weight": {
-          "description": "Board scope weight",
-          "type": "integer"
+          "description": "Weight from 0 to 9 the board is scoped to",
+          "type": [
+            "null",
+            "integer"
+          ]
         }
       },
       "required": [

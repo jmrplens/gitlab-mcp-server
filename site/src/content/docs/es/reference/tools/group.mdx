@@ -1256,7 +1256,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `group.group_board_update`
 
-> Update a group issue board's name and scope (assignee, milestone, labels, weight). Returns: the updated board with its group, milestone, labels, and lists. See also: [`group.group_board_get`](#groupgroup_board_get), [`group.group_board_list`](#groupgroup_board_list).
+> Update a group issue board's name, and on Premium and Ultimate its scope (assignee, milestone, labels, weight). Returns: the updated board with its group, milestone, labels, and lists. See also: [`group.group_board_get`](#groupgroup_board_get), [`group.group_board_list`](#groupgroup_board_list).
 
 - **Meta-herramienta**: `gitlab_group`, acción `group_board_update`
 - **Herramienta individual**: `gitlab_group_board_update`
@@ -1265,15 +1265,15 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Work Item: Update en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro      | Tipo             | Requerido | Descripción        |
-| -------------- | ---------------- | --------- | ------------------ |
-| `board_id`     | `integer`        | sí        | Board ID           |
-| `group_id`     | `string/integer` | sí        | Group ID or path   |
-| `assignee_id`  | `integer`        | no        | Assignee user ID   |
-| `labels`       | `string[]`       | no        | Board scope labels |
-| `milestone_id` | `integer`        | no        | Milestone ID       |
-| `name`         | `string`         | no        | Board name         |
-| `weight`       | `integer`        | no        | Board scope weight |
+| Parámetro                | Tipo             | Requerido | Descripción                                    |
+| ------------------------ | ---------------- | --------- | ---------------------------------------------- |
+| `board_id`               | `integer`        | sí        | Board ID                                       |
+| `group_id`               | `string/integer` | sí        | Group ID or path                               |
+| `assignee_id` (Premium)  | `integer`        | no        | User ID of the assignee the board is scoped to |
+| `labels` (Premium)       | `string[]`       | no        | Label names the board is scoped to             |
+| `milestone_id` (Premium) | `integer`        | no        | Milestone ID the board is scoped to            |
+| `name`                   | `string`         | no        | Board name                                     |
+| `weight` (Premium)       | `integer`        | no        | Weight from 0 to 9 the board is scoped to      |
 
 ### `group.group_board_update_list`
 

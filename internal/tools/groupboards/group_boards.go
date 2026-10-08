@@ -348,15 +348,21 @@ func CreateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Cr
 	return convertGroupBoardAPI(board), nil
 }
 
-// UpdateGroupBoardInput represents input for updating a group board.
+// UpdateGroupBoardInput represents input for updating a group board. The four
+// scope fields are tagged Premium because doc/api/group_boards.md marks them
+// "Premium and Ultimate only": a Free instance updates the board and leaves
+// the scope out, so the Free schema does not offer them. Weight is a pointer
+// because 0 is a scope of its own: GitLab reads only nil and -1 as no weight
+// scope (EMPTY_SCOPE_STATE in ee/app/models/ee/board.rb), and an issue created
+// on a board scoped to 0 gets weight 0.
 type UpdateGroupBoardInput struct {
 	GroupID     toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
 	BoardID     int64                `json:"board_id" jsonschema:"Board ID,required"`
 	Name        string               `json:"name,omitempty" jsonschema:"Board name"`
-	AssigneeID  int64                `json:"assignee_id,omitempty" jsonschema:"Assignee user ID"`
-	MilestoneID int64                `json:"milestone_id,omitempty" jsonschema:"Milestone ID"`
-	Labels      []string             `json:"labels,omitempty" jsonschema:"Board scope labels"`
-	Weight      int64                `json:"weight,omitempty" jsonschema:"Board scope weight"`
+	AssigneeID  int64                `json:"assignee_id,omitempty" tier:"premium" jsonschema:"User ID of the assignee the board is scoped to"`
+	MilestoneID int64                `json:"milestone_id,omitempty" tier:"premium" jsonschema:"Milestone ID the board is scoped to"`
+	Labels      []string             `json:"labels,omitempty" tier:"premium" jsonschema:"Label names the board is scoped to"`
+	Weight      *int64               `json:"weight,omitempty" tier:"premium" jsonschema:"Weight from 0 to 9 the board is scoped to"`
 }
 
 // UpdateGroupBoard updates a group issue board.
@@ -381,8 +387,8 @@ func UpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Up
 		lbls := gl.LabelOptions(input.Labels)
 		opts.Labels = &lbls
 	}
-	if input.Weight != 0 {
-		opts.Weight = new(input.Weight)
+	if input.Weight != nil {
+		opts.Weight = input.Weight
 	}
 	// Raw REST fetch so the documented hide_backlog_list/hide_closed_list/
 	// assignee/weight fields (absent from client-go's gl.GroupIssueBoard) are

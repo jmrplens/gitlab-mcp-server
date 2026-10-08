@@ -669,7 +669,7 @@ func TestFormatBoardMarkdown_AllFields(t *testing.T) {
 		"| 101 | @alice | 1 | - | - |\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'project.board_list_create' to add a column to this board\n" +
-		"- Use action 'project.board_update' to change this board's name or scope\n" +
+		"- Use action 'project.board_update' to rename this board or toggle its Open and Closed lists, and on Premium and Ultimate change its scope\n" +
 		"- Use action 'project.board_delete' to remove this board\n"
 	if md != want {
 		t.Errorf("FormatBoardMarkdown()\n got %q\nwant %q", md, want)
@@ -688,7 +688,7 @@ func TestFormatBoardMarkdown_Minimal(t *testing.T) {
 		"- **Hide Closed**: " + toolutil.EmojiCross + "\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'project.board_list_create' to add a column to this board\n" +
-		"- Use action 'project.board_update' to change this board's name or scope\n" +
+		"- Use action 'project.board_update' to rename this board or toggle its Open and Closed lists, and on Premium and Ultimate change its scope\n" +
 		"- Use action 'project.board_delete' to remove this board\n"
 	if md != want {
 		t.Errorf("FormatBoardMarkdown()\n got %q\nwant %q", md, want)
@@ -716,7 +716,7 @@ func TestFormatBoardMarkdown_GroupBoardProjectNameFallback(t *testing.T) {
 		"- **Hide Closed**: " + toolutil.EmojiCross + "\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'project.board_list_create' to add a column to this board\n" +
-		"- Use action 'project.board_update' to change this board's name or scope\n" +
+		"- Use action 'project.board_update' to rename this board or toggle its Open and Closed lists, and on Premium and Ultimate change its scope\n" +
 		"- Use action 'project.board_delete' to remove this board\n"
 	if md != want {
 		t.Errorf("FormatBoardMarkdown()\n got %q\nwant %q", md, want)
@@ -904,7 +904,7 @@ func TestUpdateBoard_AllOptionalFields(t *testing.T) {
 			AssigneeID:      3,
 			MilestoneID:     5,
 			Labels:          []string{"bug", "feature"},
-			Weight:          2,
+			Weight:          new(int64(2)),
 			HideBacklogList: &hideTrue,
 			HideClosedList:  &hideFalse,
 		})
@@ -1720,7 +1720,11 @@ func TestUpdateBoard_OneFieldAtATime_SendsOnlyThatKey(t *testing.T) {
 		{"assignee_id", UpdateBoardInput{AssigneeID: 3}, map[string]any{"assignee_id": float64(3)}},
 		{"milestone_id", UpdateBoardInput{MilestoneID: 5}, map[string]any{"milestone_id": float64(5)}},
 		{"labels", UpdateBoardInput{Labels: []string{"bug", "ux"}}, map[string]any{"labels": "bug,ux"}},
-		{"weight", UpdateBoardInput{Weight: 7}, map[string]any{"weight": float64(7)}},
+		{"weight", UpdateBoardInput{Weight: new(int64(7))}, map[string]any{"weight": float64(7)}},
+		// GitLab scopes a board to weight 0 as it does to any other weight
+		// (EMPTY_SCOPE_STATE in ee/app/models/ee/board.rb is nil and -1), so a
+		// zero the caller set is sent rather than read as unset.
+		{"weight zero", UpdateBoardInput{Weight: new(int64(0))}, map[string]any{"weight": float64(0)}},
 		{"hide_backlog_list", UpdateBoardInput{HideBacklogList: &hideBacklog}, map[string]any{"hide_backlog_list": true}},
 		{"hide_closed_list", UpdateBoardInput{HideClosedList: &hideClosed}, map[string]any{"hide_closed_list": false}},
 		{"nothing optional set", UpdateBoardInput{}, map[string]any{}},
@@ -1954,7 +1958,7 @@ func TestFormatBoardMarkdown_LabelsWithoutNames(t *testing.T) {
 				"- **Hide Closed**: " + toolutil.EmojiCross + "\n\n" +
 				"---\n\U0001F4A1 **Next steps:**\n" +
 				"- Use action 'project.board_list_create' to add a column to this board\n" +
-				"- Use action 'project.board_update' to change this board's name or scope\n" +
+				"- Use action 'project.board_update' to rename this board or toggle its Open and Closed lists, and on Premium and Ultimate change its scope\n" +
 				"- Use action 'project.board_delete' to remove this board\n"
 			if md != want {
 				t.Errorf("FormatBoardMarkdown()\n got %q\nwant %q", md, want)
