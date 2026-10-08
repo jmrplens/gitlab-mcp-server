@@ -1032,7 +1032,7 @@ Dimensiona el host por el conjunto residente del servidor HTTP, no por el tamañ
 | HTTP, por credencial adicional en el pool |        30 a 53 KiB | Heap vivo en reposo, la credencial mantenida y no llamando             |
 | HTTP, por credencial adicional que llama  |    0,81 a 4,27 MiB | Pico de conjunto residente, con entre dos y cuatro peticiones en vuelo |
 | stdio, un proceso por cliente             |      106 a 277 MiB | Empieza a construir su catálogo enseguida, así que no tiene reposo     |
-| Binario en disco                          |             ~55 MB | Binario estático único, sin dependencias de runtime                    |
+| Binario en disco                          |             ~55 MB | Un único binario autocontenido, sin runtime que instalar               |
 
 De aquí se derivan tres cosas.
 

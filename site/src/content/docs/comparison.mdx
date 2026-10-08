@@ -28,7 +28,7 @@ Several MCP servers connect an AI assistant to GitLab, and they are not intercha
 | Tools exposed          | {stats.tools.free} on CE, up to {stats.tools.gitlab_com} on GitLab.com                                       | ~23 curated tools                                                | ~216 tools                 |
 | Default visible tools  | {footprint.dynamic.visible_tools} (dynamic find/execute)                                                     | All exposed tools                                                | All exposed tools          |
 | Where it runs          | Binary you run (stdio or HTTP)                                                                               | Hosted on your GitLab instance (`/api/v4/mcp`)                   | Node.js process you run    |
-| Runtime required       | None — single static Go binary                                                                               | None — built into GitLab                                         | Node.js                    |
+| Runtime required       | None: a single self-contained Go binary                                                                      | None: built into GitLab                                          | Node.js                    |
 | GitLab tier            | Free/CE, Premium, Ultimate — Premium and Ultimate tools register automatically when the instance is licensed | Free, Premium, Ultimate                                          | Free/CE, Premium, Ultimate |
 | Instance prerequisites | A personal access token                                                                                      | GitLab Duo availability on, beta features on, MCP access allowed | A personal access token    |
 | Status                 | Stable, v{stats.version}                                                                                     | Beta                                                             | Stable                     |
@@ -53,7 +53,7 @@ So "works without paying" is **not** a reason to choose this project over the of
 - You need an operation the curated set does not expose. It covers {stats.tools.free} operations on Community Edition, rising to {stats.tools.gitlab_com} on GitLab.com, against roughly two dozen — releases, tags, environments, deploy keys, protected branches, package registry, runners, wikis, snippets, milestones, and so on.
 - You cannot enable GitLab Duo or beta features on the instance, whether by policy or because it is an older self-managed deployment.
 - You want the assistant constrained. `GITLAB_MCP_READ_ONLY=true` removes every mutating operation from the catalog, and `GITLAB_MCP_SAFE_MODE=true` returns a preview of a mutation instead of performing it.
-- You want no runtime dependency — a single static Go binary rather than a Node.js process.
+- You want no runtime dependency: a single self-contained Go binary rather than a Node.js process.
 
 **Consider another community server** such as `zereight/gitlab-mcp` when you are already comfortable running Node.js and its roughly 216 tools cover your workflows. It is the most widely adopted community option by a wide margin, and its coverage is substantial — the practical differences from this project are the runtime dependency, the absence of read-only and safe modes, and that it registers its tools individually rather than behind a low-token discovery surface.
 
