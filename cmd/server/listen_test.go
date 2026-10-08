@@ -139,19 +139,11 @@ func TestClearStaleSocket_AbsentPathIsFine(t *testing.T) {
 // TestClearStaleSocket_DeadSocketIsRemoved covers the case the whole check
 // exists to allow: a restart after a process died without unlinking its
 // socket, which would otherwise fail to bind forever.
+//
+// It does not run in parallel, for the reason deadUnixSocket gives.
 func TestClearStaleSocket_DeadSocketIsRemoved(t *testing.T) {
-	t.Parallel()
-
 	path := filepath.Join(socketDir(t), "dead.sock")
-	listener := listenUnixForTest(t, path)
-	// A normal Close unlinks the file, so unlinking is disabled to leave
-	// behind exactly what an unclean exit leaves behind.
-	if unix, ok := listener.(*net.UnixListener); ok {
-		unix.SetUnlinkOnClose(false)
-	} else {
-		t.Fatalf("listener type = %T, want *net.UnixListener", listener)
-	}
-	_ = listener.Close()
+	deadUnixSocket(t, path)
 
 	if err := clearStaleSocket(t.Context(), path); err != nil {
 		t.Fatalf("clearStaleSocket() error = %v", err)
@@ -166,15 +158,13 @@ func TestClearStaleSocket_DeadSocketIsRemoved(t *testing.T) {
 // permission, so the unlink is failed through its seam; what is asserted is
 // that the failure names the path and reaches the operator instead of the
 // bind failing a moment later on a file the log never mentioned.
+//
+// It does not run in parallel, for two reasons: it swaps the unlink seam every
+// test of the package reads, and it dials a dead socket, which deadUnixSocket
+// explains.
 func TestClearStaleSocket_ADeadSocketThatCannotBeRemoved_IsReported(t *testing.T) {
 	path := filepath.Join(socketDir(t), "stuck.sock")
-	listener := listenUnixForTest(t, path)
-	if unix, ok := listener.(*net.UnixListener); ok {
-		unix.SetUnlinkOnClose(false)
-	} else {
-		t.Fatalf("listener type = %T, want *net.UnixListener", listener)
-	}
-	_ = listener.Close()
+	deadUnixSocket(t, path)
 
 	original := removeStaleSocket
 	t.Cleanup(func() { removeStaleSocket = original })
@@ -280,6 +270,35 @@ func listenUnixForTest(t *testing.T, path string) net.Listener {
 		t.Fatalf("listen on %q: %v", path, err)
 	}
 	return listener
+}
+
+// deadUnixSocket leaves at path what a process that died without unlinking its
+// socket leaves behind: the socket file, with nothing listening on it.
+//
+// A test that dials such a path and asserts the refusal must not run in
+// parallel. Starting a process copies every descriptor this one holds into the
+// child, and close-on-exec closes the copy only when the child reaches exec.
+// For the moments between a sibling's fork and its exec, the listener closed
+// here is therefore still listening in the child, and a connect succeeds into
+// its backlog: clearStaleSocket then reports the path as served, which is the
+// right answer for a socket somebody holds. Tests of this package start
+// processes during the parallel phase, and with only those beside it the
+// dead-socket test failed in 242 of 3000 runs (269 under the race detector).
+// os/exec's Start returns only once the child's exec has closed those copies,
+// since that is how it learns the exec succeeded, and no test of this package
+// starts a process from a goroutine that outlives it, so outside the parallel
+// phase no copy can exist when the dial is made.
+func deadUnixSocket(t *testing.T, path string) {
+	t.Helper()
+	listener := listenUnixForTest(t, path)
+	// A normal Close unlinks the file, so unlinking is disabled to leave
+	// behind exactly what an unclean exit leaves behind.
+	unix, ok := listener.(*net.UnixListener)
+	if !ok {
+		t.Fatalf("listener type = %T, want *net.UnixListener", listener)
+	}
+	unix.SetUnlinkOnClose(false)
+	_ = listener.Close()
 }
 
 // TestParseSocketMode_ReadsOctal verifies that the mode is read the way chmod

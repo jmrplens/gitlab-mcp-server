@@ -237,6 +237,15 @@ func TestLockedBuffer_ConcurrentWrites_LoseNothing(t *testing.T) {
 // TestFreePorts_ReturnsAPortThatCanBeBound verifies the reservation hands back
 // a usable port and releases it, since the caller's next move is to give it to
 // a child process.
+//
+// It does not run in parallel, and neither does
+// TestFreePorts_SuccessiveCalls_DoNotCollide: both bind a port the moment
+// freePorts releases it, and a process started by a parallel test would hold
+// the reservation from its fork until its exec closes the close-on-exec
+// descriptors, which deadUnixSocket in cmd/server explains. No parallel test
+// of this package starts a process today. The command itself does not rely on
+// that window being short: start asks for another address when the child
+// exits without serving.
 func TestFreePorts_ReturnsAPortThatCanBeBound(t *testing.T) {
 	ports, err := freePorts(context.Background(), 1)
 	if err != nil {
@@ -285,7 +294,8 @@ func TestFreePorts_OneCall_HandsBackDistinctPorts(t *testing.T) {
 //
 // The race with another process is what start retries around; this only pins
 // that the command does not race with itself, which it would if the port came
-// from anywhere but the kernel.
+// from anywhere but the kernel. It does not run in parallel, for the reason
+// TestFreePorts_ReturnsAPortThatCanBeBound gives.
 func TestFreePorts_SuccessiveCalls_DoNotCollide(t *testing.T) {
 	first, err := freePorts(context.Background(), 1)
 	if err != nil {
