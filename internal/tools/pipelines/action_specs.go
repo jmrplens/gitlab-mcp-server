@@ -210,7 +210,7 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 		options.ParameterGuidance = pipelineIDGuidance()
 		options.IndividualTool.Description = "Get a pipeline's test report summary. Returns: aggregate test totals and per-suite summaries with build IDs. See also: gitlab_pipeline_test_report, gitlab_pipeline_get, gitlab_job_list_project."
 	case "latest":
-		options.Usage = "Get the most recent pipeline for a project, optionally filtered by ref. Use when the exact pipeline_id is unknown and you need the latest run for a branch or tag."
+		options.Usage = "Get the latest pipeline of a ref, the pipeline GitLab ran for the commit at its head, using the default branch when ref is omitted. Use when the exact pipeline_id is unknown and you need the current run of a branch or tag. When that commit has no pipeline on the ref (a push still being processed, or a commit workflow:rules skipped), returns instead the newest pipeline on the same ref, or the first under any filters or ordering passed, with head_sha and fallback_note saying it ran for an earlier commit."
 		options.Aliases = []string{"latest pipeline", "most recent pipeline", "get latest pipeline"}
 		options.RelatedActions = []string{actionPipelineGet, actionPipelineList, actionJobListProject}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -225,7 +225,7 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 				ExampleBinding: `params.ref:"main"`,
 			},
 		}
-		options.IndividualTool.Description = "Get the latest pipeline for a ref. Returns: full pipeline metadata for the most recent run. See also: gitlab_pipeline_get, gitlab_pipeline_list, gitlab_job_list_project."
+		options.IndividualTool.Description = "Get the latest pipeline of a ref (the default branch when ref is omitted): the one GitLab ran for the commit at its head, or, when that commit has none on the ref, the newest on the ref (the first under any filters or ordering passed). Returns: full pipeline metadata, plus head_sha and fallback_note when the pipeline ran for an earlier commit. See also: gitlab_pipeline_get, gitlab_pipeline_list, gitlab_job_list_project."
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("status", "created", "waiting_for_resource", "preparing", "pending", "running", "success", "failed", "canceled", "skipped", "manual", "scheduled"),
 			toolutil.SchemaEnumOverride("scope", "running", "pending", "finished", "branches", "tags"),

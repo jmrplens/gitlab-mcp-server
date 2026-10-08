@@ -10929,7 +10929,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_pipeline_latest
 
-Get the latest pipeline for a ref. Returns: full pipeline metadata for the most recent run. See also: gitlab_pipeline_get, gitlab_pipeline_list, gitlab_job_list_project.
+Get the latest pipeline of a ref (the default branch when ref is omitted): the one GitLab ran for the commit at its head, or, when that commit has none on the ref, the newest on the ref (the first under any filters or ordering passed). Returns: full pipeline metadata, plus head_sha and fallback_note when the pipeline ran for an earlier commit. See also: gitlab_pipeline_get, gitlab_pipeline_list, gitlab_job_list_project.
 
 **Parameters:**
 
@@ -10942,7 +10942,7 @@ Get the latest pipeline for a ref. Returns: full pipeline metadata for the most 
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `ref` (string): Branch or tag name to filter by (defaults to the default branch)
+- `ref` (string): Branch or tag whose latest pipeline is requested (defaults to the project's default branch)
 - `scope` (string): Filter by scope (running, pending, finished, branches, tags). Applies to the list fallback.
 - `sha` (string): Filter by commit SHA. Applies to the list fallback.
 - `sort` (string): Sort direction (asc, desc). Applies to the list fallback.

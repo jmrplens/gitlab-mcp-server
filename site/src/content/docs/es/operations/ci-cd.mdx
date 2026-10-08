@@ -573,7 +573,7 @@ El dominio `pipeline` gestiona el ciclo de vida completo de los pipelines. Sus a
 | `variables`           | Listar variables del pipeline                                                                                         |
 | `test_report`         | Obtener el informe de tests de un pipeline                                                                            |
 | `wait`                | **Esperar a la finalización** del pipeline con polling                                                                |
-| `latest`              | Obtener el último pipeline de una ref                                                                                 |
+| `latest`              | Obtener el último pipeline de una ref (la rama predeterminada si se omite), ver Último pipeline más abajo             |
 | `test_report_summary` | Obtener el resumen del informe de tests de un pipeline                                                                |
 | `update_metadata`     | Actualizar los metadatos de un pipeline (nombre)                                                                      |
 | `trigger_*`           | Gestión de tokens de trigger de pipeline (list, get, create, update, delete, run)                                     |
@@ -584,6 +584,10 @@ Las filas de programaciones pertenecen al mismo grupo `gitlab_pipeline` que el r
 
 :::tip[Esperar pipeline]
 La acción `wait` consulta un pipeline hasta que alcanza un estado terminal (success, failed, canceled). Esto es especialmente útil en scripts CI que necesitan bloquearse hasta que un pipeline disparado termine.
+:::
+
+:::note[Último pipeline]
+El último pipeline de una ref, para GitLab, es el pipeline del commit en su cabeza, y GitLab rechaza la petición con 403 cuando ese commit no tiene ninguno en la ref: un push que todavía se está procesando, o un commit que `workflow:rules` omitió. `latest` devuelve entonces el pipeline más reciente de la misma ref (el primero según los filtros u orden que pases), con `head_sha` puesto al commit de la cabeza y `fallback_note` indicando que el pipeline se ejecutó para un commit anterior. Los pipelines de un merge request desde la rama se ejecutan en la ref propia del merge request (`refs/merge-requests/<iid>/head`), así que ni GitLab ni el fallback los cuentan como de la rama. Cuando la lista de pipelines también lo rechaza, el token no puede leer los pipelines del proyecto, y el error dice qué roles pueden: Reporter o superior, y Guest o Planner solo mientras la visibilidad de pipelines basada en el proyecto (Project-based pipeline visibility) esté activada.
 :::
 
 ### Jobs

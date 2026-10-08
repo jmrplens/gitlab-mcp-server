@@ -604,7 +604,7 @@ const (
 	reasonProjectOptionsNeverRequested = "lib/api/entities/basic_project_details.rb exposes license and license_url under the license " +
 		"option (lines 23 and 31) and custom_attributes under with_custom_attributes (line 43). GET /projects/:id (lib/api/projects.rb) " +
 		"declares both as parameters defaulting to false and passes them to the presenter, and this package calls it with no query at all, " +
-		"which is what the request inventory's row for it records: it reads the project to probe that it exists or to resolve its web URL, " +
+		"which is what the request inventory's row for it records: it reads the project to probe that it exists or to resolve its web URL or its default branch, " +
 		"never to present it. Neither option is ever set, so the keys have never been on a response this package reads. " +
 		"internal/tools/projects sends license and with_custom_attributes on the same route and publishes all three keys."
 	reasonGroupProjectsLicenseNeverPassed = "lib/api/entities/basic_project_details.rb exposes license and license_url under the license " +
@@ -907,7 +907,7 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: issuesPkg, Entity: userBasicEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonCustomAttributesNeverPassed},
 	{Package: mergeRequestsPkg, Entity: userBasicEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonCustomAttributesNeverPassed},
 
-	// The license pair and custom_attributes on the project the six packages
+	// The license pair and custom_attributes on the project the seven packages
 	// that read one without presenting it get back from GET /projects/:id.
 	// users publishes a user's custom_attributes, so the package grain finds
 	// that name published there and reports only the license pair.
@@ -917,6 +917,9 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: eventsPkg, Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
 	{Package: eventsPkg, Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
 	{Package: eventsPkg, Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: pipelinesPkg, Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: pipelinesPkg, Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
+	{Package: pipelinesPkg, Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
 	{Package: projectDiscoveryPkg, Entity: projectWithAccessEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
 	{Package: projectDiscoveryPkg, Entity: projectWithAccessEntity, Field: "license", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
 	{Package: projectDiscoveryPkg, Entity: projectWithAccessEntity, Field: "license_url", Category: categoryOptionNeverRequested, Reason: reasonProjectOptionsNeverRequested},
@@ -942,7 +945,7 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 
 	// The commit a submodule update answers with, and an epic's deprecated
 	// short reference.
-	{Package: toolsDir + "/repositorysubmodules", Entity: "API::Entities::CommitDetail", Field: "stats", Category: categoryOptionNeverPassed, Reason: reasonSubmoduleCommitStatsNeverPassed},
+	{Package: toolsDir + "/repositorysubmodules", Entity: commitDetailEntity, Field: "stats", Category: categoryOptionNeverPassed, Reason: reasonSubmoduleCommitStatsNeverPassed},
 	{Package: toolsDir + "/epics", Entity: "API::Entities::Epic", Field: "reference", Category: categoryOptionNeverPassed, Reason: reasonEpicReferenceNeverPassed},
 
 	// The two access-request types, each answered for the entity of the
@@ -1050,6 +1053,12 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: eventsPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonEventProjectLookup},
 	{Package: usersPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonEventProjectLookup},
 
+	// The project and the head commit the latest pipeline reads when GitLab
+	// has no latest pipeline for the ref: the default branch to list, and the
+	// commit to name beside the pipeline the list returned.
+	{Package: pipelinesPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonLatestPipelineDefaultBranch},
+	{Package: pipelinesPkg, Entity: commitDetailEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonLatestPipelineHead},
+
 	// The existence probes: three list actions read the project, and the LDAP
 	// link listing the group, only to tell a missing object from one with
 	// nothing to list. The option declarations above still answer the license
@@ -1125,6 +1134,18 @@ const reasonEventProjectLookup = "the package reads each event's project (GET /p
 	"through events.EnrichContributionEventURLs and toolutil.ResolveProjectWebURLs) only to build the event's target_url " +
 	"from the project's web_url, and returns nothing else of the answer. project.get is the action that answers with a " +
 	"project."
+
+// commitDetailEntity is what GET /projects/:id/repository/commits/:sha
+// presents.
+const commitDetailEntity = "API::Entities::CommitDetail"
+
+// reasonLatestPipelineDefaultBranch answers the project pipeline.latest reads
+// when the latest route refused and the caller named no ref.
+const reasonLatestPipelineDefaultBranch = "pipeline.latest reads GET /projects/:id (pipelines.defaultBranch) only after GET /projects/:id/pipelines/latest answered 403 for a call that named no ref, to list the pipelines of the default branch the route was asked about rather than of the whole project, and keeps default_branch and nothing else of the answer. project.get is the action that answers with a project."
+
+// reasonLatestPipelineHead answers the commit pipeline.latest reads to name
+// the head of the ref beside the pipeline it fell back to.
+const reasonLatestPipelineHead = "pipeline.latest reads GET /projects/:id/repository/commits/:sha with the ref (pipelines.headCommit) only after GET /projects/:id/pipelines/latest answered 403 and the list of the ref returned a pipeline, to publish the id of the commit at the head of the ref as head_sha beside the earlier commit the pipeline ran for, and keeps nothing else of the answer. repository.commit_get is the action that answers with a commit."
 
 // The health package and the metadata entity its connectivity check reads.
 const (

@@ -572,7 +572,7 @@ The `pipeline` domain manages the full pipeline lifecycle. Its actions are `pipe
 | `variables`           | List pipeline variables                                                                                   |
 | `test_report`         | Get test report for a pipeline                                                                            |
 | `wait`                | **Wait for pipeline completion** with polling                                                             |
-| `latest`              | Get the latest pipeline for a ref                                                                         |
+| `latest`              | Get the latest pipeline of a ref (the default branch when omitted), see Latest pipeline below             |
 | `test_report_summary` | Get the test report summary for a pipeline                                                                |
 | `update_metadata`     | Update a pipeline's metadata (name)                                                                       |
 | `trigger_*`           | Pipeline trigger token management (list, get, create, update, delete, run)                                |
@@ -583,6 +583,10 @@ The schedule rows belong to the same `gitlab_pipeline` group as every other row,
 
 :::tip[Wait for pipeline]
 The `wait` action polls a pipeline until it reaches a terminal state (success, failed, canceled). This is especially useful in CI scripts that need to block until a triggered pipeline finishes.
+:::
+
+:::note[Latest pipeline]
+GitLab's latest pipeline of a ref is the pipeline of the commit at its head, and GitLab refuses the request with 403 when that commit has none on the ref: a push still being processed, or a commit `workflow:rules` skipped. `latest` then returns the newest pipeline on the same ref instead (the first one under any filters or ordering you pass), with `head_sha` set to the head commit and `fallback_note` saying that the pipeline ran for an earlier one. Pipelines of a merge request from the branch run on the merge request's own ref (`refs/merge-requests/<iid>/head`), so neither GitLab nor the fallback counts them as the branch's. When the pipeline list refuses as well, the token cannot read the project's pipelines, and the error says which roles can: Reporter or higher, and a Guest or Planner only while the project's Project-based pipeline visibility is on.
 :::
 
 ### Jobs

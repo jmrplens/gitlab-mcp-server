@@ -18687,14 +18687,39 @@
         },
         {
           "kind": "rest",
+          "route": "GET /projects/:id",
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "pipelines.defaultBranch"
+          ],
+          "sdk_methods": [
+            "Projects.GetProject"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "GET /projects/:id/pipelines",
           "class": "optional",
           "classic": "read_api",
           "sites": [
-            "pipelines.getLatestFallback"
+            "pipelines.firstPipelineOnRef",
+            "pipelines.refUnknown"
           ],
           "sdk_methods": [
             "Pipelines.ListProjectPipelines"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/repository/commits/:sha",
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "pipelines.headCommit"
+          ],
+          "sdk_methods": [
+            "Commits.GetCommit"
           ]
         },
         {

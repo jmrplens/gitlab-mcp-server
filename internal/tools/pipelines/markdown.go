@@ -81,13 +81,32 @@ func shortSHA(sha string) string {
 func FormatDetailMarkdown(p DetailOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, pipelineHeading(p))
-	writePipelineDetail(c, p)
-	c.End(
+	writePipelineDetail(c, p, "")
+	c.End(pipelineDetailHints()...)
+	return b.String()
+}
+
+// FormatLatestMarkdown renders the answer of pipeline.latest as the card of
+// its pipeline. When the pipeline is the one the list fell back to, the head
+// commit of the ref is written beside the pipeline's own and the note saying
+// why after the rows, so a reader never takes it for GitLab's latest.
+func FormatLatestMarkdown(out LatestOutput) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, pipelineHeading(out.DetailOutput))
+	writePipelineDetail(c, out.DetailOutput, out.HeadSHA)
+	c.Note(out.FallbackNote)
+	c.End(pipelineDetailHints()...)
+	return b.String()
+}
+
+// pipelineDetailHints are the next steps every card of one pipeline closes
+// with.
+func pipelineDetailHints() []string {
+	return []string{
 		toolutil.HintAction(actionJobList, "see the jobs of this pipeline"),
 		toolutil.HintAction(actionPipelineVariables, "see the variables it ran with"),
 		toolutil.HintAction(actionPipelineTestReport, "see its test results"),
-	)
-	return b.String()
+	}
 }
 
 // pipelineHeading composes the card's heading: the status as a glyph, the
@@ -104,8 +123,10 @@ func pipelineHeading(p DetailOutput) string {
 
 // writePipelineDetail writes the pipeline's own rows onto the card it is
 // given, so the wait result can show the same fields under its own H3 instead
-// of embedding a second H2 and a second guidance section.
-func writePipelineDetail(c *toolutil.Card, p DetailOutput) {
+// of embedding a second H2 and a second guidance section. headSHA is the
+// commit at the head of the ref when it is not the pipeline's, written beside
+// the pipeline's own, and nothing when it is empty.
+func writePipelineDetail(c *toolutil.Card, p DetailOutput, headSHA string) {
 	c.Int("IID", p.IID)
 	c.Field("Source", p.Source)
 	// A ref is not an identifier: git check-ref-format permits '|', '<' and
@@ -113,6 +134,7 @@ func writePipelineDetail(c *toolutil.Card, p DetailOutput) {
 	c.Field("Ref", p.Ref)
 	c.Bool("Tag", p.Tag)
 	c.Code("SHA", p.SHA)
+	c.Code("Head SHA", headSHA)
 	c.Code("Before SHA", p.BeforeSHA)
 	// The pipeline name comes from workflow:name in .gitlab-ci.yml, which is
 	// free text and interpolates CI variables besides.
@@ -302,7 +324,7 @@ func FormatWaitMarkdown(out WaitOutput) string {
 	c.Int("Polls", int64(out.PollCount))
 	c.Field("Final Status", out.FinalStatus)
 	c.Warn("Timed Out", out.TimedOut)
-	writePipelineDetail(c.Section("Pipeline Details"), out.Pipeline)
+	writePipelineDetail(c.Section("Pipeline Details"), out.Pipeline, "")
 	c.End(waitHints(out)...)
 	return b.String()
 }
@@ -350,6 +372,7 @@ func init() {
 	toolutil.RegisterMarkdownResult(formatPipelineNotFound)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 	toolutil.RegisterMarkdown(FormatDetailMarkdown)
+	toolutil.RegisterMarkdown(FormatLatestMarkdown)
 	toolutil.RegisterMarkdown(FormatVariablesMarkdown)
 	toolutil.RegisterMarkdown(FormatTestReportMarkdown)
 	toolutil.RegisterMarkdown(FormatTestReportSummaryMarkdown)

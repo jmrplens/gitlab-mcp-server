@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -89,7 +88,9 @@ func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/pipelines/latest"):
 			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 		case r.Method == http.MethodGet && r.URL.Path == pathProjectPipelines:
-			testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"status":"success"}]`)
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"status":"success","ref":"main"}]`)
+		case r.URL.Path == "/api/v4/projects/42/repository/commits/main":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":"head123"}`)
 		default:
 			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"status":"success","archived":"not-a-bool"}`)
 		}
@@ -108,7 +109,7 @@ func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
 			return err
 		}},
 		{Name: "get latest through the fallback", Call: func() error {
-			_, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "42"})
+			_, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "42", Ref: "main"})
 			return err
 		}},
 		{Name: "create", Call: func() error {
@@ -124,22 +125,6 @@ func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
 			return err
 		}},
 	})
-}
-
-// TestPipelineGetLatest_ReadsArchived verifies the latest pipeline, which
-// GitLab renders whole, carries the archived flag off the captured answer.
-func TestPipelineGetLatest_ReadsArchived(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"status":"success","archived":true}`)
-	}))
-
-	out, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "42"})
-	if err != nil {
-		t.Fatalf("GetLatest() unexpected error: %v", err)
-	}
-	if !out.Archived {
-		t.Errorf("GetLatest() = %+v, want archived read off the captured answer", out)
-	}
 }
 
 // TestPipelineList_Success verifies PipelineList when success.
@@ -611,104 +596,6 @@ func TestGetTestReportSummary_MissingProject(t *testing.T) {
 	_, err := GetTestReportSummary(context.Background(), client, GetInput{PipelineID: 10})
 	if err == nil {
 		t.Fatal(msgErrEmptyProjectID)
-	}
-}
-
-// TestGetLatest_Success verifies GetLatest when success.
-func TestGetLatest_Success(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/pipelines/latest" {
-			testutil.RespondJSON(w, http.StatusOK, pipelineDetailJSON)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	out, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "42"})
-	if err != nil {
-		t.Fatalf("GetLatest() unexpected error: %v", err)
-	}
-	if out.ID != 10 {
-		t.Errorf(fmtIDWant10, out.ID)
-	}
-	if out.Status != statusSuccess {
-		t.Errorf(fmtOutStatusWant, out.Status, statusSuccess)
-	}
-}
-
-// TestGetLatest_MissingProject verifies GetLatest when missing project.
-func TestGetLatest_MissingProject(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := GetLatest(context.Background(), client, GetLatestInput{})
-	if err == nil {
-		t.Fatal(msgErrEmptyProjectID)
-	}
-}
-
-// TestGet_Latest403FallbackToList verifies that GetLatest automatically falls
-// back to listing pipelines when the /latest endpoint returns 403 (which
-// happens for users with Developer role).
-func TestGet_Latest403FallbackToList(t *testing.T) {
-	callCount := 0
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
-		switch {
-		case r.URL.Path == "/api/v4/projects/42/pipelines/latest":
-			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
-		case r.URL.Path == "/api/v4/projects/42/pipelines" && r.Method == http.MethodGet:
-			testutil.RespondJSON(w, http.StatusOK, `[{"id":99,"status":"success","ref":"main","sha":"abc123"}]`)
-		case r.URL.Path == "/api/v4/projects/42/pipelines/99":
-			testutil.RespondJSON(w, http.StatusOK, `{"id":99,"status":"success","ref":"main","sha":"abc123","web_url":"https://gitlab.example.com/p/-/pipelines/99"}`)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-
-	out, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "42"})
-	if err != nil {
-		t.Fatalf("GetLatest() with 403 fallback unexpected error: %v", err)
-	}
-	if out.ID != 99 {
-		t.Errorf("GetLatest() fallback ID = %d, want 99", out.ID)
-	}
-	if out.Status != statusSuccess {
-		t.Errorf("GetLatest() fallback Status = %q, want %q", out.Status, statusSuccess)
-	}
-	if callCount < 3 {
-		t.Errorf("Expected at least 3 API calls (latest + list + get), got %d", callCount)
-	}
-}
-
-// TestGetLatest_FallbackWithRef verifies that the fallback list request keeps
-// the requested ref filter after the /latest endpoint returns 403.
-func TestGetLatest_FallbackWithRef(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/api/v4/projects/42/pipelines/latest":
-			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
-		case r.URL.Path == "/api/v4/projects/42/pipelines" && r.Method == http.MethodGet:
-			if ref := r.URL.Query().Get("ref"); ref != "release" {
-				t.Errorf("fallback ref = %q, want release", ref)
-			}
-			testutil.RespondJSON(w, http.StatusOK, `[{"id":77,"status":"success","ref":"release","sha":"abc123"}]`)
-		case r.URL.Path == "/api/v4/projects/42/pipelines/77":
-			testutil.RespondJSON(w, http.StatusOK, `{"id":77,"status":"success","ref":"release","sha":"abc123","web_url":"https://gitlab.example.com/p/-/pipelines/77"}`)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-
-	out, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "42", Ref: "release"})
-	if err != nil {
-		t.Fatalf("GetLatest() with ref fallback unexpected error: %v", err)
-	}
-	if out.ID != 77 {
-		t.Errorf("fallback ID = %d, want 77", out.ID)
-	}
-	if out.Ref != "release" {
-		t.Errorf("fallback Ref = %q, want release", out.Ref)
 	}
 }
 
@@ -1208,16 +1095,6 @@ func TestGetTestReportSummary_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetLatest_CancelledContext verifies GetLatest when cancelled context.
-func TestGetLatest_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	ctx := testutil.CancelledCtx(t)
-	_, err := GetLatest(ctx, client, GetLatestInput{ProjectID: "42"})
-	if err == nil {
-		t.Fatal(errExpCancelledNil)
-	}
-}
-
 // TestCreate_CancelledContext verifies Create when cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
@@ -1330,17 +1207,6 @@ func TestGetTestReportSummary_APIError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
 	}))
 	_, err := GetTestReportSummary(context.Background(), client, GetInput{ProjectID: "42", PipelineID: 10})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
-}
-
-// TestGetLatest_APIError verifies GetLatest when API error.
-func TestGetLatest_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
-	}))
-	_, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
@@ -1510,38 +1376,6 @@ func TestCreate_NoVariables_SendsNoVariablesKey(t *testing.T) {
 	}
 	if strings.Contains(body, "variables") {
 		t.Errorf("create body carried a variables key with none given:\n%s", body)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// GetLatest with ref filter
-// ---------------------------------------------------------------------------.
-
-// TestGetLatest_WithRef verifies GetLatest when with ref.
-func TestGetLatest_WithRef(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/pipelines/latest" {
-			if ref := r.URL.Query().Get("ref"); ref != "develop" {
-				t.Errorf("expected ref=develop, got %q", ref)
-			}
-			testutil.RespondJSON(w, http.StatusOK, `{
-				"id":15,"iid":15,"project_id":42,
-				"status":"success","source":"push","ref":"develop","sha":"def",
-				"name":"latest-dev","duration":60,"queued_duration":2,
-				"web_url":"https://gitlab.example.com/-/pipelines/15",
-				"created_at":"2026-03-01T10:00:00Z","updated_at":"2026-03-01T10:01:00Z"
-			}`)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	out, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "42", Ref: "develop"})
-	if err != nil {
-		t.Fatalf("GetLatest() unexpected error: %v", err)
-	}
-	if out.Ref != "develop" {
-		t.Errorf("Ref = %q, want %q", out.Ref, "develop")
 	}
 }
 
@@ -2172,87 +2006,6 @@ func TestPipelineCreate_400Hint(t *testing.T) {
 	}
 }
 
-// TestGetLatest_NonForbiddenError verifies that GetLatest returns a wrapped
-// error (not the fallback path) for non-403 API errors.
-func TestGetLatest_NonForbiddenError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":"server error"}`)
-	}))
-	_, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "1"})
-	if err == nil {
-		t.Fatal("expected error for 500")
-	}
-}
-
-// TestGetLatest_FallbackListError verifies the fallback path when the
-// ListProjectPipelines call fails (e.g. connection refused).
-func TestGetLatest_FallbackListError(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "latest") {
-			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
-			return
-		}
-		// Force a connection-level error by hijacking and closing
-		hj, ok := w.(http.Hijacker)
-		if !ok {
-			t.Error("response writer does not support hijacking")
-			http.Error(w, "response writer does not support hijacking", http.StatusInternalServerError)
-			return
-		}
-		conn, _, _ := hj.Hijack()
-		conn.Close()
-	})
-	client := testutil.NewTestClient(t, mux)
-	_, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "1"})
-	if err == nil {
-		t.Fatal("expected error from fallback list")
-	}
-}
-
-// TestGetLatest_FallbackEmptyList verifies the fallback path returns an error
-// when the list endpoint returns an empty array (no pipelines).
-func TestGetLatest_FallbackEmptyList(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "latest") {
-			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
-			return
-		}
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	})
-	client := testutil.NewTestClient(t, mux)
-	_, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "1"})
-	if err == nil {
-		t.Fatal("expected error for empty fallback list")
-	}
-	if !strings.Contains(err.Error(), "no pipelines found") {
-		t.Errorf("error should mention no pipelines, got: %v", err)
-	}
-}
-
-// TestGetLatest_FallbackGetPipelineError verifies the fallback path returns an
-// error when the list succeeds but the subsequent GetPipeline call fails.
-func TestGetLatest_FallbackGetPipelineError(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "latest") {
-			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
-			return
-		}
-		if strings.HasSuffix(r.URL.Path, "/pipelines") || strings.Contains(r.URL.RawQuery, "sort") {
-			testutil.RespondJSON(w, http.StatusOK, `[{"id":99}]`)
-			return
-		}
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
-	})
-	client := testutil.NewTestClient(t, mux)
-	_, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "1"})
-	if err == nil {
-		t.Fatal("expected error from fallback GetPipeline")
-	}
-}
-
 // TestActionSpecs_Get404NotFound verifies the get route returns a not-found output when the API returns 404.
 func TestActionSpecs_Get404NotFound(t *testing.T) {
 	handler := http.NewServeMux()
@@ -2394,111 +2147,6 @@ func pipelineSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]t
 // ---------------------------------------------------------------------------
 // 1:1 audit additions: keyset pagination, pipeline inputs, sub-object mirrors
 // ---------------------------------------------------------------------------.
-
-// TestGetLatest_FallbackKeysetAndFilters verifies that the list fallback honors
-// keyset pagination and the additional ListProjectPipelinesOptions filters that
-// GetLatestInput now mirrors.
-func TestGetLatest_FallbackKeysetAndFilters(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/api/v4/projects/42/pipelines/latest":
-			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
-		case r.URL.Path == "/api/v4/projects/42/pipelines" && r.Method == http.MethodGet:
-			q := r.URL.Query()
-			if q.Get("pagination") != "keyset" || q.Get("page_token") != "cur-9" {
-				t.Errorf("keyset query = %q/%q, want keyset/cur-9", q.Get("pagination"), q.Get("page_token"))
-			}
-			if q.Get("status") != "success" || q.Get("source") != "push" {
-				t.Errorf("filter query status=%q source=%q, want success/push", q.Get("status"), q.Get("source"))
-			}
-			testutil.RespondJSON(w, http.StatusOK, `[{"id":88,"status":"success","ref":"main","sha":"abc123"}]`)
-		case r.URL.Path == "/api/v4/projects/42/pipelines/88":
-			testutil.RespondJSON(w, http.StatusOK, `{"id":88,"status":"success","ref":"main","sha":"abc123","web_url":"https://gitlab.example.com/p/-/pipelines/88"}`)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-
-	input := GetLatestInput{
-		ProjectID: "42", Status: "success", Source: "push",
-		Pagination: "keyset",
-		PageToken:  "cur-9",
-	}
-	out, err := GetLatest(context.Background(), client, input)
-	if err != nil {
-		t.Fatalf("GetLatest() unexpected error: %v", err)
-	}
-	if out.ID != 88 {
-		t.Errorf("fallback ID = %d, want 88", out.ID)
-	}
-}
-
-// fallbackListQuery drives GetLatest down its 403 fallback and hands back the
-// query the fallback list request carried, so a test can state what the
-// fallback asked GitLab for rather than only what it decoded.
-func fallbackListQuery(t *testing.T, input GetLatestInput) url.Values {
-	t.Helper()
-	var query url.Values
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/api/v4/projects/42/pipelines/latest":
-			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
-		case r.URL.Path == pathProjectPipelines && r.Method == http.MethodGet:
-			query = r.URL.Query()
-			testutil.RespondJSON(w, http.StatusOK, `[{"id":88,"status":"success","ref":"main","sha":"abc123"}]`)
-		case r.URL.Path == "/api/v4/projects/42/pipelines/88":
-			testutil.RespondJSON(w, http.StatusOK, `{"id":88,"status":"success","ref":"main","sha":"abc123"}`)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	if _, err := GetLatest(context.Background(), client, input); err != nil {
-		t.Fatalf("GetLatest() unexpected error: %v", err)
-	}
-	if query == nil {
-		t.Fatal("GetLatest() never issued the fallback list request")
-	}
-	return query
-}
-
-// TestGetLatest_FallbackDefaults_AskForTheSingleNewestPipeline states what the
-// fallback has to ask for when the caller named no ordering. It stands in for
-// /pipelines/latest, so it must request one pipeline ordered newest first; any
-// other ordering or page size answers with a pipeline that is not the latest,
-// and the decoded output looks the same either way.
-func TestGetLatest_FallbackDefaults_AskForTheSingleNewestPipeline(t *testing.T) {
-	query := fallbackListQuery(t, GetLatestInput{ProjectID: "42"})
-
-	defaults := map[string]string{"order_by": "id", "sort": "desc", "per_page": "1"}
-	for param, want := range defaults {
-		t.Run(param, func(t *testing.T) {
-			if got := query.Get(param); got != want {
-				t.Errorf("fallback %s = %q, want %q", param, got, want)
-			}
-		})
-	}
-}
-
-// TestGetLatest_FallbackKeepsTheCallersOrdering is the other half: those three
-// are defaults, so an order_by, sort or per_page the caller supplied has to
-// reach GitLab unchanged rather than being overwritten by them.
-func TestGetLatest_FallbackKeepsTheCallersOrdering(t *testing.T) {
-	query := fallbackListQuery(t, GetLatestInput{
-		ProjectID: "42",
-		OrderBy:   "updated_at",
-		Sort:      "asc",
-		PerPage:   50,
-	})
-
-	supplied := map[string]string{"order_by": "updated_at", "sort": "asc", "per_page": "50"}
-	for param, want := range supplied {
-		t.Run(param, func(t *testing.T) {
-			if got := query.Get(param); got != want {
-				t.Errorf("fallback %s = %q, want the caller's %q", param, got, want)
-			}
-		})
-	}
-}
 
 // TestCreate_WithInputs verifies Create serializes typed pipeline inputs and
 // sends them in the request body.

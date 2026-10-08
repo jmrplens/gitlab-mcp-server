@@ -164729,7 +164729,7 @@
   },
   {
     "name": "gitlab_pipeline_latest",
-    "description": "Get the latest pipeline for a ref. Returns: full pipeline metadata for the most recent run. See also: gitlab_pipeline_get, gitlab_pipeline_list, gitlab_job_list_project.",
+    "description": "Get the latest pipeline of a ref (the default branch when ref is omitted): the one GitLab ran for the commit at its head, or, when that commit has none on the ref, the newest on the ref (the first under any filters or ordering passed). Returns: full pipeline metadata, plus head_sha and fallback_note when the pipeline ran for an earlier commit. See also: gitlab_pipeline_get, gitlab_pipeline_list, gitlab_job_list_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -164785,7 +164785,7 @@
           ]
         },
         "ref": {
-          "description": "Branch or tag name to filter by (defaults to the default branch)",
+          "description": "Branch or tag whose latest pipeline is requested (defaults to the project's default branch)",
           "type": "string"
         },
         "scope": {
@@ -164947,7 +164947,15 @@
         "duration": {
           "type": "integer"
         },
+        "fallback_note": {
+          "description": "Set only when the pipeline shown is not GitLab's latest pipeline of the ref, saying why",
+          "type": "string"
+        },
         "finished_at": {
+          "type": "string"
+        },
+        "head_sha": {
+          "description": "Commit at the head of the ref, set only when that commit has no pipeline on the ref and the pipeline shown ran for the earlier commit in sha",
           "type": "string"
         },
         "id": {
