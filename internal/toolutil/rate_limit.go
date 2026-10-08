@@ -605,15 +605,15 @@ type inspectionKey struct{}
 // WithInternalInspection marks ctx as belonging to a session the server opens
 // against itself, so what it asks for is not charged to a caller's bucket.
 //
-// The server lists its own tools several times while it starts: to count them,
-// to drop the excluded ones, to learn which survived the read-only and
-// safe-mode passes, to build the gitlab://tools manifest, and to write the
-// server card. Those requests travel the same receiving middlewares a client's
-// do, so metering tools/list charged them to the deployment's own bucket, and
-// on a server started with --rate-limit-burst=1 the second one was refused and
-// the tool manifest resource failed to build. Pass this to the server's
-// [mcp.Server.Connect]: the handler context descends from that one, and no
-// header or parameter a caller controls reaches it.
+// The server lists its own tools several times while it starts: to drop the
+// excluded ones, to learn which survived the read-only and safe-mode passes,
+// to count them and build the gitlab://tools manifest from one listing, and to
+// write the server card. Those requests travel the same receiving middlewares
+// a client's do, so metering tools/list charged them to the deployment's own
+// bucket, and on a server started with --rate-limit-burst=1 the second one was
+// refused and the tool manifest resource failed to build. Pass this to the
+// server's [mcp.Server.Connect]: the handler context descends from that one,
+// and no header or parameter a caller controls reaches it.
 //
 // Only the catalog bucket consults the mark, because only listings are asked
 // for this way. A method that reached GitLab would be spending the credential

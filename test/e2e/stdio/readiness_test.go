@@ -275,7 +275,7 @@ func TestInitialize_WhileTheCatalogIsStillBuilding_IsAnsweredFirst(t *testing.T)
 	// The other half of the claim: the slow work still happens, and the server
 	// says so. Without this a server that answered promptly by registering
 	// nothing at all would pass.
-	awaitStderr(t, s, catalogReadyLine, 60*time.Second)
+	awaitStderr(t, s, catalogReadyLine, registrationTimeout)
 }
 
 // TestToolsList_IssuedDuringStartup_ReturnsTheWholeCatalog verifies that the
@@ -354,7 +354,7 @@ func listToolsDuringStartup(t *testing.T, surface string) []string {
 		t.Fatalf("the handshake failed: %v", failure)
 	}
 
-	listed, answered := nextResponse(messages, 60*time.Second)
+	listed, answered := nextResponse(messages, registrationTimeout)
 	if !answered {
 		t.Fatalf("tools/list was never answered\nstderr: %s", s.stderrText())
 	}

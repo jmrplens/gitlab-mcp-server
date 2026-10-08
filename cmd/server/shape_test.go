@@ -690,12 +690,12 @@ func gateHasOpened(gate *readinessGate) bool {
 
 // waitForCatalog blocks until a shell's readiness gate settles, either way.
 //
-// The budget is the liveness one rather than waitFor's two seconds: this waits
+// The budget is a registration's rather than waitFor's two seconds: this waits
 // on a real dynamic catalog build, which is about 1.5 seconds warm and several
 // times that under -race on a cold shared catalog.
 func waitForCatalog(t *testing.T, shell *serverShell) {
 	t.Helper()
-	deadline := time.Now().Add(testHTTPLivenessTimeout)
+	deadline := time.Now().Add(testCatalogBuildTimeout)
 	for time.Now().Before(deadline) {
 		if shell.gate.isReady() || shell.gate.failed() != nil {
 			return

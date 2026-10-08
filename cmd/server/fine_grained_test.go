@@ -48,7 +48,8 @@ func individualFineGrainedShell(t *testing.T, client *gitlabclient.Client, cfg *
 	// Awaited with a bound, because a registration that never returns is a
 	// defect to report rather than a suite to hang: registration lists its own
 	// tools through the readiness gate, and a gate that held that call back
-	// would wait for itself.
+	// would wait for itself. The bound is a registration's, which under the
+	// race detector is tens of seconds for this surface.
 	registered := make(chan error, 1)
 	go func() { registered <- shell.register(t.Context()) }()
 	select {
@@ -56,8 +57,8 @@ func individualFineGrainedShell(t *testing.T, client *gitlabclient.Client, cfg *
 		if registerErr != nil {
 			t.Fatalf("register: %v", registerErr)
 		}
-	case <-time.After(testHTTPLivenessTimeout):
-		t.Fatalf("register did not return within %s", testHTTPLivenessTimeout)
+	case <-time.After(testCatalogBuildTimeout):
+		t.Fatalf("register did not return within %s", testCatalogBuildTimeout)
 	}
 	shell.gate.markReady()
 	return shell

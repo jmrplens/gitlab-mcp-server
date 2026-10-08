@@ -400,7 +400,7 @@ func TestTokenScope_FineGrainedToken_TheFirstListingIsAlreadyNarrowed(t *testing
 
 	s.send(t, request(1, "tools/list", ""))
 	close(fake.versionHold)
-	got := s.readMessage(t, 60*time.Second)
+	got := s.readMessage(t, registrationTimeout)
 	result, ok := got["result"].(map[string]any)
 	if !ok {
 		t.Fatalf("the first tools/list answered no result: %v", got)
@@ -663,7 +663,7 @@ func TestTokenScope_FineGrainedToken_PhaseBTheFirstListingIsAlreadyNarrowed(t *t
 
 	s.send(t, request(1, "tools/list", ""))
 	close(fake.grantHold)
-	names := toolNames(t, s.readMessage(t, 60*time.Second))
+	names := toolNames(t, s.readMessage(t, registrationTimeout))
 	if contains(names, "gitlab_branch_create") || !contains(names, "gitlab_issue_create") {
 		t.Errorf("the first listing holds gitlab_branch_create %v and gitlab_issue_create %v; want only the second",
 			contains(names, "gitlab_branch_create"), contains(names, "gitlab_issue_create"))

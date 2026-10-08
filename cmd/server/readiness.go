@@ -181,10 +181,10 @@ type gatedConnectionKey struct{}
 //
 // The gate is opt-in per connection, and that direction is deliberate. This
 // server talks MCP to itself while it is being built: the exclusion pass, the
-// read-only and safe-mode filters, the tool count, the meta-route filter and
-// the gitlab://tools manifest each connect an in-memory client and call
-// tools/list, some of them on a context.Background() with no deadline. Under an
-// opt-OUT gate every one of those had to remember to exempt itself, and the
+// read-only and safe-mode filters and the one listing the tool count and the
+// gitlab://tools manifest share each connect an in-memory client and call
+// tools/list, some of them on a context.Background() with no deadline. Under
+// an opt-OUT gate every one of those had to remember to exempt itself, and the
 // first that did not deadlocked registration against itself, waiting for a
 // step that could not finish until the call returned. Under this one, the
 // default is to pass, and the only thing that waits is a connection somebody

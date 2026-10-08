@@ -2402,11 +2402,17 @@ func (sh *serverShell) register(ctx context.Context) error {
 	toolActions := toolvisibility.NewToolActions(sh.toolSurface, surfaceCatalog)
 	sh.toolActions.Store(toolActions)
 
-	toolCount, err := countRegisteredTools(server)
-	if err != nil {
-		slog.Warn("failed to count registered tools", "error", err)
+	// One listing serves both the count logged here and the gitlab://tools
+	// manifest built below, and nothing between the two registers a tool. A
+	// listing marshals every registered tool's schemas, which is about a
+	// quarter of a second on the individual surface and ten times that under
+	// the race detector, so a second listing made only to count them was the
+	// largest avoidable cost of a registration.
+	registeredTools, listErr := listRegisteredToolsForInspection(server, "registration")
+	if listErr != nil {
+		slog.Warn("failed to list registered tools; gitlab://tools is not served", "error", listErr)
 	}
-	logRegisteredToolSurface(sh.toolSurface, toolCount, metaSchemaRoutes)
+	logRegisteredToolSurface(sh.toolSurface, len(registeredTools), metaSchemaRoutes)
 
 	// The meta routes are not filtered against the tools left registered:
 	// every filter that can remove a meta dispatcher (read-only, token scope,
@@ -2426,12 +2432,10 @@ func (sh *serverShell) register(ctx context.Context) error {
 	sh.completions.PublishExcludedActions(surfaceRegistration.excludedActions)
 	publishSubscriptionIndex(sh.subs, client, surfaceRegistration.excludedActions)
 
-	if manifestTools, listErr := listRegisteredToolsForInspection(server, "tool-manifest"); listErr != nil {
-		slog.Warn("failed to build tool manifest resource", "error", listErr)
-	} else {
+	if listErr == nil {
 		manifestOpts := resources.ToolSurfaceResourceOptions{
 			Surface:           sh.toolSurface,
-			Tools:             manifestTools,
+			Tools:             registeredTools,
 			Catalog:           surfaceCatalog,
 			MetaRoutes:        metaSchemaRoutes,
 			ShareKey:          manifestShareKey(sh.toolSurface, sh.capabilitySurface, cfg, surfaceCatalog),
@@ -4918,16 +4922,6 @@ func serveStdio(ctx context.Context, server *mcp.Server) error {
 // real session took that branch on some runs and not on others, so whether it
 // ran said nothing about the code.
 var runStdioServer = (*mcp.Server).Run
-
-// countRegisteredTools returns the number of tools registered on the server
-// by connecting an ephemeral in-memory client session and calling ListTools.
-func countRegisteredTools(server *mcp.Server) (int, error) {
-	registered, err := listRegisteredToolsForInspection(server, "counter")
-	if err != nil {
-		return 0, err
-	}
-	return len(registered), nil
-}
 
 // MCP inspection hooks are replaceable in tests so error paths from in-memory
 // server/client setup can be exercised without mutating production behavior.

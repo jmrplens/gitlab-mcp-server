@@ -482,7 +482,7 @@ func (s *session) callRaw(t *testing.T, msg string) (string, map[string]any) {
 	want := requestIDOf(t, msg)
 	s.send(t, msg)
 	for {
-		line, got := s.readRawMessage(t, 30*time.Second)
+		line, got := s.readRawMessage(t, callTimeout)
 		if _, isCall := got["method"]; isCall && got["id"] == nil {
 			s.mu.Lock()
 			s.notifications = append(s.notifications, got)
