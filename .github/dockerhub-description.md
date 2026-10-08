@@ -25,7 +25,13 @@ Stdio transport (for desktop MCP clients such as Claude Desktop, Cursor, or VS C
 }
 ```
 
-HTTP transport (remote/shared use — the container's default mode, listening on `:8080`). Name the GitLab instance this deployment serves, or it refuses to start rather than making requests to whatever host a caller names:
+HTTP transport (remote/shared use). The image's default command is `--transport auto --http-addr 0.0.0.0:8080`, which picks the transport from stdin: started with `-i`, as above, the container is handed a pipe and serves stdio; started without `-i`, its stdin is `/dev/null` and it listens for HTTP on `:8080`. Name the GitLab instance this deployment serves, or it refuses to start rather than making requests to whatever host a caller names. A `GITLAB_URL` variable names it and keeps the default command:
+
+```bash
+docker run --rm -p 8080:8080 -e GITLAB_URL=https://gitlab.com jmrplens/gitlab-mcp-server:latest
+```
+
+Any argument after the image name replaces the default command, so naming the instance as a flag brings `--http` and `--http-addr` back with it:
 
 ```bash
 docker run --rm -p 8080:8080 jmrplens/gitlab-mcp-server:latest \

@@ -132,8 +132,15 @@ Full reference: <https://jmrp.io/docs/gitlab-mcp-server/configuration/>
 ## Step 4 — Verify the installation
 
 1. Restart or reload the MCP client so it picks up the new configuration.
-2. The server should appear as connected with either 2 tools (default
-   `dynamic` surface) or 34 tools (`meta` surface). Both are correct.
+2. The server should appear as connected, listing 2 tools on the default
+   `dynamic` surface. On the `meta` surface it lists 34 tools on Free/CE, 40
+   on Premium, 51 on self-managed Ultimate, 41 on GitLab.com Premium and 52
+   on GitLab.com Ultimate. With a token that lacks the `admin_mode` scope,
+   such as the one Step 1 asks for, it lists fewer: the server removes the
+   `gitlab_admin` and `gitlab_storage_move` groups, and on Premium and above
+   also `gitlab_enterprise_user`, `gitlab_geo` and `gitlab_project_alias`,
+   which leaves 32, 35, 46, 36 and 47 in the same order. All of these
+   counts are correct.
 3. Smoke test: call `gitlab_find_action` with `query: "get current user"`,
    then `gitlab_execute_action` with the returned action id
    (`user.current`). On the `meta` surface call `gitlab_user` with
@@ -142,8 +149,20 @@ Full reference: <https://jmrp.io/docs/gitlab-mcp-server/configuration/>
 
 ## Troubleshooting
 
-- **401 Unauthorized** — token is wrong, expired, or missing the `api`
-  scope. Ask the user for a new token.
+- **401 Unauthorized on the smoke test**: GitLab refused the token itself:
+  it is mistyped, expired or revoked, or was issued by another instance than
+  `GITLAB_URL`. Ask the user for a new token. A 401 from only some actions,
+  while the smoke test works, is GitLab refusing a permission on those
+  routes rather than the token.
+- **Every tool, resource and prompt request fails with JSON-RPC error
+  `-40300`**: GitLab accepted the token, but it carries neither `read_api`
+  nor `api`, the minimum this server needs. A token's scopes cannot be
+  changed after it is created: ask the user for a new token with `api` (or
+  `read_api` for reads only), then restart or reload the MCP client.
+- **Reads work but most create, update and delete actions are missing**:
+  the token carries `read_api` and not `api`, so the server serves it only
+  the actions GitLab accepts from `read_api`. Ask for a token with `api` to
+  write.
 - **TLS errors on self-managed instances** — set
   `GITLAB_MCP_SKIP_TLS_VERIFY=true` (and `-e GITLAB_MCP_SKIP_TLS_VERIFY` in the
   Docker args).
@@ -152,6 +171,9 @@ Full reference: <https://jmrp.io/docs/gitlab-mcp-server/configuration/>
   every action. Set `GITLAB_MCP_TOOL_SURFACE=meta` for visible per-domain tools.
 - **Docker: `docker: command not found`** — fall back to Method C (npm/npx,
   needs only Node 18+) or Method B (native binary).
+- Other symptoms and their fixes are under
+  [Connection and authentication](https://jmrp.io/docs/gitlab-mcp-server/operations/troubleshooting/#connection-and-authentication)
+  on the troubleshooting page.
 
 ## More documentation
 
