@@ -33,6 +33,8 @@ import {
 import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { VERSION_TOKEN, readRelease } from "../src/lib/version-token.mjs";
+
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..", "..");
 const publicDir = join(here, "..", "public");
@@ -279,6 +281,15 @@ function readFrontmatter(file) {
 		}
 		value = value.replace(/\\"/g, '"');
 		if (!value) throw new Error(`${file}: frontmatter ${key} is empty`);
+		// The build replaces the version token in a page's body only, so one in
+		// the frontmatter would reach this index verbatim (and the page's own
+		// title or description too). Refused here as well as in
+		// check-version-token.mjs, so the prebuild stops before writing it.
+		if (value.includes(VERSION_TOKEN)) {
+			throw new Error(
+				`${file}: frontmatter ${key} carries ${VERSION_TOKEN}, which the build replaces only in the page body; write the release there`,
+			);
+		}
 		return value;
 	};
 	const sidebar = block.match(
@@ -340,15 +351,6 @@ function approxTokens(bytes) {
 	const tokens = bytes / 4;
 	if (tokens >= 1_000_000) return `~${(tokens / 1_000_000).toFixed(1)}M tokens`;
 	return `~${Math.round(tokens / 1000)}k tokens`;
-}
-
-/** Reads the released version, so the index dates itself. */
-function readVersion() {
-	try {
-		return readFileSync(join(repoRoot, "VERSION"), "utf8").trim();
-	} catch {
-		return "";
-	}
 }
 
 /**
@@ -422,8 +424,8 @@ function renderIndex({ locale, pages, version, referenceSizes }) {
 	push();
 	push(
 		es
-			? `Este es el índice del sitio de documentación${version ? ` (versión ${version})` : ""}. Cada entrada enlaza una página de documentación con su propia descripción. El código, los issues y las releases están en ${REPO_BASE.replace(/\/$/, "")}.`
-			: `This is the index of the documentation site${version ? ` (version ${version})` : ""}. Every entry links one documentation page and carries that page's own description. Source, issues and releases live at ${REPO_BASE.replace(/\/$/, "")}.`,
+			? `Este es el índice del sitio de documentación (versión ${version}). Cada entrada enlaza una página de documentación con su propia descripción. El código, los issues y las releases están en ${REPO_BASE.replace(/\/$/, "")}.`
+			: `This is the index of the documentation site (version ${version}). Every entry links one documentation page and carries that page's own description. Source, issues and releases live at ${REPO_BASE.replace(/\/$/, "")}.`,
 	);
 	push();
 	push(
@@ -547,7 +549,10 @@ function main() {
 		);
 	}
 
-	const version = readVersion();
+	// The index dates itself by the release its pages tell a reader to
+	// install, the published one in server.json, which is what %%VERSION%%
+	// becomes on every page it lists.
+	const version = readRelease();
 	for (const [locale, pages, target] of [
 		["en", enPages, join(publicDir, "llms.txt")],
 		["es", esPages, join(publicDir, "es", "llms.txt")],

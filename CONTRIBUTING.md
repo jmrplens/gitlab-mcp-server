@@ -239,6 +239,8 @@ The user documentation lives only on the [documentation site](https://jmrp.io/do
 
 A site page is named by its slug: `operations/http-server` is `site/src/content/docs/operations/http-server.mdx`, published at `https://jmrp.io/docs/gitlab-mcp-server/operations/http-server/`. Link it from a repository file by that URL; `make check-doc-links` resolves the URL and its anchor to the page.
 
+A page that names the release a reader installs today (an install command, an image tag, a package pin, sample `--version` output, "the current release is") writes `%%VERSION%%` instead of the number, and the build replaces it with the published release, the top-level `version` of `server.json`, which the release workflow stamps once the release is out, so a release needs no page edit. `VERSION` is not used, because it names the release being prepared before anyone can download it. A number that is history ("removed in 3.1.0", "checked on 3.1.0") stays literal. `pnpm run version:check` (in `site/`) refuses the token in frontmatter, where the build does not replace it, and a release written by hand where the token belongs; the [`update-starlight-docs` skill](.github/skills/update-starlight-docs/SKILL.md) has the rule and its exceptions.
+
 ### What Is Generated
 
 Some documentation is written by a generator and never edited by hand. Change what the generator reads, run it, and commit the result; `make update-all` runs every command below (the benchmark through its redraw target, which measures nothing), and CI compares each committed result with what the tree generates.

@@ -38,7 +38,8 @@ control al binario, que es lo que permite a `uvx` resolver la herramienta
 por el nombre de la distribución, y `python -m gitlab_mcp_server` para
 localizarlo desde código. A partir de la primera release posterior a 3.1.0
 cada wheel lleva además el `LICENSE` del repositorio y `THIRD_PARTY_NOTICES`
-bajo `.dist-info/licenses/`. A 2026-10-05 PyPI tiene 2.7.5, 3.0.0 y 3.1.0.
+bajo `.dist-info/licenses/`. PyPI tiene todas las releases desde la 2.7.5
+hasta la actual, %%VERSION%%.
 
 Por tanto, tras instalar aparecen dos comandos:
 
@@ -112,7 +113,7 @@ Comprueba la instalación:
 
 ```bash
 gitlab-mcp-server --version
-# gitlab-mcp-server 3.1.0 (commit: ...)
+# gitlab-mcp-server %%VERSION%% (commit: ...)
 ```
 
 Con `uvx` no queda ningún comando en tu PATH;
@@ -159,7 +160,7 @@ a `env` solo para una instancia autogestionada. Un cliente que no herede el
 PATH de tu shell puede necesitar la ruta completa al comando;
 `which gitlab-mcp-server` (o `where gitlab-mcp-server` en Windows) la
 imprime. Para fijar una release con `uvx` en lugar de seguir la más
-reciente, nómbrala en el argumento: `"jmrplens-gitlab-mcp-server@3.1.0"`.
+reciente, nómbrala en el argumento: `"jmrplens-gitlab-mcp-server@%%VERSION%%"`.
 
 Las rutas de archivo y las formas de cada cliente (VS Code usa `servers` con
 `"type": "stdio"`, Zed usa `context_servers`) están en las

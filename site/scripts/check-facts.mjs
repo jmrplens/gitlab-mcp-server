@@ -32,6 +32,12 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { classify } from "../src/lib/wide-tables.mjs";
+import { readRelease, replaceVersionToken } from "../src/lib/version-token.mjs";
+
+// What %%VERSION%% becomes at build time, the published release, so a table
+// cell is measured at the width the classifier sees rather than at the
+// token's.
+const version = readRelease();
 
 const docsDir = fileURLToPath(new URL("../src/content/docs", import.meta.url));
 const esDir = join(docsDir, "es");
@@ -83,15 +89,15 @@ function sheets(path) {
 
 /**
  * Every markdown table in a page, as rows of cell text rendered the way the
- * classifier sees it at build time: a code span is its contents, a link is
- * its label. Measuring raw markdown instead counts backticks and `](…)` and
- * reaches a different verdict — a gate reporting a divergence that does not
- * exist.
+ * classifier sees it at build time: the version token is the release, a code
+ * span is its contents, a link is its label. Measuring raw markdown instead
+ * counts backticks and `](…)` and reaches a different verdict: a gate
+ * reporting a divergence that does not exist.
  */
 function markdownTables(text) {
 	const body = text.slice(text.indexOf("\n---\n", 3) + 5);
 	const render = (cell) =>
-		cell
+		replaceVersionToken(cell, version)
 			// A JSX stat interpolation renders to a short figure at build time;
 			// measuring the raw expression would count its variable path as a
 			// 30-character unbreakable token. Both locales carry the same

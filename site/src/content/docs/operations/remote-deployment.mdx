@@ -274,6 +274,8 @@ shape.
 ### One container
 
 ```bash
+image=$(curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/server.json \
+  | jq -r '.packages[] | select(.registryType == "oci" and (.identifier | startswith("ghcr.io/"))) | .identifier')
 docker run -d --name gitlab-mcp \
   --restart unless-stopped \
   -p 127.0.0.1:8080:8080 \
@@ -283,7 +285,7 @@ docker run -d --name gitlab-mcp \
   --security-opt no-new-privileges:true \
   --memory 512m \
   -e GITLAB_URL=https://gitlab.example.com \
-  ghcr.io/jmrplens/gitlab-mcp-server:3.1.0@sha256:87e483299a2663a7a5d4d28679859b0c7fba2b1a421b7de2652441a569d4a2fc
+  "$image"
 ```
 
 **The instance arrives as an environment variable, not an argument.** Any
@@ -309,16 +311,20 @@ already runs as `appuser` (uid 10001), so `--user` is redundant, and
 `--cap-drop ALL` is safe because nothing binds a privileged port.
 
 **Pin the digest, not only the tag.** A tag can be re-pushed; a digest is what a
-client actually resolves. `3.1.0` and `latest` resolved to the digest above on
-2026-10-04, on `ghcr.io` and on Docker Hub, and it is the digest the MCP
-Registry's `server.json` pins for that release.
+client actually resolves. The first command reads the image the MCP Registry's
+`server.json` pins for the current release: the `%%VERSION%%` tag with the
+digest the release workflow pushed under it, recorded in the repository when
+the release was published rather than read back from the tag now. Docker Hub
+holds the same index under the same digest. Resolve it once and keep the value:
+a script that reads it again on every start moves to the next release as soon
+as one is published.
 
 ### Compose
 
 ```yaml
 services:
   gitlab-mcp-server:
-    image: ghcr.io/jmrplens/gitlab-mcp-server:3.1.0
+    image: ghcr.io/jmrplens/gitlab-mcp-server:%%VERSION%%
     restart: unless-stopped
     networks: [mcp]
     ports:

@@ -94,7 +94,7 @@ gitlab-mcp-server/
 ├── site/                   # The user documentation: an Astro Starlight site, published at https://jmrp.io/docs/gitlab-mcp-server/
 │   ├── src/content/docs/   # One .mdx page per slug, its Spanish twin under es/; reference/tools/ (make gen-tool-reference) and reference/fine-grained-permissions.mdx (make gen-action-grants) are generated
 │   ├── src/data/           # Generated figures the pages read: stats.json (audit_metrics), token-footprint.json (audit_tokens), resource-benchmark.json (bench_resources); home.ts, the landing data, is hand-written
-│   └── scripts/            # The site's own checks (i18n:check, facts:check, chips:check and llms:check among them) and its llms.txt generator
+│   └── scripts/            # The site's own checks (i18n:check, facts:check, chips:check, llms:check and version:check among them) and its llms.txt generator
 ├── plan/                   # Untracked working area: ignored by git, never committed
 ├── .github/                # Copilot agents, skills, instructions
 ├── .gitignore
@@ -168,7 +168,7 @@ go run ./cmd/format_md_tables/
 go run ./cmd/format_md_tables/ --check
 
 # Site pages: every English page needs its Spanish twin, and these checks hold the pair
-(cd site && pnpm run i18n:check && pnpm run facts:check && pnpm run chips:check && pnpm run llms:check)
+(cd site && pnpm run i18n:check && pnpm run facts:check && pnpm run chips:check && pnpm run llms:check && pnpm run version:check)
 (cd site && pnpm run analyze)   # the whole site gate: build, then lint, which reads what the build wrote
 ```
 

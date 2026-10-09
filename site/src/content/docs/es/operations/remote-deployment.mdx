@@ -281,6 +281,8 @@ despliegue.
 ### Un contenedor
 
 ```bash
+image=$(curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/server.json \
+  | jq -r '.packages[] | select(.registryType == "oci" and (.identifier | startswith("ghcr.io/"))) | .identifier')
 docker run -d --name gitlab-mcp \
   --restart unless-stopped \
   -p 127.0.0.1:8080:8080 \
@@ -290,7 +292,7 @@ docker run -d --name gitlab-mcp \
   --security-opt no-new-privileges:true \
   --memory 512m \
   -e GITLAB_URL=https://gitlab.example.com \
-  ghcr.io/jmrplens/gitlab-mcp-server:3.1.0@sha256:87e483299a2663a7a5d4d28679859b0c7fba2b1a421b7de2652441a569d4a2fc
+  "$image"
 ```
 
 **La instancia llega como variable de entorno, no como argumento.** Cualquier
@@ -318,16 +320,20 @@ dale un `--tmpfs` o un volumen. El contenedor ya se ejecuta como `appuser` (uid
 escucha en un puerto privilegiado.
 
 **Fija el digest, no solo la etiqueta.** Una etiqueta se puede volver a subir; un
-digest es lo que un cliente resuelve de verdad. `3.1.0` y `latest` resolvían al
-digest de arriba el 2026-10-04, tanto en `ghcr.io` como en Docker Hub, y es el
-digest que fija para esa versión el `server.json` del MCP Registry.
+digest es lo que un cliente resuelve de verdad. La primera orden lee la imagen que
+fija para la release actual el `server.json` del MCP Registry: la etiqueta
+`%%VERSION%%` con el digest que el workflow de release subió bajo ella, anotado en
+el repositorio cuando se publicó la release y no leído ahora de la etiqueta.
+Docker Hub guarda el mismo índice con el mismo digest. Resuélvelo una vez y
+guarda el valor: un script que lo vuelve a leer en cada arranque pasa a la
+siguiente release en cuanto se publica.
 
 ### Compose
 
 ```yaml
 services:
   gitlab-mcp-server:
-    image: ghcr.io/jmrplens/gitlab-mcp-server:3.1.0
+    image: ghcr.io/jmrplens/gitlab-mcp-server:%%VERSION%%
     restart: unless-stopped
     networks: [mcp]
     ports:

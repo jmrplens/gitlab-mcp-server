@@ -37,8 +37,8 @@ it the `gitlab-mcp-server` command directly. The wheel also ships a tiny
 which is what lets `uvx` resolve the tool by its distribution name, and
 `python -m gitlab_mcp_server` for programmatic lookup. From the first
 release after 3.1.0 each wheel also carries the repository's `LICENSE` and
-`THIRD_PARTY_NOTICES` under `.dist-info/licenses/`. As of 2026-10-05 PyPI
-holds 2.7.5, 3.0.0 and 3.1.0.
+`THIRD_PARTY_NOTICES` under `.dist-info/licenses/`. PyPI holds every
+release from 2.7.5 on, up to the current one, %%VERSION%%.
 
 Two commands therefore appear after an install:
 
@@ -111,7 +111,7 @@ Check the install:
 
 ```bash
 gitlab-mcp-server --version
-# gitlab-mcp-server 3.1.0 (commit: ...)
+# gitlab-mcp-server %%VERSION%% (commit: ...)
 ```
 
 With `uvx` no command lands on your PATH; `uvx jmrplens-gitlab-mcp-server --version`
@@ -157,7 +157,7 @@ self-managed instance. A client that does not inherit your shell's PATH may
 need the full path to the command; `which gitlab-mcp-server` (or
 `where gitlab-mcp-server` on Windows) prints it. To pin a release rather
 than follow the newest one with `uvx`, name it in the argument:
-`"jmrplens-gitlab-mcp-server@3.1.0"`.
+`"jmrplens-gitlab-mcp-server@%%VERSION%%"`.
 
 Per-client file locations and shapes (VS Code uses `servers` with
 `"type": "stdio"`, Zed uses `context_servers`) are in the
