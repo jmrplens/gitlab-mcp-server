@@ -276,6 +276,19 @@ linters:
         linters:
           - tparallel
 
+      # Every fmt.Sprintf here whose format is one double-quoted literal
+      # holding "`%s`", the form go-critic v0.15.0 added to
+      # sprintfQuotedString, builds a Markdown code span. The check asks for
+      # %#q, which is Go quoting: it writes a backquoted string only when
+      # strconv.CanBackquote accepts the value, and a double-quoted string with
+      # Go escapes otherwise (a value holding a backquote, an ASCII control
+      # character other than tab, a byte order mark or invalid UTF-8), so the
+      # rewrite would change text the server and the generators write. The
+      # check's other form, "\"%s\"" or `"%s"`, which asks for %q, stays on.
+      - linters:
+          - gocritic
+        text: 'sprintfQuotedString: use %#q instead of "`%s`"'
+
 output:
   formats:
     text:

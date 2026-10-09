@@ -292,8 +292,8 @@ func Parent(path string) string {
 		}
 		return trimmed
 	}
-	if cut := strings.LastIndex(path, "."); cut >= 0 {
-		return path[:cut]
+	if parent, _, found := strings.CutLast(path, "."); found {
+		return parent
 	}
 	return Root
 }

@@ -647,15 +647,14 @@ func siblingMatches(related string, siblings map[string]struct{}) bool {
 	if _, ok := siblings[related]; ok {
 		return true
 	}
-	idx := strings.LastIndex(related, ".")
-	if idx < 0 {
+	head, tail, found := strings.CutLast(related, ".")
+	if !found {
 		return false
 	}
-	tail := related[idx+1:]
 	if _, ok := siblings[tail]; ok {
 		return true
 	}
-	_, ok := siblings[related[:idx]+"_"+tail]
+	_, ok := siblings[head+"_"+tail]
 	return ok
 }
 

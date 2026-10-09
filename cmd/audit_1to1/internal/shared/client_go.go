@@ -242,8 +242,8 @@ func GraphQLInterface(clientGo *types.Package) (*types.Named, error) {
 func ShortPackage(pkgPath string) string {
 	_, after, ok := strings.Cut(pkgPath, ToolsPkgInfix)
 	if !ok {
-		if last := strings.LastIndex(pkgPath, "/"); last >= 0 {
-			return pkgPath[last+1:]
+		if _, last, found := strings.CutLast(pkgPath, "/"); found {
+			return last
 		}
 		return pkgPath
 	}

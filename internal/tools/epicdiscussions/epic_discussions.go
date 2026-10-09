@@ -235,8 +235,8 @@ func (r gqlDiscussionsResponse) topLevelError(operation string) error {
 
 // extractDiscussionHex extracts the hex ID from a Discussion GID.
 func extractDiscussionHex(gid string) string {
-	if idx := strings.LastIndex(gid, "/"); idx >= 0 {
-		return gid[idx+1:]
+	if _, hex, found := strings.CutLast(gid, "/"); found {
+		return hex
 	}
 	return gid
 }

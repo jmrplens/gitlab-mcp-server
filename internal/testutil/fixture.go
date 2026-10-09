@@ -281,8 +281,8 @@ func timeShaped(name string) bool {
 // slice index dropped, or "Value" for a path with no field at all.
 func lastSegment(path string) string {
 	segment := path
-	if i := strings.LastIndex(path, "."); i >= 0 {
-		segment = path[i+1:]
+	if _, after, found := strings.CutLast(path, "."); found {
+		segment = after
 	}
 	if segment == "" {
 		return "Value"

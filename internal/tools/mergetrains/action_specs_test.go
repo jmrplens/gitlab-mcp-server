@@ -76,8 +76,8 @@ func hasNaturalAlias(spec toolutil.ActionSpec) bool {
 // project, branch, get or add. Everything before it is shared, four actions on
 // one resource differing only in what they are pointed at and what they do.
 func mergeTrainDiscriminator(action string) string {
-	if cut := strings.LastIndex(action, "_"); cut >= 0 {
-		return action[cut+1:]
+	if _, word, found := strings.CutLast(action, "_"); found {
+		return word
 	}
 	return action
 }

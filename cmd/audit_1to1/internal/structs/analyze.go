@@ -2137,8 +2137,8 @@ func shortQualifier(pkg *types.Package) string {
 }
 
 func lastPathSegment(path string) string {
-	if idx := strings.LastIndex(path, "/"); idx >= 0 {
-		return path[idx+1:]
+	if _, segment, found := strings.CutLast(path, "/"); found {
+		return segment
 	}
 	return path
 }

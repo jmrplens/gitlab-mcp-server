@@ -610,6 +610,70 @@ func TestOptionalFields_PointerType_ListsTheFieldsOfWhatItPointsAt(t *testing.T)
 	}
 }
 
+// TestOptionalFields_SharedShapes_ListsNoneOfTheirFields checks that the walk
+// steps over each shared holder the server writes, the offset pagination, both
+// cursor paginations and the hints, even where the holder carries a field the
+// absent-value rule would otherwise list: the cursor pagination tags its
+// cursors omitempty, and a walk into it would ask that rule about a value
+// GitLab never sends. Each holder carries such a field here, so the skip of
+// each one is observable on its own.
+func TestOptionalFields_SharedShapes_ListsNoneOfTheirFields(t *testing.T) {
+	type PaginationOutput struct {
+		Page       int64 `json:"page"`
+		TotalItems int64 `json:"total_items"`
+		TotalPages int64 `json:"total_pages"`
+		NextPage   int64 `json:"next_page,omitempty"`
+	}
+	type GraphQLPaginationOutput struct {
+		HasNextPage bool   `json:"has_next_page"`
+		EndCursor   string `json:"end_cursor,omitempty"`
+	}
+	type GraphQLForwardPaginationOutput struct {
+		HasNextPage bool   `json:"has_next_page"`
+		EndCursor   string `json:"end_cursor,omitempty"`
+	}
+	type HintableOutput struct {
+		NextSteps []string `json:"next_steps,omitempty"`
+	}
+	type withOffset struct {
+		Pagination PaginationOutput `json:"pagination"`
+		Note       string           `json:"note,omitempty"`
+	}
+	type withCursor struct {
+		Pagination GraphQLPaginationOutput `json:"pagination"`
+		Note       string                  `json:"note,omitempty"`
+	}
+	type withForward struct {
+		Pagination GraphQLForwardPaginationOutput `json:"pagination"`
+		Note       string                         `json:"note,omitempty"`
+	}
+	type withHints struct {
+		Hints HintableOutput `json:"hints"`
+		Note  string         `json:"note,omitempty"`
+	}
+
+	cases := []struct {
+		name string
+		typ  reflect.Type
+	}{
+		{name: "offset pagination", typ: reflect.TypeFor[withOffset]()},
+		{name: "cursor pagination", typ: reflect.TypeFor[withCursor]()},
+		{name: "forward cursor pagination", typ: reflect.TypeFor[withForward]()},
+		{name: "hints", typ: reflect.TypeFor[withHints]()},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var names []string
+			for _, field := range OptionalFields(tc.typ) {
+				names = append(names, field.Name)
+			}
+			if got := strings.Join(names, " "); got != "Note" {
+				t.Errorf("OptionalFields = %q, want only %q, the holder skipped", got, "Note")
+			}
+		})
+	}
+}
+
 // TestFixtureState_String_NamesEveryState checks the subtest names the
 // harness prints.
 func TestFixtureState_String_NamesEveryState(t *testing.T) {

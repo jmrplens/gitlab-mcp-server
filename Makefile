@@ -1359,7 +1359,7 @@ MCPB_CLI_VERSION := 2.1.2
 ## tree would land in go.sum for every job that runs `go mod download`. Keep it
 ## equal to what developers run locally, so `make golangci-lint` means the same
 ## on both sides of a push.
-GOLANGCI_LINT_VERSION := v2.13.2
+GOLANGCI_LINT_VERSION := v2.14.0
 
 ## check-mcpb: validate the Claude Desktop extension manifests: mcpb/manifest.json,
 ## which the universal bundle packs, and the darwin, win32 and linux manifests

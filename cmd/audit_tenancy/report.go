@@ -125,12 +125,12 @@ func sortFindings(found []Finding) []Finding {
 // splitPosition is a position's file and line, so line 100 sorts after line
 // 99. A position with no line is its file alone.
 func splitPosition(position string) (file string, line int) {
-	i := strings.LastIndexByte(position, ':')
-	if i < 0 {
+	before, after, found := strings.CutLast(position, ":")
+	if !found {
 		return position, 0
 	}
-	line, _ = strconv.Atoi(position[i+1:])
-	return position[:i], line
+	line, _ = strconv.Atoi(after)
+	return before, line
 }
 
 // ruleNumber is the number of a rule name, "G10" is 10, so G10 sorts after G9.

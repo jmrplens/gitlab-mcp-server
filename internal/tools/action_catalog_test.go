@@ -1296,8 +1296,8 @@ func TestActionAnnotations_AdditiveActionsAreNotIdempotent(t *testing.T) {
 	for _, action := range catalog.Actions() {
 		name := string(action.ID)
 		short := name
-		if i := strings.LastIndex(name, "."); i >= 0 {
-			short = name[i+1:]
+		if _, after, found := strings.CutLast(name, "."); found {
+			short = after
 		}
 		if !strings.HasPrefix(short, "add_") && !strings.HasSuffix(short, "_add") && short != "add" {
 			continue

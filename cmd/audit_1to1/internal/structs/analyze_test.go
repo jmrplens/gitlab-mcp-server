@@ -898,8 +898,8 @@ func TestBuildReport_UnionsMultiConverterOutput(t *testing.T) {
 // sdkLeaf returns the type name after the last "." in an SDK type string
 // (e.g. "v2.Response" → "Response").
 func sdkLeaf(sdk string) string {
-	if i := strings.LastIndex(sdk, "."); i >= 0 {
-		return sdk[i+1:]
+	if _, leaf, found := strings.CutLast(sdk, "."); found {
+		return leaf
 	}
 	return sdk
 }
