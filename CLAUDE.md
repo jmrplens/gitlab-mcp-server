@@ -35,7 +35,7 @@
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v3` v3.15.0       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 3.1.0                                               |
+| Version       | 3.2.0                                               |
 
 ### Scale
 
@@ -214,7 +214,7 @@ gitlab-mcp-server/
 │   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 8 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
-└── VERSION                      # Semantic version (3.1.0)
+└── VERSION                      # Semantic version (3.2.0)
 ```
 
 ## Editing files
