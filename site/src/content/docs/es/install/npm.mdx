@@ -99,10 +99,10 @@ Tras una instalación global, el comando en tu PATH es `gitlab-mcp-server`:
 
 ```bash
 gitlab-mcp-server --version
-# gitlab-mcp-server 3.1.0 (commit: ...)
+# gitlab-mcp-server %%VERSION%% (commit: ...)
 ```
 
-A 2026-10-05 el registro tiene 2.7.5, 3.0.0 y 3.1.0, y `latest` es 3.1.0.
+El registro tiene todas las releases desde la 2.7.5, y `latest` es la actual, %%VERSION%%.
 
 Si lo arrancas en una terminal sin `GITLAB_URL` y `GITLAB_TOKEN` definidos, el binario
 imprime qué es y los dos valores que necesita, y después espera a que pulses
@@ -158,7 +158,7 @@ a `env` solo para una instancia autogestionada. Un cliente que no herede el
 PATH de tu shell puede necesitar la ruta completa al comando;
 `which gitlab-mcp-server` (o `where gitlab-mcp-server` en Windows) la
 imprime. Para fijar una release en lugar de seguir la más reciente, nómbrala
-en el argumento: `"@jmrp.io/gitlab-mcp-server@3.1.0"`.
+en el argumento: `"@jmrp.io/gitlab-mcp-server@%%VERSION%%"`.
 
 Las rutas de archivo y las formas de cada cliente (VS Code usa `servers` con
 `"type": "stdio"`, Zed usa `context_servers`) están en las

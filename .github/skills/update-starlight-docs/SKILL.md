@@ -40,6 +40,20 @@ Never edit these by hand: change the source the generator reads, then run it. `m
 
 A page that states one of the counts `stats.json` carries imports it and prints the field, rather than writing the figure.
 
+### The release a page names
+
+A page never writes the current release as a number. Where it means the release a reader installs today (an install command, an image tag, a package pin, a download URL or tag ref, sample `--version` or `/health` output, "the current release is"), it writes `%%VERSION%%`, and the build replaces it with the published release: the top-level `version` of the repository's `server.json`. That is the release a reader can download. `VERSION` is not read, because it names the release being prepared and moves days before that release exists (3.1.0: `VERSION` moved on 2026-09-17, the tag came on 2026-09-30), so a command built from it would name a release nobody can download yet. `server.json` is stamped by `scripts/update-server-json-sha.sh` in the release workflow's last job, once the release, its images and its npm, PyPI and NuGet packages are published, and that commit reaches `main` with a deploy key, so the Pages workflow redeploys on it. `site/src/lib/version-token.mjs` holds the reader and the remark plugin, which `site/astro.config.mjs` runs before every other one, so the token works in prose, inline code, fenced code blocks (Expressive Code receives them already substituted), tables, link and image URLs, and MDX component attributes, in English and Spanish alike. A release then moves every page with no edit:
+
+```mdx
+curl -fsSLO https://github.com/jmrplens/gitlab-mcp-server/releases/download/v%%VERSION%%/gitlab-mcp-server-linux-amd64
+
+The current release is **v%%VERSION%%**.
+```
+
+A number stays literal when it is history, whatever the published release is today: "removed in 3.1.0", "since 3.0.0", "up to 3.1.0", "from the first release after 3.1.0", or a measurement taken on one release ("checked on 3.1.0"). Decide by what the sentence means, not by whether the number matches. Avoid a condition naming the latest release ("the one to download while the latest release is 3.1.0"): it turns false the day the next one publishes, so write what stays true whichever release is the latest ("the one to download when the latest release predates the per-system bundles"). A value that belongs to one release and is not the release number (an image digest, a release date) is not written either: show where to read it, as `install/docker` and `operations/remote-deployment` read the image reference with its digest out of `server.json` on `main`, which records what the release published rather than what a tag points at now.
+
+The token is replaced in the page body only. Frontmatter (`title`, `description`, `faq`, `chips`) is parsed and cached by the content layer outside the Markdown pipeline and copied verbatim into the site's `/llms.txt`, so it never carries the token; and `{stats.version}` is the copy of `VERSION` that `make gen-site-stats` writes into `stats.json`, the release being prepared, so the token replaces it. `pnpm run version:check` (`site/scripts/check-version-token.mjs`, part of `pnpm run lint` and of CI's site lint) refuses both, and a literal release in a shape that means the current one (an install command, image tag, package pin, download URL, tag ref, `--version` or `/health` output, or "current release", "latest release", "release actual", "última release" before a number), whatever the number. A literal in one of those shapes kept on purpose is declared in `site/scripts/version-literals.mjs` with its category (`measurement`, or `condition` for one true only while that release is the published one) and its reason, and a declaration that matches nothing, lacks either, or is a condition about a release the published one has moved past fails the check. That last failure arrives with the commit the release workflow stamps `server.json` with, on `main`, which is why a sentence that stays true is better than a condition. The build's postbuild step fails when `%%VERSION%%` survives anywhere in `dist/`, the llms indexes included, or when a page's `<main>` carries the release fewer times than its source wrote the token and the number together.
+
 ## Steps
 
 ### 1. Map code changes to affected docs
@@ -137,7 +151,7 @@ cd site
 pnpm install --frozen-lockfile
 pnpm exec playwright install chromium   # once: rehype-mermaid renders every Mermaid block with it
 pnpm run build                          # also runs starlight-links-validator over every internal link and anchor
-pnpm run lint                           # type check, contrast, chips, facts, i18n, llms, eslint, prettier, then the dist gates
+pnpm run lint                           # type check, contrast, chips, facts, i18n, llms, version, eslint, prettier, then the dist gates
 ```
 
 Must produce zero errors. The build regenerates the site's `/llms.txt` first (`prebuild`), and fails when a page is missing from its `SECTIONS` table. From the repository root, also run the gates CI runs on content:
@@ -154,6 +168,7 @@ make check-doc-links                     # every relative link and jmrp.io/docs/
 - Always update the EN and ES pages together, in the same change
 - Keep ES translations accurate: do not leave English text in ES pages
 - Never edit a generated page or data file (the table under "Where Documentation Lives"); change its source and run its generator
+- Write the release a reader installs today as `%%VERSION%%`, never as a number; keep a literal release only for history (see "The release a page names")
 - Touch `site/astro.config.mjs` for two reasons only: a page added, renamed or removed changes the `sidebar` array (slug, label and `translations.es`), and a page that moves or leaves the site gets an entry in its `redirects` map for its old URL, English and Spanish, so a bookmark or an inbound link lands where the content went
 - A page added, renamed or removed also changes the `SECTIONS` table of `site/scripts/gen-llms.mjs`, in the order the sidebar shows it
 - Use Starlight components (Aside, Tabs, etc.) instead of raw HTML
@@ -166,6 +181,7 @@ make check-doc-links                     # every relative link and jmrp.io/docs/
 - [ ] All affected EN pages updated
 - [ ] All affected ES pages updated with translated content
 - [ ] No generated page or data file edited by hand; the generator was run instead
+- [ ] The current release written as `%%VERSION%%`, in the body and never in frontmatter; a literal release only where it is history
 - [ ] Frontmatter (title, description, and the chips/datePublished/faq fields the neighbouring pages carry) is correct
 - [ ] New, renamed or removed pages reflected in the `sidebar` array of `site/astro.config.mjs` (with their Spanish label), in `SECTIONS` of `site/scripts/gen-llms.mjs`, and, for a page that moved or left, in `redirects`
 - [ ] Starlight components used correctly (imports present)

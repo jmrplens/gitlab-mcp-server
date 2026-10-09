@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "postbuild": "node scripts/normalize-html.mjs && node scripts/add-sitemap-lastmod.mjs",
+    "postbuild": "node scripts/normalize-html.mjs && node scripts/add-sitemap-lastmod.mjs && node scripts/check-version-token.mjs --dist",
     "preview": "astro preview",
     "check": "astro check",
     "contrast:check": "node scripts/check-contrast.mjs",
@@ -21,12 +21,13 @@
     "pa11y": "astro preview & sleep 3 && pa11y-ci; EXIT=$?; kill %1 2>/dev/null; exit $EXIT",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "pnpm run check && pnpm run contrast:check && pnpm run chips:check && pnpm run facts:check && pnpm run i18n:check && pnpm run llms:check && pnpm run eslint && pnpm run format:check && pnpm run html-validate && pnpm run htmlhint && pnpm run a11y:check",
+    "lint": "pnpm run check && pnpm run contrast:check && pnpm run chips:check && pnpm run facts:check && pnpm run i18n:check && pnpm run llms:check && pnpm run version:check && pnpm run eslint && pnpm run format:check && pnpm run html-validate && pnpm run htmlhint && pnpm run a11y:check",
     "test:a11y": "pnpm run pa11y",
     "analyze": "pnpm run build && pnpm run lint",
     "prebuild": "node scripts/gen-llms.mjs",
     "i18n:check": "node scripts/check-i18n-parity.mjs",
     "llms:check": "node scripts/gen-llms.mjs --check",
+    "version:check": "node scripts/check-version-token.mjs",
     "a11y:check": "node scripts/check-headings-labels.mjs"
   },
   "type": "module",

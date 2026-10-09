@@ -120,8 +120,8 @@ In HTTP mode configuration comes from flags rather than variables (`--tool-surfa
 
 ## Tags and registries
 
-- `latest` follows the newest release; `3.1.0` and every other version tag stays put. Pin a version tag in production, or pin the digest for full immutability: `ghcr.io/jmrplens/gitlab-mcp-server:3.1.0@sha256:87e483299a2663a7a5d4d28679859b0c7fba2b1a421b7de2652441a569d4a2fc` is the form the MCP Registry's `server.json` uses for the current release.
-- `ghcr.io/jmrplens/gitlab-mcp-server` and `docker.io/jmrplens/gitlab-mcp-server` carry the same images: as of 2026-10-05, `3.1.0` and `latest` resolve to that same digest on both. The documentation uses `ghcr.io`; use the Docker Hub name if that registry is the one your network allows.
+- `latest` follows the newest release; `%%VERSION%%` and every other version tag stays put. Pin a version tag in production, or pin the digest for full immutability: `ghcr.io/jmrplens/gitlab-mcp-server:%%VERSION%%@sha256:<digest>` is the form the MCP Registry's `server.json` uses for the current release, with the digest the release workflow recorded when it published the image. `curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/server.json | jq -r '.packages[] | select(.registryType == "oci") | .identifier'` prints that reference for both registries.
+- `ghcr.io/jmrplens/gitlab-mcp-server` and `docker.io/jmrplens/gitlab-mcp-server` carry the same images: every release pushes one index to both, so a version tag and `latest` resolve to the same digest on each. The documentation uses `ghcr.io`; use the Docker Hub name if that registry is the one your network allows.
 - The repository's `docker-compose.yml` names its image as `${DOCKER_REGISTRY:-ghcr.io/jmrplens/gitlab-mcp-server}:${VERSION:-latest}`, so `DOCKER_REGISTRY` and `VERSION` choose the registry and the tag without editing the file.
 - The image carries the label `io.modelcontextprotocol.server.name=io.github.jmrplens/gitlab-mcp-server`, which is how the MCP Registry validates its ownership.
 

@@ -629,18 +629,18 @@ La imagen se publica en dos registros, y a ambos se sube el mismo índice, así 
 
 ```bash
 # Firma: quién subió este índice. Cualquiera de los dos registros, misma respuesta.
-cosign verify ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 \
+cosign verify ghcr.io/jmrplens/gitlab-mcp-server:%%VERSION%% \
   --certificate-identity-regexp "^https://github.com/jmrplens/gitlab-mcp-server/" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 
-cosign verify docker.io/jmrplens/gitlab-mcp-server:3.0.0 \
+cosign verify docker.io/jmrplens/gitlab-mcp-server:%%VERSION%% \
   --certificate-identity-regexp "^https://github.com/jmrplens/gitlab-mcp-server/" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 
 # Procedencia de compilación: qué commit y qué ejecución de workflow la produjeron
-gh attestation verify oci://ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server \
+gh attestation verify oci://ghcr.io/jmrplens/gitlab-mcp-server:%%VERSION%% -R jmrplens/gitlab-mcp-server \
   --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
-gh attestation verify oci://docker.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server \
+gh attestation verify oci://docker.io/jmrplens/gitlab-mcp-server:%%VERSION%% -R jmrplens/gitlab-mcp-server \
   --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 ```
 
@@ -650,12 +650,12 @@ La imagen lleva además una atestación de SBOM sobre el índice **y** sobre cad
 
 ```bash
 # SBOM: qué hay dentro de la imagen. Una etiqueta resuelve al índice, que lleva uno.
-gh attestation verify oci://ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server \
+gh attestation verify oci://ghcr.io/jmrplens/gitlab-mcp-server:%%VERSION%% -R jmrplens/gitlab-mcp-server \
   --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml \
   --predicate-type https://spdx.dev/Document
 
 # O por el digest del manifiesto de plataforma que realmente ejecutas
-digest=$(docker buildx imagetools inspect ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 \
+digest=$(docker buildx imagetools inspect ghcr.io/jmrplens/gitlab-mcp-server:%%VERSION%% \
   --format '{{range .Manifest.Manifests}}{{if and .Platform (eq .Platform.Architecture "amd64")}}{{.Digest}}{{end}}{{end}}')
 gh attestation verify "oci://ghcr.io/jmrplens/gitlab-mcp-server@${digest}" -R jmrplens/gitlab-mcp-server \
   --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml \
@@ -665,11 +665,11 @@ gh attestation verify "oci://ghcr.io/jmrplens/gitlab-mcp-server@${digest}" -R jm
 Cada uno de esos documentos se adjunta una segunda vez como referrer `application/spdx+json` en crudo, porque lo que escribe la atestación es un bundle de sigstore y un lector que busca el propio tipo de medio SPDX no lo reconoce. Ambos aparecen juntos:
 
 ```bash
-oras discover --format tree ghcr.io/jmrplens/gitlab-mcp-server:3.0.0
+oras discover --format tree ghcr.io/jmrplens/gitlab-mcp-server:%%VERSION%%
 ```
 
 :::note
-Las atestaciones de procedencia y de SBOM de la imagen empiezan en el primer release posterior al 3.0.0. Sobre el propio 3.0.0 los comandos `gh attestation verify` de arriba responden que no encuentran atestación: ese release está firmado pero no atestado. El comando de firma sí funciona sobre 3.0.0.
+Las atestaciones de procedencia y de SBOM de la imagen empiezan en el primer release posterior al 3.0.0. Apuntados al propio 3.0.0, los comandos `gh attestation verify` de arriba responden que no encuentran atestación: ese release está firmado pero no atestado. El comando de firma sí funciona sobre 3.0.0.
 :::
 
 ## Vulnerabilidades conocidas en un binario

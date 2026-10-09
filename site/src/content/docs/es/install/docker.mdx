@@ -120,8 +120,8 @@ En modo HTTP la configuración viene de flags y no de variables (`--tool-surface
 
 ## Etiquetas y registros
 
-- `latest` sigue a la release más nueva; `3.1.0` y cualquier otra etiqueta de versión se quedan fijas. Fija una etiqueta de versión en producción, o fija el digest para una inmutabilidad total: `ghcr.io/jmrplens/gitlab-mcp-server:3.1.0@sha256:87e483299a2663a7a5d4d28679859b0c7fba2b1a421b7de2652441a569d4a2fc` es la forma que usa el `server.json` del MCP Registry para la release actual.
-- `ghcr.io/jmrplens/gitlab-mcp-server` y `docker.io/jmrplens/gitlab-mcp-server` llevan las mismas imágenes: a 2026-10-05, `3.1.0` y `latest` resuelven a ese mismo digest en ambos. La documentación usa `ghcr.io`; usa el nombre de Docker Hub si ese es el registro que permite tu red.
+- `latest` sigue a la release más nueva; `%%VERSION%%` y cualquier otra etiqueta de versión se quedan fijas. Fija una etiqueta de versión en producción, o fija el digest para una inmutabilidad total: `ghcr.io/jmrplens/gitlab-mcp-server:%%VERSION%%@sha256:<digest>` es la forma que usa el `server.json` del MCP Registry para la release actual, con el digest que el workflow de release anotó al publicar la imagen. `curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/server.json | jq -r '.packages[] | select(.registryType == "oci") | .identifier'` imprime esa referencia para los dos registros.
+- `ghcr.io/jmrplens/gitlab-mcp-server` y `docker.io/jmrplens/gitlab-mcp-server` llevan las mismas imágenes: cada release sube un mismo índice a los dos, así que una etiqueta de versión y `latest` resuelven al mismo digest en cada uno. La documentación usa `ghcr.io`; usa el nombre de Docker Hub si ese es el registro que permite tu red.
 - El `docker-compose.yml` del repositorio nombra su imagen como `${DOCKER_REGISTRY:-ghcr.io/jmrplens/gitlab-mcp-server}:${VERSION:-latest}`, así que `DOCKER_REGISTRY` y `VERSION` eligen el registro y la etiqueta sin editar el archivo.
 - La imagen lleva la etiqueta `io.modelcontextprotocol.server.name=io.github.jmrplens/gitlab-mcp-server`, que es como el MCP Registry valida su propiedad.
 

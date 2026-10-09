@@ -92,17 +92,17 @@ make inspector-stop
 
 ## Post-edit regeneration matrix
 
-| You edited                                            | Run                                                                                                                                                 |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Domain tool (added/renamed/changed input or output)   | `go run ./cmd/audit_tokens/ -footprint`                                                                                                             |
-| ActionSpec metadata (catalog routes)                  | `go run ./cmd/gen_action_catalog_manifest/` (and `--check` in CI)                                                                                   |
-| Pipe tables in `README.md`, `docs/` or the site       | `go run ./cmd/format_md_tables/` (and `--check`)                                                                                                    |
-| A hand-written page under `site/src/content/docs/`    | Its Spanish twin under `es/` in the same change, then `pnpm run i18n:check`, `facts:check`, `chips:check` and `llms:check` from `site/`             |
-| A new site page                                       | Its entry in the sidebar (`site/astro.config.mjs`) and in `SECTIONS` (`site/scripts/gen-llms.mjs`); the generated `reference/tools/` need neither   |
-| Tests, after a test phase                             | `go run ./cmd/gen_testing_docs/` (and `--check`)                                                                                                    |
-| Tool surface (registered tools, resources, prompts)   | `go run ./cmd/gen_llms/` (and `--check` via `make check-llms`), plus `go run ./cmd/gen_lhm_manifest/` (and `--check` via `make check-lhm-manifest`) |
-| Catalog actions or groups (the site's tool reference) | `make gen-tool-reference` (and `make check-tool-reference`); a new group needs its entry in `cmd/gen_tool_reference/domains.json`                   |
-| `server.json`                                         | `make check-server-json` (uses MCP publisher)                                                                                                       |
+| You edited                                            | Run                                                                                                                                                      |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Domain tool (added/renamed/changed input or output)   | `go run ./cmd/audit_tokens/ -footprint`                                                                                                                  |
+| ActionSpec metadata (catalog routes)                  | `go run ./cmd/gen_action_catalog_manifest/` (and `--check` in CI)                                                                                        |
+| Pipe tables in `README.md`, `docs/` or the site       | `go run ./cmd/format_md_tables/` (and `--check`)                                                                                                         |
+| A hand-written page under `site/src/content/docs/`    | Its Spanish twin under `es/` in the same change, then `pnpm run i18n:check`, `facts:check`, `chips:check`, `llms:check` and `version:check` from `site/` |
+| A new site page                                       | Its entry in the sidebar (`site/astro.config.mjs`) and in `SECTIONS` (`site/scripts/gen-llms.mjs`); the generated `reference/tools/` need neither        |
+| Tests, after a test phase                             | `go run ./cmd/gen_testing_docs/` (and `--check`)                                                                                                         |
+| Tool surface (registered tools, resources, prompts)   | `go run ./cmd/gen_llms/` (and `--check` via `make check-llms`), plus `go run ./cmd/gen_lhm_manifest/` (and `--check` via `make check-lhm-manifest`)      |
+| Catalog actions or groups (the site's tool reference) | `make gen-tool-reference` (and `make check-tool-reference`); a new group needs its entry in `cmd/gen_tool_reference/domains.json`                        |
+| `server.json`                                         | `make check-server-json` (uses MCP publisher)                                                                                                            |
 
 `make audit-docs` runs the combined documentation gate locally. **CI does not
 run that target**, but it runs its parts in separate jobs: the `generated` job

@@ -197,7 +197,7 @@ docker pull ghcr.io/jmrplens/gitlab-mcp-server:latest
 The next start uses the new image. The server never checks for updates and
 never replaces its own binary; here Docker owns it. To pin a version rather
 than follow `latest`, change the tag in your local `mcp.json` to
-`ghcr.io/jmrplens/gitlab-mcp-server:3.1.0` and update it by hand.
+`ghcr.io/jmrplens/gitlab-mcp-server:%%VERSION%%` and update it by hand.
 
 To uninstall, remove the plugin the way your host documents (its plugin UI
 or command), delete the local `mcp.json` copy if you wrote a token into it,

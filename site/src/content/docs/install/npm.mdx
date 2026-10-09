@@ -96,10 +96,10 @@ After a global install the command on your PATH is `gitlab-mcp-server`:
 
 ```bash
 gitlab-mcp-server --version
-# gitlab-mcp-server 3.1.0 (commit: ...)
+# gitlab-mcp-server %%VERSION%% (commit: ...)
 ```
 
-As of 2026-10-05 the registry holds 2.7.5, 3.0.0 and 3.1.0, and `latest` is 3.1.0.
+The registry holds every release from 2.7.5 on, and `latest` is the current one, %%VERSION%%.
 
 Started in a terminal without both `GITLAB_URL` and `GITLAB_TOKEN` set, the binary prints what it
 is and the two values it needs, then waits for Enter. That is the first-run
@@ -154,7 +154,7 @@ self-managed instance. A client that does not inherit your shell's PATH may
 need the full path to the command; `which gitlab-mcp-server` (or
 `where gitlab-mcp-server` on Windows) prints it. To pin a release rather
 than follow the newest one, name it in the argument:
-`"@jmrp.io/gitlab-mcp-server@3.1.0"`.
+`"@jmrp.io/gitlab-mcp-server@%%VERSION%%"`.
 
 Per-client file locations and shapes (VS Code uses `servers` with
 `"type": "stdio"`, Zed uses `context_servers`) are in the

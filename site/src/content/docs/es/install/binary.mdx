@@ -26,7 +26,7 @@ Antes de descargar nada resuelve `latest` a la etiqueta que nombra en ese moment
 | Variable            | Por defecto                  | Efecto                                                                                                                             |
 | ------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `INSTALL_DIR`       | `$HOME/.local/bin`           | Directorio de destino                                                                                                              |
-| `VERSION`           | `latest`                     | Etiqueta de la release a instalar, por ejemplo `v3.1.0`                                                                            |
+| `VERSION`           | `latest`                     | Etiqueta de la release a instalar, por ejemplo `v%%VERSION%%`                                                                      |
 | `REPO`              | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub desde el que descargar                                                                                       |
 | `REQUIRE_SIGNATURE` | sin definir                  | `1` aborta salvo que se verifique una firma o una atestación                                                                       |
 | `ALLOW_UNVERIFIED`  | sin definir                  | `1` omite toda verificación, checksum y firma por igual, bajo tu responsabilidad (la salida en un sistema sin herramienta SHA-256) |
@@ -36,7 +36,7 @@ Antes de descargar nada resuelve `latest` a la etiqueta que nombra en ese moment
 Definir a la vez `REQUIRE_SIGNATURE=1` y `ALLOW_UNVERIFIED=1` se rechaza en lugar de resolverse en un sentido u otro: piden cosas opuestas. Las variables van delante de `sh`, que es el proceso que ejecuta el script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | VERSION=v3.1.0 INSTALL_DIR=/usr/local/bin sh
+curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | VERSION=v%%VERSION%% INSTALL_DIR=/usr/local/bin sh
 ```
 
 </TabItem>
@@ -51,7 +51,7 @@ El script lee la arquitectura real de la máquina (primero `PROCESSOR_ARCHITEW64
 Existen las mismas opciones como variables de entorno (`VERSION`, `INSTALL_DIR`, `REPO`, `REQUIRE_SIGNATURE`, `ALLOW_UNVERIFIED`, `FETCH_ATTEMPTS`, `FETCH_RETRY_DELAY`, con los mismos valores por defecto y el mismo rechazo de la pareja contradictoria) y, si guardas el script y lo ejecutas como archivo, las tres primeras como parámetros (`-Version`, `-InstallDir`, `-Repo`). Al encadenarlo con `iex`, define primero las variables:
 
 ```powershell
-$env:VERSION = 'v3.1.0'
+$env:VERSION = 'v%%VERSION%%'
 irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
 ```
 
@@ -106,7 +106,7 @@ Dos formas de URL cubren todos los archivos: `releases/latest/download/<archivo>
 curl -fsSLO https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64
 
 # Una versión fijada
-curl -fsSLO https://github.com/jmrplens/gitlab-mcp-server/releases/download/v3.1.0/gitlab-mcp-server-linux-amd64
+curl -fsSLO https://github.com/jmrplens/gitlab-mcp-server/releases/download/v%%VERSION%%/gitlab-mcp-server-linux-amd64
 ```
 
 ### Hacerlo ejecutable (Linux/macOS)
@@ -132,7 +132,7 @@ Los scripts de instalación ya comparan la descarga con `checksums.txt`, y compr
    ```bash
    cosign verify-blob \
      --bundle checksums.txt.sigstore.json \
-     --certificate-identity "https://github.com/jmrplens/gitlab-mcp-server/.github/workflows/release.yml@refs/tags/v3.1.0" \
+     --certificate-identity "https://github.com/jmrplens/gitlab-mcp-server/.github/workflows/release.yml@refs/tags/v%%VERSION%%" \
      --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
      checksums.txt
    ```
@@ -182,7 +182,7 @@ Los clientes que arrancan desde el escritorio en lugar de desde una shell no sie
 gitlab-mcp-server --version
 ```
 
-imprime `gitlab-mcp-server 3.1.0 (commit: <commit>)` para la release actual, la 3.1.0 (2026-09-30). Arrancar el binario sin argumentos en una terminal, o hacerle doble clic en Windows, sin `GITLAB_URL` y `GITLAB_TOKEN` definidos imprime una breve pantalla de primera ejecución que nombra los dos valores que necesita y espera a que pulses Enter; un cliente MCP nunca la ve, porque habla con el servidor por tuberías. No hay asistente de configuración.
+imprime `gitlab-mcp-server %%VERSION%% (commit: <commit>)` para la release actual. Arrancar el binario sin argumentos en una terminal, o hacerle doble clic en Windows, sin `GITLAB_URL` y `GITLAB_TOKEN` definidos imprime una breve pantalla de primera ejecución que nombra los dos valores que necesita y espera a que pulses Enter; un cliente MCP nunca la ve, porque habla con el servidor por tuberías. No hay asistente de configuración.
 
 ## Configura tu cliente
 
@@ -214,7 +214,7 @@ Añade `GITLAB_URL=https://gitlab.example.com` al mismo archivo para GitLab auto
 
 ## Actualizar y desinstalar
 
-El binario nunca se actualiza a sí mismo. Para actualizar, vuelve a ejecutar el script de instalación, que reemplaza el archivo in situ tras verificar el checksum nuevo, o descarga el archivo más nuevo y sobrescribe el antiguo. `VERSION=v3.1.0` (o `$env:VERSION` en Windows) fija una release concreta cuando necesitas quedarte en ella.
+El binario nunca se actualiza a sí mismo. Para actualizar, vuelve a ejecutar el script de instalación, que reemplaza el archivo in situ tras verificar el checksum nuevo, o descarga el archivo más nuevo y sobrescribe el antiguo. `VERSION=v%%VERSION%%` (o `$env:VERSION` en Windows) fija una release concreta cuando necesitas quedarte en ella.
 
 Para desinstalar, borra el archivo: `rm ~/.local/bin/gitlab-mcp-server` (o donde lo hayas colocado) en Linux y macOS; en Windows, borra `%LOCALAPPDATA%\Programs\gitlab-mcp-server` y quita esa carpeta de tu PATH de usuario, que el script añadió y nunca elimina. Después quita la entrada `gitlab` de la configuración de tu cliente.
 

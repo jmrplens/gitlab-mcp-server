@@ -769,8 +769,9 @@ jobs:
           cache: pnpm
           cache-dependency-path: site/pnpm-lock.yaml
       # The build-independent half of `pnpm run lint`: type check, palette
-      # contrast, chip parity, i18n parity, llms index coverage, eslint,
-      # prettier. The dist-dependent half is site-build's.
+      # contrast, chip parity, i18n parity, llms index coverage, the version
+      # token's source rules, eslint, prettier. The dist-dependent half is
+      # site-build's.
       - name: Install site dependencies
         run: pnpm install --frozen-lockfile
         working-directory: site
@@ -786,6 +787,15 @@ jobs:
           # to the collection and not listed there would simply be missing from
           # the index, which nothing else would notice.
           pnpm run llms:check
+          # A page names the current release as %%VERSION%%, which the build
+          # replaces with the published release, the top-level version of
+          # server.json. This refuses the token in frontmatter, where the
+          # build cannot replace it, a release written by hand in an install
+          # command, image tag, package pin or "the current release is"
+          # sentence, and a literal declared as a condition about a release
+          # the published one has moved past. The built-site half (no token
+          # left in dist/) runs inside `pnpm run build`, as its postbuild step.
+          pnpm run version:check
           pnpm run eslint
           pnpm run format:check
         working-directory: site
@@ -1070,6 +1080,13 @@ jobs:
       # timeout, to finishing what dpkg was left doing before a retry, to
       # failing within its bounds when apt hangs, and the two workflows to
       # capping the step above those bounds.
+      # scripts/site_version_token_test.py hands the site's remark plugin,
+      # site/src/lib/version-token.mjs, a Markdown tree carrying %%VERSION%%
+      # in every kind of node a page can hold it in, and runs the site's gate,
+      # site/scripts/check-version-token.mjs, and gen-llms.mjs in a stand-in
+      # site, holding them to the published release in server.json rather
+      # than VERSION, and to refusing the token in frontmatter or in the built
+      # site and a release written by hand where the token belongs.
       # shellcheck, bash, git, jq, zip, unzip and wget come from the runner
       # image.
       # Off CI a test skips when one is missing; here, where GitHub sets CI,

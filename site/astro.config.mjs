@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { rehypeWideTables } from "./src/lib/wide-tables.mjs";
+import { readRelease, remarkVersionToken } from "./src/lib/version-token.mjs";
 import { readFileSync } from "node:fs";
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
@@ -10,6 +11,14 @@ import rehypeMermaid from "rehype-mermaid";
 const stats = JSON.parse(
 	readFileSync(new URL("./src/data/stats.json", import.meta.url), "utf8"),
 );
+
+// The published release, the top-level version of the repository's server.json,
+// read on every build: the release workflow stamps it once the release is out,
+// while VERSION already names the one being prepared. Pages write %%VERSION%%
+// where they mean it, and the first remark plugin below replaces it
+// (src/lib/version-token.mjs), so no page and no data file carries a copy of
+// the number to keep in step.
+const version = readRelease();
 
 // Auto-injects locale prefix into internal links for translated content files.
 // ES files write links as /gitlab-mcp-server/path/ (same as EN); this plugin
@@ -271,7 +280,7 @@ const jsonLd = JSON.stringify({
 			"@type": "SoftwareApplication",
 			"@id": softwareId,
 			name: "GitLab MCP Server",
-			softwareVersion: stats.version,
+			softwareVersion: version,
 			applicationCategory: "DeveloperApplication",
 			applicationSubCategory: "Version Control",
 			operatingSystem: "Windows, Linux, macOS",
@@ -987,7 +996,9 @@ export default defineConfig({
 		}),
 	],
 	markdown: {
-		remarkPlugins: [remarkLocaleLinks],
+		// The version token goes first, so every later plugin, and Expressive
+		// Code after them, sees the release rather than the token.
+		remarkPlugins: [[remarkVersionToken, { version }], remarkLocaleLinks],
 		rehypePlugins: [
 			rehypeTableAlign,
 			// Classifies wide record tables at build time and marks them to stack

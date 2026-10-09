@@ -12,7 +12,7 @@ The formula is `Formula/gitlab-mcp-server.rb` in the [`jmrplens/homebrew-tap`](h
 brew install jmrplens/tap/gitlab-mcp-server
 ```
 
-The fully qualified name taps `jmrplens/tap` on the way, so there is no separate `brew tap` step. As of 2026-10-05 the tap is at the current release, 3.1.0, with the asset URLs and hashes of that release.
+The fully qualified name taps `jmrplens/tap` on the way, so there is no separate `brew tap` step. The tap is at the current release, %%VERSION%%, with the asset URLs and hashes of that release.
 
 ## Verify
 
@@ -20,7 +20,7 @@ The fully qualified name taps `jmrplens/tap` on the way, so there is no separate
 gitlab-mcp-server --version
 ```
 
-prints `gitlab-mcp-server 3.1.0 (commit: <commit>)`. That is also what the formula's own `test` block runs. `brew info gitlab-mcp-server` shows the installed version and the formula's caveats, which repeat the client configuration below. The formula published for 2.7.5 mentioned `AUTO_UPDATE=false` and `--setup` in those caveats; neither exists any more, the generator no longer emits those lines, and the live formula does not carry them.
+prints `gitlab-mcp-server %%VERSION%% (commit: <commit>)`. That is also what the formula's own `test` block runs. `brew info gitlab-mcp-server` shows the installed version and the formula's caveats, which repeat the client configuration below. The formula published for 2.7.5 mentioned `AUTO_UPDATE=false` and `--setup` in those caveats; neither exists any more, the generator no longer emits those lines, and the live formula does not carry them.
 
 ## Where the binary lands
 

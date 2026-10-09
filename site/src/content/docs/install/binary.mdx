@@ -26,7 +26,7 @@ Before downloading anything it resolves `latest` to the tag it currently names, 
 | Variable            | Default                      | Effect                                                                                                                         |
 | ------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `INSTALL_DIR`       | `$HOME/.local/bin`           | Target directory                                                                                                               |
-| `VERSION`           | `latest`                     | Release tag to install, for example `v3.1.0`                                                                                   |
+| `VERSION`           | `latest`                     | Release tag to install, for example `v%%VERSION%%`                                                                             |
 | `REPO`              | `jmrplens/gitlab-mcp-server` | GitHub repository to download from                                                                                             |
 | `REQUIRE_SIGNATURE` | unset                        | `1` aborts unless a signature or attestation verifies                                                                          |
 | `ALLOW_UNVERIFIED`  | unset                        | `1` skips verification entirely, checksum and signature alike, at your own risk (the way out on a system with no SHA-256 tool) |
@@ -36,7 +36,7 @@ Before downloading anything it resolves `latest` to the tag it currently names, 
 Setting both `REQUIRE_SIGNATURE=1` and `ALLOW_UNVERIFIED=1` is refused rather than resolved in either direction: they ask for opposite things. Variables go in front of `sh`, since that is the process running the script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | VERSION=v3.1.0 INSTALL_DIR=/usr/local/bin sh
+curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | VERSION=v%%VERSION%% INSTALL_DIR=/usr/local/bin sh
 ```
 
 </TabItem>
@@ -51,7 +51,7 @@ The script reads the real machine architecture (`PROCESSOR_ARCHITEW6432` first, 
 The same overrides exist as environment variables (`VERSION`, `INSTALL_DIR`, `REPO`, `REQUIRE_SIGNATURE`, `ALLOW_UNVERIFIED`, `FETCH_ATTEMPTS`, `FETCH_RETRY_DELAY`, with the same defaults and the same refusal of the contradictory pair) and, when you save the script and run it as a file, the first three as parameters (`-Version`, `-InstallDir`, `-Repo`). When piping into `iex`, set the variables first:
 
 ```powershell
-$env:VERSION = 'v3.1.0'
+$env:VERSION = 'v%%VERSION%%'
 irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
 ```
 
@@ -106,7 +106,7 @@ Two URL forms cover every asset: `releases/latest/download/<asset>` always resol
 curl -fsSLO https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64
 
 # A pinned version
-curl -fsSLO https://github.com/jmrplens/gitlab-mcp-server/releases/download/v3.1.0/gitlab-mcp-server-linux-amd64
+curl -fsSLO https://github.com/jmrplens/gitlab-mcp-server/releases/download/v%%VERSION%%/gitlab-mcp-server-linux-amd64
 ```
 
 ### Make it executable (Linux/macOS)
@@ -132,7 +132,7 @@ The install scripts already compare the download with `checksums.txt`, and check
    ```bash
    cosign verify-blob \
      --bundle checksums.txt.sigstore.json \
-     --certificate-identity "https://github.com/jmrplens/gitlab-mcp-server/.github/workflows/release.yml@refs/tags/v3.1.0" \
+     --certificate-identity "https://github.com/jmrplens/gitlab-mcp-server/.github/workflows/release.yml@refs/tags/v%%VERSION%%" \
      --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
      checksums.txt
    ```
@@ -182,7 +182,7 @@ Clients started from the desktop rather than from a shell do not always inherit 
 gitlab-mcp-server --version
 ```
 
-prints `gitlab-mcp-server 3.1.0 (commit: <commit>)` for the current release, 3.1.0 (2026-09-30). Starting the binary with no arguments in a terminal, or double-clicking it on Windows, without both `GITLAB_URL` and `GITLAB_TOKEN` set prints a short first-run screen naming the two values it needs and waits for Enter; an MCP client never sees it, because it talks to the server over pipes. There is no setup wizard.
+prints `gitlab-mcp-server %%VERSION%% (commit: <commit>)` for the current release. Starting the binary with no arguments in a terminal, or double-clicking it on Windows, without both `GITLAB_URL` and `GITLAB_TOKEN` set prints a short first-run screen naming the two values it needs and waits for Enter; an MCP client never sees it, because it talks to the server over pipes. There is no setup wizard.
 
 ## Configure your client
 
@@ -214,7 +214,7 @@ Add `GITLAB_URL=https://gitlab.example.com` to the same file for self-managed Gi
 
 ## Upgrade and uninstall
 
-The binary never updates itself. To upgrade, run the install script again, which replaces the file in place after verifying the new checksum, or download the newer asset and overwrite the old one. `VERSION=v3.1.0` (or `$env:VERSION` on Windows) pins a specific release when you need to stay put.
+The binary never updates itself. To upgrade, run the install script again, which replaces the file in place after verifying the new checksum, or download the newer asset and overwrite the old one. `VERSION=v%%VERSION%%` (or `$env:VERSION` on Windows) pins a specific release when you need to stay put.
 
 To uninstall, delete the file: `rm ~/.local/bin/gitlab-mcp-server` (or wherever you placed it) on Linux and macOS; on Windows, delete `%LOCALAPPDATA%\Programs\gitlab-mcp-server` and remove that folder from your user PATH, which the script appended and never removes. Then drop the `gitlab` entry from your client's configuration.
 

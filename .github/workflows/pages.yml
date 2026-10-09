@@ -12,11 +12,18 @@ on:
       - "site/**"
       # The prebuild step (site/scripts/gen-llms.mjs) copies the six llms*.txt
       # files cmd/gen_llms writes at the repository root into the published
-      # site, and the generated /llms.txt index states the version it reads
-      # from VERSION. A change to any of them changes what the site serves, so
-      # it redeploys the site.
+      # site. The published release is the top-level version of server.json
+      # (site/src/lib/version-token.mjs): every page that writes %%VERSION%%
+      # prints it, and so do the generated /llms.txt index and the
+      # SoftwareApplication JSON-LD. The release workflow's last job stamps it
+      # once a release is out and pushes that commit to main with a deploy key,
+      # which runs workflows as any push does, so the stamp is what moves the
+      # install commands, image tags and package pins the pages show. VERSION
+      # is not listed: it names the release being prepared, which the pages do
+      # not print. A change to any of these changes what the site serves, so it
+      # redeploys the site.
       - "llms*.txt"
-      - "VERSION"
+      - "server.json"
       - "!site/node_modules/**"
   workflow_dispatch:
 
