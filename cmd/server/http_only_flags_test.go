@@ -380,6 +380,12 @@ func TestNamesStdioInstance_ComparesTheCanonicalInstances(t *testing.T) {
 		{name: "none of several", gitlabURL: "https://gitlab.corp.example.test", named: []string{"https://other.example.test", "https://third.example.test"}},
 		{name: "a GITLAB_URL the allow-list cannot read", gitlabURL: "ftp://gitlab.corp.example.test", named: []string{"ftp://gitlab.corp.example.test"}},
 		{name: "a flag the allow-list cannot read", gitlabURL: "https://gitlab.corp.example.test", named: []string{"https://gitlab.corp.example.test", "ftp://other.example.test"}},
+		// stdio dials this GITLAB_URL as xn--gitlab-qyd.corp.example.test,
+		// so a flag naming the ASCII host names another instance, however
+		// strings.ToLower would fold the two together.
+		{name: "a GITLAB_URL with a dotted capital I", gitlabURL: "https://gİtlab.corp.example.test", named: []string{"https://gitlab.corp.example.test"}},
+		{name: "a flag with a dotted capital I", gitlabURL: "https://gitlab.corp.example.test", named: []string{"https://g%C4%B0tlab.corp.example.test"}},
+		{name: "both written with a dotted capital I", gitlabURL: "https://gİtlab.corp.example.test", named: []string{"https://g%C4%B0tlab.corp.example.test"}, want: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

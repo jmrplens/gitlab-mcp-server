@@ -226,7 +226,7 @@ A refused destination is answered with `400` from the gate when the `GITLAB-URL`
 
 In OAuth mode the server **verifies the bearer token against the instance it is about to use**, so a free-form header would let a caller name a host of their own and be handed the token. An allow-list keeps that choice with the operator: the published instances are listed in the RFC 9728 `authorization_servers` array, so a client discovers which ones it may pick, and a token is verified and cached per instance, never across them. A rejection is scoped the same way, so a `401` from one published instance never refuses a valid token on another.
 
-An instance is matched after canonicalization, so `https://GitLab.com`, `https://gitlab.com:443` and `https://gitlab.com/` all name the same published instance (RFC 3986 section 6.2.2: scheme and host are case-insensitive, and a default port is equivalent to none).
+An instance is matched after canonicalization, so `https://GitLab.com`, `https://gitlab.com:443` and `https://gitlab.com/` all name the same published instance (RFC 3986 section 6.2.2: scheme and host are case-insensitive, and a default port is equivalent to none). The case that is folded is ASCII case alone: `https://gİtlab.com`, with a dotted capital `İ`, is dialed as `xn--gitlab-qyd.com`, so it names another host and is refused rather than matched to `https://gitlab.com`.
 
 ### Private-token header (recommended)
 

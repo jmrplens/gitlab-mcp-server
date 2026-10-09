@@ -175,12 +175,17 @@ The remainder of this document describes how the server handles security-sensiti
 - In HTTP mode, each client authenticates via `PRIVATE-TOKEN` or `Authorization: Bearer` header — tokens are isolated per session.
 - **A credential does not leave the instance it was issued for.** A redirect that
   crosses hosts, or downgrades https to http, loses `PRIVATE-TOKEN`,
-  `Authorization`, `Sudo` and `Job-Token` before the next hop. Go's own client
-  strips `Authorization` and cannot strip GitLab's header, and no adversary is
-  needed to reach this: GitLab answers artifact, trace and package downloads
-  with a redirect to object storage whenever object storage is configured. The
-  OAuth verifier refuses such a hop outright rather than following it stripped,
-  because there the response body is the caller's identity rather than an asset.
+  `Authorization`, `Sudo`, `Job-Token` and `Deploy-Token` before the next hop,
+  and on every hop after it, a hop back onto the instance included.
+  Go's own client strips `Authorization` and cannot strip GitLab's header, and
+  no adversary is needed to reach this: GitLab answers artifact, trace and
+  package downloads with a redirect to object storage whenever object storage
+  is configured. Hosts are compared with ASCII letters folded and nothing else,
+  so a name that matches the instance only once a character outside ASCII is
+  lowercased (a dotted capital `İ` becomes `i`) is a different host, as it is
+  to the dialer. The OAuth verifier refuses such a hop outright rather than
+  following it stripped, because there the response body is the caller's
+  identity rather than an asset.
 - **HTTP mode names the instances it serves.** It refuses to start without
   `--gitlab-url`, because a deployment that names none makes requests to
   whatever host a caller puts in a header, with whatever token that caller

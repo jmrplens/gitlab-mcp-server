@@ -226,7 +226,7 @@ Un destino rechazado se responde con `400` desde la puerta cuando la cabecera `G
 
 En modo OAuth el servidor **verifica el token bearer contra la instancia que va a usar**, así que una cabecera libre permitiría a quien llama nombrar un host propio y recibir el token. Una lista de instancias deja esa elección en manos de quien opera: las instancias publicadas se listan en el array `authorization_servers` de RFC 9728, de modo que un cliente descubre cuáles puede elegir, y un token se verifica y se cachea por instancia, nunca entre ellas. Un rechazo tiene el mismo alcance, así que un `401` de una instancia publicada nunca rechaza un token válido en otra.
 
-Una instancia se compara tras canonicalizarla, así que `https://GitLab.com`, `https://gitlab.com:443` y `https://gitlab.com/` nombran la misma instancia publicada (RFC 3986 sección 6.2.2: el esquema y el host no distinguen mayúsculas, y un puerto por defecto equivale a ninguno).
+Una instancia se compara tras canonicalizarla, así que `https://GitLab.com`, `https://gitlab.com:443` y `https://gitlab.com/` nombran la misma instancia publicada (RFC 3986 sección 6.2.2: el esquema y el host no distinguen mayúsculas, y un puerto por defecto equivale a ninguno). Solo se ignoran las mayúsculas ASCII: `https://gİtlab.com`, con una `İ` mayúscula con punto, se conecta a `xn--gitlab-qyd.com`, así que nombra otro host y se rechaza en vez de casarlo con `https://gitlab.com`.
 
 ### Cabecera private-token (recomendada)
 

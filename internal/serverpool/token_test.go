@@ -427,6 +427,12 @@ func TestResolveRequestOptionsFor_MultipleInstances(t *testing.T) {
 		{name: "header selects another published instance", header: secondary, want: secondary},
 		{name: "header selects a trailing-slash spelling of one", header: secondary + "/", want: secondary},
 		{name: "header naming an unpublished instance is refused", header: "https://evil.example.com", wantErr: true},
+		{name: "header selects an upper-case spelling of one", header: "https://GitLab.Example.com", want: secondary},
+		// net/http dials this spelling as xn--gitlab-qyd.com, which is not
+		// gitlab.com, so it names an instance the deployment does not publish
+		// even though strings.ToLower folds it onto one that it does.
+		{name: "header naming a dotted capital I lookalike is refused", header: "https://gİtlab.com", wantErr: true},
+		{name: "header naming a percent-encoded lookalike is refused", header: "https://g%C4%B0tlab.com", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -520,6 +526,63 @@ func TestNormalizeGitLabURL_CanonicalizesEquivalentSpellings(t *testing.T) {
 	}
 	if got, err := normalizeGitLabURL("http://gitlab.example.com:443"); err != nil || got != "http://gitlab.example.com:443" {
 		t.Errorf("normalizeGitLabURL(http :443) = %q, %v; 443 is not http's default", got, err)
+	}
+}
+
+// TestNormalizeGitLabURL_FoldsOnlyASCIICase verifies that canonicalization
+// never turns a host into a different one.
+//
+// RFC 3986's case-insensitivity is about ASCII letters, and so is DNS's.
+// strings.ToLower also folds U+0130, the dotted capital I, into a plain "i",
+// so "https://gİtlab.com" came out as "https://gitlab.com": a caller under
+// --allow-any-gitlab-url who named the first had their token sent to the
+// second, and an allow-list publishing the second accepted the first. net/http
+// dials that spelling as xn--gitlab-qyd.com, and the canonical form has to
+// keep naming it.
+func TestNormalizeGitLabURL_FoldsOnlyASCIICase(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "ascii upper case is folded", raw: "https://GITLAB.COM", want: "https://gitlab.com"},
+		{name: "dotted capital I written raw", raw: "https://gİtlab.com", want: "https://g%C4%B0tlab.com"},
+		{name: "dotted capital I percent-encoded", raw: "https://G%C4%B0TLAB.com:443/", want: "https://g%C4%B0tlab.com"},
+		{name: "kelvin sign", raw: "https://Kube.example.com", want: "https://%E2%84%AAube.example.com"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := normalizeGitLabURL(tt.raw)
+			if err != nil {
+				t.Fatalf("normalizeGitLabURL(%q) error = %v", tt.raw, err)
+			}
+			if got != tt.want {
+				t.Errorf("normalizeGitLabURL(%q) = %q, want %q", tt.raw, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestResolveRequestOptionsFor_AnyInstance_KeepsTheNamedHost verifies that
+// under --allow-any-gitlab-url the instance a request reaches is the one its
+// header named, spelled as the client will dial it.
+func TestResolveRequestOptionsFor_AnyInstance_KeepsTheNamedHost(t *testing.T) {
+	t.Parallel()
+
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+	r.Header.Set(RequestOptionGitLabURL, "https://g%C4%B0tlab.com")
+
+	options, err := ResolveRequestOptionsFor(r, nil)
+	if err != nil {
+		t.Fatalf("ResolveRequestOptionsFor() error = %v", err)
+	}
+	if options.GitLabURL != "https://g%C4%B0tlab.com" {
+		t.Errorf("GitLabURL = %q, want the lookalike the header named rather than gitlab.com", options.GitLabURL)
 	}
 }
 
@@ -629,6 +692,8 @@ func TestCanonicalHost_DropsOnlyTheSchemeDefaultPort(t *testing.T) {
 		{name: "http port that is https default", scheme: "http", host: "gitlab.local:443", want: "gitlab.local:443"},
 		{name: "ipv6 literal keeps its brackets", scheme: "https", host: "[::1]:443", want: "[::1]"},
 		{name: "a scheme with no default port keeps everything", scheme: "ssh", host: "GitLab.local:22", want: "gitlab.local:22"},
+		{name: "a dotted capital I is kept as written", scheme: "https", host: "GİTLAB.com:443", want: "gİtlab.com"},
+		{name: "a kelvin sign is kept as written", scheme: "https", host: "Kube.example.com", want: "Kube.example.com"},
 	}
 
 	for _, tt := range tests {

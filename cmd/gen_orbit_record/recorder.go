@@ -50,9 +50,20 @@ type recorder struct {
 	exchanges []exchange
 }
 
-// newRecorder forwards to upstream through client.
+// newRecorder forwards to upstream through a copy of client that answers a
+// redirect rather than following it.
+//
+// The proxy forwards Private-Token, which net/http does not know to be a
+// credential: a client following a redirect copies it onto every hop, to
+// whatever host the Location names, so a redirect from GitLab.com would hand
+// GITLAB_COM_TOKEN to that host. Answered as it came, the redirect reaches the
+// handler as a 3xx and the run fails on a call not answered 200, which is
+// right: a recording is of GitLab.com's own answers, so there is nothing to
+// follow.
 func newRecorder(upstream string, client *http.Client) *recorder {
-	return &recorder{upstream: strings.TrimRight(upstream, "/"), client: client}
+	noFollow := *client
+	noFollow.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &recorder{upstream: strings.TrimRight(upstream, "/"), client: &noFollow}
 }
 
 // ServeHTTP forwards one request and answers with what the upstream said,

@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
 // RequestOptionGitLabURL identifies the per-request GitLab URL header option.
@@ -344,7 +346,9 @@ func normalizeGitLabURL(raw string) (string, error) {
 	u.Path = strings.TrimRight(u.Path, "/")
 	// RFC 3986 section 6.2.2: scheme and host are case-insensitive, and an
 	// explicit default port is equivalent to none. url.Parse already lowers
-	// the scheme; the host and the port are on us.
+	// the scheme; the host and the port are on us. Case-insensitive means
+	// ASCII case: a host written outside ASCII is kept as written, and String
+	// percent-encodes it, which names the same host the client will dial.
 	//
 	// This is not cosmetic in either place it lands. The allow-list compares
 	// canonical strings, so without it "https://GitLab.com" and
@@ -357,10 +361,17 @@ func normalizeGitLabURL(raw string) (string, error) {
 	return u.String(), nil
 }
 
-// canonicalHost lowercases the host and drops a port that is the scheme's
-// default, so equivalent spellings of one instance compare equal.
+// canonicalHost folds the host's ASCII case and drops a port that is the
+// scheme's default, so equivalent spellings of one instance compare equal.
+//
+// ASCII case and no other, through [gitlabclient.FoldHostCase]: the case
+// insensitivity RFC 3986 and DNS grant is about ASCII letters, and
+// strings.ToLower also folds U+0130 into "i". It made "https://gİtlab.com",
+// which net/http dials as xn--gitlab-qyd.com, canonicalize to
+// "https://gitlab.com", so a header naming the first was resolved to the
+// second and a list publishing the second accepted the first.
 func canonicalHost(scheme, host string) string {
-	lowered := strings.ToLower(host)
+	lowered := gitlabclient.FoldHostCase(host)
 	var defaultPort string
 	switch scheme {
 	case "https":

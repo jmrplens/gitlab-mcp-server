@@ -1332,6 +1332,15 @@ func TestNormalizeFixedGitLabURL_ReadsBothFields(t *testing.T) {
 			hcfg:      httpConfig{gitlabURLs: repeatedFlag{"https://gitlab.com", "https://"}},
 			wantErrIn: "--gitlab-url must include a host",
 		},
+		{
+			// net/http dials this instance as xn--gitlab-qyd.com. Folding it
+			// to gitlab.com published, and served, an instance the operator
+			// never named.
+			name:     "an instance written with a dotted capital I is published as written",
+			hcfg:     httpConfig{gitlabURLs: repeatedFlag{"https://GİTLAB.com/"}},
+			wantURL:  "https://g%C4%B0tlab.com",
+			wantList: []string{"https://g%C4%B0tlab.com"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

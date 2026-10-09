@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqlintrospect"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
 // TestCredentialFor_DecidesByInstance verifies the rule that keeps a GitLab
@@ -138,6 +139,30 @@ func TestCredentialFor_DecidesByInstance(t *testing.T) {
 			token:    token,
 			reason:   "is not a URL, so GITLAB_TOKEN was not sent",
 		},
+		// net/http sends a request for this host to xn--gitlab-qyd.example.com,
+		// which is not the instance whatever strings.ToLower makes of the
+		// spelling: only ASCII letters may be folded.
+		{
+			name:     "a lookalike written with a dotted capital I",
+			endpoint: "https://gİtlab.example.com/api/graphql",
+			instance: "https://gitlab.example.com",
+			token:    token,
+			reason:   "and this run asks https://gİtlab.example.com",
+		},
+		{
+			name:     "a lookalike percent-encoded",
+			endpoint: "https://G%C4%B0TLAB.example.com/api/graphql",
+			instance: "https://gitlab.example.com",
+			token:    token,
+			reason:   "and this run asks https://gİtlab.example.com",
+		},
+		{
+			name:     "an instance written with a dotted capital I and asked as written",
+			endpoint: "https://g%C4%B0tlab.example.com/api/graphql",
+			instance: "https://GİTLAB.example.com",
+			token:    token,
+			want:     token,
+		},
 	}
 
 	for _, testCase := range cases {
@@ -152,6 +177,38 @@ func TestCredentialFor_DecidesByInstance(t *testing.T) {
 				t.Errorf("CredentialFor() withheld nothing but explained anyway: %q", withheld)
 			case testCase.reason != "" && !strings.Contains(withheld, testCase.reason):
 				t.Errorf("CredentialFor() does not say why it withheld the token, want %q in:\n%s", testCase.reason, withheld)
+			}
+		})
+	}
+}
+
+// TestFoldASCIICase_IsTheServersFold holds the commands' copy of the host fold
+// to the server's own, gitlab.FoldHostCase.
+//
+// The copy exists so that the two commands that introspect do not link the
+// server's GitLab client package for ten lines; this test is what keeps it a
+// copy rather than a second rule. Both folds work byte by byte, so every
+// single byte is compared on its own, and then whole hosts carrying the two
+// runes strings.ToLower would have folded into ASCII and a byte that is not
+// UTF-8.
+func TestFoldASCIICase_IsTheServersFold(t *testing.T) {
+	for b := range 256 {
+		host := string([]byte{byte(b)})
+		if got, want := graphqlintrospect.FoldASCIICaseForTest(host), gitlabclient.FoldHostCase(host); got != want {
+			t.Errorf("byte %#02x: the commands fold it to %q, the server to %q", b, got, want)
+		}
+	}
+	for _, host := range []string{
+		"",
+		"GitLab.Example.COM:8443",
+		"GİTLAB.example.com",
+		"KUBE.example.com",
+		"G\xc4TLAB",
+		"[FD00:EC2::254]:443",
+	} {
+		t.Run(host, func(t *testing.T) {
+			if got, want := graphqlintrospect.FoldASCIICaseForTest(host), gitlabclient.FoldHostCase(host); got != want {
+				t.Errorf("the commands fold %q to %q, the server to %q", host, got, want)
 			}
 		})
 	}

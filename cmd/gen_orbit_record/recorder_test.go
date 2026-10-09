@@ -134,6 +134,54 @@ func TestRecorder_AFailureToForward_IsAnswered502(t *testing.T) {
 	}
 }
 
+// TestRecorder_ARedirectFromTheUpstream_IsAnsweredAndNotFollowed verifies the
+// proxy hands a redirect back as it came rather than following it.
+//
+// The proxy forwards Private-Token, which net/http does not know to be a
+// credential and so copies onto every hop of a redirect it follows, to
+// whatever host the Location names. Followed, a redirect from GitLab.com would
+// therefore hand GITLAB_COM_TOKEN to that host; answered, the handler reports
+// a 3xx where the record demands a 200, which is the right outcome for a
+// recording that has to be of GitLab.com's own answers. The caller's client is
+// left as it was handed in.
+func TestRecorder_ARedirectFromTheUpstream_IsAnsweredAndNotFollowed(t *testing.T) {
+	var asked []string
+	tokens := map[string]string{}
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		asked = append(asked, req.URL.Host)
+		tokens[req.URL.Host] = req.Header.Get("Private-Token")
+		header := http.Header{}
+		if req.URL.Host == "gitlab.com" {
+			header.Set("Location", "https://elsewhere.example.net/collect")
+			return &http.Response{StatusCode: http.StatusFound, Header: header, Body: io.NopCloser(strings.NewReader("")), Request: req}, nil
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: header, Body: io.NopCloser(strings.NewReader(`{}`)), Request: req}, nil
+	})
+	client := &http.Client{Transport: transport}
+	proxy := newRecorder("https://gitlab.com", client)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v4/orbit/status", http.NoBody)
+	req.Header.Set("Private-Token", "glpat-x")
+	rec := httptest.NewRecorder()
+
+	proxy.ServeHTTP(rec, req)
+
+	if !slices.Equal(asked, []string{"gitlab.com"}) {
+		t.Errorf("the upstream transport was asked for %v, want gitlab.com alone", asked)
+	}
+	if got := tokens["elsewhere.example.net"]; got != "" {
+		t.Errorf("the redirect target received Private-Token %q", got)
+	}
+	if rec.Code != http.StatusFound {
+		t.Errorf("answer = %d, want the 302 the upstream gave", rec.Code)
+	}
+	if kept := proxy.take(); len(kept) != 1 || kept[0].status != http.StatusFound {
+		t.Errorf("kept %+v, want the one exchange answered 302", kept)
+	}
+	if client.CheckRedirect != nil {
+		t.Error("newRecorder changed the client it was handed")
+	}
+}
+
 // TestNames_AreReadOnlyFromWhatCarriesThem verifies the parameter name readers:
 // no query is nothing, a body is read only when it is a JSON object with
 // something in it, and a media type is read without its parameters.

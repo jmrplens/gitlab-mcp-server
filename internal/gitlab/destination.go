@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/net/idna"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
@@ -98,6 +100,37 @@ func addressLiteral(host string) (netip.Addr, bool) {
 	return addr, true
 }
 
+// dialHostname is the host net/http hands the dialer for host, and asks a
+// SOCKS proxy or an HTTP CONNECT for: host itself when it is ASCII, and
+// otherwise its IDNA form under the Lookup profile, or host as written when
+// that profile refuses it. It is the rule of net/http's own idnaASCII, which
+// its canonicalAddr applies to every request URL.
+//
+// It matters wherever this package asks what an address is spelled as,
+// because the IDNA mapping turns spellings that are not addresses into ones
+// that are: fullwidth digits and full stops, ideographic full stops and
+// circled digits all map to ASCII, so 169.254.169.254 written in fullwidth
+// digits is dialed as 169.254.169.254 and handed to a SOCKS proxy as an IPv4
+// address. The dialer sees that address and judges it; a request sent through
+// a proxy is never dialed, and was judged as a name.
+//
+// The mapping is golang.org/x/net/idna rather than the copy the standard
+// library vendors, which cannot be imported. The two can drift apart when
+// their Unicode tables do; TestDialHostname_IsWhatNetHTTPDials holds this to
+// what net/http actually dials for every spelling it lists.
+func dialHostname(host string) string {
+	for i := range len(host) {
+		if host[i] >= 0x80 {
+			mapped, err := idna.Lookup.ToASCII(host)
+			if err != nil {
+				return host
+			}
+			return mapped
+		}
+	}
+	return host
+}
+
 // metadataAddress reports whether addr is a cloud metadata endpoint, and what
 // to call it in the refusal.
 //
@@ -165,10 +198,10 @@ func allowPrivateInstances() bool {
 // attack. DNS rebinding is only a threat when the attacker controls the name,
 // and here the operator chose it. See ADR-0022 before narrowing this.
 type destinationPolicy struct {
-	// instanceHost is the lower-cased host of the instance this client talks
-	// to. Empty when the base URL carried none, which makes every destination
-	// off-origin: without a host to compare against there is no hop that can
-	// be shown to be the instance's own.
+	// instanceHost is the host of the instance this client talks to, as
+	// [FoldHostCase] leaves it. Empty when the base URL carried none, which
+	// makes every destination off-origin: without a host to compare against
+	// there is no hop that can be shown to be the instance's own.
 	instanceHost string
 
 	// callerChosen records that the instance itself was named by a caller
@@ -217,7 +250,7 @@ func (p *destinationPolicy) coversInstance(dest *url.URL) bool {
 	if p == nil || p.instanceHost == "" || dest == nil {
 		return false
 	}
-	return isDomainOrSubdomain(strings.ToLower(dest.Hostname()), p.instanceHost)
+	return isDomainOrSubdomain(FoldHostCase(dest.Hostname()), p.instanceHost)
 }
 
 // permitsPrivate reports whether tier B lets one request reach a private
@@ -303,11 +336,17 @@ func (p *destinationPolicy) instanceIsPrivate(ctx context.Context) bool {
 
 // resolveInstancePrivate is the body of [destinationPolicy.instanceIsPrivate],
 // separated so the memoization and the decision can be read apart.
+//
+// The question is asked of the host the dialer will connect to, its
+// [dialHostname], and not of the configured spelling: an instance written as
+// "gİtlab.corp.example" is dialed as xn--gitlab-qyd.corp.example, and the
+// answer for any other name describes some other host.
 func (p *destinationPolicy) resolveInstancePrivate(ctx context.Context) bool {
 	if p.instanceHost == "" {
 		return false
 	}
-	if addr, spelledAsAddress := addressLiteral(p.instanceHost); spelledAsAddress {
+	dialed := dialHostname(p.instanceHost)
+	if addr, spelledAsAddress := addressLiteral(dialed); spelledAsAddress {
 		return isPrivateAddress(addr)
 	}
 	if p.lookupIP == nil {
@@ -315,7 +354,7 @@ func (p *destinationPolicy) resolveInstancePrivate(ctx context.Context) bool {
 	}
 	lookupCtx, cancel := context.WithTimeout(ctx, instanceLookupTimeout)
 	defer cancel()
-	addrs, err := p.lookupIP(lookupCtx, p.instanceHost)
+	addrs, err := p.lookupIP(lookupCtx, dialed)
 	if err != nil || len(addrs) == 0 {
 		return false
 	}
@@ -628,8 +667,16 @@ var proxySchemePorts = map[string]string{
 // plain-HTTP request sent through an http or https proxy on the proxy alone
 // (connectMethod.key in its transport.go), so one such connection carries
 // requests to many destinations.
+//
+// "Spelled as an address" is asked of the host's [dialHostname], since that
+// is what net/http hands a SOCKS proxy and names in a CONNECT: a host written
+// in fullwidth digits reached 169.254.169.254 through either while it was
+// judged here as a name. A plain-HTTP request through an HTTP proxy names its
+// host in the request line under another IDNA profile, which leaves such a
+// spelling a name, so judging the mapped form there refuses more than the
+// proxy would have reached and never less.
 func judgeProxiedDestination(ctx context.Context, target dialTarget, dest *url.URL) error {
-	addr, spelledAsAddress := addressLiteral(dest.Hostname())
+	addr, spelledAsAddress := addressLiteral(dialHostname(dest.Hostname()))
 	if !spelledAsAddress {
 		return nil
 	}
@@ -689,10 +736,12 @@ func (c *Client) MarkInstanceCallerNamed() {
 // host spelled as a name is left entirely to the dialer, which sees what the
 // name resolved to and is the only check that can. Asking DNS a question per
 // request at the door would put a resolver timeout in front of every caller
-// and would still not be authoritative.
+// and would still not be authoritative. A spelling is read as net/http will
+// dial it ([dialHostname]), so an address written in fullwidth digits is the
+// address it reaches rather than a name.
 func CheckCallerNamedInstance(rawURL string) error {
 	host, _ := credentialScope(rawURL)
-	addr, spelledAsAddress := addressLiteral(host)
+	addr, spelledAsAddress := addressLiteral(dialHostname(host))
 	if !spelledAsAddress {
 		return nil
 	}
