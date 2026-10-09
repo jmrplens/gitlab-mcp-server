@@ -1,7 +1,7 @@
 {
   "identifier": "jmrplens-gitlab-mcp-server",
   "name": "GitLab MCP Server",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Model Context Protocol server exposing GitLab REST + GraphQL operations as AI tools, ~868 on Free/CE and up to ~1094 on GitLab.com Ultimate: merge requests, pipelines, issues, releases, milestones, and more. One self-contained Go binary with no runtime to install; stdio or HTTP transport, with dynamic/meta/individual tool surfaces, plus resource subscriptions (live change notifications by polling).",
   "author": "José M. Requena Plens",
   "authorUrl": "https://github.com/jmrplens",

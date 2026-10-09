@@ -3,7 +3,7 @@
   "name": "io.github.jmrplens/gitlab-mcp-server",
   "title": "GitLab MCP Server",
   "description": "Go MCP server for GitLab: 2 dynamic tools reach ~872 actions on Free/CE, up to ~1098 on Ultimate.",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "repository": {
     "url": "https://github.com/jmrplens/gitlab-mcp-server",
     "source": "github",
@@ -29,9 +29,169 @@
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v3.1.0/gitlab-mcp-server.mcpb",
-      "version": "3.1.0",
-      "fileSha256": "0e1f4feb06533b25cf06493ac843ab68aba7ba149457205d659d5914d4a05ca4",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v3.2.0/gitlab-mcp-server-darwin.mcpb",
+      "version": "3.2.0",
+      "fileSha256": "e878d36137861bced210310a4f706969895b3229123ac6d5af1219a2957eb22c",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "GITLAB_URL",
+          "description": "GitLab instance URL (default: https://gitlab.com; set for self-managed instances)",
+          "isRequired": false,
+          "placeholder": "https://gitlab.com",
+          "default": "https://gitlab.com"
+        },
+        {
+          "name": "GITLAB_TOKEN",
+          "description": "GitLab Personal Access Token (glpat-...)",
+          "isRequired": true,
+          "isSecret": true,
+          "placeholder": "glpat-xxxxxxxxxxxxxxxxxxxx"
+        },
+        {
+          "name": "GITLAB_MCP_SKIP_TLS_VERIFY",
+          "description": "Skip TLS certificate verification for self-signed certs (default: false)",
+          "isRequired": false,
+          "default": "false",
+          "format": "boolean"
+        },
+        {
+          "name": "GITLAB_MCP_TOOL_SURFACE",
+          "description": "Tool catalog selector: dynamic, meta, or individual (default: dynamic)",
+          "isRequired": false,
+          "default": "dynamic",
+          "choices": [
+            "meta",
+            "individual",
+            "dynamic"
+          ]
+        },
+        {
+          "name": "GITLAB_MCP_TIER",
+          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
+          "isRequired": false,
+          "choices": [
+            "free",
+            "ce",
+            "premium",
+            "ultimate"
+          ]
+        },
+        {
+          "name": "GITLAB_MCP_READ_ONLY",
+          "description": "Read-only mode: removes every mutating action from the served surface; reads keep working (default: false)",
+          "isRequired": false,
+          "default": "false",
+          "format": "boolean"
+        },
+        {
+          "name": "GITLAB_MCP_SAFE_MODE",
+          "description": "Safe mode: a mutating action returns a preview card naming the action and echoing its arguments instead of running; reads keep working (default: false)",
+          "isRequired": false,
+          "default": "false",
+          "format": "boolean"
+        },
+        {
+          "name": "GITLAB_MCP_LOG_LEVEL",
+          "description": "Logging verbosity (default: info)",
+          "isRequired": false,
+          "default": "info",
+          "choices": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ]
+        }
+      ]
+    },
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v3.2.0/gitlab-mcp-server-windows.mcpb",
+      "version": "3.2.0",
+      "fileSha256": "3946f927f703d84fd01e18dbe8e160b75084835129a453a313c515765f316575",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "GITLAB_URL",
+          "description": "GitLab instance URL (default: https://gitlab.com; set for self-managed instances)",
+          "isRequired": false,
+          "placeholder": "https://gitlab.com",
+          "default": "https://gitlab.com"
+        },
+        {
+          "name": "GITLAB_TOKEN",
+          "description": "GitLab Personal Access Token (glpat-...)",
+          "isRequired": true,
+          "isSecret": true,
+          "placeholder": "glpat-xxxxxxxxxxxxxxxxxxxx"
+        },
+        {
+          "name": "GITLAB_MCP_SKIP_TLS_VERIFY",
+          "description": "Skip TLS certificate verification for self-signed certs (default: false)",
+          "isRequired": false,
+          "default": "false",
+          "format": "boolean"
+        },
+        {
+          "name": "GITLAB_MCP_TOOL_SURFACE",
+          "description": "Tool catalog selector: dynamic, meta, or individual (default: dynamic)",
+          "isRequired": false,
+          "default": "dynamic",
+          "choices": [
+            "meta",
+            "individual",
+            "dynamic"
+          ]
+        },
+        {
+          "name": "GITLAB_MCP_TIER",
+          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
+          "isRequired": false,
+          "choices": [
+            "free",
+            "ce",
+            "premium",
+            "ultimate"
+          ]
+        },
+        {
+          "name": "GITLAB_MCP_READ_ONLY",
+          "description": "Read-only mode: removes every mutating action from the served surface; reads keep working (default: false)",
+          "isRequired": false,
+          "default": "false",
+          "format": "boolean"
+        },
+        {
+          "name": "GITLAB_MCP_SAFE_MODE",
+          "description": "Safe mode: a mutating action returns a preview card naming the action and echoing its arguments instead of running; reads keep working (default: false)",
+          "isRequired": false,
+          "default": "false",
+          "format": "boolean"
+        },
+        {
+          "name": "GITLAB_MCP_LOG_LEVEL",
+          "description": "Logging verbosity (default: info)",
+          "isRequired": false,
+          "default": "info",
+          "choices": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ]
+        }
+      ]
+    },
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v3.2.0/gitlab-mcp-server-linux.mcpb",
+      "version": "3.2.0",
+      "fileSha256": "4740db9d1a9a81b668e0f7c6ee5ae0e47bca604f51fce05f65a051ea0dfcbded",
       "transport": {
         "type": "stdio"
       },
@@ -109,7 +269,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/jmrplens/gitlab-mcp-server:3.1.0@sha256:87e483299a2663a7a5d4d28679859b0c7fba2b1a421b7de2652441a569d4a2fc",
+      "identifier": "ghcr.io/jmrplens/gitlab-mcp-server:3.2.0@sha256:054f99756efb1182aff73effb2a8861ddde8c90146d2e2b3efafd459647d69f8",
       "transport": {
         "type": "stdio"
       },
@@ -266,7 +426,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "docker.io/jmrplens/gitlab-mcp-server:3.1.0@sha256:87e483299a2663a7a5d4d28679859b0c7fba2b1a421b7de2652441a569d4a2fc",
+      "identifier": "docker.io/jmrplens/gitlab-mcp-server:3.2.0@sha256:054f99756efb1182aff73effb2a8861ddde8c90146d2e2b3efafd459647d69f8",
       "transport": {
         "type": "stdio"
       },
@@ -424,7 +584,7 @@
     {
       "registryType": "npm",
       "identifier": "@jmrp.io/gitlab-mcp-server",
-      "version": "3.1.0",
+      "version": "3.2.0",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
@@ -584,7 +744,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "jmrplens-gitlab-mcp-server",
-      "version": "3.1.0",
+      "version": "3.2.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -744,7 +904,7 @@
       "registryType": "nuget",
       "registryBaseUrl": "https://api.nuget.org/v3/index.json",
       "identifier": "gitlab-mcp-server",
-      "version": "3.1.0",
+      "version": "3.2.0",
       "runtimeHint": "dnx",
       "transport": {
         "type": "stdio"
