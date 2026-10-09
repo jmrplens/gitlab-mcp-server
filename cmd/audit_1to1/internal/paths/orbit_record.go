@@ -320,11 +320,11 @@ func outputsOf(calls []orbitrecord.Call) []recordedOutput {
 // declares a type in, so it is reported missing rather than read from the
 // repository root.
 func splitOutput(output string) (pkg, name string) {
-	cut := strings.LastIndex(output, ".")
-	if cut < 0 {
+	before, after, found := strings.CutLast(output, ".")
+	if !found {
 		return "", output
 	}
-	return output[:cut], output[cut+1:]
+	return before, after
 }
 
 // typeSource is one package's structs, resolved the way the published-type

@@ -2947,8 +2947,8 @@ func mdGateLinkLine(doc *testutil.GFMDocument, dest string) (int, string) {
 // no declaration either.
 func mdGateFieldNames(path string) []string {
 	name := path
-	if i := strings.LastIndex(path, "."); i >= 0 {
-		name = path[i+1:]
+	if _, after, found := strings.CutLast(path, "."); found {
+		name = after
 	}
 	names := []string{name}
 	for trimmed := name; len(trimmed) > 0 && trimmed[len(trimmed)-1] >= '0' && trimmed[len(trimmed)-1] <= '9'; {

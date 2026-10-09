@@ -40,8 +40,8 @@ func entries(findings []Finding) []string {
 // shortName drops the fixture directory from a package path so a want list
 // reads as the package name alone.
 func shortName(pkg string) string {
-	if idx := strings.LastIndex(pkg, "/"); idx >= 0 {
-		return pkg[idx+1:]
+	if _, name, found := strings.CutLast(pkg, "/"); found {
+		return name
 	}
 	return pkg
 }

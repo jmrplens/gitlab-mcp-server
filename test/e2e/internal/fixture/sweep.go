@@ -114,8 +114,8 @@ func hasPrefix(name, path, prefix string) bool {
 
 // lastSegment returns the part of a path after its last slash.
 func lastSegment(path string) string {
-	if i := strings.LastIndex(path, "/"); i >= 0 {
-		return path[i+1:]
+	if _, segment, found := strings.CutLast(path, "/"); found {
+		return segment
 	}
 	return path
 }

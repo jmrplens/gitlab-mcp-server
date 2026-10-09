@@ -1200,11 +1200,11 @@ func logDoorPermissionRefusal(ctx context.Context, message, sentence string) {
 // been through [oauth.QuotedDescription], so it is ASCII and a cut splits no
 // rune.
 func sentencePermissions(sentence string) (count int, named []string) {
-	open := strings.LastIndexByte(sentence, '[')
-	if open < 0 {
+	_, bracketed, opened := strings.CutLast(sentence, "[")
+	if !opened {
 		return 0, nil
 	}
-	list, _, closed := strings.Cut(sentence[open+1:], "]")
+	list, _, closed := strings.Cut(bracketed, "]")
 	if !closed {
 		return 0, nil
 	}
