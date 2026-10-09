@@ -443,6 +443,31 @@ func TestNewHostGuard_DeclaresTheLoopbackNamesAndTheAdvertisedHost(t *testing.T)
 			declared:  []string{"localhost"},
 			absent:    []string{"", "not a url"},
 		},
+		{
+			name:      "an advertised origin in upper case is declared in lower case",
+			addr:      ":8080",
+			publicURL: "https://MCP.Example.COM",
+			declared:  []string{"mcp.example.com"},
+			absent:    []string{"MCP.Example.COM"},
+		},
+		{
+			// A browser sends this origin's host as its IDNA form, which no
+			// folding produces. What must not happen is declaring the ASCII
+			// name strings.ToLower folds it into, a different registrable
+			// name whose owner could then rebind it to this listener.
+			name:      "an advertised origin with a dotted capital I declares no ascii twin",
+			addr:      ":8080",
+			publicURL: "https://mcp.gİtlab-corp.example",
+			declared:  []string{"mcp.gİtlab-corp.example"},
+			absent:    []string{"mcp.gitlab-corp.example"},
+		},
+		{
+			name:      "a bind address with a dotted capital I declares no ascii twin",
+			addr:      "GİTLAB.internal:8080",
+			wantBound: true,
+			declared:  []string{"gİtlab.internal"},
+			absent:    []string{"gitlab.internal"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

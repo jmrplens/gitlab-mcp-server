@@ -24,8 +24,8 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
-	"strings"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 )
 
@@ -135,8 +135,16 @@ func hostOnly(value string) string {
 // origin the operator published. Both sides go through here so the comparison
 // asks what DNS asks. An IPv6 literal is unharmed: its hex digits mean the
 // same in either case, and lower is the canonical spelling.
+//
+// DNS ignores the case of ASCII letters only, so that is all that is folded
+// ([gitlabclient.FoldHostCase]). strings.ToLower also turns U+0130 into "i",
+// and declared a --public-url of "mcp.gİtlab-corp.example" as
+// "mcp.gitlab-corp.example": a different name, registrable by somebody else,
+// who could then point it at this listener and be answered. A browser asks
+// for a name outside ASCII by its xn-- form, so such an origin is declared by
+// writing that form in --public-url.
 func normalizedHost(value string) string {
-	return strings.ToLower(hostOnly(value))
+	return gitlabclient.FoldHostCase(hostOnly(value))
 }
 
 // publicURLHost is the host --public-url advertises, without its port. An
@@ -202,7 +210,7 @@ func allowedHosts(addr string) map[string]bool {
 	if host == "" || host == "0.0.0.0" || host == "::" {
 		return nil
 	}
-	return map[string]bool{strings.ToLower(host): true}
+	return map[string]bool{gitlabclient.FoldHostCase(host): true}
 }
 
 // hostValidationMiddleware refuses requests whose Host header names a host

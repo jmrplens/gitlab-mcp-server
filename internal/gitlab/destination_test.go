@@ -470,6 +470,13 @@ func TestDestinationPolicy_InstanceIsPrivate(t *testing.T) {
 		{name: "name that does not resolve", instance: "https://gitlab.example.com", lookupErr: errors.New("no such host"), want: false},
 		{name: "name resolving to nothing", instance: "https://gitlab.example.com", resolved: []string{}, want: false},
 		{name: "no resolver available", instance: "https://gitlab.example.com", noLookup: true, want: false},
+		// net/http dials the IDNA form of a host, and that form of these
+		// spellings is an address: 10.0.0.1 in fullwidth digits, and with
+		// ideographic full stops. The resolver fails on purpose, since asking
+		// it about the spelling as written is the mistake these rows catch.
+		{name: "private address in fullwidth digits", instance: "https://１０.0.0.1", lookupErr: errors.New("no such host"), want: true},
+		{name: "private address with ideographic full stops", instance: "https://10。0。0。1", lookupErr: errors.New("no such host"), want: true},
+		{name: "public address in fullwidth digits", instance: "https://２０３.0.113.1", lookupErr: errors.New("no such host"), want: false},
 	}
 
 	for _, tt := range tests {
@@ -510,9 +517,54 @@ func TestDestinationPolicy_InstanceIsPrivate(t *testing.T) {
 	}
 }
 
+// TestDestinationPolicy_InstanceIsPrivate_ResolvesTheNameTheDialerDials
+// verifies the question about the instance is asked of the host the client
+// actually connects to.
+//
+// An instance configured as "gİtlab.corp.example", with U+0130, is dialed by
+// net/http as xn--gitlab-qyd.corp.example. Resolving the folded spelling
+// "gitlab.corp.example" instead asked about another host, whose answer then
+// decided whether every redirect away from the instance may reach a private
+// address.
+func TestDestinationPolicy_InstanceIsPrivate_ResolvesTheNameTheDialerDials(t *testing.T) {
+	tests := []struct {
+		name     string
+		instance string
+		want     string
+	}{
+		{name: "dotted capital I written raw", instance: "https://gİtlab.corp.example", want: "xn--gitlab-qyd.corp.example"},
+		{name: "dotted capital I percent-encoded", instance: "https://g%C4%B0tlab.corp.example", want: "xn--gitlab-qyd.corp.example"},
+		{name: "ascii upper case", instance: "https://GitLab.Corp.Example", want: "gitlab.corp.example"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			policy := newDestinationPolicy(tt.instance, false, false)
+			var asked []string
+			policy.lookupIP = func(_ context.Context, host string) ([]netip.Addr, error) {
+				asked = append(asked, host)
+				return []netip.Addr{netip.MustParseAddr("10.0.0.1")}, nil
+			}
+
+			if !policy.instanceIsPrivate(t.Context()) {
+				t.Fatal("instanceIsPrivate() = false, want the stub's private answer")
+			}
+			if !slices.Equal(asked, []string{tt.want}) {
+				t.Errorf("the resolver was asked about %q, want %q, the host net/http dials", asked, tt.want)
+			}
+		})
+	}
+}
+
 // TestDestinationPolicy_CoversInstance verifies which destinations count as
 // the instance's own host, which is what decides whether a redirect hop is
 // judged at all.
+//
+// The spelling rows hold the comparison [credentialSafeRedirect] makes: ASCII
+// letters are folded and nothing else is, so a host spelled with U+0130 is
+// not the instance whose name it folds to under strings.ToLower. It is
+// dialed as its IDNA form, a different host, and counting it as the
+// instance's own put the hop in the permissive pool with no tier B at all.
 func TestDestinationPolicy_CoversInstance(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -528,6 +580,13 @@ func TestDestinationPolicy_CoversInstance(t *testing.T) {
 		{name: "a suffix without a dot boundary", instance: "https://gitlab.example.com", dest: "https://evilgitlab.example.com/x", want: false},
 		{name: "an ipv6 zone spelled as a subdomain", instance: "https://gitlab.example.com", dest: "https://[::1%25.gitlab.example.com]/x", want: false},
 		{name: "no instance host", instance: "", dest: "https://gitlab.example.com/x", want: false},
+		{name: "the instance in ascii upper case", instance: "https://gitlab.example.com", dest: "https://GITLAB.EXAMPLE.COM/x", want: true},
+		{name: "dotted capital I written raw", instance: "https://gitlab.example.com", dest: "https://gİtlab.example.com/x", want: false},
+		{name: "dotted capital I percent-encoded", instance: "https://gitlab.example.com", dest: "https://g%C4%B0tlab.example.com/x", want: false},
+		{name: "dotted capital I above a subdomain label", instance: "https://gitlab.example.com", dest: "https://storage.gİtlab.example.com/x", want: false},
+		{name: "an instance written with a dotted capital I", instance: "https://gİtlab.example.com", dest: "https://gitlab.example.com/x", want: false},
+		{name: "the rooted name of the instance", instance: "https://gitlab.example.com", dest: "https://gitlab.example.com./x", want: false},
+		{name: "an ipv6 zone with an upper-case subdomain", instance: "https://gitlab.example.com", dest: "https://[::1%25.GitLab.example.com]/x", want: false},
 	}
 
 	for _, tt := range tests {
@@ -1251,6 +1310,22 @@ func TestDestinationTransport_ProxiedDestinationSpelledAsAnAddress_IsJudged(t *t
 			name: "a hop away from a public instance to a private address", instanceURL: "http://gitlab.example.com",
 			resolves: "203.0.113.1", redirectTo: "http://10.0.0.5:9000" + versionAPIPath, wantText: "reached the private address 10.0.0.5",
 		},
+		// net/http turns each of these into an address before it asks a SOCKS
+		// proxy for it or sends a CONNECT, since it hands a proxy the host's
+		// IDNA form: fullwidth digits and full stops, ideographic full stops
+		// and circled digits all map to their ASCII counterparts.
+		{
+			name: "a hop to the metadata address in fullwidth digits", instanceURL: "http://gitlab.example.com",
+			resolves: "203.0.113.1", redirectTo: "http://１６９．２５４．１６９．２５４/latest/meta-data/", wantText: "metadata",
+		},
+		{
+			name: "a hop to the metadata address with ideographic full stops", instanceURL: "http://gitlab.example.com",
+			resolves: "203.0.113.1", redirectTo: "http://169。254。169。254/latest/meta-data/", wantText: "metadata",
+		},
+		{
+			name: "a hop to a private address with a circled digit", instanceURL: "http://gitlab.example.com",
+			resolves: "203.0.113.1", redirectTo: "http://①⓪.0.0.5:9000" + versionAPIPath, wantText: "reached the private address 10.0.0.5",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1632,6 +1707,12 @@ func TestJudgeProxiedDestination_JudgesOnlyWhatIsSpelledAsAnAddress(t *testing.T
 		{name: "the metadata address with no policy", target: dialTarget{}, dest: "http://169.254.169.254/", wantRefused: true},
 		{name: "a private address with no policy", target: dialTarget{}, dest: "http://10.0.0.1/"},
 		{name: "the metadata address over ipv6 with a zone", target: permissive, dest: "http://[fd00:ec2::254%25eth0]/", wantRefused: true},
+		{name: "the metadata address in fullwidth digits with no policy", target: dialTarget{}, dest: "http://１６９．２５４．１６９．２５４/", wantRefused: true},
+		{name: "the metadata address percent-encoded in fullwidth digits", target: dialTarget{}, dest: "http://%EF%BC%91%EF%BC%96%EF%BC%99.254.169.254/", wantRefused: true},
+		{name: "a private address in fullwidth digits under a strict stamp", target: strict, dest: "http://１０.0.0.1/", wantRefused: true},
+		{name: "a private address in fullwidth digits the stamp permits", target: permissive, dest: "http://１０.0.0.1/"},
+		{name: "a name outside ascii", target: strict, dest: "http://café.example.com/"},
+		{name: "a name idna refuses, dialed as written", target: strict, dest: "http://a_é.example.com/"},
 	}
 
 	for _, tt := range tests {
@@ -1645,6 +1726,72 @@ func TestJudgeProxiedDestination_JudgesOnlyWhatIsSpelledAsAnAddress(t *testing.T
 
 			if got := errors.Is(err, ErrDestinationRefused); got != tt.wantRefused {
 				t.Fatalf("refused = %v, want %v (err = %v)", got, tt.wantRefused, err)
+			}
+		})
+	}
+}
+
+// TestDialHostname_IsWhatNetHTTPDials holds [dialHostname] to the host
+// net/http actually hands its dialer, spelling by spelling.
+//
+// The two compute the same mapping from two copies of it: net/http from the
+// IDNA package the standard library vendors, this package from
+// golang.org/x/net/idna. A difference in their Unicode tables would let a
+// spelling be judged as one host and dialed as another, which is the defect
+// the helper exists to close, so the answer is checked against the dial
+// rather than against a table written here. A SOCKS proxy and an HTTP
+// CONNECT are handed the same canonical address as the dialer.
+func TestDialHostname_IsWhatNetHTTPDials(t *testing.T) {
+	tests := []struct {
+		name string
+		host string
+		want string
+	}{
+		{name: "ascii is dialed as written", host: "GitLab.Example.com", want: "GitLab.Example.com"},
+		{name: "a dotted capital I", host: "gİtlab.example.com", want: "xn--gitlab-qyd.example.com"},
+		{name: "a kelvin sign", host: "Kube.example.com", want: "kube.example.com"},
+		{name: "fullwidth digits and full stops", host: "１６９．２５４．１６９．２５４", want: "169.254.169.254"},
+		{name: "ideographic full stops", host: "169。254。169。254", want: "169.254.169.254"},
+		{name: "circled digits", host: "①⓪.0.0.5", want: "10.0.0.5"},
+		{name: "mathematical digits", host: "10.0.0.\U0001D7D3", want: "10.0.0.5"},
+		{name: "a name idna refuses is dialed as written", host: "a_é.example.com", want: "a_é.example.com"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errStop := errors.New("recorded")
+			var dialed string
+			transport := &http.Transport{
+				DialContext: func(_ context.Context, _, address string) (net.Conn, error) {
+					dialed = address
+					return nil, errStop
+				},
+			}
+			t.Cleanup(transport.CloseIdleConnections)
+			dest := &url.URL{Scheme: "http", Host: tt.host, Path: "/"}
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, dest.String(), http.NoBody)
+			if err != nil {
+				t.Fatalf("http.NewRequestWithContext(%q) unexpected error: %v", dest.String(), err)
+			}
+
+			resp, err := transport.RoundTrip(req)
+			if resp != nil {
+				_ = resp.Body.Close()
+			}
+			if !errors.Is(err, errStop) {
+				t.Fatalf("the transport did not reach its dialer: %v", err)
+			}
+			dialedHost, _, err := net.SplitHostPort(dialed)
+			if err != nil {
+				t.Fatalf("net.SplitHostPort(%q) unexpected error: %v", dialed, err)
+			}
+
+			got := dialHostname(tt.host)
+			if got != dialedHost {
+				t.Errorf("dialHostname(%q) = %q, but net/http dialed %q", tt.host, got, dialedHost)
+			}
+			if got != tt.want {
+				t.Errorf("dialHostname(%q) = %q, want %q", tt.host, got, tt.want)
 			}
 		})
 	}
@@ -1744,6 +1891,12 @@ func TestCheckCallerNamedInstance_RefusesWhatTheDialerWould(t *testing.T) {
 		{name: "a host name, left to the dialer", rawURL: "https://localhost:8080", wantRefused: false},
 		{name: "no host", rawURL: "not a url at all", wantRefused: false},
 		{name: "empty", rawURL: "", wantRefused: false},
+		// The spellings net/http turns into an address when it dials, or asks
+		// a proxy for, the host: judged as that address, not as a name.
+		{name: "cloud metadata in fullwidth digits", rawURL: "http://１６９．２５４．１６９．２５４", wantRefused: true, wantText: "metadata"},
+		{name: "rfc 1918 in fullwidth digits", rawURL: "https://１０.0.0.1", wantRefused: true, wantText: "private address 10.0.0.1"},
+		{name: "rfc 1918 percent-encoded in fullwidth digits", rawURL: "https://%EF%BC%91%EF%BC%90.0.0.1", wantRefused: true, wantText: "private address 10.0.0.1"},
+		{name: "a name with a dotted capital I, left to the dialer", rawURL: "https://gİtlab.example.com", wantRefused: false},
 	}
 
 	for _, tt := range tests {

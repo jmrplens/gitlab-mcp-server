@@ -378,12 +378,18 @@ func verificationRedirect(req *http.Request, via []*http.Request) error {
 
 // sameVerificationHost reports whether dest is still the instance origin names,
 // or a subdomain of it, without downgrading https to http.
+//
+// The hosts are compared with ASCII case folded and nothing else
+// ([gitlabclient.FoldHostCase] says why): strings.ToLower folded U+0130 into
+// "i", so a hop to "gİtlab.example.com" was followed as the instance's own
+// while net/http sent it to xn--gitlab-qyd.example.com, and whatever answered
+// there was admitted as the caller's identity.
 func sameVerificationHost(origin, dest *url.URL) bool {
 	if strings.EqualFold(origin.Scheme, "https") && !strings.EqualFold(dest.Scheme, "https") {
 		return false
 	}
-	originHost := strings.ToLower(origin.Hostname())
-	destHost := strings.ToLower(dest.Hostname())
+	originHost := gitlabclient.FoldHostCase(origin.Hostname())
+	destHost := gitlabclient.FoldHostCase(dest.Hostname())
 	if originHost == "" || destHost == "" {
 		return false
 	}

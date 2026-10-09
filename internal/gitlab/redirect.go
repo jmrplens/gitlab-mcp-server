@@ -25,14 +25,16 @@ const maxRedirects = 10
 // personal-access-token header — the only credential stdio mode has, and HTTP
 // legacy mode's default — rides along to whatever host answers the 302.
 // Authorization is listed anyway because net/http compares hostnames alone and
-// so keeps it across an https-to-http downgrade, and Sudo and Job-Token are
-// listed because they are credentials of the same kind even though this server
-// does not send them today.
+// so keeps it across an https-to-http downgrade, and Sudo, Job-Token and
+// Deploy-Token are listed because they are credentials of the same kind even
+// though this server does not send them today: GitLab reads Deploy-Token on
+// its package registry routes, and neither this server nor client-go sets it.
 var credentialHeaders = []string{
 	"PRIVATE-TOKEN",
 	"Authorization",
 	"Sudo",
 	"Job-Token",
+	"Deploy-Token",
 }
 
 // credentialSafeRedirect returns a redirect policy that keeps following
@@ -51,9 +53,15 @@ var credentialHeaders = []string{
 // host nor a subdomain of it — the same relation net/http applies to its own
 // sensitive headers — or the hop downgrades https to http, which net/http does
 // not treat as leaving at all because it compares hostnames and ignores the
-// scheme. A base URL that cannot be parsed, or carries no host, strips on
-// every redirect: without a host to compare against there is no hop that can
-// be shown to be safe.
+// scheme. Both hosts are compared as [FoldHostCase] leaves them, with ASCII
+// letters folded and nothing else. A base URL that cannot be parsed, or
+// carries no host, strips on every redirect: without a host to compare
+// against there is no hop that can be shown to be safe.
+//
+// Once a hop has left, every later hop of the same chain is stripped too, the
+// instance included, because net/http rebuilds each hop from the first
+// request's headers: judged on its own, a hop back onto the instance would
+// carry the credential again, to a path the host the chain left for chose.
 func credentialSafeRedirect(baseURL string) func(*http.Request, []*http.Request) error {
 	baseHost, baseHTTPS := credentialScope(baseURL)
 
@@ -61,7 +69,7 @@ func credentialSafeRedirect(baseURL string) func(*http.Request, []*http.Request)
 		if len(via) >= maxRedirects {
 			return fmt.Errorf("stopped after %d redirects", maxRedirects)
 		}
-		if !withinCredentialScope(baseHost, baseHTTPS, req.URL) {
+		if !withinCredentialScope(baseHost, baseHTTPS, req.URL) || chainLeftScope(baseHost, baseHTTPS, via) {
 			dropped := make([]string, 0, len(credentialHeaders))
 			for _, name := range credentialHeaders {
 				if req.Header.Get(name) == "" {
@@ -77,14 +85,14 @@ func credentialSafeRedirect(baseURL string) func(*http.Request, []*http.Request)
 }
 
 // credentialScope reduces a configured base URL to the two facts the redirect
-// policy compares against: the lower-cased host, and whether the configured
-// scheme was https.
+// policy compares against: the host with its case folded by [FoldHostCase],
+// and whether the configured scheme was https.
 func credentialScope(baseURL string) (host string, https bool) {
 	u, err := url.Parse(strings.TrimSpace(baseURL))
 	if err != nil {
 		return "", false
 	}
-	return strings.ToLower(u.Hostname()), strings.EqualFold(u.Scheme, "https")
+	return FoldHostCase(u.Hostname()), strings.EqualFold(u.Scheme, "https")
 }
 
 // withinCredentialScope reports whether dest may still receive the credential
@@ -96,7 +104,78 @@ func withinCredentialScope(baseHost string, baseHTTPS bool, dest *url.URL) bool 
 	if baseHTTPS && !strings.EqualFold(dest.Scheme, "https") {
 		return false
 	}
-	return isDomainOrSubdomain(strings.ToLower(dest.Hostname()), baseHost)
+	return isDomainOrSubdomain(FoldHostCase(dest.Hostname()), baseHost)
+}
+
+// chainLeftScope reports whether an earlier request of this redirect chain
+// was outside the credential's scope.
+//
+// net/http builds every hop from the first request's headers, so a hop back
+// onto the instance after one that left it would carry the credential again,
+// to a path the host it left for chose: an object store a download was sent
+// to could make this server run an authenticated request of its choosing on
+// the instance, and hand the answer to the caller. net/http keeps its own
+// sensitive headers stripped for the rest of a chain once a hop has left;
+// this does the same for GitLab's. A request it cannot read counts as having
+// left, since nothing shows that it stayed.
+func chainLeftScope(baseHost string, baseHTTPS bool, via []*http.Request) bool {
+	for _, prev := range via {
+		if prev == nil || !withinCredentialScope(baseHost, baseHTTPS, prev.URL) {
+			return true
+		}
+	}
+	return false
+}
+
+// FoldHostCase returns host with its ASCII letters in lower case and every
+// other byte as it was written, which is the form two spellings of a host are
+// compared in wherever this server decides whether they name the same one.
+//
+// # Why not strings.ToLower
+//
+// strings.ToLower folds Unicode, and two runes outside ASCII fold into an
+// ASCII letter: U+0130, the dotted capital I, becomes "i", and U+212A, the
+// Kelvin sign, becomes "k". net/http dials "gİtlab.example.com" as
+// xn--gitlab-qyd.example.com, while strings.ToLower makes it
+// "gitlab.example.com". It dials the Kelvin sign as "k", but a plain-http
+// request through an HTTP proxy names its host in the request line under the
+// Punycode profile, which maps neither rune, so "Kube.example.com" is asked
+// for as xn--ube-xk1a.example.com. A comparison through strings.ToLower
+// therefore treated hosts somebody else can register as the configured
+// instance, and let a redirect to them keep PRIVATE-TOKEN.
+//
+// # Why not the IDNA form either
+//
+// There is no single IDNA form to compare. net/http dials, names in a CONNECT
+// and hands a SOCKS proxy the host's form under the Lookup profile, and writes
+// its Host header, and the request line of a plain-http request through an
+// HTTP proxy, under the Punycode profile, and the two differ for exactly these
+// spellings: xn--gitlab-qyd against xn--gtlab-h4a. Folding ASCII alone can
+// only be stricter than either. An ASCII host is dialed as written and DNS
+// ignores its case; a name outside ASCII matches only the same bytes, which
+// both profiles map alike; and an ASCII parent after a dot maps to itself, so
+// a subdomain written outside ASCII is still a subdomain. Where it costs
+// anything the cost is paid in the safe direction: the xn-- spelling of an
+// instance configured in Unicode counts as another host, and so does the
+// Kelvin-sign spelling, which a direct dial resolves to the instance and a
+// proxied plain-http request does not.
+//
+// Byte by byte rather than rune by rune, so a host carrying bytes that are not
+// UTF-8 keeps them: a rune-wise mapping would turn every such byte into
+// U+FFFD and make two different hosts compare equal. No byte of a multi-byte
+// UTF-8 sequence falls in the ASCII range, so none of them is touched.
+func FoldHostCase(host string) string {
+	upper := strings.IndexFunc(host, func(r rune) bool { return 'A' <= r && r <= 'Z' })
+	if upper < 0 {
+		return host
+	}
+	folded := []byte(host)
+	for i := upper; i < len(folded); i++ {
+		if c := folded[i]; 'A' <= c && c <= 'Z' {
+			folded[i] = c + ('a' - 'A')
+		}
+	}
+	return string(folded)
 }
 
 // isDomainOrSubdomain reports whether sub is parent or a subdomain of it.
@@ -151,8 +230,11 @@ func logCredentialDrop(req *http.Request, baseHost string, baseHTTPS bool, dropp
 		return
 	}
 	reason := "host outside the configured instance"
-	if baseHTTPS && !strings.EqualFold(req.URL.Scheme, "https") {
+	switch {
+	case baseHTTPS && !strings.EqualFold(req.URL.Scheme, "https"):
 		reason = "redirect downgrades https to http"
+	case withinCredentialScope(baseHost, baseHTTPS, req.URL):
+		reason = "an earlier hop left the configured instance"
 	}
 	slog.InfoContext(req.Context(), "dropped credential headers on redirect",
 		"reason", reason,

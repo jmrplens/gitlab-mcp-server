@@ -50,7 +50,10 @@ func CredentialFor(endpoint, instance, token string) (credential, withheld strin
 // origin reduces a URL to the part that decides who receives a request. The
 // path is dropped because an endpoint carries /api/graphql and the instance
 // URL does not, and the host keeps its port because two ports on one host are
-// two servers.
+// two servers. The host's case is folded ASCII letters only
+// ([foldASCIICase]): strings.ToLower also turns U+0130 into "i", which made a
+// host somebody else can register the instance's origin and sent it
+// GITLAB_TOKEN.
 func origin(raw string) (string, error) {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
@@ -59,5 +62,24 @@ func origin(raw string) (string, error) {
 	if parsed.Scheme == "" || parsed.Host == "" {
 		return "", fmt.Errorf("%q names no scheme and host", raw)
 	}
-	return strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host), nil
+	return strings.ToLower(parsed.Scheme) + "://" + foldASCIICase(parsed.Host), nil
+}
+
+// foldASCIICase returns host with its ASCII letters in lower case and every
+// other byte as written, which is the form the server compares hosts in
+// (gitlab.FoldHostCase, which a test holds this to byte for byte).
+//
+// It is a copy rather than an import because importing the server's GitLab
+// client package for ten lines would link client-go and OpenTelemetry into
+// both commands that introspect, about three hundred packages they otherwise
+// never build. Byte by byte, so a byte that is not UTF-8 stays itself rather than
+// becoming U+FFFD and merging two hosts.
+func foldASCIICase(host string) string {
+	folded := []byte(host)
+	for i, c := range folded {
+		if 'A' <= c && c <= 'Z' {
+			folded[i] = c + ('a' - 'A')
+		}
+	}
+	return string(folded)
 }

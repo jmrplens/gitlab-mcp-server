@@ -1759,6 +1759,19 @@ func TestVerificationRedirect_Policy(t *testing.T) {
 		// own would follow the hop.
 		{name: "a dot boundary over a different parent", origin: "https://gitlab.example.com/api/v4/user", dest: "https://a.xitlab.example.com/api/v4/user", wantErr: true},
 		{name: "ten hops already made", origin: "https://gitlab.example.com/api/v4/user", dest: "https://gitlab.example.com/api/v4/user", hops: 10, wantErr: true},
+		// Only ASCII letters are folded. strings.ToLower also turns U+0130,
+		// the dotted capital I, into a plain "i", so the hop below was
+		// followed as the instance's own while net/http sent it to
+		// xn--gitlab-qyd.example.com, and whatever answered there became the
+		// caller's identity.
+		{name: "the instance in ascii upper case", origin: "https://gitlab.example.com/api/v4/user", dest: "https://GITLAB.Example.com/api/v4/user"},
+		{name: "dotted capital I written raw", origin: "https://gitlab.example.com/api/v4/user", dest: "https://gİtlab.example.com/api/v4/user", wantErr: true},
+		{name: "dotted capital I percent-encoded", origin: "https://gitlab.example.com/api/v4/user", dest: "https://g%C4%B0tlab.example.com/api/v4/user", wantErr: true},
+		{name: "dotted capital I above a subdomain label", origin: "https://gitlab.example.com/api/v4/user", dest: "https://eu.g%C4%B0tlab.example.com/api/v4/user", wantErr: true},
+		{name: "an instance written with a dotted capital I", origin: "https://g%C4%B0tlab.example.com/api/v4/user", dest: "https://gitlab.example.com/api/v4/user", wantErr: true},
+		{name: "an instance written with a dotted capital I keeps its own spelling", origin: "https://g%C4%B0tlab.example.com/api/v4/user", dest: "https://g%C4%B0tlab.example.com/api/v4/user/"},
+		{name: "the rooted name of the instance", origin: "https://gitlab.example.com/api/v4/user", dest: "https://gitlab.example.com./api/v4/user", wantErr: true},
+		{name: "ipv6 zone literal with an upper-case subdomain", origin: "https://gitlab.example.com/api/v4/user", dest: "https://[::1%25.GITLAB.example.com]/api/v4/user", wantErr: true},
 	}
 
 	for _, tt := range tests {
