@@ -51,7 +51,7 @@ type ScheduleInput struct {
 
 // ScheduleAllInput holds parameters for scheduling storage moves for all snippets.
 type ScheduleAllInput struct {
-	SourceStorageName      *string `json:"source_storage_name,omitempty"      jsonschema:"Name of the source storage shard"`
+	SourceStorageName      *string `json:"source_storage_name,omitempty"      jsonschema:"Name of the source storage shard,required"`
 	DestinationStorageName *string `json:"destination_storage_name,omitempty" jsonschema:"Name of the destination storage shard"`
 }
 

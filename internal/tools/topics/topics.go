@@ -111,7 +111,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 // CreateInput is the input for creating a topic.
 type CreateInput struct {
 	Name        string `json:"name" jsonschema:"Topic name (slug-like unique identifier),required"`
-	Title       string `json:"title,omitempty" jsonschema:"Topic display title"`
+	Title       string `json:"title,omitempty" jsonschema:"Topic display title,required"`
 	Description string `json:"description,omitempty" jsonschema:"Topic description"`
 }
 

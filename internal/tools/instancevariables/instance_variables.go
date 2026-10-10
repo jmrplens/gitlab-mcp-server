@@ -40,7 +40,7 @@ type GetInput struct {
 // CreateInput holds parameters for creating an instance CI/CD variable.
 type CreateInput struct {
 	Key          string `json:"key"                        jsonschema:"Variable key name,required"`
-	Value        string `json:"value"                      jsonschema:"Variable value"`
+	Value        string `json:"value"                      jsonschema:"Variable value,required"`
 	Description  string `json:"description,omitempty"      jsonschema:"Variable description"`
 	VariableType string `json:"variable_type,omitempty"    jsonschema:"Variable type: env_var or file"`
 	Protected    *bool  `json:"protected,omitempty"        jsonschema:"Only expose in protected branches/tags"`

@@ -172,6 +172,12 @@ const (
 		"and epic.list pins types to EPIC at group scope, so the filter would select epics by an association " +
 		"only a project's work items can have. Exposed on internal/tools/workitems, where the type is the " +
 		"caller's to choose"
+	// bitbucketAppPasswordPair is the reason the Bitbucket Cloud import
+	// publishes neither half of the app-password authentication client-go's
+	// options still carry. It is one literal rather than a concatenation, so
+	// the mutation tool finds no operator in a package-level initializer it
+	// could never report as covered.
+	bitbucketAppPasswordPair = "app-password authentication no current GitLab or Bitbucket accepts: GitLab 19.0 dropped bitbucket_username and bitbucket_app_password from POST /import/bitbucket (lib/api/import_bitbucket.rb at v19.0.0-ee), an earlier instance refuses the app password beside the bitbucket_api_token this action always sends (mutually_exclusive) and the username without the app password (all_or_none_of, both at v18.11.0-ee), and Atlassian disabled app passwords in June 2026"
 	// deploymentMergeRequestsInert is the reason three merge request list
 	// options are absent from the deployment merge request input.
 	deploymentMergeRequestsInert = "declared by GET /projects/:id/deployments/:deployment_id/merge_requests through " +
@@ -974,6 +980,12 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	// Deprecated params the current endpoint replaced.
 	"grouplabels.DeleteInput.name": "deprecated DELETE /groups/:id/labels name param; current endpoint uses label_id in path",
 	"grouplabels.UpdateInput.name": "deprecated PUT /groups/:id/labels name param; current endpoint uses label_id in path",
+	// The Bitbucket Cloud app-password pair, which no current GitLab or
+	// Bitbucket accepts: GitLab 19.0 dropped both from POST /import/bitbucket,
+	// an earlier instance refuses them beside the API token the action always
+	// sends, and Atlassian disabled app passwords in June 2026.
+	"importservice.ImportFromBitbucketCloudInput.bitbucket_username":     bitbucketAppPasswordPair,
+	"importservice.ImportFromBitbucketCloudInput.bitbucket_app_password": bitbucketAppPasswordPair,
 
 	// Project params client-go still models and GitLab no longer declares:
 	// neither POST /projects nor PUT /projects/:id carries them in the live

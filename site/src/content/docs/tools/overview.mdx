@@ -168,6 +168,8 @@ Set the mode with the `GITLAB_MCP_TOOL_SURFACE` environment variable (`dynamic`,
 
 Individual mode registers **one MCP tool per GitLab operation**: **{stats.tools.free} tools** on Free/CE, **{stats.tools.premium} tools** on self-managed Premium, **{stats.tools.ultimate_self_managed} tools** on self-managed Ultimate, or **{stats.tools.gitlab_com} tools** on GitLab.com Ultimate, where Orbit is available. This gives an AI assistant maximum granularity (every operation is a distinct, individually described tool) at the cost of significant context tokens spent listing and disambiguating tools during discovery.
 
+Each tool requires exactly the parameters its action requires on the meta-tool and dynamic surfaces, which follow what GitLab requires of the request the action sends, apart from a few the server fills in itself, keeps required so it never sends a null in place of a value, or asks for as a choice of two, such as a member named by `user_id` or `username`. A parameter GitLab fills in when it is left out, such as the `link_type` of an issue link, is optional in every mode, and one GitLab cannot do without, such as the commit `sha` of a cherry-pick, is required in every mode.
+
 <Facts>
 	<Fact kind="exposes">
 		one visible MCP tool per GitLab operation, each with its own typed input

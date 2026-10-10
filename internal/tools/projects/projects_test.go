@@ -158,16 +158,26 @@ func TestProjectCreateName_Conflict(t *testing.T) {
 	}
 }
 
-// TestProjectCreate_EmptyName verifies that Create returns an error
-// when called with an empty project name.
-func TestProjectCreate_EmptyName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// TestProjectCreate_NeitherNameNorPath_IsRefusedWithoutReachingGitLab
+// verifies that Create refuses a call naming neither a name nor a path before
+// anything is sent, with a message naming both. GitLab requires at least one
+// of them (at_least_one_of in lib/api/projects.rb), the schema says so with an
+// anyOf, and the meta surface checks only the root required list, so without
+// this the call would reach GitLab and come back as a 400 whose hint talks
+// about a name already taken.
+func TestProjectCreate_NeitherNameNorPath_IsRefusedWithoutReachingGitLab(t *testing.T) {
+	var sent atomic.Int32
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		sent.Add(1)
 		http.Error(w, "bad request", http.StatusBadRequest)
 	}))
 
-	_, err := Create(context.Background(), client, CreateInput{Name: ""})
-	if err == nil {
-		t.Fatal("Create() expected error for empty name, got nil")
+	_, err := Create(context.Background(), client, CreateInput{Visibility: testPrivate})
+	if err == nil || !strings.Contains(err.Error(), "name or path is required") {
+		t.Errorf("Create() error = %v, want one naming name or path as required", err)
+	}
+	if got := sent.Load(); got != 0 {
+		t.Errorf("requests sent = %d, want 0", got)
 	}
 }
 
@@ -3999,6 +4009,34 @@ func TestFormatListStarrersMarkdown_WithStarrers(t *testing.T) {
 // buildCreateOpts — additional branch coverage for optional fields
 // ---------------------------------------------------------------------------.
 
+// TestBuildCreateOpts_NameAndPath_EachSentOnlyWhenGiven verifies the project
+// is named by whichever of name and path the caller gave: GitLab declares both
+// optional and requires at least one (at_least_one_of in lib/api/projects.rb),
+// deriving the other, so an empty one is left out rather than sent as "".
+func TestBuildCreateOpts_NameAndPath_EachSentOnlyWhenGiven(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    CreateInput
+		wantName *string
+		wantPath *string
+	}{
+		{"name only", CreateInput{Name: "My Project"}, new("My Project"), nil},
+		{"path only", CreateInput{Path: "my-project"}, nil, new("my-project")},
+		{"both", CreateInput{Name: "My Project", Path: "my-project"}, new("My Project"), new("my-project")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := buildCreateOpts(tt.input)
+			if !reflect.DeepEqual(opts.Name, tt.wantName) {
+				t.Errorf("Name = %v, want %v", opts.Name, tt.wantName)
+			}
+			if !reflect.DeepEqual(opts.Path, tt.wantPath) {
+				t.Errorf("Path = %v, want %v", opts.Path, tt.wantPath)
+			}
+		})
+	}
+}
+
 // TestBuildCreateOpts_AllOptionalFields verifies BuildCreateOpts when all optional fields.
 func TestBuildCreateOpts_AllOptionalFields(t *testing.T) {
 	issuesEnabled := true
@@ -7441,15 +7479,19 @@ func TestDeleteTwoStep_StepTwoFails(t *testing.T) {
 	}
 }
 
-// TestCreate_ErrorBranches exercises Create 400 (bad request) and 409 (conflict) branches.
+// TestCreate_ErrorBranches exercises Create's 400 (bad request) and 409
+// (conflict) branches, each with the hint it adds. The call names a project,
+// since one naming neither a name nor a path is refused before it is sent and
+// would reach neither branch.
 func TestCreate_ErrorBranches(t *testing.T) {
 	tests := []struct {
 		name   string
 		status int
 		body   string
+		hint   string
 	}{
-		{"bad_request", http.StatusBadRequest, `{"message":"name is already taken"}`},
-		{"conflict", http.StatusConflict, `{"message":"project already exists"}`},
+		{"bad_request", http.StatusBadRequest, `{"message":"name is already taken"}`, "unique in the target namespace"},
+		{"conflict", http.StatusConflict, `{"message":"project already exists"}`, "already exists in the namespace"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -7458,11 +7500,35 @@ func TestCreate_ErrorBranches(t *testing.T) {
 				w.WriteHeader(tt.status)
 				_, _ = w.Write([]byte(tt.body))
 			}))
-			_, err := Create(context.Background(), client, CreateInput{})
-			if err == nil {
-				t.Fatal("expected error")
+			_, err := Create(context.Background(), client, CreateInput{Name: testRepoName})
+			if err == nil || !strings.Contains(err.Error(), tt.hint) {
+				t.Fatalf("Create() error = %v, want one carrying the hint %q", err, tt.hint)
 			}
 		})
+	}
+}
+
+// TestProjectCreate_PathAlone_IsSentWithoutAName verifies that a project
+// named by its path alone reaches GitLab carrying the path and no name, which
+// GitLab derives from the path, rather than being refused as a call naming
+// neither.
+func TestProjectCreate_PathAlone_IsSentWithoutAName(t *testing.T) {
+	var body map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":42,"name":"my-repo","path":"my-repo","path_with_namespace":"jmrplens/my-repo"}`)
+	}))
+
+	if _, err := Create(context.Background(), client, CreateInput{Path: "my-repo"}); err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	if body["path"] != "my-repo" {
+		t.Errorf("request path = %v, want my-repo", body["path"])
+	}
+	if _, sent := body["name"]; sent {
+		t.Errorf("request carried name = %v, want it left to GitLab", body["name"])
 	}
 }
 

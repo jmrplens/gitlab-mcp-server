@@ -1034,7 +1034,7 @@ func ListMRsByCommit(ctx context.Context, client *gitlabclient.Client, input MRs
 // CherryPickInput defines parameters for cherry-picking a commit.
 type CherryPickInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	SHA       string               `json:"sha"        jsonschema:"Commit SHA to cherry-pick"`
+	SHA       string               `json:"sha"        jsonschema:"Commit SHA to cherry-pick,required"`
 	Branch    string               `json:"branch"     jsonschema:"Target branch name,required"`
 	DryRun    bool                 `json:"dry_run,omitempty"  jsonschema:"If true, does not create the commit but checks for conflicts"`
 	Message   string               `json:"message,omitempty"  jsonschema:"Custom commit message (defaults to original)"`
@@ -1083,7 +1083,7 @@ func CherryPick(ctx context.Context, client *gitlabclient.Client, input CherryPi
 // RevertInput defines parameters for reverting a commit.
 type RevertInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	SHA       string               `json:"sha"        jsonschema:"Commit SHA to revert"`
+	SHA       string               `json:"sha"        jsonschema:"Commit SHA to revert,required"`
 	Branch    string               `json:"branch"     jsonschema:"Target branch name,required"`
 }
 

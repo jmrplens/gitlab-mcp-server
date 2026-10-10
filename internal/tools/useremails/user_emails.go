@@ -46,7 +46,7 @@ type DeleteOutput struct {
 // and keyset pagination parameters mirroring v2.ListEmailsForUserOptions
 // (which embeds v2.ListOptions).
 type ListForUserInput struct {
-	UserID int64 `json:"user_id" jsonschema:"GitLab user ID"`
+	UserID int64 `json:"user_id" jsonschema:"GitLab user ID,required"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
@@ -55,7 +55,7 @@ type ListForUserInput struct {
 
 // GetInput identifies an email by ID.
 type GetInput struct {
-	EmailID int64 `json:"email_id" jsonschema:"Email ID to retrieve"`
+	EmailID int64 `json:"email_id" jsonschema:"Email ID to retrieve,required"`
 }
 
 // AddInput holds parameters for adding an email to the current user.

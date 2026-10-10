@@ -41,7 +41,7 @@ type ListGroupInput struct {
 // membership level and not one a custom role may extend: the served prose used
 // to offer it, and GitLab refuses it.
 type CreateInstanceInput struct {
-	Name            string `json:"name"              jsonschema:"Name of the custom role,required"`
+	Name            string `json:"name,omitempty"    jsonschema:"Name of the custom role. GitLab names a role created without one"`
 	BaseAccessLevel int    `json:"base_access_level" jsonschema:"Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 0, 5 and 60 are not valid,required"`
 	Description     string `json:"description,omitempty" jsonschema:"Description of the custom role"`
 	Permissions
@@ -50,7 +50,7 @@ type CreateInstanceInput struct {
 // CreateGroupInput holds parameters for creating a group member role.
 type CreateGroupInput struct {
 	GroupID         toolutil.StringOrInt `json:"group_id"          jsonschema:"Group ID or URL-encoded path,required"`
-	Name            string               `json:"name"              jsonschema:"Name of the custom role,required"`
+	Name            string               `json:"name,omitempty"    jsonschema:"Name of the custom role. GitLab names a role created without one"`
 	BaseAccessLevel int                  `json:"base_access_level" jsonschema:"Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 0, 5 and 60 are not valid,required"`
 	Description     string               `json:"description,omitempty" jsonschema:"Description of the custom role"`
 	Permissions
@@ -223,8 +223,12 @@ func withCapturedPermissions(out Output, extra roleExtra) Output {
 // base_access_level, description, and permissions onto a [CreateInstanceInput].
 func buildCreateOpts(in CreateInstanceInput) *gl.CreateMemberRoleOptions {
 	opts := &gl.CreateMemberRoleOptions{
-		Name:            new(in.Name),
 		BaseAccessLevel: new(gl.AccessLevelValue(in.BaseAccessLevel)),
+	}
+	// GitLab declares the name optional and names a role created without
+	// one itself, so an empty name is left out rather than sent as "".
+	if in.Name != "" {
+		opts.Name = new(in.Name)
 	}
 	if in.Description != "" {
 		opts.Description = new(in.Description)
@@ -378,9 +382,6 @@ func CreateInstance(ctx context.Context, client *gitlabclient.Client, in CreateI
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
-	if in.Name == "" {
-		return Output{}, toolutil.ErrFieldRequired("name")
-	}
 	if in.BaseAccessLevel == 0 {
 		return Output{}, toolutil.ErrFieldRequired("base_access_level")
 	}
@@ -403,9 +404,6 @@ func CreateGroup(ctx context.Context, client *gitlabclient.Client, in CreateGrou
 	}
 	if in.GroupID.String() == "" {
 		return Output{}, toolutil.ErrFieldRequired("group_id")
-	}
-	if in.Name == "" {
-		return Output{}, toolutil.ErrFieldRequired("name")
 	}
 	if in.BaseAccessLevel == 0 {
 		return Output{}, toolutil.ErrFieldRequired("base_access_level")

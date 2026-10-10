@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -7191,6 +7192,48 @@ func TestDependencyHandlers_BlockingID_ReachesTheRequest(t *testing.T) {
 			t.Errorf("DELETE path = %q, want %q", path, want)
 		}
 	})
+}
+
+// TestDependencyHandlers_NoBlockingID_AreRefusedWithoutReachingGitLab holds
+// both dependency handlers to refusing a call that names no dependency before
+// anything is sent: a zero would go out as POST {"blocking_merge_request_id":0}
+// or DELETE .../blocks/0, both of which GitLab answers 404, which reads as a
+// merge request that does not exist rather than a parameter left out.
+func TestDependencyHandlers_NoBlockingID_AreRefusedWithoutReachingGitLab(t *testing.T) {
+	var sent atomic.Int32
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		sent.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	_, createErr := CreateDependency(t.Context(), client, DependencyInput{ProjectID: testProjectID, MRIID: 1})
+	deleteErr := DeleteDependency(t.Context(), client, DeleteDependencyInput{ProjectID: testProjectID, MRIID: 1})
+	for name, err := range map[string]error{"create": createErr, "delete": deleteErr} {
+		t.Run(name, func(t *testing.T) {
+			if err == nil || !strings.Contains(err.Error(), "blocking_merge_request_id is required") {
+				t.Errorf("error = %v, want one naming blocking_merge_request_id as required", err)
+			}
+		})
+	}
+	if got := sent.Load(); got != 0 {
+		t.Errorf("requests sent = %d, want 0", got)
+	}
+}
+
+// TestActionSpecs_Dependencies_RequireTheBlockingID asserts both dependency
+// actions publish blocking_merge_request_id as required on the route schema
+// all three surfaces read, since GitLab's delete route has it as its last
+// path segment and the create, of the two alternatives GitLab takes, can send
+// only this one.
+func TestActionSpecs_Dependencies_RequireTheBlockingID(t *testing.T) {
+	byTool := mergeRequestSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t))))
+	for _, tool := range []string{"gitlab_mr_dependency_create", "gitlab_mr_dependency_delete"} {
+		t.Run(tool, func(t *testing.T) {
+			required, _ := byTool[tool].Route.InputSchema["required"].([]string)
+			if !slices.Contains(required, "blocking_merge_request_id") {
+				t.Errorf("required = %v, want it to hold blocking_merge_request_id", required)
+			}
+		})
+	}
 }
 
 // mrListing is one of the three merge request listings, driven by the query

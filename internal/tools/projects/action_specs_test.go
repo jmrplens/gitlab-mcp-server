@@ -302,6 +302,27 @@ func TestActionSpecs_ProjectGetAndListGuidance(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_ProjectCreate_KeepsItsValueSetsBesideTheNameOrPathRule
+// verifies the create's schema carries both the anyOf GitLab's
+// at_least_one_of of name and path needs and the value sets of its enum
+// fields. The anyOf was first added by assigning the override list, which
+// threw away the value sets projectOptions had put there and left
+// resource_group_default_process_mode described in prose missing a value.
+func TestActionSpecs_ProjectCreate_KeepsItsValueSetsBesideTheNameOrPathRule(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	schema := projectActionSpecByTool(t, ActionSpecs(client, false), "gitlab_project_create").Route.InputSchema
+
+	branches, ok := schema["anyOf"].([]any)
+	if !ok || len(branches) != 2 {
+		t.Fatalf("anyOf = %v, want the name-or-path pair", schema["anyOf"])
+	}
+	if got := projectSchemaPropertyEnum(t, schema, "resource_group_default_process_mode"); !sameProjectStringSet(got, []string{"unordered", "oldest_first", "newest_first", "newest_ready_first"}) {
+		t.Fatalf("resource_group_default_process_mode enum = %v, want the four process modes", got)
+	}
+}
+
 // TestActionSpecs_NoGenericMetadata enforces the 1:1 R-META requirement that
 // every projects action exposes purpose-specific Usage, natural-language
 // aliases beyond the canonical/tool name, RelatedActions cross-links, and a

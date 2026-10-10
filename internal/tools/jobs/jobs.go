@@ -625,8 +625,8 @@ func GetArtifacts(ctx context.Context, client *gitlabclient.Client, input Artifa
 // DownloadArtifactsInput defines parameters for downloading artifacts by ref and job name.
 type DownloadArtifactsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	RefName   string               `json:"ref_name"   jsonschema:"Branch or tag name"`
-	JobName   string               `json:"job"        jsonschema:"Job name to download artifacts from"`
+	RefName   string               `json:"ref_name"   jsonschema:"Branch or tag name,required"`
+	JobName   string               `json:"job"        jsonschema:"Job name to download artifacts from,required"`
 }
 
 // DownloadArtifacts downloads the artifacts archive for the latest
@@ -644,10 +644,12 @@ func DownloadArtifacts(ctx context.Context, client *gitlabclient.Client, input D
 	if input.RefName == "" {
 		return ArtifactsOutput{}, errors.New("jobDownloadArtifacts: ref_name is required")
 	}
-	opts := &gl.DownloadArtifactsFileOptions{}
-	if input.JobName != "" {
-		opts.Job = new(input.JobName)
+	// GitLab requires the job on this route: the ref alone names a pipeline,
+	// and the job is what picks whose artifacts come back.
+	if input.JobName == "" {
+		return ArtifactsOutput{}, errors.New("jobDownloadArtifacts: job is required")
 	}
+	opts := &gl.DownloadArtifactsFileOptions{Job: new(input.JobName)}
 
 	reader, _, err := client.GL().Jobs.DownloadArtifactsFile(string(input.ProjectID), input.RefName, opts, gl.WithContext(ctx))
 	if err != nil {

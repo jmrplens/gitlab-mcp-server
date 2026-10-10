@@ -168,6 +168,8 @@ Define el modo con la variable de entorno `GITLAB_MCP_TOOL_SURFACE` (`dynamic`, 
 
 El modo individual registra **una herramienta MCP por operación de GitLab**: **{stats.tools.free} herramientas** en Free/CE, **{stats.tools.premium} herramientas** en Premium autoalojado, **{stats.tools.ultimate_self_managed} herramientas** en Ultimate autoalojado, o **{stats.tools.gitlab_com} herramientas** en GitLab.com Ultimate, donde Orbit está disponible. Esto ofrece al asistente la máxima granularidad (cada operación es una herramienta distinta y descrita individualmente) a costa de un consumo significativo de tokens de contexto al listar y desambiguar herramientas durante el descubrimiento.
 
+Cada herramienta exige exactamente los parámetros que su acción exige en las superficies de meta-herramientas y dinámica, que siguen lo que GitLab exige a la petición que envía la acción, salvo unos pocos que el servidor rellena por su cuenta, mantiene obligatorios para no enviar nunca un null en lugar de un valor, o pide como una elección entre dos, como un miembro indicado por `user_id` o `username`. Un parámetro que GitLab rellena cuando se omite, como el `link_type` de un enlace entre issues, es opcional en todos los modos, y uno sin el que GitLab no puede trabajar, como el `sha` del commit en un cherry-pick, es obligatorio en todos los modos.
+
 <Facts>
 	<Fact kind="exposes">
 		una herramienta MCP visible por operación de GitLab, cada una con su

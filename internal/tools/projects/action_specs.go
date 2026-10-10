@@ -52,7 +52,7 @@ const (
 // ActionSpecs returns canonical specs for project lifecycle and settings actions.
 func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.ActionSpec {
 	specs := []toolutil.ActionSpec{
-		projectCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_project_create"),
+		projectNamedCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_project_create"),
 		projectGetSpec(projectGetRoute(client)).
 			WithEmbeddedResource("gitlab://project/{project_id}"),
 		projectReadSpec("list", toolutil.RouteAction(client, List), toolProjectList),
@@ -247,6 +247,18 @@ func projectCreateSpec(name string, route toolutil.ActionRoute, individualTool s
 	return toolutil.NewCreateActionSpec(name, route, projectOptions(individualTool, extraTags...))
 }
 
+// projectNamedCreateSpec is projectCreateSpec for an action that creates a
+// project from [CreateInput]: GitLab declares name and path each optional and
+// requires at least one of them (at_least_one_of in lib/api/projects.rb),
+// which the anyOf says and a required list cannot.
+func projectNamedCreateSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
+	options := projectOptions(individualTool, extraTags...)
+	// Appended, since projectOptions has already put the value sets of the
+	// create's enum fields in this list.
+	options.InputSchemaOverrides = append(options.InputSchemaOverrides, toolutil.SchemaAnyOfRequired("name", "path"))
+	return toolutil.NewCreateActionSpec(name, route, options)
+}
+
 func projectMutationSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, projectOptions(individualTool, extraTags...))
 }
@@ -363,7 +375,7 @@ func decorateProjectMeta(options *toolutil.ActionSpecOptions, individualTool str
 // A flat, reviewable lookup table: one entry per project action.
 var projectActionMeta = map[string]projectActionMetaEntry{
 	"gitlab_project_create": {
-		usage:       "Create a new project in a namespace you can write to. Provide name (and optionally path, namespace_id, visibility, description). Use create_for_user to create on behalf of another user as admin.",
+		usage:       "Create a new project in a namespace you can write to. Provide name, path or both (GitLab derives the one left out), and optionally namespace_id, visibility, description. Use create_for_user to create on behalf of another user as admin.",
 		aliases:     []string{"create project", "new project", "add project", "make a repository"},
 		related:     []string{actionProjectGet, actionProjectUpdate, "project.create_for_user"},
 		description: "Create a new GitLab project. Returns: the created project with id, path_with_namespace, default_branch, visibility, and web URL. See also: gitlab_project_get, gitlab_project_update, gitlab_project_create_for_user.",

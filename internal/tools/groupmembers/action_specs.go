@@ -59,7 +59,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		groupMemberReadSpec(specMemberGet, toolutil.RouteAction(client, GetMember), "gitlab_group_member_get"),
 		groupMemberReadSpec(specMemberGetInherited, toolutil.RouteAction(client, GetInheritedMember), "gitlab_group_member_get_inherited"),
-		groupMemberCreateSpec(specMemberAdd, toolutil.RouteAction(client, AddMember), "gitlab_group_member_add"),
+		groupMemberAddSpec(client),
 		groupMemberUpdateSpec(specMemberEdit, toolutil.RouteAction(client, EditMember), "gitlab_group_member_edit"),
 		groupMemberDeleteSpec(specMemberRemove, toolutil.DestructiveAction(client, removeMemberOutput), "gitlab_group_member_remove"),
 		groupMemberCreateSpec(specMemberShare, toolutil.RouteAction(client, ShareGroup), "gitlab_group_share"),
@@ -133,6 +133,17 @@ func groupMemberCreateSpec(name string, route toolutil.ActionRoute, individualTo
 	options := groupMemberOptions(individualTool)
 	decorateGroupMemberMeta(&options, individualTool)
 	return toolutil.NewCreateActionSpec(name, route, options)
+}
+
+// groupMemberAddSpec is groupMemberCreateSpec plus the one constraint GitLab
+// puts on who is added: user_id and username are each optional and at least
+// one of them is required (at_least_one_of in lib/api/members.rb), which the
+// anyOf says and a required list cannot.
+func groupMemberAddSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	options := groupMemberOptions("gitlab_group_member_add")
+	decorateGroupMemberMeta(&options, "gitlab_group_member_add")
+	options.InputSchemaOverrides = append(options.InputSchemaOverrides, toolutil.SchemaAnyOfRequired("user_id", "username"))
+	return toolutil.NewCreateActionSpec(specMemberAdd, toolutil.RouteAction(client, AddMember), options)
 }
 
 func groupMemberUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

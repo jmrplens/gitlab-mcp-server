@@ -73,3 +73,39 @@ func TestProjectLabels_Lifecycle_CreateListUpdateDelete(t *testing.T) {
 		}
 	})
 }
+
+// TestProjectLabels_SelectedByNameAlone_UpdatesAndDeletes updates and then
+// deletes a label on every surface naming it by name and giving no
+// label_id. The schema takes either selector with an anyOf rather than requiring
+// label_id (issue 1100); without an ID the handler puts the name in the path,
+// PUT and DELETE /projects/:id/labels/:name, which GitLab documents as taking
+// the name or the id of the label, where an empty label_id in the path used
+// to address no label at all.
+func TestProjectLabels_SelectedByNameAlone_UpdatesAndDeletes(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("labelnames"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		params := map[string]any{"project_id": project.IDParam()}
+		name := e.Name("label")
+
+		created := harness.Do[labels.Output](s, actionProjectLabelCreate, withParams(params, map[string]any{"name": name, "color": labelColorBlue}))
+		if created.ID == 0 || created.Name != name {
+			e.T.Fatalf("label_create answered %+v, want the label %q with an ID", created, name)
+		}
+		byName := withParams(params, map[string]any{"name": name})
+
+		updated := harness.Do[labels.Output](s, actionProjectLabelUpdate, withParams(byName, map[string]any{"description": "selected by its name"}))
+		if updated.ID != created.ID || updated.Description != "selected by its name" {
+			e.T.Errorf("label_update by name answered %+v, want label %d with the new description", updated, created.ID)
+		}
+
+		harness.DoVoid(s, actionProjectLabelDelete, byName)
+		remaining := harness.Do[labels.ListOutput](s, actionProjectLabelList, params)
+		if containsID(labelIDs(remaining.Labels), created.ID) {
+			e.T.Errorf("label %d is still listed after its delete by name", created.ID)
+		}
+	})
+}

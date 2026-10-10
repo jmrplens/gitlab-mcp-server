@@ -4014,7 +4014,9 @@ version `go.mod` pins, and v3.16.0, tagged that day
   retires with the tag: `value` then becomes optional in the handler, in its
   check (`pipeline_schedules.go:522`) and in the `required` of its input
   schema (the `jsonschema` tag at `:507`, and the golden snapshots that carry
-  it), as GitLab declares it. A
+  it), as GitLab declares it, and its `sdk-sends-null` declaration in
+  `cmd/audit_1to1/internal/required/declarations.go` goes with them, since
+  `make audit-1to1-required` reports a declaration that answers nothing. A
   handler could also get past the tag today, contrary to what this entry first
   said, in two ways: a request option, since client-go runs the request
   options after it has marshalled the body (`NewRequestToURL` in `gitlab.go`)
@@ -4106,9 +4108,14 @@ all three surfaces, and the five scenarios behind them
 `TestGroupSharing_TwoSurfaces_ShareAndUnshare` and
 `TestProjectSharing_WithGroup_ListsAndRemoves`) name no expiry, so each call
 sent `"expires_at": null` and GitLab created the membership or the share. The
-`link_type`, `label_id` and `value` rows are read and not measured: the issue
-link scenario always names a type, and the other two handlers always send
-their field.
+`label_id` and `value` rows are read and not measured: those two handlers
+always send their field, and `pipelineschedules.EditVariable` keeps `value`
+required in its schema for that reason, a declaration of the requiredness gate
+(`make audit-1to1-required`) saying why. The `link_type` row is read, and the
+issue link scenario stopped naming a type when
+[issue 1100](https://github.com/jmrplens/gitlab-mcp-server/issues/1100) made
+`link_type` optional on every surface, so the next Docker run measures it
+too.
 
 **Two of them are a split tag, not a missing one**, which is worth separating
 because it reads as a fix somebody began and did not finish:

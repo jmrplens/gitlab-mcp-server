@@ -116,7 +116,7 @@ var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 			"See also: gitlab_get_project_export_status, gitlab_import_project_from_file.",
 	},
 	"gitlab_import_project_from_file": {
-		usage:   "Import a project from a GitLab export archive (.tar.gz) supplied as a local file path or base64 content. Optionally override the namespace, name, path, and project attributes via override_params. Poll project.import_status afterward.",
+		usage:   "Import a project from a GitLab export archive (.tar.gz) supplied as a local file path or base64 content, at the URL path the new project takes. Optionally set the namespace and name, and override project attributes via override_params. Poll project.import_status afterward.",
 		aliases: []string{"import project", "import project from file", "restore project from export", "upload project archive"},
 		related: []string{actionImportStatus, actionExportDownload, actionProjectGet},
 		guidance: map[string]toolutil.ParameterGuidance{

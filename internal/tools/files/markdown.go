@@ -145,7 +145,7 @@ func blameRangeHeading(index int, r BlameRangeOutput) string {
 // shortSHA is a git object id abbreviated to the eight characters a reader
 // compares by, or the whole id when it is shorter.
 func shortSHA(sha string) string {
-	return sha[:minLen(len(sha), 8)]
+	return sha[:min(len(sha), 8)]
 }
 
 // FormatMetaDataMarkdown renders a file's metadata as a card, with no body.

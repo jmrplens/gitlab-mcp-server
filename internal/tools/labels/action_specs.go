@@ -154,7 +154,13 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 			},
 		}
 	case specLabelUpdate:
-		options.Usage = "Update a project label's name, color, description, priority, or archived state. Identify the label by label_id (ID or name). At least one mutable field is required."
+		// The label is selected by label_id, or by name when there is no
+		// label_id, and the handler puts whichever it took in the path of
+		// PUT /projects/:id/labels/:name, which GitLab requires. One of the
+		// two is therefore needed and neither on its own, which is what the
+		// anyOf says and a required list cannot.
+		options.InputSchemaOverrides = append(options.InputSchemaOverrides, toolutil.SchemaAnyOfRequired(paramLabelID, "name"))
+		options.Usage = "Update a project label's name, color, description, priority, or archived state. Identify the label by label_id (ID or name) or by name. At least one mutable field is required."
 		options.Aliases = []string{"update label", "edit label", "rename label", "recolor label"}
 		options.RelatedActions = []string{actionLabelGet, actionLabelList, actionLabelDelete}
 		options.IndividualTool.Description = "Update an existing project label (new_name, color, description, priority, archived). Returns: the updated label (id, name, color, text_color, description, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_list, gitlab_label_delete."
@@ -166,7 +172,10 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 			},
 		}
 	case specLabelDelete:
-		options.Usage = "Delete a project label by label_id (ID or name). Destructive and irreversible. Group-inherited labels must be deleted at the group level."
+		// The same choice of label_id or name as the update, for DELETE
+		// /projects/:id/labels/:name.
+		options.InputSchemaOverrides = append(options.InputSchemaOverrides, toolutil.SchemaAnyOfRequired(paramLabelID, "name"))
+		options.Usage = "Delete a project label by label_id (ID or name) or by name. Destructive and irreversible. Group-inherited labels must be deleted at the group level."
 		options.Aliases = []string{"delete label", "remove label", "drop label"}
 		options.RelatedActions = []string{actionLabelList, actionLabelGet, actionLabelCreate}
 		options.IndividualTool.Description = "Delete a project label by ID or name. Destructive: the label is removed from the project and unassigned from issues and merge requests. Returns: a deletion confirmation. See also: gitlab_label_list, gitlab_label_get, gitlab_label_create."

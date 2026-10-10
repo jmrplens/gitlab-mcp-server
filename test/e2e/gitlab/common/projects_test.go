@@ -70,3 +70,28 @@ func TestProject_Lifecycle_CreateGetUpdateDelete(t *testing.T) {
 		}
 	})
 }
+
+// TestProject_CreateWithPathAlone_GitLabNamesItFromThePath creates a project
+// on every surface giving a path and no name. GitLab takes a name, a path or
+// both and derives the one left out, which the schema says with an anyOf
+// instead of requiring the name (issue 1100), and the handler leaves the name
+// out of the request rather than sending it empty.
+func TestProject_CreateWithPathAlone_GitLabNamesItFromThePath(t *testing.T) {
+	e := harness.New(t)
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		path := e.Name("bypath")
+
+		created := harness.Do[projects.Output](s, actionProjectCreate, map[string]any{"path": path, "visibility": "private"})
+		if created.ID == 0 || created.Path != path {
+			e.T.Fatalf("project create answered %+v, want a project at the path %q with an ID", created, path)
+		}
+		e.Defer("project "+created.PathWithNamespace, func(ctx context.Context) error {
+			return fixture.DeleteProject(ctx, e.Client(), created.ID, created.PathWithNamespace)
+		})
+		if created.Name == "" {
+			e.T.Errorf("project create answered no name for %q, want the one GitLab derives from the path", path)
+		}
+	})
+}

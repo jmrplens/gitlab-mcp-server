@@ -1255,10 +1255,8 @@ func hookEventFlags() map[string]HookInput {
 func TestHookWrites_EachFlagReachesTheRequestOnItsOwn(t *testing.T) {
 	for key, input := range hookEventFlags() {
 		t.Run("add/"+key, func(t *testing.T) {
-			add := input
-			add.URL = testHookURL
 			body := recordedJSONBody(t, http.StatusCreated, groupHookJSON, func(client *gitlabclient.Client) error {
-				_, err := AddHook(context.Background(), client, AddHookInput{GroupID: "99", HookInput: add})
+				_, err := AddHook(context.Background(), client, AddHookInput{GroupID: "99", URL: testHookURL, HookInput: input})
 				return err
 			})
 			want := map[string]any{"url": testHookURL, key: true}

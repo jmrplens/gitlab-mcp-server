@@ -31,8 +31,8 @@ type CreateInput struct {
 // UpdateInput defines parameters for updating a label.
 type UpdateInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id"            jsonschema:"Project ID or URL-encoded path,required"`
-	LabelID     toolutil.StringOrInt `json:"label_id"              jsonschema:"Label ID or name,required"`
-	Name        string               `json:"name,omitempty"        jsonschema:"Label name to update (alternative to label_id for selecting the label by name)"`
+	LabelID     toolutil.StringOrInt `json:"label_id,omitempty"    jsonschema:"Label ID or name. Give this or name"`
+	Name        string               `json:"name,omitempty"        jsonschema:"Name of the label to update, used to select it when label_id is not given"`
 	NewName     string               `json:"new_name,omitempty"    jsonschema:"New label name"`
 	Color       string               `json:"color,omitempty"       jsonschema:"New label color in hex format"`
 	Description string               `json:"description,omitempty" jsonschema:"New label description"`
@@ -48,8 +48,8 @@ type UpdateInput struct {
 // DeleteInput defines parameters for deleting a label.
 type DeleteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id"     jsonschema:"Project ID or URL-encoded path,required"`
-	LabelID   toolutil.StringOrInt `json:"label_id"       jsonschema:"Label ID or name,required"`
-	Name      string               `json:"name,omitempty" jsonschema:"Label name to delete (alternative to label_id for selecting the label by name)"`
+	LabelID   toolutil.StringOrInt `json:"label_id,omitempty" jsonschema:"Label ID or name. Give this or name"`
+	Name      string               `json:"name,omitempty"     jsonschema:"Name of the label to delete, used to select it when label_id is not given"`
 }
 
 // SubscribeInput defines parameters for subscribing/unsubscribing to a label.
@@ -191,6 +191,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.ProjectID == "" {
 		return Output{}, errors.New("labelUpdate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
+	if input.LabelID == "" && input.Name == "" {
+		return Output{}, errors.New("labelUpdate: label_id or name is required to select the label")
+	}
 	opts := &gl.UpdateLabelOptions{}
 	if input.Name != "" {
 		opts.Name = new(input.Name)
@@ -224,7 +227,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		opts.Archived = input.Archived
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	l, _, err := client.GL().Labels.UpdateLabel(string(input.ProjectID), string(input.LabelID), opts, gl.WithContext(ctx))
+	l, _, err := client.GL().Labels.UpdateLabel(string(input.ProjectID), labelSelector(input.LabelID, input.Name), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("labelUpdate", err, http.StatusBadRequest,
 			"verify label_id (numeric ID or name) with project.label_list; new_name must be unique; color must be 6-digit hex (e.g. #FF0000)")
@@ -242,16 +245,35 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	if input.ProjectID == "" {
 		return errors.New("labelDelete: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
+	if input.LabelID == "" && input.Name == "" {
+		return errors.New("labelDelete: label_id or name is required to select the label")
+	}
 	delOpts := &gl.DeleteLabelOptions{}
 	if input.Name != "" {
 		delOpts.Name = new(input.Name)
 	}
-	_, err := client.GL().Labels.DeleteLabel(string(input.ProjectID), string(input.LabelID), delOpts, gl.WithContext(ctx))
+	_, err := client.GL().Labels.DeleteLabel(string(input.ProjectID), labelSelector(input.LabelID, input.Name), delOpts, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("labelDelete", err, http.StatusForbidden,
 			"deleting project labels requires Maintainer or Owner role; group-inherited labels must be deleted at the group level")
 	}
 	return nil
+}
+
+// labelSelector is the label argument client-go takes for an update or a
+// delete: label_id when the caller gave one, and the name otherwise. client-go
+// puts any non-nil value in the path, so either reaches PUT or DELETE
+// /projects/:id/labels/:name, which GitLab documents as taking the name or
+// the id of the label. Handed nil, client-go would select the label by the
+// name in the body or the query instead, through the collection route that
+// GitLab 12.4 retired and doc/api/labels.md no longer lists; handed an empty
+// string, it named a label called nothing at /labels/. The handlers refuse a
+// call carrying neither before this is reached.
+func labelSelector(labelID toolutil.StringOrInt, name string) string {
+	if labelID == "" {
+		return name
+	}
+	return string(labelID)
 }
 
 // Subscribe subscribes the authenticated user to a label to receive

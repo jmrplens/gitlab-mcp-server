@@ -162,11 +162,12 @@ func GetGroupDatadog(ctx context.Context, client *gitlabclient.Client, input Get
 // SetGroupDatadog (mutate).
 
 // SetGroupDatadogInput is the input for creating or updating the Datadog
-// integration of a group. At least one Datadog field must be set, or
-// UseInheritedSettings=true to inherit settings from an ancestor group.
+// integration of a group. APIKey is required on every call, inheriting an
+// ancestor's settings with UseInheritedSettings=true included; every other
+// setting is optional.
 type SetGroupDatadogInput struct {
 	GroupID              toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	APIKey               string               `json:"api_key,omitempty" jsonschema:"Datadog API key (write-only. Never returned by the get endpoint)"`
+	APIKey               string               `json:"api_key,omitempty" jsonschema:"Datadog API key (write-only. Never returned by the get endpoint). GitLab requires it on every update,required"`
 	APIURL               string               `json:"api_url,omitempty" jsonschema:"Datadog API URL (e.g. https://api.datadoghq.com)"`
 	DatadogEnv           string               `json:"datadog_env,omitempty" jsonschema:"Datadog env tag forwarded with every log/metric"`
 	DatadogService       string               `json:"datadog_service,omitempty" jsonschema:"Datadog service tag forwarded with every log/metric"`
@@ -183,14 +184,12 @@ type SetGroupDatadogOutput struct {
 	Integration GroupDatadogItem `json:"integration"`
 }
 
-// buildGroupDatadogOptions maps the tool input onto the SDK options struct,
-// sending only the fields the caller actually set (empty strings and nil
+// buildGroupDatadogOptions maps the tool input onto the SDK options struct.
+// The API key, which SetGroupDatadog has already required, is always sent;
+// every other field only when the caller set it (empty strings and nil
 // pointers are omitted so unset fields are never overwritten server-side).
 func buildGroupDatadogOptions(input SetGroupDatadogInput) *gl.GroupDatadogIntegrationOptions {
-	opts := &gl.GroupDatadogIntegrationOptions{}
-	if input.APIKey != "" {
-		opts.APIKey = new(input.APIKey)
-	}
+	opts := &gl.GroupDatadogIntegrationOptions{APIKey: new(input.APIKey)}
 	if input.APIURL != "" {
 		opts.APIURL = new(input.APIURL)
 	}
@@ -221,18 +220,19 @@ func buildGroupDatadogOptions(input SetGroupDatadogInput) *gl.GroupDatadogIntegr
 // SetGroupDatadog creates or updates the Datadog integration for a group.
 // Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com).
 func SetGroupDatadog(ctx context.Context, client *gitlabclient.Client, input SetGroupDatadogInput) (SetGroupDatadogOutput, error) {
-	useInherited := input.UseInheritedSettings != nil && *input.UseInheritedSettings
-	if !useInherited && input.APIKey == "" && input.APIURL == "" &&
-		input.DatadogEnv == "" && input.DatadogService == "" && input.DatadogSite == "" &&
-		input.DatadogTags == "" && input.DatadogCIVisibility == nil && input.ArchiveTraceEvents == nil {
+	// PUT /groups/:id/integrations/datadog requires api_key on every call,
+	// inheriting an ancestor's settings included (requires in
+	// lib/api/integrations/integratable_operations.rb), so a call without
+	// one is refused here rather than by GitLab's 400.
+	if input.APIKey == "" {
 		return SetGroupDatadogOutput{}, toolutil.WrapErrWithMessage("set_group_datadog_integration",
-			toolutil.ErrFieldRequired("at least one of: api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events, use_inherited_settings=true"))
+			toolutil.ErrFieldRequired("api_key"))
 	}
 
 	integration, _, err := client.GL().Integrations.SetGroupDatadogIntegration(string(input.GroupID), buildGroupDatadogOptions(input), gl.WithContext(ctx))
 	if err != nil {
 		return SetGroupDatadogOutput{}, toolutil.WrapErrWithStatusHint("set_group_datadog_integration", err, http.StatusForbidden,
-			"requires Owner role on the group and GitLab Premium/Ultimate (self-managed EE or GitLab.com); verify group_id with group.get; provide at least one of api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events, or use_inherited_settings=true")
+			"requires Owner role on the group and GitLab Premium/Ultimate (self-managed EE or GitLab.com); verify group_id with group.get")
 	}
 	if integration == nil {
 		return SetGroupDatadogOutput{}, toolutil.WrapErrWithMessage("set_group_datadog_integration",

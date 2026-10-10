@@ -2,8 +2,8 @@
 
 // integrations_test.go covers the group-level Datadog integration, the one
 // group integration with actions of its own: set it with a placeholder key,
-// read it back, delete it, and show that a set naming no field is refused
-// before GitLab is asked.
+// read it back, delete it, and show that a set without the api_key GitLab
+// requires on every update is refused before GitLab is asked.
 //
 // The key is a placeholder of the shape GitLab validates and nothing ever
 // sends to Datadog: GitLab stores it without contacting Datadog, so the set
@@ -29,7 +29,10 @@ const placeholderDatadogKey = "0123456789abcdef0123456789abcdef"
 
 // TestGroupDatadogIntegration_Lifecycle_SetsReadsAndDeletes walks the
 // integration of a fresh group through set, get and delete on every
-// surface, and asks for a set with nothing to set.
+// surface, and asks for a set without the API key. Each surface refuses that
+// set for want of api_key, the dynamic and meta dispatchers in their missing
+// parameter sentence and the individual tool in its schema validation, so the
+// field's name is what all three are held to.
 //
 // Replaces: TestGroupDatadogIntegration
 func TestGroupDatadogIntegration_Lifecycle_SetsReadsAndDeletes(t *testing.T) {
@@ -40,8 +43,8 @@ func TestGroupDatadogIntegration_Lifecycle_SetsReadsAndDeletes(t *testing.T) {
 		group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("datadog"))
 		params := map[string]any{"group_id": group.IDParam()}
 
-		refused := harness.ExpectToolError(s, actionGroupDatadogSet, params, "at least one of")
-		e.T.Logf("a set naming no field is refused before any request: %s", firstLine(refused))
+		refused := harness.ExpectToolError(s, actionGroupDatadogSet, params, "api_key")
+		e.T.Logf("a set without the API key is refused before any request: %s", firstLine(refused))
 
 		set := harness.Do[integrations.SetGroupDatadogOutput](s, actionGroupDatadogSet, withParams(params, map[string]any{"api_key": placeholderDatadogKey}))
 		e.T.Logf("set answered %+v", set)

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -181,10 +182,10 @@ func TestImportFromBitbucketCloud(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"name":"bb-repo","full_path":"ns/bb-repo","full_name":"ns / bb-repo","import_source":"bitbucket.org/user/repo","import_status":"scheduled","human_import_status_name":"scheduled"}`)
 	}))
 	out, err := ImportFromBitbucketCloud(t.Context(), client, ImportFromBitbucketCloudInput{
-		BitbucketUsername:    "user",
-		BitbucketAppPassword: "pass",
-		RepoPath:             "user/repo",
-		TargetNamespace:      testNamespace,
+		BitbucketAPIToken: "token-secret",
+		BitbucketEmail:    "user@example.com",
+		RepoPath:          "user/repo",
+		TargetNamespace:   testNamespace,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -209,7 +210,6 @@ func TestImportFromBitbucketCloud_APIToken(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"name":"bb-repo","full_path":"ns/bb-repo","import_status":"scheduled"}`)
 	}))
 	_, err := ImportFromBitbucketCloud(t.Context(), client, ImportFromBitbucketCloudInput{
-		BitbucketUsername: "user",
 		BitbucketAPIToken: "token-secret",
 		BitbucketEmail:    "user@example.com",
 		RepoPath:          "user/repo",
@@ -243,10 +243,10 @@ func TestImportFromBitbucketCloud_Validation(t *testing.T) {
 		input   ImportFromBitbucketCloudInput
 		wantErr string
 	}{
-		{"missing username", ImportFromBitbucketCloudInput{RepoPath: "u/r", TargetNamespace: testNamespace}, "bitbucket_username"},
-		{"missing repo_path", ImportFromBitbucketCloudInput{BitbucketUsername: "u", TargetNamespace: testNamespace}, "repo_path"},
-		{"missing target_namespace", ImportFromBitbucketCloudInput{BitbucketUsername: "u", RepoPath: "u/r"}, "target_namespace"},
-		{"api_token without email", ImportFromBitbucketCloudInput{BitbucketUsername: "u", RepoPath: "u/r", TargetNamespace: testNamespace, BitbucketAPIToken: "tok"}, "bitbucket_email"},
+		{"missing api token", ImportFromBitbucketCloudInput{BitbucketEmail: "u@example.com", RepoPath: "u/r", TargetNamespace: testNamespace}, "bitbucket_api_token"},
+		{"missing email", ImportFromBitbucketCloudInput{BitbucketAPIToken: "tok", RepoPath: "u/r", TargetNamespace: testNamespace}, "bitbucket_email"},
+		{"missing repo_path", ImportFromBitbucketCloudInput{BitbucketAPIToken: "tok", BitbucketEmail: "u@example.com", TargetNamespace: testNamespace}, "repo_path"},
+		{"missing target_namespace", ImportFromBitbucketCloudInput{BitbucketAPIToken: "tok", BitbucketEmail: "u@example.com", RepoPath: "u/r"}, "target_namespace"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -266,10 +266,10 @@ func TestImportFromBitbucketCloud_Error(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
 	}))
 	_, err := ImportFromBitbucketCloud(t.Context(), client, ImportFromBitbucketCloudInput{
-		BitbucketUsername:    "user",
-		BitbucketAppPassword: "pass",
-		RepoPath:             "user/repo",
-		TargetNamespace:      testNamespace,
+		BitbucketAPIToken: "token-secret",
+		BitbucketEmail:    "user@example.com",
+		RepoPath:          "user/repo",
+		TargetNamespace:   testNamespace,
 	})
 	if err == nil {
 		t.Fatal(errExpectedErr)
@@ -448,11 +448,11 @@ func TestImportFromBitbucketCloud_WithOptionalFields(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ImportFromBitbucketCloud(t.Context(), client, ImportFromBitbucketCloudInput{
-		BitbucketUsername:    "user",
-		BitbucketAppPassword: "pass",
-		RepoPath:             "user/repo",
-		TargetNamespace:      "ns",
-		NewName:              "bb-new",
+		BitbucketAPIToken: "token-secret",
+		BitbucketEmail:    "user@example.com",
+		RepoPath:          "user/repo",
+		TargetNamespace:   "ns",
+		NewName:           "bb-new",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -701,10 +701,10 @@ func TestImportService_EveryImportReachesItsEndpoint(t *testing.T) {
 		}},
 		{name: "import_bitbucket_cloud", call: func() error {
 			_, err := ImportFromBitbucketCloud(t.Context(), client, ImportFromBitbucketCloudInput{
-				BitbucketUsername:    "user",
-				BitbucketAppPassword: "pass",
-				RepoPath:             "user/repo",
-				TargetNamespace:      "ns",
+				BitbucketAPIToken: "token-secret",
+				BitbucketEmail:    "user@example.com",
+				RepoPath:          "user/repo",
+				TargetNamespace:   "ns",
 			})
 			return err
 		}},
@@ -910,6 +910,44 @@ func assertImportFieldAbsent(t *testing.T, sent map[string]any, field string) {
 	}
 }
 
+// TestImportFromBitbucketCloud_SendsTheAPITokenPairAndNoAppPassword asserts
+// an import authenticates with the API token and the email it belongs to, and
+// carries neither the username nor the app password of the authentication
+// GitLab 19.0 removed, not even as an empty string.
+func TestImportFromBitbucketCloud_SendsTheAPITokenPairAndNoAppPassword(t *testing.T) {
+	const respBody = `{"id":2,"name":"bb-repo","full_path":"ns/bb-repo","import_status":"scheduled"}`
+	sent := captureImportRequest(t, "/api/v4/import/bitbucket", respBody, func(client *gitlabclient.Client) error {
+		_, err := ImportFromBitbucketCloud(t.Context(), client, ImportFromBitbucketCloudInput{
+			BitbucketAPIToken: "token-secret",
+			BitbucketEmail:    "user@example.com",
+			RepoPath:          "user/repo",
+			TargetNamespace:   testNamespace,
+		})
+		return err
+	})
+	assertImportFieldAbsent(t, sent, "bitbucket_username")
+	assertImportFieldAbsent(t, sent, "bitbucket_app_password")
+	assertImportFieldSent(t, sent, "bitbucket_api_token", "token-secret")
+	assertImportFieldSent(t, sent, "bitbucket_email", "user@example.com")
+}
+
+// TestImportFromBitbucketCloudInput_PublishesNoAppPasswordCredentials asserts
+// the input offers no bitbucket_username or bitbucket_app_password. Neither
+// can authenticate an import any longer: GitLab 19.0 dropped both from POST
+// /import/bitbucket (lib/api/import_bitbucket.rb at v19.0.0-ee), an earlier
+// instance refuses an app password beside the API token this action always
+// sends (mutually_exclusive at v18.11.0-ee) and a username without one
+// (all_or_none_of), and Atlassian disabled app passwords in June 2026.
+// Published, they could only make a call fail or be ignored.
+func TestImportFromBitbucketCloudInput_PublishesNoAppPasswordCredentials(t *testing.T) {
+	for field := range reflect.TypeFor[ImportFromBitbucketCloudInput]().Fields() {
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if name == "bitbucket_username" || name == "bitbucket_app_password" {
+			t.Errorf("field %s publishes %q, which no current Bitbucket or GitLab accepts", field.Name, name)
+		}
+	}
+}
+
 // TestImportFromBitbucketCloud_NewName_TravelsOnlyWhenTheCallerGaveOne asserts
 // the new_name guard both ways: the name a caller asked for reaches GitLab, and
 // a caller who asked for none sends no new_name at all.
@@ -923,10 +961,10 @@ func assertImportFieldAbsent(t *testing.T, sent map[string]any, field string) {
 func TestImportFromBitbucketCloud_NewName_TravelsOnlyWhenTheCallerGaveOne(t *testing.T) {
 	const respBody = `{"id":2,"name":"bb-new","full_path":"ns/bb-new","import_status":"scheduled"}`
 	base := ImportFromBitbucketCloudInput{
-		BitbucketUsername:    "user",
-		BitbucketAppPassword: "pass",
-		RepoPath:             "user/repo",
-		TargetNamespace:      testNamespace,
+		BitbucketAPIToken: "token-secret",
+		BitbucketEmail:    "user@example.com",
+		RepoPath:          "user/repo",
+		TargetNamespace:   testNamespace,
 	}
 
 	t.Run("given", func(t *testing.T) {

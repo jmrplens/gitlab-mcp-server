@@ -1354,6 +1354,10 @@ func TestStringFieldsRequired_Validation(t *testing.T) {
 			_, e := DownloadArtifacts(ctx, client, DownloadArtifactsInput{ProjectID: pid, JobName: "build"})
 			return e
 		}},
+		{"DownloadArtifacts_job", "job is required", func() error {
+			_, e := DownloadArtifacts(ctx, client, DownloadArtifactsInput{ProjectID: pid, RefName: "main"})
+			return e
+		}},
 		{"DownloadSingleArtifact_artifact_path", "artifact_path", func() error {
 			_, e := DownloadSingleArtifact(ctx, client, SingleArtifactInput{ProjectID: pid, JobID: 100})
 			return e
@@ -2019,7 +2023,7 @@ func TestDownloadArtifacts_APIError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
 	}))
 	_, err := DownloadArtifacts(context.Background(), client, DownloadArtifactsInput{
-		ProjectID: "42", RefName: "main",
+		ProjectID: "42", RefName: "main", JobName: "build",
 	})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
@@ -2033,7 +2037,7 @@ func TestDownloadArtifacts_CancelledContext(t *testing.T) {
 	}))
 	ctx := testutil.CancelledCtx(t)
 	_, err := DownloadArtifacts(ctx, client, DownloadArtifactsInput{
-		ProjectID: "42", RefName: "main",
+		ProjectID: "42", RefName: "main", JobName: "build",
 	})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)

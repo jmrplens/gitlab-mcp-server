@@ -15,7 +15,7 @@ type SetJiraInput struct {
 	ProjectID                    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	URL                          string               `json:"url" jsonschema:"Jira instance base URL,required"`
 	Username                     string               `json:"username,omitempty" jsonschema:"Jira username"`
-	Password                     string               `json:"password,omitempty" jsonschema:"Jira password or API token"`
+	Password                     string               `json:"password,omitempty" jsonschema:"Jira password or API token. GitLab requires it on every update,required"`
 	Active                       *bool                `json:"active,omitempty" jsonschema:"Enable or disable the integration"`
 	APIURL                       string               `json:"api_url,omitempty" jsonschema:"Jira API URL (overrides base URL)"`
 	JiraAuthType                 *int64               `json:"jira_auth_type,omitempty" jsonschema:"Jira auth type (0=basic, 1=token)"`

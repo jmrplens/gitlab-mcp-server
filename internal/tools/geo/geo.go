@@ -15,8 +15,8 @@ import (
 type CreateInput struct {
 	Primary                          *bool     `json:"primary,omitempty"                            jsonschema:"Whether this is a primary site"`
 	Enabled                          *bool     `json:"enabled,omitempty"                            jsonschema:"Whether the site is enabled"`
-	Name                             *string   `json:"name,omitempty"                               jsonschema:"Unique name of the Geo site"`
-	URL                              *string   `json:"url,omitempty"                                jsonschema:"External URL of the Geo site"`
+	Name                             *string   `json:"name,omitempty"                               jsonschema:"Unique name of the Geo site,required"`
+	URL                              *string   `json:"url,omitempty"                                jsonschema:"External URL of the Geo site,required"`
 	InternalURL                      *string   `json:"internal_url,omitempty"                       jsonschema:"Internal URL of the Geo site"`
 	FilesMaxCapacity                 *int64    `json:"files_max_capacity,omitempty"                 jsonschema:"Max number of LFS/attachment backfill downloads"`
 	ReposMaxCapacity                 *int64    `json:"repos_max_capacity,omitempty"                 jsonschema:"Max number of concurrent repository backfill syncs"`
