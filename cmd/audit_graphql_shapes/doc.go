@@ -93,14 +93,12 @@
 // type that unmarshals itself is trusted with its own decoding and walked no
 // further.
 //
-// One limit sits outside the walk altogether. It loads only the packages under
+// One limit sits outside this run altogether. It loads only the packages under
 // ./internal, so it sees only documents this repository's source writes; the
 // operations client-go builds have their text and their decoder in the SDK,
-// where there is nothing here to pair, and R-PATH cannot see them either
-// because a GraphQL-only endpoint has no REST operation in GitLab's OpenAPI
-// record. The report names that set, read from the committed request
-// inventory, rather than leaving a reader to infer it from a package list that
-// happens to be short.
+// where there is nothing here to pair. The report names that set, read from the
+// committed request inventory, and the client-go run below asks the same
+// questions of it.
 //
 // It reports and does not gate. A field GitLab offers that this server does
 // not surface is a candidate for the surface rather than a defect in it,
@@ -120,10 +118,64 @@
 // here: an excuse that outlives what it excused is a claim about the tree that
 // is no longer true.
 //
+// # Documents assembled before they are sent
+//
+// A document written as the format of a fmt.Sprintf call, or as the text a
+// text/template set renders into a builder whose String the request is given,
+// is paired through the rendering the document inventory makes of it
+// (graphqldocs.Assembly), under the name the call reaches it by. A shell the
+// inventory could not render is a problem naming the inventory's reason, and
+// each step of following a builder to its template set (the one Execute call
+// that writes it, the package variable that call executes, the text that
+// variable's set is parsed from) fails with a reason of its own.
+//
+// # The client-go half
+//
+// -sdk asks the same questions, the three disagreements above and what the
+// schema offers that nothing selects, of the documents client-go builds and
+// the structs it decodes them into, for the client-go go.mod requires, read
+// from the module cache under the environment a load of somebody else's module
+// needs (graphqldocs.ForeignModuleEnv). It asks them only of the sends this
+// server reaches: a client-go function is reached when a package of ours names
+// it, or names an interface method it implements (which is how a handler holds
+// a service), or when a reached client-go function names it in turn, so a send
+// in a helper only a service method calls is judged too. A send nothing reaches
+// is listed and not judged, since it is a document this server never puts on
+// the wire.
+//
+// Two things differ from the run over our own documents, each for a reason of
+// the dependency. A field the schema offers is filed under the client-go
+// service whose method sends the document rather than under a package, since
+// every client-go decoder is declared in one package and the package grain
+// would let one service's selection cancel another's gap. And an object that
+// decodes only the next object is read rather than skipped when the object it
+// hangs from is read: a work item's features and each widget under them are
+// that shape, and skipping them hides every widget client-go leaves out, which
+// is where GitLab grows the type. Applied to our own documents the same rule
+// adds eighteen findings in the epic notes, discussions and issues packages,
+// which is a question for those packages; the run over our own documents keeps
+// the narrower rule.
+//
+// Every finding of the client-go run fails it unless a declaration answers it:
+// a disagreement between a document and its decoder and a reached send whose
+// document cannot be read before a request is made, answered in
+// sdk_declarations.go, and a field nothing selects, answered in
+// sdk_declarations_sent.go. A declaration that answers nothing fails it too.
+// That is the difference from the report over our own documents, and it is
+// what makes the one-time triage of issue 1022 persist: the run reads the
+// client-go go.mod requires, so a bump that starts selecting a declared field
+// leaves its declaration stale, and a bump that stops selecting one, or a
+// re-pin that adds one, leaves a finding nothing answers. The exception is a
+// type declared whole rather than field by field: the star
+// already answers a field a re-pin adds to it. A recorded-upstream answer
+// names the row of docs/development/upstream-bugs.md that records the gap.
+//
 // Usage:
 //
 //	go run ./cmd/audit_graphql_shapes/
 //	go run ./cmd/audit_graphql_shapes/ -v
 //	go run ./cmd/audit_graphql_shapes/ -schema /tmp/live/gitlab-schema.graphql
 //	go run ./cmd/audit_graphql_shapes/ -report plan/graphql-sent.json
+//	go run ./cmd/audit_graphql_shapes/ -sdk
+//	go run ./cmd/audit_graphql_shapes/ -sdk -v -report plan/graphql-sdk-sent.json
 package main

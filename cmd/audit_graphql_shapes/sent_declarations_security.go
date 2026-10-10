@@ -16,8 +16,8 @@ package main
 
 // Where the security findings are filed.
 const (
-	vulnerabilitiesPackage  = toolsDir + "/vulnerabilities"
-	securityFindingsPackage = toolsDir + "/securityfindings"
+	vulnerabilitiesPackage  = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/vulnerabilities"
+	securityFindingsPackage = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/securityfindings"
 )
 
 // The schema types the declarations below are keyed by.

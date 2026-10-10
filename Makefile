@@ -22,7 +22,7 @@
 	audit-tenancy check-tenancy tenancy-code-identity \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
-	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes audit-graphql-sent \
+	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes audit-graphql-sent check-graphql-sdk-shapes audit-graphql-sdk-sent \
 	gen-api-live check-api-live check-meta-descriptions \
 	gen-action-grants check-action-grants check-action-grants-derivation \
 	record-request-inventory gen-request-inventory check-request-inventory audit-request-inventory \
@@ -1062,7 +1062,7 @@ analyze:
 	run_check "[14/29] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
 	run_check "[15/29] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
 	run_check "[16/29] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[17/29] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
+	run_check "[17/29] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
 	run_check "[18/29] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
 	run_check "[19/29] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
 	run_check "[20/29] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
@@ -2319,6 +2319,35 @@ audit-graphql-shapes:
 audit-graphql-sent:
 	@mkdir -p plan
 	go run ./cmd/audit_graphql_shapes/ -report plan/graphql-sent.json
+
+## check-graphql-sdk-shapes: the questions check-graphql-shapes asks (the
+## decoder disagreements, and the fields the schema offers that nothing
+## selects) asked of the documents client-go builds and the structs it
+## decodes them into, for the client-go go.mod requires and the sends this
+## server reaches (a client-go function a package under ./internal names,
+## through a service interface or not, and whatever client-go runs from
+## there). Unlike the report over our own documents it GATES: a decoder that
+## disagrees with its document and a reached send whose document cannot be
+## read before a request is made each fail unless
+## cmd/audit_graphql_shapes/sdk_declarations.go answers it, a field the schema
+## offers that no document of the client-go service selects fails unless
+## cmd/audit_graphql_shapes/sdk_declarations_sent.go answers it, and so does a
+## declaration that answers nothing. That is what keeps the one-time triage of
+## issue 1022 true: a client-go bump that starts selecting a declared field
+## leaves its declaration stale, and one that stops selecting a field, or a
+## GraphQL re-pin that adds one, leaves a finding nothing answers, except on a
+## type declared whole rather than field by field, whose new fields that declaration
+## already answers. It reads the module cache, which a build of this
+## repository has already filled, and needs no network.
+check-graphql-sdk-shapes:
+	go run ./cmd/audit_graphql_shapes/ -sdk
+
+## audit-graphql-sdk-sent: the client-go run with every answer listed, and its
+## record written to plan/graphql-sdk-sent.json: what was reached and from
+## where, what was not, and every finding with the declaration answering it.
+audit-graphql-sdk-sent:
+	@mkdir -p plan
+	go run ./cmd/audit_graphql_shapes/ -sdk -v -report plan/graphql-sdk-sent.json
 
 ## check-graphql-documents-live: judge every document against a schema fetched
 ## from a live instance right now rather than the pinned one, and report where

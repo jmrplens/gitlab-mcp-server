@@ -14,35 +14,45 @@ const oracleNone = "none"
 
 // tierOracleReason says why a finding carries no tier, which is the one
 // annotation a reader of the REST list is used to and will look for here.
-const tierOracleReason = "The pinned schema declares no tier. GitLab gates a GraphQL field at resolve time, " +
-	"so an unlicensed instance answers null or an error rather than omitting the field from the schema, and " +
-	"nine of the eleven GraphQL-only domains are Premium or Ultimate surfaces: most of these findings sit on " +
-	"licensed ground and nothing here can tell a field every instance sends from one only Ultimate sends. The " +
-	"tier struct tags on the sibling output types are a hint and not an oracle. A tier is therefore omitted " +
-	"from a finding rather than emitted empty, since an always-empty field reads as a condition that was " +
-	"checked and found absent."
+//
+// It and the two reasons below are functions rather than constants for the
+// reason sdkGatingReason is one: the mutation tool cannot see a package-level
+// declaration and reads every string joined there as never covered.
+func tierOracleReason() string {
+	return "The pinned schema declares no tier. GitLab gates a GraphQL field at resolve time, " +
+		"so an unlicensed instance answers null or an error rather than omitting the field from the schema, and " +
+		"nine of the eleven GraphQL-only domains are Premium or Ultimate surfaces: most of these findings sit on " +
+		"licensed ground and nothing here can tell a field every instance sends from one only Ultimate sends. The " +
+		"tier struct tags on the sibling output types are a hint and not an oracle. A tier is therefore omitted " +
+		"from a finding rather than emitted empty, since an always-empty field reads as a condition that was " +
+		"checked and found absent."
+}
 
 // deprecationOracleReason says why nothing here can exclude a field GitLab is
 // removing, and names the fix rather than leaving the hole unexplained.
-const deprecationOracleReason = "The pinned SDL carries no @deprecated directive and no description, because " +
-	"cmd/internal/graphqlintrospect drops both on decode: validation never consults them and they would triple " +
-	"the file. So a field GitLab has deprecated reads here as a gap, and a field GitLab is removing could be " +
-	"added on the strength of one. The data is already on the wire at pin time, since an instance answers the " +
-	"canned introspection payload with isDeprecated and deprecationReason whatever was asked for, and the fix " +
-	"is a sidecar record written by gen_graphql_schema beside the SDL rather than a fatter SDL. Until it " +
-	"exists, a deprecated field is answered by a declaration citing GitLab's own documentation."
+func deprecationOracleReason() string {
+	return "The pinned SDL carries no @deprecated directive and no description, because " +
+		"cmd/internal/graphqlintrospect drops both on decode: validation never consults them and they would triple " +
+		"the file. So a field GitLab has deprecated reads here as a gap, and a field GitLab is removing could be " +
+		"added on the strength of one. The data is already on the wire at pin time, since an instance answers the " +
+		"canned introspection payload with isDeprecated and deprecationReason whatever was asked for, and the fix " +
+		"is a sidecar record written by gen_graphql_schema beside the SDL rather than a fatter SDL. Until it " +
+		"exists, a deprecated field is answered by a declaration citing GitLab's own documentation."
+}
 
 // gatingReason says which sub-class of this dimension fails a build, since
 // every other finding is a candidate for the surface rather than a defect in
 // it.
-const gatingReason = "This dimension reports and does not gate: a field GitLab offers and this server does not " +
-	"surface is a candidate for the surface, GitLab adds fields weekly, and gating would break the build on " +
-	"every re-pin over findings the missing tier and deprecation oracles cannot fully classify. One sub-class " +
-	"gates, in the sibling shape check rather than here: a mutation payload whose errors no field of the " +
-	"decoder reads, which drops GitLab's account of a refused mutation and reports success. The condition is " +
-	"the decoder and not the document, since a payload that selects its errors and decodes none loses them " +
-	"just as completely, while a decoder field the document never selects is already a hard failure of the " +
-	"always-empty leg."
+func gatingReason() string {
+	return "This dimension reports and does not gate: a field GitLab offers and this server does not " +
+		"surface is a candidate for the surface, GitLab adds fields weekly, and gating would break the build on " +
+		"every re-pin over findings the missing tier and deprecation oracles cannot fully classify. One sub-class " +
+		"gates, in the sibling shape check rather than here: a mutation payload whose errors no field of the " +
+		"decoder reads, which drops GitLab's account of a refused mutation and reports success. The condition is " +
+		"the decoder and not the document, since a payload that selects its errors and decodes none loses them " +
+		"just as completely, while a decoder field the document never selects is already a hard failure of the " +
+		"always-empty leg."
+}
 
 // sentOracles records what this check could not consult, once on the check
 // rather than once on every finding.
@@ -105,10 +115,10 @@ func newSentReport(schema string, pairings int, coverage sentCoverage, uncovered
 			Coverage:                coverage,
 			Uncovered:               uncovered,
 			TierOracle:              oracleNone,
-			TierOracleReason:        tierOracleReason,
+			TierOracleReason:        tierOracleReason(),
 			DeprecationOracle:       oracleNone,
-			DeprecationOracleReason: deprecationOracleReason,
-			Gating:                  gatingReason,
+			DeprecationOracleReason: deprecationOracleReason(),
+			Gating:                  gatingReason(),
 		},
 		Summary:            summarizeSent(found),
 		Sent:               found,
@@ -149,16 +159,22 @@ func summarizeSent(found []sentField) sentSummary {
 }
 
 // writeSentReport writes the report where -report names.
-//
-// Rendering it cannot fail: a report holds strings, integers, and slices and
-// structs of them, none of which encoding/json refuses, so a render error
-// would be a defect in this command rather than anything a run could meet,
-// and it stops the run where it happens instead of reading as a write the
-// operator could retry.
 func writeSentReport(path string, report sentReport) error {
+	return writeJSON(path, report, "the sent report")
+}
+
+// writeJSON writes a report where -report names, saying what it could not
+// write when the write fails.
+//
+// Rendering it cannot fail: both reports hold strings, integers, booleans,
+// and slices, maps and structs of them, none of which encoding/json refuses,
+// so a render error would be a defect in this command rather than anything a
+// run could meet, and it stops the run where it happens instead of reading as
+// a write the operator could retry.
+func writeJSON(path string, report any, what string) error {
 	encoded := cmdutil.Must(json.MarshalIndent(report, "", "  "))
 	if written := os.WriteFile(path, append(encoded, '\n'), 0o600); written != nil {
-		return fmt.Errorf("write the sent report: %w", written)
+		return fmt.Errorf("write %s: %w", what, written)
 	}
 	return nil
 }
@@ -175,6 +191,6 @@ func sentLine(path string, summary sentSummary, uncovered sentUncovered) string 
 	if uncovered.Unavailable != "" {
 		return line + fmt.Sprintf("%s %s\n", prefix, uncovered.Unavailable)
 	}
-	return line + fmt.Sprintf("%s not asked of %d GraphQL operation(s) in %d package(s) whose documents client-go builds; see uncovered in %s\n",
+	return line + fmt.Sprintf("%s not asked of %d GraphQL operation(s) in %d package(s) whose documents client-go builds, which -sdk asks it of; see uncovered in %s\n",
 		prefix, uncovered.Operations, len(uncovered.Packages), path)
 }

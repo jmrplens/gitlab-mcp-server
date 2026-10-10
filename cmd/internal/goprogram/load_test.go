@@ -334,3 +334,15 @@ func TestToolutilPath_AsAPattern_ResolvesToTheSharedHelpersPackage(t *testing.T)
 		t.Errorf("loaded package path = %q, want %q", got, ToolutilPath)
 	}
 }
+
+// TestToolutilPath_UnderTheModulePath_MovesWithIt verifies that the shared
+// helpers' path is the module path's own toolutil package. The constant is
+// written out whole rather than joined onto ModulePath (see its comment), so
+// this is what keeps the module path spelled once in effect: a module move
+// that rewrites ModulePath and not ToolutilPath fails here, where the test
+// above would only fail once the old path stopped resolving.
+func TestToolutilPath_UnderTheModulePath_MovesWithIt(t *testing.T) {
+	if want := ModulePath + "/internal/toolutil"; ToolutilPath != want {
+		t.Errorf("ToolutilPath = %q, want %q", ToolutilPath, want)
+	}
+}

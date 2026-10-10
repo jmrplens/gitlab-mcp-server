@@ -261,7 +261,7 @@ func (j *judge) askSchema(at objectPosition) {
 	if j.isRoot(definition) || definition.Name == pageInfoType {
 		return
 	}
-	pkg := decoderPackage(at.goType, j.pairing.Package)
+	pkg := j.unitOf(at.goType)
 	j.recordSelected(pkg, definition, at.decoded)
 	j.gateMutationErrors(definition, at.fields, at.path)
 
@@ -285,7 +285,7 @@ func (j *judge) askSchema(at objectPosition) {
 			}
 			reported[field.Name] = true
 			j.sent = append(j.sent, sentField{
-				Grain:      sentGrain,
+				Grain:      j.grain(),
 				Package:    pkg,
 				Document:   j.pairing.Label(),
 				Operation:  j.operation,
@@ -404,6 +404,28 @@ func decoderPackage(goType types.Type, fallback string) string {
 		return named.Obj().Pkg().Path()
 	}
 	return fallback
+}
+
+// unitOf names what a field offered at an object decoded into goType is filed
+// under: the unit the pairing names when it names one, which the client-go
+// run sets to the service the send belongs to because every client-go decoder
+// is declared in one package, and the package that declares the decoder
+// otherwise.
+func (j *judge) unitOf(goType types.Type) string {
+	if j.pairing.Unit != "" {
+		return j.pairing.Unit
+	}
+	return decoderPackage(goType, j.pairing.Package)
+}
+
+// grain names what a sent row's package holds, for the reader of one row: the
+// client-go service when the pairing names a unit, since that is what
+// [judge.unitOf] files it under, and the package otherwise.
+func (j *judge) grain() string {
+	if j.pairing.Unit != "" {
+		return sdkGrain
+	}
+	return sentGrain
 }
 
 // offering lists the definitions whose fields are asked about at one position.

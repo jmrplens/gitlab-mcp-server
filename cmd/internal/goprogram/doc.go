@@ -40,12 +40,13 @@
 // and build tags, and [Load] is the same call with neither, so the loads that
 // read production source alone are unchanged.
 //
-// [Options.Env] is there for the one load that is not of this repository at
+// [Options.Env] is there for the loads that are not of this repository at
 // all: cmd/internal/graphqldocs reads the GraphQL documents client-go builds,
-// which means loading a module directory in the module cache, and two
-// toolchain settings decide whether that works. The settings and their reasons
-// stay with that caller, since they are a property of loading somebody else's
-// module rather than of this front end.
+// and cmd/audit_graphql_shapes -sdk pairs them with the structs client-go
+// decodes them into, which means loading a module directory in the module
+// cache, and two toolchain settings decide whether that works. The settings
+// and their reasons stay with graphqldocs (ForeignModuleEnv), since they are a
+// property of loading somebody else's module rather than of this front end.
 //
 // [github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared.LoadToolPackages]
 // is deliberately not folded in. Its mode is now this one less

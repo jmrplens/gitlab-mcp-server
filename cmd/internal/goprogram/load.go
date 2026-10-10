@@ -22,7 +22,13 @@ const ModulePath = "github.com/jmrplens/gitlab-mcp-server/v3"
 // executors: the one package every gate resolves calls into. Resolution keys
 // on the path rather than on the package name so an import alias cannot fool
 // it.
-const ToolutilPath = ModulePath + "/internal/toolutil"
+//
+// It is written out whole rather than joined onto ModulePath, because the
+// mutation tool cannot see a package-level declaration and reads the plus of a
+// joined one as never covered, a mutant no test can kill since a string minus
+// a string does not compile. TestToolutilPath_UnderTheModulePath_MovesWithIt
+// holds it to ModulePath, so a module move still has one place to land.
+const ToolutilPath = "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 
 // LoadMode is what the gates need from the loader: syntax to walk, types so an
 // identifier resolves to the object it names and a constant expression folds to
@@ -71,13 +77,15 @@ type Options struct {
 	// [os/exec.Cmd.Env] takes it. Empty inherits this process's, which is what
 	// every caller reading this repository's own source wants.
 	//
-	// It exists for the one load that is not of this repository: reading the
-	// GraphQL documents client-go builds means loading a module directory in
-	// the module cache, which this process neither owns nor configured, and
-	// two settings decide whether that works at all. The reasons are written
-	// down beside the caller that needs them, in cmd/internal/graphqldocs,
-	// because they are a property of loading somebody else's module rather
-	// than of this front end; all this does is carry them through.
+	// It exists for the loads that are not of this repository: reading the
+	// GraphQL documents client-go builds (cmd/internal/graphqldocs) and pairing
+	// them with the structs client-go decodes them into (cmd/audit_graphql_shapes
+	// -sdk) each mean loading a module directory in the module cache, which this
+	// process neither owns nor configured, and two settings decide whether that
+	// works at all. The reasons are written down beside the caller that states
+	// them, in cmd/internal/graphqldocs (ForeignModuleEnv), because they are a
+	// property of loading somebody else's module rather than of this front end;
+	// all this does is carry them through.
 	Env []string
 }
 

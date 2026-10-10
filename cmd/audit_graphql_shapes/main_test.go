@@ -786,7 +786,7 @@ func TestRun_FixtureWithUnpairableCalls_ReportsEachAndFails(t *testing.T) {
 	}
 	for _, want := range []string{
 		"\nfixture/unpaired (unpaired/unpaired.go:61): refused is a document the schema refuses, which make check-graphql-documents reports",
-		"\nfixture/unpaired (unpaired/unpaired.go:62): the document is built at run time, from fmt.Sprintf(",
+		"\nfixture/unpaired (unpaired/unpaired.go:62): an inline document is a document the schema refuses, which make check-graphql-documents reports",
 		"\nfixture/unpaired (unpaired/unpaired.go:63): the document is built at run time, from m.Query,",
 		"\nfixture/unpaired (unpaired/unpaired.go:64): the document is built at run time, from two(),",
 		"\nfixture/unpaired (unpaired/unpaired.go:65): the document is built at run time, from runtimeDoc,",

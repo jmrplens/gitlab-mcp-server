@@ -12,8 +12,10 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/packages"
+	"golang.org/x/tools/go/types/typeutil"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
 )
 
 // queryTypeName names the request type whose Do method sends a document. A
@@ -54,6 +56,28 @@ type pairing struct {
 	// document sent through a shared wrapper belongs to.
 	Origin        token.Position
 	OriginPackage string
+	// Function is the function that names the document: the one the Do call
+	// is written in, or, when the document was handed to a wrapper, the
+	// function that handed it over, which is the one a reader would say sends
+	// it. The client-go run asks whether this server reaches it, and files
+	// what the document leaves out under the service it belongs to, so a
+	// helper two services send through neither makes one service's document
+	// reached because the other's is, nor files both under the helper.
+	Function *types.Func
+	// Unit is what a field the document leaves out is filed under when it is
+	// not the package of the struct decoding the object: the client-go run
+	// sets it to the service the function belongs to, since every decoder of
+	// client-go is declared in one package.
+	Unit string
+	// ReadThrough makes an object that decodes no leaf of its own count as
+	// read when the object it hangs from is read, so the schema is asked what
+	// it offers there too. The client-go run sets it: a work item's features
+	// and each widget under them carry only the next object, and asking
+	// nothing of them hides every widget and every widget field client-go
+	// leaves out, which is where GitLab grows the type. Our own documents keep
+	// the narrower rule, under which such an object is an envelope around a
+	// domain R-PATH already asks this question of.
+	ReadThrough bool
 }
 
 // Label names the document for a report line.
@@ -71,6 +95,10 @@ type problem struct {
 	Package  string
 	Position token.Position
 	Message  string
+	// Function is the function the problem was found in, which the client-go
+	// run reads to tell a send this server reaches from one it never calls.
+	// It is nil for a document no send carries, which is in no function.
+	Function *types.Func
 }
 
 // wrapper is a Do call whose document arrives through a parameter of the
@@ -98,6 +126,26 @@ type wrapper struct {
 type program struct {
 	fset *token.FileSet
 	pkgs []*packages.Package
+	// documents is what the document inventory reads out of the same
+	// packages, rendered wherever the inventory can say what the text is. It
+	// is where a document assembled at run time gets its text from: the
+	// format of a fmt.Sprintf call, or the template a set executes. A named
+	// one is found by the object it is declared as and one written in place
+	// by its position, which is how the inventory keys its own renderings.
+	documents  []graphqldocs.Document
+	byObject   map[types.Object]graphqldocs.Document
+	byPosition map[token.Position]graphqldocs.Document
+	// initializers holds the value every package variable is declared with,
+	// which is how a template set a function executes is followed to the
+	// text it was parsed from.
+	initializers map[*types.Var]initializer
+}
+
+// initializer is the expression a package variable is declared with, in the
+// package that declares it.
+type initializer struct {
+	pkg   *packages.Package
+	value ast.Expr
 }
 
 // loadProgram type-checks the packages patterns name under dir.
@@ -113,7 +161,57 @@ func loadProgram(dir string, patterns []string) (*program, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &program{fset: loaded[0].Fset, pkgs: loaded}, nil
+	return newProgram(loaded), nil
+}
+
+// newProgram indexes loaded packages for the walk: the documents the inventory
+// reads out of them, and the value each package variable is declared with.
+func newProgram(loaded []*packages.Package) *program {
+	p := &program{
+		fset:         loaded[0].Fset,
+		pkgs:         loaded,
+		documents:    graphqldocs.FromPackages(loaded),
+		byObject:     map[types.Object]graphqldocs.Document{},
+		byPosition:   map[token.Position]graphqldocs.Document{},
+		initializers: map[*types.Var]initializer{},
+	}
+	for _, document := range p.documents {
+		if document.Object != nil {
+			p.byObject[document.Object] = document
+			continue
+		}
+		p.byPosition[document.Position] = document
+	}
+	for _, pkg := range loaded {
+		for _, file := range pkg.Syntax {
+			for _, decl := range file.Decls {
+				p.recordInitializers(pkg, decl)
+			}
+		}
+	}
+	return p
+}
+
+// recordInitializers notes the value every package variable a declaration
+// names is given, one value per name. A declaration giving several names the
+// results of one call gives none of them a value this walk can follow, and is
+// passed over like one that gives no value at all.
+func (p *program) recordInitializers(pkg *packages.Package, decl ast.Decl) {
+	general, isGeneral := decl.(*ast.GenDecl)
+	if !isGeneral {
+		return
+	}
+	for _, spec := range general.Specs {
+		values, isValues := spec.(*ast.ValueSpec)
+		if !isValues || len(values.Values) != len(values.Names) {
+			continue
+		}
+		for i, name := range values.Names {
+			if variable, isVar := pkg.TypesInfo.Defs[name].(*types.Var); isVar {
+				p.initializers[variable] = initializer{pkg: pkg, value: values.Values[i]}
+			}
+		}
+	}
 }
 
 // pairings finds every send in the program and pairs each with the document it
@@ -130,20 +228,22 @@ func (p *program) pairings() ([]pairing, []problem) {
 			return
 		}
 		position := p.fset.Position(call.Pos())
+		declared := declaredFunc(pkg, fn)
 		response, why := responseType(pkg, call.Args[1])
 		if why != "" {
-			problems = append(problems, problem{Package: pkg.PkgPath, Position: position, Message: why})
+			problems = append(problems, problem{Package: pkg.PkgPath, Position: position, Message: why, Function: declared})
 			return
 		}
 		expr, why := documentExpr(pkg, fn, call.Args[0])
 		if why != "" {
-			problems = append(problems, problem{Package: pkg.PkgPath, Position: position, Message: why})
+			problems = append(problems, problem{Package: pkg.PkgPath, Position: position, Message: why, Function: declared})
 			return
 		}
-		for _, found := range documentSources(pkg, fn, expr) {
-			switch {
-			case found.viaParam:
-				declared, _ := pkg.TypesInfo.Defs[fn.Name].(*types.Func)
+		for _, found := range p.documentSources(pkg, fn, expr) {
+			// Ifs rather than a tagless switch here and in the two below: the
+			// mutation tool cannot see a case expression, so every condition
+			// of one reads as never covered.
+			if found.viaParam {
 				wrappers = append(wrappers, wrapper{
 					fn:       declared,
 					param:    found.param,
@@ -152,17 +252,20 @@ func (p *program) pairings() ([]pairing, []problem) {
 					pkg:      pkg,
 					position: position,
 				})
-			case found.text == "":
-				problems = append(problems, problem{Package: pkg.PkgPath, Position: position, Message: found.why})
-			default:
-				pairings = append(pairings, pairing{
-					Package:  pkg.PkgPath,
-					Position: position,
-					Name:     found.name,
-					Text:     found.text,
-					Response: response,
-				})
+				continue
 			}
+			if found.text == "" {
+				problems = append(problems, problem{Package: pkg.PkgPath, Position: position, Message: found.why, Function: declared})
+				continue
+			}
+			pairings = append(pairings, pairing{
+				Package:  pkg.PkgPath,
+				Position: position,
+				Name:     found.name,
+				Text:     found.text,
+				Response: response,
+				Function: declared,
+			})
 		}
 	})
 	for _, w := range wrappers {
@@ -267,10 +370,11 @@ func localValues(pkg *packages.Package, fn *ast.FuncDecl, variable types.Object)
 			if !isIdent || pkg.TypesInfo.ObjectOf(id) != variable {
 				continue
 			}
-			switch {
-			case len(names) == len(assigned):
+			if len(names) == len(assigned) {
 				values = append(values, assigned[i])
-			case len(assigned) > 0:
+				continue
+			}
+			if len(assigned) > 0 {
 				values = append(values, assigned[0])
 			}
 		}
@@ -333,11 +437,10 @@ type source struct {
 // variable assigned in several branches yields one source per assignment, so
 // a call that picks between two documents is paired with both. A parameter,
 // or a field of a struct parameter, is the wrapper shape: the document is
-// named by the caller, and the pairing is completed there.
-func documentSources(pkg *packages.Package, fn *ast.FuncDecl, expr ast.Expr) []source {
-	if folded, ok := foldDocument(pkg, expr); ok {
-		return []source{folded}
-	}
+// named by the caller, and the pairing is completed there. A call is a
+// document assembled at run time, read through the rendering the document
+// inventory makes of it (see [program.assembled]).
+func (p *program) documentSources(pkg *packages.Package, fn *ast.FuncDecl, expr ast.Expr) []source {
 	switch e := expr.(type) {
 	case *ast.Ident:
 		if index, isParam := parameterIndex(pkg, fn, e); isParam {
@@ -346,11 +449,7 @@ func documentSources(pkg *packages.Package, fn *ast.FuncDecl, expr ast.Expr) []s
 		if values := localValues(pkg, fn, pkg.TypesInfo.ObjectOf(e)); len(values) > 0 {
 			sources := make([]source, 0, len(values))
 			for _, value := range values {
-				if folded, ok := foldDocument(pkg, value); ok {
-					sources = append(sources, folded)
-					continue
-				}
-				sources = append(sources, unfolded(value))
+				sources = append(sources, p.valueSource(pkg, fn, value))
 			}
 			return sources
 		}
@@ -361,7 +460,210 @@ func documentSources(pkg *packages.Package, fn *ast.FuncDecl, expr ast.Expr) []s
 			}
 		}
 	}
-	return []source{unfolded(expr)}
+	return []source{p.valueSource(pkg, fn, expr)}
+}
+
+// valueSource reads the document one expression holds: its constant value, the
+// rendering of the call that assembles it, or the reason it is neither.
+//
+// A constant is tried first whatever the expression is, since a named
+// constant is an identifier and a selector as much as a parameter or a local
+// is, and a constant expression may be written as a call (a conversion).
+func (p *program) valueSource(pkg *packages.Package, fn *ast.FuncDecl, value ast.Expr) source {
+	if folded, ok := foldDocument(pkg, value); ok {
+		return folded
+	}
+	if call, isCall := value.(*ast.CallExpr); isCall {
+		return p.assembled(pkg, fn, call)
+	}
+	return unfolded(value)
+}
+
+// The calls an assembled document is read through, by their full names as the
+// type checker spells them, so a package that imports one under another name
+// is read the same way.
+const (
+	sprintfName       = "fmt.Sprintf"
+	builderStringName = "(*strings.Builder).String"
+	bufferStringName  = "(*bytes.Buffer).String"
+	executeName       = "(*text/template.Template).Execute"
+	mustName          = "text/template.Must"
+	parseName         = "(*text/template.Template).Parse"
+)
+
+// assembled reads a document a call assembles at run time, which is how
+// client-go writes six of its own: the format of a fmt.Sprintf call, and what a
+// text/template set writes into a strings.Builder or a bytes.Buffer whose
+// String the request is given.
+//
+// The text is the document inventory's rendering (see
+// [graphqldocs.Assembly]), found the way the inventory keys it, so this walk
+// judges the same string the schema gate does and never renders anything
+// itself. A call of any other kind, a format that is not a document, and a
+// builder that is not a local are what they were before: a document built at
+// run time.
+func (p *program) assembled(pkg *packages.Package, fn *ast.FuncDecl, call *ast.CallExpr) source {
+	switch calleeName(pkg.TypesInfo, call) {
+	case sprintfName:
+		if document, found := p.documentAt(pkg, call.Args[0]); found {
+			return renderedSource(document, document.Name)
+		}
+	case builderStringName, bufferStringName:
+		if builder, isIdent := ast.Unparen(receiverOf(call)).(*ast.Ident); isIdent {
+			return p.executed(pkg, fn, builder)
+		}
+	}
+	return unfolded(call)
+}
+
+// executed reads the document a template set writes into a builder: the one
+// text/template Execute call in the function that writes it, the package
+// variable that call executes, and the text that variable's set was parsed
+// from, which the document inventory has rendered.
+//
+// Each step that does not hold is a reason of its own, because each is a
+// different change to client-go: a builder two templates write needs a
+// different reading than one written by a set built when a function runs.
+func (p *program) executed(pkg *packages.Package, fn *ast.FuncDecl, builder *ast.Ident) source {
+	written := executions(pkg.TypesInfo, fn.Body, pkg.TypesInfo.ObjectOf(builder))
+	if len(written) != 1 {
+		return builtFrom(builder, fmt.Sprintf("%d text/template Execute calls in this function write it, where exactly one says which template it is", len(written)))
+	}
+	set := receiverOf(written[0])
+	variable, isPackageVar := packageVariable(pkg.TypesInfo, set)
+	if !isPackageVar {
+		return builtFrom(builder, "the template it is written from, "+types.ExprString(set)+", is not a package variable, so its set is built when a function runs")
+	}
+	declared, found := p.initializers[variable]
+	if !found {
+		return builtFrom(builder, variable.Name()+" is declared with no value this audit reads")
+	}
+	text, isParsed := parsedText(declared.pkg.TypesInfo, declared.value)
+	if !isParsed {
+		return builtFrom(builder, variable.Name()+" is built with "+types.ExprString(text)+" rather than parsed from one text")
+	}
+	document, found := p.documentAt(declared.pkg, text)
+	if !found {
+		return builtFrom(builder, "the text "+variable.Name()+" parses is not a document the inventory reads")
+	}
+	return renderedSource(document, variable.Name())
+}
+
+// builtFrom says why the document a builder holds could not be read.
+func builtFrom(builder *ast.Ident, reason string) source {
+	return source{why: "the document is what " + builder.Name + " holds, and " + reason}
+}
+
+// renderedSource is the document an assembled send carries, under the name
+// the call reaches it by, or the reason the inventory could not render it.
+func renderedSource(document graphqldocs.Document, name string) source {
+	if assembly := document.Assembly; assembly != nil && assembly.Unrendered != "" {
+		return source{why: "the document is a shell " + assembly.By + " fills, and " + assembly.Unrendered}
+	}
+	return source{text: document.Text, name: name}
+}
+
+// documentAt finds the inventory's document for the expression a call takes
+// it as: by the object a name resolves to, or by the position of one written in
+// place.
+func (p *program) documentAt(pkg *packages.Package, expr ast.Expr) (graphqldocs.Document, bool) {
+	if object := namedObject(pkg.TypesInfo, expr); object != nil {
+		document, found := p.byObject[object]
+		return document, found
+	}
+	document, found := p.byPosition[p.fset.Position(ast.Unparen(expr).Pos())]
+	return document, found
+}
+
+// executions lists the text/template Execute calls in a body that write into
+// a builder, which they do when they are handed its address.
+func executions(info *types.Info, body ast.Node, builder types.Object) []*ast.CallExpr {
+	var found []*ast.CallExpr
+	ast.Inspect(body, func(node ast.Node) bool {
+		call, isCall := node.(*ast.CallExpr)
+		if isCall && calleeName(info, call) == executeName && addresses(info, call.Args[0], builder) {
+			found = append(found, call)
+		}
+		return true
+	})
+	return found
+}
+
+// addresses reports whether an argument is the address of the object, written
+// as &name.
+func addresses(info *types.Info, argument ast.Expr, object types.Object) bool {
+	address, isUnary := ast.Unparen(argument).(*ast.UnaryExpr)
+	if !isUnary || address.Op != token.AND {
+		return false
+	}
+	target, isIdent := ast.Unparen(address.X).(*ast.Ident)
+	return isIdent && info.ObjectOf(target) == object
+}
+
+// parsedText reads through the calls a package variable's template set is
+// declared with, template.Must and nothing else, to the text the last Parse
+// gives it, which is the template the variable executes. It returns the
+// expression it stopped at, and false, when the set is built some other way.
+func parsedText(info *types.Info, value ast.Expr) (ast.Expr, bool) {
+	for {
+		call, isCall := ast.Unparen(value).(*ast.CallExpr)
+		if !isCall {
+			return value, false
+		}
+		switch calleeName(info, call) {
+		case mustName:
+			value = call.Args[0]
+		case parseName:
+			return call.Args[0], true
+		default:
+			return value, false
+		}
+	}
+}
+
+// packageVariable reports the variable an expression names and whether it is
+// declared at package level, the one place a value is given once for every
+// function that executes it.
+func packageVariable(info *types.Info, expr ast.Expr) (*types.Var, bool) {
+	variable, isVar := namedObject(info, expr).(*types.Var)
+	return variable, isVar && variable.Parent() == variable.Pkg().Scope()
+}
+
+// namedObject is the object an expression names, a qualified identifier
+// included, or nil for one that names none.
+func namedObject(info *types.Info, expr ast.Expr) types.Object {
+	switch e := ast.Unparen(expr).(type) {
+	case *ast.Ident:
+		return info.Uses[e]
+	case *ast.SelectorExpr:
+		return info.Uses[e.Sel]
+	default:
+		return nil
+	}
+}
+
+// calleeName is the full name of the function a call reaches, or "" when it
+// reaches none statically: a conversion, a builtin or a call through a
+// function value.
+func calleeName(info *types.Info, call *ast.CallExpr) string {
+	if callee, isFunc := typeutil.Callee(info, call).(*types.Func); isFunc {
+		return callee.FullName()
+	}
+	return ""
+}
+
+// receiverOf is the value a method call is made on. Every call this is asked
+// about reached a method, which is always written as a selector.
+func receiverOf(call *ast.CallExpr) ast.Expr {
+	selector, _ := ast.Unparen(call.Fun).(*ast.SelectorExpr)
+	return selector.X
+}
+
+// declaredFunc is the function a declaration defines. Every declaration this
+// walk visits type-checked, so it defines one.
+func declaredFunc(pkg *packages.Package, fn *ast.FuncDecl) *types.Func {
+	declared, _ := pkg.TypesInfo.Defs[fn.Name].(*types.Func)
+	return declared
 }
 
 // foldDocument reads the constant value of an expression, when it has one.
@@ -425,21 +727,23 @@ func (p *program) callers(w wrapper, depth int) ([]pairing, []problem) {
 			return
 		}
 		position := p.fset.Position(call.Pos())
+		declared := declaredFunc(pkg, fn)
 		expr, why := wrapperArgument(call, w)
 		if why != "" {
-			problems = append(problems, problem{Package: pkg.PkgPath, Position: position, Message: why})
+			problems = append(problems, problem{Package: pkg.PkgPath, Position: position, Message: why, Function: declared})
 			return
 		}
-		for _, handed := range documentSources(pkg, fn, expr) {
-			switch {
-			case handed.viaParam && depth >= maxHandovers:
+		for _, handed := range p.documentSources(pkg, fn, expr) {
+			if handed.viaParam && depth >= maxHandovers {
 				problems = append(problems, problem{
 					Package:  pkg.PkgPath,
 					Position: position,
 					Message:  fmt.Sprintf("hands %s a document it received through a parameter of its own, %d hand-overs deep, which is further than this audit follows", w.fn.Name(), depth+1),
+					Function: declared,
 				})
-			case handed.viaParam:
-				declared, _ := pkg.TypesInfo.Defs[fn.Name].(*types.Func)
+				continue
+			}
+			if handed.viaParam {
 				completed, unresolved := p.callers(wrapper{
 					fn:       declared,
 					param:    handed.param,
@@ -451,25 +755,29 @@ func (p *program) callers(w wrapper, depth int) ([]pairing, []problem) {
 				}, depth+1)
 				pairings = append(pairings, completed...)
 				problems = append(problems, unresolved...)
-			case handed.text == "":
+				continue
+			}
+			if handed.text == "" {
 				problems = append(problems, problem{
 					Package:  pkg.PkgPath,
 					Position: position,
 					Message:  "hands " + w.fn.Name() + " its document here, and " + handed.why,
+					Function: declared,
 				})
-			default:
-				pairings = append(pairings, pairing{
-					Package:  w.pkg.PkgPath,
-					Position: w.position,
-					Name:     handed.name,
-					Text:     handed.text,
-					Response: w.response,
-					TypeArgs: bindings(w.typeArgs, instantiation(pkg, callee, w.fn)),
-
-					Origin:        position,
-					OriginPackage: pkg.PkgPath,
-				})
+				continue
 			}
+			pairings = append(pairings, pairing{
+				Package:  w.pkg.PkgPath,
+				Position: w.position,
+				Name:     handed.name,
+				Text:     handed.text,
+				Response: w.response,
+				TypeArgs: bindings(w.typeArgs, instantiation(pkg, callee, w.fn)),
+
+				Origin:        position,
+				OriginPackage: pkg.PkgPath,
+				Function:      declared,
+			})
 		}
 	})
 	if len(pairings) == 0 && len(problems) == 0 {
@@ -477,6 +785,7 @@ func (p *program) callers(w wrapper, depth int) ([]pairing, []problem) {
 			Package:  w.pkg.PkgPath,
 			Position: w.position,
 			Message:  w.fn.Name() + " receives its document through a parameter and nothing calls it, so no document reaches this decoder",
+			Function: w.fn,
 		})
 	}
 	return pairings, problems

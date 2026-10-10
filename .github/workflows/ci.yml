@@ -259,6 +259,15 @@ jobs:
       # match the decoder.
       - name: Check every GraphQL decoder against its document
         run: make check-graphql-shapes
+      # The same questions of the documents client-go builds and the structs
+      # it decodes them into, for the client-go go.mod requires. Every field
+      # the schema offers that a reached send leaves out is answered in
+      # sdk_declarations_sent.go, so a client-go bump that starts selecting
+      # one, or a re-pin that adds one, fails here until the table says why,
+      # except on a type declared whole rather than field by field, whose new
+      # fields that declaration already answers (issue 1022).
+      - name: Check every client-go GraphQL decoder against its document
+        run: make check-graphql-sdk-shapes
       # What the e2e suite actually asserts, per runtime, committed from a
       # maintainer's Docker run. The judgments over the JSON are deliberately
       # not behind FRESHNESS: nothing in this repository can regenerate the

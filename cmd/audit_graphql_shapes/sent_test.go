@@ -661,9 +661,9 @@ func TestRun_SentReport_SaysWhatItCouldNotConsult(t *testing.T) {
 		{name: "the grain a finding is read at", got: report.Check.Grain, want: sentGrain},
 		{name: "no tier oracle", got: report.Check.TierOracle, want: oracleNone},
 		{name: "no deprecation oracle", got: report.Check.DeprecationOracle, want: oracleNone},
-		{name: "the tier oracle is explained", got: report.Check.TierOracleReason, want: tierOracleReason},
-		{name: "the deprecation oracle is explained", got: report.Check.DeprecationOracleReason, want: deprecationOracleReason},
-		{name: "the gating rule is stated", got: report.Check.Gating, want: gatingReason},
+		{name: "the tier oracle is explained", got: report.Check.TierOracleReason, want: tierOracleReason()},
+		{name: "the deprecation oracle is explained", got: report.Check.DeprecationOracleReason, want: deprecationOracleReason()},
+		{name: "the gating rule is stated", got: report.Check.Gating, want: gatingReason()},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			if testCase.got != testCase.want {
@@ -1023,7 +1023,50 @@ func TestRun_SentCoverage_TellsPositionsAskedFromPositionsReachedAndSkipped(t *t
 			t.Errorf("a pipeline nothing decodes was asked about anyway: %v", keys(fields))
 		}
 	})
+
+	t.Run("a leaf the document selects and no field decodes does not make its object read", func(t *testing.T) {
+		report, status, out, errOut := runSent(t, map[string]string{"sent": selectedNotDecodedFixture}, nil)
+
+		if status != 0 {
+			t.Fatalf("run() = %d, want 0; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+		}
+		if got := report.Check.Coverage.Traversed; got != 1 {
+			t.Errorf("positions skipped traversed = %d, want 1 (the project): %+v", got, report.Check.Coverage)
+		}
+		if fields := offered(report, "Project"); len(fields) != 0 {
+			t.Errorf("a project whose one leaf nothing decodes was asked about: %v", keys(fields))
+		}
+		if fields := offered(report, "Pipeline"); len(fields) == 0 {
+			t.Errorf("the pipeline under it is read for its status and was not asked about: %+v", report.Check.Coverage)
+		}
+	})
 }
+
+// selectedNotDecodedFixture selects a project's name, which no field of the
+// decoder reads, beside a pipeline it decodes. The name is transfer rather
+// than something read, so the project decodes no leaf of its own and is
+// traversed, while the pipeline under it is read for its status.
+const selectedNotDecodedFixture = `package sent
+
+import "fixture/gql"
+
+const getProject = @@
+query { project(fullPath: "x") { name pipeline { status } } }
+@@
+
+func send(service gql.Service) {
+	var resp struct {
+		Data struct {
+			Project *struct {
+				Pipeline *struct {
+					Status string @@json:"status"@@
+				} @@json:"pipeline"@@
+			} @@json:"project"@@
+		} @@json:"data"@@
+	}
+	_, _ = service.Do(gql.GraphQLQuery{Query: getProject}, &resp)
+}
+`
 
 // undecodedFixture selects a pipeline and decodes none of it, so the walk
 // stops at the selection with a note and never reaches the object under it.

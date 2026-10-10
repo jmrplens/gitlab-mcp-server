@@ -14,11 +14,11 @@ package main
 
 // Where the findings answered here are filed.
 const (
-	branchRulesPackage        = toolsDir + "/branchrules"
-	ciCatalogPackage          = toolsDir + "/cicatalog"
-	customEmojiPackage        = toolsDir + "/customemoji"
-	securityAttributesPackage = toolsDir + "/securityattributes"
-	securityCategoriesPackage = toolsDir + "/securitycategories"
+	branchRulesPackage        = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/branchrules"
+	ciCatalogPackage          = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/cicatalog"
+	customEmojiPackage        = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/customemoji"
+	securityAttributesPackage = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/securityattributes"
+	securityCategoriesPackage = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/securitycategories"
 )
 
 // userReferenceReason is why a user named by something other than a note is

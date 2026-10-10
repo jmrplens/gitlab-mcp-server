@@ -15,13 +15,20 @@ const internalDir = "internal"
 
 // uncoveredReason says why a package's GraphQL is outside this walk, in the
 // terms a reader needs to judge how much the answer is worth.
-const uncoveredReason = "The walk pairs a document with a decoder, and both halves must be in the source it " +
-	"loads. A package whose operations client-go builds writes neither: the document text lives in the SDK's " +
-	"own module and the response is decoded by the SDK's own struct, so there is no send here to pair and no " +
-	"decoder here to compare a schema type with. R-PATH cannot see these either, because a GraphQL-only " +
-	"endpoint has no REST operation in GitLab's OpenAPI record, which leaves them in exactly the state this " +
-	"dimension was built to end. The set is read from the request inventory, so it is what the unit suite was " +
-	"seen to send rather than everything these packages can send."
+//
+// A function rather than a constant for the reason sdkGatingReason is one: the
+// mutation tool cannot see a package-level declaration and reads every string
+// joined there as never covered.
+func uncoveredReason() string {
+	return "The walk pairs a document with a decoder, and both halves must be in the source it " +
+		"loads. A package whose operations client-go builds writes neither: the document text lives in the SDK's " +
+		"own module and the response is decoded by the SDK's own struct, so there is no send here to pair and no " +
+		"decoder here to compare a schema type with. The client-go run of this command (-sdk, make " +
+		"check-graphql-sdk-shapes) asks the same question of those documents in client-go's own source, filed " +
+		"under the client-go service that sends each rather than under the package of ours that calls it, and " +
+		"gates on what it finds. The set is read from the request inventory, so it is what the unit suite was " +
+		"seen to send rather than everything these packages can send."
+}
 
 // uncoveredUnavailable is what the report says instead of a set when the
 // record naming it could not be read, since an omitted set and an empty one
@@ -79,7 +86,7 @@ func uncoveredGraphQL(inventory requestinventory.Inventory, pairings []pairing) 
 		byPackage[row.Package] = append(byPackage[row.Package], row.Operation)
 	}
 
-	uncovered := sentUncovered{Source: requestinventory.Path, Reason: uncoveredReason}
+	uncovered := sentUncovered{Source: requestinventory.Path, Reason: uncoveredReason()}
 	for pkg, operations := range byPackage {
 		sort.Strings(operations)
 		uncovered.Packages = append(uncovered.Packages, sentUncoveredPackage{Package: pkg, Operations: operations})
@@ -94,7 +101,7 @@ func uncoveredGraphQL(inventory requestinventory.Inventory, pairings []pairing) 
 // unavailableUncovered is what the report carries when the record could not be
 // read, which a fixture run has no reason to ship.
 func unavailableUncovered() sentUncovered {
-	return sentUncovered{Source: requestinventory.Path, Reason: uncoveredReason, Unavailable: uncoveredUnavailable}
+	return sentUncovered{Source: requestinventory.Path, Reason: uncoveredReason(), Unavailable: uncoveredUnavailable}
 }
 
 // repoRelative trims a Go import path to the repository-relative path the

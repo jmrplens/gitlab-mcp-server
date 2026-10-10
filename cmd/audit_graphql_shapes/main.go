@@ -54,6 +54,10 @@ type auditRun struct {
 	// fixture run is not asked to explain the real tree's decisions, and
 	// reports every one of them stale for not matching a synthetic one.
 	declarations []sentDeclaration
+	// sdk selects the client-go half of the audit (see [runSDK]), which is
+	// held to sdkDeclarations, carried here for the same reason.
+	sdk             bool
+	sdkDeclarations sdkTables
 }
 
 // exitProcess ends the process with the status main decided. A seam, so a
@@ -76,6 +80,7 @@ func runMain(args []string, out, errOut io.Writer) int {
 	verbose := flags.Bool("v", false, "list every pairing judged, every selection nothing reads and every position left unjudged, not only the disagreements")
 	schemaPath := flags.String("schema", "", "SDL file to judge the documents against, instead of the pinned schema")
 	reportPath := flags.String("report", "", "write the fields the schema offers that no document of their package selects, as JSON, to this path")
+	sdk := flags.Bool("sdk", false, "judge the documents client-go builds against the structs it decodes them into, for the client-go go.mod requires and the sends this server reaches, and hold every finding to sdk_declarations.go and sdk_declarations_sent.go")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -83,14 +88,20 @@ func runMain(args []string, out, errOut io.Writer) int {
 		return 2
 	}
 
-	return run(auditRun{
-		dir:          *dir,
-		verbose:      *verbose,
-		patterns:     auditPatterns,
-		schemaPath:   *schemaPath,
-		reportPath:   *reportPath,
-		declarations: declaredSent,
-	}, out, errOut)
+	cfg := auditRun{
+		dir:             *dir,
+		verbose:         *verbose,
+		patterns:        auditPatterns,
+		schemaPath:      *schemaPath,
+		reportPath:      *reportPath,
+		declarations:    declaredSent,
+		sdk:             *sdk,
+		sdkDeclarations: declaredSDK,
+	}
+	if cfg.sdk {
+		return runSDK(cfg, out, errOut)
+	}
+	return run(cfg, out, errOut)
 }
 
 // run is main with its streams and its exit status handed to it, so the ways
@@ -395,14 +406,20 @@ func block(root string, p *pairing, group []finding, notes bool) string {
 	return text.String()
 }
 
-// heading names a pairing: the package, the document, the call, and where the
-// document was handed over when the call did not name it.
+// heading names a pairing: the package, the document and where it is sent.
 func heading(root string, p *pairing) string {
-	where := relative(p.Position, root)
-	if p.Origin.IsValid() {
-		where += ", handed over at " + relative(p.Origin, root)
+	return fmt.Sprintf("%s %s (%s)", p.Package, p.Label(), sendWhere(root, p.Position, p.Origin))
+}
+
+// sendWhere names where a document is sent: the call, and where the document
+// was handed over when the call did not name it, which is the zero position
+// otherwise.
+func sendWhere(root string, call, origin token.Position) string {
+	where := relative(call, root)
+	if origin.IsValid() {
+		where += ", handed over at " + relative(origin, root)
 	}
-	return fmt.Sprintf("%s %s (%s)", p.Package, p.Label(), where)
+	return where
 }
 
 // absolute makes the audited root absolute, so positions, which come out of

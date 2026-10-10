@@ -201,6 +201,10 @@ type judge struct {
 	// coverage counts what became of every object position the walk entered,
 	// which is what says how much of the walk this dimension covers.
 	coverage sentCoverage
+	// reads holds, for every struct position the walk is inside of, whether
+	// that position is read, innermost last, which is what a position that
+	// reads through to its children asks of its parent.
+	reads []bool
 }
 
 // judgePairing compares the document's selection set with the type it is
@@ -381,8 +385,10 @@ func (j *judge) judgeStruct(body *types.Struct, gqlType *ast.Type, goType types.
 	// silence the whole package's gap, which is the same union-for-an-
 	// intersection error one level down.
 	decoded := make(map[string]bool, len(selections))
-	readsLeaf := false
-	for _, field := range j.merged(selections) {
+	merged := j.merged(selections)
+	reads := j.readsLeaf(fields, merged) || j.readThroughHere()
+	j.reads = append(j.reads, reads)
+	for _, field := range merged {
 		key := responseKey(field)
 		selected[field.Name] = true
 		match := lookupField(fields, key)
@@ -393,13 +399,9 @@ func (j *judge) judgeStruct(body *types.Struct, gqlType *ast.Type, goType types.
 		}
 		decoded[field.Name] = true
 		read[match.name] = true
-		// __typename is a meta field no schema declares, so decoding it says
-		// nothing about whether this object is read or merely traversed.
-		if field.Name != "__typename" && j.isLeafType(fieldType(field)) {
-			readsLeaf = true
-		}
 		j.judgeType(match.typ, fieldType(field), field.SelectionSet, path+"."+key, match.asString)
 	}
+	j.reads = j.reads[:len(j.reads)-1]
 	for _, field := range fields {
 		if !read[field.name] {
 			j.fail(path+"."+field.name, "decoded from a field the document never selects, so it is always empty")
@@ -411,10 +413,37 @@ func (j *judge) judgeStruct(body *types.Struct, gqlType *ast.Type, goType types.
 		selections: selections,
 		selected:   selected,
 		decoded:    decoded,
-		readsLeaf:  readsLeaf,
+		readsLeaf:  reads,
 		path:       path,
 		goType:     goType,
 	})
+}
+
+// readsLeaf reports whether a struct decodes at least one scalar or enum of
+// the selection, which is what shows the object is read rather than only
+// traversed on the way to the next one. __typename is a meta field no schema
+// declares, so decoding it says nothing about whether the object is read.
+//
+// Every field is looked at rather than stopping at the first leaf, which is
+// how the walk answered the question before it was asked ahead of the
+// recursion, so what it costs and what it reaches stay what they were.
+func (j *judge) readsLeaf(fields []goField, merged []*ast.Field) bool {
+	reads := false
+	for _, field := range merged {
+		if field.Name != "__typename" && lookupField(fields, responseKey(field)) != nil && j.isLeafType(fieldType(field)) {
+			reads = true
+		}
+	}
+	return reads
+}
+
+// readThroughHere reports whether a position that decodes no leaf of its own
+// is read anyway, because the pairing reads through to it: the client-go run
+// does, where an object hanging from an object that is read is part of what
+// was read rather than an envelope around something else (see
+// [pairing.ReadThrough]).
+func (j *judge) readThroughHere() bool {
+	return j.pairing.ReadThrough && len(j.reads) > 0 && j.reads[len(j.reads)-1]
 }
 
 // merged flattens a selection set into one field per response key, with

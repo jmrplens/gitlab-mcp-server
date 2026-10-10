@@ -142,17 +142,25 @@ const (
 
 // The two epic packages whose note and discussion declarations below name
 // them row after row, spelled once so a reader compares names.
+//
+// Each path is written whole rather than joined onto toolsDir, here and in the
+// two sibling tables: the mutation tool cannot see a package-level declaration
+// and reads the plus of a joined one as never covered, a mutant no test can
+// kill since a string minus a string does not compile. The reasons below are
+// functions for the same cause.
 const (
-	epicDiscussionsPkg = toolsDir + "/epicdiscussions"
-	epicNotesPkg       = toolsDir + "/epicnotes"
+	epicDiscussionsPkg = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/epicdiscussions"
+	epicNotesPkg       = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/epicnotes"
 )
 
 // userCoreReason is what a user object under an author is doing there, which
 // is the largest single block of this dimension's findings.
-const userCoreReason = "The object is the author of a note, a discussion or a work item, named so a reader knows " +
-	"who wrote it. Its own fields are the users domain's surface, which publishes them through gitlab_user, and " +
-	"a note tool answering with a user's saved replies, callouts, group memberships and workspaces would be " +
-	"that domain twice over. What a note is asked for is the identity, which these documents select."
+func userCoreReason() string {
+	return "The object is the author of a note, a discussion or a work item, named so a reader knows " +
+		"who wrote it. Its own fields are the users domain's surface, which publishes them through gitlab_user, and " +
+		"a note tool answering with a user's saved replies, callouts, group memberships and workspaces would be " +
+		"that domain twice over. What a note is asked for is the identity, which these documents select."
+}
 
 // notesAnchorReason is why the work item under a notes query is an anchor
 // rather than the answer.
@@ -188,23 +196,29 @@ func referenceStub(object, tools string) string {
 
 // htmlRenderingReason is why the HTML renderings of a Markdown field are
 // left out wherever the field itself is published.
-const htmlRenderingReason = "The field is GitLab's HTML rendering of Markdown this response publishes in its source form " +
-	"(a note's body, a work item's title and description). GitLab's REST note and issue entities carry the Markdown " +
-	"alone, every note and issue tool of this server publishes that, and a caller that wants the page renders the " +
-	"Markdown it already has."
+func htmlRenderingReason() string {
+	return "The field is GitLab's HTML rendering of Markdown this response publishes in its source form " +
+		"(a note's body, a work item's title and description). GitLab's REST note and issue entities carry the Markdown " +
+		"alone, every note and issue tool of this server publishes that, and a caller that wants the page renders the " +
+		"Markdown it already has."
+}
 
 // viewerPermissionsReason is why the permissions object GitLab attaches to a
 // note, a thread or a work item is left out.
-const viewerPermissionsReason = "The object says what the token's own user may do with this note, thread or work item " +
-	"(edit it, resolve it, award an emoji), which is a property of the caller and not of the object, and GitLab's REST " +
-	"entities for the same objects carry no equivalent. This server answers that question by attempting the action " +
-	"and reporting GitLab's refusal, which is authoritative where a permissions snapshot can be stale."
+func viewerPermissionsReason() string {
+	return "The object says what the token's own user may do with this note, thread or work item " +
+		"(edit it, resolve it, award an emoji), which is a property of the caller and not of the object, and GitLab's REST " +
+		"entities for the same objects carry no equivalent. This server answers that question by attempting the action " +
+		"and reporting GitLab's refusal, which is authoritative where a permissions snapshot can be stale."
+}
 
 // duoReason is why a Duo Agent Platform object under a note or a work item
 // is left out.
-const duoReason = "The object is a session or a link of the GitLab Duo Agent Platform, a feature this server serves no " +
-	"tool for. Surfacing an agent session inside an epic note or an epic's child would start a Duo domain inside a " +
-	"notes tool, with no action to act on what it names."
+func duoReason() string {
+	return "The object is a session or a link of the GitLab Duo Agent Platform, a feature this server serves no " +
+		"tool for. Surfacing an agent session inside an epic note or an epic's child would start a Duo domain inside a " +
+		"notes tool, with no action to act on what it names."
+}
 
 // epicNoteDeclarations answers the fields of GitLab's Note that a package
 // decoding an epic's notes leaves out. The two packages that do so, the flat
@@ -222,11 +236,11 @@ func epicNoteDeclarations(pkg string) []sentDeclaration {
 			"removed through the awardEmojiAdd and awardEmojiRemove mutations. This server serves them as actions of the "+
 			"awardemoji domain for issue, merge request and snippet notes; an epic note's would be actions there too, "+
 			"not a list repeated inside every note an epic note tool answers with."),
-		note("bodyFirstLineHtml", categoryWebRendering, htmlRenderingReason),
-		note("bodyHtml", categoryWebRendering, htmlRenderingReason),
-		note("duoCreatedSession", categoryOutsideSurface, duoReason),
-		note("duoTriggeredSession", categoryOutsideSurface, duoReason),
-		note("duoWorkflowLinks", categoryOutsideSurface, duoReason),
+		note("bodyFirstLineHtml", categoryWebRendering, htmlRenderingReason()),
+		note("bodyHtml", categoryWebRendering, htmlRenderingReason()),
+		note("duoCreatedSession", categoryOutsideSurface, duoReason()),
+		note("duoTriggeredSession", categoryOutsideSurface, duoReason()),
+		note("duoWorkflowLinks", categoryOutsideSurface, duoReason()),
 		note("maxAccessLevelOfAuthor", categoryNeverSentHere, "Types::Notes::NoteType resolves it as "+
 			"Note#human_max_access, which is project&.team&.human_max_access(author_id) (app/models/note.rb); the EE "+
 			"override (ee/app/models/ee/note.rb) answers only for a group wiki note. An epic's notes carry no project and "+
@@ -247,7 +261,7 @@ func epicNoteDeclarations(pkg string) []sentDeclaration {
 			"system note: the kind of event for its icon and the description version its diff link opens. The REST "+
 			"note entity carries none of it, and the note's system flag and body, GitLab's own sentence for the "+
 			"event, are published."),
-		note("userPermissions", categoryViewer, viewerPermissionsReason),
+		note("userPermissions", categoryViewer, viewerPermissionsReason()),
 	}
 }
 
@@ -268,8 +282,8 @@ func epicIssueDeclarations() []sentDeclaration {
 		workItem("createNoteEmail", categoryViewer, "The address the token's own user can email to comment on "+
 			"the child, which carries that user's incoming email token: it is minted per user, identifies nothing "+
 			"about the child, and is not a value to repeat in a list other readers of the output may see."),
-		workItem("descriptionHtml", categoryWebRendering, htmlRenderingReason),
-		workItem("duoWorkflowLinks", categoryOutsideSurface, duoReason),
+		workItem("descriptionHtml", categoryWebRendering, htmlRenderingReason()),
+		workItem("duoWorkflowLinks", categoryOutsideSurface, duoReason()),
 		workItem("features", categoryNotThisResponse, "The object is the child's widgets in a second shape, one "+
 			"field per widget. The row is a child in an epic's list and carries the child's own fields and labels; "+
 			"the child's full widget surface is the work item a caller reads with the issue.work_item_get action, "+
@@ -290,8 +304,8 @@ func epicIssueDeclarations() []sentDeclaration {
 		workItem("showPlanUpgradePromotion", categoryViewer, "Whether GitLab's web interface should show the "+
 			"token's own user a promotion for a higher plan beside the child, which is marketing addressed to the "+
 			"viewer and says nothing about the child."),
-		workItem("titleHtml", categoryWebRendering, htmlRenderingReason),
-		workItem("userPermissions", categoryViewer, viewerPermissionsReason),
+		workItem("titleHtml", categoryWebRendering, htmlRenderingReason()),
+		workItem("userPermissions", categoryViewer, viewerPermissionsReason()),
 		workItem("webPath", categoryPublishedElsewhere, "The path part of the child's web URL, without the scheme "+
 			"and host, which the row already publishes whole as web_url; a second key carrying a substring of the "+
 			"first would give a caller nothing to act on that the first does not."),
@@ -377,21 +391,21 @@ func epicSentDeclarations() []sentDeclaration {
 			SchemaType: "UserCore",
 			Field:      declaredSegment,
 			Category:   categoryNotThisResponse,
-			Reason:     userCoreReason,
+			Reason:     userCoreReason(),
 		},
 		{
 			Package:    epicNotesPkg,
 			SchemaType: "UserCore",
 			Field:      declaredSegment,
 			Category:   categoryNotThisResponse,
-			Reason:     userCoreReason,
+			Reason:     userCoreReason(),
 		},
 		{
 			Package:    toolsDir + "/epicissues",
 			SchemaType: "UserCore",
 			Field:      declaredSegment,
 			Category:   categoryNotThisResponse,
-			Reason:     userCoreReason,
+			Reason:     userCoreReason(),
 		},
 		{
 			Package:    epicDiscussionsPkg,
@@ -460,7 +474,7 @@ func epicSentDeclarations() []sentDeclaration {
 			SchemaType: "Discussion",
 			Field:      "userPermissions",
 			Category:   categoryViewer,
-			Reason:     viewerPermissionsReason,
+			Reason:     viewerPermissionsReason(),
 		},
 		{
 			Package:    toolutilDir,
