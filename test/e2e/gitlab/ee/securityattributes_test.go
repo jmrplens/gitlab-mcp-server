@@ -9,10 +9,17 @@
 package ee
 
 import (
+	"encoding/json"
+	"maps"
+	"reflect"
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/securityattributes"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
@@ -133,4 +140,96 @@ func TestSecurityAttributes_Lifecycle_AssignsToAProjectAndDeletes(t *testing.T) 
 		harness.DoVoid(s, actionSecurityAttributeDelete, map[string]any{"attribute_id": attribute.ID})
 		harness.DoVoid(s, actionSecurityCategoryDelete, map[string]any{"category_id": category.ID})
 	})
+}
+
+// TestSecurityAttributes_Find_UpdateExampleIsACallTheInstanceAccepts asks
+// the dynamic surface's find for the attribute update, which requires the
+// attribute and at least one of a name, a description or a color, and then
+// sends the example call find offers, with the real attribute bound in.
+//
+// The update is the action issue 1175 was found on: find listed all four as
+// required and filled the color with "value", which its hex pattern refuses,
+// so the call find offered was one the server turned away before GitLab saw
+// it. Now required_params names the attribute alone, the other three are
+// alternatives of their own, and the example fills the first of them; the
+// instance accepting it and renaming the attribute is what proves the example
+// is a call, not only a shape.
+func TestSecurityAttributes_Find_UpdateExampleIsACallTheInstanceAccepts(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.Tier(edition.Ultimate)))
+	f := buildClassificationFixture(e)
+	s := e.On(harness.SurfaceDynamic)
+	category := newSecurityCategory(e, s, f.group, true)
+
+	created := harness.Do[securityattributes.CreateOutput](s, actionSecurityAttributeCreate, map[string]any{
+		"namespace_id": f.group.ID, "category_id": category.ID,
+		"attributes": []map[string]any{{"name": e.Name("attribute"), "description": "e2e security attribute", "color": attributeColor}},
+	})
+	if len(created.Attributes) != 1 || created.Attributes[0].ID == 0 {
+		e.T.Fatalf("create answered %+v, want exactly the one attribute with an ID", created.Attributes)
+	}
+	attribute := created.Attributes[0]
+	e.T.Cleanup(func() {
+		if _, err := harness.Try[securityattributes.Output](s, actionSecurityAttributeDelete,
+			map[string]any{"attribute_id": attribute.ID}, harness.For(harness.PurposeCleanup)); err != nil {
+			e.T.Logf("the cleanup delete of attribute %d answered: %v", attribute.ID, err)
+		}
+	})
+
+	result := findUpdateResult(e, s)
+	if !slices.Equal(result.RequiredParams, []string{"attribute_id"}) {
+		e.T.Errorf("find required_params = %v, want attribute_id alone", result.RequiredParams)
+	}
+	if want := [][]string{{"name"}, {"description"}, {"color"}}; !reflect.DeepEqual(result.RequiredParamsAnyOf, want) {
+		e.T.Errorf("find required_params_any_of = %v, want %v", result.RequiredParamsAnyOf, want)
+	}
+	params, ok := result.Example.Arguments["params"].(map[string]any)
+	if !ok {
+		e.T.Fatalf("find example carries no params object: %#v", result.Example.Arguments)
+	}
+	if got := slices.Sorted(maps.Keys(params)); !slices.Equal(got, []string{"attribute_id", "name"}) {
+		e.T.Fatalf("find example fills %v, want attribute_id and the first alternative, name", got)
+	}
+
+	params["attribute_id"] = attribute.ID
+	updated := harness.Do[securityattributes.Output](s, actionSecurityAttributeUpdate, params)
+	if updated.ID != attribute.ID || updated.Name != params["name"] {
+		e.T.Errorf("the example update answered %+v, want attribute %d renamed to %v", updated, attribute.ID, params["name"])
+	}
+	if updated.Color != attributeColor {
+		e.T.Errorf("the example update answered color %q, want %q left as it was", updated.Color, attributeColor)
+	}
+}
+
+// findUpdateResult runs gitlab_find_action for the attribute update and
+// returns its result, failing the test when find does not return it. It goes
+// through Raw because find is discovery rather than an action the coverage
+// report credits.
+func findUpdateResult(e *harness.Env, s *harness.Session) dynamictools.FindResult {
+	e.T.Helper()
+
+	result, err := s.Raw(&mcp.CallToolParams{
+		Name:      dynamictools.FindActionToolName,
+		Arguments: dynamictools.FindInput{Query: "update a security attribute name description or color", Limit: 10},
+	})
+	if err != nil {
+		e.T.Fatalf("%s: %v", dynamictools.FindActionToolName, err)
+	}
+	if result == nil || result.IsError {
+		e.T.Fatalf("%s answered an error: %+v", dynamictools.FindActionToolName, result)
+	}
+	encoded, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		e.T.Fatalf("encoding the %s answer: %v", dynamictools.FindActionToolName, err)
+	}
+	var out dynamictools.FindOutput
+	if err = json.Unmarshal(encoded, &out); err != nil {
+		e.T.Fatalf("decoding the %s answer: %v", dynamictools.FindActionToolName, err)
+	}
+	for _, found := range out.Results {
+		if found.ID == string(actionSecurityAttributeUpdate) {
+			return found
+		}
+	}
+	e.T.Fatalf("%s did not return %s", dynamictools.FindActionToolName, actionSecurityAttributeUpdate)
+	return dynamictools.FindResult{}
 }

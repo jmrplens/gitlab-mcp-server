@@ -141,7 +141,8 @@ type refAction struct {
 	description string
 	params      []param
 	// oneOf lists the alternative parameter sets of which the schema requires
-	// at least one, beside the parameters it always requires.
+	// at least one, beside the parameters it always requires, each holding
+	// what it adds to them (actioncatalog.RequiredParamAlternatives).
 	oneOf [][]string
 
 	// domain is the action ID's prefix, which is also the heading the

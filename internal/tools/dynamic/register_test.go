@@ -1116,8 +1116,8 @@ func TestDynamicCatalog_DelegatedSpecBackedDomainsPreserveIDsAndSchemas(t *testi
 				t.Fatalf("%s SpecBacked = false, want true", actionID)
 			}
 			assertSchemaPropertyNamesEqual(t, actionID, description.InputSchema, catalogAction.Route.InputSchema)
-			if !slices.Equal(description.RequiredParams, requiredParams(catalogAction.Route.InputSchema)) {
-				t.Fatalf("%s RequiredParams = %v, want %v", actionID, description.RequiredParams, requiredParams(catalogAction.Route.InputSchema))
+			if want := actioncatalog.RequiredParams(catalogAction.Route.InputSchema); !slices.Equal(description.RequiredParams, want) {
+				t.Fatalf("%s RequiredParams = %v, want %v", actionID, description.RequiredParams, want)
 			}
 			assertSchemaPropertyNamesEqual(t, actionID+" output", description.OutputSchema, catalogAction.Route.OutputSchema)
 		})
@@ -1477,23 +1477,6 @@ func TestUnsearchableAlias_CanonicalizesWithoutRanking(t *testing.T) {
 	}
 	if slices.ContainsFunc(searchOutput.Results, func(result SearchResult) bool { return result.ID == "project.get" }) {
 		t.Fatalf("Search() results = %+v, want hidden alias not to rank project.get", searchOutput.Results)
-	}
-}
-
-// TestRequiredParams_IncludesPreferredAlternative verifies that schemas using
-// anyOf still produce a useful example branch for search and describe output.
-func TestRequiredParams_IncludesPreferredAlternative(t *testing.T) {
-	schema := map[string]any{
-		"required": []any{"project_id", "title"},
-		"anyOf": []any{
-			map[string]any{"required": []any{"file_name", "content"}},
-			map[string]any{"required": []any{"files"}},
-		},
-	}
-
-	got := strings.Join(requiredParams(schema), ",")
-	if got != "content,file_name,files,project_id,title" {
-		t.Fatalf("requiredParams() = %q", got)
 	}
 }
 
@@ -3036,63 +3019,174 @@ func TestMissingDynamicRequiredParams_AcceptsAnyOfAlternatives(t *testing.T) {
 		},
 	}
 
-	if got := missingDynamicRequiredParams(schema, map[string]any{"project_id": "p", "title": "t", "file_name": "a.md", "content": "body"}); len(got) != 0 {
-		t.Fatalf("missingDynamicRequiredParams(single-file) = %v, want none", got)
+	complete := []struct {
+		name   string
+		params map[string]any
+	}{
+		{name: "single file", params: map[string]any{"project_id": "p", "title": "t", "file_name": "a.md", "content": "body"}},
+		{name: "files", params: map[string]any{"project_id": "p", "title": "t", "files": []any{map[string]any{"file_path": "a.md", "content": "body"}}}},
 	}
-	if got := missingDynamicRequiredParams(schema, map[string]any{"project_id": "p", "title": "t", "files": []any{map[string]any{"file_path": "a.md", "content": "body"}}}); len(got) != 0 {
-		t.Fatalf("missingDynamicRequiredParams(files) = %v, want none", got)
-	}
-	if got := missingDynamicRequiredParams(schema, map[string]any{"project_id": "p", "title": "t", "file_name": "a.md"}); !slices.Equal(got, []string{"content"}) {
-		t.Fatalf("missingDynamicRequiredParams(partial) = %v, want content", got)
-	}
-}
-
-// TestMissingAlternativeRequiredParams_ReportsTheCheapestUnsatisfiedGroup
-// verifies that when no alternative is satisfied the refusal names the one
-// closest to being satisfied, not the first one declared.
-//
-// The caller is being told what to send next, so the shortest list of missing
-// params is the useful answer: reporting "file_name, content" when adding
-// "files" alone would do sends them the long way round.
-func TestMissingAlternativeRequiredParams_ReportsTheCheapestUnsatisfiedGroup(t *testing.T) {
-	schema := map[string]any{"anyOf": []any{
-		map[string]any{"required": []any{"file_name", "content"}},
-		map[string]any{"required": []any{"files"}},
-	}}
-
-	if got := missingAlternativeRequiredParams(schema, map[string]any{"project_id": "p"}); !slices.Equal(got, []string{"files"}) {
-		t.Fatalf("missingAlternativeRequiredParams() = %v, want the single-param alternative", got)
-	}
-}
-
-// TestAlternativeRequiredParamGroups_KeywordAndGroupSelection verifies which
-// alternatives the validator reads out of a schema: an anyOf that declares no
-// alternatives leaves oneOf to answer, and an alternative that requires nothing
-// contributes no group.
-//
-// Both shapes look like "there are alternatives" from the outside and mean the
-// opposite. An empty anyOf that stopped the search would hide a real oneOf, and
-// an empty group would satisfy every call, which turns the whole check off.
-func TestAlternativeRequiredParamGroups_KeywordAndGroupSelection(t *testing.T) {
-	t.Run("an empty anyOf falls back to oneOf", func(t *testing.T) {
-		groups := alternativeRequiredParamGroups(map[string]any{
-			"anyOf": []any{},
-			"oneOf": []any{map[string]any{"required": []any{"files"}}},
+	for _, tc := range complete {
+		t.Run(tc.name, func(t *testing.T) {
+			if missing, alternatives := missingDynamicRequiredParams(schema, tc.params); len(missing) != 0 || alternatives != nil {
+				t.Fatalf("missingDynamicRequiredParams(%v) = %v and %v, want none", tc.params, missing, alternatives)
+			}
 		})
-		if len(groups) != 1 || !slices.Equal(groups[0], []string{"files"}) {
-			t.Fatalf("alternativeRequiredParamGroups() = %v, want the oneOf group", groups)
-		}
-	})
+	}
+	missing, alternatives := missingDynamicRequiredParams(schema, map[string]any{"project_id": "p", "file_name": "a.md"})
+	if !slices.Equal(missing, []string{"title"}) || !reflect.DeepEqual(alternatives, [][]string{{"file_name", "content"}, {"files"}}) {
+		t.Fatalf("missingDynamicRequiredParams(partial) = %v and %v, want title and both groups", missing, alternatives)
+	}
+}
 
-	t.Run("an alternative requiring nothing is skipped", func(t *testing.T) {
-		groups := alternativeRequiredParamGroups(map[string]any{"anyOf": []any{
-			map[string]any{"required": []any{}},
-			map[string]any{"required": []any{"files"}},
-		}})
-		if len(groups) != 1 || !slices.Equal(groups[0], []string{"files"}) {
-			t.Fatalf("alternativeRequiredParamGroups() = %v, want only the group that requires something", groups)
-		}
-	})
+// TestMissingDynamicRequiredParams_ASingleGroupIsRequired verifies that a
+// schema whose alternatives come down to one group asks for that group's names
+// as required params: a call has no other way to meet it, so offering it as
+// "one of" a single choice would misstate it, and find writes it as the group
+// alone for the same reason.
+func TestMissingDynamicRequiredParams_ASingleGroupIsRequired(t *testing.T) {
+	schema := map[string]any{
+		"required": []any{"project_id"},
+		"anyOf":    []any{map[string]any{"required": []any{"name", "color"}}},
+	}
+	missing, alternatives := missingDynamicRequiredParams(schema, map[string]any{"name": "n"})
+	if !slices.Equal(missing, []string{"color", "project_id"}) || alternatives != nil {
+		t.Fatalf("missingDynamicRequiredParams() = %v and %v, want color and project_id as required and no alternatives", missing, alternatives)
+	}
+}
+
+// TestExecute_MissingAlternativesAreNamedAsFindNamesThem verifies the refusal
+// a call gets when it carries none of an action's alternatives: the root
+// params it lacks are named as required, and the alternatives as the choice
+// find publishes, never one of them as if it alone were required. The refusal
+// used to say "Missing required params: name" to a security_attribute.update
+// call while find said attribute_id and one of name, description or color, and
+// to a snippet.create call it named files while find's example filled
+// file_name and content.
+func TestExecute_MissingAlternativesAreNamedAsFindNamesThem(t *testing.T) {
+	registry := NewRegistryFromCatalog(mustCachedCatalog(t, true))
+	tests := []struct {
+		name    string
+		action  string
+		params  map[string]any
+		want    string
+		without string
+	}{
+		{
+			name:    "the alternatives alone",
+			action:  "security_attribute.update",
+			params:  map[string]any{"attribute_id": 1},
+			want:    "gitlab_execute_action/security_attribute.update: invalid params. Missing one of name, description or color. Valid params:",
+			without: "Missing required params",
+		},
+		{
+			name:   "the root params and the alternatives",
+			action: "security_attribute.update",
+			params: map[string]any{},
+			want:   "gitlab_execute_action/security_attribute.update: invalid params. Missing required params: attribute_id. Missing one of name, description or color. Valid params:",
+		},
+		{
+			name:    "groups of several names",
+			action:  "snippet.create",
+			params:  map[string]any{"title": "t"},
+			want:    "invalid params. Missing one of file_name + content or files. Valid params:",
+			without: "Missing required params",
+		},
+		{
+			name:   "an action without alternatives names no choice",
+			action: "project.get",
+			params: map[string]any{},
+			want:   "gitlab_execute_action/project.get: invalid params. Missing required params: project_id. Valid params:",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result, _, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: tc.action, Params: tc.params})
+			if err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+			if result == nil || !result.IsError {
+				t.Fatalf("Execute() result = %+v, want tool error", result)
+			}
+			text := textContent(result)
+			if !strings.Contains(text, tc.want) {
+				t.Errorf("Execute() error text = %q, want it to contain %q", text, tc.want)
+			}
+			if tc.without != "" && strings.Contains(text, tc.without) {
+				t.Errorf("Execute() error text = %q, want no %q", text, tc.without)
+			}
+		})
+	}
+}
+
+// TestUnmetAlternatives_DemandsWhatFindPublishes verifies that execute
+// demands of the alternatives exactly what find and the manifest publish,
+// since all three read actioncatalog.RequiredParamAlternatives: an anyOf that
+// declares no alternatives leaves oneOf to answer, and an alternative that
+// requires nothing satisfies its keyword. A call that completes none of the
+// groups is answered with all of them, as find lists them.
+//
+// The second used to be read the other way. The validator skipped a branch
+// that required nothing and demanded the remaining one, so it refused a call
+// the schema accepts, and, once find stopped publishing a group no call has to
+// meet, it would have refused find's own example for such a schema.
+func TestUnmetAlternatives_DemandsWhatFindPublishes(t *testing.T) {
+	tests := []struct {
+		name   string
+		schema map[string]any
+		params map[string]any
+		want   [][]string
+	}{
+		{
+			name:   "an empty anyOf leaves oneOf to answer",
+			schema: map[string]any{"anyOf": []any{}, "oneOf": []any{map[string]any{"required": []any{"files"}}}},
+			want:   [][]string{{"files"}},
+		},
+		{
+			name: "every group is named when none is complete",
+			schema: map[string]any{"anyOf": []any{
+				map[string]any{"required": []any{"file_name", "content"}},
+				map[string]any{"required": []any{"files"}},
+			}},
+			params: map[string]any{"file_name": "a.md"},
+			want:   [][]string{{"file_name", "content"}, {"files"}},
+		},
+		{
+			name: "an alternative requiring nothing satisfies its keyword",
+			schema: map[string]any{"anyOf": []any{
+				map[string]any{"required": []any{}},
+				map[string]any{"required": []any{"files"}},
+			}},
+			want: nil,
+		},
+		{
+			name: "an alternative the root list satisfies satisfies its keyword",
+			schema: map[string]any{
+				"required": []any{"project_id"},
+				"anyOf":    []any{map[string]any{"required": []any{"project_id"}}, map[string]any{"required": []any{"name"}}},
+			},
+			want: nil,
+		},
+		{
+			name:   "a branch that is not an object is skipped",
+			schema: map[string]any{"anyOf": []any{"invalid", map[string]any{"required": []any{"file_path"}}}},
+			want:   [][]string{{"file_path"}},
+		},
+		{
+			name:   "a satisfied alternative asks nothing",
+			schema: map[string]any{"anyOf": []any{map[string]any{"required": []any{"name"}}, map[string]any{"required": []any{"color"}}}},
+			params: map[string]any{"color": "#1F75CB"},
+			want:   nil,
+		},
+		{name: "no schema asks nothing", schema: nil, want: nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := unmetAlternatives(tc.schema, tc.params); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("unmetAlternatives() = %v, want %v", got, tc.want)
+			}
+		})
+	}
 }
 
 // TestExecute_UnknownActionSuggestsCanonicalIDs verifies that an action ID
@@ -6515,17 +6609,8 @@ func TestDynamicParamValidation_DefensiveBranches(t *testing.T) {
 	if got := unknownDynamicParamNames(map[string]any{"project_id": 1}, nil); got != nil {
 		t.Fatalf("unknownDynamicParamNames(no valid params) = %v, want nil", got)
 	}
-	if got := rootRequiredParams(nil); got != nil {
-		t.Fatalf("rootRequiredParams(nil) = %v, want nil", got)
-	}
-	if got := alternativeRequiredParamGroups(map[string]any{"anyOf": []any{"invalid", map[string]any{"required": []any{"file_path"}}}}); len(got) != 1 || got[0][0] != "file_path" {
-		t.Fatalf("alternativeRequiredParamGroups() = %v, want file_path group", got)
-	}
-	if got := alternativeRequiredParamGroups(map[string]any{"anyOf": "invalid", "oneOf": []any{map[string]any{"required": []any{"content"}}}}); len(got) != 1 || got[0][0] != "content" {
-		t.Fatalf("alternativeRequiredParamGroups(oneOf fallback) = %v, want content group", got)
-	}
-	if got := alternativeRequiredParamGroups(nil); got != nil {
-		t.Fatalf("alternativeRequiredParamGroups(nil) = %v, want nil", got)
+	if missing, alternatives := missingDynamicRequiredParams(nil, map[string]any{"project_id": 1}); len(missing) != 0 || alternatives != nil {
+		t.Fatalf("missingDynamicRequiredParams(nil) = %v and %v, want none", missing, alternatives)
 	}
 	if got := closestDynamicParamName("proj", []string{"project_id"}); got != "project_id" {
 		t.Fatalf("closestDynamicParamName() = %q, want project_id", got)
@@ -7314,19 +7399,6 @@ func TestWordizeSearchDocument_OnlyADocumentWithValuesGetsTheMap(t *testing.T) {
 	}
 }
 
-// TestRequiredParamAndPlaceholderBranches verifies preferred required-parameter
-// extraction from alternative schema groups and parameter placeholder selection.
-// It uses small schema fixtures with no external setup.
-func TestRequiredParamAndPlaceholderBranches(t *testing.T) {
-	schema := map[string]any{"anyOf": []any{"invalid", map[string]any{"required": []any{"project_id"}}}}
-	if got := appendPreferredAlternativeRequiredParams(nil, schema); len(got) != 1 || got[0] != "project_id" {
-		t.Fatalf("appendPreferredAlternativeRequiredParams() = %v, want project_id", got)
-	}
-	if got := placeholderForParam("group_id"); got != "group/subgroup" {
-		t.Fatalf("placeholderForParam(group_id) = %v, want group/subgroup", got)
-	}
-}
-
 // schemaWithProperties extracts schema with properties details for schema assertions.
 func schemaWithProperties(names ...string) map[string]any {
 	properties := make(map[string]any, len(names))
@@ -7350,8 +7422,8 @@ func TestNormalization_FormattingBranches(t *testing.T) {
 	})
 
 	t.Run("placeholder selects dates and generic values", func(t *testing.T) {
-		if got := placeholderForParam("due_date"); got != "YYYY-MM-DD" {
-			t.Fatalf("placeholderForParam(date) = %v, want YYYY-MM-DD", got)
+		if got := placeholderForParam("due_date"); got != exampleDate {
+			t.Fatalf("placeholderForParam(date) = %v, want %s", got, exampleDate)
 		}
 		if got := placeholderForParam("project_id"); got != "group/project" {
 			t.Fatalf("placeholderForParam(project_id) = %v, want group/project", got)
@@ -7809,6 +7881,8 @@ func TestScoreRequiredParamSignals_WeighsARequiredParamAboveAnOptionalOne(t *tes
 
 // TestCompactParamList_EdgeCases verifies all branches of compactParamList:
 // empty params, within limit, exactly at limit, and truncated with overflow.
+// An empty list renders as nothing, so the alternatives a call needs instead
+// can stand in its place without a "none" in front of them.
 func TestCompactParamList_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -7817,16 +7891,16 @@ func TestCompactParamList_EdgeCases(t *testing.T) {
 		want   string
 	}{
 		{
-			name:   "empty params returns none",
+			name:   "empty params render as nothing",
 			params: []string{},
 			limit:  5,
-			want:   "none",
+			want:   "",
 		},
 		{
-			name:   "nil params returns none",
+			name:   "nil params render as nothing",
 			params: nil,
 			limit:  5,
-			want:   "none",
+			want:   "",
 		},
 		{
 			name:   "params within limit returns backtick list",
@@ -9774,6 +9848,24 @@ func TestSearchNextStep_AdviceForEachTopResultShape(t *testing.T) {
 			want:    "has no required params",
 		},
 		{
+			name: "alternatives are named after the params every call needs",
+			results: []SearchResult{{
+				ID:                  "security_attribute.update",
+				RequiredParams:      []string{"attribute_id"},
+				RequiredParamsAnyOf: [][]string{{"name"}, {"description"}, {"color"}},
+			}},
+			want: "search only proves required params `attribute_id` and one of `name`, `description` or `color`.",
+		},
+		{
+			name: "alternatives alone are not read as no params at all",
+			results: []SearchResult{{
+				ID:                  "snippet.create",
+				RequiredParamsAnyOf: [][]string{{"file_name", "content"}, {"files"}},
+			}},
+			want: "search only proves required params one of `file_name` + `content` or `files`.",
+			deny: "has no required params",
+		},
+		{
 			name:    "destructive high confidence names the params and the confirm flag",
 			results: []SearchResult{{ID: "project.delete", Destructive: true, RequiredParams: []string{"project_id"}}},
 			want:    "confirm:true only after explicit user approval",
@@ -10016,49 +10108,6 @@ func TestScoreParamContainsFor_KeepsAScoreWeakerThanTheSynonymFloor(t *testing.T
 	}
 }
 
-// TestAppendRequiredParamNames_SkipsNonStringsAndEmptyNames verifies both
-// halves of the guard over a JSON "required" array. The array is decoded from a
-// schema, so an element can be any JSON value, and an empty name is a name no
-// caller can supply: either one reaching the required list would be published
-// as a parameter and reported missing on every call of that action.
-func TestAppendRequiredParamNames_SkipsNonStringsAndEmptyNames(t *testing.T) {
-	t.Run("any-typed array", func(t *testing.T) {
-		got := appendRequiredParamNames(nil, []any{"project_id", 42, "", map[string]any{}, "issue_iid"})
-		if !slices.Equal(got, []string{"project_id", "issue_iid"}) {
-			t.Fatalf("appendRequiredParamNames() = %v, want only the non-empty strings", got)
-		}
-	})
-
-	t.Run("already typed as strings", func(t *testing.T) {
-		got := appendRequiredParamNames(nil, []string{"project_id"})
-		if !slices.Equal(got, []string{"project_id"}) {
-			t.Fatalf("appendRequiredParamNames() = %v, want project_id", got)
-		}
-	})
-
-	t.Run("anything else contributes nothing", func(t *testing.T) {
-		if got := appendRequiredParamNames(nil, "project_id"); got != nil {
-			t.Fatalf("appendRequiredParamNames(string) = %v, want nil", got)
-		}
-	})
-}
-
-// TestAppendPreferredAlternativeRequiredParams_EmptyAnyOfFallsThroughToOneOf
-// verifies that an alternative keyword present but empty does not claim the
-// schema. Only the first keyword carrying alternatives is read, so an empty
-// anyOf that counted as present would stop the walk and leave the action with
-// no required parameters at all, while its oneOf group names them.
-func TestAppendPreferredAlternativeRequiredParams_EmptyAnyOfFallsThroughToOneOf(t *testing.T) {
-	schema := map[string]any{
-		"anyOf": []any{},
-		"oneOf": []any{map[string]any{"required": []any{"group_id"}}},
-	}
-	got := appendPreferredAlternativeRequiredParams(nil, schema)
-	if !slices.Equal(got, []string{"group_id"}) {
-		t.Fatalf("appendPreferredAlternativeRequiredParams() = %v, want group_id from oneOf", got)
-	}
-}
-
 // TestPlaceholderForParam_EveryNamedShape verifies the example value published
 // for each parameter name the switch recognizes, plus the three suffix rules
 // under it. The example is what a model copies into its first call, so a name
@@ -10087,7 +10136,7 @@ func TestPlaceholderForParam_EveryNamedShape(t *testing.T) {
 		{name: "id", want: 123},
 		{name: "issue_id", want: 123},
 		{name: "issue_iid", want: 123},
-		{name: "due_date", want: "YYYY-MM-DD"},
+		{name: "due_date", want: exampleDate},
 		{name: "title", want: "value"},
 	}
 
@@ -10934,6 +10983,183 @@ func TestFormatFindOutput_RequiredParamsCell(t *testing.T) {
 			t.Fatalf("formatFindOutput() = %q, want %q", got, want)
 		}
 	})
+
+	t.Run("alternatives follow the required params", func(t *testing.T) {
+		want := "## GitLab Catalog: 1 matching action\n\n- **Query**: `update security attribute`\n\n" + header +
+			"| `security_attribute.update` | 10 | - | `attribute_id` and one of `name`, `description` or `color` |\n" + hints
+		got := formatFindOutput(FindOutput{
+			Query: "update security attribute",
+			Count: 1,
+			Results: []FindResult{{
+				ID: "security_attribute.update", Score: 10,
+				RequiredParams:      []string{"attribute_id"},
+				RequiredParamsAnyOf: [][]string{{"name"}, {"description"}, {"color"}},
+			}},
+		}, nil)
+		if got != want {
+			t.Fatalf("formatFindOutput() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("alternatives alone fill the cell", func(t *testing.T) {
+		want := "## GitLab Catalog: 1 matching action\n\n- **Query**: `create snippet`\n\n" + header +
+			"| `snippet.create` | 10 | - | one of `file_name` + `content` or `files` |\n" + hints
+		got := formatFindOutput(FindOutput{
+			Query: "create snippet",
+			Count: 1,
+			Results: []FindResult{{
+				ID: "snippet.create", Score: 10,
+				RequiredParamsAnyOf: [][]string{{"file_name", "content"}, {"files"}},
+			}},
+		}, nil)
+		if got != want {
+			t.Fatalf("formatFindOutput() = %q, want %q", got, want)
+		}
+	})
+}
+
+// TestAlternativesPhrase_JoinsTheGroups verifies how alternative groups are
+// written for a reader, for every count of groups the phrase distinguishes,
+// and how the phrase joins the params every call needs. A single group is no
+// choice, since a call needs every name of it, so it is written without "one
+// of", which would read as a choice among its names.
+func TestAlternativesPhrase_JoinsTheGroups(t *testing.T) {
+	phrases := []struct {
+		name   string
+		groups [][]string
+		want   string
+	}{
+		{name: "no groups", groups: nil, want: ""},
+		{name: "one group of one name", groups: [][]string{{"files"}}, want: "`files`"},
+		{name: "one group of several names", groups: [][]string{{"file_name", "content"}}, want: "`file_name` + `content`"},
+		{name: "two groups", groups: [][]string{{"project_ids"}, {"group_ids"}}, want: "one of `project_ids` or `group_ids`"},
+		{name: "three groups", groups: [][]string{{"name"}, {"description"}, {"color"}}, want: "one of `name`, `description` or `color`"},
+	}
+	for _, tc := range phrases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := alternativesPhrase(tc.groups, backtickString); got != tc.want {
+				t.Fatalf("alternativesPhrase() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	joins := []struct {
+		name         string
+		required     string
+		alternatives string
+		want         string
+	}{
+		{name: "neither", want: ""},
+		{name: "required alone", required: "`id`", want: "`id`"},
+		{name: "alternatives alone", alternatives: "one of `a` or `b`", want: "one of `a` or `b`"},
+		{name: "both", required: "`id`", alternatives: "one of `a` or `b`", want: "`id` and one of `a` or `b`"},
+	}
+	for _, tc := range joins {
+		t.Run("join/"+tc.name, func(t *testing.T) {
+			if got := withAlternatives(tc.required, tc.alternatives); got != tc.want {
+				t.Fatalf("withAlternatives(%q, %q) = %q, want %q", tc.required, tc.alternatives, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFormatSearchOutput_RequiredParamsCellNamesTheAlternatives verifies the
+// search twin of the find cell: the alternatives a search result carries are
+// written after its required params, so the table a model reads its first call
+// from does not show an action that needs one of three params as one that
+// needs none of them.
+func TestFormatSearchOutput_RequiredParamsCellNamesTheAlternatives(t *testing.T) {
+	got := formatSearchOutput(SearchOutput{
+		Query: "update security category",
+		Count: 1,
+		Results: []SearchResult{{
+			ID: "security_category.update", Score: 10,
+			RequiredParams:      []string{"category_id"},
+			RequiredParamsAnyOf: [][]string{{"name"}, {"description"}},
+		}},
+	})
+	if want := "| `security_category.update` | 10 | - | `category_id` and one of `name` or `description` |"; !strings.Contains(got, want) {
+		t.Fatalf("formatSearchOutput() = %q, want the row %q", got, want)
+	}
+}
+
+// TestFormatDescribeOutput_RequiredParamsNameTheAlternatives verifies the
+// describe card's requirement line: the alternatives follow the params every
+// call needs, and an action that needs only one of its alternatives still has
+// the line, since a missing line reads as an action that takes nothing.
+func TestFormatDescribeOutput_RequiredParamsNameTheAlternatives(t *testing.T) {
+	cases := []struct {
+		name   string
+		action ActionDescription
+		want   string
+	}{
+		{
+			name: "required params and alternatives",
+			action: ActionDescription{
+				ID: "security_attribute.update", Tool: "gitlab_security_attribute", Action: "update",
+				RequiredParams:      []string{"attribute_id"},
+				RequiredParamsAnyOf: [][]string{{"name"}, {"color"}},
+			},
+			want: "- **Required params**: `attribute_id` and one of `name` or `color`\n",
+		},
+		{
+			name: "alternatives alone",
+			action: ActionDescription{
+				ID: "security_scan_profile.attach", Tool: "gitlab_security_scan_profile", Action: "attach",
+				RequiredParamsAnyOf: [][]string{{"project_ids"}, {"group_ids"}},
+			},
+			want: "- **Required params**: one of `project_ids` or `group_ids`\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := formatDescribeOutput(DescribeOutput{Count: 1, Actions: []ActionDescription{tc.action}})
+			if !strings.Contains(got, tc.want) {
+				t.Fatalf("formatDescribeOutput() = %q, want the line %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestWhyThisActionForEntry_SaysWhatTheCallNeeds verifies the fallback reason
+// a close or ambiguous match carries when its action has no usage note: it
+// names the params every call needs and the alternatives, and an action that
+// needs nothing says so rather than ending on "required params ." with an
+// empty list.
+func TestWhyThisActionForEntry_SaysWhatTheCallNeeds(t *testing.T) {
+	cases := []struct {
+		name  string
+		entry actionEntry
+		want  string
+	}{
+		{
+			name:  "a usage note wins",
+			entry: actionEntry{ID: "widget.get", Usage: "Reads one widget.", RequiredParams: []string{"widget_id"}},
+			want:  "Reads one widget.",
+		},
+		{
+			name:  "required params",
+			entry: actionEntry{ID: "widget.get", RequiredParams: []string{"project_id", "widget_id"}},
+			want:  "Matches canonical action widget.get with required params project_id, widget_id.",
+		},
+		{
+			name:  "required params and alternatives",
+			entry: actionEntry{ID: "widget.update", RequiredParams: []string{"widget_id"}, RequiredParamsAnyOf: [][]string{{"name"}, {"color"}}},
+			want:  "Matches canonical action widget.update with required params widget_id and one of name or color.",
+		},
+		{
+			name:  "nothing required",
+			entry: actionEntry{ID: "widget.list"},
+			want:  "Matches canonical action widget.list, which has no required params.",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := whyThisActionForEntry(tc.entry); got != tc.want {
+				t.Fatalf("whyThisActionForEntry() = %q, want %q", got, tc.want)
+			}
+		})
+	}
 }
 
 // TestFormatFindOutput_LowConfidenceAndAmbiguityAreSaidOutLoud verifies that a
