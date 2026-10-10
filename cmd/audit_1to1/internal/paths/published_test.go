@@ -885,7 +885,7 @@ type RightOutput struct {
 	}
 }
 
-// TestEnvelopePayload_TellsThePackagingFromTheContent verifies the rule that
+// TestEnvelopePayloads_TellsThePackagingFromTheContent verifies the rule that
 // decides whether a type named as somebody's field is a response.
 //
 // Both shapes exist in this repository and they look identical to a walk that

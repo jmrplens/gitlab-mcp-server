@@ -125,8 +125,10 @@ func run(cfg auditRun, out, errOut io.Writer) int {
 		// own gate (make check-graphql-schema) refuses a build where either
 		// does not load, so a failure here is not something this command could
 		// act on.
+		var sdk sdkRead
+		sdk.documents, sdk.err = readSDKDocuments(cfg.dir)
 		fmt.Fprint(out, driftReport(
-			cmdutil.Must(graphqlschema.Schema()), probed, result.Documents,
+			cmdutil.Must(graphqlschema.Schema()), probed, result.Documents, sdk,
 			cmdutil.Must(graphqlschema.SourceInfo()), provenance.Clock(cfg.now),
 		))
 	}
@@ -140,32 +142,57 @@ func run(cfg auditRun, out, errOut io.Writer) int {
 	return 0
 }
 
+// readSDKDocuments reads the documents client-go builds, for the drift report
+// of a run that compares two schemas. It is a variable so a test can hand the
+// report documents of its own instead of loading a module.
+var readSDKDocuments = readClientGoDocuments
+
+// readClientGoDocuments reads the documents of the client-go the module in dir
+// requires, every shell the collector can render rendered.
+//
+// Only the drift report reads them, and never this command's gate: a document
+// client-go builds that a schema refuses is fixed upstream rather than here,
+// which is why R-PATH reports those refusals and this command does not judge
+// them. What the drift report asks of them is the question a re-pin needs
+// answered of every document that reaches GitLab through this server: what the
+// two schemas disagree about under it.
+func readClientGoDocuments(dir string) ([]graphqldocs.Document, error) {
+	sdkDir, err := graphqldocs.SDKDirectory(dir)
+	if err != nil {
+		return nil, err
+	}
+	return graphqldocs.SDKDocuments(sdkDir)
+}
+
 // resolveSchema decides what this run judges by, and returns nil when that is
 // the pin. A non-nil schema is one the caller handed the audit rather than one
 // it loaded itself, which is also exactly the condition drift can be reported
 // under: there are two schemas to compare only when somebody supplied the
 // second.
+//
+// Written as a chain of returns rather than a tagless switch, whose case
+// expressions carry no statement counter for the mutation gate to see.
 func resolveSchema(cfg auditRun) (*ast.Schema, string, error) {
-	switch {
-	case cfg.live != "" && cfg.schemaPath != "":
+	if cfg.live != "" && cfg.schemaPath != "" {
 		return nil, "", errors.New("-live and -schema both name a schema to judge by: pass one")
-	case cfg.live != "":
+	}
+	if cfg.live != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), graphqlintrospect.FetchTimeout)
 		defer cancel()
 		return liveSchema(ctx, cfg.live, cfg.token, cfg.tokenWithheld)
-	case cfg.schemaPath != "":
-		sdl, err := os.ReadFile(cfg.schemaPath) //#nosec G304 -- the path is the operator's own -schema flag
-		if err != nil {
-			return nil, "", fmt.Errorf("read the schema to judge against: %w", err)
-		}
-		schema, err := graphqlschema.Load(sdl)
-		if err != nil {
-			return nil, "", fmt.Errorf("%s: %w", cfg.schemaPath, err)
-		}
-		return schema, fmt.Sprintf("%d types from %s, not the pinned schema", len(schema.Types), cfg.schemaPath), nil
-	default:
+	}
+	if cfg.schemaPath == "" {
 		return nil, "", nil
 	}
+	sdl, err := os.ReadFile(cfg.schemaPath) //#nosec G304 -- the path is the operator's own -schema flag
+	if err != nil {
+		return nil, "", fmt.Errorf("read the schema to judge against: %w", err)
+	}
+	schema, err := graphqlschema.Load(sdl)
+	if err != nil {
+		return nil, "", fmt.Errorf("%s: %w", cfg.schemaPath, err)
+	}
+	return schema, fmt.Sprintf("%d types from %s, not the pinned schema", len(schema.Types), cfg.schemaPath), nil
 }
 
 // refusedDocuments indexes the refusals by position so the verbose listing can

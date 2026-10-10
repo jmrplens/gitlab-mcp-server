@@ -277,6 +277,113 @@ func TestRun_AgainstASchemaTheCallerSupplies_JudgesByThatSchema(t *testing.T) {
 	}
 }
 
+// withSDKDocuments replaces the read of client-go's documents for the length
+// of a test, since the real one loads whichever client-go the tree requires.
+func withSDKDocuments(t *testing.T, read func(string) ([]graphqldocs.Document, error)) {
+	t.Helper()
+	original := readSDKDocuments
+	readSDKDocuments = read
+	t.Cleanup(func() { readSDKDocuments = original })
+}
+
+// TestRun_AgainstASchemaTheCallerSupplies_ComparesClientGosDocumentsToo
+// verifies the re-pin question is asked of the documents client-go builds as
+// well as of this repository's. The 19.5 re-pin changed objects only those
+// documents read and the report said nothing about any of them; a reader
+// re-pinning needs the drift under both, and needs to be told when the second
+// half could not be read rather than shown a clean section.
+func TestRun_AgainstASchemaTheCallerSupplies_ComparesClientGosDocumentsToo(t *testing.T) {
+	narrowed := filepath.Join(t.TempDir(), "narrow.graphql")
+	if err := os.WriteFile(narrowed, []byte("type Query {\n  ok: Boolean\n}\n"), 0o600); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	dir := fixtureModule(t, map[string]string{"ok": okFixture})
+
+	t.Run("read", func(t *testing.T) {
+		var asked string
+		withSDKDocuments(t, func(root string) ([]graphqldocs.Document, error) {
+			asked = root
+			return []graphqldocs.Document{{Package: graphqldocs.SDKImportPath, Name: "sdkQuery", Text: "query { project(fullPath: \"x\") { id } }"}}, nil
+		})
+		var out, errOut bytes.Buffer
+
+		status := run(auditRun{dir: dir, patterns: []string{"./..."}, schemaPath: narrowed, now: afterThePin}, &out, &errOut)
+
+		if status != 0 {
+			t.Fatalf("exit status %d, want 0: client-go's documents are reported, never judged here.\nstderr:\n%s", status, errOut.String())
+		}
+		if asked != dir {
+			t.Errorf("client-go was looked for from %q, want the directory the run audits, %q", asked, dir)
+		}
+		for _, want := range []string{
+			"the pin and the live schema disagree on 4 of 5 coordinate(s) client-go's documents touch\n",
+			"    Query.project: the pin has it, the live schema does not\n",
+		} {
+			t.Run(strings.TrimSpace(want), func(t *testing.T) {
+				if !strings.Contains(out.String(), want) {
+					t.Errorf("stdout does not carry client-go's section %q:\n%s", want, out.String())
+				}
+			})
+		}
+	})
+	t.Run("not read", func(t *testing.T) {
+		withSDKDocuments(t, func(string) ([]graphqldocs.Document, error) {
+			return nil, errors.New("the module resolves no client-go")
+		})
+		var out, errOut bytes.Buffer
+
+		status := run(auditRun{dir: dir, patterns: []string{"./..."}, schemaPath: narrowed, now: afterThePin}, &out, &errOut)
+
+		if status != 0 {
+			t.Fatalf("exit status %d, want 0: a module this run cannot read is a note.\nstderr:\n%s", status, errOut.String())
+		}
+		if want := "client-go's documents were not read, so nothing they touch is compared: the module resolves no client-go\n"; !strings.Contains(out.String(), want) {
+			t.Errorf("stdout does not say why client-go's section is missing, want %q:\n%s", want, out.String())
+		}
+	})
+	t.Run("a pinned run reads none", func(t *testing.T) {
+		withSDKDocuments(t, func(string) ([]graphqldocs.Document, error) {
+			t.Error("client-go's documents were read by a run that compares no two schemas")
+			return nil, nil
+		})
+		var out, errOut bytes.Buffer
+		sound := fixtureModule(t, map[string]string{"sound": soundFixture})
+
+		if status := run(auditRun{dir: sound, patterns: []string{"./..."}}, &out, &errOut); status != 0 {
+			t.Fatalf("exit status %d, want 0.\nstderr:\n%s", status, errOut.String())
+		}
+	})
+}
+
+// TestReadClientGoDocuments_ReadsTheModuleTheTreeRequires verifies the read
+// the drift report is handed: the client-go the repository's go.mod requires,
+// rendered, and a refusal for a module that requires none.
+func TestReadClientGoDocuments_ReadsTheModuleTheTreeRequires(t *testing.T) {
+	t.Run("this repository", func(t *testing.T) {
+		documents, err := readClientGoDocuments(filepath.Join("..", ".."))
+		if err != nil {
+			t.Fatalf("readClientGoDocuments() error = %v", err)
+		}
+		rendered := 0
+		for _, document := range documents {
+			if document.Package != graphqldocs.SDKImportPath {
+				t.Fatalf("read %s from %s, want client-go's documents alone", document.Label(), document.Package)
+			}
+			if document.Assembly != nil && document.Assembly.Unrendered == "" {
+				rendered++
+			}
+		}
+		if rendered == 0 {
+			t.Errorf("read %d documents and no rendered shell among them", len(documents))
+		}
+	})
+	t.Run("a module that requires no client-go", func(t *testing.T) {
+		if _, err := readClientGoDocuments(fixtureModule(t, map[string]string{"ok": okFixture})); err == nil {
+			t.Error("readClientGoDocuments() reported no error for a module that requires no client-go")
+		}
+	})
+}
+
 // okFixture holds one document the smallest possible instance accepts, so a run
 // against a fetched schema can be judged by that schema rather than by the pin.
 const okFixture = "package ok\n\nconst queryOk = `query { ok }`\n"

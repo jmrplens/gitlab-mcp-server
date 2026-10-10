@@ -435,6 +435,7 @@ func buildReport(ctx context.Context, root string, opts Options) (Report, error)
 		// their findings too: the document set and the observed actions are
 		// context, and -gaps-only asks for the work.
 		report.SDKGraphQL.Templates = nil
+		report.SDKGraphQL.Rendered = nil
 		report.E2E.Issuing = nil
 	}
 	return report, nil

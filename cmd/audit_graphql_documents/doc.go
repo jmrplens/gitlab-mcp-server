@@ -21,9 +21,15 @@
 // schema it serves. The pin can only report a document that was already broken
 // on the day it was taken; this reports one GitLab has narrowed since, which is
 // how every defect this gate was built for arose. The same run names every
-// type, field and argument the pin and that instance disagree about under our
-// own selection sets, so the pin's age is a number somebody sees. -schema is
-// the same against an SDL file already on disk.
+// type, field and argument the pin and that instance disagree about, an enum's
+// values and a union's or interface's members included, under our own
+// selection sets and, in a section of its own, under the documents client-go
+// builds, so the pin's age is a number somebody sees. -schema is the same
+// against an SDL file already on disk, which is how a candidate re-pin is read
+// before it lands. client-go's documents are compared and never judged here:
+// one a schema refuses is fixed upstream, and R-PATH reports it. One neither
+// schema accepts is still named, as not walked, so the count the section
+// prints does not leave it out in silence.
 //
 // Usage:
 //

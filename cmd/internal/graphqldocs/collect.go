@@ -1,6 +1,7 @@
 package graphqldocs
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -11,7 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -52,8 +53,14 @@ type Document struct {
 	Object types.Object
 	// Position is where a reader will find it.
 	Position token.Position
-	// Text is the folded value, with any shared fragment already spliced in.
+	// Text is the folded value, with any shared fragment already spliced in,
+	// and for a document the source writes with holes in it, the rendering
+	// the call that fills them produces wherever this walk can say what that
+	// is.
 	Text string
+	// Assembly says how a document written with holes in it becomes the text
+	// GitLab receives, and is nil for one written whole. See [Assembly].
+	Assembly *Assembly
 }
 
 // Label names a document for a report line.
@@ -72,6 +79,14 @@ type collector struct {
 	// name they are declared as, so the inline pass does not report them a
 	// second time without one.
 	claimed map[token.Pos]bool
+	// sitesByObject and sitesByPosition hold the calls that fill a document's
+	// holes, keyed the way the document is found: by the object a named one is
+	// declared as, and by the position of one written inline at the call.
+	sitesByObject   map[types.Object][]site
+	sitesByPosition map[token.Position][]site
+	// initializers holds the value every package variable is declared with,
+	// which a template set cloned out of another is followed through.
+	initializers map[*types.Var]initializer
 }
 
 // Collect loads the packages named by patterns, rooted at dir, and returns
@@ -112,14 +127,26 @@ func Collect(dir string, patterns []string, overlay map[string][]byte) ([]Docume
 // holds in memory. The positions come from the packages' own file set, so a
 // caller that mixes these documents with its own walk of the same packages
 // compares positions that mean the same thing.
+//
+// A document written with holes in it is rendered once every package is
+// walked, since the variable a template set is cloned from may be declared in
+// a file the walk reaches after the call that parses the document. See
+// [Assembly].
 func FromPackages(loaded []*packages.Package) []Document {
 	if len(loaded) == 0 {
 		return nil
 	}
-	gatherer := &collector{fset: loaded[0].Fset, claimed: map[token.Pos]bool{}}
+	gatherer := &collector{
+		fset:            loaded[0].Fset,
+		claimed:         map[token.Pos]bool{},
+		sitesByObject:   map[types.Object][]site{},
+		sitesByPosition: map[token.Position][]site{},
+		initializers:    map[*types.Var]initializer{},
+	}
 	for _, pkg := range loaded {
 		gatherer.walk(pkg)
 	}
+	gatherer.render()
 	sortDocuments(gatherer.documents)
 	return gatherer.documents
 }
@@ -129,16 +156,17 @@ func FromPackages(loaded []*packages.Package) []Document {
 // key because a package holds documents from several files and, for a
 // standalone .graphql document, offset alone says nothing about which file it
 // came from.
+//
+// The keys are compared rather than ordered with <, because a key is consulted
+// only where the one before it differs, and there a < and a <= agree: the
+// mutation gate could not tell the two apart, and neither could a reader.
 func sortDocuments(documents []Document) {
-	sort.Slice(documents, func(i, j int) bool {
-		left, right := documents[i], documents[j]
-		if left.Package != right.Package {
-			return left.Package < right.Package
-		}
-		if left.Position.Filename != right.Position.Filename {
-			return left.Position.Filename < right.Position.Filename
-		}
-		return left.Position.Offset < right.Position.Offset
+	slices.SortFunc(documents, func(left, right Document) int {
+		return cmp.Or(
+			strings.Compare(left.Package, right.Package),
+			strings.Compare(left.Position.Filename, right.Position.Filename),
+			cmp.Compare(left.Position.Offset, right.Position.Offset),
+		)
 	})
 }
 
@@ -253,9 +281,13 @@ func (c *collector) visit(pkg *packages.Package, node ast.Node) bool {
 		return false
 	case *ast.ValueSpec:
 		c.recordNamed(pkg, typed)
+		c.recordInitializers(pkg, typed)
 		// The walk still descends: a declaration's value may be a function
 		// literal with a document inside it, and the values that were just
 		// recorded are claimed so they are not reported twice.
+		return true
+	case *ast.CallExpr:
+		c.recordSite(pkg, typed)
 		return true
 	case *ast.BasicLit:
 		c.recordInline(pkg, typed)

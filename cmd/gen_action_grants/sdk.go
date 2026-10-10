@@ -21,8 +21,10 @@ type sdkSource struct {
 
 // Requests reads what one client-go method sends: each of its routes as an
 // alternative, a legacy request it cannot fold as an unresolved alternative,
-// and every document it posts, one assembled at run time (a text/template
-// shell or a format string) as an unresolved request a declaration answers.
+// and every document it posts, one graphqldocs rendered from its shell as the
+// rendering, and one still a shell (a text/template or a format string whose
+// text depends on what the handler hands the method) as an unresolved request
+// a declaration answers.
 func (s *sdkSource) Requests(key string) (routes, documents []derive.Request, known bool) {
 	method, ok := s.sdk.Method(key)
 	if !ok {

@@ -24,32 +24,18 @@ import (
 )
 
 // declarationDrivers are the arguments that make each declared action send
-// what its declaration stands for: the work item filter that takes an epic
-// list off the REST endpoint, and the empty assignee list that makes a work
-// item update read the item before writing it.
+// what its declaration stands for, the work item filter that takes an epic
+// list off the REST endpoint among them.
 var declarationDrivers = map[string]map[string]any{
-	"group.epic_create":          {"full_path": "group", "title": "t"},
-	"group.epic_get":             {"full_path": "group", "epic_iid": 1},
-	"group.epic_list":            {"full_path": "group", "author_username": "someone"},
-	"group.epic_update":          {"full_path": "group", "epic_iid": 1, "title": "t"},
-	"issue.work_item_create":     {"full_path": "group/project", "work_item_type_id": "gid://gitlab/WorkItems::Type/1", "title": "t"},
-	"issue.work_item_get":        {"full_path": "group/project", "work_item_iid": 1},
-	"issue.work_item_list":       {"full_path": "group/project"},
-	"issue.work_item_update":     {"full_path": "group/project", "work_item_iid": 1, "title": "t", "assignee_ids": []int64{}},
-	"admin.terraform_state_get":  {"project_path": "group/project", "name": "state"},
-	"admin.terraform_state_list": {"project_path": "group/project"},
+	"group.epic_list":      {"full_path": "group", "author_username": "someone"},
+	"issue.work_item_list": {"full_path": "group/project"},
 }
 
 // graphQLAnswers are what the stand-in answers each document with, keyed by a
 // word only that document carries, longest first, so every handler gets past
 // the requests in front of the one its declaration stands for.
 var graphQLAnswers = []struct{ key, body string }{
-	{"GetWorkItemID", `{"data":{"namespace":{"workItem":{"id":"gid://gitlab/WorkItem/1"}}}}`},
-	{"GetWorkItem", `{"data":{"namespace":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","title":"t"}}}}`},
 	{"ListWorkItems", `{"data":{"namespace":{"workItems":{"nodes":[],"pageInfo":{"hasNextPage":false,"hasPreviousPage":false}}}}}`},
-	{"workItemCreate", `{"data":{"workItemCreate":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","title":"t"},"errors":[]}}}`},
-	{"workItemUpdate", `{"data":{"workItemUpdate":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","title":"t"},"errors":[]}}}`},
-	{"terraformState", `{"data":{"project":{"terraformStates":{"nodes":[]},"terraformState":{"name":"state"}}}}`},
 }
 
 // documentRecorder is a stand-in GitLab that keeps every GraphQL document a
@@ -187,14 +173,15 @@ func declaredDocuments() []declaredGraphQL {
 // client-go of the version the program compiles against, and holds each
 // declared GraphQL document to the one the handler made client-go send: the
 // same operation and the same object positions. The documents are written by
-// hand because client-go assembles them at run time, from text/template
-// (the work item methods, a list's fragment rendered from the fields the
-// handler asks for) or fmt.Sprintf (the Terraform states), which no walk of
-// the source evaluates; this is what tells a client-go bump that changed a
-// template, or a handler that asks for other fields, from a declaration
-// still telling the truth. The client is an Enterprise one, since a work item
-// list asks for the Enterprise features only there and the declaration
-// stands for the widest list it sends.
+// hand because client-go assembles the work item list at run time, from a
+// text/template whose fragment is rendered from the fields the handler asks
+// for and whose variables are the filters it sets, which no walk of the
+// source can evaluate without the handler (graphqldocs renders every other
+// client-go shell, and leaves this one); this is what tells a client-go bump
+// that changed the template, or a handler that asks for other fields, from a
+// declaration still telling the truth. The client is an Enterprise one, since
+// a work item list asks for the Enterprise features only there and the
+// declaration stands for the widest list it sends.
 func TestRequestDeclarations_DeclareWhatTheHandlerSends(t *testing.T) {
 	declared := declaredDocuments()
 	recorders := map[string]*documentRecorder{}

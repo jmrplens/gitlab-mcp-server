@@ -109,12 +109,16 @@
 // the typed shape comparison already resolves a directory for, and puts them
 // to the same pinned schema.
 //
-// Six of the 42 are not sendable text and are counted apart rather than
-// refused: client-go writes the work item documents as text/template shells
-// and the Terraform state queries as printf format strings, so what the type
-// checker folds carries a placeholder where a value belongs. No schema can
-// judge those, and a refusal list with permanent entries in it is a list a
-// reader learns to skip.
+// Six of the 42 are written with holes in them: client-go writes the work item
+// documents as text/template shells and the Terraform state queries as printf
+// format strings, so what the type checker folds carries a placeholder where a
+// value belongs. The collector renders five of them, wherever the call that
+// fills a shell settles its text, and those are judged as their rendering and
+// listed apart (rendered_documents). The work item list stays a shell, since
+// its template set is built when a function runs, from the fields and the
+// filters a caller passes, and it is counted apart with that reason rather
+// than refused (template_documents): no schema can judge a shell, and a
+// refusal list with permanent entries in it is a list a reader learns to skip.
 //
 // That section reports and never gates, for a reason unlike the usual one: the
 // pin is what GitLab serves, so a refusal there is real. What it is not is
