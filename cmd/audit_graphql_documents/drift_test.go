@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"go/token"
 	"slices"
 	"sort"
 	"strings"
@@ -15,7 +17,8 @@ import (
 
 // pinnedFixture is the schema standing in for the pin in these tests. It is
 // written the way GitLab's own is: an enum, an input object that refers to
-// itself, an interface with an implementation, and a field taking arguments.
+// itself, an interface with an implementation, a union, and a field taking
+// arguments.
 //
 // `after` is here for one comparison and is passed by no document: it is the
 // argument the pin has and the later release does not, which is the direction
@@ -40,16 +43,25 @@ interface Node {
   id: ID!
 }
 
-type Finding implements Node {
+interface Labeled {
+  label: String
+}
+
+type Finding implements Node & Labeled {
   id: ID!
   severity: Severity
   title: String
   found: Time
+  label: String
 }
+
+union Outcome = Finding
 
 type Query {
   findings(filter: Filter, first: Int, after: String): [Finding!]
   node(id: ID!): Node
+  outcome: Outcome
+  labeled: Labeled
 }
 
 schema {
@@ -59,13 +71,16 @@ schema {
 
 // probedFixture is the same schema as a later release might serve it: an enum
 // value withdrawn and another added, an argument narrowed, a field gone, a type
-// that changed kind, an input object that grew a field, and a type that did not
-// exist before.
+// that changed kind, an input object that grew a field, a type that did not
+// exist before, a union that grew a member and an interface whose
+// implementations moved.
 //
-// The last two are the ways a later release adds rather than removes. `cursor`
-// is what a document handing `Filter` a value silently starts being able to
-// send, so it is the coordinate that says whether the walk followed the schema
-// this run judged by; `Introduced` is a type the pin has never heard of.
+// `cursor` and `Introduced` are the ways a later release adds rather than
+// removes. `cursor` is what a document handing `Filter` a value silently
+// starts being able to send, so it is the coordinate that says whether the
+// walk followed the schema this run judged by; `Introduced` is a type the pin
+// has never heard of, and the member the union and the interface gained, which
+// is how GitLab 19.5 changed the WorkItemWidget interface our documents select.
 const probedFixture = `
 enum Time {
   NOW
@@ -88,19 +103,28 @@ interface Node {
   id: ID!
 }
 
+interface Labeled {
+  label: String
+}
+
 type Finding implements Node {
   id: ID!
   severity: Severity
   found: Time
 }
 
-type Introduced {
+type Introduced implements Labeled {
   id: ID!
+  label: String
 }
+
+union Outcome = Finding | Introduced
 
 type Query {
   findings(filter: Filter, first: Int!): [Finding!]
   node(id: ID!): Node
+  outcome: Outcome
+  labeled: Labeled
 }
 
 schema {
@@ -323,6 +347,16 @@ func TestDifference_EveryWayTwoSchemasDisagree_IsNamedAtItsCoordinate(t *testing
 			want: "the live schema drops CRITICAL and adds UNKNOWN",
 		},
 		{
+			name: "a union that gained a member",
+			at:   coordinate{typeName: "Outcome"},
+			want: "the live schema adds members Introduced",
+		},
+		{
+			name: "an interface whose implementations moved",
+			at:   coordinate{typeName: "Labeled"},
+			want: "the live schema drops implementations Finding and adds implementations Introduced",
+		},
+		{
 			name: "a type only one of them has",
 			at:   coordinate{typeName: "NotInEither"},
 			want: "",
@@ -468,6 +502,72 @@ func TestEnumDifference_ValuesAddedAndWithdrawn_AreBothReported(t *testing.T) {
 	}
 }
 
+// TestMemberDifference_MembersAddedAndWithdrawn_AreBothReported verifies each
+// half of the comparison of an abstract type on its own. A member withdrawn
+// turns an inline fragment on it into a refusal, and a member added is an
+// object a decoder meets with no fragment for it, which is how GitLab 19.5
+// grew its scan profile configuration union.
+func TestMemberDifference_MembersAddedAndWithdrawn_AreBothReported(t *testing.T) {
+	members := func(names ...string) []*ast.Definition {
+		definitions := make([]*ast.Definition, 0, len(names))
+		for _, name := range names {
+			definitions = append(definitions, &ast.Definition{Kind: ast.Object, Name: name})
+		}
+		return definitions
+	}
+
+	cases := []struct {
+		name           string
+		pinned, probed []*ast.Definition
+		want           string
+	}{
+		{name: "the same members", pinned: members("A", "B"), probed: members("B", "A"), want: ""},
+		{name: "a member withdrawn", pinned: members("A", "B"), probed: members("A"), want: "the live schema drops members B"},
+		{name: "members added", pinned: members("A"), probed: members("C", "A", "B"), want: "the live schema adds members B, C"},
+		{
+			name:   "both at once",
+			pinned: members("A", "B"), probed: members("A", "C"),
+			want: "the live schema drops members B and adds members C",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := memberDifference("members", testCase.pinned, testCase.probed); got != testCase.want {
+				t.Errorf("memberDifference() = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
+
+// sdkShell is a client-go document the collector left a shell, which the
+// drift report names as not walked rather than passing over.
+func sdkShell() graphqldocs.Document {
+	shell := "query ListWorkItems($fullPath: ID!{{ if .Decls }}, {{ .Decls }}{{ end }}) { id }"
+	return graphqldocs.Document{
+		Package:  graphqldocs.SDKImportPath,
+		Name:     "listWorkItemsQueryShell",
+		Position: token.Position{Filename: "/home/somebody/go/pkg/mod/gitlab.com/gitlab-org/api/client-go/v3@v3.15.0/workitems.go", Line: 523},
+		Text:     shell,
+		Assembly: &graphqldocs.Assembly{
+			By: graphqldocs.AssembledByTemplate, Shell: shell,
+			Unrendered: "t is not a package variable, so the template set it holds is built when a function runs",
+		},
+	}
+}
+
+// sdkRefused is a client-go document neither fixture schema accepts: it
+// selects a field both releases lack, which is what a document client-go has
+// not caught up with looks like once GitLab removed the field before the pin
+// was taken.
+func sdkRefused() graphqldocs.Document {
+	return graphqldocs.Document{
+		Package:  graphqldocs.SDKImportPath,
+		Name:     "removedFieldQuery",
+		Position: token.Position{Filename: "/home/somebody/go/pkg/mod/gitlab.com/gitlab-org/api/client-go/v3@v3.15.0/findings.go", Line: 41},
+		Text:     "query removedFieldQuery { findings { id removedEverywhere } }",
+	}
+}
+
 // TestDriftReport_TwoSchemasAndTheDocumentsBetweenThem_ReportsBothOutcomes
 // verifies the block a reader actually sees, in both of its shapes: a count
 // when the two agree, and a line per coordinate when they do not.
@@ -485,6 +585,15 @@ func TestEnumDifference_ValuesAddedAndWithdrawn_AreBothReported(t *testing.T) {
 // looks a coordinate up in, and the coordinates are gathered in a map, so a
 // report that did not sort them would differ from one run to the next and two
 // runs could not be compared line for line.
+//
+// client-go's documents are a section of their own, under the same rule: the
+// re-pin of 19.5 changed objects only client-go's documents read, and a report
+// over this repository's documents alone said nothing about them. The one
+// shell the collector could not render is named as not walked, because a
+// coordinate count that silently left a document out reads as a document that
+// touches nothing. A document neither schema accepts is named for the same
+// reason: nothing in this command judges client-go's documents, so this line
+// is the only place a run says one was left out of the count.
 func TestDriftReport_TwoSchemasAndTheDocumentsBetweenThem_ReportsBothOutcomes(t *testing.T) {
 	pinned, probed := loadSchemaFixture(t, pinnedFixture), loadSchemaFixture(t, probedFixture)
 	documents := documentsOf(`
@@ -495,10 +604,18 @@ query($filter: Filter) {
   }
 }
 `)
+	// A rendered shell is walked like any other document: the rendering is
+	// the text client-go sends.
+	rendered := documentsOf(`query { node(id: "projectFullPath") { id } }`)[0]
+	rendered.Assembly = &graphqldocs.Assembly{By: graphqldocs.AssembledByFormat, Shell: "query { node(id: %q) { id } }"}
+	sdk := sdkRead{documents: append(documentsOf("query { outcome { ... on Finding { id } } }"), rendered, sdkShell(), sdkRefused())}
 	const pinLine = "    the pin: 4331 types from https://gitlab.com/api/graphql (GitLab 19.4.0), retrieved 2026-03-01, 10 day(s) ago\n"
+	const notWalked = "    not walked: listWorkItemsQueryShell (workitems.go:523), assembled at run time: " +
+		"t is not a package variable, so the template set it holds is built when a function runs\n" +
+		"    not walked: removedFieldQuery (findings.go:41), neither schema accepts it\n"
 
 	t.Run("schemas that disagree", func(t *testing.T) {
-		report := driftReport(pinned, probed, documents, fixturePin, fixtureNow())
+		report := driftReport(pinned, probed, documents, sdk, fixturePin, fixtureNow())
 
 		want := "audit_graphql_documents: the pin and the live schema disagree on 5 of 14 coordinate(s) the documents touch\n" +
 			// Only reachable when the walk followed the schema this run judged
@@ -508,6 +625,9 @@ query($filter: Filter) {
 			"    Query.findings(first): the pin says Int, the live schema says Int!\n" +
 			"    Severity: the live schema drops CRITICAL and adds UNKNOWN\n" +
 			"    Time: the pin says SCALAR, the live schema says ENUM\n" +
+			"audit_graphql_documents: the pin and the live schema disagree on 1 of 9 coordinate(s) client-go's documents touch\n" +
+			"    Outcome: the live schema adds members Introduced\n" +
+			notWalked +
 			pinLine
 		if report != want {
 			t.Errorf("driftReport() =\n%s\nwant\n%s", report, want)
@@ -515,9 +635,24 @@ query($filter: Filter) {
 	})
 
 	t.Run("one schema compared with itself", func(t *testing.T) {
-		report := driftReport(pinned, pinned, documents, fixturePin, fixtureNow())
+		report := driftReport(pinned, pinned, documents, sdk, fixturePin, fixtureNow())
 
-		want := "audit_graphql_documents: the pin and the live schema agree on all 13 coordinate(s) the documents touch\n" + pinLine
+		want := "audit_graphql_documents: the pin and the live schema agree on all 13 coordinate(s) the documents touch\n" +
+			"audit_graphql_documents: the pin and the live schema agree on all 9 coordinate(s) client-go's documents touch\n" +
+			notWalked + pinLine
+		if report != want {
+			t.Errorf("driftReport() =\n%s\nwant\n%s", report, want)
+		}
+	})
+
+	t.Run("client-go's documents could not be read", func(t *testing.T) {
+		unread := sdkRead{err: errors.New("the module in /tmp/x resolves no client-go")}
+
+		report := driftReport(pinned, pinned, documents, unread, fixturePin, fixtureNow())
+
+		want := "audit_graphql_documents: the pin and the live schema agree on all 13 coordinate(s) the documents touch\n" +
+			"audit_graphql_documents: client-go's documents were not read, so nothing they touch is compared: " +
+			"the module in /tmp/x resolves no client-go\n" + pinLine
 		if report != want {
 			t.Errorf("driftReport() =\n%s\nwant\n%s", report, want)
 		}
@@ -533,7 +668,7 @@ func TestDriftReport_APinWithNoUsableDate_StillReports(t *testing.T) {
 	undated := fixturePin
 	undated.RetrievedAt = "the day before yesterday"
 
-	report := driftReport(pinned, pinned, documentsOf("query { findings { id } }"), undated, fixtureNow())
+	report := driftReport(pinned, pinned, documentsOf("query { findings { id } }"), sdkRead{}, undated, fixtureNow())
 
 	if !strings.Contains(report, "agree on all") {
 		t.Errorf("the report does not carry its comparison:\n%s", report)

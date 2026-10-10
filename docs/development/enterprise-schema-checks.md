@@ -35,10 +35,12 @@ and in authorization, not by removing types, and a malformed document is refused
 validation, before either of those runs.
 
 The same run reports where the pinned schema and the live one disagree **about a type
-or field one of our documents touches**. Whole-schema drift between two GitLab releases
-is thousands of lines and tells nobody anything; the drift under our own selection sets
-is a handful of coordinates, and it is what turns the pin's age from an assumption into
-a number somebody sees.
+or field one of our documents touches**, an enum's values and a union's or interface's
+members included, and asks the same of the documents client-go builds in a section of
+its own. Whole-schema drift between two GitLab releases is thousands of lines and tells
+nobody anything; the drift under the selection sets this server sends is a handful of
+coordinates, and it is what turns the pin's age from an assumption into a number
+somebody sees.
 
 Run the same check locally against any instance:
 

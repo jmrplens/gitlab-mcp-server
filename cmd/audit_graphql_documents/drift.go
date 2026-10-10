@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -28,15 +30,17 @@ type coordinate struct {
 
 // String renders a coordinate the way a reader would write it: Vulnerability,
 // Vulnerability.severity, or Project.vulnerabilities(severity).
+//
+// Written as a chain of returns rather than a tagless switch, whose case
+// expressions carry no statement counter for the mutation gate to see.
 func (c coordinate) String() string {
-	switch {
-	case c.fieldName == "":
+	if c.fieldName == "" {
 		return c.typeName
-	case c.argName == "":
-		return c.typeName + "." + c.fieldName
-	default:
-		return c.typeName + "." + c.fieldName + "(" + c.argName + ")"
 	}
+	if c.argName == "" {
+		return c.typeName + "." + c.fieldName
+	}
+	return c.typeName + "." + c.fieldName + "(" + c.argName + ")"
 }
 
 // driftReport says where the pinned schema and the one this run judged by
@@ -48,11 +52,63 @@ func (c coordinate) String() string {
 // against a live instance is the only thing that can say how far the photograph
 // has drifted from what an instance serves now.
 //
-// A document neither schema accepts contributes no coordinates. It is already
-// reported as a refusal, and there is nothing to walk: a document is walked
-// through the schema that validated it, and one that validated nowhere has no
-// fields anybody can resolve.
-func driftReport(pinned, probed *ast.Schema, documents []graphqldocs.Document, pin graphqlschema.Source, now time.Time) string {
+// A document neither schema accepts contributes no coordinates, since there is
+// nothing to walk: a document is walked through the schema that validated it,
+// and one that validated nowhere has no fields anybody can resolve. One of
+// this repository's is already reported as a refusal by the gate.
+//
+// The documents client-go builds are a section of their own. They reach
+// GitLab through this server as much as the repository's own do, and a re-pin
+// that changes something only they read is a change a reader of this report
+// has to see: the 19.5 re-pin added BUSINESS_LOGIC to SecurityScanProfileType,
+// the enum client-go's scan profile document selects as scanType, and no
+// report said so. A client-go document that contributes no coordinate is named
+// as not walked rather than passed over, since a count that silently left it
+// out reads as a document that touches nothing: a shell the collector could
+// not render, and a document neither schema accepts. The second is named here
+// and nowhere else in this command, because this repository's own documents
+// are judged by the gate and client-go's are not.
+func driftReport(pinned, probed *ast.Schema, documents []graphqldocs.Document, sdk sdkRead, pin graphqlschema.Source, now time.Time) string {
+	var report strings.Builder
+	report.WriteString(driftSection(pinned, probed, documents, "the documents touch"))
+	if sdk.err != nil {
+		fmt.Fprintf(&report, "%s client-go's documents were not read, so nothing they touch is compared: %v\n", prefix, sdk.err)
+	} else {
+		report.WriteString(driftSection(pinned, probed, sdk.documents, "client-go's documents touch"))
+		for _, document := range sdk.documents {
+			if why := notWalked(pinned, probed, document); why != "" {
+				fmt.Fprintf(&report, "    not walked: %s (%s:%d), %s\n", document.Label(),
+					filepath.Base(document.Position.Filename), document.Position.Line, why)
+			}
+		}
+	}
+	fmt.Fprintf(&report, "    the pin: %s%s\n", pin, pinAge(pin, now))
+	return report.String()
+}
+
+// notWalked says why a document contributed no coordinate to its section, or
+// "" when it was walked: a shell is not text either schema can parse, and a
+// document neither schema accepts has no field anybody can resolve.
+func notWalked(pinned, probed *ast.Schema, document graphqldocs.Document) string {
+	if document.Assembly != nil && document.Assembly.Unrendered != "" {
+		return "assembled at run time: " + document.Assembly.Unrendered
+	}
+	if _, parsed := parseUnderEither(probed, pinned, document.Text); parsed == nil {
+		return "neither schema accepts it"
+	}
+	return ""
+}
+
+// sdkRead is what a run read of the documents client-go builds: the documents,
+// or why there are none to compare.
+type sdkRead struct {
+	documents []graphqldocs.Document
+	err       error
+}
+
+// driftSection compares the coordinates one set of documents touches, under a
+// line naming whose documents they are.
+func driftSection(pinned, probed *ast.Schema, documents []graphqldocs.Document, whose string) string {
 	coordinates := touchedCoordinates(probed, pinned, documents)
 
 	var differences []string
@@ -62,19 +118,18 @@ func driftReport(pinned, probed *ast.Schema, documents []graphqldocs.Document, p
 		}
 	}
 
-	var report strings.Builder
+	var section strings.Builder
 	if len(differences) == 0 {
-		fmt.Fprintf(&report, "%s the pin and the live schema agree on all %d coordinate(s) the documents touch\n",
-			prefix, len(coordinates))
-	} else {
-		fmt.Fprintf(&report, "%s the pin and the live schema disagree on %d of %d coordinate(s) the documents touch\n",
-			prefix, len(differences), len(coordinates))
-		for _, line := range differences {
-			report.WriteString(line)
-		}
+		fmt.Fprintf(&section, "%s the pin and the live schema agree on all %d coordinate(s) %s\n",
+			prefix, len(coordinates), whose)
+		return section.String()
 	}
-	fmt.Fprintf(&report, "    the pin: %s%s\n", pin, pinAge(pin, now))
-	return report.String()
+	fmt.Fprintf(&section, "%s the pin and the live schema disagree on %d of %d coordinate(s) %s\n",
+		prefix, len(differences), len(coordinates), whose)
+	for _, line := range differences {
+		section.WriteString(line)
+	}
+	return section.String()
 }
 
 // pinAge renders how long ago the pin was taken, or "" when its record carries
@@ -114,7 +169,9 @@ func touchedCoordinates(preferred, fallback *ast.Schema, documents []graphqldocs
 	for at := range found {
 		coordinates = append(coordinates, at)
 	}
-	sort.Slice(coordinates, func(i, j int) bool { return coordinates[i].String() < coordinates[j].String() })
+	// Compared rather than ordered with <: the coordinates are a map's keys, so
+	// no two render alike and a < and a <= would sort them the same.
+	slices.SortFunc(coordinates, func(left, right coordinate) int { return strings.Compare(left.String(), right.String()) })
 	return coordinates
 }
 
@@ -246,7 +303,7 @@ func difference(pinned, probed *ast.Schema, at coordinate) string {
 		return presence(pinnedType != nil, probedType != nil)
 	}
 	if at.fieldName == "" {
-		return typeDifference(pinnedType, probedType)
+		return typeDifference(pinned, probed, pinnedType, probedType)
 	}
 
 	pinnedField, probedField := pinnedType.Fields.ForName(at.fieldName), probedType.Fields.ForName(at.fieldName)
@@ -267,26 +324,35 @@ func difference(pinned, probed *ast.Schema, at coordinate) string {
 // presence reports a coordinate one schema has and the other does not. Two
 // schemas that both lack it agree, which happens when a coordinate found under
 // one document's schema is not reachable in the other at all.
+//
+// Written as a chain of returns rather than a tagless switch, whose case
+// expressions carry no statement counter for the mutation gate to see.
 func presence(inPin, inLive bool) string {
-	switch {
-	case inPin && !inLive:
+	if inPin && !inLive {
 		return "the pin has it, the live schema does not"
-	case !inPin && inLive:
-		return "the live schema has it, the pin does not"
-	default:
-		return ""
 	}
+	if !inPin && inLive {
+		return "the live schema has it, the pin does not"
+	}
+	return ""
 }
 
-// typeDifference compares two definitions of the same named type.
-func typeDifference(pinned, probed *ast.Definition) string {
+// typeDifference compares two definitions of the same named type, each read
+// in the schema it belongs to.
+func typeDifference(pinnedSchema, probedSchema *ast.Schema, pinned, probed *ast.Definition) string {
 	if pinned.Kind != probed.Kind {
 		return fmt.Sprintf("the pin says %s, the live schema says %s", pinned.Kind, probed.Kind)
 	}
-	if pinned.Kind == ast.Enum {
+	switch pinned.Kind {
+	case ast.Enum:
 		return enumDifference(pinned, probed)
+	case ast.Union:
+		return memberDifference("members", pinnedSchema.GetPossibleTypes(pinned), probedSchema.GetPossibleTypes(probed))
+	case ast.Interface:
+		return memberDifference("implementations", pinnedSchema.GetPossibleTypes(pinned), probedSchema.GetPossibleTypes(probed))
+	default:
+		return ""
 	}
-	return ""
 }
 
 // enumDifference reports the values one schema holds and the other does not.
@@ -295,15 +361,37 @@ func typeDifference(pinned, probed *ast.Definition) string {
 // GitLab accepts exactly the spellings it lists, so a value withdrawn between
 // two releases turns a request our handlers still send into a refusal.
 func enumDifference(pinned, probed *ast.Definition) string {
-	dropped := enumValuesMissingFrom(probed, pinned)
-	added := enumValuesMissingFrom(pinned, probed)
+	return setDifference("", enumValueNames(pinned), enumValueNames(probed))
+}
+
+// memberDifference reports the possible types one schema gives a union or an
+// interface and the other does not.
+//
+// An abstract type is compared by its members because that is how it changes
+// under a document without any field of it changing: an inline fragment on a
+// member the live schema withdrew is refused, and a member it added is an
+// object the decoder meets with no fragment for it. The second is how GitLab
+// 19.5 changed WorkItemWidget under this repository's own documents, adding
+// the WorkItemWidgetDecisionLog implementation, and only this comparison
+// reports it. A union no document selects is not compared at all:
+// ScanProfileConfiguration gained five members in the same release, and no
+// document of this repository or of client-go reaches it.
+func memberDifference(noun string, pinned, probed []*ast.Definition) string {
+	return setDifference(noun+" ", definitionNames(pinned), definitionNames(probed))
+}
+
+// setDifference reports the names one schema holds and the other does not,
+// each list in a reader's order, or "" when the two hold the same names.
+func setDifference(noun string, pinned, probed []string) string {
+	dropped := namesMissingFrom(probed, pinned)
+	added := namesMissingFrom(pinned, probed)
 
 	var parts []string
 	if len(dropped) > 0 {
-		parts = append(parts, "drops "+strings.Join(dropped, ", "))
+		parts = append(parts, "drops "+noun+strings.Join(dropped, ", "))
 	}
 	if len(added) > 0 {
-		parts = append(parts, "adds "+strings.Join(added, ", "))
+		parts = append(parts, "adds "+noun+strings.Join(added, ", "))
 	}
 	if len(parts) == 0 {
 		return ""
@@ -311,12 +399,30 @@ func enumDifference(pinned, probed *ast.Definition) string {
 	return "the live schema " + strings.Join(parts, " and ")
 }
 
-// enumValuesMissingFrom returns the values of have that lack does not hold.
-func enumValuesMissingFrom(lack, have *ast.Definition) []string {
+// enumValueNames is the names an enum lists.
+func enumValueNames(definition *ast.Definition) []string {
+	names := make([]string, 0, len(definition.EnumValues))
+	for _, value := range definition.EnumValues {
+		names = append(names, value.Name)
+	}
+	return names
+}
+
+// definitionNames is the names of a list of definitions.
+func definitionNames(definitions []*ast.Definition) []string {
+	names := make([]string, 0, len(definitions))
+	for _, definition := range definitions {
+		names = append(names, definition.Name)
+	}
+	return names
+}
+
+// namesMissingFrom returns the names of have that lack does not hold, sorted.
+func namesMissingFrom(lack, have []string) []string {
 	var missing []string
-	for _, value := range have.EnumValues {
-		if lack.EnumValues.ForName(value.Name) == nil {
-			missing = append(missing, value.Name)
+	for _, name := range have {
+		if !slices.Contains(lack, name) {
+			missing = append(missing, name)
 		}
 	}
 	sort.Strings(missing)
