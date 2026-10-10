@@ -2017,7 +2017,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 <details><summary>list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"end_cursor":{"type":"string"},"has_next_page":{"type":"boolean"},"has_previous_page":{"type":"boolean"},"start_cursor":{"type":"string"}},"required":["has_next_page","has_previous_page"],"type":"object"},"resources":{"items":{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"description":{"type":"string"},"full_path":{"type":"string"},"icon":{"type":"string"},"id":{"type":"string"},"last_30_day_usage_count":{"type":"integer"},"latest_released_at":{"type":"string"},"latest_version_name":{"type":"string"},"name":{"type":"string"},"star_count":{"type":"integer"},"starrers_path":{"type":"string"},"topics":{"items":{"type":"string"},"type":["null","array"]},"verification_level":{"type":"string"},"visibility_level":{"type":"string"},"web_path":{"type":"string"}},"required":["id","name","full_path","star_count","last_30_day_usage_count","archived"],"type":"object"},"type":["null","array"]}},"required":["resources","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"hidden_items":{"description":"Items of this page GitLab answered as null with no error, which it does for an item the credential may not read. They are left out of resources","type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"end_cursor":{"type":"string"},"has_next_page":{"type":"boolean"},"has_previous_page":{"type":"boolean"},"start_cursor":{"type":"string"}},"required":["has_next_page","has_previous_page"],"type":"object"},"resources":{"items":{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"description":{"type":"string"},"full_path":{"type":"string"},"icon":{"type":"string"},"id":{"type":"string"},"last_30_day_usage_count":{"type":"integer"},"latest_released_at":{"type":"string"},"latest_version_name":{"type":"string"},"name":{"type":"string"},"star_count":{"type":"integer"},"starrers_path":{"type":"string"},"topics":{"items":{"type":"string"},"type":["null","array"]},"verification_level":{"type":"string"},"visibility_level":{"type":"string"},"web_path":{"type":"string"}},"required":["id","name","full_path","star_count","last_30_day_usage_count","archived"],"type":"object"},"type":["null","array"]}},"required":["resources","pagination"],"type":"object"}
 ```
 
 </details>
@@ -12221,7 +12221,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ## Enterprise-Only Meta-Tools
 
-These 18 tools require GITLAB_MCP_TIER=premium or GITLAB_MCP_TIER=ultimate (or a detected Premium/Ultimate license or namespace plan). GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
+These 18 tools require GITLAB_MCP_TIER=premium or GITLAB_MCP_TIER=ultimate (or a detected Premium/Ultimate license, namespace plan or, on GitLab.com, top-level group the token is a member of). GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
 
 ### gitlab_attestation
 
