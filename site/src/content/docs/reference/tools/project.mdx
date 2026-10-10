@@ -875,7 +875,7 @@ Also needs at least one of: `name`; `path`.
 - **Individual tool**: `gitlab_project_delete`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Project: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
+- **Fine-grained token**: Project: Delete at project. Some calls also need: Project: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter            | Type             | Mandatory | Description                                                                                                                              |
@@ -2626,7 +2626,7 @@ Also needs at least one of: `user_id`; `username`.
 - **Individual tool**: `gitlab_project_pull_mirror_configure`
 - **Tier**: Premium
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Pull Mirror: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
+- **Fine-grained token**: Pull Mirror: Update at project. Some calls also need: Pull Mirror: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Behavior**: writes, idempotent
 
 | Parameter                             | Type             | Mandatory | Description                                                                                                                                                                                        |
@@ -3008,7 +3008,7 @@ Also needs at least one of: `user_id`; `username`.
 - **Individual tool**: `gitlab_project_star`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Project: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
+- **Fine-grained token**: Project: Update at project. Some calls also need: Project: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -3115,7 +3115,7 @@ Also needs at least one of: `user_id`; `username`.
 - **Individual tool**: `gitlab_project_transfer`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Project: Transfer at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
+- **Fine-grained token**: Project: Transfer at project. Some calls also need: Project: Read at project; Todo: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |

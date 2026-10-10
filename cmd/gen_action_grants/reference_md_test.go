@@ -73,6 +73,56 @@ func TestRenderReference_OneTablePerDomain(t *testing.T) {
 	}
 }
 
+// TestRenderReference_NamesWhatSomeCallsAlsoNeed verifies each language's page
+// writes, after what an action needs, what the requests it sends on some calls
+// only need (issue 1242), and that its introduction says what that part of a
+// line means, so the notation is never read as a second way of running the
+// action.
+func TestRenderReference_NamesWhatSomeCallsAlsoNeed(t *testing.T) {
+	table := &finegrained.Table{
+		Version:     "19.4.1-ee",
+		Permissions: []string{"read_pipeline", "read_project"},
+		Displays:    []string{"", "Pipeline: Read", "Project: Read"},
+		Display:     []uint16{1, 2},
+		Groups: []finegrained.Group{
+			{Perms: []uint16{0}, Any: finegrained.BoundaryProject},
+			{Perms: []uint16{1}, Any: finegrained.BoundaryProject},
+		},
+		Operations: []finegrained.Operation{
+			{Name: "GET /projects/:id/pipelines/latest", Groups: []uint32{0}},
+			{Name: "GET /projects/:id", Groups: []uint32{1}},
+		},
+		Actions: []finegrained.Requirement{{ID: "pipeline.latest", Paths: [][]uint32{{0}}, Optional: []uint32{1}}},
+	}
+	cases := []struct {
+		language    *referenceLanguage
+		row, legend string
+	}{
+		{
+			language: englishReference(),
+			row:      "| `pipeline.latest` | Pipeline: Read at project. Some calls also need: Project: Read at project |",
+			legend:   "**Some calls also need**",
+		},
+		{
+			language: spanishReference(),
+			row:      "| `pipeline.latest` | Pipeline: Read en proyecto. Algunas llamadas también necesitan: Project: Read en proyecto |",
+			legend:   "**Algunas llamadas también necesitan**",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.language.title, func(t *testing.T) {
+			page := string(testCase.language.render(table))
+			for _, want := range []string{testCase.row, testCase.legend} {
+				t.Run(want, func(t *testing.T) {
+					if !strings.Contains(page, want) {
+						t.Errorf("the page holds no %q:\n%s", want, page)
+					}
+				})
+			}
+		})
+	}
+}
+
 // TestRenderReference_PointsAClassicTokenAtTheToolReference verifies each
 // language's introduction says the table judges fine-grained tokens alone and
 // sends the reader who holds a classic or OAuth token to the tool reference,

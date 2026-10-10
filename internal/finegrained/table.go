@@ -175,6 +175,16 @@ type Requirement struct {
 	// an input that selects one of these. They are kept out of Paths, which
 	// is what a grant is judged against, since no grant passes them.
 	DeniedWays []Denial
+	// Optional are indices into [Table.Operations]: the requests the action
+	// sends on some calls only and no way needs, such as a lookup its input
+	// or GitLab's answer to an earlier request calls for (issue 1242). They
+	// are kept out of Paths, since a grant without them still runs the
+	// action, and are worded beside them so a reader knows what such a call
+	// needs as well.
+	Optional []uint32
+	// OptionalDenied are the denials of the optional requests no
+	// fine-grained token passes at the recorded version, each once.
+	OptionalDenied []Denial
 	// Degraded are indices into [Table.Elements]: undeclared positions off
 	// every spine, served and always empty.
 	Degraded []uint32

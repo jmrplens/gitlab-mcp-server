@@ -2250,7 +2250,7 @@ Además necesita al menos uno de estos: `user_id`; `username`.
 - **Herramienta individual**: `gitlab_group_ldap_link_list`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: LDAP Group Link: Read en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
+- **Token de grano fino**: LDAP Group Link: Read en grupo. Algunas llamadas también necesitan: Group: Read en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo     | Requerido | Descripción                  |
@@ -3185,7 +3185,7 @@ Además necesita al menos uno de estos: `user_id`; `username`.
 - **Herramienta individual**: `gitlab_group_transfer`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Group: Transfer en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
+- **Token de grano fino**: Group: Transfer en grupo. Algunas llamadas también necesitan: Group: Read en grupo; Todo: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro   | Tipo             | Requerido | Descripción                                                                  |

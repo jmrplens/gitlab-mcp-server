@@ -623,7 +623,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_file_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Repository: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Create en proyecto. Algunas llamadas también necesitan: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro          | Tipo                        | Requerido | Descripción                                                        |
@@ -769,7 +769,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_file_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Repository: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Update en proyecto. Algunas llamadas también necesitan: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro          | Tipo                        | Requerido | Descripción                                      |

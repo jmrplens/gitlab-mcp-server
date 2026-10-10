@@ -28,7 +28,11 @@ const regenerate = "run `make gen-action-grants`"
 //   - the permission vocabulary, the words the requirement is written in;
 //   - the public sets, which the call guard reads;
 //   - every denial's element, held by the record as the kind its cause says,
-//     which is the derivation's gate 2 read back from what it wrote;
+//     which is the derivation's gate 2 read back from what it wrote, the
+//     denials of the requests an action sends on some calls only included;
+//   - the requests each action sends on some calls only, which the table
+//     holds beside its ways and the request record classes optional
+//     (issue 1242);
 //   - what every REST operation demands, which is the join's REST half read
 //     back: a re-recording at the same release that changes a route's
 //     permissions moves no other check;
@@ -56,6 +60,7 @@ func inconsistencies(table *finegrained.Table, record actionrequests.Record, liv
 	found = append(found, deniedElements(table, live)...)
 	found = append(found, restOperations(table, live)...)
 	found = append(found, coverage(table, record)...)
+	found = append(found, optionalRows(table, record)...)
 	found = append(found, catalogCoverage(table, actions)...)
 	found = append(found, classicOperations(table, record, live)...)
 	found = append(found, classicRows(table, record)...)
@@ -266,6 +271,49 @@ func deniedElements(table *finegrained.Table, live *apilive.Document) []string {
 			if !live.HoldsDenial(way) {
 				found = append(found, fmt.Sprintf("a way of running %s is denied by %s, which the live record does not hold as a %s; %s",
 					row.ID, way.Element, way.Cause, regenerate))
+			}
+		}
+		for j := range row.OptionalDenied {
+			optional := &row.OptionalDenied[j]
+			if !live.HoldsDenial(optional) {
+				found = append(found, fmt.Sprintf("a request %s sends on some calls only is denied by %s, which the live record does not hold as a %s; %s",
+					row.ID, optional.Element, optional.Cause, regenerate))
+			}
+		}
+	}
+	return found
+}
+
+// optionalRows holds the requests each row sends on some calls only to the
+// request record's optional requests of the same action, by name. The
+// generator writes both from one join, so a request one side holds and the
+// other does not is an artifact left behind; the table holds each operation
+// once however many of the record's requests send it.
+func optionalRows(table *finegrained.Table, record actionrequests.Record) []string {
+	recorded := map[string][]string{}
+	for i := range record.Actions {
+		action := &record.Actions[i]
+		for j := range action.Requests {
+			if action.Requests[j].Class == actionrequests.ClassOptional {
+				recorded[action.ID] = appendOnce(recorded[action.ID], requestName(&action.Requests[j]))
+			}
+		}
+	}
+	var found []string
+	for i := range table.Actions {
+		row := &table.Actions[i]
+		held := make([]string, 0, len(row.Optional))
+		for _, op := range row.Optional {
+			held = append(held, table.Operations[op].Name)
+		}
+		for _, name := range held {
+			if !slices.Contains(recorded[row.ID], name) {
+				found = append(found, fmt.Sprintf("the table says %s sends %s on some calls only and the request record does not; %s", row.ID, name, regenerate))
+			}
+		}
+		for _, name := range recorded[row.ID] {
+			if !slices.Contains(held, name) {
+				found = append(found, fmt.Sprintf("the request record says %s sends %s on some calls only and the table does not; %s", row.ID, name, regenerate))
 			}
 		}
 	}

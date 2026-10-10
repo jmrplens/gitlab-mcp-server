@@ -138,10 +138,11 @@ func unsettled(gate string, declared map[string]bool) []string {
 	return findings
 }
 
-// unheldDenials reports each denial of a row, of the action or of one way of
-// running it, that names an element the record does not hold as the kind its
-// cause says. R-GRANT asks the same question of the committed table through
-// the same function, so the two cannot disagree on any denial either reads.
+// unheldDenials reports each denial of a row, of the action, of one way of
+// running it or of one of its optional requests, that names an element the
+// record does not hold as the kind its cause says. R-GRANT asks the same
+// question of the committed table through the same function, so the two
+// cannot disagree on any denial either reads.
 func unheldDenials(row *finegrained.Requirement, record *apilive.Document) []string {
 	if row == nil {
 		return nil
@@ -156,6 +157,13 @@ func unheldDenials(row *finegrained.Requirement, record *apilive.Document) []str
 		if !record.HoldsDenial(way) {
 			findings = append(findings, fmt.Sprintf("gate 2: a way of running %s is denied by %s, which the live record does not hold as a %s",
 				row.ID, way.Element, way.Cause))
+		}
+	}
+	for j := range row.OptionalDenied {
+		optional := &row.OptionalDenied[j]
+		if !record.HoldsDenial(optional) {
+			findings = append(findings, fmt.Sprintf("gate 2: an optional request of %s is denied by %s, which the live record does not hold as a %s",
+				row.ID, optional.Element, optional.Cause))
 		}
 	}
 	return findings

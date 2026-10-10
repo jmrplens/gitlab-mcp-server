@@ -51,11 +51,12 @@ func TestGateFindings_HoldsEachRuleToItsShape(t *testing.T) {
 }
 
 // TestGateFindings_HoldsEveryDenialOfARowToTheRecord verifies gate 2 asks of
-// every denial a row carries, the action's and each denied way's, whether the
-// record holds its element as the kind its cause says: a row denied on a type
-// the record lacks and a row with one held and one unheld denied way each
-// report the unheld denial once, and a row with no requirement reports
-// nothing.
+// every denial a row carries, the action's, each denied way's and each
+// optional request's, whether the record holds its element as the kind its
+// cause says: a row denied on a type the record lacks, a row with one held
+// and one unheld denied way, and a row with one held and one unheld optional
+// denial each report the unheld denial once, and a row with no requirement
+// reports nothing.
 func TestGateFindings_HoldsEveryDenialOfARowToTheRecord(t *testing.T) {
 	joined := []join.Action{
 		{ID: "a.unplaced"},
@@ -66,11 +67,16 @@ func TestGateFindings_HoldsEveryDenialOfARowToTheRecord(t *testing.T) {
 			{Cause: finegrained.CauseRESTUndeclared, Element: "DELETE /projects/:id"},
 			{Cause: finegrained.CauseMutationUndeclared, Element: "thingCreate"},
 		}}},
+		{ID: "a.optional", Row: &finegrained.Requirement{ID: "a.optional", OptionalDenied: []finegrained.Denial{
+			{Cause: finegrained.CauseRESTUndeclared, Element: "DELETE /projects/:id"},
+			{Cause: finegrained.CauseTypeUndeclared, Element: "Pipeline"},
+		}}},
 	}
 	got := gateFindings(nil, joined, mainRecord())
 	want := []string{
 		"gate 2: a way of running a.ways is denied by thingCreate, which the live record does not hold as a graphql-mutation-undeclared",
 		"gate 2: a.denied is denied by Namespace, which the live record does not hold as a graphql-type-undeclared",
+		"gate 2: an optional request of a.optional is denied by Pipeline, which the live record does not hold as a graphql-type-undeclared",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("gateFindings = %q, want %q", got, want)

@@ -133,7 +133,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_discussion_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
+- **Token de grano fino**: Merge Request: Create en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                                                                 |
@@ -268,7 +268,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_draft_note_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
+- **Token de grano fino**: Merge Request: Update en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                   | Tipo             | Requerido | Descripción                                                                        |
@@ -381,7 +381,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_draft_note_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
+- **Token de grano fino**: Merge Request: Update en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                               |

@@ -44,10 +44,12 @@ func TestRenderTable_KeyedLiteralsOfEveryField(t *testing.T) {
 		},
 		Actions: []finegrained.Requirement{
 			{ID: "a.denied", Classic: finegrained.ClassicOtherCredential, Denied: &finegrained.Denial{Cause: finegrained.CauseRESTTodo, Element: "GET /a", Effect: finegrained.EffectRefused}},
-			{ID: "a.read", Classic: finegrained.ClassicNoRequest, Paths: [][]uint32{{0}, {0, 1}}, Degraded: []uint32{1}, GraphQL: true, Collection: true},
+			{ID: "a.read", Classic: finegrained.ClassicNoRequest, Paths: [][]uint32{{0}, {0, 1}}, Optional: []uint32{1}, Degraded: []uint32{1}, GraphQL: true, Collection: true},
 			{ID: "a.some", Paths: [][]uint32{{0}}, DeniedWays: []finegrained.Denial{
 				{Cause: finegrained.CauseTypeUndeclared, Element: "Namespace", Effect: finegrained.EffectNull},
 				{Cause: finegrained.CauseRESTUndeclared, Element: "GET /b", Effect: finegrained.EffectRefused},
+			}, OptionalDenied: []finegrained.Denial{
+				{Cause: finegrained.CauseRESTTodo, Element: "GET /c", Effect: finegrained.EffectRefused},
 			}},
 		},
 	}
@@ -87,8 +89,8 @@ func TestRenderTable_KeyedLiteralsOfEveryField(t *testing.T) {
 	},
 	Actions: []finegrained.Requirement{
 		{ID: "a.denied", Classic: finegrained.ClassicOtherCredential, Denied: &finegrained.Denial{Cause: finegrained.CauseRESTTodo, Element: "GET /a", Effect: finegrained.EffectRefused}},
-		{ID: "a.read", Classic: finegrained.ClassicNoRequest, Paths: [][]uint32{{0}, {0, 1}}, Degraded: []uint32{1}, GraphQL: true, Collection: true},
-		{ID: "a.some", Classic: finegrained.ClassicUnknown, Paths: [][]uint32{{0}}, DeniedWays: []finegrained.Denial{{Cause: finegrained.CauseTypeUndeclared, Element: "Namespace", Effect: finegrained.EffectNull}, {Cause: finegrained.CauseRESTUndeclared, Element: "GET /b", Effect: finegrained.EffectRefused}}},
+		{ID: "a.read", Classic: finegrained.ClassicNoRequest, Paths: [][]uint32{{0}, {0, 1}}, Optional: []uint32{1}, Degraded: []uint32{1}, GraphQL: true, Collection: true},
+		{ID: "a.some", Classic: finegrained.ClassicUnknown, Paths: [][]uint32{{0}}, DeniedWays: []finegrained.Denial{{Cause: finegrained.CauseTypeUndeclared, Element: "Namespace", Effect: finegrained.EffectNull}, {Cause: finegrained.CauseRESTUndeclared, Element: "GET /b", Effect: finegrained.EffectRefused}}, OptionalDenied: []finegrained.Denial{{Cause: finegrained.CauseRESTTodo, Element: "GET /c", Effect: finegrained.EffectRefused}}},
 	},
 }
 `

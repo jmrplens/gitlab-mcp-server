@@ -336,7 +336,7 @@ The description of each action, and of each of its parameters, is the text the s
 - **Individual tool**: `gitlab_list_user_contribution_events`
 - **Tier**: Free
 - **Classic or OAuth token**: `read_api` (or `api`)
-- **Fine-grained token**: Event: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Fine-grained token**: Event: Read at user. Some calls also need: Project: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type                                                                                                                                                        | Mandatory | Description                                                                                                                                                                                                                                                                                                             |
@@ -724,7 +724,7 @@ No parameters.
 - **Individual tool**: `gitlab_user_contribution_event_list`
 - **Tier**: Free
 - **Classic or OAuth token**: `read_api` (or `api`)
-- **Fine-grained token**: Event: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Fine-grained token**: Event: Read at user. Some calls also need: Project: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type                                                                                                                                                        | Mandatory | Description                                                                                                                                                                                                                                                                                                             |
@@ -749,7 +749,7 @@ No parameters.
 - **Individual tool**: `gitlab_project_event_list`
 - **Tier**: Free
 - **Classic or OAuth token**: `read_api` (or `api`)
-- **Fine-grained token**: Event: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Fine-grained token**: Event: Read at project. Some calls also need: Project: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type                                                                                                                                                        | Mandatory | Description                                                                                                                                                                                                                                                                                                             |

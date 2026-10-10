@@ -24,6 +24,11 @@ type Words struct {
 	// deniedWays leads into the ways no fine-grained token takes, after what
 	// the others need.
 	deniedWays string
+	// optional leads into what the requests an action sends on some calls
+	// only need, and optionalDenied into those of them no fine-grained token
+	// passes, after every way.
+	optional       string
+	optionalDenied string
 	// notJudged is a request GitLab leaves out of the grant check.
 	notJudged string
 	// noPermission is a way that needs nothing.
@@ -63,6 +68,8 @@ func English() *Words {
 		oneOf:              "one of: ",
 		or:                 " **or** ",
 		deniedWays:         ". With an input that sends another request instead, not reachable at this release: ",
+		optional:           ". Some calls also need: ",
+		optionalDenied:     ". Some calls also send a request no fine-grained token passes at this release: ",
 		notJudged:          "a request GitLab does not judge by the grant",
 		noPermission:       "no permission",
 		at:                 " at ",
@@ -85,16 +92,18 @@ func English() *Words {
 // fine-grained tokens guide names it.
 func Spanish() *Words {
 	return &Words{
-		Needs:        "Necesita",
-		ServedEmpty:  "Se sirve vacío",
-		notReachable: "No alcanzable en esta versión: ",
-		oneOf:        "una de: ",
-		or:           " **o** ",
-		deniedWays:   ". Con una entrada que envía otra petición en su lugar, no alcanzable en esta versión: ",
-		notJudged:    "una petición que GitLab no juzga por la concesión",
-		noPermission: "ningún permiso",
-		at:           " en ",
-		boundaryOr:   " o ",
+		Needs:          "Necesita",
+		ServedEmpty:    "Se sirve vacío",
+		notReachable:   "No alcanzable en esta versión: ",
+		oneOf:          "una de: ",
+		or:             " **o** ",
+		deniedWays:     ". Con una entrada que envía otra petición en su lugar, no alcanzable en esta versión: ",
+		optional:       ". Algunas llamadas también necesitan: ",
+		optionalDenied: ". Algunas llamadas también envían una petición que ningún token de grano fino supera en esta versión: ",
+		notJudged:      "una petición que GitLab no juzga por la concesión",
+		noPermission:   "ningún permiso",
+		at:             " en ",
+		boundaryOr:     " o ",
 		boundaries: map[string]string{
 			"project":  "proyecto",
 			"group":    "grupo",
@@ -115,8 +124,12 @@ func Spanish() *Words {
 	}
 }
 
-// NeedsText is what the action needs, way by way, and the ways no
-// fine-grained token takes when some other way runs.
+// NeedsText is what the action needs, way by way, the ways no fine-grained
+// token takes when some other way runs, and then what the requests it sends
+// on some calls only need, and those of them no fine-grained token passes.
+// The ways no token takes are alternatives to the others, so they are joined
+// as ways are; the requests sent on some calls only are each a request of its
+// own, so their needs are joined as one way's are, and so are their denials.
 func (w *Words) NeedsText(description *finegrained.Description) string {
 	if description.Denied != nil {
 		return w.notReachable + w.denialText(description.Denied)
@@ -129,14 +142,35 @@ func (w *Words) NeedsText(description *finegrained.Description) string {
 	if len(ways) > 1 {
 		text = w.oneOf + text
 	}
-	if len(description.DeniedWays) == 0 {
-		return text
+	if len(description.DeniedWays) > 0 {
+		text += w.deniedWays + w.denialsText(description.DeniedWays, w.or)
 	}
-	reasons := make([]string, len(description.DeniedWays))
-	for i := range description.DeniedWays {
-		reasons[i] = w.denialText(&description.DeniedWays[i])
+	if len(description.OptionalNeeds) > 0 {
+		needs := make([]string, len(description.OptionalNeeds))
+		for i, need := range description.OptionalNeeds {
+			needs[i] = w.needText(need)
+		}
+		text += w.optional + strings.Join(needs, needsSeparator)
 	}
-	return text + w.deniedWays + strings.Join(reasons, w.or)
+	if len(description.OptionalDenied) > 0 {
+		text += w.optionalDenied + w.denialsText(description.OptionalDenied, needsSeparator)
+	}
+	return text
+}
+
+// needsSeparator joins the needs of one way, which a grant has to hold all
+// of; it is a semicolon because a need's own permissions are joined by
+// commas.
+const needsSeparator = "; "
+
+// denialsText says why no fine-grained token passes each of denials, joined
+// by sep.
+func (w *Words) denialsText(denials []finegrained.Denial, sep string) string {
+	reasons := make([]string, len(denials))
+	for i := range denials {
+		reasons[i] = w.denialText(&denials[i])
+	}
+	return strings.Join(reasons, sep)
 }
 
 // wayText is what one way of running the action needs.
@@ -151,7 +185,7 @@ func (w *Words) wayText(way finegrained.Way) string {
 	if len(parts) == 0 {
 		return w.noPermission
 	}
-	return strings.Join(parts, "; ")
+	return strings.Join(parts, needsSeparator)
 }
 
 // needText is one need: every permission, at one of the boundaries.

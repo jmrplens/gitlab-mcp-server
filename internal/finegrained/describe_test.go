@@ -7,8 +7,8 @@ import (
 
 // describeTable is a table whose rows exercise every way Describe words one:
 // two operations whose groups word the same, a request that opts out of the
-// grant, a GraphQL operation with spine and off-spine elements, and a
-// permission no assignable words.
+// grant, a GraphQL operation with spine and off-spine elements, a permission
+// no assignable words, and the requests an action sends on some calls only.
 func describeTable() *Table {
 	return &Table{
 		Version:     "19.4.1-ee",
@@ -31,6 +31,7 @@ func describeTable() *Table {
 			{Name: "query thing", Groups: []uint32{1}, Spine: []uint32{0}, OffSpine: []uint32{1, 1}},
 			{Name: "GET /twice", Groups: []uint32{0, 3, 4}},
 			{Name: "mutation skipped", Groups: []uint32{0}, Skip: true, Spine: []uint32{1}},
+			{Name: "GET /d", Groups: []uint32{4}},
 		},
 		Elements: []Element{
 			{Path: "thing", Groups: []uint32{2}},
@@ -38,8 +39,13 @@ func describeTable() *Table {
 			{Path: "thing.never", Undeclared: true},
 		},
 		Actions: []Requirement{
-			{ID: "a.denied", Denied: &Denial{Cause: CauseTypeUndeclared, Element: "Namespace", Effect: EffectNull}},
+			{ID: "a.denied", Denied: &Denial{Cause: CauseTypeUndeclared, Element: "Namespace", Effect: EffectNull}, Optional: []uint32{1}},
 			{ID: "a.graphql", Paths: [][]uint32{{3, 0}}, Degraded: []uint32{2}},
+			{ID: "a.optional", Paths: [][]uint32{{0}}, Optional: []uint32{1, 2, 3}, OptionalDenied: []Denial{
+				{Cause: CauseRESTUndeclared, Element: "GET /never", Effect: EffectRefused},
+			}},
+			{ID: "a.optional_alone", Optional: []uint32{1}},
+			{ID: "a.optional_ways", Paths: [][]uint32{{0}, {4}}, Optional: []uint32{1, 6}},
 			{ID: "a.skipped", Paths: [][]uint32{{5}}},
 			{ID: "a.some", Paths: [][]uint32{{0}}, DeniedWays: []Denial{
 				{Cause: CauseTypeUndeclared, Element: "Namespace", Effect: EffectNull},
@@ -126,6 +132,45 @@ func TestTable_Describe_WordsEachRow(t *testing.T) {
 			},
 		},
 		{
+			// The requests sent on some calls only: their groups and spine,
+			// a skipped one adding nothing, less what every way already
+			// needs, and the one of them no token passes.
+			id: "a.optional",
+			want: &Description{
+				GitLabVersion: "19.4.1",
+				AnyOf:         []Way{{Needs: []Need{{Permissions: []string{"A: Read"}, At: []string{"project"}}}}},
+				OptionalNeeds: []Need{
+					{Permissions: []string{"read_b"}, At: []string{"group"}},
+					{Permissions: []string{"A: Read", "C: Write"}, At: []string{"project"}},
+				},
+				OptionalDenied: []Denial{{Cause: CauseRESTUndeclared, Element: "GET /never", Effect: EffectRefused}},
+			},
+		},
+		{
+			// A need only one way holds is still worded: the other way runs
+			// without it.
+			id: "a.optional_ways",
+			want: &Description{
+				GitLabVersion: "19.4.1",
+				AnyOf: []Way{
+					{Needs: []Need{{Permissions: []string{"A: Read"}, At: []string{"project"}}}},
+					{Needs: []Need{
+						{Permissions: []string{"A: Read"}, At: []string{"project"}},
+						{Permissions: []string{"read_d"}, At: []string{"user", "instance"}},
+					}},
+				},
+				OptionalNeeds: []Need{{Permissions: []string{"read_d"}, At: []string{"user", "instance"}}},
+			},
+		},
+		{
+			// With no way to hold a need already, every need is worded.
+			id: "a.optional_alone",
+			want: &Description{
+				GitLabVersion: "19.4.1",
+				OptionalNeeds: []Need{{Permissions: []string{"A: Read"}, At: []string{"project"}}},
+			},
+		},
+		{
 			// Two groups wording the same are one need; a permission past
 			// the end of the words reads as its raw name.
 			id: "a.twice",
@@ -160,6 +205,11 @@ func TestTable_Describe_DeniedIsACopy(t *testing.T) {
 	table.Describe(some).DeniedWays[0].Element = "changed"
 	if some.DeniedWays[0].Element != "Namespace" {
 		t.Errorf("writing the description changed the table's denied way to %q", some.DeniedWays[0].Element)
+	}
+	optional := table.Requirement("a.optional")
+	table.Describe(optional).OptionalDenied[0].Element = "changed"
+	if optional.OptionalDenied[0].Element != "GET /never" {
+		t.Errorf("writing the description changed the table's denied optional request to %q", optional.OptionalDenied[0].Element)
 	}
 }
 

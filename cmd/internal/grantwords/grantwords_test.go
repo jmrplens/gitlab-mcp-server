@@ -128,6 +128,52 @@ func TestNeedsText_WordsEachWayOfRunningTheAction(t *testing.T) {
 				"GitLab no declara ningún permiso de grano fino para `Namespace`, del que está hecha la respuesta **o** " +
 				"GitLab no declara ningún permiso de grano fino para `GET /x`",
 		},
+		{
+			// The requests sent on some calls only come after every way and
+			// every way no token takes: what they need, each need once and
+			// joined as a way's are, then those no token passes, each a
+			// request of its own rather than an alternative.
+			name: "requests sent on some calls only",
+			description: finegrained.Description{
+				AnyOf:         []finegrained.Way{{Needs: []finegrained.Need{read}}},
+				DeniedWays:    []finegrained.Denial{{Cause: finegrained.CauseRESTUndeclared, Element: "GET /x"}},
+				OptionalNeeds: []finegrained.Need{write, read},
+				OptionalDenied: []finegrained.Denial{
+					{Cause: finegrained.CauseRESTUndeclared, Element: "GET /y"},
+					{Cause: finegrained.CauseRESTTodo, Element: "GET /z"},
+				},
+			},
+			en: "Project: Read at project or group. With an input that sends another request instead, not reachable at this release: " +
+				"GitLab declares no fine-grained permission for `GET /x`. " +
+				"Some calls also need: Issue: Create, Label: Create at project; Project: Read at project or group. " +
+				"Some calls also send a request no fine-grained token passes at this release: " +
+				"GitLab declares no fine-grained permission for `GET /y`; GitLab marks `GET /z` as not yet supported for fine-grained tokens",
+			es: "Project: Read en proyecto o grupo. Con una entrada que envía otra petición en su lugar, no alcanzable en esta versión: " +
+				"GitLab no declara ningún permiso de grano fino para `GET /x`. " +
+				"Algunas llamadas también necesitan: Issue: Create, Label: Create en proyecto; Project: Read en proyecto o grupo. " +
+				"Algunas llamadas también envían una petición que ningún token de grano fino supera en esta versión: " +
+				"GitLab no declara ningún permiso de grano fino para `GET /y`; GitLab marca `GET /z` como aún no admitido para tokens de grano fino",
+		},
+		{
+			name: "a request sent on some calls only, alone",
+			description: finegrained.Description{
+				AnyOf:         []finegrained.Way{{Needs: []finegrained.Need{read}}},
+				OptionalNeeds: []finegrained.Need{write},
+			},
+			en: "Project: Read at project or group. Some calls also need: Issue: Create, Label: Create at project",
+			es: "Project: Read en proyecto o grupo. Algunas llamadas también necesitan: Issue: Create, Label: Create en proyecto",
+		},
+		{
+			name: "a request no token passes sent on some calls only, alone",
+			description: finegrained.Description{
+				AnyOf:          []finegrained.Way{{Needs: []finegrained.Need{read}}},
+				OptionalDenied: []finegrained.Denial{{Cause: finegrained.CauseRESTUndeclared, Element: "GET /y"}},
+			},
+			en: "Project: Read at project or group. Some calls also send a request no fine-grained token passes at this release: " +
+				"GitLab declares no fine-grained permission for `GET /y`",
+			es: "Project: Read en proyecto o grupo. Algunas llamadas también envían una petición que ningún token de grano fino supera en esta versión: " +
+				"GitLab no declara ningún permiso de grano fino para `GET /y`",
+		},
 	}
 	english, spanish := English(), Spanish()
 	for _, testCase := range cases {

@@ -694,6 +694,7 @@ func (j *joiner) element(element Element) uint32 {
 // a denied way is answered the way that way answers.
 func (j *joiner) requirement(id string, requests []Request, paths [][]int) *finegrained.Requirement {
 	row := &finegrained.Requirement{ID: id}
+	j.optional(row, requests)
 	degraded := map[uint32]bool{}
 	var deniedWays []finegrained.Denial
 	// A classic token is judged on every way the action can run, the ways no
@@ -744,6 +745,27 @@ func (j *joiner) requirement(id string, requests []Request, paths [][]int) *fine
 	}
 	slices.Sort(row.Degraded)
 	return row
+}
+
+// optional files the requests an action sends on some calls only, the ones
+// the derivation classes optional because no way needs them (issue 1242):
+// their operations, each once in the table's order, and the denials of those
+// no fine-grained token passes, each once in the order the action makes them.
+// They are filed for every row, a denied one included, so the table holds
+// every request the record does; the description leaves them out of a row
+// nothing reaches.
+func (j *joiner) optional(row *finegrained.Requirement, requests []Request) {
+	for _, request := range requests {
+		if request.Class != derive.ClassOptional {
+			continue
+		}
+		row.Optional = append(row.Optional, uint32(request.Operation)) //#nosec G115 -- an operation index, set and non-negative on every request of a complete action
+		if denial := j.opDenial[request.Operation]; denial != nil && !slices.Contains(row.OptionalDenied, *denial) {
+			row.OptionalDenied = append(row.OptionalDenied, *denial)
+		}
+	}
+	slices.Sort(row.Optional)
+	row.Optional = slices.Compact(row.Optional)
 }
 
 // fatalFor reads whether a position is fatal for one action, a declaration

@@ -25,6 +25,11 @@ type ActionGrant struct {
 	DeniedWays   []finegrained.Denial   `json:"denied_ways,omitempty"`
 	AlwaysEmpty  []string               `json:"always_empty,omitempty"`
 	EmptyWithout []finegrained.Position `json:"empty_without,omitempty"`
+	// OptionalNeeds and OptionalDenied are what the requests the action
+	// sends on some calls only need beyond its ways, and those of them no
+	// fine-grained token passes (issue 1242).
+	OptionalNeeds  []finegrained.Need   `json:"optional_needs,omitempty"`
+	OptionalDenied []finegrained.Denial `json:"optional_denied,omitempty"`
 	// Declaration is the category of the action-level declaration that
 	// answers what the walk could not, when one does.
 	Declaration string `json:"declaration,omitempty"`
@@ -105,8 +110,9 @@ type actionView struct {
 	public   []PublicOperation
 	// notJudged, byDirective and byDeclaration count the actions with a way
 	// GitLab does not judge by the grant, with a request a directive
-	// qualified, and with one a declaration supplied.
-	notJudged, byDirective, byDeclaration int
+	// qualified, and with one a declaration supplied; optional those that
+	// send a request on some calls only, a denied one included.
+	notJudged, byDirective, byDeclaration, optional int
 }
 
 // viewActions words every row of the table, with what shaped it.
@@ -124,6 +130,10 @@ func viewActions(table *finegrained.Table, record actionrequests.Record, owners 
 			ID: row.ID, Owner: owners[row.ID],
 			AnyOf: description.AnyOf, Denied: description.Denied, DeniedWays: description.DeniedWays,
 			AlwaysEmpty: description.AlwaysEmpty, EmptyWithout: description.EmptyWithout,
+			OptionalNeeds: description.OptionalNeeds, OptionalDenied: description.OptionalDenied,
+		}
+		if len(row.Optional) > 0 {
+			view.optional++
 		}
 		if recorded := byID[row.ID]; recorded != nil {
 			grant.Declaration = recorded.Declaration

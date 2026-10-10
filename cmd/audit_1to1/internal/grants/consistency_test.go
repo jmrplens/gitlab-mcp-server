@@ -101,6 +101,45 @@ func TestInconsistencies_EachDisagreement_IsNamedWithTheWayOut(t *testing.T) {
 			},
 		},
 		{
+			name: "a_denied_optional_request_the_record_does_not_hold",
+			bend: func(table *finegrained.Table, _ *actionrequests.Record, _ *apilive.Document) {
+				tableRow(table, "issue.update").OptionalDenied = []finegrained.Denial{
+					{Cause: finegrained.CauseRESTUndeclared, Element: "GET /gone", Effect: finegrained.EffectRefused},
+				}
+			},
+			wants: []string{"a request issue.update sends on some calls only is denied by GET /gone, which the live record does not hold as a rest-undeclared; run `make gen-action-grants`"},
+		},
+		{
+			name: "an_optional_request_the_table_lacks",
+			bend: func(_ *finegrained.Table, record *actionrequests.Record, _ *apilive.Document) {
+				update := recordAction(record, "issue.update")
+				update.Requests = append(update.Requests, rest("GET /namespaces", actionrequests.ClassOptional))
+			},
+			wants: []string{"the request record says issue.update sends GET /namespaces on some calls only and the table does not; run `make gen-action-grants`"},
+		},
+		{
+			name: "an_optional_operation_the_record_lacks",
+			bend: func(table *finegrained.Table, _ *actionrequests.Record, _ *apilive.Document) {
+				tableRow(table, "issue.update").Optional = []uint32{2}
+			},
+			wants: []string{"the table says issue.update sends GET /namespaces on some calls only and the request record does not; run `make gen-action-grants`"},
+		},
+		{
+			// The same request held on both sides, once in the table however
+			// many times the record names it, and an optional request no
+			// fine-grained token passes that the record holds as its cause
+			// says, agree.
+			name: "optional_requests_on_both_sides",
+			bend: func(table *finegrained.Table, record *actionrequests.Record, _ *apilive.Document) {
+				update := recordAction(record, "issue.update")
+				update.Requests = append(update.Requests,
+					rest("GET /namespaces", actionrequests.ClassOptional), rest("GET /namespaces", actionrequests.ClassOptional))
+				row := tableRow(table, "issue.update")
+				row.Optional = []uint32{2}
+				row.OptionalDenied = []finegrained.Denial{{Cause: finegrained.CauseRESTUndeclared, Element: "GET /nothing", Effect: finegrained.EffectRefused}}
+			},
+		},
+		{
 			name: "an_operation_no_route_of_the_record_is",
 			bend: func(_ *finegrained.Table, _ *actionrequests.Record, live *apilive.Document) {
 				live.Routes = slices.DeleteFunc(live.Routes, func(route apilive.Route) bool {

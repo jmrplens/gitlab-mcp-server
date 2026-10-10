@@ -322,7 +322,7 @@ The description of each action, and of each of its parameters, is the text the s
 - **Individual tool**: `gitlab_mr_cancel_auto_merge`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Merge Request: Merge at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Fine-grained token**: Merge Request: Merge at project. Some calls also need: Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
 - **Behavior**: writes, idempotent
 
 | Parameter                        | Type             | Mandatory | Description                                                                                         |
@@ -544,7 +544,7 @@ The description of each action, and of each of its parameters, is the text the s
 - **Individual tool**: `gitlab_mr_emoji_create`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Work Item: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Fine-grained token**: Work Item: Create at project. Some calls also need: User: Read at user; Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
 - **Behavior**: writes, not idempotent
 
 | Parameter           | Type             | Mandatory | Description                                                |
@@ -1004,7 +1004,7 @@ The description of each action, and of each of its parameters, is the text the s
 - **Individual tool**: `gitlab_mr_merge`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Merge Request: Merge at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Fine-grained token**: Merge Request: Merge at project. Some calls also need: Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter                      | Type             | Mandatory | Description                                                                                                          |
@@ -1157,7 +1157,7 @@ The description of each action, and of each of its parameters, is the text the s
 - **Individual tool**: `gitlab_mr_subscribe`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Merge Request: Subscribe at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Fine-grained token**: Merge Request: Subscribe at project. Some calls also need: Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
 - **Behavior**: writes, idempotent
 
 | Parameter                        | Type             | Mandatory | Description                                                                                         |
@@ -1248,7 +1248,7 @@ The description of each action, and of each of its parameters, is the text the s
 - **Individual tool**: `gitlab_mr_unsubscribe`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Merge Request: Subscribe at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Fine-grained token**: Merge Request: Subscribe at project. Some calls also need: Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
 - **Behavior**: writes, idempotent
 
 | Parameter                        | Type             | Mandatory | Description                                                                                         |

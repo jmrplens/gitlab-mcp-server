@@ -132,13 +132,9 @@ func renderTable(table *finegrained.Table) []byte {
 		if row.Denied != nil {
 			fmt.Fprintf(&b, ", Denied: &finegrained.Denial%s", denial(*row.Denied))
 		}
-		if len(row.DeniedWays) > 0 {
-			ways := make([]string, len(row.DeniedWays))
-			for i, way := range row.DeniedWays {
-				ways[i] = denial(way)
-			}
-			b.WriteString(", DeniedWays: []finegrained.Denial{" + strings.Join(ways, ", ") + "}")
-		}
+		writeDenials(&b, "DeniedWays", row.DeniedWays)
+		writeIndices(&b, "Optional", row.Optional)
+		writeDenials(&b, "OptionalDenied", row.OptionalDenied)
 		writeIndices(&b, "Degraded", row.Degraded)
 		writeFlag(&b, "GraphQL", row.GraphQL)
 		writeFlag(&b, "Collection", row.Collection)
@@ -149,6 +145,18 @@ func renderTable(table *finegrained.Table) []byte {
 	// formatting failure is a defect of this function, which the repository's
 	// rule says to state at the leaf.
 	return cmdutil.Must(format.Source(b.Bytes()))
+}
+
+// writeDenials writes a denial slice field when it holds anything.
+func writeDenials(b *bytes.Buffer, field string, values []finegrained.Denial) {
+	if len(values) == 0 {
+		return
+	}
+	spelled := make([]string, len(values))
+	for i, value := range values {
+		spelled[i] = denial(value)
+	}
+	fmt.Fprintf(b, ", %s: []finegrained.Denial{%s}", field, strings.Join(spelled, ", "))
 }
 
 // denial spells one denial's fields as a keyed literal body.

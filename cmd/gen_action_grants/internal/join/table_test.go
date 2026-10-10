@@ -282,6 +282,12 @@ func graphQL(document string) derive.Use {
 	return derive.Use{Kind: derive.KindGraphQL, Document: document, Sites: []string{"fixture.Handler"}}
 }
 
+// optional is a derived request no path needs, as the derivation classes it.
+func optional(use derive.Use) derive.Use {
+	use.Class = derive.ClassOptional
+	return use
+}
+
 // action is a derived action with one path holding every request.
 func action(id string, uses ...derive.Use) derive.Action {
 	path := make([]int, len(uses))
@@ -321,6 +327,12 @@ func render(table *finegrained.Table, act *Action) string {
 	}
 	for _, element := range act.Row.Degraded {
 		fmt.Fprintf(&b, "degraded %s\n", elementText(table, element))
+	}
+	for _, op := range act.Row.Optional {
+		fmt.Fprintf(&b, "optional %s\n", table.Operations[op].Name)
+	}
+	for _, denial := range act.Row.OptionalDenied {
+		fmt.Fprintf(&b, "optional denied %s %s %s\n", denial.Cause, denial.Element, denial.Effect)
 	}
 	if act.Row.GraphQL {
 		b.WriteString("graphql")
@@ -428,6 +440,13 @@ func fixtureActions() []derive.Action {
 		{ID: "rest.no_way"},
 		{ID: "rest.either", Uses: []derive.Use{rest("GET", "/projects/:/issues"), rest("GET", "/groups/:/epics")}, Paths: [][]int{{0}, {1}}},
 		{ID: "rest.superset", Uses: []derive.Use{rest("GET", "/projects/:/issues"), rest("GET", "/groups/:/epics")}, Paths: [][]int{{0}, {0, 1}}},
+		{ID: "rest.optional", Uses: []derive.Use{
+			rest("GET", "/projects/:/issues"), optional(rest("GET", "/projects/:/later")),
+			optional(rest("GET", "/groups/:/epics")), optional(rest("GET", "/projects/:/later")),
+		}, Paths: [][]int{{0}}},
+		{ID: "rest.optional_denied_action", Uses: []derive.Use{
+			rest("GET", "/projects/:/nothing"), optional(rest("GET", "/groups/:/epics")),
+		}, Paths: [][]int{{0}}},
 		action("rest.instance", rest("GET", "/instance/things")),
 		action("graphql.issue_create", graphQL(`mutation { issueCreate(input: {title: "t"}) { errors issue { id } } }`)),
 		action("graphql.undeclared", graphQL(`mutation { undeclaredThing(input: {title: "t"}) { errors } }`)),
@@ -578,6 +597,14 @@ func TestJoin_Fixture_PlacesEachRequest(t *testing.T) {
 			"    spine viewer UserCore null [read_user @ user]\ngraphql collection\n",
 		"rest.either":   issuesRoute + "path\n  GET /groups/:id(/-)/epics\n    group read_epic @ project or group\n",
 		"rest.superset": issuesRoute,
+		// The requests no way needs are held apart from the ways, each
+		// operation once in the table's order, and a denial among them once;
+		// a denied action keeps them too.
+		"rest.optional": issuesRoute +
+			"optional GET /groups/:id(/-)/epics\noptional GET /projects/:id/later\n" +
+			"optional denied rest-todo GET /projects/:id/later refused\n",
+		"rest.optional_denied_action": "denied rest-undeclared GET /projects/:id/nothing refused\n" +
+			"optional GET /groups/:id(/-)/epics\n",
 		"rest.instance": "path\n  GET /instance/things\n    group read_user @ project or group or user or instance\n",
 		"graphql.issue_create": "path\n  mutation issueCreate (fixture.Handler)\n    group create_issue @ project\n" +
 			"    spine issueCreate.issue Issue null [read_issue @ project]\ngraphql\n",

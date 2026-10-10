@@ -20,6 +20,14 @@ type Description struct {
 	// passes, beside the ways in AnyOf that it can: an input that selects one
 	// of these meets the denial, every other input runs.
 	DeniedWays []Denial `json:"denied_ways,omitempty"`
+	// OptionalNeeds is what the requests the action sends on some calls only
+	// need beyond what every way in AnyOf already needs: a grant without it
+	// runs every call that does not send them, and a call that does may
+	// answer with less or be refused.
+	OptionalNeeds []Need `json:"optional_needs,omitempty"`
+	// OptionalDenied are the denials of the requests the action sends on
+	// some calls only that no fine-grained token passes at this release.
+	OptionalDenied []Denial `json:"optional_denied,omitempty"`
 	// Denied says why no fine-grained token runs the action at this release.
 	Denied *Denial `json:"denied,omitempty"`
 	// AlwaysEmpty are parts of the answer GitLab leaves empty for every
@@ -85,6 +93,10 @@ func (t *Table) Describe(row *Requirement) *Description {
 		}
 	}
 	description.DeniedWays = slices.Clone(row.DeniedWays)
+	description.OptionalNeeds = slices.DeleteFunc(t.way(row.Optional).Needs, func(need Need) bool {
+		return everyWayNeeds(description.AnyOf, need)
+	})
+	description.OptionalDenied = slices.Clone(row.OptionalDenied)
 	for _, element := range row.Degraded {
 		description.AlwaysEmpty = append(description.AlwaysEmpty, Selection(t.Elements[element].Path))
 	}
@@ -150,6 +162,18 @@ func (t *Table) need(group *Group) Need {
 		}
 	}
 	return need
+}
+
+// everyWayNeeds reports whether every way already words need, which leaves it
+// out of what the optional requests need: a grant that runs the action holds
+// it whatever the call. With no way, nothing holds it already.
+func everyWayNeeds(ways []Way, need Need) bool {
+	for _, way := range ways {
+		if !slices.ContainsFunc(way.Needs, func(other Need) bool { return sameNeed(other, need) }) {
+			return false
+		}
+	}
+	return len(ways) > 0
 }
 
 // sameWay reports whether two ways word the same.

@@ -64,6 +64,29 @@ func TestViewActions_TheFixture_WordsEveryRowAndSortsTheWithheld(t *testing.T) {
 	}
 }
 
+// TestViewActions_RequestsSentOnSomeCallsOnly_AreWordedAndCounted verifies the
+// per-action half of the report carries what the requests an action sends on
+// some calls only need and those of them no fine-grained token passes, as the
+// table's description words them, and counts the actions that send any, a
+// denied one included.
+func TestViewActions_RequestsSentOnSomeCallsOnly_AreWordedAndCounted(t *testing.T) {
+	table := fixtureTable()
+	update := table.Requirement("issue.update")
+	update.Optional = []uint32{2}
+	update.OptionalDenied = []finegrained.Denial{{Cause: finegrained.CauseRESTUndeclared, Element: "GET /nothing", Effect: finegrained.EffectRefused}}
+	table.Requirement("later.get").Optional = []uint32{2}
+
+	view := viewActions(table, fixtureRecord(), fixtureOwners())
+	grant := view.grants[slices.IndexFunc(view.grants, func(g ActionGrant) bool { return g.ID == "issue.update" })]
+	wantNeeds := []finegrained.Need{{Permissions: []string{"Namespace: Read"}, At: []string{"group"}}}
+	if !reflect.DeepEqual(grant.OptionalNeeds, wantNeeds) || !reflect.DeepEqual(grant.OptionalDenied, update.OptionalDenied) {
+		t.Errorf("issue.update = %+v, want optional needs %+v and the denial %+v", grant, wantNeeds, update.OptionalDenied)
+	}
+	if view.optional != 2 {
+		t.Errorf("actions with requests sent on some calls only = %d, want 2", view.optional)
+	}
+}
+
 // TestViewActions_EitherEmptyPart_DegradesTheAction verifies an action is
 // listed as served with a part empty when only a part always empty applies
 // and when only a part empty without more of the grant does, not only when

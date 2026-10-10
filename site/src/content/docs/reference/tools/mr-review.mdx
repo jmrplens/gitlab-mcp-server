@@ -133,7 +133,7 @@ The description of each action, and of each of its parameters, is the text the s
 - **Individual tool**: `gitlab_mr_discussion_create`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Merge Request: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
+- **Fine-grained token**: Merge Request: Create at project. Some calls also need: Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, not idempotent
 
 | Parameter           | Type             | Mandatory | Description                                                                                                 |
@@ -268,7 +268,7 @@ The description of each action, and of each of its parameters, is the text the s
 - **Individual tool**: `gitlab_mr_draft_note_create`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Merge Request: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
+- **Fine-grained token**: Merge Request: Update at project. Some calls also need: Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, not idempotent
 
 | Parameter                   | Type             | Mandatory | Description                                                                        |
@@ -381,7 +381,7 @@ The description of each action, and of each of its parameters, is the text the s
 - **Individual tool**: `gitlab_mr_draft_note_update`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Merge Request: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
+- **Fine-grained token**: Merge Request: Update at project. Some calls also need: Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, idempotent
 
 | Parameter           | Type             | Mandatory | Description                               |

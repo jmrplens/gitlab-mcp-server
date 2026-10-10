@@ -63,6 +63,9 @@ type Summary struct {
 	PartlyWithheld int `json:"partly_withheld"`
 	// NotJudged counts actions with a way GitLab does not judge by the grant.
 	NotJudged int `json:"actions_with_a_way_not_judged_by_the_grant"`
+	// Optional counts actions that send a request on some calls only, which
+	// the table holds beside the ways rather than on one (issue 1242).
+	Optional int `json:"actions_with_requests_sent_on_some_calls_only"`
 	// Degraded counts reachable actions served with a part of the answer
 	// empty, always or unless the grant holds more.
 	Degraded int `json:"served_with_parts_empty"`
@@ -209,6 +212,7 @@ func summarize(table *finegrained.Table, view *actionView, elements []WorklistEn
 		Actions:                     len(table.Actions),
 		PartlyWithheld:              len(view.phaseA.PartlyWithheld),
 		NotJudged:                   view.notJudged,
+		Optional:                    view.optional,
 		Degraded:                    len(view.degraded),
 		ShapedByDirective:           view.byDirective,
 		ShapedByDeclaration:         view.byDeclaration,
