@@ -61,7 +61,6 @@ The description of each action, and of each of its parameters, is the text the s
 | ------------------------------- | ---------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `base_access_level`             | `integer`        | yes       | Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 0, 5 and 60 are not valid |
 | `group_id`                      | `string/integer` | yes       | Group ID or URL-encoded path                                                                                                                 |
-| `name`                          | `string`         | yes       | Name of the custom role                                                                                                                      |
 | `admin_cicd_variables`          | `boolean`        | no        | Allow admin CI/CD variables                                                                                                                  |
 | `admin_compliance_framework`    | `boolean`        | no        | Allow admin compliance framework                                                                                                             |
 | `admin_group_member`            | `boolean`        | no        | Allow admin group members                                                                                                                    |
@@ -77,6 +76,7 @@ The description of each action, and of each of its parameters, is the text the s
 | `manage_merge_request_settings` | `boolean`        | no        | Allow manage MR settings                                                                                                                     |
 | `manage_project_access_tokens`  | `boolean`        | no        | Allow manage project access tokens                                                                                                           |
 | `manage_security_policy_link`   | `boolean`        | no        | Allow manage security policy link                                                                                                            |
+| `name`                          | `string`         | no        | Name of the custom role. GitLab names a role created without one                                                                             |
 | `read_code`                     | `boolean`        | no        | Allow read code                                                                                                                              |
 | `read_dependency`               | `boolean`        | no        | Allow read dependency                                                                                                                        |
 | `read_runners`                  | `boolean`        | no        | Allow read runners                                                                                                                           |
@@ -98,7 +98,6 @@ The description of each action, and of each of its parameters, is the text the s
 | Parameter                       | Type      | Mandatory | Description                                                                                                                                  |
 | ------------------------------- | --------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `base_access_level`             | `integer` | yes       | Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 0, 5 and 60 are not valid |
-| `name`                          | `string`  | yes       | Name of the custom role                                                                                                                      |
 | `admin_cicd_variables`          | `boolean` | no        | Allow admin CI/CD variables                                                                                                                  |
 | `admin_compliance_framework`    | `boolean` | no        | Allow admin compliance framework                                                                                                             |
 | `admin_group_member`            | `boolean` | no        | Allow admin group members                                                                                                                    |
@@ -114,6 +113,7 @@ The description of each action, and of each of its parameters, is the text the s
 | `manage_merge_request_settings` | `boolean` | no        | Allow manage MR settings                                                                                                                     |
 | `manage_project_access_tokens`  | `boolean` | no        | Allow manage project access tokens                                                                                                           |
 | `manage_security_policy_link`   | `boolean` | no        | Allow manage security policy link                                                                                                            |
+| `name`                          | `string`  | no        | Name of the custom role. GitLab names a role created without one                                                                             |
 | `read_code`                     | `boolean` | no        | Allow read code                                                                                                                              |
 | `read_dependency`               | `boolean` | no        | Allow read dependency                                                                                                                        |
 | `read_runners`                  | `boolean` | no        | Allow read runners                                                                                                                           |

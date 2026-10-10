@@ -94,10 +94,13 @@ func TestCreateTagProtectionRule_Success(t *testing.T) {
 	}
 }
 
-// TestCreateTagProtectionRule_Immutable verifies that omitting both access levels creates an immutable rule.
-// The test exercises the POST path with no minimum access levels set.
-// It asserts the empty access levels round-trip without error.
-func TestCreateTagProtectionRule_Immutable(t *testing.T) {
+// TestCreateTagProtectionRule_NoAccessLevels_LeavesTheRefusalToGitLab verifies
+// the handler sends a rule without access levels as given and reads an
+// answer whose levels are empty. GitLab 19.4 requires both levels on this
+// route, which the schema says; a caller reaching the handler anyway is
+// answered by GitLab, and an immutable rule created elsewhere reads back with
+// both levels empty.
+func TestCreateTagProtectionRule_NoAccessLevels_LeavesTheRefusalToGitLab(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(tagRulesPath, func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated,
@@ -415,9 +418,8 @@ func TestUpdateTagProtectionRule_AccessLevels(t *testing.T) {
 
 // TestCreateTagProtectionRule_OneAccessLevelAtATime_SendsThatLevelAndNothingElse
 // drives one creation per optional access level and compares the whole request
-// body. The pattern-only case is the immutable rule GitLab documents, and it
-// is also what a single inverted guard would break by sending a level nobody
-// asked for.
+// body. The pattern-only case is what a single inverted guard would break by
+// sending a level nobody asked for.
 func TestCreateTagProtectionRule_OneAccessLevelAtATime_SendsThatLevelAndNothingElse(t *testing.T) {
 	const pattern = "v.+"
 	tests := []struct {

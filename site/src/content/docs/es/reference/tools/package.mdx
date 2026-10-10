@@ -581,7 +581,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `package.registry_tag_rule_create`
 
-> Create a container registry tag protection rule. Returns: the created rule. Omit both minimum access levels to make matching tags immutable. See also: [`package.registry_tag_rule_list`](#packageregistry_tag_rule_list), [`package.registry_tag_rule_update`](#packageregistry_tag_rule_update), [`package.registry_rule_create`](#packageregistry_rule_create).
+> Create a container registry tag protection rule. Returns: the created rule. Both minimum access levels (push and delete) are required. See also: [`package.registry_tag_rule_list`](#packageregistry_tag_rule_list), [`package.registry_tag_rule_update`](#packageregistry_tag_rule_update), [`package.registry_rule_create`](#packageregistry_rule_create).
 
 - **Meta-herramienta**: `gitlab_package`, acción `registry_tag_rule_create`
 - **Herramienta individual**: `gitlab_registry_tag_protection_create`
@@ -590,12 +590,12 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Container Registry Protection Tag Rule: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro                         | Tipo             | Requerido | Descripción                                                                                                                               |
-| --------------------------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `project_id`                      | `string/integer` | sí        | Project ID or path                                                                                                                        |
-| `tag_name_pattern`                | `string`         | sí        | Tag name pattern as a RE2 regular expression (e.g. v.+)                                                                                   |
-| `minimum_access_level_for_delete` | `string`         | no        | Minimum access level to delete matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable |
-| `minimum_access_level_for_push`   | `string`         | no        | Minimum access level to push matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable   |
+| Parámetro                         | Tipo             | Requerido | Descripción                                                             |
+| --------------------------------- | ---------------- | --------- | ----------------------------------------------------------------------- |
+| `minimum_access_level_for_delete` | `string`         | sí        | Minimum access level to delete matching tags (maintainer, owner, admin) |
+| `minimum_access_level_for_push`   | `string`         | sí        | Minimum access level to push matching tags (maintainer, owner, admin)   |
+| `project_id`                      | `string/integer` | sí        | Project ID or path                                                      |
+| `tag_name_pattern`                | `string`         | sí        | Tag name pattern as a RE2 regular expression (e.g. v.+)                 |
 
 ### `package.registry_tag_rule_delete`
 

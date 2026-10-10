@@ -386,6 +386,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | Parámetro                                                      | Tipo                                                           | Requerido | Descripción                                                                                                                                       |
 | -------------------------------------------------------------- | -------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`                                                         | `string`                                                       | sí        | Group name                                                                                                                                        |
+| `path`                                                         | `string`                                                       | sí        | Group URL path                                                                                                                                    |
 | `allow_personal_snippets`                                      | `boolean`                                                      | no        | Allow members to create personal snippets                                                                                                         |
 | `auto_ban_user_on_excessive_projects_download` (Ultimate)      | `boolean`                                                      | no        | Automatically ban users who exceed the unique project download limit (Ultimate)                                                                   |
 | `auto_devops_enabled`                                          | `boolean`                                                      | no        | Enable Auto DevOps for projects in this group                                                                                                     |
@@ -406,7 +407,6 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | `mentions_disabled`                                            | `boolean`                                                      | no        | Disable @-mention notifications                                                                                                                   |
 | `organization_id`                                              | `integer`                                                      | no        | Organization ID to create the group in (GitLab.com multi-organization. Defaults to the default organization)                                      |
 | `parent_id`                                                    | `integer`                                                      | no        | Parent group ID (creates a subgroup)                                                                                                              |
-| `path`                                                         | `string`                                                       | no        | Group URL path (defaults to kebab-case of name)                                                                                                   |
 | `project_creation_level`                                       | `string` (`noone`, `maintainer`, `developer`, `administrator`) | no        | Who can create projects (noone, maintainer, developer)                                                                                            |
 | `request_access_enabled`                                       | `boolean`                                                      | no        | Allow users to request access                                                                                                                     |
 | `require_two_factor_authentication`                            | `boolean`                                                      | no        | Require two-factor authentication for members                                                                                                     |
@@ -1486,12 +1486,14 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 | Parámetro        | Tipo             | Requerido | Descripción                                                                                                                                       |
 | ---------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `access_level`   | `integer`        | sí        | Access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner) |
 | `group_id`       | `string/integer` | sí        | Group ID or URL-encoded path                                                                                                                      |
-| `user_id`        | `integer`        | sí        | User ID to add                                                                                                                                    |
-| `access_level`   | `integer`        | no        | Access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner) |
 | `expires_at`     | `string`         | no        | Membership expiration date (YYYY-MM-DD)                                                                                                           |
 | `member_role_id` | `integer`        | no        | Custom member role ID to assign. Ultimate only. The role's base access level must match access_level                                              |
-| `username`       | `string`         | no        | Username to add (alternative to user_id)                                                                                                          |
+| `user_id`        | `integer`        | no        | User ID to add (provide user_id or username)                                                                                                      |
+| `username`       | `string`         | no        | Username to add (provide user_id or username)                                                                                                     |
+
+Además necesita al menos uno de estos: `user_id`; `username`.
 
 ### `group.group_member_edit`
 
@@ -1506,9 +1508,9 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 | Parámetro        | Tipo             | Requerido | Descripción                                                                                                                                                     |
 | ---------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `access_level`   | `integer`        | sí        | New access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner, 60=Admin) |
 | `group_id`       | `string/integer` | sí        | Group ID or URL-encoded path                                                                                                                                    |
 | `user_id`        | `integer`        | sí        | User ID                                                                                                                                                         |
-| `access_level`   | `integer`        | no        | New access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner, 60=Admin) |
 | `expires_at`     | `string`         | no        | New membership expiration date (YYYY-MM-DD)                                                                                                                     |
 | `member_role_id` | `integer`        | no        | Custom member role ID to assign. Ultimate only. The role's base access level must match access_level                                                            |
 
@@ -1575,10 +1577,10 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 | Parámetro                   | Tipo             | Requerido | Descripción                                                                                                                                                                                                                         |
 | --------------------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `group_access`              | `integer`        | sí        | Access level the members of the group shared with gain (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 60=Admin is not valid for group shares |
 | `group_id`                  | `string/integer` | sí        | Group ID or URL-encoded path to share                                                                                                                                                                                               |
 | `share_group_id`            | `integer`        | sí        | Group ID to share with                                                                                                                                                                                                              |
 | `expires_at`                | `string`         | no        | Share expiration date (YYYY-MM-DD)                                                                                                                                                                                                  |
-| `group_access`              | `integer`        | no        | Access level the members of the group shared with gain (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 60=Admin is not valid for group shares |
 | `member_role_id` (Ultimate) | `integer`        | no        | Custom member role the share grants (Ultimate only). Its base access level must equal group_access                                                                                                                                  |
 
 ### `group.group_member_unshare`
@@ -1875,6 +1877,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | Parámetro                      | Tipo                                           | Requerido | Descripción                                                             |
 | ------------------------------ | ---------------------------------------------- | --------- | ----------------------------------------------------------------------- |
 | `group_id`                     | `string/integer`                               | sí        | Group ID or URL-encoded path                                            |
+| `url`                          | `string`                                       | sí        | Webhook URL                                                             |
 | `branch_filter_strategy`       | `string` (`wildcard`, `regex`, `all_branches`) | no        | Branch filter strategy (wildcard, regex, all_branches)                  |
 | `confidential_issues_events`   | `boolean`                                      | no        | Trigger on confidential issue events                                    |
 | `confidential_note_events`     | `boolean`                                      | no        | Trigger on confidential note events                                     |
@@ -1902,7 +1905,6 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | `subgroup_events`              | `boolean`                                      | no        | Trigger on subgroup events                                              |
 | `tag_push_events`              | `boolean`                                      | no        | Trigger on tag push events                                              |
 | `token`                        | `string`                                       | no        | Secret token for payload validation                                     |
-| `url`                          | `string`                                       | no        | Webhook URL (required for add)                                          |
 | `vulnerability_events`         | `boolean`                                      | no        | Trigger on vulnerability events                                         |
 | `wiki_page_events`             | `boolean`                                      | no        | Trigger on wiki page events                                             |
 
@@ -1998,7 +2000,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | `subgroup_events`              | `boolean`                                      | no        | Trigger on subgroup events                                              |
 | `tag_push_events`              | `boolean`                                      | no        | Trigger on tag push events                                              |
 | `token`                        | `string`                                       | no        | Secret token for payload validation                                     |
-| `url`                          | `string`                                       | no        | Webhook URL (required for add)                                          |
+| `url`                          | `string`                                       | no        | New webhook URL                                                         |
 | `vulnerability_events`         | `boolean`                                      | no        | Trigger on vulnerability events                                         |
 | `wiki_page_events`             | `boolean`                                      | no        | Trigger on wiki page events                                             |
 
@@ -2219,9 +2221,9 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | Parámetro  | Tipo     | Requerido | Descripción                  |
 | ---------- | -------- | --------- | ---------------------------- |
 | `group_id` | `string` | sí        | Group ID or URL-encoded path |
+| `provider` | `string` | sí        | LDAP provider name           |
 | `cn`       | `string` | no        | LDAP Common Name to delete   |
 | `filter`   | `string` | no        | LDAP filter to delete        |
-| `provider` | `string` | no        | LDAP provider name           |
 
 ### `group.ldap_link_delete_for_provider`
 

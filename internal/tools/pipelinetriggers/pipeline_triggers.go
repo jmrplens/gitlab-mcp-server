@@ -101,7 +101,7 @@ type GetInput struct {
 // CreateInput contains parameters for creating a pipeline trigger.
 type CreateInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	Description string               `json:"description" jsonschema:"Trigger token description"`
+	Description string               `json:"description" jsonschema:"Trigger token description,required"`
 }
 
 // UpdateInput contains parameters for updating a pipeline trigger.
@@ -123,8 +123,8 @@ type DeleteInput struct {
 // input parameters.
 type RunInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	Ref       string               `json:"ref" jsonschema:"Branch or tag name to run pipeline on"`
-	Token     string               `json:"token" jsonschema:"Pipeline trigger token"`
+	Ref       string               `json:"ref" jsonschema:"Branch or tag name to run pipeline on,required"`
+	Token     string               `json:"token" jsonschema:"Pipeline trigger token,required"`
 	Variables map[string]string    `json:"variables,omitempty" jsonschema:"Map of CI/CD variable name to value injected into the triggered pipeline."`
 	Inputs    map[string]any       `json:"inputs,omitempty" jsonschema:"Map of pipeline input name to value (string, number, boolean, or array of strings) for inputs declared in the pipeline spec."`
 }
@@ -287,19 +287,18 @@ func RunTrigger(ctx context.Context, client *gitlabclient.Client, input RunInput
 	if input.Token == "" {
 		return RunOutput{}, toolutil.WrapErrWithMessage("pipeline_trigger_run", toolutil.ErrFieldRequired("token"))
 	}
+	// Variables and inputs are passed whatever their length: client-go tags
+	// both omitempty, so an empty map is left out of the body, the same
+	// request a guard on the length would send.
+	inputs, err := buildPipelineInputs(input.Inputs)
+	if err != nil {
+		return RunOutput{}, toolutil.WrapErrWithMessage("pipeline_trigger_run", err)
+	}
 	opts := &gl.RunPipelineTriggerOptions{
-		Ref:   new(input.Ref),
-		Token: new(input.Token),
-	}
-	if len(input.Variables) > 0 {
-		opts.Variables = input.Variables
-	}
-	if len(input.Inputs) > 0 {
-		inputs, err := buildPipelineInputs(input.Inputs)
-		if err != nil {
-			return RunOutput{}, toolutil.WrapErrWithMessage("pipeline_trigger_run", err)
-		}
-		opts.Inputs = inputs
+		Ref:       new(input.Ref),
+		Token:     new(input.Token),
+		Variables: input.Variables,
+		Inputs:    inputs,
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().PipelineTriggers.RunPipelineTrigger(

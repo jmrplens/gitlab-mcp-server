@@ -121,7 +121,7 @@ type DeleteWithCNOrFilterInput struct {
 	GroupID  string `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	CN       string `json:"cn,omitempty" jsonschema:"LDAP Common Name to delete"`
 	Filter   string `json:"filter,omitempty" jsonschema:"LDAP filter to delete"`
-	Provider string `json:"provider,omitempty" jsonschema:"LDAP provider name"`
+	Provider string `json:"provider,omitempty" jsonschema:"LDAP provider name,required"`
 }
 
 // DeleteWithCNOrFilter deletes a group LDAP link by CN or filter.

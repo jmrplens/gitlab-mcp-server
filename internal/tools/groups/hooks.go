@@ -14,8 +14,10 @@ import (
 )
 
 // HookInput defines common parameters for creating or editing a group hook.
+// Its URL is the edit's, which GitLab leaves optional; [AddHookInput]
+// declares the add's own, which GitLab requires.
 type HookInput struct {
-	URL                       string                  `json:"url,omitempty"                        jsonschema:"Webhook URL (required for add)"`
+	URL                       string                  `json:"url,omitempty"                        jsonschema:"New webhook URL"`
 	Name                      string                  `json:"name,omitempty"                       jsonschema:"Hook name"`
 	Description               string                  `json:"description,omitempty"                jsonschema:"Hook description"`
 	Token                     string                  `json:"token,omitempty"                      jsonschema:"Secret token for payload validation"`
@@ -72,6 +74,10 @@ type GetHookInput struct {
 // AddHookInput defines parameters for adding a new group hook.
 type AddHookInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	// URL shadows the shared field, so the schema of a new hook can say what
+	// GitLab says of it: POST /groups/:id/hooks requires url, and the edit
+	// that shares the other fields does not.
+	URL string `json:"url" jsonschema:"Webhook URL,required"`
 	HookInput
 }
 
@@ -446,7 +452,9 @@ func AddHook(ctx context.Context, client *gitlabclient.Client, input AddHookInpu
 		return HookOutput{}, errors.New("AddHook: url is required")
 	}
 
-	opts := applyAddHookOpts(input.HookInput)
+	hook := input.HookInput
+	hook.URL = input.URL
+	opts := applyAddHookOpts(hook)
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	h, _, err := client.GL().Groups.AddGroupHook(string(input.GroupID), opts, gl.WithContext(ctx))

@@ -81,17 +81,20 @@ func trailersSummary(extended map[string][]string) string {
 // commitIdent renders the person a commit names: their name, and the address
 // beside it in parentheses rather than in angle brackets, which GFM turns
 // into a mailto autolink to an address nobody chose to publish.
+//
+// Early returns rather than a tagless switch, so the mutation tool, which
+// cannot see a case expression, measures each condition.
 func commitIdent(name, email string) string {
-	switch {
-	case name == "" && email == "":
+	if name == "" && email == "" {
 		return ""
-	case email == "":
-		return toolutil.EscapeMdTableCell(name)
-	case name == "":
-		return toolutil.EscapeMdTableCell(email)
-	default:
-		return toolutil.EscapeMdTableCell(name) + " (" + toolutil.EscapeMdTableCell(email) + ")"
 	}
+	if email == "" {
+		return toolutil.EscapeMdTableCell(name)
+	}
+	if name == "" {
+		return toolutil.EscapeMdTableCell(email)
+	}
+	return toolutil.EscapeMdTableCell(name) + " (" + toolutil.EscapeMdTableCell(email) + ")"
 }
 
 // FormatOutputMarkdown renders one commit as a card.
@@ -407,25 +410,34 @@ func FormatGPGSignatureMarkdown(sig GPGSignatureOutput) string {
 	c := toolutil.NewCard(&b, "Commit Signature")
 	c.Field("Type", sig.SignatureType)
 	c.Field("Verification", sig.VerificationStatus)
-	switch {
-	case sig.X509Certificate != nil:
+	writeSigner(c, sig)
+	c.Field("Commit Source", sig.CommitSource)
+	c.End(toolutil.HintAction(actionCommitGet, "view the full commit details"))
+	return b.String()
+}
+
+// writeSigner writes the signer object the signing scheme carries: an X.509
+// certificate, an SSH key, or the GPG key's user ID. Early returns rather
+// than a tagless switch, so the mutation tool, which cannot see a case
+// expression, measures each condition.
+func writeSigner(c *toolutil.Card, sig GPGSignatureOutput) {
+	if sig.X509Certificate != nil {
 		// Both are read out of the signer's own certificate, which GitLab
 		// stores as parsed rather than validating.
 		c.Field("X.509 Subject", sig.X509Certificate.Subject)
 		c.Field("X.509 Email", sig.X509Certificate.Email)
-	case sig.Key != nil:
+		return
+	}
+	if sig.Key != nil {
 		c.Field("SSH Key", sig.Key.Title)
 		c.Field("Usage", sig.Key.UsageType)
-	default:
-		// Both come out of the GPG key's user ID packet, which is whatever the
-		// key's owner typed when they generated it.
-		c.Markdown("Key User", commitIdent(sig.KeyUserName, sig.KeyUserEmail))
-		c.Int("Key ID", sig.KeyID)
-		c.Code("Primary Key ID", sig.KeyPrimaryKeyID)
+		return
 	}
-	c.Field("Commit Source", sig.CommitSource)
-	c.End(toolutil.HintAction(actionCommitGet, "view the full commit details"))
-	return b.String()
+	// Both come out of the GPG key's user ID packet, which is whatever the
+	// key's owner typed when they generated it.
+	c.Markdown("Key User", commitIdent(sig.KeyUserName, sig.KeyUserEmail))
+	c.Int("Key ID", sig.KeyID)
+	c.Code("Primary Key ID", sig.KeyPrimaryKeyID)
 }
 
 func init() {

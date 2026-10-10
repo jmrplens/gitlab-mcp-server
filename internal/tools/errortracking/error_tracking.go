@@ -48,8 +48,8 @@ func GetSettings(ctx context.Context, client *gitlabclient.Client, input GetSett
 // EnableDisableInput contains parameters for enabling/disabling error tracking.
 type EnableDisableInput struct {
 	ProjectID  toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Active     *bool                `json:"active" jsonschema:"Enable or disable error tracking"`
-	Integrated *bool                `json:"integrated" jsonschema:"Use integrated error tracking"`
+	Active     *bool                `json:"active" jsonschema:"Enable or disable error tracking,required"`
+	Integrated *bool                `json:"integrated,omitempty" jsonschema:"Use integrated error tracking"`
 }
 
 // EnableDisable enables or disables error tracking for a project.

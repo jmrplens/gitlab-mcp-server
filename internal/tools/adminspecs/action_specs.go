@@ -616,7 +616,7 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		guidance:    map[string]toolutil.ParameterGuidance{"topic_id": guidanceTopicID},
 	},
 	"gitlab_create_topic": {
-		usage:       "Create a new instance project topic (admin only). Provide name and optionally title, description, and avatar.",
+		usage:       "Create a new instance project topic (admin only). Provide name and title, and optionally description and avatar.",
 		aliases:     []string{"create topic", "add topic", "new project topic"},
 		related:     []string{actionTopicList, actionTopicUpdate, actionTopicDelete},
 		description: "Create an instance project topic. Returns: the created topic with id, name, title, and description. See also: gitlab_update_topic, gitlab_list_topics.",

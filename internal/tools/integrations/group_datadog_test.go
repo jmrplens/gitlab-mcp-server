@@ -7,6 +7,7 @@ package integrations
 import (
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"reflect"
 	"slices"
@@ -273,15 +274,17 @@ func TestSetGroupDatadog_Success(t *testing.T) {
 }
 
 // TestSetGroupDatadog_UseInheritedSettings asserts that asking a group to
-// inherit its ancestor's Datadog configuration is accepted on its own, with no
-// other field supplied, and that the flag reaches GitLab.
+// inherit its ancestor's Datadog configuration reaches GitLab beside the API
+// key, which PUT /groups/:id/integrations/datadog requires whatever else the
+// call carries (requires in lib/api/integrations/integratable_operations.rb).
 func TestSetGroupDatadog_UseInheritedSettings(t *testing.T) {
 	inherited := true
 	got := setGroupDatadogBody(t, SetGroupDatadogInput{
 		GroupID:              testGroupPath,
+		APIKey:               "secret-key",
 		UseInheritedSettings: &inherited,
 	})
-	if want := (map[string]any{"use_inherited_settings": true}); !reflect.DeepEqual(got, want) {
+	if want := (map[string]any{"api_key": "secret-key", "use_inherited_settings": true}); !reflect.DeepEqual(got, want) {
 		t.Errorf("request body = %v, want %v", got, want)
 	}
 }
@@ -321,13 +324,14 @@ func setGroupDatadogBody(t *testing.T, input SetGroupDatadogInput) map[string]an
 }
 
 // TestSetGroupDatadog_OneFieldAtATime_SendsOnlyThatField drives each of the
-// nine configurable fields on its own and asserts the PUT body carries exactly
-// that field. One field per case is the only fixture that tells the nine
-// apart: a request populated with all of them agrees with itself however the
-// handler pairs an input field with an option field, so a value read from the
-// wrong neighbor, or a value dropped because its guard tests the empty case,
-// would go unnoticed. The explicit false on archive_trace_events also pins
-// that a flag a caller turned off is sent rather than omitted as a zero.
+// eight optional settings on its own beside the API key GitLab requires, and
+// asserts the PUT body carries exactly the key and that setting. One setting
+// per case is the only fixture that tells the eight apart: a request populated
+// with all of them agrees with itself however the handler pairs an input field
+// with an option field, so a value read from the wrong neighbor, or a value
+// dropped because its guard tests the empty case, would go unnoticed. The
+// explicit false on archive_trace_events also pins that a flag a caller turned
+// off is sent rather than omitted as a zero.
 func TestSetGroupDatadog_OneFieldAtATime_SendsOnlyThatField(t *testing.T) {
 	ciVisibility := true
 	archiveOff := false
@@ -338,7 +342,7 @@ func TestSetGroupDatadog_OneFieldAtATime_SendsOnlyThatField(t *testing.T) {
 		input SetGroupDatadogInput
 		want  map[string]any
 	}{
-		{"api_key", SetGroupDatadogInput{APIKey: "secret-key"}, map[string]any{"api_key": "secret-key"}},
+		{"api_key alone", SetGroupDatadogInput{}, map[string]any{}},
 		{"api_url", SetGroupDatadogInput{APIURL: testAPIURL}, map[string]any{"api_url": testAPIURL}},
 		{"datadog_env", SetGroupDatadogInput{DatadogEnv: "prod"}, map[string]any{"datadog_env": "prod"}},
 		{"datadog_service", SetGroupDatadogInput{DatadogService: "gitlab"}, map[string]any{"datadog_service": "gitlab"}},
@@ -353,46 +357,43 @@ func TestSetGroupDatadog_OneFieldAtATime_SendsOnlyThatField(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			input := tt.input
 			input.GroupID = testGroupPath
+			input.APIKey = "secret-key"
+			want := map[string]any{"api_key": "secret-key"}
+			maps.Copy(want, tt.want)
 			got := setGroupDatadogBody(t, input)
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("request body = %v, want %v", got, tt.want)
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("request body = %v, want %v", got, want)
 			}
 		})
 	}
 }
 
-// TestSetGroupDatadog_InheritedSettingsOffAlone_Rejected asserts that
-// use_inherited_settings=false is not itself a configuration: it names what
-// the group should not do and leaves nothing to store, so the handler refuses
-// it before reaching GitLab exactly as it refuses an empty input.
-func TestSetGroupDatadog_InheritedSettingsOffAlone_Rejected(t *testing.T) {
-	notInherited := false
-	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-
-	_, err := SetGroupDatadog(t.Context(), client, SetGroupDatadogInput{
-		GroupID:              testGroupPath,
-		UseInheritedSettings: &notInherited,
-	})
-	if err == nil {
-		t.Fatal("expected validation error for use_inherited_settings=false on its own")
+// TestSetGroupDatadog_NoAPIKey_IsRefusedWithoutReachingGitLab asserts that a
+// call without an API key is refused before anything is sent, whatever else
+// it carries: PUT /groups/:id/integrations/datadog requires api_key on every
+// call, inheriting an ancestor's settings included, so GitLab would refuse
+// each of these with a 400.
+func TestSetGroupDatadog_NoAPIKey_IsRefusedWithoutReachingGitLab(t *testing.T) {
+	inherited, notInherited := true, false
+	tests := []struct {
+		name  string
+		input SetGroupDatadogInput
+	}{
+		{"nothing", SetGroupDatadogInput{}},
+		{"inherit", SetGroupDatadogInput{UseInheritedSettings: &inherited}},
+		{"do not inherit", SetGroupDatadogInput{UseInheritedSettings: &notInherited}},
+		{"settings", SetGroupDatadogInput{APIURL: testAPIURL, DatadogEnv: "prod"}},
 	}
-	if !strings.Contains(err.Error(), "at least one of") {
-		t.Errorf("error should describe the missing fields, got: %v", err)
-	}
-}
-
-// TestSetGroupDatadog_EmptyInputRejected verifies the SetGroupDatadog_EmptyInputRejected handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestSetGroupDatadog_EmptyInputRejected(t *testing.T) {
-	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-
-	_, err := SetGroupDatadog(t.Context(), client, SetGroupDatadogInput{GroupID: testGroupPath})
-	if err == nil {
-		t.Fatal("expected validation error for empty set")
-	}
-	if !strings.Contains(err.Error(), "at least one of") {
-		t.Errorf("error should describe the missing fields, got: %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			input := tt.input
+			input.GroupID = testGroupPath
+			_, err := SetGroupDatadog(t.Context(), client, input)
+			if err == nil || !strings.Contains(err.Error(), "api_key is required") {
+				t.Errorf("error = %v, want one naming api_key as required", err)
+			}
+		})
 	}
 }
 

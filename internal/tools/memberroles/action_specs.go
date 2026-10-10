@@ -98,21 +98,19 @@ func decorateMemberRoleMeta(opts *toolutil.ActionSpecOptions, name string) {
 	if !ok {
 		return
 	}
+	// Usage and the aliases have catalog defaults an empty entry must not
+	// blank. The other three have none, so an empty value copied over them
+	// leaves what was there, and a guard would be a condition with no
+	// observable other side.
 	if meta.usage != "" {
 		opts.Usage = meta.usage
 	}
 	if len(meta.aliases) > 0 {
 		opts.Aliases = append([]string(nil), meta.aliases...)
 	}
-	if len(meta.related) > 0 {
-		opts.RelatedActions = append([]string(nil), meta.related...)
-	}
-	if len(meta.guidance) > 0 {
-		opts.ParameterGuidance = meta.guidance
-	}
-	if meta.description != "" {
-		opts.IndividualTool.Description = meta.description
-	}
+	opts.RelatedActions = append([]string(nil), meta.related...)
+	opts.ParameterGuidance = meta.guidance
+	opts.IndividualTool.Description = meta.description
 }
 
 // memberRoleActionMetaEntry is the discovery metadata for one custom
@@ -167,7 +165,7 @@ var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 		description: "List group-level custom member roles. Returns: each role with id, name, description, base_access_level, and its enabled permission flags. See also: gitlab_list_instance_member_roles, gitlab_create_group_member_role, gitlab_delete_group_member_role.",
 	},
 	"create_instance": {
-		usage:   "Create a new instance-level custom member role. Provide name and base_access_level, then enable individual permission flags (e.g. read_code, admin_merge_request) only when requested. Requires admin + self-managed Ultimate.",
+		usage:   "Create a new instance-level custom member role. Provide base_access_level and, optionally, a name (GitLab names a role created without one), then enable individual permission flags (e.g. read_code, admin_merge_request) only when requested. Requires admin + self-managed Ultimate.",
 		aliases: []string{"create instance member role", "create custom role", "add instance member role", "define custom role"},
 		related: []string{actionMRListInstance, actionMRDeleteInstance, actionMRCreateGroup},
 		guidance: map[string]toolutil.ParameterGuidance{
@@ -186,7 +184,7 @@ var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 		description: "Create an instance-level custom member role. Returns: the created role with id, name, base_access_level, and its enabled permission flags. See also: gitlab_list_instance_member_roles, gitlab_delete_instance_member_role, gitlab_create_group_member_role.",
 	},
 	"create_group": {
-		usage:   "Create a new group-level custom member role for a group_id. Provide name and base_access_level, then enable individual permission flags only when requested. Requires Owner + Ultimate. Deprecated on self-managed 17+.",
+		usage:   "Create a new group-level custom member role for a group_id. Provide base_access_level and, optionally, a name (GitLab names a role created without one), then enable individual permission flags only when requested. Requires Owner + Ultimate. Deprecated on self-managed 17+.",
 		aliases: []string{"create group member role", "add group custom role", "define group member role"},
 		related: []string{actionMRListGroup, actionMRDeleteGroup, actionMRCreateInstance},
 		guidance: map[string]toolutil.ParameterGuidance{

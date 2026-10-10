@@ -142,9 +142,9 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 | Parámetro    | Tipo             | Requerido | Descripción                         |
 | ------------ | ---------------- | --------- | ----------------------------------- |
+| `job`        | `string`         | sí        | Job name to download artifacts from |
 | `project_id` | `string/integer` | sí        | Project ID or URL-encoded path      |
-| `job`        | `string`         | no        | Job name to download artifacts from |
-| `ref_name`   | `string`         | no        | Branch or tag name                  |
+| `ref_name`   | `string`         | sí        | Branch or tag name                  |
 
 ### `job.download_single_artifact`
 

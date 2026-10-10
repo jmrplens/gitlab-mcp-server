@@ -878,10 +878,10 @@ Validate inline .gitlab-ci.yml content within a project namespace. Returns: vali
 **Parameters:**
 
 - `content` (string) (required): CI/CD YAML content to validate
-- `dry_run` (boolean) (required): Run pipeline creation simulation
-- `include_jobs` (boolean) (required): Include expanded job list in the response
+- `dry_run` (boolean): Run pipeline creation simulation
+- `include_jobs` (boolean): Include expanded job list in the response
 - `project_id` (string or integer) (required): Project ID or URL-encoded path (namespace context)
-- `ref` (string) (required): Branch or tag to use for CI includes resolution
+- `ref` (string): Branch or tag to use for CI includes resolution
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -891,12 +891,12 @@ Validate a project's committed .gitlab-ci.yml at a branch or tag. Returns: valid
 
 **Parameters:**
 
-- `content_ref` (string) (required): Branch or tag to use for the CI configuration content
-- `dry_run` (boolean) (required): Run pipeline creation simulation
-- `dry_run_ref` (string) (required): Branch or tag to use as context for the dry run
-- `include_jobs` (boolean) (required): Include expanded job list in the response
+- `content_ref` (string): Branch or tag to use for the CI configuration content
+- `dry_run` (boolean): Run pipeline creation simulation
+- `dry_run_ref` (string): Branch or tag to use as context for the dry run
+- `include_jobs` (boolean): Include expanded job list in the response
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `ref` (string) (required): Branch or tag to use for CI includes resolution
+- `ref` (string): Branch or tag to use for CI includes resolution
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -906,14 +906,14 @@ Create a CI/CD variable in a project with type, environment scope, and protected
 
 **Parameters:**
 
-- `description` (string) (required): Variable description
-- `environment_scope` (string) (required): Environment scope (default: *)
+- `description` (string): Variable description
+- `environment_scope` (string): Environment scope (default: *)
 - `key` (string) (required): Variable key name
-- `masked` (boolean) (required): Mask variable value in job logs
-- `masked_and_hidden` (boolean) (required): Mask and hide variable value
+- `masked` (boolean): Mask variable value in job logs
+- `masked_and_hidden` (boolean): Mask and hide variable value
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `protected` (boolean) (required): Only expose in protected branches/tags
-- `raw` (boolean) (required): Treat variable value as raw string
+- `protected` (boolean): Only expose in protected branches/tags
+- `raw` (boolean): Treat variable value as raw string
 - `value` (string) (required): Variable value
 - `variable_type` (string): Variable type: env_var or file
 
@@ -926,7 +926,7 @@ Delete a CI/CD variable by key, selecting an environment-scoped instance via the
 **Parameters:**
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
-- `environment_scope` (string) (required): Filter by environment scope (shorthand for filter.environment_scope)
+- `environment_scope` (string): Filter by environment scope (shorthand for filter.environment_scope)
 - `filter` (object): Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object
 - `key` (string) (required): Variable key name
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
@@ -939,7 +939,7 @@ Get a single CI/CD variable by key, optionally selecting an environment-scoped i
 
 **Parameters:**
 
-- `environment_scope` (string) (required): Filter by environment scope (shorthand for filter.environment_scope)
+- `environment_scope` (string): Filter by environment scope (shorthand for filter.environment_scope)
 - `filter` (object): Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object
 - `key` (string) (required): Variable key name
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
@@ -968,15 +968,15 @@ Update a CI/CD variable, selecting an environment-scoped instance via the filter
 
 **Parameters:**
 
-- `description` (string) (required): Updated variable description
-- `environment_scope` (string) (required): Filter by environment scope (shorthand for filter.environment_scope)
+- `description` (string): Updated variable description
+- `environment_scope` (string): Filter by environment scope (shorthand for filter.environment_scope)
 - `filter` (object): Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object
 - `key` (string) (required): Variable key name
-- `masked` (boolean) (required): Mask variable value in job logs
+- `masked` (boolean): Mask variable value in job logs
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `protected` (boolean) (required): Only expose in protected branches/tags
-- `raw` (boolean) (required): Treat variable value as raw string
-- `value` (string) (required): Updated variable value
+- `protected` (boolean): Only expose in protected branches/tags
+- `raw` (boolean): Treat variable value as raw string
+- `value` (string): Updated variable value
 - `variable_type` (string): Variable type: env_var or file
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -1252,7 +1252,7 @@ Create a cluster agent token. Returns: the created token including the secret va
 **Parameters:**
 
 - `agent_id` (integer) (required): Agent ID
-- `description` (string) (required): Token description
+- `description` (string): Token description
 - `name` (string) (required): Token name
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
@@ -1354,14 +1354,14 @@ Create a new Geo site. Returns: the site with id, name, url, primary/enabled fla
 - `files_max_capacity` (integer): Max number of LFS/attachment backfill downloads
 - `internal_url` (string): Internal URL of the Geo site
 - `minimum_reverification_interval` (integer): Minimum interval (days) before re-verification
-- `name` (string): Unique name of the Geo site
+- `name` (string) (required): Unique name of the Geo site
 - `primary` (boolean): Whether this is a primary site
 - `repos_max_capacity` (integer): Max number of concurrent repository backfill syncs
 - `selective_sync_namespace_ids` (array of integers): Namespace IDs to sync (when selective_sync_type=namespaces)
 - `selective_sync_shards` (array of strings): Storage shards to sync (when selective_sync_type=shards)
 - `selective_sync_type` (string): Selective sync type: namespaces or shards
 - `sync_object_storage` (boolean): Whether to sync object-stored data
-- `url` (string): External URL of the Geo site
+- `url` (string) (required): External URL of the Geo site
 - `verification_max_capacity` (integer): Max number of concurrent verification jobs
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -1389,7 +1389,7 @@ Create a group-level custom member role. Returns: the created role with id, name
 - `manage_merge_request_settings` (boolean): Allow manage MR settings
 - `manage_project_access_tokens` (boolean): Allow manage project access tokens
 - `manage_security_policy_link` (boolean): Allow manage security policy link
-- `name` (string) (required): Name of the custom role
+- `name` (string): Name of the custom role. GitLab names a role created without one
 - `read_code` (boolean): Allow read code
 - `read_dependency` (boolean): Allow read dependency
 - `read_runners` (boolean): Allow read runners
@@ -1446,7 +1446,7 @@ Create an instance-level custom member role. Returns: the created role with id, 
 - `manage_merge_request_settings` (boolean): Allow manage MR settings
 - `manage_project_access_tokens` (boolean): Allow manage project access tokens
 - `manage_security_policy_link` (boolean): Allow manage security policy link
-- `name` (string) (required): Name of the custom role
+- `name` (string): Name of the custom role. GitLab names a role created without one
 - `read_code` (boolean): Allow read code
 - `read_dependency` (boolean): Allow read dependency
 - `read_runners` (boolean): Allow read runners
@@ -1605,7 +1605,7 @@ Create an instance project topic. Returns: the created topic with id, name, titl
 
 - `description` (string): Topic description
 - `name` (string) (required): Topic name (slug-like unique identifier)
-- `title` (string): Topic display title
+- `title` (string) (required): Topic display title
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -2569,8 +2569,8 @@ Create a deployment record for an environment at a given ref and sha with an ini
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `ref` (string) (required): Git branch or tag to deploy
 - `sha` (string) (required): Git SHA to deploy
-- `status` (string): Initial deployment status: running or success or failed or canceled. GitLab 19 rejects created when creating a deployment
-- `tag` (boolean): Whether the ref is a tag. GitLab 19 requires this explicitly: pass false for branch refs and true for tag refs (default: false)
+- `status` (string) (required): Initial deployment status: running or success or failed or canceled. GitLab 19 rejects created when creating a deployment
+- `tag` (boolean) (required): Whether the ref is a tag: false for a branch ref, true for a tag ref
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -2866,7 +2866,7 @@ Enable or disable error tracking. Returns: the updated error-tracking settings. 
 **Parameters:**
 
 - `active` (boolean) (required): Enable or disable error tracking
-- `integrated` (boolean) (required): Use integrated error tracking
+- `integrated` (boolean): Use integrated error tracking
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -3370,7 +3370,7 @@ Get blame information for a file, optionally for a line range. Returns: file_pat
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `range_end` (integer): End line number for blame range
 - `range_start` (integer): Start line number for blame range
-- `ref` (string): Branch, tag, or commit SHA (defaults to default branch)
+- `ref` (string) (required): Branch, tag, or commit SHA
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -3419,7 +3419,7 @@ Get a single file's decoded content and metadata from a repository. Returns: fil
 
 - `file_path` (string) (required): URL-encoded full path of the file (e.g. src%2Fmain.go or src/main.go)
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `ref` (string): Branch name, tag, or commit SHA (defaults to default branch)
+- `ref` (string) (required): Branch name, tag, or commit SHA
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -3431,7 +3431,7 @@ Get a file's metadata without content (HEAD request). Returns: file_name, file_p
 
 - `file_path` (string) (required): URL-encoded full path of the file
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `ref` (string): Branch, tag, or commit SHA (defaults to default branch)
+- `ref` (string) (required): Branch, tag, or commit SHA
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -3516,7 +3516,7 @@ Get the avatar URL for an email address. Returns: the resolved avatar URL for th
 **Parameters:**
 
 - `email` (string) (required): Email address to look up avatar for
-- `size` (integer) (required): Desired avatar size in pixels
+- `size` (integer): Desired avatar size in pixels
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -4754,7 +4754,7 @@ Create a GitLab group or subgroup. Returns: created group metadata including ID,
 - `name` (string) (required): Group name
 - `organization_id` (integer): Organization ID to create the group in (GitLab.com multi-organization. Defaults to the default organization)
 - `parent_id` (integer): Parent group ID (creates a subgroup)
-- `path` (string): Group URL path (defaults to kebab-case of name)
+- `path` (string) (required): Group URL path
 - `project_creation_level` (string): Who can create projects (noone, maintainer, developer)
 - `request_access_enabled` (boolean): Allow users to request access
 - `require_two_factor_authentication` (boolean): Require two-factor authentication for members
@@ -4908,7 +4908,7 @@ Create a webhook on a GitLab group. Returns: the created hook with URL, enabled 
 - `subgroup_events` (boolean): Trigger on subgroup events
 - `tag_push_events` (boolean): Trigger on tag push events
 - `token` (string): Secret token for payload validation
-- `url` (string): Webhook URL (required for add)
+- `url` (string) (required): Webhook URL
 - `vulnerability_events` (boolean): Trigger on vulnerability events
 - `wiki_page_events` (boolean): Trigger on wiki page events
 
@@ -4987,7 +4987,7 @@ Update a GitLab group webhook. Returns: the updated hook with URL, enabled event
 - `subgroup_events` (boolean): Trigger on subgroup events
 - `tag_push_events` (boolean): Trigger on tag push events
 - `token` (string): Secret token for payload validation
-- `url` (string): Webhook URL (required for add)
+- `url` (string): New webhook URL
 - `vulnerability_events` (boolean): Trigger on vulnerability events
 - `wiki_page_events` (boolean): Trigger on wiki page events
 
@@ -5247,7 +5247,7 @@ Delete a GitLab group's LDAP link by CN or filter (Premium/Ultimate). Returns: a
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `filter` (string): LDAP filter to delete
 - `group_id` (string) (required): Group ID or URL-encoded path
-- `provider` (string): LDAP provider name
+- `provider` (string) (required): LDAP provider name
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
@@ -5345,8 +5345,8 @@ Add a user as a direct member of a group. Returns: the created membership with a
 - `expires_at` (string): Membership expiration date (YYYY-MM-DD)
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `member_role_id` (integer): Custom member role ID to assign. Ultimate only. The role's base access level must match access_level
-- `user_id` (integer): User ID to add
-- `username` (string): Username to add (alternative to user_id)
+- `user_id` (integer): User ID to add (provide user_id or username)
+- `username` (string): Username to add (provide user_id or username)
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -5356,7 +5356,7 @@ Edit a direct group member's access level, expiry, or custom member role. Return
 
 **Parameters:**
 
-- `access_level` (integer): New access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner, 60=Admin)
+- `access_level` (integer) (required): New access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner, 60=Admin)
 - `expires_at` (string): New membership expiration date (YYYY-MM-DD)
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `member_role_id` (integer): Custom member role ID to assign. Ultimate only. The role's base access level must match access_level
@@ -5693,7 +5693,7 @@ Protect a group-level environment tier with deploy access levels and approval ru
 **Parameters:**
 
 - `approval_rules` (array of objects): Approval rules
-- `deploy_access_levels` (array of objects): Deploy access levels
+- `deploy_access_levels` (array of objects) (required): Deploy access levels
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `name` (string) (required): Environment tier to protect (production, staging, testing, development, other)
 - `required_approval_count` (integer): Required number of approvals
@@ -6340,10 +6340,8 @@ Import a repository from Bitbucket Cloud. Returns: the created project for the i
 
 **Parameters:**
 
-- `bitbucket_api_token` (string): Bitbucket Cloud API token (replaces app passwords). Treat as secret: do not log or store it, and redact it in telemetry/errors. Requires bitbucket_email
-- `bitbucket_app_password` (string): Bitbucket Cloud app password (legacy auth). Treat as secret: do not log or store it, and redact it in telemetry/errors. Provide this OR bitbucket_api_token + bitbucket_email
-- `bitbucket_email` (string): Atlassian account email associated with the API token (required when using bitbucket_api_token)
-- `bitbucket_username` (string) (required): Bitbucket Cloud username
+- `bitbucket_api_token` (string) (required): Bitbucket Cloud API token, which replaced app passwords. Treat as secret: do not log or store it, and redact it in telemetry/errors
+- `bitbucket_email` (string) (required): Atlassian account email the API token belongs to
 - `new_name` (string): New name for the imported project
 - `repo_path` (string) (required): Bitbucket repository path (e.g. owner/repo)
 - `target_namespace` (string) (required): Target namespace for the imported project
@@ -6418,7 +6416,7 @@ Import a project from an export archive. Returns: the new project's import statu
 - `namespace` (string): Namespace to import the project into (user or group path)
 - `override_params` (object): Optional project attributes to override on the imported project (mirrors the create-project attributes accepted by override_params[])
 - `overwrite` (boolean): If true, overwrite an existing project with the same path
-- `path` (string): URL path for the imported project
+- `path` (string) (required): URL path for the imported project
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -6720,7 +6718,7 @@ Create a link between two issues (optionally across projects). Returns: the crea
 **Parameters:**
 
 - `issue_iid` (integer) (required): Source issue IID
-- `link_type` (string) (required): Link type: relates_to (default), blocks, or is_blocked_by
+- `link_type` (string): Link type: relates_to (default), blocks, or is_blocked_by
 - `project_id` (string or integer) (required): Source project ID or URL-encoded path
 - `target_issue_iid` (string) (required): Target issue IID
 - `target_project_id` (string) (required): Target project ID or path
@@ -7529,8 +7527,8 @@ Delete a project label by ID or name. Destructive: the label is removed from the
 **Parameters:**
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
-- `label_id` (string or integer) (required): Label ID or name
-- `name` (string): Label name to delete (alternative to label_id for selecting the label by name)
+- `label_id` (string or integer): Label ID or name. Give this or name
+- `name` (string): Name of the label to delete, used to select it when label_id is not given
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -7607,8 +7605,8 @@ Update an existing project label (new_name, color, description, priority, archiv
 - `archived` (boolean): Set true to archive, false to unarchive
 - `color` (string): New label color in hex format
 - `description` (string): New label description
-- `label_id` (string or integer) (required): Label ID or name
-- `name` (string): Label name to update (alternative to label_id for selecting the label by name)
+- `label_id` (string or integer): Label ID or name. Give this or name
+- `name` (string): Name of the label to update, used to select it when label_id is not given
 - `new_name` (string): New label name
 - `priority` (integer): New label priority, where 0 removes the priority GitLab has
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
@@ -10807,7 +10805,7 @@ Get a personal access token by ID. Use token_id=0 to retrieve the current token 
 
 **Parameters:**
 
-- `token_id` (integer) (required): Access token ID (required, use 0 for current token)
+- `token_id` (integer): Access token ID (required, use 0 for current token)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -11595,7 +11593,7 @@ Create a new GitLab project. Returns: the created project with id, path_with_nam
 - `model_registry_access_level` (string): Model registry access level (disabled, private, enabled)
 - `monitor_access_level` (string): Monitor access level (disabled, private, enabled)
 - `mr_default_title_template` (string): Template for default merge request titles
-- `name` (string) (required): Project name
+- `name` (string): Project name, derived from the path when left out. Provide name, path or both
 - `namespace_id` (integer): Namespace ID (defaults to personal namespace)
 - `only_allow_merge_if_all_discussions_are_resolved` (boolean): Only allow merge when all discussions are resolved
 - `only_allow_merge_if_all_status_checks_passed` (boolean): Only allow merge when all external status checks pass
@@ -11603,7 +11601,7 @@ Create a new GitLab project. Returns: the created project with id, path_with_nam
 - `package_registry_access_level` (string): Package registry access level (disabled, private, enabled)
 - `packages_enabled` (boolean): Enable packages feature (deprecated: use package_registry_access_level)
 - `pages_access_level` (string): Pages access level (disabled, private, enabled, public)
-- `path` (string): Project path slug (defaults from name)
+- `path` (string): Project path slug, derived from the name when left out. Provide name, path or both
 - `printing_merge_request_link_enabled` (boolean): Show the create-merge-request link after pushing
 - `protect_merge_request_pipelines` (boolean): Prevent merge request pipeline settings from being modified by users with lower permissions
 - `public_builds` (boolean): Enable public access to pipelines (deprecated: use public_jobs)
@@ -11703,7 +11701,7 @@ Create a project on behalf of a user (admin). Returns: the created project with 
 - `package_registry_access_level` (string): Package registry access level (disabled, private, enabled)
 - `packages_enabled` (boolean): Enable packages feature (deprecated: use package_registry_access_level)
 - `pages_access_level` (string): Pages access level (disabled, private, enabled, public)
-- `path` (string): Project path slug (defaults from name)
+- `path` (string): Project path slug, derived from the name when left out. Provide name, path or both
 - `printing_merge_request_link_enabled` (boolean): Show the create-merge-request link after pushing
 - `protect_merge_request_pipelines` (boolean): Prevent merge request pipeline settings from being modified by users with lower permissions
 - `public_builds` (boolean): Enable public access to pipelines (deprecated: use public_jobs)
@@ -13138,7 +13136,7 @@ Protect a single environment or wildcard with deploy access levels and approval 
 **Parameters:**
 
 - `approval_rules` (array of objects): Approval rules
-- `deploy_access_levels` (array of objects): Deploy access levels
+- `deploy_access_levels` (array of objects) (required): Deploy access levels
 - `name` (string) (required): Environment name to protect
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `required_approval_count` (integer): Required number of approvals
@@ -13383,12 +13381,12 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_registry_tag_protection_create
 
-Create a container registry tag protection rule. Returns: the created rule. Omit both minimum access levels to make matching tags immutable. See also: gitlab_registry_tag_protection_list, gitlab_registry_tag_protection_update, gitlab_registry_protection_create.
+Create a container registry tag protection rule. Returns: the created rule. Both minimum access levels (push and delete) are required. See also: gitlab_registry_tag_protection_list, gitlab_registry_tag_protection_update, gitlab_registry_protection_create.
 
 **Parameters:**
 
-- `minimum_access_level_for_delete` (string): Minimum access level to delete matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable
-- `minimum_access_level_for_push` (string): Minimum access level to push matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable
+- `minimum_access_level_for_delete` (string) (required): Minimum access level to delete matching tags (maintainer, owner, admin)
+- `minimum_access_level_for_push` (string) (required): Minimum access level to push matching tags (maintainer, owner, admin)
 - `project_id` (string or integer) (required): Project ID or path
 - `tag_name_pattern` (string) (required): Tag name pattern as a RE2 regular expression (e.g. v.+)
 
@@ -14452,7 +14450,7 @@ Schedule repository storage moves for all groups on a source storage shard. Retu
 **Parameters:**
 
 - `destination_storage_name` (string): Name of the destination storage shard
-- `source_storage_name` (string): Name of the source storage shard
+- `source_storage_name` (string) (required): Name of the source storage shard
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -14463,7 +14461,7 @@ Schedule repository storage moves for all projects on a Gitaly storage shard. Dr
 **Parameters:**
 
 - `destination_storage_name` (string): Name of the destination storage shard
-- `source_storage_name` (string): Name of the source storage shard
+- `source_storage_name` (string) (required): Name of the source storage shard
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -14474,7 +14472,7 @@ Schedule repository storage moves for all snippets on a source Gitaly storage sh
 **Parameters:**
 
 - `destination_storage_name` (string): Name of the destination storage shard
-- `source_storage_name` (string): Name of the source storage shard
+- `source_storage_name` (string) (required): Name of the source storage shard
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -14739,11 +14737,11 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_set_group_datadog_integration
 
-Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). At least one of api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events, or use_inherited_settings=true must be supplied.
+Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). api_key is required on every call, use_inherited_settings=true included. api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility and archive_trace_events are optional.
 
 **Parameters:**
 
-- `api_key` (string): Datadog API key (write-only. Never returned by the get endpoint)
+- `api_key` (string) (required): Datadog API key (write-only. Never returned by the get endpoint). GitLab requires it on every update
 - `api_url` (string): Datadog API URL (e.g. https://api.datadoghq.com)
 - `archive_trace_events` (boolean): Forward CI job trace events to Datadog
 - `datadog_ci_visibility` (boolean): Enable Datadog CI Visibility: forward pipeline/job data to Datadog CI Visibility
@@ -14803,7 +14801,7 @@ Configure the Jira integration for a project. Sets up the connection to a Jira i
 - `jira_issue_transition_id` (string): Jira transition ID
 - `jira_status_check_enabled` (boolean): Require the referenced Jira issue to be in an allowed status
 - `merge_requests_events` (boolean): Trigger on merge request events
-- `password` (string): Jira password or API token
+- `password` (string) (required): Jira password or API token. GitLab requires it on every update
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `project_key` (string): Jira project key where vulnerability tickets are created (when vulnerabilities_enabled is true)
 - `project_keys` (array of strings): Jira project keys to restrict (used when issues_enabled is true)
@@ -15460,8 +15458,8 @@ Update an alert metric image. Returns: the updated metric image. See also: gitla
 - `alert_iid` (integer) (required): Alert IID
 - `image_id` (integer) (required): Metric image ID
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `url` (string) (required): URL to link the metric image to
-- `url_text` (string) (required): Text for the URL link
+- `url` (string): URL to link the metric image to
+- `url_text` (string): Text for the URL link
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -15534,7 +15532,7 @@ Update the instance compliance policy settings. Returns: the compliance policy s
 
 **Parameters:**
 
-- `csp_namespace_id` (integer): Namespace ID for the compliance security policy project
+- `csp_namespace_id` (integer) (required): Namespace ID for the compliance security policy project
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -15821,8 +15819,8 @@ Upload an alert metric image. Returns: the uploaded metric image with id, filena
 - `file_path` (string): Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64. Only one of file_path or content_base64 should be provided.
 - `filename` (string) (required): Image filename
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `url` (string) (required): URL to link the metric image to
-- `url_text` (string) (required): Text for the URL link
+- `url` (string): URL to link the metric image to
+- `url_text` (string): Text for the URL link
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 

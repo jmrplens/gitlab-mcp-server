@@ -333,8 +333,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | ------------ | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
 | `group_id`   | `string/integer` | sí        | Group ID or URL-encoded path                                                                                    |
 | `name`       | `string`         | sí        | Deploy token name                                                                                               |
+| `scopes`     | `string[]`       | sí        | Array of scopes (read_repository, read_registry, write_registry, read_package_registry, write_package_registry) |
 | `expires_at` | `string`         | no        | Expiry date (YYYY-MM-DD)                                                                                        |
-| `scopes`     | `string[]`       | no        | Array of scopes (read_repository, read_registry, write_registry, read_package_registry, write_package_registry) |
 | `username`   | `string`         | no        | Username for the deploy token                                                                                   |
 
 ### `access.deploy_token_create_project`
@@ -352,8 +352,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | ------------ | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
 | `name`       | `string`         | sí        | Deploy token name                                                                                               |
 | `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                                                                  |
+| `scopes`     | `string[]`       | sí        | Array of scopes (read_repository, read_registry, write_registry, read_package_registry, write_package_registry) |
 | `expires_at` | `string`         | no        | Expiry date (YYYY-MM-DD)                                                                                        |
-| `scopes`     | `string[]`       | no        | Array of scopes (read_repository, read_registry, write_registry, read_package_registry, write_package_registry) |
 | `username`   | `string`         | no        | Username for the deploy token                                                                                   |
 
 ### `access.deploy_token_delete_group`

@@ -90,8 +90,8 @@ func (c *ContainerExpirationPolicyInput) toGL() *gl.ContainerExpirationPolicyAtt
 // the GitLab [gl.CreateProjectOptions] options 1:1.
 type CreateInput struct {
 	// Basic metadata
-	Name                 string   `json:"name" jsonschema:"Project name,required"`
-	Path                 string   `json:"path,omitempty" jsonschema:"Project path slug (defaults from name)"`
+	Name                 string   `json:"name,omitempty" jsonschema:"Project name, derived from the path when left out. Provide name, path or both"`
+	Path                 string   `json:"path,omitempty" jsonschema:"Project path slug, derived from the name when left out. Provide name, path or both"`
 	NamespaceID          int      `json:"namespace_id,omitempty" jsonschema:"Namespace ID (defaults to personal namespace)"`
 	Description          string   `json:"description,omitempty" jsonschema:"Project description"`
 	Visibility           string   `json:"visibility,omitempty" jsonschema:"Visibility level (private, internal, public)"`
@@ -894,7 +894,12 @@ func accessLevelPtr(s string) *gl.AccessControlValue {
 
 // buildCreateOpts maps CreateInput fields to the GitLab API create options.
 func buildCreateOpts(input CreateInput) *gl.CreateProjectOptions {
-	opts := &gl.CreateProjectOptions{Name: new(input.Name)}
+	opts := &gl.CreateProjectOptions{}
+	// GitLab takes name, path or both and derives the one left out, so an
+	// empty name is not sent as "".
+	if input.Name != "" {
+		opts.Name = new(input.Name)
+	}
 	if input.NamespaceID != 0 {
 		opts.NamespaceID = new(int64(input.NamespaceID))
 	}
@@ -1184,6 +1189,13 @@ func createAccessLevel(level string, toggle *bool) *gl.AccessControlValue {
 func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
+	}
+	// GitLab requires at least one of the two (at_least_one_of in
+	// lib/api/projects.rb). The schema says so with an anyOf, which the meta
+	// surface does not check, so without this the call would reach GitLab and
+	// come back as a 400 read as a name already taken.
+	if input.Name == "" && input.Path == "" {
+		return Output{}, errors.New("projectCreate: name or path is required. Give the project a name, a path or both, and GitLab derives the one left out")
 	}
 	opts := buildCreateOpts(input)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
@@ -3960,6 +3972,9 @@ func GetRepositoryStorage(ctx context.Context, client *gitlabclient.Client, inpu
 // settings via an embedded [CreateInput].
 type CreateForUserInput struct {
 	UserID int64 `json:"user_id" jsonschema:"Target user ID who will own the project,required"`
+	// Name shadows the embedded one, because POST /projects/user/:user_id
+	// requires the name where POST /projects takes a name or a path.
+	Name string `json:"name" jsonschema:"Project name,required"`
 	CreateInput
 }
 
@@ -3974,7 +3989,9 @@ func CreateForUser(ctx context.Context, client *gitlabclient.Client, input Creat
 	if input.Name == "" {
 		return Output{}, errors.New("projectCreateForUser: name is required")
 	}
-	createOpts := buildCreateOpts(input.CreateInput)
+	create := input.CreateInput
+	create.Name = input.Name
+	createOpts := buildCreateOpts(create)
 	opts := (*gl.CreateProjectForUserOptions)(createOpts)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Projects.CreateProjectForUser(input.UserID, opts, gl.WithContext(ctx))

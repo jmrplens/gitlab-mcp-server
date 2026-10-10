@@ -209,7 +209,7 @@ type ImportFromFileInput struct {
 	ContentBase64  string                     `json:"content_base64,omitempty" jsonschema:"Base64-encoded export archive content. Only one of file_path or content_base64 should be provided."`
 	Namespace      string                     `json:"namespace,omitempty" jsonschema:"Namespace to import the project into (user or group path)"`
 	Name           string                     `json:"name,omitempty" jsonschema:"Name for the imported project"`
-	Path           string                     `json:"path,omitempty" jsonschema:"URL path for the imported project"`
+	Path           string                     `json:"path,omitempty" jsonschema:"URL path for the imported project,required"`
 	Overwrite      *bool                      `json:"overwrite,omitempty" jsonschema:"If true, overwrite an existing project with the same path"`
 	OverrideParams *ImportOverrideParamsInput `json:"override_params,omitempty" jsonschema:"Optional project attributes to override on the imported project (mirrors the create-project attributes accepted by override_params[])"`
 }
@@ -358,6 +358,11 @@ func rawImportFromFile(ctx context.Context, client *gitlabclient.Client, archive
 	return &status, err
 }
 
+// openArchive opens an import archive that already passed every check. It is
+// a variable so a test can take the branch where the open fails anyway, which
+// a real file reaches only through a permission root does not lack.
+var openArchive = os.Open
+
 // ImportFromFile imports a project from an export archive.
 func ImportFromFile(ctx context.Context, client *gitlabclient.Client, input ImportFromFileInput) (ImportStatusOutput, error) {
 	hasFilePath := input.FilePath != ""
@@ -376,7 +381,7 @@ func ImportFromFile(ctx context.Context, client *gitlabclient.Client, input Impo
 		if err != nil {
 			return ImportStatusOutput{}, toolutil.WrapErrWithMessage("import_from_file", err)
 		}
-		file, err := os.Open(archivePath) // archivePath is canonicalized, extension-checked, regular-file checked, and constrained to the allowed import directories by CanonicalImportArchivePath above.
+		file, err := openArchive(archivePath) // archivePath is canonicalized, extension-checked, regular-file checked, and constrained to the allowed import directories by CanonicalImportArchivePath above.
 		if err != nil {
 			return ImportStatusOutput{}, toolutil.WrapErrWithMessage("import_from_file", fmt.Errorf("open archive: %w", err))
 		}

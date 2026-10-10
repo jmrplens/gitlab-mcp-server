@@ -105,18 +105,17 @@ func userEmailOptions(individualTool string) toolutil.ActionSpecOptions {
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 	if meta, ok := userEmailActionMeta[individualTool]; ok {
+		// Usage and the aliases have defaults an empty entry must not blank.
+		// Related actions and the description have none, so an empty value
+		// copied over them leaves what was there and needs no guard.
 		if meta.usage != "" {
 			options.Usage = meta.usage
 		}
 		if len(meta.aliases) > 0 {
 			options.Aliases = meta.aliases
 		}
-		if len(meta.related) > 0 {
-			options.RelatedActions = meta.related
-		}
-		if meta.description != "" {
-			options.IndividualTool.Description = meta.description
-		}
+		options.RelatedActions = meta.related
+		options.IndividualTool.Description = meta.description
 	}
 	return options
 }

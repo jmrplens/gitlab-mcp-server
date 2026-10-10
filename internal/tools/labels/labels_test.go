@@ -14,6 +14,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -771,6 +772,148 @@ func TestLabelDelete_NameBodyField(t *testing.T) {
 	if !strings.Contains(capturedQuery, "name=bug") {
 		t.Errorf("request query should contain name=bug, got: %s", capturedQuery)
 	}
+}
+
+// recordedLabelRequest is what a mock saw of the one request a label handler
+// sent: its method, its path, its query and its body.
+type recordedLabelRequest struct {
+	method, path, query, body string
+	count                     int
+}
+
+// labelRecorder answers every request with the label JSON given and records
+// what it saw, so a test can assert which of GitLab's two label routes a
+// handler chose.
+func labelRecorder(t *testing.T, status int, response string) (*gitlabclient.Client, *recordedLabelRequest) {
+	t.Helper()
+	seen := &recordedLabelRequest{}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
+		}
+		seen.method, seen.path, seen.query, seen.body = r.Method, r.URL.Path, r.URL.RawQuery, string(raw)
+		seen.count++
+		if status == http.StatusNoContent {
+			w.WriteHeader(status)
+			return
+		}
+		testutil.RespondJSON(w, status, response)
+	}))
+	return client, seen
+}
+
+// TestLabelUpdate_ByNameAlone_TakesTheNamedRoute asserts that a label
+// selected by name with no label_id is updated through PUT
+// /projects/:id/labels/:name, the route GitLab documents and describes as
+// taking the name or the id of the label. The collection route PUT
+// /projects/:id/labels also takes a name, and is deprecated since GitLab 12.4
+// (lib/api/labels.rb) and absent from doc/api/labels.md, so a caller who
+// selects by name is sent where one selecting by ID already goes. The handler
+// used to put an empty label_id in the path, which is a request for no label
+// at all.
+func TestLabelUpdate_ByNameAlone_TakesTheNamedRoute(t *testing.T) {
+	client, seen := labelRecorder(t, http.StatusOK, `{"id":1,"name":"defect","color":"#00FF00","is_project_label":true}`)
+
+	if _, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", Name: "bug", NewName: "defect"}); err != nil {
+		t.Fatalf("Update() unexpected error: %v", err)
+	}
+	if seen.method != http.MethodPut || seen.path != pathLabelBug {
+		t.Errorf("request = %s %s, want PUT %s", seen.method, seen.path, pathLabelBug)
+	}
+}
+
+// TestLabelDelete_ByNameAlone_TakesTheNamedRoute asserts the same of a
+// delete: a label selected by name alone is deleted through DELETE
+// /projects/:id/labels/:name rather than the deprecated collection route.
+func TestLabelDelete_ByNameAlone_TakesTheNamedRoute(t *testing.T) {
+	client, seen := labelRecorder(t, http.StatusNoContent, "")
+
+	if err := Delete(t.Context(), client, DeleteInput{ProjectID: "42", Name: "bug"}); err != nil {
+		t.Fatalf("Delete() unexpected error: %v", err)
+	}
+	if seen.method != http.MethodDelete || seen.path != pathLabelBug {
+		t.Errorf("request = %s %s, want DELETE %s", seen.method, seen.path, pathLabelBug)
+	}
+}
+
+// TestLabelSelectors_LabelIDBesideName_AddressesTheLabelID asserts that a
+// call naming both selectors addresses the label label_id names: the path is
+// what GitLab reads on the named route, so label_id is the one the path
+// carries, and the name goes where client-go's option puts it.
+func TestLabelSelectors_LabelIDBesideName_AddressesTheLabelID(t *testing.T) {
+	client, seen := labelRecorder(t, http.StatusNoContent, "")
+
+	if err := Delete(t.Context(), client, DeleteInput{ProjectID: "42", LabelID: "7", Name: "bug"}); err != nil {
+		t.Fatalf("Delete() unexpected error: %v", err)
+	}
+	if want := "/api/v4/projects/42/labels/7"; seen.path != want {
+		t.Errorf("request path = %s, want %s", seen.path, want)
+	}
+}
+
+// TestLabelSelectors_NeitherGiven_AreRefusedWithoutReachingGitLab asserts
+// that an update or a delete naming neither label_id nor name is refused
+// before any request, with a message naming both, since GitLab requires
+// exactly one of them and the call would otherwise go out naming no label.
+func TestLabelSelectors_NeitherGiven_AreRefusedWithoutReachingGitLab(t *testing.T) {
+	client, seen := labelRecorder(t, http.StatusOK, `{}`)
+
+	_, updateErr := Update(t.Context(), client, UpdateInput{ProjectID: "42", Color: "#00FF00"})
+	deleteErr := Delete(t.Context(), client, DeleteInput{ProjectID: "42"})
+	for name, err := range map[string]error{"update": updateErr, "delete": deleteErr} {
+		t.Run(name, func(t *testing.T) {
+			if err == nil || !strings.Contains(err.Error(), "label_id or name") {
+				t.Errorf("error = %v, want one naming label_id or name", err)
+			}
+		})
+	}
+	if seen.count != 0 {
+		t.Errorf("requests sent = %d, want 0", seen.count)
+	}
+}
+
+// TestActionSpecs_LabelSelectors_RequireLabelIDOrName asserts the schema of
+// both actions says what the handlers need of the two selectors, one of which
+// fills the path GitLab requires: neither is required on its own and one of
+// them is (an anyOf), which a required list cannot express.
+func TestActionSpecs_LabelSelectors_RequireLabelIDOrName(t *testing.T) {
+	byTool := labelSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
+	for _, tool := range []string{"gitlab_label_update", "gitlab_label_delete"} {
+		t.Run(tool, func(t *testing.T) {
+			schema := byTool[tool].Route.InputSchema
+			if slices.Contains(schemaRequiredNames(schema), "label_id") {
+				t.Errorf("required = %v, want label_id left to the anyOf", schemaRequiredNames(schema))
+			}
+			raw, err := json.Marshal(schema["anyOf"])
+			if err != nil {
+				t.Fatalf("marshal anyOf: %v", err)
+			}
+			if string(raw) != `[{"required":["label_id"]},{"required":["name"]}]` {
+				t.Errorf("anyOf = %s, want label_id or name", raw)
+			}
+		})
+	}
+}
+
+// schemaRequiredNames returns the names a schema's required list holds,
+// whichever of the two slice types it is kept in.
+func schemaRequiredNames(schema map[string]any) []string {
+	switch required := schema["required"].(type) {
+	case []string:
+		return required
+	case []any:
+		names := make([]string, 0, len(required))
+		for _, raw := range required {
+			if name, ok := raw.(string); ok {
+				names = append(names, name)
+			}
+		}
+		return names
+	}
+	return nil
 }
 
 // TestLabelDelete_NotFound verifies LabelDelete when not found.

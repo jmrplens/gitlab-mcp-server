@@ -4,10 +4,12 @@ package memberroles
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -512,18 +514,64 @@ func TestCreateInstance_Success(t *testing.T) {
 	}
 }
 
-// TestCreateInstance_MissingName verifies CreateInstance returns a validation
-// error when the name field is empty, without hitting the API.
-func TestCreateInstance_MissingName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
+// TestCreateInstance_NoName_LeavesTheNameToGitLab verifies CreateInstance
+// sends a role with no name without a name key, since GitLab declares name
+// optional on POST /member_roles and names such a role itself ('Custom'), and
+// reads back the name GitLab chose.
+func TestCreateInstance_NoName_LeavesTheNameToGitLab(t *testing.T) {
+	var body map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode body: %v", err)
+		}
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":7,"name":"Custom","base_access_level":30}`)
 	}))
 
-	_, err := CreateInstance(context.Background(), client, CreateInstanceInput{
+	out, err := CreateInstance(context.Background(), client, CreateInstanceInput{
 		BaseAccessLevel: 30,
 	})
-	if err == nil {
-		t.Fatal("expected error for empty name, got nil")
+	if err != nil {
+		t.Fatalf("CreateInstance() error: %v", err)
+	}
+	if _, sent := body["name"]; sent {
+		t.Errorf("request body = %v, want no name key", body)
+	}
+	if out.Name != "Custom" {
+		t.Errorf("name = %q, want the one GitLab chose", out.Name)
+	}
+}
+
+// TestCreateInstance_EveryPermissionReachesTheRequest sets every permission
+// flag of [Permissions] and verifies each is sent, as true, under the key its
+// own tag names. The options builder copies them one by one, so a flag it
+// skipped would create a role without a permission the caller asked for and
+// no other test would notice.
+func TestCreateInstance_EveryPermissionReachesTheRequest(t *testing.T) {
+	var permissions Permissions
+	fields := reflect.ValueOf(&permissions).Elem()
+	keys := make([]string, 0, fields.NumField())
+	for index := range fields.NumField() {
+		fields.Field(index).Set(reflect.ValueOf(new(true)))
+		key, _, _ := strings.Cut(fields.Type().Field(index).Tag.Get("json"), ",")
+		keys = append(keys, key)
+	}
+	var body map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode body: %v", err)
+		}
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":7,"name":"Custom","base_access_level":30}`)
+	}))
+
+	if _, err := CreateInstance(context.Background(), client, CreateInstanceInput{BaseAccessLevel: 30, Permissions: permissions}); err != nil {
+		t.Fatalf("CreateInstance() error: %v", err)
+	}
+	for _, key := range keys {
+		t.Run(key, func(t *testing.T) {
+			if body[key] != true {
+				t.Errorf("body[%q] = %v, want true", key, body[key])
+			}
+		})
 	}
 }
 
@@ -620,19 +668,30 @@ func TestCreateGroup_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestCreateGroup_MissingName verifies CreateGroup returns a validation error
-// when the name field is empty.
-func TestCreateGroup_MissingName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
+// TestCreateGroup_NoName_LeavesTheNameToGitLab verifies CreateGroup sends a
+// role with no name without a name key, as GitLab declares name optional on
+// POST /groups/:id/member_roles too.
+func TestCreateGroup_NoName_LeavesTheNameToGitLab(t *testing.T) {
+	var body map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode body: %v", err)
+		}
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":8,"name":"Custom","group_id":100,"base_access_level":30}`)
 	}))
 
-	_, err := CreateGroup(context.Background(), client, CreateGroupInput{
+	out, err := CreateGroup(context.Background(), client, CreateGroupInput{
 		GroupID:         toolutil.StringOrInt("mygroup"),
 		BaseAccessLevel: 30,
 	})
-	if err == nil {
-		t.Fatal("expected error for empty name, got nil")
+	if err != nil {
+		t.Fatalf("CreateGroup() error: %v", err)
+	}
+	if _, sent := body["name"]; sent {
+		t.Errorf("request body = %v, want no name key", body)
+	}
+	if out.Name != "Custom" {
+		t.Errorf("name = %q, want the one GitLab chose", out.Name)
 	}
 }
 

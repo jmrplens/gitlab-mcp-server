@@ -1742,23 +1742,50 @@ func TestFormatRawMarkdown(t *testing.T) {
 // minLen helper
 // ---------------------------------------------------------------------------.
 
-// TestMinLen verifies minLen returns the smaller of its two arguments,
-// including when they are equal or one of them is zero.
-func TestMinLen(t *testing.T) {
+// TestContentCategory_ImageBeforeBinaryBeforeText verifies a file is an image
+// whenever its name carries an image type, even one whose extension also
+// reads as binary, a binary when only the extension says so, and text
+// otherwise.
+func TestContentCategory_ImageBeforeBinaryBeforeText(t *testing.T) {
 	tests := []struct {
-		name       string
-		a, b, want int
+		name      string
+		imageMIME string
+		isBinary  bool
+		want      string
 	}{
-		{"first_smaller", 3, 8, 3},
-		{"second_smaller", 8, 3, 3},
-		{"equal", 5, 5, 5},
-		{"zero", 0, 1, 0},
+		{"image", "image/png", false, categoryImage},
+		{"image_and_binary", "image/png", true, categoryImage},
+		{"binary", "", true, categoryBinary},
+		{"text", "", false, categoryText},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := minLen(tt.a, tt.b)
-			if got != tt.want {
-				t.Errorf("minLen(%d, %d) = %d, want %d", tt.a, tt.b, got, tt.want)
+			if got := contentCategory(tt.imageMIME, tt.isBinary); got != tt.want {
+				t.Errorf("contentCategory(%q, %t) = %q, want %q", tt.imageMIME, tt.isBinary, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSplitContent_PutsTheBytesWhereTheCategorySays verifies an image's
+// bytes go to the image data and nowhere else, a binary's are dropped, and a
+// text's become the content.
+func TestSplitContent_PutsTheBytesWhereTheCategorySays(t *testing.T) {
+	data := []byte("bytes")
+	tests := []struct {
+		category    string
+		wantContent string
+		wantImage   []byte
+	}{
+		{categoryImage, "", data},
+		{categoryBinary, "", nil},
+		{categoryText, "bytes", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.category, func(t *testing.T) {
+			content, image := splitContent(data, tt.category)
+			if content != tt.wantContent || !bytes.Equal(image, tt.wantImage) || (image == nil) != (tt.wantImage == nil) {
+				t.Errorf("splitContent(%q) = %q, %v; want %q, %v", tt.category, content, image, tt.wantContent, tt.wantImage)
 			}
 		})
 	}

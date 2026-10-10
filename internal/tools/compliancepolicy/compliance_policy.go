@@ -16,7 +16,7 @@ type GetInput struct{}
 
 // UpdateInput holds parameters for updating compliance policy settings.
 type UpdateInput struct {
-	CSPNamespaceID *int64 `json:"csp_namespace_id,omitempty" jsonschema:"Namespace ID for the compliance security policy project"`
+	CSPNamespaceID *int64 `json:"csp_namespace_id,omitempty" jsonschema:"Namespace ID for the compliance security policy project,required"`
 }
 
 // Output represents compliance policy settings.

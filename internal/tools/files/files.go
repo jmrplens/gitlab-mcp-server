@@ -24,7 +24,7 @@ const hintVerifyFilePathRef = "verify file_path and ref exist with repository.tr
 type GetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	FilePath  string               `json:"file_path"  jsonschema:"URL-encoded full path of the file (e.g. src%2Fmain.go or src/main.go),required"`
-	Ref       string               `json:"ref,omitempty" jsonschema:"Branch name, tag, or commit SHA (defaults to default branch)"`
+	Ref       string               `json:"ref,omitempty" jsonschema:"Branch name, tag, or commit SHA,required"`
 }
 
 // Output represents a file retrieved from a repository.
@@ -49,8 +49,8 @@ type Output struct {
 	ImageMIMEType string `json:"-"`
 }
 
-// Get retrieves a single file from a GitLab repository by its path and
-// optional ref (branch, tag, or commit SHA). If the file content is
+// Get retrieves a single file from a GitLab repository by its path and the
+// ref (branch, tag, or commit SHA) GitLab requires. If the file content is
 // base64-encoded by the API, it is automatically decoded to plain text.
 // Returns an error if the file is not found or decoding fails.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
@@ -77,7 +77,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	content := f.Content
 	var imageData []byte
 	imageMIME := toolutil.ImageMIMEType(f.FileName)
-	isBinary := toolutil.IsBinaryFile(f.FileName)
+	category := contentCategory(imageMIME, toolutil.IsBinaryFile(f.FileName))
 
 	if f.Encoding == "base64" {
 		var decoded []byte
@@ -85,22 +85,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		if err != nil {
 			return Output{}, fmt.Errorf("fileGet: decode base64 content: %w", err)
 		}
-		switch {
-		case imageMIME != "":
-			imageData = decoded
-			content = ""
-		case isBinary:
-			content = ""
-		default:
-			content = string(decoded)
-		}
-	}
-
-	category := "text"
-	if imageMIME != "" {
-		category = "image"
-	} else if isBinary {
-		category = "binary"
+		content, imageData = splitContent(decoded, category)
 	}
 
 	return Output{
@@ -348,7 +333,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 type BlameInput struct {
 	ProjectID  toolutil.StringOrInt `json:"project_id"            jsonschema:"Project ID or URL-encoded path,required"`
 	FilePath   string               `json:"file_path"             jsonschema:"URL-encoded full path of the file,required"`
-	Ref        string               `json:"ref,omitempty"         jsonschema:"Branch, tag, or commit SHA (defaults to default branch)"`
+	Ref        string               `json:"ref,omitempty"         jsonschema:"Branch, tag, or commit SHA,required"`
 	RangeStart int                  `json:"range_start,omitempty" jsonschema:"Start line number for blame range"`
 	RangeEnd   int                  `json:"range_end,omitempty"   jsonschema:"End line number for blame range"`
 }
@@ -418,12 +403,37 @@ func Blame(ctx context.Context, client *gitlabclient.Client, input BlameInput) (
 	return BlameOutput{FilePath: input.FilePath, Ranges: out}, nil
 }
 
-// minLen returns the smaller of two lengths for bounded content previews.
-func minLen(a, b int) int {
-	if a < b {
-		return a
+// The content categories a read files a file under.
+const (
+	categoryText   = "text"
+	categoryImage  = "image"
+	categoryBinary = "binary"
+)
+
+// contentCategory names what a file holds: an image when its name carries an
+// image type, a binary when its extension is one, and text otherwise. Early
+// returns rather than a tagless switch, so the mutation tool, which cannot
+// see a case expression, measures each condition.
+func contentCategory(imageMIME string, isBinary bool) string {
+	if imageMIME != "" {
+		return categoryImage
 	}
-	return b
+	if isBinary {
+		return categoryBinary
+	}
+	return categoryText
+}
+
+// splitContent puts a file's bytes where its category says: an image's into
+// the image data, a binary's nowhere, and a text's into the content.
+func splitContent(data []byte, category string) (content string, imageData []byte) {
+	if category == categoryImage {
+		return "", data
+	}
+	if category == categoryBinary {
+		return "", nil
+	}
+	return string(data), nil
 }
 
 // extToLang maps file extensions to code fence language hints.
@@ -488,7 +498,7 @@ func langFromPath(filePath string) string {
 type MetaDataInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	FilePath  string               `json:"file_path"  jsonschema:"URL-encoded full path of the file,required"`
-	Ref       string               `json:"ref,omitempty" jsonschema:"Branch, tag, or commit SHA (defaults to default branch)"`
+	Ref       string               `json:"ref,omitempty" jsonschema:"Branch, tag, or commit SHA,required"`
 }
 
 // MetaDataOutput holds file metadata. The metadata endpoints use HEAD
@@ -613,21 +623,8 @@ func GetRaw(ctx context.Context, client *gitlabclient.Client, input RawInput) (R
 	}
 
 	imageMIME := toolutil.ImageMIMEType(input.FilePath)
-	isBinary := toolutil.IsBinaryFile(input.FilePath)
-
-	var content string
-	var imageData []byte
-	category := "text"
-
-	switch {
-	case imageMIME != "":
-		imageData = data
-		category = "image"
-	case isBinary:
-		category = "binary"
-	default:
-		content = string(data)
-	}
+	category := contentCategory(imageMIME, toolutil.IsBinaryFile(input.FilePath))
+	content, imageData := splitContent(data, category)
 
 	return RawOutput{
 		FilePath:        input.FilePath,

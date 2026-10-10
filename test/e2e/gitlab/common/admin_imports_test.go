@@ -39,11 +39,12 @@ const settingGitHubToken = "GH_TOKEN"
 const importAlreadyCompleted = "cannot be canceled because it is"
 
 // The Bitbucket Cloud credential keys the importer reads, as the repository
-// .env carries them.
+// .env carries them. An API token and the email it belongs to are the whole
+// credential: the username went with app passwords, which the import no
+// longer offers.
 const (
 	settingBitbucketAPIToken = "BITBUCKET_API_TOKEN"
 	settingBitbucketEmail    = "BITBUCKET_EMAIL"
-	settingBitbucketUsername = "BITBUCKET_USERNAME"
 	settingBitbucketRepoPath = "BITBUCKET_REPO_PATH"
 )
 
@@ -110,10 +111,10 @@ func TestAdmin_ExternalImporters(t *testing.T) {
 
 	t.Run("BitbucketCloudImport", func(t *testing.T) {
 		e := harness.New(t, harness.Needs(harness.NeedAdmin, harness.NeedExternalNetwork))
-		token, email, username, repoPath := requireBitbucketCloud(e)
+		token, email, repoPath := requireBitbucketCloud(e)
 		s := e.On(harness.SurfaceMeta)
 		out := harness.Do[importservice.BitbucketCloudImportOutput](s, actionAdminImportBitbucket, map[string]any{
-			"bitbucket_username": username, "bitbucket_api_token": token, "bitbucket_email": email,
+			"bitbucket_api_token": token, "bitbucket_email": email,
 			"repo_path": repoPath, "target_namespace": e.Runtime().Username, "new_name": e.Name("bb-import"),
 		})
 		if out.ID == 0 {
@@ -147,11 +148,11 @@ func TestAdmin_ExternalImporters(t *testing.T) {
 // Replaces: TestIndividual_BitbucketCloudImport_APIToken
 func TestBitbucketCloudImport_Individual(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedExternalNetwork))
-	token, email, username, repoPath := requireBitbucketCloud(e)
+	token, email, repoPath := requireBitbucketCloud(e)
 	s := e.On(harness.SurfaceIndividual)
 
 	out := harness.Do[importservice.BitbucketCloudImportOutput](s, actionAdminImportBitbucket, map[string]any{
-		"bitbucket_username": username, "bitbucket_api_token": token, "bitbucket_email": email,
+		"bitbucket_api_token": token, "bitbucket_email": email,
 		"repo_path": repoPath, "target_namespace": e.Runtime().Username, "new_name": e.Name("bb-import-ind"),
 	})
 	if out.ID == 0 {
@@ -164,17 +165,16 @@ func TestBitbucketCloudImport_Individual(t *testing.T) {
 // requireBitbucketCloud returns the Bitbucket Cloud credentials, skipping when
 // any of them is missing. The external-network opt-in is declared as a need by
 // every test that calls this, so it is not re-checked here.
-func requireBitbucketCloud(e *harness.Env) (token, email, username, repoPath string) {
+func requireBitbucketCloud(e *harness.Env) (token, email, repoPath string) {
 	e.T.Helper()
 	token = e.Setting(settingBitbucketAPIToken)
 	email = e.Setting(settingBitbucketEmail)
-	username = e.Setting(settingBitbucketUsername)
 	repoPath = e.Setting(settingBitbucketRepoPath)
-	if token == "" || email == "" || username == "" || repoPath == "" {
-		e.Skipf("the Bitbucket Cloud credentials (%s/%s/%s/%s) are not all set",
-			settingBitbucketAPIToken, settingBitbucketEmail, settingBitbucketUsername, settingBitbucketRepoPath)
+	if token == "" || email == "" || repoPath == "" {
+		e.Skipf("the Bitbucket Cloud credentials (%s/%s/%s) are not all set",
+			settingBitbucketAPIToken, settingBitbucketEmail, settingBitbucketRepoPath)
 	}
-	return token, email, username, repoPath
+	return token, email, repoPath
 }
 
 // requireBitbucketServer returns the Bitbucket Server credentials, skipping

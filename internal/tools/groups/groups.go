@@ -1038,7 +1038,7 @@ func accessLevelOptions(levels []int) []*gl.GroupAccessLevel {
 // CreateInput defines parameters for creating a group.
 type CreateInput struct {
 	Name                         string `json:"name"                          jsonschema:"Group name,required"`
-	Path                         string `json:"path,omitempty"                jsonschema:"Group URL path (defaults to kebab-case of name)"`
+	Path                         string `json:"path,omitempty"                jsonschema:"Group URL path,required"`
 	Description                  string `json:"description,omitempty"         jsonschema:"Group description"`
 	Visibility                   string `json:"visibility,omitempty"          jsonschema:"Visibility level (private, internal, public)"`
 	ParentID                     int64  `json:"parent_id,omitempty"           jsonschema:"Parent group ID (creates a subgroup)"`

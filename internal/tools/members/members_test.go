@@ -1783,7 +1783,9 @@ func TestMembers_GuardsNameTheirOwnOperationAndField(t *testing.T) {
 			_, err := Add(context.Background(), client, AddInput{UserID: 10, AccessLevel: 30})
 			return err
 		}},
-		{name: "add without an identity", operation: "memberAdd", field: testFieldUserID, call: func(client *gitlabclient.Client) error {
+		// The schema offers user_id or username with an anyOf, so the
+		// refusal names both rather than the one a caller may not have.
+		{name: "add without an identity", operation: "memberAdd", field: "user_id or username", call: func(client *gitlabclient.Client) error {
 			_, err := Add(context.Background(), client, AddInput{ProjectID: testProjectID, AccessLevel: 30})
 			return err
 		}},

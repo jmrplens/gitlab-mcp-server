@@ -31,15 +31,19 @@ import (
 // What this covers is the class the fix was for: an auto-accepted answer that
 // does not satisfy the requested schema never reaches the handler at all, so
 // the flow dies inside the client's own validation and the server looks
-// innocent. The proof that it does not happen is that the call reaches GitLab,
-// whatever GitLab then makes of it.
+// innocent. The proof that it does not happen is that the answers reach the
+// project create the flow ends in, whatever that create then makes of them:
+// GitLab's own refusal, or the create's refusal of a project with neither a
+// name nor a path, which it answers before asking GitLab.
 //
 // It deliberately does NOT assert that the flow completes. An earlier version
 // of this comment claimed the project flow is the one that can be finished
 // this way, because every prompt has a value its own schema admits. That is
 // false and the suite found it: `name` is a required string, a policy that
-// answers from the schema alone has nothing to put there, and GitLab refuses
-// the empty one. No client that accepts without being asked can invent a
+// answers from the schema alone has nothing to put there, and the empty one is
+// refused: by the project create itself, which asks GitLab for nothing when
+// neither a name nor a path is given, and by GitLab before that check
+// existed. No client that accepts without being asked can invent a
 // project name, so this is a fact about auto-accept rather than a defect, and
 // the scripted scenario beside this one is what covers a completed flow.
 func TestElicitation_AutoAccept_AnswersEveryPromptFromItsSchema(t *testing.T) {
@@ -64,12 +68,16 @@ func TestElicitation_AutoAccept_AnswersEveryPromptFromItsSchema(t *testing.T) {
 	if result == nil {
 		t.Fatal("the auto-accepting flow answered nothing")
 	}
-	// A refusal GitLab decided is the expected ending here and is not what
-	// this covers. The two are told apart by where the message comes from
-	// rather than by a word in it: an answer that reached the API names the
-	// request, and the previous version of this check keyed on "required",
-	// which the server's own hint carries ("all required fields are valid"),
-	// so a perfectly good run was reported as a schema violation.
+	// A refusal of the empty name is the expected ending here and is not
+	// what this covers, whether GitLab decided it or the project create
+	// did before asking GitLab. Each is told apart from a schema violation
+	// by where the message comes from rather than by a word in it: an
+	// answer that reached the API names the request, the create's own
+	// refusal is the sentence projects.Create writes for a project with
+	// neither a name nor a path, and the previous version of this check
+	// keyed on "required", which the server's own hint carries ("all
+	// required fields are valid"), so a perfectly good run was reported as
+	// a schema violation.
 	if !result.IsError {
 		return
 	}
@@ -78,6 +86,9 @@ func TestElicitation_AutoAccept_AnswersEveryPromptFromItsSchema(t *testing.T) {
 	case containsAny(text, "/api/v4/", "400", "bad request"):
 		t.Logf("the answers satisfied every requested schema and GitLab refused the creation, "+
 			"which is where an unscripted client ends on a flow that needs a name: %s", firstLine(text))
+	case strings.Contains(text, "projectCreate: name or path is required"):
+		t.Logf("the answers satisfied every requested schema and reached the project create, which refused "+
+			"the empty name before asking GitLab, where an unscripted client ends on a flow that needs a name: %s", firstLine(text))
 	case containsAny(text, "InvalidParams", "invalid params", `validating "content"`, "jsonschema"):
 		t.Errorf("the auto-accepted answers did not satisfy the requested schema, so no call was made: %s", text)
 	default:

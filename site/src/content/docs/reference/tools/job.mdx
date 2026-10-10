@@ -142,9 +142,9 @@ The description of each action, and of each of its parameters, is the text the s
 
 | Parameter    | Type             | Mandatory | Description                         |
 | ------------ | ---------------- | --------- | ----------------------------------- |
+| `job`        | `string`         | yes       | Job name to download artifacts from |
 | `project_id` | `string/integer` | yes       | Project ID or URL-encoded path      |
-| `job`        | `string`         | no        | Job name to download artifacts from |
-| `ref_name`   | `string`         | no        | Branch or tag name                  |
+| `ref_name`   | `string`         | yes       | Branch or tag name                  |
 
 ### `job.download_single_artifact`
 

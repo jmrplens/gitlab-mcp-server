@@ -21,16 +21,16 @@ func accessLevel(level int) string {
 // linkHeading names the link in the card's heading. A link is defined either
 // by a common name or by a filter, never by both, so a filter-based link has
 // an empty CN and used to be headed "LDAP Link: " with nothing after the
-// colon.
+// colon. Early returns rather than a tagless switch, so the mutation tool,
+// which cannot see a case expression, measures each condition.
 func linkHeading(out Output) string {
-	switch {
-	case out.CN != "":
+	if out.CN != "" {
 		return "LDAP Link: " + out.CN
-	case out.Filter != "":
-		return "LDAP Link: " + out.Filter
-	default:
-		return "LDAP Link"
 	}
+	if out.Filter != "" {
+		return "LDAP Link: " + out.Filter
+	}
+	return "LDAP Link"
 }
 
 // FormatOutputMarkdown renders a single group LDAP link as Markdown.

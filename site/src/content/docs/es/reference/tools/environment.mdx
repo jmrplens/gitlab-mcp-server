@@ -135,14 +135,14 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Deployment: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#environment))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro     | Tipo                                                  | Requerido | Descripción                                                                                                                     |
-| ------------- | ----------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `environment` | `string`                                              | sí        | Name of the environment to deploy to                                                                                            |
-| `project_id`  | `string/integer`                                      | sí        | Project ID or URL-encoded path                                                                                                  |
-| `ref`         | `string`                                              | sí        | Git branch or tag to deploy                                                                                                     |
-| `sha`         | `string`                                              | sí        | Git SHA to deploy                                                                                                               |
-| `status`      | `string` (`running`, `success`, `failed`, `canceled`) | no        | Initial deployment status: running or success or failed or canceled. GitLab 19 rejects created when creating a deployment       |
-| `tag`         | `boolean`                                             | no        | Whether the ref is a tag. GitLab 19 requires this explicitly: pass false for branch refs and true for tag refs (default: false) |
+| Parámetro     | Tipo                                                  | Requerido | Descripción                                                                                                               |
+| ------------- | ----------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `environment` | `string`                                              | sí        | Name of the environment to deploy to                                                                                      |
+| `project_id`  | `string/integer`                                      | sí        | Project ID or URL-encoded path                                                                                            |
+| `ref`         | `string`                                              | sí        | Git branch or tag to deploy                                                                                               |
+| `sha`         | `string`                                              | sí        | Git SHA to deploy                                                                                                         |
+| `status`      | `string` (`running`, `success`, `failed`, `canceled`) | sí        | Initial deployment status: running or success or failed or canceled. GitLab 19 rejects created when creating a deployment |
+| `tag`         | `boolean`                                             | sí        | Whether the ref is a tag: false for a branch ref, true for a tag ref                                                      |
 
 ### `environment.deployment_delete`
 

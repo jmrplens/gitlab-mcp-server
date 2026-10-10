@@ -87,8 +87,8 @@ func ListTagProtectionRules(ctx context.Context, client *gitlabclient.Client, in
 type CreateTagProtectionRuleInput struct {
 	ProjectID                   toolutil.StringOrInt         `json:"project_id" jsonschema:"Project ID or path,required"`
 	TagNamePattern              string                       `json:"tag_name_pattern" jsonschema:"Tag name pattern as a RE2 regular expression (e.g. v.+),required"`
-	MinimumAccessLevelForPush   gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level to push matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable"`
-	MinimumAccessLevelForDelete gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level to delete matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable"`
+	MinimumAccessLevelForPush   gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level to push matching tags (maintainer, owner, admin),required"`
+	MinimumAccessLevelForDelete gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level to delete matching tags (maintainer, owner, admin),required"`
 }
 
 // CreateTagProtectionRule creates a container registry tag protection rule.
@@ -113,7 +113,7 @@ func CreateTagProtectionRule(ctx context.Context, client *gitlabclient.Client, i
 	)
 	if err != nil {
 		return TagProtectionRuleOutput{}, toolutil.WrapErrWithStatusHint("registry_tag_protection_create", err, http.StatusBadRequest,
-			"tag_name_pattern must be a valid RE2 regular expression and unique within the project; minimum_access_level_for_push and minimum_access_level_for_delete must be one of {maintainer, owner, admin}, or omit both to make matching tags immutable")
+			"tag_name_pattern must be a valid RE2 regular expression and unique within the project; minimum_access_level_for_push and minimum_access_level_for_delete are both required and must each be one of {maintainer, owner, admin}")
 	}
 	return convertTagProtectionRule(rule), nil
 }

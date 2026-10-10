@@ -140,6 +140,10 @@ func memberOptions(individualTool string) toolutil.ActionSpecOptions {
 		opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{paramProjectID: projectIDGuidance, paramUserID: userIDGuidance}
 		opts.IndividualTool.Description = "Get a project member including membership inherited from parent groups. Returns: id, username, name, state, effective access level, member role, and web URL. See also: gitlab_project_member_get, gitlab_project_members_list."
 	case "gitlab_project_member_add":
+		// GitLab declares user_id and username optional and requires at least
+		// one of them (at_least_one_of in lib/api/members.rb), which is what
+		// the anyOf says and a required list cannot.
+		opts.InputSchemaOverrides = append(opts.InputSchemaOverrides, toolutil.SchemaAnyOfRequired(paramUserID, "username"))
 		opts.Usage = "Add a user to a project team by user_id or username with an access_level. Optionally set expires_at and member_role_id (Premium/Ultimate custom role). Idempotent for already-existing members."
 		opts.Aliases = []string{individualTool, "add project member", "grant project access", "add existing user to project", "give user access"}
 		opts.RelatedActions = []string{actionMembersList, actionMemberGet, actionMemberEdit, actionUserGet}

@@ -2217,7 +2217,7 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 type DependencyInput struct {
 	ProjectID              toolutil.StringOrInt `json:"project_id"                jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID                  int64                `json:"merge_request_iid"                    jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
-	BlockingMergeRequestID int64                `json:"blocking_merge_request_id" jsonschema:"ID of the merge request that blocks this one"`
+	BlockingMergeRequestID int64                `json:"blocking_merge_request_id" jsonschema:"ID of the merge request that blocks this one,required"`
 }
 
 // DependencyOutput mirrors gl.MergeRequestDependency. The blocking merge
@@ -2292,6 +2292,9 @@ func CreateDependency(ctx context.Context, client *gitlabclient.Client, input De
 	if input.MRIID <= 0 {
 		return DependencyOutput{}, toolutil.ErrRequiredInt64("mrCreateDependency", "merge_request_iid")
 	}
+	if input.BlockingMergeRequestID <= 0 {
+		return DependencyOutput{}, toolutil.ErrRequiredInt64("mrCreateDependency", "blocking_merge_request_id")
+	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	dep, _, err := client.GL().MergeRequests.CreateMergeRequestDependency(string(input.ProjectID), input.MRIID,
 		gl.CreateMergeRequestDependencyOptions{BlockingMergeRequestID: new(input.BlockingMergeRequestID)}, gl.WithContext(ctx))
@@ -2324,7 +2327,7 @@ func CreateDependency(ctx context.Context, client *gitlabclient.Client, input De
 type DeleteDependencyInput struct {
 	ProjectID              toolutil.StringOrInt `json:"project_id"                jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID                  int64                `json:"merge_request_iid"                    jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
-	BlockingMergeRequestID int64                `json:"blocking_merge_request_id" jsonschema:"ID of the dependency to remove: the id of a dependencies_list entry, not the blocking merge request's own id"`
+	BlockingMergeRequestID int64                `json:"blocking_merge_request_id" jsonschema:"ID of the dependency to remove: the id of a dependencies_list entry, not the blocking merge request's own id,required"`
 }
 
 // DeleteDependency removes a dependency (blocker) from a merge request.
@@ -2337,6 +2340,9 @@ func DeleteDependency(ctx context.Context, client *gitlabclient.Client, input De
 	}
 	if input.MRIID <= 0 {
 		return toolutil.ErrRequiredInt64("mrDeleteDependency", "merge_request_iid")
+	}
+	if input.BlockingMergeRequestID <= 0 {
+		return toolutil.ErrRequiredInt64("mrDeleteDependency", "blocking_merge_request_id")
 	}
 	_, err := client.GL().MergeRequests.DeleteMergeRequestDependency(string(input.ProjectID), input.MRIID, input.BlockingMergeRequestID, gl.WithContext(ctx))
 	if err != nil {

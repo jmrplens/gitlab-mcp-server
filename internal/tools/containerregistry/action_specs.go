@@ -192,17 +192,17 @@ func applyRegistryDiscovery(options *toolutil.ActionSpecOptions, individualTool 
 		}
 		options.IndividualTool.Description = "List container registry tag protection rules for a project. Returns: each rule's tag name pattern and minimum push/delete access levels (empty = immutable). For repository-path protection use package.registry_rule_list. See also: gitlab_registry_tag_protection_create, gitlab_registry_list_tags."
 	case toolRegistryTagProtCreate:
-		options.Aliases = []string{"protect image tags", "make tags immutable", "create tag protection rule", "restrict tag push or delete"}
+		options.Aliases = []string{"protect image tags", "create tag protection rule", "restrict tag push or delete"}
 		options.RelatedActions = []string{actionRegistryTagRuleList, "package.registry_tag_rule_update", actionRegistryRuleCreate}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"tag_name_pattern": {
 				SemanticRole:     "match_pattern",
 				ValueSource:      "An RE2 regular expression matching the tags to protect.",
 				ExampleBinding:   `params.tag_name_pattern:"v.+"`,
-				CommonConfusions: []string{"tag_name_pattern is an RE2 regex, not a glob. Omit both minimum access levels to make matching tags fully immutable."},
+				CommonConfusions: []string{"tag_name_pattern is an RE2 regex, not a glob. Both minimum access levels are required: the REST API creates no rule without them."},
 			},
 		}
-		options.IndividualTool.Description = "Create a container registry tag protection rule. Returns: the created rule. Omit both minimum access levels to make matching tags immutable. See also: gitlab_registry_tag_protection_list, gitlab_registry_tag_protection_update, gitlab_registry_protection_create."
+		options.IndividualTool.Description = "Create a container registry tag protection rule. Returns: the created rule. Both minimum access levels (push and delete) are required. See also: gitlab_registry_tag_protection_list, gitlab_registry_tag_protection_update, gitlab_registry_protection_create."
 	case toolRegistryTagProtUpdate:
 		options.Aliases = []string{"update tag protection rule", "change tag protection access levels", "edit tag protection rule", "modify tag protection rule"}
 		options.RelatedActions = []string{actionRegistryTagRuleList, "package.registry_tag_rule_delete"}

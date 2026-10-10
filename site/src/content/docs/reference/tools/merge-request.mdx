@@ -515,9 +515,9 @@ The description of each action, and of each of its parameters, is the text the s
 
 | Parameter                   | Type             | Mandatory | Description                                                |
 | --------------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `blocking_merge_request_id` | `integer`        | yes       | ID of the merge request that blocks this one               |
 | `merge_request_iid`         | `integer`        | yes       | Merge request IID (project-scoped, not 'merge_request_id') |
 | `project_id`                | `string/integer` | yes       | Project ID or URL-encoded path                             |
-| `blocking_merge_request_id` | `integer`        | no        | ID of the merge request that blocks this one               |
 
 ### `merge_request.dependency_delete`
 
@@ -532,9 +532,9 @@ The description of each action, and of each of its parameters, is the text the s
 
 | Parameter                   | Type             | Mandatory | Description                                                                                                  |
 | --------------------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------ |
+| `blocking_merge_request_id` | `integer`        | yes       | ID of the dependency to remove: the id of a dependencies_list entry, not the blocking merge request's own id |
 | `merge_request_iid`         | `integer`        | yes       | Merge request IID (project-scoped, not 'merge_request_id')                                                   |
 | `project_id`                | `string/integer` | yes       | Project ID or URL-encoded path                                                                               |
-| `blocking_merge_request_id` | `integer`        | no        | ID of the dependency to remove: the id of a dependencies_list entry, not the blocking merge request's own id |
 
 ### `merge_request.emoji_mr_create`
 

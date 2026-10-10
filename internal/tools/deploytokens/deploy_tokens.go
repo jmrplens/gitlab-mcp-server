@@ -105,7 +105,7 @@ type CreateProjectInput struct {
 	Name      string               `json:"name" jsonschema:"Deploy token name,required"`
 	ExpiresAt string               `json:"expires_at,omitempty" jsonschema:"Expiry date (YYYY-MM-DD)"`
 	Username  string               `json:"username,omitempty" jsonschema:"Username for the deploy token"`
-	Scopes    []string             `json:"scopes" jsonschema:"Array of scopes (read_repository, read_registry, write_registry, read_package_registry, write_package_registry)"`
+	Scopes    []string             `json:"scopes" jsonschema:"Array of scopes (read_repository, read_registry, write_registry, read_package_registry, write_package_registry),required"`
 }
 
 // CreateGroupInput represents parameters for creating a group deploy token.
@@ -114,7 +114,7 @@ type CreateGroupInput struct {
 	Name      string               `json:"name" jsonschema:"Deploy token name,required"`
 	ExpiresAt string               `json:"expires_at,omitempty" jsonschema:"Expiry date (YYYY-MM-DD)"`
 	Username  string               `json:"username,omitempty" jsonschema:"Username for the deploy token"`
-	Scopes    []string             `json:"scopes" jsonschema:"Array of scopes (read_repository, read_registry, write_registry, read_package_registry, write_package_registry)"`
+	Scopes    []string             `json:"scopes" jsonschema:"Array of scopes (read_repository, read_registry, write_registry, read_package_registry, write_package_registry),required"`
 }
 
 // DeleteProjectInput represents parameters for deleting a project deploy token.

@@ -49,8 +49,8 @@ type CreateInput struct {
 	Environment string               `json:"environment"       jsonschema:"Name of the environment to deploy to,required"`
 	Ref         string               `json:"ref"               jsonschema:"Git branch or tag to deploy,required"`
 	SHA         string               `json:"sha"               jsonschema:"Git SHA to deploy,required"`
-	Tag         *bool                `json:"tag,omitempty"     jsonschema:"Whether the ref is a tag. GitLab 19 requires this explicitly: pass false for branch refs and true for tag refs (default: false)"`
-	Status      string               `json:"status,omitempty"  jsonschema:"Initial deployment status: running or success or failed or canceled. GitLab 19 rejects created when creating a deployment"`
+	Tag         *bool                `json:"tag,omitempty"     jsonschema:"Whether the ref is a tag: false for a branch ref, true for a tag ref,required"`
+	Status      string               `json:"status,omitempty"  jsonschema:"Initial deployment status: running or success or failed or canceled. GitLab 19 rejects created when creating a deployment,required"`
 }
 
 // UpdateInput contains parameters for updating a deployment status.
@@ -338,7 +338,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 					"GitLab 19 requires the tag field explicitly. Retry with tag:false for branch refs or tag:true for tag refs")
 			case toolutil.ContainsAny(err, "status does not have a valid value"):
 				return Output{}, toolutil.WrapErrWithHint(opCreateDeployment, err,
-					"the API accepts status running, success, failed, or canceled when creating a deployment. GitLab 19 rejects 'created'; omit status or use an accepted value")
+					"the API accepts status running, success, failed, or canceled when creating a deployment. GitLab 19 rejects 'created'; retry with one of the accepted values")
 			}
 			return Output{}, toolutil.WrapErrWithHint(opCreateDeployment, err,
 				"verify environment exists with environment.list, sha is a valid commit, and ref is an existing branch/tag")

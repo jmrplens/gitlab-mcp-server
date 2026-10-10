@@ -187,6 +187,34 @@ func TestMemberRoleOptions_UnknownActionKeepsGenericDefaults(t *testing.T) {
 	}
 }
 
+// TestMemberRoleOptions_AnEntryReplacesOnlyWhatItFills verifies a metadata
+// entry whose fields are all empty leaves the generic Usage and alias the
+// catalog defaults set, which an unconditional copy would blank, and that an
+// entry filling every field replaces each of them. The entry is added under a
+// name no action has and removed afterwards.
+func TestMemberRoleOptions_AnEntryReplacesOnlyWhatItFills(t *testing.T) {
+	const name = "test_only_action"
+	t.Cleanup(func() { delete(memberRoleActionMeta, name) })
+
+	memberRoleActionMeta[name] = memberRoleActionMetaEntry{}
+	empty := memberRoleOptions(name, "gitlab_test_only")
+	if empty.Usage != "Use to execute memberroles domain action." || len(empty.Aliases) != 1 || empty.Aliases[0] != "gitlab_test_only" {
+		t.Errorf("an empty entry gave Usage %q and Aliases %v, want the generic defaults", empty.Usage, empty.Aliases)
+	}
+
+	guidance := map[string]toolutil.ParameterGuidance{"name": {ValueSource: "typed by the caller"}}
+	memberRoleActionMeta[name] = memberRoleActionMetaEntry{
+		usage: "Does the test thing.", aliases: []string{"test alias"}, related: []string{actionMRListGroup},
+		guidance: guidance, description: "Tests things.",
+	}
+	full := memberRoleOptions(name, "gitlab_test_only")
+	if full.Usage != "Does the test thing." || len(full.Aliases) != 1 || full.Aliases[0] != "test alias" ||
+		len(full.RelatedActions) != 1 || full.RelatedActions[0] != actionMRListGroup ||
+		full.ParameterGuidance["name"].ValueSource != "typed by the caller" || full.IndividualTool.Description != "Tests things." {
+		t.Errorf("a full entry gave %+v, want every field it fills", full)
+	}
+}
+
 // TestMemberRoleActionMeta_AllActionsHaveRichMetadata verifies every canonical
 // member role action carries non-generic Usage, natural-language Aliases, and a
 // "Returns: … See also: …" individual-tool description (1:1 audit R-META).

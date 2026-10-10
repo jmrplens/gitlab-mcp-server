@@ -38,17 +38,17 @@ type ProjectInput struct{}
 
 // IssueInput is the minimal input for interactive issue creation.
 type IssueInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path where the issue will be created"`
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path where the issue will be created,required"`
 }
 
 // MRInput is the minimal input for interactive MR creation.
 type MRInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path where the MR will be created"`
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path where the MR will be created,required"`
 }
 
 // ReleaseInput is the minimal input for interactive release creation.
 type ReleaseInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path where the release will be created"`
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path where the release will be created,required"`
 }
 
 // Confirmation helpers for destructive / create tools.

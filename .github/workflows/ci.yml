@@ -231,6 +231,13 @@ jobs:
       - name: Check the fine-grained grants against the live record (R-GRANT)
         if: env.FRESHNESS == 'checked'
         run: make audit-1to1-grants
+      # The parameters every input schema requires, which all three surfaces
+      # read, held to what GitLab requires on every way an action runs. It
+      # reads the request record the derivation commits, so it is deferred
+      # with R-GRANT.
+      - name: Check every required parameter against the live record (R-INPUT)
+        if: env.FRESHNESS == 'checked'
+        run: make audit-1to1-required
       # The Orbit twin of the record above: what GitLab.com's Orbit routes
       # answered the requests the handlers build, as a key tree. No
       # self-managed GitLab serves Orbit, so no boot could answer it, and the

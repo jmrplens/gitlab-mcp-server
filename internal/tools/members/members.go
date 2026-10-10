@@ -163,13 +163,14 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.ShowSeatInfo {
 		opts.ShowSeatInfo = new(true)
 	}
-	if len(input.UserIDs) > 0 {
-		ids := make([]int64, len(input.UserIDs))
-		for i, id := range input.UserIDs {
-			ids[i] = int64(id)
-		}
-		opts.UserIDs = &ids
+	// Converted whatever its length: the query encoder leaves an empty list
+	// out, so no IDs reaches GitLab as no filter, the same request a guard on
+	// the length would send.
+	ids := make([]int64, len(input.UserIDs))
+	for i, id := range input.UserIDs {
+		ids[i] = int64(id)
 	}
+	opts.UserIDs = &ids
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	members, resp, err := client.GL().ProjectMembers.ListAllProjectMembers(string(input.ProjectID), opts, gl.WithContext(ctx))
@@ -205,9 +206,9 @@ type GetInput struct {
 // AddInput defines parameters for adding a project member.
 type AddInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
-	UserID       int64                `json:"user_id,omitempty"       jsonschema:"User ID to add (provide user_id or username),required"`
+	UserID       int64                `json:"user_id,omitempty"       jsonschema:"User ID to add (provide user_id or username)"`
 	Username     string               `json:"username,omitempty"      jsonschema:"Username to add (provide user_id or username)"`
-	AccessLevel  int                  `json:"access_level"            jsonschema:"Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)"`
+	AccessLevel  int                  `json:"access_level"            jsonschema:"Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner),required"`
 	ExpiresAt    string               `json:"expires_at,omitempty"    jsonschema:"Membership expiration date (YYYY-MM-DD)"`
 	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role ID"`
 }
@@ -216,7 +217,7 @@ type AddInput struct {
 type EditInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
 	UserID       int64                `json:"user_id"                 jsonschema:"User ID of the member to edit,required"`
-	AccessLevel  int                  `json:"access_level"            jsonschema:"New access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)"`
+	AccessLevel  int                  `json:"access_level"            jsonschema:"New access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner),required"`
 	ExpiresAt    string               `json:"expires_at,omitempty"    jsonschema:"Membership expiration date (YYYY-MM-DD)"`
 	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role ID"`
 }
@@ -290,7 +291,7 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 		return Output{}, errors.New("memberAdd: project_id is required")
 	}
 	if input.UserID <= 0 && input.Username == "" {
-		return Output{}, toolutil.ErrRequiredInt64("memberAdd", "user_id")
+		return Output{}, errors.New("memberAdd: user_id or username is required. Name the user to add by one of them")
 	}
 	if input.AccessLevel == 0 {
 		return Output{}, errors.New("memberAdd: access_level is required")

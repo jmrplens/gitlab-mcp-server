@@ -577,6 +577,27 @@ func TestImportFromFile_FilePathOpenError(t *testing.T) {
 	}
 }
 
+// TestImportFromFile_AnArchiveThatWillNotOpen_NamesTheOpen verifies an archive
+// that passed every check and still cannot be opened is reported as the open
+// that failed, and that nothing is sent. It reaches the branch through the
+// open seam, which is what lets it run as root, where the permission test
+// above has to skip.
+func TestImportFromFile_AnArchiveThatWillNotOpen_NamesTheOpen(t *testing.T) {
+	original := openArchive
+	t.Cleanup(func() { openArchive = original })
+	openArchive = func(string) (*os.File, error) { return nil, errors.New("too many open files") }
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+	archivePath := t.TempDir() + "/project.tar.gz"
+	if err := os.WriteFile(archivePath, []byte("fake archive"), 0o600); err != nil {
+		t.Fatalf("write archive: %v", err)
+	}
+	_, err := ImportFromFile(t.Context(), client, ImportFromFileInput{FilePath: archivePath, Path: "imported"})
+	if err == nil || !strings.Contains(err.Error(), "open archive: too many open files") {
+		t.Fatalf("error = %v, want the open named with its cause", err)
+	}
+}
+
 // TestScheduleExport_WithUpload verifies the deprecated flat upload_url and
 // upload_http_method reach GitLab under the nested names the API documents,
 // alongside the description. The three values are deliberately unlike each
