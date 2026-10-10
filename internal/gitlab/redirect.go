@@ -164,16 +164,23 @@ func chainLeftScope(baseHost string, baseHTTPS bool, via []*http.Request) bool {
 // UTF-8 keeps them: a rune-wise mapping would turn every such byte into
 // U+FFFD and make two different hosts compare equal. No byte of a multi-byte
 // UTF-8 sequence falls in the ASCII range, so none of them is touched.
+//
+// The copy is made at the first upper-case letter and not before, so a host
+// already in lower case, which is nearly every one, is handed back as it came.
+// One test of the byte decides both whether to copy and what to fold, since a
+// separate scan for the first letter would ask the same question twice.
 func FoldHostCase(host string) string {
-	upper := strings.IndexFunc(host, func(r rune) bool { return 'A' <= r && r <= 'Z' })
-	if upper < 0 {
-		return host
-	}
-	folded := []byte(host)
-	for i := upper; i < len(folded); i++ {
-		if c := folded[i]; 'A' <= c && c <= 'Z' {
+	var folded []byte
+	for i := range len(host) {
+		if c := host[i]; 'A' <= c && c <= 'Z' {
+			if folded == nil {
+				folded = []byte(host)
+			}
 			folded[i] = c + ('a' - 'A')
 		}
+	}
+	if folded == nil {
+		return host
 	}
 	return string(folded)
 }
@@ -229,18 +236,26 @@ func logCredentialDrop(req *http.Request, baseHost string, baseHTTPS bool, dropp
 	if len(dropped) == 0 {
 		return
 	}
-	reason := "host outside the configured instance"
-	switch {
-	case baseHTTPS && !strings.EqualFold(req.URL.Scheme, "https"):
-		reason = "redirect downgrades https to http"
-	case withinCredentialScope(baseHost, baseHTTPS, req.URL):
-		reason = "an earlier hop left the configured instance"
-	}
 	slog.InfoContext(req.Context(), "dropped credential headers on redirect",
-		"reason", reason,
+		"reason", credentialDropReason(req.URL, baseHost, baseHTTPS),
 		"instance_host", baseHost,
 		"redirect_host", req.URL.Hostname(),
 		"redirect_scheme", req.URL.Scheme,
 		"headers", strings.Join(dropped, ", "),
 	)
+}
+
+// credentialDropReason names why a redirect to dest lost its credentials: it
+// left https for http, or it is inside the instance's scope and lost them
+// because an earlier hop had left it, or it is a host outside the configured
+// instance. The downgrade is asked first because it is the one a reader acts
+// on whatever the host.
+func credentialDropReason(dest *url.URL, baseHost string, baseHTTPS bool) string {
+	if baseHTTPS && !strings.EqualFold(dest.Scheme, "https") {
+		return "redirect downgrades https to http"
+	}
+	if withinCredentialScope(baseHost, baseHTTPS, dest) {
+		return "an earlier hop left the configured instance"
+	}
+	return "host outside the configured instance"
 }

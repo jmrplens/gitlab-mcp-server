@@ -118,9 +118,13 @@ func addressLiteral(host string) (netip.Addr, bool) {
 // library vendors, which cannot be imported. The two can drift apart when
 // their Unicode tables do; TestDialHostname_IsWhatNetHTTPDials holds this to
 // what net/http actually dials for every spelling it lists.
+//
+// A byte outside ASCII is one with its high bit set, asked as that bit rather
+// than as a comparison with 0x80: the two agree on every byte, and the bit
+// leaves no boundary to misplace.
 func dialHostname(host string) string {
 	for i := range len(host) {
-		if host[i] >= 0x80 {
+		if host[i]&0x80 != 0 {
 			mapped, err := idna.Lookup.ToASCII(host)
 			if err != nil {
 				return host
