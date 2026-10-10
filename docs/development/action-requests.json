@@ -4060,7 +4060,9 @@
           "sites": [
             "terraformstates.Get"
           ],
-          "declaration": "sdk-graphql-format"
+          "sdk_methods": [
+            "TerraformStates.Get"
+          ]
         }
       ],
       "paths": [
@@ -4096,7 +4098,9 @@
           "sites": [
             "terraformstates.List"
           ],
-          "declaration": "sdk-graphql-format"
+          "sdk_methods": [
+            "TerraformStates.List"
+          ]
         }
       ],
       "paths": [
@@ -7871,7 +7875,9 @@
           "sites": [
             "epics.Create"
           ],
-          "declaration": "sdk-graphql-template"
+          "sdk_methods": [
+            "WorkItems.CreateWorkItem"
+          ]
         }
       ],
       "paths": [
@@ -8236,7 +8242,9 @@
           "sites": [
             "epics.Get"
           ],
-          "declaration": "sdk-graphql-template"
+          "sdk_methods": [
+            "WorkItems.GetWorkItem"
+          ]
         }
       ],
       "paths": [
@@ -8823,7 +8831,9 @@
           "sites": [
             "epics.Update"
           ],
-          "declaration": "sdk-graphql-template"
+          "sdk_methods": [
+            "WorkItems.UpdateWorkItem"
+          ]
         }
       ],
       "paths": [
@@ -13880,7 +13890,9 @@
           "sites": [
             "workitems.Create"
           ],
-          "declaration": "sdk-graphql-template"
+          "sdk_methods": [
+            "WorkItems.CreateWorkItem"
+          ]
         }
       ],
       "paths": [
@@ -13993,7 +14005,9 @@
           "sites": [
             "workitems.Get"
           ],
-          "declaration": "sdk-graphql-template"
+          "sdk_methods": [
+            "WorkItems.GetWorkItem"
+          ]
         }
       ],
       "paths": [
@@ -14385,7 +14399,9 @@
           "sites": [
             "workitems.pendingClearLosses"
           ],
-          "declaration": "sdk-graphql-template"
+          "sdk_methods": [
+            "WorkItems.GetWorkItem"
+          ]
         },
         {
           "kind": "graphql",
@@ -14451,7 +14467,9 @@
           "sites": [
             "workitems.Update"
           ],
-          "declaration": "sdk-graphql-template"
+          "sdk_methods": [
+            "WorkItems.UpdateWorkItem"
+          ]
         }
       ],
       "paths": [

@@ -42,10 +42,16 @@ type SDKGraphQLCheck struct {
 	Error string `json:"error,omitempty"`
 	// Documents is how many were read, template shells included.
 	Documents int `json:"documents"`
-	// Templates are the documents assembled around a placeholder rather than
-	// written as the text GitLab receives, named because they are the part of
-	// this surface no schema can judge. See [graphqldocs.IsTemplate].
+	// Templates are the documents still assembled around a placeholder rather
+	// than written as the text GitLab receives, named with the reason the
+	// collector gives for leaving each one a shell, because they are the part
+	// of this surface no schema can judge. See [graphqldocs.IsTemplate].
 	Templates []SDKDocument `json:"template_documents,omitempty"`
+	// Rendered are the shells the collector rendered, which were judged as
+	// that rendering: a refusal of one is a refusal of the text client-go
+	// builds from it, and a reader has to know the text was not written as
+	// such. See [graphqldocs.Assembly].
+	Rendered []SDKDocument `json:"rendered_documents,omitempty"`
 	// Judged is how many were put to the schema, which is Documents less the
 	// templates.
 	Judged int `json:"judged"`
@@ -60,10 +66,16 @@ type SDKGraphQLCheck struct {
 // documents are written inline at the point of use and so are declared under
 // no name at all, and a list of four rows all reading "an inline document" is
 // a list a reader cannot act on.
+//
+// AssembledBy names the call that fills a shell's holes and Reason why one is
+// still a shell, each as the collector says it and left out where it says
+// nothing.
 type SDKDocument struct {
-	Package  string `json:"package"`
-	Document string `json:"document"`
-	Position string `json:"position"`
+	Package     string `json:"package"`
+	Document    string `json:"document"`
+	Position    string `json:"position"`
+	AssembledBy string `json:"assembled_by,omitempty"`
+	Reason      string `json:"reason,omitempty"`
 }
 
 // Seams for the two halves of this check the real tree resolves and a test
@@ -108,13 +120,13 @@ func sdkGraphQLCheck(root string) SDKGraphQLCheck {
 
 	judgeable := make([]graphqldocs.Document, 0, len(documents))
 	for _, document := range documents {
+		named := sdkDocumentOf(document, pairings.ClientGoDir)
 		if graphqldocs.IsTemplate(document) {
-			check.Templates = append(check.Templates, SDKDocument{
-				Package:  document.Package,
-				Document: document.Label(),
-				Position: relativePosition(document, pairings.ClientGoDir),
-			})
+			check.Templates = append(check.Templates, named)
 			continue
+		}
+		if document.Assembly != nil {
+			check.Rendered = append(check.Rendered, named)
 		}
 		judgeable = append(judgeable, document)
 	}
@@ -127,6 +139,21 @@ func sdkGraphQLCheck(root string) SDKGraphQLCheck {
 	}
 	check.Refusals = sdkRefusals(result, pairings.ClientGoDir)
 	return check
+}
+
+// sdkDocumentOf names one SDK document for a list, with what the collector
+// says about its holes when it has any.
+func sdkDocumentOf(document graphqldocs.Document, moduleDir string) SDKDocument {
+	named := SDKDocument{
+		Package:  document.Package,
+		Document: document.Label(),
+		Position: relativePosition(document, moduleDir),
+	}
+	if document.Assembly != nil {
+		named.AssembledBy = document.Assembly.By
+		named.Reason = document.Assembly.Unrendered
+	}
+	return named
 }
 
 // sdkModuleName names the module a cache directory holds, short enough to keep

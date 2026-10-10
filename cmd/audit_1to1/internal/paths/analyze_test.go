@@ -269,6 +269,56 @@ func TestRun_GapsOnly_KeepsTheWorkAndDropsTheContext(t *testing.T) {
 	})
 }
 
+// TestRun_GapsOnly_DropsTheListingsOfClientGosDocuments verifies the same flag
+// on the SDK section: the shells client-go writes, whether the collector
+// rendered them or left them shells, are a listing of what was read rather
+// than work, so the report audit-1to1-paths and CI print leaves both out while
+// the full report keeps them and the summary counts every document either way.
+func TestRun_GapsOnly_DropsTheListingsOfClientGosDocuments(t *testing.T) {
+	root := t.TempDir()
+	withDeclarations(t, map[string]silentOwnerDeclaration{})
+	stubInputs(t, oneRow, nil, graphqldocs.Result{})
+	shell := "query ListWorkItems($fullPath: ID!{{ if .Decls }}, {{ .Decls }}{{ end }}) { x }"
+	documents := []graphqldocs.Document{
+		assembled(sdkDocument("listWorkItemsQueryShell", "workitems.go", shell), graphqldocs.AssembledByTemplate, shell,
+			"t is not a package variable, so the template set it holds is built when a function runs"),
+		assembled(sdkDocument("", "terraform_states.go", `query { project(fullPath: "projectFullPath") { name } }`),
+			graphqldocs.AssembledByFormat, "query { project(fullPath: %q) { name } }", ""),
+	}
+	withSDKSeams(t, foundPairings,
+		func(string) ([]graphqldocs.Document, error) { return documents, nil },
+		func(got []graphqldocs.Document, _ graphqldocs.Options) (graphqldocs.Result, error) {
+			return graphqldocs.Result{Documents: got}, nil
+		})
+
+	full, _, err := Run(t.Context(), root, Options{})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	gaps, _, err := Run(t.Context(), root, Options{GapsOnly: true})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	t.Run("the full report lists both", func(t *testing.T) {
+		sdk := decode(t, full).SDKGraphQL
+		if len(sdk.Templates) != 1 || len(sdk.Rendered) != 1 {
+			t.Errorf("sdk_graphql = %+v, want the shell and the rendering listed", sdk)
+		}
+	})
+	t.Run("the gaps-only report lists neither", func(t *testing.T) {
+		sdk := decode(t, gaps).SDKGraphQL
+		if len(sdk.Templates) != 0 || len(sdk.Rendered) != 0 {
+			t.Errorf("sdk_graphql = %+v, want the listings dropped", sdk)
+		}
+	})
+	t.Run("the summary still counts every document", func(t *testing.T) {
+		if got := decode(t, gaps).Summary.SDKGraphQLDocuments; got != 2 {
+			t.Errorf("summary counts %d documents, want 2", got)
+		}
+	})
+}
+
 // TestRun_AnEndToEndRecord_AnswersTheObservationQuestionPerAction verifies the
 // wiring of the one input that sharpens this dimension's weakest number.
 //

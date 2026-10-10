@@ -63,7 +63,15 @@ var readDefinition = definitionOf("query|subscription")
 // of its own and is still a document: this repository writes fragments as
 // constants and splices them into the operations that use them. The "on" is
 // what separates one from prose that opens with the word fragment.
-var fragmentDefinition = regexp.MustCompile(`(?m)^[ \t]*fragment\b` + ignoredText + `+[A-Za-z_][A-Za-z0-9_]*` + ignoredText + `+on\b`)
+var fragmentDefinition = fragmentRule()
+
+// fragmentRule builds [fragmentDefinition]. It is a function, as
+// [definitionOf] is, so the pattern is assembled in a body a test runs rather
+// than in a declaration, whose expressions carry no statement counter for the
+// mutation gate to see.
+func fragmentRule() *regexp.Regexp {
+	return regexp.MustCompile(`(?m)^[ \t]*fragment\b` + ignoredText + `+[A-Za-z_][A-Za-z0-9_]*` + ignoredText + `+on\b`)
+}
 
 // objectLiteral matches an opening brace whose first entry binds a name to a
 // quoted string, which is a map written in JSON-ish shorthand and never

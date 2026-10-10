@@ -36,14 +36,31 @@
 // answer is a separate claim: a document refused there is fixed upstream and
 // not here, so its caller reports where the caller of [Collect] gates.
 //
-// Six of the 42 are not sendable text at all, and [IsTemplate] is what tells
-// them apart: client-go writes the work item documents as text/template shells
-// and the Terraform state queries as printf format strings, so the folded
-// value carries a placeholder where a value belongs.
+// Six of the 42 are not written as sendable text: client-go writes the work
+// item documents as text/template shells and the Terraform state queries as
+// printf format strings, so the folded value carries a placeholder where a
+// value belongs.
+//
+// # Shells, and what renders them
+//
+// A document written with holes in it is rendered wherever the call that
+// fills them settles what the text is, and the walk records how in
+// [Assembly]. A format string is passed through fmt.Sprintf with each
+// constant argument's own value and a stand-in of its type for the rest. A
+// text/template is executed inside the set it is parsed into, read back
+// through the package variables the set is cloned from, provided nothing it
+// reaches reads data, since a template that does renders what client-go sends
+// for one caller and not for every one. Five of client-go's six render that
+// way, and a test holds each rendering byte for byte to what client-go posts.
+// The work item list does not, because its fragment is parsed inside a
+// function from the fields a caller asks for and its variables are the
+// filters a caller sets: it keeps its holes, [IsTemplate] still tells it
+// apart, and its assembly says why. [SDKDirectory] finds the client-go the
+// module requires.
 //
 // # Who calls it
 //
-// Four commands call it, and what they ask of the inventory splits them in two.
+// Five commands call it, and what they ask of the inventory splits them in two.
 //
 // Two of them judge these documents against a schema, deliberately:
 // cmd/audit_graphql_documents renders the result as the text of a standalone
@@ -51,7 +68,7 @@
 // where a document GitLab refuses is one of the three ways a registered action
 // cannot reach the endpoint it names.
 //
-// The other two want the inventory for a question of their own.
+// The other three want the inventory for a question of their own.
 //
 // cmd/audit_readonly_graphql asks what operation type each document carries,
 // and used to find them with a walk of its own that read constants and
@@ -71,4 +88,14 @@
 // that question: a document here that no pairing carries is one handed to
 // something that audit does not follow, and it is named rather than passed over
 // in silence.
+//
+// cmd/gen_action_grants reads client-go's documents through [SDKDocuments] as
+// the requests a client-go method sends, which the fine-grained derivation
+// joins to what GitLab demands of each element they reach. A shell rendered
+// here is read as its rendering, which is why the work item get, create and
+// update documents and the Terraform state queries need no declaration there;
+// one still a shell ([IsTemplate]) is a request the walk cannot read, which a
+// declaration answers, and [DefinesMutation] puts a method's documents in the
+// order it posts them. A change to the rendering therefore moves that
+// command's derivation as well as the counts the two judging commands print.
 package graphqldocs

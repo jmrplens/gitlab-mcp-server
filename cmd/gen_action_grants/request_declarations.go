@@ -15,11 +15,10 @@ const (
 	// and sends no request at all.
 	categorySendsNothing = "sends-nothing"
 	// categoryTemplate is a client-go GraphQL document assembled from a
-	// text/template at run time.
+	// text/template at run time out of values the handler hands the method,
+	// which graphqldocs leaves a shell because no rendering of it exists
+	// without them.
 	categoryTemplate = "sdk-graphql-template"
-	// categoryFormat is a client-go GraphQL document assembled with
-	// fmt.Sprintf at run time.
-	categoryFormat = "sdk-graphql-format"
 	// categorySprintfPath is a request path client-go formats for a handler
 	// that then sends the request itself.
 	categorySprintfPath = "sdk-path-sprintf"
@@ -95,38 +94,27 @@ func workItemFragment(features ...string) string {
 	return workItemScalars + "\n\tfeatures { " + strings.Join(selections, " ") + " }"
 }
 
-// The work item fragments the handlers make client-go send. Get, create and
-// update use client-go's static WorkItem template, which selects every
-// feature; a list renders its fragment from the fields the handler asks for:
-// issue.work_item_list the CE-safe default and, on an Enterprise instance,
-// all five Enterprise features (workitems.listReturnedFields, the widest
-// default, since a caller's returned_fields only narrows it), and
-// group.epic_list the default with color, healthStatus and weight, an epic
-// carrying neither a status nor an iteration (epics.buildWorkItemsListOptions).
+// The work item fragments the list handlers make client-go send, each rendered
+// from the fields the handler asks for: issue.work_item_list the CE-safe
+// default and, on an Enterprise instance, all five Enterprise features
+// (workitems.listReturnedFields, the widest default, since a caller's
+// returned_fields only narrows it), and group.epic_list the default with
+// color, healthStatus and weight, an epic carrying neither a status nor an
+// iteration (epics.buildWorkItemsListOptions). Get, create and update need no
+// declaration: their templates read no value, so graphqldocs renders them
+// from client-go's own source and the walk reads what they send.
 var (
-	staticWorkItemFragment = workItemFragment("assignees", "color", "healthStatus", "hierarchy", "iteration",
-		"labels", "linkedItems", "milestone", "startAndDueDate", "status", "weight")
 	workItemListFragment = workItemFragment(append(slices.Clone(workItemDefaultListFeatures),
 		"color", "healthStatus", "iteration", "status", "weight")...)
 	epicListFragment = workItemFragment(append(slices.Clone(workItemDefaultListFeatures),
 		"color", "healthStatus", "weight")...)
 )
 
-// The work item documents client-go assembles from its templates, evaluated
-// with what the method passes the template: nothing for get, create and
-// update, and for a list the fragment its fields render.
+// The work item list documents client-go assembles from its ListWorkItems
+// shell, evaluated with the fragment each handler's fields render.
 var (
-	getWorkItemDocument = fmt.Sprintf(`query GetWorkItem($fullPath: ID!, $iid: String!) {
-	namespace(fullPath: $fullPath) { workItem(iid: $iid) { %s } }
-}`, staticWorkItemFragment)
-	listWorkItemsDocument  = listDocument(workItemListFragment)
-	listEpicsDocument      = listDocument(epicListFragment)
-	createWorkItemDocument = fmt.Sprintf(`mutation CreateWorkItem($input: WorkItemCreateInput!) {
-	workItemCreate(input: $input) { workItem { %s } errors }
-}`, staticWorkItemFragment)
-	updateWorkItemDocument = fmt.Sprintf(`mutation UpdateWorkItem($input: WorkItemUpdateInput!) {
-	workItemUpdate(input: $input) { workItem { %s } errors }
-}`, staticWorkItemFragment)
+	listWorkItemsDocument = listDocument(workItemListFragment)
+	listEpicsDocument     = listDocument(epicListFragment)
 )
 
 // listDocument is client-go's ListWorkItems shell around one fragment.
@@ -137,25 +125,6 @@ func listDocument(fragment string) string {
 	}
 }`
 }
-
-// The Terraform state documents client-go formats with the project path and
-// the state name quoted in.
-const (
-	terraformStateListDocument = `query {
-	project(fullPath: "group/project") {
-		terraformStates {
-			nodes { name createdAt deletedAt latestVersion { createdAt updatedAt downloadPath serial } updatedAt lockedAt }
-		}
-	}
-}`
-	terraformStateGetDocument = `query {
-	project(fullPath: "group/project") {
-		terraformState(name: "state") {
-			name createdAt deletedAt latestVersion { createdAt updatedAt downloadPath serial } updatedAt lockedAt
-		}
-	}
-}`
-)
 
 // graphql is a declared GraphQL request.
 func graphql(name, document string) derive.Request {
@@ -197,36 +166,20 @@ var requestDeclarations = []derive.Declaration{
 		Reason:   "the path is GenericPackages.FormatPackageURL's, which formats the generic package file route and sends nothing; the handler sends the GET itself to stream the body",
 		Replaces: "raw-path packages.newDownloadRequest", Requests: []derive.Request{rest("GET", "/projects/:/packages/generic/:/:/:")},
 	},
-	workItemDeclaration("group.epic_create", "CreateWorkItem", createWorkItemDocument),
-	workItemDeclaration("group.epic_get", "GetWorkItem", getWorkItemDocument),
-	workItemDeclaration("group.epic_list", "ListWorkItems", listEpicsDocument),
-	workItemDeclaration("group.epic_update", "UpdateWorkItem", updateWorkItemDocument),
-	workItemDeclaration("issue.work_item_create", "CreateWorkItem", createWorkItemDocument),
-	workItemDeclaration("issue.work_item_get", "GetWorkItem", getWorkItemDocument),
-	workItemDeclaration("issue.work_item_list", "ListWorkItems", listWorkItemsDocument),
-	workItemDeclaration("issue.work_item_update", "GetWorkItem", getWorkItemDocument),
-	workItemDeclaration("issue.work_item_update", "UpdateWorkItem", updateWorkItemDocument),
-	{
-		Action: "admin.terraform_state_get", Category: categoryFormat,
-		Reason:   "client-go formats the project path and the state name into the query with %q",
-		Replaces: "sdk-graphql-format TerraformStates.Get", Requests: []derive.Request{graphql("TerraformStates.Get", terraformStateGetDocument)},
-	},
-	{
-		Action: "admin.terraform_state_list", Category: categoryFormat,
-		Reason:   "client-go formats the project path into the query with %q",
-		Replaces: "sdk-graphql-format TerraformStates.List", Requests: []derive.Request{graphql("TerraformStates.List", terraformStateListDocument)},
-	},
+	workItemListDeclaration("group.epic_list", listEpicsDocument),
+	workItemListDeclaration("issue.work_item_list", listWorkItemsDocument),
 }
 
-// workItemDeclaration declares the document a client-go work item method,
-// named by its name on the WorkItems service, assembles from its template.
-// TestRequestDeclarations_DeclareWhatTheHandlerSends holds each to what the
-// handler makes client-go send.
-func workItemDeclaration(action, name, document string) derive.Declaration {
-	method := "WorkItems." + name
+// workItemListDeclaration declares the document client-go's ListWorkItems
+// assembles for one list handler. TestRequestDeclarations_DeclareWhatTheHandlerSends
+// holds each to what the handler makes client-go send.
+func workItemListDeclaration(action, document string) derive.Declaration {
+	const method = "WorkItems.ListWorkItems"
 	return derive.Declaration{
 		Action: action, Category: categoryTemplate,
-		Reason:   "client-go executes the " + name + " text/template of workitems.go at run time; the document is that template evaluated with what the handler hands the method",
+		Reason: "client-go parses the ListWorkItems shell of workitems.go at run time into a template set whose WorkItem fragment " +
+			"is rendered from the fields the handler asks for and whose variables are the filters it sets; " +
+			"the document is that template evaluated with what the handler hands the method",
 		Replaces: categoryTemplate + " " + method, Requests: []derive.Request{graphql(method, document)},
 	}
 }

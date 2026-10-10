@@ -8,11 +8,50 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
+	"golang.org/x/tools/go/packages"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 )
+
+// SDKImportPath is the import path of client-go's root package, the one the
+// handlers of this repository compile against and the one whose directory
+// [SDKDirectory] finds.
+const SDKImportPath = "gitlab.com/gitlab-org/api/client-go/v3"
+
+// SDKDirectory returns the directory of the client-go module the Go module in
+// dir builds against, which is the version go.mod requires and the one
+// [SDKDocuments] is pointed at.
+//
+// It asks the toolchain for the root package's files and nothing more, since
+// a caller that only needs to know where the module lives should not pay for
+// type-checking it. A module that does not require client-go is refused
+// rather than answered with an empty directory, which a caller would hand to
+// [SDKDocuments] and have refused there under a reason that names nothing.
+//
+// The lookup runs under -mod=readonly whatever GOFLAGS the caller exported.
+// Under -mod=mod the toolchain resolves a package no requirement provides by
+// adding the newest version it can find, so a module that requires no
+// client-go would be answered with whichever one the module cache holds last,
+// and this one with a version go.mod never named.
+func SDKDirectory(dir string) (string, error) {
+	loaded, err := packages.Load(&packages.Config{
+		Mode: packages.NeedName | packages.NeedFiles,
+		Dir:  dir,
+		Env:  append(os.Environ(), "GOFLAGS="+readOnlyModule(os.Getenv("GOFLAGS"))),
+	}, SDKImportPath)
+	if err != nil {
+		return "", fmt.Errorf("find the client-go module %s builds against: %w", dir, err)
+	}
+	// One pattern naming one import path loads one package, found or not.
+	if root := loaded[0]; len(root.GoFiles) > 0 {
+		return filepath.Dir(root.GoFiles[0]), nil
+	}
+	return "", fmt.Errorf("the module in %s resolves no %s: %v", dir, SDKImportPath, loaded[0].Errors)
+}
 
 // SDKPatterns are the packages of client-go a document can live in, which is
 // all of them: the operations sit beside the service methods that send them,
@@ -131,17 +170,22 @@ var templateHole = regexp.MustCompile(`\{\{[^}]*\}\}|%[#+\-0-9.]*[bcdeEfFgGoOpqs
 // IsTemplate reports whether a document is a shell with holes in it rather
 // than the text GitLab receives.
 //
-// client-go writes its documents in two shapes that are not sendable text.
-// The work item list is a text/template whose folded value carries
-// `{{ if .Decls }}` where a variable declaration list belongs. The Terraform
-// state queries are printf format strings that interpolate the project path
-// and the state name with %q, so what folds is a document with `%q` where a
-// value goes.
+// client-go writes six of its documents in two shapes that are not sendable
+// text as written: the work item get, create, update and list documents are
+// text/template shells, and the Terraform state queries are printf format
+// strings that interpolate the project path and the state name with %q. The
+// collector renders a shell wherever the call that fills it says what the
+// text is (see [Assembly]), so five of the six arrive here rendered and this
+// answers false for them. The work item list stays a shell: its fragment is
+// parsed from the fields a caller asks for and its variable list is the
+// filters a caller sets, so no rendering of it exists without a caller, and
+// what folds still carries `{{ if .Decls }}` where that list belongs.
 //
-// No schema can judge either, and both would be refused for the same reason on
-// every single run. Reporting them as refusals would teach a reader to skip
-// the refusal list, which is the one list here that must never be skipped, so
-// they are counted apart, named, and left unjudged.
+// No schema can judge a shell, and one would be refused for the same reason on
+// every single run. Reporting it as a refusal would teach a reader to skip the
+// refusal list, which is the one list here that must never be skipped, so it
+// is counted apart, named with the reason its assembly gives, and left
+// unjudged.
 func IsTemplate(document Document) bool {
 	return templateHole.MatchString(document.Text)
 }

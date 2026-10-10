@@ -4,6 +4,7 @@ import (
 	"errors"
 	"go/token"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -51,19 +52,32 @@ func foundPairings(string) (structs.Pairings, error) {
 	return structs.Pairings{ClientGoDir: sdkModuleDir}, nil
 }
 
+// assembled is a document the collector found with holes in it, rendered when
+// unrendered is "" and still a shell, for that reason, when it is not.
+func assembled(document graphqldocs.Document, by, shell, unrendered string) graphqldocs.Document {
+	document.Assembly = &graphqldocs.Assembly{By: by, Shell: shell, Unrendered: unrendered}
+	return document
+}
+
 // TestSDKGraphQLCheck_TemplatesAreNamedAndNotJudged pins the one distinction
 // that decides whether this section is readable.
 //
-// client-go writes two of its documents as shells with holes in them: a
-// text/template for the work item list, and printf format strings for the
-// Terraform state queries. Neither is text GitLab ever receives, both would be
-// refused by any schema on every single run, and a refusal list with permanent
-// entries in it is a list a reader learns to skip. They are counted apart and
-// named instead, and only the sendable ones reach the schema.
+// client-go writes six of its documents as shells with holes in them, and the
+// collector renders the ones whose holes the call that fills them settles. A
+// shell left unrendered is not text GitLab ever receives, would be refused by
+// any schema on every single run, and a refusal list with permanent entries in
+// it is a list a reader learns to skip. It is counted apart and named with the
+// reason it stays a shell, and only sendable text reaches the schema: a
+// rendered shell among it, named apart too, since a reader of a refusal has to
+// know the text judged is a rendering.
 func TestSDKGraphQLCheck_TemplatesAreNamedAndNotJudged(t *testing.T) {
 	documents := []graphqldocs.Document{
-		sdkDocument("listWorkItemsQueryShell", "workitems.go", "query ListWorkItems($fullPath: ID!{{ if .Decls }}, {{ .Decls }}{{ end }}) { x }"),
+		assembled(sdkDocument("listWorkItemsQueryShell", "workitems.go", "query ListWorkItems($fullPath: ID!{{ if .Decls }}, {{ .Decls }}{{ end }}) { x }"),
+			graphqldocs.AssembledByTemplate, "query ListWorkItems($fullPath: ID!{{ if .Decls }}, {{ .Decls }}{{ end }}) { x }",
+			"t is not a package variable, so the template set it holds is built when a function runs"),
 		sdkDocument("", "terraform_states.go", "query { project(fullPath: %q) { terraformStates { nodes { name } } } }"),
+		assembled(sdkDocument("", "terraform_states.go", `query { project(fullPath: "projectFullPath") { terraformState(name: "name") { name } } }`),
+			graphqldocs.AssembledByFormat, "query { project(fullPath: %q) { terraformState(name: %q) { name } } }", ""),
 		sdkDocument("listAchievementsQuery", "achievements.go", "query ListAchievements($fullPath: ID!) { group(fullPath: $fullPath) { id } }"),
 	}
 	var judged []graphqldocs.Document
@@ -76,11 +90,11 @@ func TestSDKGraphQLCheck_TemplatesAreNamedAndNotJudged(t *testing.T) {
 
 	check := sdkGraphQLCheck(t.TempDir())
 
-	if !check.Ran || check.Documents != 3 || check.Judged != 1 {
-		t.Fatalf("check = %+v, want three documents read and one judged", check)
+	if !check.Ran || check.Documents != 4 || check.Judged != 2 {
+		t.Fatalf("check = %+v, want four documents read and two judged", check)
 	}
-	if len(judged) != 1 || judged[0].Name != "listAchievementsQuery" {
-		t.Errorf("the schema was handed %v, want the one document with no hole in it", judged)
+	if len(judged) != 2 || judged[0].Assembly == nil || judged[1].Name != "listAchievementsQuery" {
+		t.Errorf("the schema was handed %v, want the rendering and the document with no hole in it", judged)
 	}
 	if len(check.Templates) != 2 {
 		t.Fatalf("templates = %+v, want the template shell and the format string", check.Templates)
@@ -92,6 +106,24 @@ func TestSDKGraphQLCheck_TemplatesAreNamedAndNotJudged(t *testing.T) {
 			}
 		})
 	}
+	t.Run("a shell says why it is one", func(t *testing.T) {
+		shell := check.Templates[0]
+		if shell.AssembledBy != graphqldocs.AssembledByTemplate || !strings.Contains(shell.Reason, "is not a package variable") {
+			t.Errorf("template = %+v, want the call that fills it and the reason it stays a shell", shell)
+		}
+		if check.Templates[1].AssembledBy != "" || check.Templates[1].Reason != "" {
+			t.Errorf("template = %+v, want nothing said where the collector said nothing", check.Templates[1])
+		}
+	})
+	t.Run("a rendered shell is named apart", func(t *testing.T) {
+		want := []SDKDocument{{
+			Package: "gitlab.com/gitlab-org/api/client-go/v3", Document: "an inline document",
+			Position: "terraform_states.go:10:2", AssembledBy: graphqldocs.AssembledByFormat,
+		}}
+		if !slices.Equal(check.Rendered, want) {
+			t.Errorf("rendered = %+v, want %+v", check.Rendered, want)
+		}
+	})
 }
 
 // TestSDKGraphQLCheck_Refusals_NameAPathAnybodyCanFollow verifies that a
