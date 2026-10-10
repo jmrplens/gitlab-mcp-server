@@ -1703,3 +1703,60 @@ func TestIndividualCatalogHandler_FineGrained_NotesAGraphQLNotFound(t *testing.T
 		t.Errorf("classic error = %v, want the handler's own", err)
 	}
 }
+
+// TestIndividualCatalogTools_RequireWhatTheRouteSchemaRequires holds the three
+// surfaces to one answer about which parameters an action needs. The meta and
+// dynamic surfaces serve the catalog route's schema ([toolutil.MetaActionSchema]
+// is what both read), and the individual tool is projected from the same
+// route, so a parameter required on one of them and optional on another is a
+// call one surface refuses and another sends. It is asked of every action the
+// individual surface projects, at every tier on both instance classes, because
+// a tier prunes properties from the route schema and the individual surface
+// must not bring a pruned one back as required.
+func TestIndividualCatalogTools_RequireWhatTheRouteSchemaRequires(t *testing.T) {
+	for _, tier := range []edition.Tier{edition.Free, edition.Premium, edition.Ultimate} {
+		for _, dotCom := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s gitlab.com=%v", tier, dotCom), func(t *testing.T) {
+				var client *gitlabclient.Client
+				if dotCom {
+					client = newGitLabDotComClient(t)
+				}
+				catalog := mustBuildActionCatalog(t, client, ActionCatalogOptions{Tier: tier, IncludeMCP: true})
+				var disagreements []string
+				for _, action := range individualRegistrationOrder(catalog) {
+					if strings.TrimSpace(action.IndividualTool.Name) == "" {
+						continue
+					}
+					tool := mustIndividualToolFromCatalogAction(action, nil, IndividualCatalogRegisterOptions{})
+					individual := requiredNames(tool.InputSchema)
+					route := requiredNames(toolutil.MetaActionSchema(action.Route))
+					if !slices.Equal(individual, route) {
+						disagreements = append(disagreements, fmt.Sprintf("%s (%s): individual %v, route %v", action.ID, action.IndividualTool.Name, individual, route))
+					}
+				}
+				if len(disagreements) > 0 {
+					t.Errorf("%d actions require different parameters on the individual surface than on the route schema:\n%s", len(disagreements), strings.Join(disagreements, "\n"))
+				}
+			})
+		}
+	}
+}
+
+// requiredNames returns a schema's top-level required list sorted, whichever
+// of the two slice types the schema carries it in.
+func requiredNames(schema any) []string {
+	object, _ := schema.(map[string]any)
+	var names []string
+	switch required := object["required"].(type) {
+	case []string:
+		names = append(names, required...)
+	case []any:
+		for _, raw := range required {
+			if name, ok := raw.(string); ok {
+				names = append(names, name)
+			}
+		}
+	}
+	sort.Strings(names)
+	return names
+}

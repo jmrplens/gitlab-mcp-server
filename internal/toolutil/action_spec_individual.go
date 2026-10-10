@@ -92,16 +92,26 @@ func IndividualToolFromActionSpec(spec ActionSpec, opts IndividualToolProjection
 }
 
 // individualInputSchema returns the input schema the individual surface
-// serves for a route: the type's own required list, the destructive
-// confirmation property, normalized descriptions and the additionalProperties
-// lockdown. It is derived from the route's schema rather than applied to it,
-// once per process for a shared route (see [DeriveSchema]). The input type is
-// part of the transform name because the required list comes from it.
+// serves for a route: the route's own schema, required list included, with the
+// destructive confirmation property, normalized descriptions and the
+// additionalProperties lockdown. It is derived from the route's schema rather
+// than applied to it, once per process for a shared route (see
+// [DeriveSchema]).
+//
+// The required list is the route's and nothing else's, because the meta and
+// dynamic surfaces serve the route's schema too: one parameter has one answer
+// to whether a call may leave it out, on every surface (issue 1100). That
+// answer is the `,required` marker of the field's jsonschema tag
+// ([requiredJSONFieldNames]), after whatever an [InputSchemaOverride] or a
+// tier left of it. This projection used to replace it with the list
+// jsonschema-go reflects, which calls every field without omitempty required,
+// so the individual tool demanded parameters GitLab defaults (an issue link's
+// link_type) and, at a tier that prunes a property, one the schema no longer
+// offered.
 func individualInputSchema(route ActionRoute) map[string]any {
-	transform := "individual|destructive=" + strconv.FormatBool(route.Destructive) + "|type=" + TypeIdentity(route.InputType)
+	transform := "individual|destructive=" + strconv.FormatBool(route.Destructive)
 	derived := DeriveSchema(route.InputSchema, transform, func() any {
 		schema := cloneSchemaMap(route.InputSchema)
-		applyIndividualRequiredFields(schema, route.InputType)
 		schema = enrichDestructiveSchema(schema, route.Destructive)
 		normalizeSchemaDescriptions(schema)
 		lockdownSchemaNode(schema)
@@ -119,21 +129,6 @@ func TypeIdentity(rt reflect.Type) string {
 		return ""
 	}
 	return rt.PkgPath() + "." + rt.String()
-}
-
-// applyIndividualRequiredFields replaces the schema's required list with the
-// one reflected from the input type, in place on a schema the caller owns.
-func applyIndividualRequiredFields(schema map[string]any, inputType reflect.Type) {
-	if inputType == nil || schema == nil {
-		return
-	}
-	typeSchema := schemaForType(inputType)
-	required, ok := typeSchema["required"]
-	if !ok {
-		delete(schema, "required")
-		return
-	}
-	schema["required"] = cloneSchemaValue(required)
 }
 
 // NarrowingOnly returns the overrides with every claim removed that would make

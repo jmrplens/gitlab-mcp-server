@@ -203,11 +203,18 @@ func TestIndividualToolFromActionSpec_LockdownsInputSchema(t *testing.T) {
 	}
 }
 
-// TestIndividualToolFromActionSpec_PreservesIndividualRequiredFields verifies IndividualToolFromActionSpec preserves individual required fields.
-func TestIndividualToolFromActionSpec_PreservesIndividualRequiredFields(t *testing.T) {
+// TestIndividualToolFromActionSpec_RequiresWhatTheRouteSchemaRequires verifies
+// the individual tool requires exactly the fields the route schema requires,
+// which is the `,required` marker of each field's jsonschema tag: project_id
+// carries it and is required, environment_scope does not and is optional
+// although it has no omitempty, and the reverse (a field marked required that
+// does carry omitempty) is required too. The meta and dynamic surfaces serve
+// the route's schema, so this is the one answer all three give (issue 1100).
+func TestIndividualToolFromActionSpec_RequiresWhatTheRouteSchemaRequires(t *testing.T) {
 	type input struct {
 		ProjectID        string `json:"project_id" jsonschema:"Project ID,required"`
 		EnvironmentScope string `json:"environment_scope" jsonschema:"Filter by environment scope"`
+		Key              string `json:"key,omitempty" jsonschema:"Variable key,required"`
 	}
 	route := RouteAction((*gitlabclient.Client)(nil), func(context.Context, *gitlabclient.Client, input) (VoidOutput, error) {
 		return VoidOutput{}, nil
@@ -227,16 +234,15 @@ func TestIndividualToolFromActionSpec_PreservesIndividualRequiredFields(t *testi
 	if !schemaOK {
 		t.Fatalf("tool input schema = %T, want map[string]any", tool.InputSchema)
 	}
-	required, requiredOK := schema["required"].([]any)
+	required, requiredOK := schema["required"].([]string)
 	if !requiredOK {
-		t.Fatalf("schema required = %T, want []any", schema["required"])
+		t.Fatalf("schema required = %#v (%T), want the route's []string", schema["required"], schema["required"])
 	}
-	for _, field := range []string{"project_id", "environment_scope"} {
-		t.Run(field, func(t *testing.T) {
-			if !slices.ContainsFunc(required, func(value any) bool { return value == field }) {
-				t.Fatalf("required fields = %#v, want %q", required, field)
-			}
-		})
+	if want := []string{"key", "project_id"}; !slices.Equal(required, want) {
+		t.Errorf("individual required = %v, want %v", required, want)
+	}
+	if routeRequired, _ := spec.Route.InputSchema["required"].([]string); !slices.Equal(required, routeRequired) {
+		t.Errorf("individual required = %v, route required = %v, want one list", required, routeRequired)
 	}
 }
 
@@ -313,21 +319,25 @@ func TestIndividualToolFromSpecs_RejectsMissingOrDuplicateSpec(t *testing.T) {
 	}
 }
 
-// TestIndividualToolFromActionSpec_RemovesStaleRequired verifies required
-// fields are recalculated from the reflected input type.
+// TestIndividualToolFromActionSpec_KeepsTheRouteSchemasRequiredList verifies
+// the individual tool takes the required list from the route schema even where
+// that schema says something the input type's reflection would not: a route
+// whose schema an override or a tier rewrote is served as rewritten, on the
+// individual surface as on the other two. The type here declares name
+// optional, and the route requires it.
 //
-// The stale list is put on a copy rather than on the route's own schema.
+// The list is put on a copy rather than on the route's own schema.
 // [RouteFunc] hands out the reflected schema memoized for the input type,
 // which lives for the process and is read by every other test in this package
 // that reflects the same type; writing into it here would be the very thing
 // the shared-route source guard refuses, made invisible by being in a test.
-func TestIndividualToolFromActionSpec_RemovesStaleRequired(t *testing.T) {
+func TestIndividualToolFromActionSpec_KeepsTheRouteSchemasRequiredList(t *testing.T) {
 	route := RouteFunc(func(_ context.Context, _ optionalIndividualInput) (testOutput, error) {
 		return testOutput{}, nil
 	})
-	stale := CloneSchemaMap(route.InputSchema)
-	stale["required"] = []any{"name"}
-	route.InputSchema = stale
+	rewritten := CloneSchemaMap(route.InputSchema)
+	rewritten["required"] = []any{"name"}
+	route.InputSchema = rewritten
 	spec := NewActionSpec("get", route, ActionSpecOptions{
 		ReadOnly:       true,
 		IndividualTool: IndividualToolSpec{Name: "gitlab_project_get", Description: "Get a project."},
@@ -341,8 +351,8 @@ func TestIndividualToolFromActionSpec_RemovesStaleRequired(t *testing.T) {
 	if !ok {
 		t.Fatalf("tool input schema = %T, want map[string]any", tool.InputSchema)
 	}
-	if _, hasRequired := schema["required"]; hasRequired {
-		t.Fatalf("schema required = %#v, want removed", schema["required"])
+	if required, _ := schema["required"].([]any); len(required) != 1 || required[0] != "name" {
+		t.Fatalf("schema required = %#v, want the route's [name]", schema["required"])
 	}
 }
 
@@ -578,16 +588,6 @@ func TestTypeIdentity_NamesTypesByPackagePath(t *testing.T) {
 	}
 }
 
-// TestApplyIndividualRequiredFields_NilSchema_IsLeftAlone verifies a route
-// with an input type and no schema is left with no schema: the required list
-// has nowhere to go, and writing it into a nil map would panic. The call
-// returning is the evidence.
-func TestApplyIndividualRequiredFields_NilSchema_IsLeftAlone(t *testing.T) {
-	t.Parallel()
-
-	applyIndividualRequiredFields(nil, reflect.TypeFor[testInput]())
-}
-
 // TestIndividualInputSchema_SharedRouteDerivesOnce verifies the individual
 // projection derives one locked-down schema per shared route and serves it
 // to every server, and that a route over a private schema keeps a private
@@ -626,10 +626,11 @@ func TestIndividualInputSchema_SharedRouteDerivesOnce(t *testing.T) {
 }
 
 // sharedSchemaRequiredInput and sharedSchemaOptionalInput differ only in
-// whether the field is required, so two routes reflected from them derive
-// different required lists from one input schema. They exist for
-// [TestIndividualInputSchema_KeepsRoutesOverOneSharedSchemaApart], and are
-// two types rather than one because the derivation is keyed on the type.
+// whether jsonschema-go would call their field required, which it does for a
+// field with no omitempty. They exist for
+// [TestIndividualInputSchema_KeepsRoutesOverOneSharedSchemaApart], to show
+// that the difference no longer reaches the individual surface: neither marks
+// the field `,required`, so both are served the one list the schema holds.
 type sharedSchemaRequiredInput struct {
 	Name string `json:"name"`
 }
@@ -650,8 +651,11 @@ type sharedSchemaOptionalInput struct {
 // of the read-only one it shares an input struct with, confirmation property
 // and all.
 //
-// Both components of the name are pinned: the destructive flag, which decides
-// the confirm property, and the input type, which decides the required list.
+// The destructive flag is the one component of the name, since it decides the
+// confirm property. The input type is not, and the second half of the test
+// says why: the required list is the schema's own (issue 1100), so two routes
+// over one schema derive one schema whatever types they were declared with,
+// and naming the type would only build the same map twice.
 func TestIndividualInputSchema_KeepsRoutesOverOneSharedSchemaApart(t *testing.T) {
 	t.Parallel()
 
@@ -675,13 +679,10 @@ func TestIndividualInputSchema_KeepsRoutesOverOneSharedSchemaApart(t *testing.T)
 
 	required := individualInputSchema(ActionRoute{InputSchema: schema, InputType: reflect.TypeFor[sharedSchemaRequiredInput]()})
 	optional := individualInputSchema(ActionRoute{InputSchema: schema, InputType: reflect.TypeFor[sharedSchemaOptionalInput]()})
-	if sameMap(required, optional) {
-		t.Fatal("two routes differing only in InputType derived one schema, want one each")
+	if !sameMap(required, optional) {
+		t.Fatal("two routes differing only in InputType derived two schemas, want the one their schema decides")
 	}
-	if names, _ := required["required"].([]any); len(names) != 1 || names[0] != "name" {
-		t.Errorf("required list of the required-field type = %v, want [name]", required["required"])
-	}
-	if names, listed := optional["required"]; listed {
-		t.Errorf("required list of the optional-field type = %v, want none", names)
+	if names, listed := required["required"]; listed {
+		t.Errorf("required list = %v, want none: the schema requires nothing, whatever the type's tags", names)
 	}
 }
