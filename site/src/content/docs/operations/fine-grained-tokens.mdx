@@ -363,6 +363,53 @@ So a fine-grained session is given a next step beside three kinds of answer:
 - An empty list from an action whose answer is a GraphQL list: GitLab leaves out the
   items the token is not granted, so empty may mean the token cannot see them.
 
+A list can also answer an item as `null` where it sits rather than leave it out, when
+the item's type declares neither a permission check of its own nor a fine-grained
+permission. Those items are left out of the answer rather than shown as rows with
+nothing in them. The CI/CD catalog listing counts them in its heading and says why in
+its next steps. At GitLab 19.4.1 that listing is itself withheld from a fine-grained
+session ([above](#what-no-fine-grained-token-can-reach)), so the count is for a session
+it is served to anyway, such as one whose token kind the server could not learn
+([above](#when-the-server-cannot-tell-what-kind-of-token-it-holds)).
+
+### A write answered without its object
+
+GitLab checks a write's own permission before the write runs, and the object the write
+answers with only after it ran. So a write the grant allows, whose object the grant does
+not let the token read, is made, and answered without the object: `null` with no error,
+or the error GitLab writes when that null sits below a field that cannot be null. An
+assistant that reads that as "not done" repeats a write GitLab already made.
+
+Where a fine-grained session can reach such a write, the answer is an error that says
+the write was **probably committed**, and to check in GitLab, or with a classic token,
+whether it took effect before repeating it, since repeating a create makes a second one.
+Two kinds of write are answered this way:
+
+- Writes the server serves whose object needs a permission the write's own does not
+  include: the four vulnerability state changes (`vulnerability.dismiss`,
+  `vulnerability.confirm`, `vulnerability.resolve` and `vulnerability.revert`), since
+  Vulnerability: Update does not grant Vulnerability: Read, and the epic note edits
+  (`group.epic_note_update` and `group.epic_discussion_update_note`), since Work Item:
+  Update does not grant Work Item: Read. A session reaches one with a grant that holds
+  the write without the read, when the grant was not evaluated, or when it holds the
+  read on another project or group than the one written to. An edited note answered
+  this way may also be a note GitLab deleted because its new body held only quick
+  actions, and the answer says so, since a fine-grained token is not shown what told the
+  two apart.
+- The writes of the second and fourth rows of the
+  [table above](#what-no-fine-grained-token-can-reach). With the table this server
+  records from GitLab 19.4.1 they are withheld from every session the server knows to be
+  fine-grained, whatever its grant and whatever release the instance runs. The answer is there for a table
+  recorded from a later release that stops withholding one while a grant can still leave
+  its object out. GitLab has merged, for 19.5, a declaration of Custom Emoji: Read on
+  the custom emoji type, after which a token granted Custom Emoji: Create alone still
+  creates the emoji and reads `null`.
+
+A token whose kind the server could not learn
+([above](#when-the-server-cannot-tell-what-kind-of-token-it-holds)) is served as a
+classic one, and gets the answer a classic token gets, which does not say the write was
+probably committed. A classic token is never given this answer.
+
 ## GitLab's own refusals
 
 A call the server lets through can still be refused by GitLab, and the server passes

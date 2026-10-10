@@ -6,10 +6,13 @@ package projects
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -380,4 +383,122 @@ func findProjectSpec(specs []toolutil.ActionSpec, tool string) *toolutil.ActionS
 		}
 	}
 	return nil
+}
+
+// targetBranchRuleRefusal is the sentence GitLab refuses a target branch rule
+// read or write with when the caller may not reach the project or the rule.
+const targetBranchRuleRefusal = "The resource that you are attempting to access does not exist or you don't have permission to perform this action"
+
+// respondWith answers every request with body as it is, the whole GraphQL
+// answer rather than its data alone, so a test can carry top-level errors.
+func respondWith(status int, body string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, status, body)
+	}
+}
+
+// TestCreateTargetBranchRule_RuleNulled_FineGrainedSessionIsToldTheWriteProbablyCommitted
+// verifies the answer to a creation GitLab ran and answered without the rule,
+// which is what it does for a fine-grained token at 19.4.1:
+// ProjectTargetBranchRule declares no fine-grained permission, and GitLab
+// checks the payload's object only after the rule exists. client-go reads the
+// null as its not-found sentinel, which used to reach a model as a creation
+// that did not happen. A fine-grained session is now told it probably
+// committed; a classic one keeps the answer it had and is never told so
+// (issue 1103).
+func TestCreateTargetBranchRule_RuleNulled_FineGrainedSessionIsToldTheWriteProbablyCommitted(t *testing.T) {
+	handler := testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		"projectTargetBranchRuleCreate": respondWith(http.StatusOK, `{"data":{"projectTargetBranchRuleCreate":{"targetBranchRule":null,"errors":[]}}}`),
+	})
+	input := CreateTargetBranchRuleInput{ProjectID: "42", Name: "release/*", TargetBranch: "production"}
+
+	fineClient := testutil.NewTestClient(t, handler)
+	fineClient.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, ""))
+	_, fine := CreateTargetBranchRule(context.Background(), fineClient, input)
+	if !errors.Is(fine, finegrained.ErrUnconfirmedWrite) {
+		t.Fatalf("fine-grained error = %v, want an unconfirmed write", fine)
+	}
+	if want := "projectCreateTargetBranchRule: GitLab answered without the target branch rule this write returns."; !strings.HasPrefix(fine.Error(), want) {
+		t.Errorf("fine-grained error = %q, want it to open with %q", fine.Error(), want)
+	}
+
+	_, classic := CreateTargetBranchRule(context.Background(), testutil.NewTestClient(t, handler), input)
+	if classic == nil || errors.Is(classic, finegrained.ErrUnconfirmedWrite) || strings.Contains(classic.Error(), "probably committed") {
+		t.Errorf("classic error = %v, want the handler's own answer", classic)
+	}
+}
+
+// TestTargetBranchRules_Refused_ReportGitLabsRefusal verifies that a read or
+// write GitLab refused reaches the caller as GitLab's refusal. client-go's
+// three target branch rule methods decode the top-level errors GitLab answers
+// a refusal with and never read them, so the payload's null beside them read
+// as a missing project, a missing rule, and for the delete as a success. The
+// handlers read them from the captured answer instead, and a fine-grained
+// session's refused creation is never mistaken for one GitLab ran.
+func TestTargetBranchRules_Refused_ReportGitLabsRefusal(t *testing.T) {
+	classic := func(t *testing.T, handler http.Handler) *gitlabclient.Client {
+		t.Helper()
+		return testutil.NewTestClient(t, handler)
+	}
+	fine := func(t *testing.T, handler http.Handler) *gitlabclient.Client {
+		t.Helper()
+		client := testutil.NewTestClient(t, handler)
+		client.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, ""))
+		return client
+	}
+	refused := func(field string) string {
+		return `{"data":{"` + field + `":null},"errors":[{"message":"` + targetBranchRuleRefusal + `"}]}`
+	}
+	cases := []struct {
+		name string
+		key  string
+		body string
+		call func(*gitlabclient.Client) error
+	}{
+		{name: "list", key: "targetBranchRules", body: refused("project"), call: func(c *gitlabclient.Client) error {
+			_, err := ListTargetBranchRules(context.Background(), c, ListTargetBranchRulesInput{ProjectID: "g/p"})
+			return err
+		}},
+		{name: "create", key: "projectTargetBranchRuleCreate", body: refused("projectTargetBranchRuleCreate"), call: func(c *gitlabclient.Client) error {
+			_, err := CreateTargetBranchRule(context.Background(), c, CreateTargetBranchRuleInput{ProjectID: "42", Name: "release/*", TargetBranch: "production"})
+			return err
+		}},
+		{name: "delete", key: "projectTargetBranchRuleDestroy", body: refused("projectTargetBranchRuleDestroy"), call: func(c *gitlabclient.Client) error {
+			return DeleteTargetBranchRule(context.Background(), c, DeleteTargetBranchRuleInput{RuleID: 7})
+		}},
+	}
+	for _, tc := range cases {
+		for _, session := range []struct {
+			name   string
+			client func(*testing.T, http.Handler) *gitlabclient.Client
+		}{{name: "classic", client: classic}, {name: "fine-grained", client: fine}} {
+			t.Run(tc.name+" "+session.name, func(t *testing.T) {
+				handler := testutil.GraphQLHandler(map[string]http.HandlerFunc{tc.key: respondWith(http.StatusOK, tc.body)})
+				err := tc.call(session.client(t, handler))
+				if err == nil || !strings.Contains(err.Error(), targetBranchRuleRefusal) {
+					t.Fatalf("error = %v, want GitLab's refusal %q", err, targetBranchRuleRefusal)
+				}
+				if errors.Is(err, finegrained.ErrUnconfirmedWrite) {
+					t.Errorf("error = %v, want no unconfirmed write", err)
+				}
+			})
+		}
+	}
+}
+
+// TestCreateTargetBranchRule_EndpointMissing_IsNoUnconfirmedWrite verifies
+// that an answer that is not GraphQL's at all, a 404 of the endpoint with a
+// body that is no JSON, carries no refusal to read and ran nothing: the
+// handler's own error stands, and a fine-grained session is not told the
+// write probably committed.
+func TestCreateTargetBranchRule_EndpointMissing_IsNoUnconfirmedWrite(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte("no GraphQL here"))
+	}))
+	client.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, ""))
+	_, err := CreateTargetBranchRule(context.Background(), client, CreateTargetBranchRuleInput{ProjectID: "42", Name: "release/*", TargetBranch: "production"})
+	if err == nil || errors.Is(err, finegrained.ErrUnconfirmedWrite) {
+		t.Errorf("error = %v, want the handler's own error and no unconfirmed write", err)
+	}
 }

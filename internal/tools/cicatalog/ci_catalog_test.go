@@ -5,6 +5,7 @@ package cicatalog
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"reflect"
 	"slices"
@@ -264,6 +265,56 @@ func TestList_EmptyResults(t *testing.T) {
 	}
 }
 
+// TestList_NullNodes_AreLeftOutAndCounted verifies what a page of resources
+// GitLab answered partly as null becomes. GitLab nulls an item the credential
+// may not read, with no error, and CiCatalogResource declares no fine-grained
+// permission at 19.4.1, so a fine-grained token reads every resource of a
+// page as null. Those nulls used to decode into rows of zero values, a
+// resource with no name or path published as if it existed; they are left
+// out now and counted, so the reader is told the page holds fewer items than
+// GitLab had (issue 1103).
+func TestList_NullNodes_AreLeftOutAndCounted(t *testing.T) {
+	cases := []struct {
+		name       string
+		nodes      string
+		wantNames  []string
+		wantHidden int
+	}{
+		{name: "some nulled", nodes: `null, ` + sampleResourceNode + `, null`, wantNames: []string{"go-pipeline"}, wantHidden: 2},
+		{name: "all nulled", nodes: `null`, wantHidden: 1},
+		{name: "none nulled", nodes: sampleResourceNode, wantNames: []string{"go-pipeline"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := graphqlMux(map[string]http.HandlerFunc{
+				"ciCatalogResources": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{
+						"ciCatalogResources": {
+							"nodes": [`+tc.nodes+`],
+							"pageInfo": {"hasNextPage": false, "hasPreviousPage": false, "endCursor": null, "startCursor": null}
+						}
+					}`)
+				},
+			})
+
+			out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{})
+			if err != nil {
+				t.Fatalf("List() error = %v", err)
+			}
+			var names []string
+			for _, r := range out.Resources {
+				names = append(names, r.Name)
+			}
+			if !slices.Equal(names, tc.wantNames) {
+				t.Errorf("resources = %q, want %q", names, tc.wantNames)
+			}
+			if out.HiddenItems != tc.wantHidden {
+				t.Errorf("HiddenItems = %d, want %d", out.HiddenItems, tc.wantHidden)
+			}
+		})
+	}
+}
+
 // TestList_ServerError verifies that List_ServerError returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
@@ -436,6 +487,29 @@ func documentFields(t *testing.T, document string) []selectedField {
 	}
 	walk("", parsed.Operations[0].SelectionSet)
 	return fields
+}
+
+// TestQueries_SelectTheSameResourceFields holds the two documents to one
+// selection of a catalog resource itself: every field directly under the
+// resource other than its version connections. Each document spells the list
+// out rather than joining a shared fragment, so this is what keeps a field
+// added to one from being missing from the other.
+func TestQueries_SelectTheSameResourceFields(t *testing.T) {
+	resourceFields := func(document, resource string) []string {
+		var names []string
+		for _, field := range documentFields(t, document) {
+			name, ok := strings.CutPrefix(field.path, resource+".")
+			if ok && !strings.Contains(name, ".") && name != "versions" && name != "latestVersion" {
+				names = append(names, name)
+			}
+		}
+		return names
+	}
+	listed := resourceFields(queryListResources, ".ciCatalogResources.nodes")
+	got := resourceFields(queryGetResource, ".ciCatalogResource")
+	if len(listed) == 0 || !slices.Equal(listed, got) {
+		t.Errorf("the listing selects %v of a resource and the get %v, want the same non-empty list", listed, got)
+	}
 }
 
 // TestQueryListResources_ReadsOnlyTheLatestVersionName holds the listing to
@@ -687,6 +761,103 @@ func TestGet_LatestVersionReadme_EachShapeOfTheAlias(t *testing.T) {
 				t.Errorf("README = %q, rendered %q; want %q, %q", out.Resource.Readme, out.Resource.ReadmeHTML, tt.readme, tt.render)
 			}
 		})
+	}
+}
+
+// TestGet_NullVersionsAndComponents_AreLeftOut verifies what a resource whose
+// versions or components GitLab answered partly as null becomes. GitLab nulls
+// an item the credential may not read, with no error, and neither
+// CiCatalogResourceVersion nor CiCatalogResourceComponent declares a
+// fine-grained permission at 19.4.1, so a fine-grained token reads them as
+// null wherever the resource itself is readable. Those nulls used to decode
+// into versions and components of zero values; they are left out now, and a
+// newest version GitLab nulled is not replaced by the one after it, which is
+// not the newest: the resource names no latest version and no components
+// rather than an older version's (issue 1103).
+func TestGet_NullVersionsAndComponents_AreLeftOut(t *testing.T) {
+	const version = `{"id": "gid://gitlab/Ci::Catalog::Resources::Version/2", "name": "1.0.0",
+		"components": {"nodes": [null, {"id": "gid://gitlab/Ci::Catalog::Resources::Component/3", "name": "build",
+			"includePath": "g/r/build@1.0.0", "inputs": []}]}}`
+	cases := []struct {
+		name           string
+		versions       string
+		readme         string
+		wantVersions   []string
+		wantLatest     string
+		wantComponents []string
+		wantReadme     string
+	}{
+		{name: "the newest nulled", versions: `null, ` + version, readme: `{"nodes": [null]}`, wantVersions: []string{"1.0.0"}},
+		{
+			name: "an older one nulled", versions: version + `, null`, readme: `{"nodes": [{"readme": "x", "readmeHtml": null}]}`,
+			wantVersions: []string{"1.0.0"}, wantLatest: "1.0.0", wantComponents: []string{"build"}, wantReadme: "x",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := graphqlMux(map[string]http.HandlerFunc{
+				"ciCatalogResource": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"ciCatalogResource": {
+						"id": "gid://gitlab/Ci::CatalogResource/9", "name": "r", "fullPath": "g/r", "webPath": "/r",
+						"starCount": 0, "last30DayUsageCount": 0, "archived": false,
+						"versions": {"nodes": [`+tc.versions+`]}, "latestVersion": `+tc.readme+`}}`)
+				},
+			})
+			out, err := Get(context.Background(), testutil.NewTestClient(t, handler), GetInput{FullPath: "g/r"})
+			if err != nil {
+				t.Fatalf("Get() error = %v", err)
+			}
+			r := out.Resource
+			versions, components := versionAndComponentNames(t, r)
+			if !slices.Equal(versions, tc.wantVersions) {
+				t.Errorf("versions = %q, want %q", versions, tc.wantVersions)
+			}
+			if r.LatestVersionName != tc.wantLatest || !slices.Equal(components, tc.wantComponents) || r.Readme != tc.wantReadme {
+				t.Errorf("latest version %q, components %q, README %q; want %q, %q, %q",
+					r.LatestVersionName, components, r.Readme, tc.wantLatest, tc.wantComponents, tc.wantReadme)
+			}
+		})
+	}
+}
+
+// versionAndComponentNames lists the names of a resource's versions and of
+// the components it shows at detail level, and fails the test for a component
+// of zero values under any version, which is what a null node decoded by value
+// used to become.
+func versionAndComponentNames(t *testing.T, r ResourceDetail) (versions, components []string) {
+	t.Helper()
+	for _, v := range r.Versions {
+		versions = append(versions, v.Name)
+		for _, c := range v.Components {
+			if c.Name == "" {
+				t.Errorf("version %s publishes a component of zero values", v.Name)
+			}
+		}
+	}
+	for _, c := range r.Components {
+		components = append(components, c.Name)
+	}
+	return versions, components
+}
+
+// TestList_NullLatestVersion_NamesNone verifies that a listed resource whose
+// one version GitLab answered as null names no latest version, rather than
+// the empty name of a version of zero values (issue 1103).
+func TestList_NullLatestVersion_NamesNone(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"ciCatalogResources": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"ciCatalogResources": {
+				"nodes": [{"id": "gid://gitlab/Ci::CatalogResource/9", "name": "r", "fullPath": "g/r", "webPath": "/r",
+					"starCount": 0, "last30DayUsageCount": 0, "archived": false, "versions": {"nodes": [null]}}],
+				"pageInfo": {"hasNextPage": false, "hasPreviousPage": false, "endCursor": null, "startCursor": null}}}`)
+		},
+	})
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(out.Resources) != 1 || out.Resources[0].LatestVersionName != "" || out.HiddenItems != 0 {
+		t.Errorf("List() = %+v, want the one resource naming no latest version and nothing hidden", out)
 	}
 }
 
@@ -1062,6 +1233,63 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	const want = "No catalog resources found.\n"
 	if md := FormatListMarkdown(ListOutput{}); md != want {
 		t.Errorf("FormatListMarkdown(empty)\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatListMarkdown_HiddenItems_SaysThePageHeldMore verifies a page with
+// items GitLab answered as null, on a page that still shows some and on one
+// that shows none: the heading counts what was left out beside what is
+// shown, the next steps say why GitLab answers that way, and the page's
+// cursor is written either way, so an empty or short page is read neither as
+// all there is nor as the end of the catalog. A page that shows nothing
+// offers no step about a resource it does not show. A page with none hidden
+// carries none of this, as the two tests above hold.
+func TestFormatListMarkdown_HiddenItems_SaysThePageHeldMore(t *testing.T) {
+	const note = "- GitLab answered 2 of the items on this page as null, with no error, which is how it answers an item the credential may not read, " +
+		"a catalog resource whose GraphQL type a fine-grained personal access token is not granted among them. " +
+		"They are left out, so this page shows fewer items than GitLab returned.\n"
+	const cursor = "Showing %d items | next page cursor: `c2`"
+	page := toolutil.GraphQLPaginationOutput{HasNextPage: true, EndCursor: "c2"}
+	cases := []struct {
+		name       string
+		out        ListOutput
+		head       string
+		shown      int
+		getOffered bool
+	}{
+		{
+			name:       "some shown",
+			out:        ListOutput{Resources: []ResourceItem{{Name: "go-pipeline", FullPath: "g/go-pipeline"}}, HiddenItems: 2, Pagination: page},
+			head:       "## CI/CD Catalog Resources (1 shown, 2 hidden)\n\n",
+			shown:      1,
+			getOffered: true,
+		},
+		{
+			name: "none shown",
+			out:  ListOutput{HiddenItems: 2, Pagination: page},
+			head: "## CI/CD Catalog Resources (0 shown, 2 hidden)\n\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			md := FormatListMarkdown(tc.out)
+			if !strings.HasPrefix(md, tc.head) {
+				t.Errorf("FormatListMarkdown() =\n%s\nwant it to open with %q", md, tc.head)
+			}
+			if !strings.Contains(md, note) {
+				t.Errorf("FormatListMarkdown() =\n%s\nwant the note\n%s", md, note)
+			}
+			if want := fmt.Sprintf(cursor, tc.shown); !strings.Contains(md, want) {
+				t.Errorf("FormatListMarkdown() =\n%s\nwant the page's cursor %q", md, want)
+			}
+			hints := toolutil.ExtractHints(md)
+			if !slices.Contains(hints, strings.TrimSuffix(strings.TrimPrefix(note, "- "), "\n")) {
+				t.Errorf("next steps = %q, want the note among them", hints)
+			}
+			if offered := strings.Contains(md, actionCatalogGet); offered != tc.getOffered {
+				t.Errorf("next steps = %q, offer %s = %t, want %t", hints, actionCatalogGet, offered, tc.getOffered)
+			}
+		})
 	}
 }
 

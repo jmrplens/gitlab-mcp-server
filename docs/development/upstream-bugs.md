@@ -75,6 +75,7 @@ for the fork, branch, fix, test and MR workflow.
   - [UpdateGroupIssueBoardOptions models neither list switch the group board update takes](#updategroupissueboardoptions-models-neither-list-switch-the-group-board-update-takes)
   - [The board structs miss keys GitLab sends on a board and its lists](#the-board-structs-miss-keys-gitlab-sends-on-a-board-and-its-lists)
   - [No client-go helper returns the RFC 6750 fields of a token refusal](#no-client-go-helper-returns-the-rfc-6750-fields-of-a-token-refusal)
+  - [The target branch rule methods discard GraphQL errors](#the-target-branch-rule-methods-discard-graphql-errors)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -299,7 +300,7 @@ readable without opening the tracker:
 | 85 | gitlab-org/gitlab | [The fine-grained refusal can name a deprecated permission's label](#the-fine-grained-refusal-can-name-a-deprecated-permissions-label) | No, not yet reproduced on a running instance | No | No | No | None taken |
 | 86 | gitlab-org/gitlab | [A token's own description omits its granular scopes](#a-tokens-own-description-omits-its-granular-scopes) | Yes, by GitLab, [gitlab-org/gitlab#629849](https://gitlab.com/gitlab-org/gitlab/-/issues/629849) | Yes, [gitlab-org/gitlab!259764](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259764), merged; its two follow-ups for the other token routes, [gitlab-org/gitlab!260276](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260276) and [gitlab-org/gitlab!260277](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260277), merged, with their history lines moved to 19.5 by [gitlab-org/gitlab!260930](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260930), merged; a third, for the service account rotate routes, [gitlab-org/gitlab!260929](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260929), open, in milestone 19.5 | **Yes, unreleased**: merged on 2026-10-07, in milestone 19.5, and deployed to GitLab.com the same day; the two follow-ups merged on 2026-10-08, in 19.5, and are deployed too | No | Yes, a second request by the token's id, until a release carries the merge |
 | 87 | gitlab-org/gitlab | [GraphQL types and mutations this server reaches declare no fine-grained permission](#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission) | GitLab tracks them on its own pending list, and plans part of them in [gitlab-org/gitlab#631631](https://gitlab.com/gitlab-org/gitlab/-/issues/631631); nothing raised by us | Partly, theirs: another contributor's for `CustomEmoji`, [gitlab-org/gitlab!260586](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260586), merged; GitLab's own changes for `WorkItemType` are open; none by us | Partly, by [gitlab-org/gitlab!260586](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260586), not ours, unreleased, in milestone 19.5: the `CustomEmoji` entry, one of five on the table's second line | Yes, for a fine-grained token: 37 actions withheld, 8 served with parts empty | Withheld with the reason, and a note on the parts; [issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054) |
-| 88 | gitlab-org/gitlab | [A declared mutation whose payload type declares nothing commits the write and answers null](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null) | No | No | No | Yes, for a fine-grained token, on 20 writes | Withheld with the reason |
+| 88 | gitlab-org/gitlab | [A declared mutation whose payload type declares nothing commits the write and answers null](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null) | No; a merge request proposing a visible error is written and goes out after a second review of its text | No | No | Yes, for a fine-grained token, on 20 writes | Withheld with the reason; the handlers answer such a write as probably committed for a table that stops withholding one, and six served writes whose object a grant can leave out answer so today |
 | 89 | gitlab-org/gitlab | [WorkItem declares the project boundary only, so a group's work item is null to a fine-grained token](#workitem-declares-the-project-boundary-only-so-a-groups-work-item-is-null-to-a-fine-grained-token) | Yes, by another user, [gitlab-org/gitlab#630483](https://gitlab.com/gitlab-org/gitlab/-/issues/630483) | Yes, [gitlab-org/gitlab!259765](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259765), open, closing that issue | No | Yes, for a fine-grained token, on the epic actions | Withheld with the reason |
 | 90 | gitlab-org/gitlab | [The pending-permission check exempts every type named `*Edge` or `*Payload`](#the-pending-permission-check-exempts-every-type-named-edge-or-payload) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260959](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260959), open | No | No | Not needed; the live record computes the undeclared set itself |
 | 91 | gitlab-org/gitlab | [`available_for_permission` ignores `available_for`](#available_for_permission-ignores-available_for) | No | No | No | No | Not needed; the live record names the first permission a token can be granted |
@@ -314,6 +315,7 @@ readable without opening the tracker:
 | 100 | gitlab-org/gitlab | [The roles and permissions page gives Guest, Planner and Reporter the pipeline security report](#the-roles-and-permissions-page-gives-guest-planner-and-reporter-the-pipeline-security-report) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260471](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260471), merged | **Yes, unreleased**: in milestone 19.5, and deployed to GitLab.com | No | Not needed; no hint of this server names who can view a pipeline's findings |
 | 101 | client-go | [The board structs miss keys GitLab sends on a board and its lists](#the-board-structs-miss-keys-gitlab-sends-on-a-board-and-its-lists) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), open, commit 6, beside rows 96 and 98 | No | No; the keys are read around the SDK | Partial; six requests of our own and the captured response, and `limit_metric` is missing from six project board answers |
 | 102 | gitlab-org/orbit/knowledge-graph | [The pinned version check stops with "no merge base" on forks and long branches](#the-pinned-version-check-stops-with-no-merge-base-on-forks-and-long-branches) | Yes, by the merge request | Yes, [gitlab-org/orbit/knowledge-graph!2746](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2746), open | No | No | Not needed |
+| 103 | client-go | [The target branch rule methods discard GraphQL errors](#the-target-branch-rule-methods-discard-graphql-errors) | No | No | No | No | Yes, the three handlers read the refusal from the captured answer |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -5252,8 +5254,10 @@ consumer sentence commits it, so the issue goes out only after that decision.
 GraphQL side and outside the helper: a GraphQL refusal of a mutation arrives
 with HTTP 200 and an `errors` array, and `GraphQL.Do` builds a
 `GraphQLResponseError` only on a non-2xx status (`graphql.go:173-186`), so if
-GitLab adopts that issue's upstream change the matching accessor is a
-proposal of its own. glab would be the other candidate consumer; it has no
+GitLab adopts the visible error that issue's merge request proposes (a
+`code` of `INSUFFICIENT_GRANULAR_SCOPE` among the error's `extensions`,
+[row 88](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null)),
+the matching accessor is a proposal of its own. glab would be the other candidate consumer; it has no
 hint for either code, and nobody has asked there.
 
 **Limits the issue states**:
@@ -5425,6 +5429,47 @@ Two questions before I open a merge request: would you prefer functions like the
 ```
 
 </details>
+
+### The target branch rule methods discard GraphQL errors
+
+- **Reported**: no.
+- **In review**: no. It is the class
+  [row 19](#the-security-attribute-and-category-mutations-discard-graphql-errors)
+  describes for the security attribute and category mutations, and its fix is
+  the same three lines per method, so it could ride in
+  [gitlab-org/api/client-go!3066](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3066)
+  or follow it once that merges.
+- **Merged**: no. v3.17.0 carries the same code.
+- **Blocking**: no.
+- **Workaround**: yes. `internal/tools/projects/target_branch_rules.go` calls
+  each method under `gitlabclient.WithResponseCapture` (ADR-0021) and reads
+  the top-level `errors` from the captured answer (`refusalOr`), so a refusal
+  reaches the caller as GitLab's message. It retires when the methods check
+  that array.
+
+**Where**: `project_target_branch_rules.go`, in all three of
+`ListProjectTargetBranchRules`, `CreateTargetBranchRule` and
+`DeleteTargetBranchRule`, at v3.15.0 and v3.17.0.
+
+**What**: each one unmarshals into a struct that embeds `GenericGraphQLErrors`
+and never reads it, and `GraphQL.Do` returns an error only for a non-2xx
+status, while GitLab answers a refused query or mutation with HTTP 200, the
+field `null` and a top-level `errors` array. So a refused listing returns
+`ErrNotFound`, the sentinel its `project` being `null` becomes; a refused
+creation returns `ErrNotFound` too, because its payload struct is a value and
+its `targetBranchRule` is then `nil`; and a refused delete returns no error at
+all, since its payload struct is a value whose `errors` is empty. The
+creation's case matters beyond the message: GitLab also answers `null` with
+no error for a rule it created and then would not show a fine-grained token
+([row 88](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null)),
+and the two arrive as the same `ErrNotFound`, so a caller cannot tell a
+creation GitLab refused from one it made.
+
+**How we found it**: issue 1103, telling a write GitLab ran and answered
+without its object from one it refused, for each of the 20 writes of row 88.
+
+**Effort**: small, as for row 19: `if len(result.Errors) != 0 { return ...,
+&GraphQLResponseError{...} }` in each method, and a test each.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
@@ -9538,7 +9583,8 @@ an alternative. Out of scope, and said so: permission names a token cannot be
 granted, the deliberate 404, and GraphQL, where a mutation's errors could
 follow with `extensions` and a query field redacts to null, which
 [issue 1103](https://github.com/jmrplens/gitlab-mcp-server/issues/1103)
-investigates from this side.
+measured from this side and answers with a merge request of its own
+([row 88](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null)).
 
 **What the group has said that decides this shape**: besides the issue above,
 @alexbuijs, asking a user how GitLab could help migrate legacy tokens to
@@ -10106,8 +10152,13 @@ record's, so an instance older than the release that carries a declaration is
 served an action it answers with a silent `null`. Re-pinning the record at
 each minor is
 [issue 1023](https://github.com/jmrplens/gitlab-mcp-server/issues/1023), and
-how GitLab could fail visibly instead is
-[issue 1103](https://github.com/jmrplens/gitlab-mcp-server/issues/1103).
+how GitLab could fail visibly instead is the merge request
+[issue 1103](https://github.com/jmrplens/gitlab-mcp-server/issues/1103)
+prepared, described under
+[row 88](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null).
+Until then, when such an instance answers one of the writes of row 88 or the
+epic creation of row 89 without its object, the handler reports it to a
+fine-grained session as probably committed rather than as not done.
 
 **The two other findings issue 1055 carried.** The self route omitting a
 token's granular scopes is
@@ -10128,7 +10179,10 @@ leaves nothing for us to do, so it has no row of its own.
 
 ### A declared mutation whose payload type declares nothing commits the write and answers null
 
-- **Reported**: no.
+- **Reported**: no. The merge request that proposes a visible error for a
+  fine-grained denial, this one among them, is written (issue 1103, below
+  under **Proposal**), and the maintainer decided on 2026-10-10 to open it
+  after a second review of its text.
 - **In review**: no, by us. For one of the payload types below GitLab's own
   change is open:
   [gitlab-org/gitlab!251840](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/251840)
@@ -10157,7 +10211,27 @@ leaves nothing for us to do, so it has no row of its own.
   with the reason (register row `AUT-007`), and the reason says that GitLab
   commits such a write and answers null. Serving them would be worse than
   withholding them: a client that reads a null payload as "not done" and
-  retries repeats a write GitLab already made.
+  retries repeats a write GitLab already made. With the table recorded from
+  19.4.1 no session that carries an authority reaches one of the 20, in any
+  phase and on any release. Since issue 1103 their handlers answer the case
+  all the same, for a table recorded from a later release that stops
+  withholding one while a grant can still leave its object out (with the
+  `CustomEmoji` declaration below, a token granted Custom Emoji: Create alone,
+  or such a table on an instance older than the declaration): an error saying
+  the write was probably committed and to check before repeating it
+  (`toolutil.UnconfirmedWrite`, worded by
+  `finegrained.Authority.UnconfirmedWrite`). Nineteen handlers changed;
+  `custom_emoji.delete` selects the errors alone and already answered a
+  deletion GitLab ran as the success it is. The class is wider than the
+  declarations, since a type GitLab declares and a grant does not hold answers
+  the same way, and six writes the table serves reach it today: the four
+  vulnerability state changes, whose Vulnerability: Update does not grant
+  `read_vulnerability`, and the two epic note edits, whose Work Item: Update
+  does not grant `read_note`. Their handlers answer the same way, and
+  `TestTable_WritesAnsweredWithoutTheirObject_AreEachAnswered` holds the list
+  of such writes to the table. A classic token keeps the answer it had, and
+  so does a fine-grained token whose kind the server could not learn, which
+  carries no authority.
 
 **Where**: `app/graphql/mutations/base_mutation.rb` and
 `lib/gitlab/graphql/authz/granular_scope_authorization.rb` at `v19.4.1-ee`. A
@@ -10189,13 +10263,54 @@ item of row 89, which reaches it by another path.
 **How we found it**: the fine-grained derivation of issue 952, which judges a
 mutation's payload as part of its answer.
 
+**Whether GitLab means it** (issue 1103, read from GitLab's `master` at
+60d9f74b2 on 2026-10-09, its specs and its tracker, and the same code at
+`v19.4.1-ee`): for a read, yes. The shared example every GraphQL type is
+tested with says "queries return nil values when unauthorized, mutations
+raise an error"
+(`spec/support/shared_examples/authz/granular_token_permissions_shared_examples.rb:41`),
+[gitlab-org/gitlab!238311](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/238311),
+which moved the fine-grained check onto the type, describes the `null` as the
+expected answer, and
+[gitlab-org/gitlab#544044](https://gitlab.com/gitlab-org/gitlab/-/issues/544044)
+closed a visible error for unauthorized objects as won't do in 2025, because
+an error on `project(fullPath:)` would tell a caller that a private group
+exists. For a mutation's payload nothing says so, and two things point the
+other way: `Mutations::BaseMutation` raises rather than answer `null` for its
+own denial ("in our mutations we raise, rather than returning a null value",
+`app/graphql/mutations/base_mutation.rb:29`, and "We prefer to at least say
+that something went wrong", `:75-81`), and none of GitLab's fine-grained specs
+of these mutations looks at the payload's object: the security attribute and
+work item create specs select only `errors`, and the achievement create spec
+selects the whole payload and asserts only that the payload is present, which
+it is while `achievement` is `null`. So the committed write with a `null`
+object is untested rather than designed.
+
+Two things moved on `master` since 19.4.1.
+[gitlab-org/gitlab!260586](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260586)
+declares `CustomEmoji` with Custom Emoji: Read at the group boundary, so
+`custom_emoji.create` leaves the withheld set once the table is recorded from
+19.5, and a token granted Custom Emoji: Create alone still commits the emoji
+and reads `null`, which is the case the handlers' answer is for. And
+`GranularScopeAuthorization#authorized?` now also judges a legacy token that
+`subject_to_granular_enforcement?` (a classic token under a namespace that
+enforces fine-grained tokens), so such a token reads a declared type it holds
+no fine-grained permission for as `null` too, where REST answers it `403`.
+
 **Proposal**: the declarations of row 87 for the payload types close it for
-these; the class closes when a payload object no fine-grained token may read
-is refused with an `errors[]` entry rather than nulled, or when a mutation is
-refused before it runs if its payload type declares nothing. Establishing
-whether GitLab means a GraphQL read to fail silently for such a token, and
-proposing a visible error upstream, is
-[issue 1103](https://github.com/jmrplens/gitlab-mcp-server/issues/1103), open.
+these; the class closes when a fine-grained denial is answered with an
+`errors[]` entry rather than nulled. The merge request issue 1103 prepared
+proposes that for every object the user's ordinary authorization admits:
+`Types::BaseObject.authorized?` runs the ability check first, an object the
+user cannot read stays `null` (which keeps the property the won't-do issue
+above was about, and is the rule `Authz::Tokens::AuthorizeGranularScopesService#hidden_boundary`
+already applies on REST), and a fine-grained denial of an object the user can
+read raises a `GraphQL::ExecutionError` from `GitlabSchema.unauthorized_object`
+carrying the `code` `INSUFFICIENT_GRANULAR_SCOPE` among its `extensions` and,
+for a declared type, the missing permissions, behind a feature flag. A payload object denied after
+the write then reads as a write that ran and returned nothing this token may
+see. Lists keep their redaction in that change. Its text is kept with the
+issue until it is opened.
 
 ### WorkItem declares the project boundary only, so a group's work item is null to a fine-grained token
 
@@ -10247,7 +10362,11 @@ proposing a visible error upstream, is
 - **Workaround**: yes. Every epic position the epic actions reach is declared
   in `cmd/gen_action_grants/grant_declarations.go` (category
   `group-work-item`) as one no fine-grained token passes, and the actions are
-  withheld with the reason (register row `AUT-007`).
+  withheld with the reason (register row `AUT-007`). Since issue 1103 the
+  epic creation's handler also answers a creation GitLab ran and answered
+  without the epic as probably committed, as the writes of
+  [row 88](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null)
+  do, for a table that stops withholding it.
 
 **Where**: `app/graphql/types/work_item_type.rb` at `v19.4.1-ee` declares
 `authorize_granular_token permissions: :read_work_item, boundary: :project,

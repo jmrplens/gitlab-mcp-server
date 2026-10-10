@@ -4,6 +4,7 @@ package epics
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -436,6 +438,113 @@ func TestCreate_APIError(t *testing.T) {
 	_, err := Create(context.Background(), client, CreateInput{FullPath: testFullPath, Title: "Epic"})
 	if err == nil {
 		t.Fatal(errExpectedNil)
+	}
+}
+
+// TestCreate_EpicNulled_FineGrainedSessionIsToldTheWriteProbablyCommitted
+// verifies the answer to a creation GitLab ran and answered without the epic.
+// GitLab declares WorkItem at the project boundary only, so an epic, a group's
+// work item, resolves no boundary for a fine-grained token and is answered
+// null after it exists, and a grant that does reach it can still null it
+// through its type, a non-null field, with the error that writes. client-go
+// reports the one as an empty response and the other as a failed mutation,
+// and both used to reach a model as a creation that did not happen. A
+// fine-grained session is now told it probably committed; a classic one keeps
+// its answer, and is never told so (issue 1103).
+func TestCreate_EpicNulled_FineGrainedSessionIsToldTheWriteProbablyCommitted(t *testing.T) {
+	tests := []struct {
+		name    string
+		body    string
+		classic string
+	}{
+		{
+			name:    "the epic nulled",
+			body:    `{"data":{"workItemCreate":{"workItem":null,"errors":[]}}}`,
+			classic: "unexpected empty response",
+		},
+		{
+			name:    "the type nulled below a non-null field",
+			body:    `{"data":{"workItemCreate":{"workItem":null,"errors":[]}},"errors":[{"message":"Cannot return null for non-nullable field WorkItem.workItemType"}]}`,
+			classic: "Cannot return null for non-nullable field WorkItem.workItemType",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			})
+			input := CreateInput{FullPath: testFullPath, Title: "Q1 Planning"}
+
+			fineClient := testutil.NewTestClient(t, handler)
+			fineClient.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, ""))
+			_, fine := Create(context.Background(), fineClient, input)
+			if !errors.Is(fine, finegrained.ErrUnconfirmedWrite) {
+				t.Fatalf("fine-grained error = %v, want an unconfirmed write", fine)
+			}
+			if want := "epicCreate: GitLab answered without the epic this write returns."; !strings.HasPrefix(fine.Error(), want) {
+				t.Errorf("fine-grained error = %q, want it to open with %q", fine.Error(), want)
+			}
+
+			_, classic := Create(context.Background(), testutil.NewTestClient(t, handler), input)
+			if errors.Is(classic, finegrained.ErrUnconfirmedWrite) || classic == nil || !strings.Contains(classic.Error(), tt.classic) {
+				t.Errorf("classic error = %v, want the answer it always had, containing %q", classic, tt.classic)
+			}
+		})
+	}
+}
+
+// TestOptionBuilders_EmptyLists_SendNothing verifies that a list a caller
+// passed empty is left out of the options exactly as an omitted one is, on
+// every builder: the REST listing, the Work Items listing, the creation and
+// the update. An empty label list sent to the REST listing would ask for epics
+// with no labels, and an empty one sent anywhere else is a filter or a change
+// nobody asked for.
+func TestOptionBuilders_EmptyLists_SendNothing(t *testing.T) {
+	list := ListInput{
+		FullPath: testFullPath, LabelName: []string{}, In: []string{}, AssigneeUsernames: []string{},
+		IIDs: []string{}, IDs: []string{}, ParentIDs: []string{}, MilestoneTitle: []string{},
+	}
+	if rest := buildEpicListOptions(list); rest.Labels != nil {
+		t.Errorf("REST listing labels = %v, want none for an empty label list", *rest.Labels)
+	}
+	work := buildWorkItemsListOptions(list, toolutil.GraphQLCursor{})
+	sent := map[string][]string{
+		"in": work.In, "label_name": work.LabelName, "assignee_usernames": work.AssigneeUsernames,
+		"iids": work.IIDs, "ids": work.IDs, "parent_ids": work.ParentIDs, "milestone_title": work.MilestoneTitle,
+	}
+	for name, value := range sent {
+		t.Run(name, func(t *testing.T) {
+			if value != nil {
+				t.Errorf("Work Items listing %s = %#v, want none for an empty list", name, value)
+			}
+		})
+	}
+
+	created := buildCreateOptions(CreateInput{FullPath: testFullPath, Title: "t", AssigneeIDs: []int64{}, LabelIDs: []int64{}})
+	if created.AssigneeIDs != nil || created.LabelIDs != nil {
+		t.Errorf("creation assignees, labels = %#v, %#v; want none for empty lists", created.AssigneeIDs, created.LabelIDs)
+	}
+	updated := buildUpdateOptions(UpdateInput{FullPath: testFullPath, IID: 1, AddLabelIDs: []int64{}, RemoveLabelIDs: []int64{}})
+	if updated.AddLabelIDs != nil || updated.RemoveLabelIDs != nil {
+		t.Errorf("update added, removed labels = %#v, %#v; want none for empty lists", updated.AddLabelIDs, updated.RemoveLabelIDs)
+	}
+}
+
+// TestCursorPagination_ResponseWithoutPageInfo_IsNoPage verifies the guard of
+// the cursor reader the work items listing uses: a response client-go hung no
+// page information on, or none at all, publishes no cursor block rather than
+// panicking, and one that carries it is copied whole.
+func TestCursorPagination_ResponseWithoutPageInfo_IsNoPage(t *testing.T) {
+	if got := cursorPagination(nil); got != nil {
+		t.Errorf("cursorPagination(nil) = %+v, want none", got)
+	}
+	if got := cursorPagination(&gl.Response{}); got != nil {
+		t.Errorf("cursorPagination(no page info) = %+v, want none", got)
+	}
+	info := &gl.PageInfo{HasNextPage: true, HasPreviousPage: true, EndCursor: "end", StartCursor: "start"}
+	want := toolutil.GraphQLPaginationOutput{HasNextPage: true, HasPreviousPage: true, EndCursor: "end", StartCursor: "start"}
+	if got := cursorPagination(&gl.Response{PageInfo: info}); got == nil || *got != want {
+		t.Errorf("cursorPagination(page info) = %+v, want %+v", got, want)
 	}
 }
 

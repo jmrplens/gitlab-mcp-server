@@ -4,8 +4,10 @@
 // token (issue 952) meets in the licensed GraphQL surface: the reads and
 // writes no such token can reach at the recorded release, which the server
 // withholds with the reason; the vulnerability reads it can, which are served
-// with a note naming what GitLab leaves empty for the credential; a public
-// project's attestations, served to a grant that does not hold them; and, by
+// with a note naming what GitLab leaves empty for the credential; a dismissal
+// GitLab commits and answers without the vulnerability, for a grant that may
+// change it and not read it; a public project's attestations, served to a
+// grant that does not hold them; and, by
 // direct probes that bypass the server, what GitLab answers a group's work
 // item, which is what the table's boundary cause rests on.
 //
@@ -35,10 +37,11 @@ import (
 // The assignable permissions the scenarios grant, by the names GitLab's token
 // creation route takes.
 const (
-	fineGrantReadProject       = "read_project"
-	fineGrantReadVulnerability = "read_vulnerability"
-	fineGrantReadWorkItem      = "read_work_item"
-	fineGrantUpdateWorkItem    = "update_work_item"
+	fineGrantReadProject         = "read_project"
+	fineGrantReadVulnerability   = "read_vulnerability"
+	fineGrantUpdateVulnerability = "update_vulnerability"
+	fineGrantReadWorkItem        = "read_work_item"
+	fineGrantUpdateWorkItem      = "update_work_item"
 )
 
 // The words the server's answers carry, which the scenarios assert.
@@ -189,6 +192,58 @@ func TestFineGrained_PublicProjectAttestations_AreServedToAGrantWithoutThem(t *t
 	})
 }
 
+// vulnerabilityStateQuery reads one vulnerability's state by its global id,
+// written here rather than borrowed from the tool under test.
+const vulnerabilityStateQuery = `query($id: VulnerabilityID!) { vulnerability(id: $id) { id state } }`
+
+// grantedDismissalFixture is a project whose pipeline reported
+// vulnerabilities, and a token of one of its maintainers granted Vulnerability:
+// Update there and not Vulnerability: Read.
+type grantedDismissalFixture struct {
+	report vulnerabilityFixture
+	token  fixture.Token
+}
+
+// TestFineGrained_VulnerabilityDismissWithoutRead_IsAnsweredAsProbablyCommitted
+// dismisses a vulnerability with a token granted Vulnerability: Update and not
+// Vulnerability: Read, which is a state change the server serves. The token
+// cannot read the instance's version, so its grant is not evaluated and the
+// call reaches GitLab. GitLab checks the token against the mutation before it
+// runs and against the vulnerability it answers with only after, so the
+// dismissal commits and the vulnerability comes back null with no error: the
+// server says the write was probably committed rather than handing back an
+// empty vulnerability as the result, and the run's classic token reads the
+// vulnerability dismissed. Each surface dismisses a vulnerability of its own.
+func TestFineGrained_VulnerabilityDismissWithoutRead_IsAnsweredAsProbablyCommitted(t *testing.T) {
+	e := harness.New(t,
+		harness.Needs(harness.NeedAdmin, harness.NeedRunner, harness.Tier(edition.Ultimate)),
+		harness.Locks(harness.LockRunner))
+
+	harness.SurfacesWith(e, func(e *harness.Env) grantedDismissalFixture {
+		report := buildVulnerabilityFixture(e)
+		user := fixture.NewUser(e, "fgdismiss")
+		fixture.AddProjectMember(e, report.project, user, gl.MaintainerPermissions)
+		return grantedDismissalFixture{report: report, token: fixture.NewFineGrainedToken(e, user, fixture.StartupScopes()[0],
+			fixture.GranularScope{
+				Access: fixture.AccessSelectedMemberships, ProjectIDs: []int64{report.project.ID},
+				Permissions: []string{fineGrantReadProject, fineGrantUpdateVulnerability},
+			})}
+	}, func(e *harness.Env, surface harness.Surface, f grantedDismissalFixture) {
+		s := e.Session(harness.ServerConfig{Surface: surface, Token: f.token.Value, Tier: harness.TierUltimate})
+		if authority := s.Authority(); authority == nil || authority.Phase() != finegrained.PhaseUnknown {
+			e.T.Fatalf("a token refused Metadata: Read is judged %+v, want phase A, which serves the dismissal", authority)
+		}
+		own := f.report.reported[slices.Index(harness.AllSurfaces(), surface)%len(f.report.reported)]
+
+		harness.ExpectToolError(s, actionVulnerabilityDismiss, map[string]any{"id": own.ID}, "probably committed")
+
+		after := fixture.ProbeGraphQL(e, fixture.Token{}, vulnerabilityStateQuery, map[string]any{"id": own.ID})
+		if len(after.Errors) > 0 || !strings.Contains(string(after.Data["vulnerability"]), stateDismissed) {
+			e.T.Errorf("the dismissal did not commit: the classic token reads %s %v", after.Data["vulnerability"], after.Errors)
+		}
+	})
+}
+
 // workItemQuery reads one work item by its global id.
 const workItemQuery = `query($id: WorkItemID!) { workItem(id: $id) { id title } }`
 
@@ -268,5 +323,62 @@ func TestFineGrainedProbes_SeverityCount_IsNullWithNoError(t *testing.T) {
 	}
 	if len(fine.Errors) > 0 || !strings.Contains(string(fine.Data["project"]), `"vulnerabilitySeveritiesCount":null`) {
 		t.Errorf("the fine-grained count answered %s %v, want null with no error", fine.Data["project"], fine.Errors)
+	}
+}
+
+// fineGrantCreateSecurityAttribute is the assignable permission that grants
+// securityAttributeCreate, by the name GitLab's token creation route takes.
+const fineGrantCreateSecurityAttribute = "create_security_attribute"
+
+// TestFineGrainedProbes_SecurityAttributeCreate_CommitsAndNullsTheList
+// measures what the security_attribute.create row of the table rests on, and
+// what the handler's probably-committed answer describes (issue 1103): a token
+// granted Security Attribute: Create on a group passes the mutation's own
+// check, so GitLab creates the attribute, and then checks each SecurityAttribute
+// the payload returns. That type declares no fine-grained permission at
+// 19.4.1, and the payload lists the attributes as non-null items, so one null
+// item nulls the whole list and GitLab's GraphQL library writes the error that
+// says so. The run's classic token then finds the attribute in its category.
+func TestFineGrainedProbes_SecurityAttributeCreate_CommitsAndNullsTheList(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin, harness.Tier(edition.Ultimate)))
+	group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("fgsecattr"))
+	category := newSecurityCategory(e, e.On(harness.SurfaceMeta), group, true)
+	user := fixture.NewUser(e, "fgsecattr")
+	fixture.AddGroupMember(e, group, user, gl.OwnerPermissions)
+	token := fixture.NewFineGrainedToken(e, user, append(fixture.StartupScopes(), fixture.GranularScope{
+		Access: fixture.AccessSelectedMemberships, GroupIDs: []int64{group.ID},
+		Permissions: []string{fineGrantCreateSecurityAttribute},
+	})...)
+	name := e.Name("fg-attribute")
+
+	written := fixture.ProbeGraphQL(e, token, `mutation($namespace: NamespaceID!, $category: SecurityCategoryID!, $name: String!) {
+  securityAttributeCreate(input: {namespaceId: $namespace, categoryId: $category,
+    attributes: [{name: $name, description: "created by a fine-grained token", color: "#FF0000"}]}) { securityAttributes { id name } errors }
+}`, map[string]any{
+		"namespace": "gid://gitlab/Namespace/" + strconv.FormatInt(group.ID, 10),
+		"category":  "gid://gitlab/Security::Category/" + strconv.FormatInt(category.ID, 10),
+		"name":      name,
+	})
+	var payload struct {
+		SecurityAttributes json.RawMessage `json:"securityAttributes"`
+		Errors             []string        `json:"errors"`
+	}
+	if err := json.Unmarshal(written.Data["securityAttributeCreate"], &payload); err != nil {
+		t.Fatalf("the fine-grained write answered %s %v: %v", written.Data["securityAttributeCreate"], written.Errors, err)
+	}
+	if string(payload.SecurityAttributes) != "null" || len(payload.Errors) > 0 {
+		t.Errorf("the fine-grained write answered attributes %s and errors %v, want null and none", payload.SecurityAttributes, payload.Errors)
+	}
+	// The list is [SecurityAttribute!], itself nullable, so graphql-ruby names
+	// the element's type without its "!".
+	const nulledElement = "Cannot return null for non-nullable element of type 'SecurityAttribute' for SecurityAttributeCreatePayload.securityAttributes"
+	if !slices.ContainsFunc(written.Errors, func(m string) bool { return strings.HasPrefix(m, nulledElement) }) {
+		t.Errorf("the fine-grained write answered errors %v, want the one %q writes", written.Errors, nulledElement)
+	}
+
+	after := fixture.ProbeGraphQL(e, fixture.Token{}, `query($group: ID!) { group(fullPath: $group) { securityCategories { securityAttributes { name } } } }`,
+		map[string]any{"group": group.Path})
+	if len(after.Errors) > 0 || !strings.Contains(string(after.Data["group"]), `"`+name+`"`) {
+		t.Errorf("the classic read of the group's categories answered %s %v, want the attribute %s: the write did not commit", after.Data["group"], after.Errors, name)
 	}
 }

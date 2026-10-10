@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -1044,6 +1045,115 @@ func TestActionIDs_RelatedActionsAndHintsSpellOnlyDeclaredIDs(t *testing.T) {
 		t.Run(u.where+" "+u.id, func(t *testing.T) {
 			if !slices.Contains(declaredActionIDs, u.id) {
 				t.Errorf("action ID %q is spelled outside the declared block", u.id)
+			}
+		})
+	}
+}
+
+// fineGrainedClient is a test client carrying the authority a fine-grained
+// session's client carries, so a handler reads it the way production does.
+func fineGrainedClient(t *testing.T, handler http.Handler) *gitlabclient.Client {
+	t.Helper()
+	client := testutil.NewTestClient(t, handler)
+	client.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, ""))
+	return client
+}
+
+// categoryWrite is one of the two writes that answer with a category.
+type categoryWrite struct {
+	name string
+	key  string
+	op   string
+	call func(*gitlabclient.Client) error
+}
+
+// categoryWrites are the create and the update, each with the payload key
+// GitLab answers it under and the operation its errors name.
+func categoryWrites() []categoryWrite {
+	return []categoryWrite{
+		{name: "create", key: "securityCategoryCreate", op: "create security category", call: func(client *gitlabclient.Client) error {
+			_, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, Name: "Business impact"})
+			return err
+		}},
+		{name: "update", key: "securityCategoryUpdate", op: "update security category", call: func(client *gitlabclient.Client) error {
+			name := "Business impact"
+			_, err := Update(context.Background(), client, UpdateInput{CategoryID: 7, NamespaceID: 101, Name: &name})
+			return err
+		}},
+	}
+}
+
+// TestWrites_CategoryAnsweredWithout_FineGrainedSessionIsToldTheWriteProbablyCommitted
+// verifies the answer to a category write GitLab ran and answered without
+// the category: null with no error, which is how GitLab answers a
+// fine-grained token the SecurityCategory type does not admit (at 19.4.1 it
+// declares no fine-grained permission), and the category nulled below by its
+// attributes, a list of non-null items whose type does not admit the token.
+// GitLab checks those objects only after the write ran, so a fine-grained
+// session is told the write was probably committed instead of not found; a
+// classic session keeps the answer it had and is never told so (issue 1103).
+func TestWrites_CategoryAnsweredWithout_FineGrainedSessionIsToldTheWriteProbablyCommitted(t *testing.T) {
+	const nulledAttributes = `Cannot return null for non-nullable element of type 'SecurityAttribute' for SecurityCategory.securityAttributes`
+	answers := []struct {
+		name    string
+		body    func(key string) string
+		classic string
+	}{
+		{
+			name:    "the category null",
+			body:    func(key string) string { return `{"data":{"` + key + `":{"securityCategory":null,"errors":[]}}}` },
+			classic: "Not Found",
+		},
+		{
+			name: "its attributes nulled",
+			body: func(key string) string {
+				return `{"data":{"` + key + `":{"securityCategory":{"id":"gid://gitlab/Security::Category/7","name":"Business impact",` +
+					`"description":null,"multipleSelection":true,"editableState":"EDITABLE","templateType":null,"securityAttributes":null},` +
+					`"errors":[]}},"errors":[{"message":"` + nulledAttributes + `"}]}`
+			},
+			classic: nulledAttributes,
+		},
+	}
+	for _, write := range categoryWrites() {
+		for _, answer := range answers {
+			t.Run(write.name+" "+answer.name, func(t *testing.T) {
+				handler := categoryGraphQLMux(map[string]http.HandlerFunc{
+					write.key: func(w http.ResponseWriter, _ *http.Request) {
+						testutil.RespondJSON(w, http.StatusOK, answer.body(write.key))
+					},
+				})
+
+				fine := write.call(fineGrainedClient(t, handler))
+				if !errors.Is(fine, finegrained.ErrUnconfirmedWrite) {
+					t.Fatalf("fine-grained error = %v, want an unconfirmed write", fine)
+				}
+				if want := write.op + ": GitLab answered without the security category this write returns."; !strings.HasPrefix(fine.Error(), want) {
+					t.Errorf("fine-grained error = %q, want it to open with %q", fine.Error(), want)
+				}
+
+				classic := write.call(testutil.NewTestClient(t, handler))
+				if errors.Is(classic, finegrained.ErrUnconfirmedWrite) || !strings.Contains(classic.Error(), answer.classic) {
+					t.Errorf("classic error = %v, want the answer it always had, containing %q", classic, answer.classic)
+				}
+			})
+		}
+	}
+}
+
+// TestWrites_FineGrainedSession_RefusalIsNoUnconfirmedWrite verifies that a
+// category write GitLab refused, with an error of its own and no payload, is
+// the refusal to read rather than a write it ran.
+func TestWrites_FineGrainedSession_RefusalIsNoUnconfirmedWrite(t *testing.T) {
+	for _, write := range categoryWrites() {
+		t.Run(write.name, func(t *testing.T) {
+			handler := categoryGraphQLMux(map[string]http.HandlerFunc{
+				write.key: func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusOK, `{"data":{"`+write.key+`":null},"errors":[{"message":"Access denied: This operation requires a fine-grained personal access token with the following group permissions: [Security Category: Create]."}]}`)
+				},
+			})
+			err := write.call(fineGrainedClient(t, handler))
+			if err == nil || errors.Is(err, finegrained.ErrUnconfirmedWrite) || !strings.Contains(err.Error(), "Access denied") {
+				t.Errorf("error = %v, want the refusal and no unconfirmed write", err)
 			}
 		})
 	}

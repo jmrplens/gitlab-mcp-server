@@ -8,8 +8,18 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+// The operations the two writes that answer with a category name in their
+// errors, and the category in a reader's words, for the answer a fine-grained
+// session gets when GitLab ran the write and answered without it.
+const (
+	opCreateCategory = "create security category"
+	opUpdateCategory = "update security category"
+	objectCategory   = "security category"
 )
 
 const (
@@ -144,13 +154,16 @@ type categoryMutationEnvelope struct {
 	Errors []toolutil.GraphQLError `json:"errors"`
 }
 
-type securityCategoryCreatePayload struct {
+// categoryMutationPayload is the payload the create and the update answer
+// with: the category, and the errors of a write GitLab ran and refused to
+// keep.
+type categoryMutationPayload struct {
 	SecurityCategory *categoryNode `json:"securityCategory"`
 	Errors           []string      `json:"errors"`
 }
 
 type securityCategoryCreateData struct {
-	SecurityCategoryCreate *securityCategoryCreatePayload `json:"securityCategoryCreate"`
+	SecurityCategoryCreate *categoryMutationPayload `json:"securityCategoryCreate"`
 }
 
 type securityCategoryCreateResponse struct {
@@ -158,13 +171,8 @@ type securityCategoryCreateResponse struct {
 	categoryMutationEnvelope
 }
 
-type securityCategoryUpdatePayload struct {
-	SecurityCategory *categoryNode `json:"securityCategory"`
-	Errors           []string      `json:"errors"`
-}
-
 type securityCategoryUpdateData struct {
-	SecurityCategoryUpdate *securityCategoryUpdatePayload `json:"securityCategoryUpdate"`
+	SecurityCategoryUpdate *categoryMutationPayload `json:"securityCategoryUpdate"`
 }
 
 type securityCategoryUpdateResponse struct {
@@ -272,8 +280,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		MultipleSelection: input.MultipleSelection,
 	}
 	category, err := createSecurityCategory(ctx, client, input.NamespaceID, opts)
+	if errors.Is(err, finegrained.ErrUnconfirmedWrite) {
+		return Output{}, err
+	}
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithHint("create security category", err, "verify namespace_id and that the token has permission on a Premium or Ultimate namespace")
+		return Output{}, toolutil.WrapErrWithHint(opCreateCategory, err, "verify namespace_id and that the token has permission on a Premium or Ultimate namespace")
 	}
 	return categoryNodeOutput(category)
 }
@@ -302,8 +313,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		opts.Name = &name
 	}
 	category, err := updateSecurityCategory(ctx, client, input.CategoryID, input.NamespaceID, opts)
+	if errors.Is(err, finegrained.ErrUnconfirmedWrite) {
+		return Output{}, err
+	}
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithHint("update security category", err, "verify category_id and namespace_id; only editable custom categories can be updated")
+		return Output{}, toolutil.WrapErrWithHint(opUpdateCategory, err, "verify category_id and namespace_id; only editable custom categories can be updated")
 	}
 	return categoryNodeOutput(category)
 }
@@ -359,22 +373,32 @@ func createSecurityCategory(ctx context.Context, client *gitlabclient.Client, na
 		input["multipleSelection"] = opts.MultipleSelection
 	}
 	var result securityCategoryCreateResponse
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: securityCategoryCreateMutation, Variables: map[string]any{"input": input}}, &result, gl.WithContext(ctx))
+	resp, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: securityCategoryCreateMutation, Variables: map[string]any{"input": input}}, &result, gl.WithContext(ctx))
 	if err != nil {
 		return nil, err
 	}
-	if topLevelErr := toolutil.GraphQLTopLevelError("securityCategoryCreate", result.Errors); topLevelErr != nil {
-		return nil, topLevelErr
+	return categoryWritten(client, resp, opCreateCategory, "securityCategoryCreate", result.Errors, result.Data.SecurityCategoryCreate)
+}
+
+// categoryWritten reads what a category write answered: GitLab's refusal,
+// the payload's own errors, or the category. A write GitLab ran and answered
+// without the category, null with no error or nulled below by its attributes
+// with the errors that null writes, is one a fine-grained session is told
+// probably committed (issue 1103): GitLab checks the category and its
+// attributes against a fine-grained token only after the write ran, and at
+// 19.4.1 neither type declares a fine-grained permission.
+func categoryWritten(client *gitlabclient.Client, resp *gl.Response, operation, field string, responseErrors []toolutil.GraphQLError, payload *categoryMutationPayload) (*categoryNode, error) {
+	if topLevelErr := toolutil.GraphQLTopLevelError(field, responseErrors); topLevelErr != nil {
+		return nil, toolutil.UnconfirmedWrite(client, resp, operation, objectCategory, topLevelErr, topLevelErr)
 	}
-	payload := result.Data.SecurityCategoryCreate
 	if payload == nil {
 		return nil, gl.ErrNotFound
 	}
-	if mutationErr := toolutil.GraphQLMutationError("securityCategoryCreate", payload.Errors); mutationErr != nil {
+	if mutationErr := toolutil.GraphQLMutationError(field, payload.Errors); mutationErr != nil {
 		return nil, mutationErr
 	}
 	if payload.SecurityCategory == nil {
-		return nil, gl.ErrNotFound
+		return nil, client.Authority().UnconfirmedWrite(operation, objectCategory, gl.ErrNotFound)
 	}
 	return payload.SecurityCategory, nil
 }
@@ -391,24 +415,11 @@ func updateSecurityCategory(ctx context.Context, client *gitlabclient.Client, ca
 		input["description"] = opts.Description
 	}
 	var result securityCategoryUpdateResponse
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: securityCategoryUpdateMutation, Variables: map[string]any{"input": input}}, &result, gl.WithContext(ctx))
+	resp, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: securityCategoryUpdateMutation, Variables: map[string]any{"input": input}}, &result, gl.WithContext(ctx))
 	if err != nil {
 		return nil, err
 	}
-	if topLevelErr := toolutil.GraphQLTopLevelError("securityCategoryUpdate", result.Errors); topLevelErr != nil {
-		return nil, topLevelErr
-	}
-	payload := result.Data.SecurityCategoryUpdate
-	if payload == nil {
-		return nil, gl.ErrNotFound
-	}
-	if mutationErr := toolutil.GraphQLMutationError("securityCategoryUpdate", payload.Errors); mutationErr != nil {
-		return nil, mutationErr
-	}
-	if payload.SecurityCategory == nil {
-		return nil, gl.ErrNotFound
-	}
-	return payload.SecurityCategory, nil
+	return categoryWritten(client, resp, opUpdateCategory, "securityCategoryUpdate", result.Errors, result.Data.SecurityCategoryUpdate)
 }
 
 // destroySecurityCategory deletes one category and returns the global ids of

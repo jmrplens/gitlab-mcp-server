@@ -9,11 +9,23 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const hexColorSchemaPattern = `^#[0-9A-Fa-f]{6}$`
+
+// The operations the two writes that answer with attributes name in their
+// errors, and what each returns in a reader's words, for the answer a
+// fine-grained session gets when GitLab ran the write and answered without
+// it.
+const (
+	opCreateAttributes = "create security attributes"
+	opUpdateAttribute  = "update security attribute"
+	objectAttributes   = "security attributes"
+	objectAttribute    = "security attribute"
+)
 
 var hexColorPattern = regexp.MustCompile(hexColorSchemaPattern)
 
@@ -433,8 +445,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 
 	attributes, err := createSecurityAttributes(ctx, client, input.NamespaceID, input.CategoryID, createAttributeOptions(input.Attributes))
+	if errors.Is(err, finegrained.ErrUnconfirmedWrite) {
+		return CreateOutput{}, err
+	}
 	if err != nil {
-		return CreateOutput{}, toolutil.WrapErrWithHint("create security attributes", err, "verify namespace_id and category_id; requires permission on a Premium or Ultimate namespace")
+		return CreateOutput{}, toolutil.WrapErrWithHint(opCreateAttributes, err, "verify namespace_id and category_id; requires permission on a Premium or Ultimate namespace")
 	}
 	return attributeNodesOutput(attributes)
 }
@@ -468,8 +483,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		opts.Name = &name
 	}
 	attribute, err := updateSecurityAttribute(ctx, client, input.AttributeID, opts)
+	if errors.Is(err, finegrained.ErrUnconfirmedWrite) {
+		return Output{}, err
+	}
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithHint("update security attribute", err, "verify attribute_id; only editable custom attributes can be updated")
+		return Output{}, toolutil.WrapErrWithHint(opUpdateAttribute, err, "verify attribute_id; only editable custom attributes can be updated")
 	}
 	return attributeNodeOutput(attribute)
 }
@@ -599,12 +617,17 @@ func createSecurityAttributes(ctx context.Context, client *gitlabclient.Client, 
 		}},
 	}
 	var result securityAttributeCreateResponse
-	_, err := client.GL().GraphQL.Do(query, &result, gl.WithContext(ctx))
+	resp, err := client.GL().GraphQL.Do(query, &result, gl.WithContext(ctx))
 	if err != nil {
 		return nil, err
 	}
+	// The payload carries the attributes as a list of non-null items, so an
+	// attribute GitLab denies after the write ran nulls the list and writes
+	// one error per denied attribute instead of answering it null where it
+	// sits. That answer, and a list that came back empty with no error, is a
+	// write GitLab ran, which a fine-grained session is told (issue 1103).
 	if topLevelErr := toolutil.GraphQLTopLevelError("securityAttributeCreate", result.Errors); topLevelErr != nil {
-		return nil, topLevelErr
+		return nil, toolutil.UnconfirmedWrite(client, resp, opCreateAttributes, objectAttributes, topLevelErr, topLevelErr)
 	}
 	payload := result.Data.SecurityAttributeCreate
 	if payload == nil {
@@ -614,7 +637,7 @@ func createSecurityAttributes(ctx context.Context, client *gitlabclient.Client, 
 		return nil, mutationErr
 	}
 	if len(payload.SecurityAttributes) == 0 {
-		return nil, gl.ErrNotFound
+		return nil, client.Authority().UnconfirmedWrite(opCreateAttributes, objectAttributes, gl.ErrNotFound)
 	}
 	return payload.SecurityAttributes, nil
 }
@@ -631,12 +654,16 @@ func updateSecurityAttribute(ctx context.Context, client *gitlabclient.Client, a
 		input["color"] = opts.Color
 	}
 	var result securityAttributeUpdateResponse
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: securityAttributeUpdateMutation, Variables: map[string]any{"input": input}}, &result, gl.WithContext(ctx))
+	resp, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: securityAttributeUpdateMutation, Variables: map[string]any{"input": input}}, &result, gl.WithContext(ctx))
 	if err != nil {
 		return nil, err
 	}
+	// The attribute's category is a non-null field, so a grant that reads the
+	// attribute and not its category nulls the attribute through it and
+	// writes the error that says so: an update GitLab ran, which a
+	// fine-grained session is told (issue 1103).
 	if topLevelErr := toolutil.GraphQLTopLevelError("securityAttributeUpdate", result.Errors); topLevelErr != nil {
-		return nil, topLevelErr
+		return nil, toolutil.UnconfirmedWrite(client, resp, opUpdateAttribute, objectAttribute, topLevelErr, topLevelErr)
 	}
 	payload := result.Data.SecurityAttributeUpdate
 	if payload == nil {
@@ -645,8 +672,10 @@ func updateSecurityAttribute(ctx context.Context, client *gitlabclient.Client, a
 	if mutationErr := toolutil.GraphQLMutationError("securityAttributeUpdate", payload.Errors); mutationErr != nil {
 		return nil, mutationErr
 	}
+	// No attribute and no error is an update GitLab ran and answered without
+	// it, which a fine-grained session is told (issue 1103).
 	if payload.SecurityAttribute == nil {
-		return nil, gl.ErrNotFound
+		return nil, client.Authority().UnconfirmedWrite(opUpdateAttribute, objectAttribute, gl.ErrNotFound)
 	}
 	return payload.SecurityAttribute, nil
 }

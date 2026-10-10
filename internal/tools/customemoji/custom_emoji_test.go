@@ -4,10 +4,12 @@ package customemoji
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -508,11 +510,10 @@ func TestCreate_ServerError(t *testing.T) {
 	}
 }
 
-// TestCreate_NullEmoji verifies the Create_NullEmoji handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestCreate_NullEmoji(t *testing.T) {
-	handler := graphqlMux(map[string]http.HandlerFunc{
+// nullEmojiHandler answers a creation the way GitLab answers one whose
+// returned emoji it nulled: the payload with no emoji and no error.
+func nullEmojiHandler() http.Handler {
+	return graphqlMux(map[string]http.HandlerFunc{
 		"createCustomEmoji": func(w http.ResponseWriter, _ *http.Request) {
 			testutil.RespondGraphQL(w, http.StatusOK, `{
 				"createCustomEmoji": {
@@ -522,8 +523,14 @@ func TestCreate_NullEmoji(t *testing.T) {
 			}`)
 		},
 	})
+}
 
-	client := testutil.NewTestClient(t, handler)
+// TestCreate_NullEmoji verifies that a classic session whose creation GitLab
+// answered with no emoji and no error gets the handler's own error, and is
+// never told the write was probably committed: that sentence is a
+// fine-grained token's alone (issue 1103).
+func TestCreate_NullEmoji(t *testing.T) {
+	client := testutil.NewTestClient(t, nullEmojiHandler())
 	_, err := Create(context.Background(), client, CreateInput{
 		GroupPath: "my-group",
 		Name:      "test",
@@ -532,8 +539,38 @@ func TestCreate_NullEmoji(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for null emoji, got nil")
 	}
-	if !strings.Contains(err.Error(), "no emoji returned") {
-		t.Errorf("error = %q, want it to contain %q", err.Error(), "no emoji returned")
+	if err.Error() != "create_custom_emoji: no emoji returned" {
+		t.Errorf("error = %q, want the handler's own %q", err.Error(), "create_custom_emoji: no emoji returned")
+	}
+	if errors.Is(err, finegrained.ErrUnconfirmedWrite) {
+		t.Errorf("a classic session's error reads as an unconfirmed write: %v", err)
+	}
+}
+
+// TestCreate_NullEmoji_FineGrainedSessionIsToldTheWriteProbablyCommitted
+// verifies the answer a fine-grained session gets to the same creation:
+// GitLab checks the emoji a creation returns only after it created it, and
+// CustomEmoji declares no fine-grained permission at 19.4.1, so the emoji
+// exists and the answer says so rather than reading as a creation that did
+// not happen, which a model would repeat (issue 1103).
+func TestCreate_NullEmoji_FineGrainedSessionIsToldTheWriteProbablyCommitted(t *testing.T) {
+	client := testutil.NewTestClient(t, nullEmojiHandler())
+	client.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, ""))
+
+	_, err := Create(context.Background(), client, CreateInput{
+		GroupPath: "my-group",
+		Name:      "test",
+		URL:       "https://example.com/test.png",
+	})
+
+	if !errors.Is(err, finegrained.ErrUnconfirmedWrite) {
+		t.Fatalf("Create error = %v, want it to be an unconfirmed write", err)
+	}
+	if want := "create_custom_emoji: GitLab answered without the custom emoji this write returns."; !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("error = %q, want it to open with %q", err.Error(), want)
+	}
+	if !strings.Contains(err.Error(), "probably committed") {
+		t.Errorf("error = %q, want it to say the write was probably committed", err.Error())
 	}
 }
 

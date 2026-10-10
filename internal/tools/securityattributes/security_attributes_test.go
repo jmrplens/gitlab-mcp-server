@@ -14,6 +14,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -495,6 +496,120 @@ func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
 				t.Fatalf("handler error = %v, want Not Found", err)
 			}
 		})
+	}
+}
+
+// createHigh creates the one attribute the write tests send.
+func createHigh(client *gitlabclient.Client) error {
+	_, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, CategoryID: 7, Attributes: []AttributeInput{{Name: "High", Description: "High impact", Color: "#FF0000"}}})
+	return err
+}
+
+// renameHigh renames the one attribute the write tests send.
+func renameHigh(client *gitlabclient.Client) error {
+	name := "High"
+	_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: &name})
+	return err
+}
+
+// TestWrites_ObjectNulled_FineGrainedSessionIsToldTheWriteProbablyCommitted
+// verifies the answer to a write GitLab ran and answered without what it
+// returns, which is how it answers a fine-grained token at 19.4.1:
+// SecurityAttribute declares no fine-grained permission, and GitLab checks the
+// payload's attributes only after the write ran. The creation carries them as
+// a list of non-null items, so GitLab's GraphQL library nulls the list and
+// writes one error per denied attribute; the update answers its attribute
+// null with no error. Each used to reach a model as not found, or as GitLab's
+// error, a write that did not happen. A fine-grained session is now told the
+// write was probably committed; a classic one keeps its answer, and is never
+// told so (issue 1103).
+func TestWrites_ObjectNulled_FineGrainedSessionIsToldTheWriteProbablyCommitted(t *testing.T) {
+	const nulledElement = `{"message":"Cannot return null for non-nullable element of type 'SecurityAttribute' for SecurityAttributeCreatePayload.securityAttributes"}`
+	tests := []struct {
+		name     string
+		queryKey string
+		body     string
+		call     func(*gitlabclient.Client) error
+		opening  string
+		classic  string
+	}{
+		{
+			name:     "create, the list nulled",
+			queryKey: "securityAttributeCreate",
+			body:     `{"data":{"securityAttributeCreate":{"securityAttributes":null,"errors":[]}},"errors":[` + nulledElement + `]}`,
+			call:     createHigh,
+			opening:  "create security attributes: GitLab answered without the security attributes this write returns.",
+			classic:  "Cannot return null for non-nullable element",
+		},
+		{
+			name:     "create, the list empty",
+			queryKey: "securityAttributeCreate",
+			body:     `{"data":{"securityAttributeCreate":{"securityAttributes":[],"errors":[]}}}`,
+			call:     createHigh,
+			opening:  "create security attributes: GitLab answered without the security attributes this write returns.",
+			classic:  "Not Found",
+		},
+		{
+			name:     "update, the attribute nulled",
+			queryKey: "securityAttributeUpdate",
+			body:     `{"data":{"securityAttributeUpdate":{"securityAttribute":null,"errors":[]}}}`,
+			call:     renameHigh,
+			opening:  "update security attribute: GitLab answered without the security attribute this write returns.",
+			classic:  "Not Found",
+		},
+		{
+			// A grant that reads the attribute and not its category: the
+			// category is a non-null field, so its null takes the attribute
+			// with it and writes the error that says so.
+			name:     "update, the attribute nulled below its non-null category",
+			queryKey: "securityAttributeUpdate",
+			body:     `{"data":{"securityAttributeUpdate":{"securityAttribute":null,"errors":[]}},"errors":[{"message":"Cannot return null for non-nullable field SecurityAttribute.securityCategory"}]}`,
+			call:     renameHigh,
+			opening:  "update security attribute: GitLab answered without the security attribute this write returns.",
+			classic:  "Cannot return null for non-nullable field SecurityAttribute.securityCategory",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := attributeGraphQLMux(map[string]http.HandlerFunc{
+				tt.queryKey: func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusOK, tt.body)
+				},
+			})
+
+			fineClient := testutil.NewTestClient(t, handler)
+			fineClient.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, ""))
+			fine := tt.call(fineClient)
+			if !errors.Is(fine, finegrained.ErrUnconfirmedWrite) {
+				t.Fatalf("fine-grained error = %v, want an unconfirmed write", fine)
+			}
+			if !strings.HasPrefix(fine.Error(), tt.opening) {
+				t.Errorf("fine-grained error = %q, want it to open with %q", fine.Error(), tt.opening)
+			}
+
+			classic := tt.call(testutil.NewTestClient(t, handler))
+			if errors.Is(classic, finegrained.ErrUnconfirmedWrite) || !strings.Contains(classic.Error(), tt.classic) {
+				t.Errorf("classic error = %v, want the answer it always had, containing %q", classic, tt.classic)
+			}
+		})
+	}
+}
+
+// TestCreate_FineGrainedSession_RefusalAmongTheNullsIsNoUnconfirmedWrite
+// verifies that a creation whose errors hold anything besides the ones a
+// nulled attribute writes is GitLab's refusal to read, not a write it ran.
+func TestCreate_FineGrainedSession_RefusalAmongTheNullsIsNoUnconfirmedWrite(t *testing.T) {
+	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
+		"securityAttributeCreate": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQLError(w, http.StatusOK, "The resource that you are attempting to access does not exist or you don't have permission to perform this action")
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+	client.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, ""))
+
+	err := createHigh(client)
+	if err == nil || errors.Is(err, finegrained.ErrUnconfirmedWrite) || !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("Create() error = %v, want GitLab's refusal and no unconfirmed write", err)
 	}
 }
 

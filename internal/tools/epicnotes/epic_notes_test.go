@@ -3,11 +3,13 @@ package epicnotes
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1068,6 +1070,30 @@ func TestUpdate_SendsTheNoteTheCallerNamed(t *testing.T) {
 		UpdateInput{FullPath: testFullPath, IID: 5, NoteID: 100, Body: "Updated"})
 	if err != nil {
 		t.Fatalf("Update() error = %v, want nil", err)
+	}
+}
+
+// TestUpdate_NoteAnsweredNull_FineGrainedSessionIsToldTheEditProbablyCommitted
+// verifies the handler hands its client's authority to the note mutation: an
+// edit answered with neither note nor status is, for a fine-grained token
+// granted Work Item: Update and not Work Item: Read, an edit GitLab made and
+// then hid, so that session is told it probably committed, while a classic one
+// keeps the deletion it always read there (issue 1103).
+func TestUpdate_NoteAnsweredNull_FineGrainedSessionIsToldTheEditProbablyCommitted(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{"updateNote": func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQL(w, http.StatusOK, gqlUpdateNoteDeletedData)
+	}})
+	input := UpdateInput{FullPath: testFullPath, IID: 5, NoteID: 100, Body: "Updated"}
+
+	fineClient := testutil.NewTestClient(t, handler)
+	fineClient.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, ""))
+	if _, err := Update(context.Background(), fineClient, input); !errors.Is(err, finegrained.ErrUnconfirmedWrite) {
+		t.Errorf("fine-grained Update() error = %v, want an unconfirmed write", err)
+	}
+
+	_, err := Update(context.Background(), testutil.NewTestClient(t, handler), input)
+	if errors.Is(err, finegrained.ErrUnconfirmedWrite) || err == nil || !strings.Contains(err.Error(), "GitLab deleted the note instead of editing it") {
+		t.Errorf("classic Update() error = %v, want the deletion it always read", err)
 	}
 }
 

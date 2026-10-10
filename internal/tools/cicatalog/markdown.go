@@ -24,16 +24,51 @@ const usage30dLabel = "Usage (30d)"
 // package never learns which instance answered, so a link built from it
 // resolved against whatever base the reading client happened to have. The path
 // is shown as the value it is, beside the full path the get action takes.
+//
+// A page holding items GitLab answered as null counts them in its heading
+// beside the ones shown and keeps its cursor, a page that shows none of its
+// items included: such a page is neither the whole catalog nor its end.
 func FormatListMarkdown(out ListOutput) string {
-	if len(out.Resources) == 0 {
+	if len(out.Resources) == 0 && out.HiddenItems == 0 {
 		return toolutil.EmptyMessage("catalog resources")
 	}
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "CI/CD Catalog Resources", len(out.Resources), toolutil.PaginationOutput{})
+	writeListHeading(&b, len(out.Resources), out.HiddenItems)
+	var hints []string
+	if len(out.Resources) > 0 {
+		writeResourceTable(&b, out.Resources)
+		hints = append(hints,
+			toolutil.HintAction(actionCatalogGet, "see one resource with its components and inputs"),
+			toolutil.HintAction(actionTemplateLint, "check a configuration that includes one"),
+		)
+	}
+	toolutil.WriteGraphQLPagination(&b, out.Pagination, len(out.Resources))
+	if out.HiddenItems > 0 {
+		hints = append(hints, hiddenItemsHint(out.HiddenItems))
+	}
+	toolutil.WriteHints(&b, hints...)
+	return b.String()
+}
+
+// listTitle is the heading of a page of catalog resources.
+const listTitle = "CI/CD Catalog Resources"
+
+// writeListHeading writes the page's heading: the count shown, and beside it
+// the count hidden when GitLab answered any item as null.
+func writeListHeading(b *strings.Builder, shown, hidden int) {
+	if hidden == 0 {
+		toolutil.WriteListHeading(b, listTitle, shown, toolutil.PaginationOutput{})
+		return
+	}
+	fmt.Fprintf(b, "## %s (%d shown, %d hidden)\n\n", listTitle, shown, hidden)
+}
+
+// writeResourceTable writes one row per resource shown.
+func writeResourceTable(b *strings.Builder, resources []ResourceItem) {
 	b.WriteString(toolutil.MarkdownTableHeader(
 		"Name", "Path", "Description", "Stars", usage30dLabel, "Verification", "Latest Version", "Released",
 	))
-	for _, r := range out.Resources {
+	for _, r := range resources {
 		b.WriteString(toolutil.MarkdownTableRow(
 			resourceNameCell(r.Name, r.Archived),
 			toolutil.MdCodeSpanCell(r.FullPath),
@@ -45,12 +80,16 @@ func FormatListMarkdown(out ListOutput) string {
 			toolutil.FormatTime(r.LatestReleasedAt),
 		))
 	}
-	toolutil.WriteGraphQLPagination(&b, out.Pagination, len(out.Resources))
-	toolutil.WriteHints(&b,
-		toolutil.HintAction(actionCatalogGet, "see one resource with its components and inputs"),
-		toolutil.HintAction(actionTemplateLint, "check a configuration that includes one"),
-	)
-	return b.String()
+}
+
+// hiddenItemsHint says how many items of a page GitLab answered as null and
+// why, so a short or empty page is not read as all the catalog holds (issue
+// 1103). It names no GitLab version: which types a fine-grained token is
+// refused changes with every release, and the null is how each one answers.
+func hiddenItemsHint(hidden int) string {
+	return fmt.Sprintf("GitLab answered %d of the items on this page as null, with no error, which is how it answers an item the credential may not read, "+
+		"a catalog resource whose GraphQL type a fine-grained personal access token is not granted among them. "+
+		"They are left out, so this page shows fewer items than GitLab returned.", hidden)
 }
 
 // resourceNameCell carries the archived marker, without which a reader cannot

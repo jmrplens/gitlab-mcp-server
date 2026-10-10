@@ -14,6 +14,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// What each write returns, in a reader's words, for the answer a fine-grained
+// session gets when GitLab ran the write and answered without it.
+const (
+	objectAchievement = "achievement"
+	objectAward       = "award"
+	objectAwards      = "awards"
+)
+
 // Operation names used in wrapped errors and shared with the action specs.
 const (
 	opCreate                 = "create_achievement"
@@ -236,9 +244,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	defer cleanup()
 	opts.Avatar = avatar
 
-	achievement, _, err := client.GL().Achievements.CreateAchievement(input.NamespaceID, opts, gl.WithContext(ctx))
+	achievement, resp, err := client.GL().Achievements.CreateAchievement(input.NamespaceID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, wrapErr(opCreate, err, "verify namespace_id names an existing group or project namespace you can administer")
+		return Output{}, writeErr(client, resp, opCreate, objectAchievement, err, "verify namespace_id names an existing group or project namespace you can administer")
 	}
 	return Output{Achievement: toAchievement(achievement)}, nil
 }
@@ -268,9 +276,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	defer cleanup()
 	opts.Avatar = avatar
 
-	achievement, _, err := client.GL().Achievements.UpdateAchievement(input.AchievementID, opts, gl.WithContext(ctx))
+	achievement, resp, err := client.GL().Achievements.UpdateAchievement(input.AchievementID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, wrapErr(opUpdate, err, hintAchievementID)
+		return Output{}, writeErr(client, resp, opUpdate, objectAchievement, err, hintAchievementID)
 	}
 	return Output{Achievement: toAchievement(achievement)}, nil
 }
@@ -284,9 +292,9 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return DeleteOutput{}, toolutil.ErrRequiredInt64(opDelete, "achievement_id")
 	}
 
-	achievement, _, err := client.GL().Achievements.DeleteAchievement(input.AchievementID, gl.WithContext(ctx))
+	achievement, resp, err := client.GL().Achievements.DeleteAchievement(input.AchievementID, gl.WithContext(ctx))
 	if err != nil {
-		return DeleteOutput{}, wrapErr(opDelete, err, hintAchievementID)
+		return DeleteOutput{}, writeErr(client, resp, opDelete, objectAchievement, err, hintAchievementID)
 	}
 	return DeleteOutput{
 		Status:      "success",
@@ -312,9 +320,9 @@ func Award(ctx context.Context, client *gitlabclient.Client, input AwardInput) (
 		opts.AwardMessage = &message
 	}
 
-	award, _, err := client.GL().Achievements.AwardAchievement(input.AchievementID, input.UserID, opts, gl.WithContext(ctx))
+	award, resp, err := client.GL().Achievements.AwardAchievement(input.AchievementID, input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return UserAchievementOutput{}, wrapErr(opAward, err, "verify achievement_id and user_id both exist, and that award_message stays within 200 characters")
+		return UserAchievementOutput{}, writeErr(client, resp, opAward, objectAward, err, "verify achievement_id and user_id both exist, and that award_message stays within 200 characters")
 	}
 	return UserAchievementOutput{UserAchievement: toUserAchievement(award)}, nil
 }
@@ -328,9 +336,9 @@ func Revoke(ctx context.Context, client *gitlabclient.Client, input RevokeInput)
 		return UserAchievementMutationOutput{}, toolutil.ErrRequiredInt64(opRevoke, "user_achievement_id")
 	}
 
-	award, _, err := client.GL().Achievements.RevokeAchievement(input.UserAchievementID, gl.WithContext(ctx))
+	award, resp, err := client.GL().Achievements.RevokeAchievement(input.UserAchievementID, gl.WithContext(ctx))
 	if err != nil {
-		return UserAchievementMutationOutput{}, wrapErr(opRevoke, err, hintUserAchievementID)
+		return UserAchievementMutationOutput{}, writeErr(client, resp, opRevoke, objectAward, err, hintUserAchievementID)
 	}
 	return UserAchievementMutationOutput{
 		Status:          "success",
@@ -351,9 +359,9 @@ func UserAchievementUpdate(ctx context.Context, client *gitlabclient.Client, inp
 
 	opts := &gl.UpdateUserAchievementOptions{ShowOnProfile: input.ShowOnProfile}
 
-	award, _, err := client.GL().Achievements.UpdateUserAchievement(input.UserAchievementID, opts, gl.WithContext(ctx))
+	award, resp, err := client.GL().Achievements.UpdateUserAchievement(input.UserAchievementID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return UserAchievementOutput{}, wrapErr(opUserAchievementUpdate, err, hintUserAchievementID)
+		return UserAchievementOutput{}, writeErr(client, resp, opUserAchievementUpdate, objectAward, err, hintUserAchievementID)
 	}
 	return UserAchievementOutput{UserAchievement: toUserAchievement(award)}, nil
 }
@@ -367,9 +375,9 @@ func UserAchievementDelete(ctx context.Context, client *gitlabclient.Client, inp
 		return UserAchievementMutationOutput{}, toolutil.ErrRequiredInt64(opUserAchievementDelete, "user_achievement_id")
 	}
 
-	award, _, err := client.GL().Achievements.DeleteUserAchievement(input.UserAchievementID, gl.WithContext(ctx))
+	award, resp, err := client.GL().Achievements.DeleteUserAchievement(input.UserAchievementID, gl.WithContext(ctx))
 	if err != nil {
-		return UserAchievementMutationOutput{}, wrapErr(opUserAchievementDelete, err, hintUserAchievementID)
+		return UserAchievementMutationOutput{}, writeErr(client, resp, opUserAchievementDelete, objectAward, err, hintUserAchievementID)
 	}
 	return UserAchievementMutationOutput{
 		Status:          "success",
@@ -392,9 +400,9 @@ func UserAchievementReorder(ctx context.Context, client *gitlabclient.Client, in
 		}
 	}
 
-	awards, _, err := client.GL().Achievements.UpdateUserAchievementPriorities(input.UserAchievementIDs, gl.WithContext(ctx))
+	awards, resp, err := client.GL().Achievements.UpdateUserAchievementPriorities(input.UserAchievementIDs, gl.WithContext(ctx))
 	if err != nil {
-		return ReorderOutput{}, wrapErr(opUserAchievementReorder, err, "every ID must be an award of the same user, from a prior achievement.user_list response")
+		return ReorderOutput{}, writeErr(client, resp, opUserAchievementReorder, objectAwards, err, "every ID must be an award of the same user, from a prior achievement.user_list response")
 	}
 	return ReorderOutput{
 		Status:           "success",
@@ -432,17 +440,21 @@ func byPriority(awards []UserAchievement) []UserAchievement {
 // sorted list, at any length, insertion path and merge path alike. Asserting
 // this function directly is what states that two unranked awards are equal
 // rather than merely not out of order.
+//
+// Separate ifs rather than a tagless switch: a case expression carries no
+// statement counter, so the mutation gate reports every mutant of one as not
+// covered whatever the tests assert.
 func comparePriority(a, b UserAchievement) int {
-	switch {
-	case a.Priority == nil && b.Priority == nil:
+	if a.Priority == nil && b.Priority == nil {
 		return 0
-	case a.Priority == nil:
-		return 1
-	case b.Priority == nil:
-		return -1
-	default:
-		return cmp.Compare(*a.Priority, *b.Priority)
 	}
+	if a.Priority == nil {
+		return 1
+	}
+	if b.Priority == nil {
+		return -1
+	}
+	return cmp.Compare(*a.Priority, *b.Priority)
 }
 
 // UserList lists the awards one user holds.
@@ -647,6 +659,16 @@ func wrapErr(operation string, err error, hint string) error {
 		return toolutil.WrapErrWithHint(operation, err, hint+". "+hintFeatureAvailability)
 	}
 	return toolutil.WrapErrWithHint(operation, err, hint)
+}
+
+// writeErr wraps the error a write's client-go call returned, the way
+// [wrapErr] does, except for a write GitLab ran and answered without the
+// object it returns, which a fine-grained session is told was probably
+// committed (issue 1103): client-go reports a single object answered null as
+// its not-found sentinel, and the reorder's list of awards, a non-null list
+// of non-null items, as the errors a null below it writes.
+func writeErr(client *gitlabclient.Client, resp *gl.Response, operation, object string, err error, hint string) error {
+	return toolutil.UnconfirmedWrite(client, resp, operation, object, err, wrapErr(operation, err, hint))
 }
 
 func toAchievement(a *gl.Achievement) Achievement {

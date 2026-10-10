@@ -130,23 +130,12 @@ type InputRule struct {
 // leaving them out would take published fields away to guard against a
 // removal nothing in the releases since has pointed to. A catalog field that
 // is an experiment and not yet selected is still left out.
-
-// resourceSelection is what both documents select of a catalog resource
-// itself.
-const resourceSelection = `id
-    name
-    description
-    icon
-    fullPath
-    webPath
-    starCount
-    starrersPath
-    last30DayUsageCount
-    archived
-    topics
-    verificationLevel
-    visibilityLevel
-    latestReleasedAt`
+//
+// Both select the same fields of a catalog resource itself, written out in
+// each rather than joined from a shared fragment, because a constant
+// expression has no statement a test can cover and the mutation gate reports
+// every + in one as not covered. TestQueries_SelectTheSameResourceFields
+// holds the two lists equal instead.
 
 // queryListResources reads each resource and the name of its latest version,
 // which is all a listing publishes of it. It used to select that version's
@@ -166,7 +155,20 @@ query($search: String, $scope: CiCatalogResourceScope, $sort: CiCatalogResourceS
     before: $before
   ) {
     nodes {
-      ` + resourceSelection + `
+      id
+      name
+      description
+      icon
+      fullPath
+      webPath
+      starCount
+      starrersPath
+      last30DayUsageCount
+      archived
+      topics
+      verificationLevel
+      visibilityLevel
+      latestReleasedAt
       versions(first: 1) {
         nodes {
           name
@@ -192,7 +194,20 @@ query($search: String, $scope: CiCatalogResourceScope, $sort: CiCatalogResourceS
 const queryGetResource = `
 query($id: CiCatalogResourceID, $fullPath: ID) {
   ciCatalogResource(id: $id, fullPath: $fullPath) {
-    ` + resourceSelection + `
+    id
+    name
+    description
+    icon
+    fullPath
+    webPath
+    starCount
+    starrersPath
+    last30DayUsageCount
+    archived
+    topics
+    verificationLevel
+    visibilityLevel
+    latestReleasedAt
     versions(first: 10) {
       nodes {
         id
@@ -321,8 +336,15 @@ type gqlVersionName struct {
 }
 
 // gqlVersionNameNodes holds the one version a listing reads per resource.
+//
+// This and every other node list of the package decode their nodes as
+// pointers, because the schema lets each be null and GitLab answers an item
+// the credential may not read as null with no error: a version or a
+// component, for a fine-grained token, since at 19.4.1 neither type declares a
+// fine-grained permission. Decoded by value, a null became an item of zero
+// values (issue 1103).
 type gqlVersionNameNodes struct {
-	Nodes []gqlVersionName `json:"nodes"`
+	Nodes []*gqlVersionName `json:"nodes"`
 }
 
 // gqlVersionReadme decodes the latest version's README, read under an alias
@@ -334,7 +356,7 @@ type gqlVersionReadme struct {
 
 // gqlVersionReadmeNodes holds the latest version the alias reads.
 type gqlVersionReadmeNodes struct {
-	Nodes []gqlVersionReadme `json:"nodes"`
+	Nodes []*gqlVersionReadme `json:"nodes"`
 }
 
 // gqlSemver mirrors CiCatalogResourceSemver, which the schema models as a
@@ -349,7 +371,7 @@ type gqlSemver struct {
 
 // gqlComponentNodes holds the component connection of a version.
 type gqlComponentNodes struct {
-	Nodes []gqlComponent `json:"nodes"`
+	Nodes []*gqlComponent `json:"nodes"`
 }
 
 // gqlResourceFields are the fields of a catalog resource both documents
@@ -386,12 +408,14 @@ type gqlResourceNode struct {
 
 // gqlVersionNodes holds a list of version nodes.
 type gqlVersionNodes struct {
-	Nodes []gqlVersion `json:"nodes"`
+	Nodes []*gqlVersion `json:"nodes"`
 }
 
-// gqlCatalogConnection holds the paginated list of CI catalog resource nodes.
+// gqlCatalogConnection holds the paginated list of CI catalog resource nodes,
+// as pointers for the reason [gqlVersionNameNodes] gives: at 19.4.1 a
+// fine-grained token reads every resource of a page as null.
 type gqlCatalogConnection struct {
-	Nodes    []gqlResourceListNode       `json:"nodes"`
+	Nodes    []*gqlResourceListNode      `json:"nodes"`
 	PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
 }
 
@@ -433,33 +457,49 @@ func (n gqlResourceFields) item(latestVersionName string) ResourceItem {
 // [ResourceItem], naming its latest version when it has one.
 func nodeToResourceItem(n gqlResourceListNode) ResourceItem {
 	var latest string
-	if n.Versions != nil && len(n.Versions.Nodes) > 0 {
-		latest = n.Versions.Nodes[0].Name
+	if n.Versions != nil {
+		if newest := firstNode(n.Versions.Nodes); newest != nil {
+			latest = newest.Name
+		}
 	}
 	return n.item(latest)
 }
 
+// firstNode returns the first node of a list, or nil when the list is empty or
+// GitLab answered its first node as null. A newest version answered null is
+// not replaced by the one after it, which is not the newest.
+func firstNode[T any](nodes []*T) *T {
+	if len(nodes) == 0 {
+		return nil
+	}
+	return nodes[0]
+}
+
 // nodeToResourceDetail converts a catalog resource the get document read into
 // a [ResourceDetail]: its versions, the latest version's components, and the
-// latest version's README from the alias that reads it.
+// latest version's README from the alias that reads it. A version GitLab
+// answered as null is left out.
 func nodeToResourceDetail(n gqlResourceNode) ResourceDetail {
 	var versions []VersionItem
+	var newest *gqlVersion
 	if n.Versions != nil {
 		for _, v := range n.Versions.Nodes {
-			versions = append(versions, versionToItem(v))
+			if v != nil {
+				versions = append(versions, versionToItem(*v))
+			}
 		}
+		newest = firstNode(n.Versions.Nodes)
 	}
 	var latest string
 	detail := ResourceDetail{Versions: versions}
 	// The newest version carries the component set shown at detail level,
 	// since the schema moved it from the resource to its versions.
-	if len(versions) > 0 {
+	if newest != nil {
 		latest = versions[0].Name
 		detail.Components = versions[0].Components
 	}
 	detail.ResourceItem = n.item(latest)
-	if n.LatestVersion != nil && len(n.LatestVersion.Nodes) > 0 {
-		readme := n.LatestVersion.Nodes[0]
+	if readme := latestReadme(n.LatestVersion); readme != nil {
 		if readme.Readme != nil {
 			detail.Readme = *readme.Readme
 		}
@@ -468,6 +508,15 @@ func nodeToResourceDetail(n gqlResourceNode) ResourceDetail {
 		}
 	}
 	return detail
+}
+
+// latestReadme returns the latest version the alias read its README from, or
+// nil when the alias came back null, empty, or with that version null.
+func latestReadme(alias *gqlVersionReadmeNodes) *gqlVersionReadme {
+	if alias == nil {
+		return nil
+	}
+	return firstNode(alias.Nodes)
 }
 
 // versionToItem converts a raw GraphQL version node into a [VersionItem],
@@ -513,10 +562,14 @@ func versionToItem(v gqlVersion) VersionItem {
 }
 
 // convertComponents transforms a slice of raw GraphQL component structs into
-// typed [ComponentItem] values, including nested input specifications.
-func convertComponents(gqlComps []gqlComponent) []ComponentItem {
+// typed [ComponentItem] values, including nested input specifications. A
+// component GitLab answered as null is left out.
+func convertComponents(gqlComps []*gqlComponent) []ComponentItem {
 	items := make([]ComponentItem, 0, len(gqlComps))
 	for _, c := range gqlComps {
+		if c == nil {
+			continue
+		}
 		comp := ComponentItem{
 			ID:                  c.ID,
 			Name:                c.Name,
@@ -569,8 +622,9 @@ type ListInput struct {
 // ListOutput is the output for listing CI/CD Catalog resources.
 type ListOutput struct {
 	toolutil.HintableOutput
-	Resources  []ResourceItem                   `json:"resources"`
-	Pagination toolutil.GraphQLPaginationOutput `json:"pagination"`
+	Resources   []ResourceItem                   `json:"resources"`
+	HiddenItems int                              `json:"hidden_items,omitempty" jsonschema:"Items of this page GitLab answered as null with no error, which it does for an item the credential may not read. They are left out of resources"`
+	Pagination  toolutil.GraphQLPaginationOutput `json:"pagination"`
 }
 
 // List retrieves CI/CD Catalog resources via the GitLab GraphQL API.
@@ -615,15 +669,18 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		}
 	}
 
-	items := make([]ResourceItem, 0, len(resp.Data.CiCatalogResources.Nodes))
-	for _, n := range resp.Data.CiCatalogResources.Nodes {
-		items = append(items, nodeToResourceItem(n))
-	}
-
-	return ListOutput{
-		Resources:  items,
+	out := ListOutput{
+		Resources:  make([]ResourceItem, 0, len(resp.Data.CiCatalogResources.Nodes)),
 		Pagination: toolutil.PageInfoToOutput(resp.Data.CiCatalogResources.PageInfo),
-	}, nil
+	}
+	for _, n := range resp.Data.CiCatalogResources.Nodes {
+		if n == nil {
+			out.HiddenItems++
+			continue
+		}
+		out.Resources = append(out.Resources, nodeToResourceItem(*n))
+	}
+	return out, nil
 }
 
 // Get.

@@ -182,6 +182,68 @@ the payload as a pointer beside the top-level entries, returns
 `GraphQLTopLevelError` when the payload is absent, and an error naming the
 missing payload when GitLab gave no reason either.
 
+The opposite case is a write GitLab ran and answered without the object it
+returns, which is what it does to a fine-grained token the payload's type does
+not admit: it checks the mutation before the write and the payload's object
+only after it, so the object comes back `null` with no error, or nulled below a
+non-null position with graphql-ruby's `Cannot return null for non-nullable ...`
+entries (issue 1103, [row 88 of the upstream register](upstream-bugs.md#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null)).
+Read as "not done", that answer makes a model repeat a committed write. So a
+GraphQL write's handler answers its error through `toolutil.UnconfirmedWrite`
+(client-go's not-found and empty-response sentinels on an HTTP 200, and an
+error whose top-level messages are all `GraphQLNullPropagated`), or, where it
+decodes the payload itself, calls `client.Authority().UnconfirmedWrite` at the
+branch where the object is missing. A fine-grained session is then told the
+write was probably committed and to check before repeating it; a classic
+session's client carries no authority, so it keeps the handler's own error.
+The sentence is `finegrained.Authority.UnconfirmedWrite`'s and is not wrapped
+again, since its hint would be about a write that did not happen.
+
+Which writes can be answered this way is the fine-grained table's to say, and
+`TestTable_WritesAnsweredWithoutTheirObject_AreEachAnswered` in
+`internal/tools/actiongrants` holds the list (`committedWithoutObject`) to it,
+so a regeneration that adds one fails until its handler is looked at. There
+are 27 at 19.4.1, in two kinds:
+
+- The 21 the table denies as committed and then answered `null`: the 20 of
+  row 88, whose payload type declares nothing, and `group.epic_create`, whose
+  epic resolves no boundary (row 89). They are withheld from every session
+  that carries an authority, in every phase, so their handlers' answer is for
+  a table recorded from a later release that stops withholding one while a
+  grant can still leave the object out. `custom_emoji.delete` is among them
+  and needs nothing: its document selects the errors alone, so it answers a
+  deletion GitLab ran as the success it is.
+- The six the table serves whose mutation passes a grant that cannot read
+  the object on its answer spine: the four vulnerability state changes, since
+  Vulnerability: Update does not grant `read_vulnerability`, and the two epic
+  note edits, since Work Item: Update does not grant `read_note`. A session
+  reaches these today, in phase A with any grant and in phase B with the read
+  held on another project or group. An edit answered with neither note nor
+  quick actions status is also what a body of commands alone, which deletes
+  the note, answers, and a fine-grained token is never shown the status that
+  tells them apart, so `toolutil.ExecGraphQLNoteMutation` takes the client's
+  authority and names both readings.
+
+A fine-grained token whose kind the server could not learn carries no
+authority, so it gets each handler's classic answer, which for the
+vulnerability state changes is the empty vulnerability they always returned.
+
+A list can answer an item `null` in place too: GitLab redacts the items of a
+connection whose node type declares an ability or a fine-grained permission,
+and checks every other item as it answers it, so an item whose type declares
+neither is `null` where it sits. A node decoded by value turns that into a row
+of zero values. The positions the fine-grained table records that way are the
+CI/CD catalog's resources, versions and components, a pipeline security
+summary's scanned resources, and the linked items of a work item's create,
+update, read and list answers (`features.linkedItems.linkedItems.nodes`). The
+first two have decoders here (`internal/tools/cicatalog`,
+`internal/tools/vulnerabilities`), which read the nodes as pointers and leave a
+`null` out, and the catalog listing counts what it left out in `hidden_items`
+and in its heading. The linked items are decoded by client-go, which reads a
+`null` node as one with no work item and skips it in
+`workItemWidgetLinkedItemsGQL.unwrap`, so they need nothing here. A new decoder
+of a connection whose node type declares neither does the same.
+
 ---
 
 ## Wrapping in a handler
