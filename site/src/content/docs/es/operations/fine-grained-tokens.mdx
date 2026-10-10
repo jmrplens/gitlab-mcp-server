@@ -377,6 +377,57 @@ junto a tres tipos de respuesta:
   los elementos que no se le concedieron al token, así que vacía puede significar que el
   token no puede verlos.
 
+Una lista también puede responder un elemento como `null` donde está en vez de dejarlo
+fuera, cuando el tipo del elemento no declara ni una comprobación de permisos propia ni
+un permiso de grano fino. Esos elementos se dejan fuera de la respuesta en vez de
+mostrarse como filas vacías. El listado del catálogo de CI/CD los cuenta en su
+encabezado y explica el motivo en sus siguientes pasos. En GitLab 19.4.1 ese listado se
+retiene a una sesión de grano fino ([arriba](#lo-que-ningún-token-de-grano-fino-alcanza)),
+así que la cuenta es para una sesión a la que se sirve de todos modos, como una cuyo
+tipo de token el servidor no pudo averiguar
+([arriba](#cuando-el-servidor-no-sabe-qué-tipo-de-token-tiene)).
+
+### Una escritura respondida sin su objeto
+
+GitLab comprueba el permiso propio de una escritura antes de ejecutarla, y el objeto con
+el que responde solo después de ejecutarla. Así, una escritura que la concesión permite,
+cuyo objeto la concesión no deja leer al token, se hace, y se responde sin el objeto:
+`null` sin ningún error, o el error que GitLab escribe cuando ese null queda bajo un
+campo que no puede ser null. Un asistente que lee eso como "no hecho" repite una
+escritura que GitLab ya hizo.
+
+Cuando una sesión de grano fino puede llegar a una escritura así, la respuesta es un
+error que dice que la escritura **probablemente se confirmó**, y que compruebe en GitLab,
+o con un token clásico, si surtió efecto antes de repetirla, porque repetir una creación
+crea una segunda. Responden así dos tipos de escritura:
+
+- Escrituras que el servidor sirve cuyo objeto necesita un permiso que el de la propia
+  escritura no incluye: los cuatro cambios de estado de una vulnerabilidad
+  (`vulnerability.dismiss`, `vulnerability.confirm`, `vulnerability.resolve` y
+  `vulnerability.revert`), porque Vulnerability: Update no concede Vulnerability: Read,
+  y las ediciones de notas de una épica (`group.epic_note_update` y
+  `group.epic_discussion_update_note`), porque Work Item: Update no concede Work Item:
+  Read. Una sesión llega a una con una concesión que tiene la escritura sin la lectura,
+  cuando la concesión no se evaluó, o cuando tiene la lectura en otro proyecto o grupo
+  que aquel en el que escribe. Una nota editada que se responde así también puede ser
+  una nota que GitLab borró porque su nuevo cuerpo solo tenía acciones rápidas, y la
+  respuesta lo dice, porque a un token de grano fino no se le muestra lo que distinguía
+  una cosa de la otra.
+- Las escrituras de la segunda y la cuarta fila de la
+  [tabla de arriba](#lo-que-ningún-token-de-grano-fino-alcanza). Con la tabla que este
+  servidor registra de GitLab 19.4.1 se retienen a toda sesión que el servidor sabe de
+  grano fino, sea cual sea su concesión y la versión que ejecute la instancia. La respuesta está para una
+  tabla registrada de una versión posterior que deje de retener alguna mientras una
+  concesión todavía pueda dejar fuera su objeto. GitLab ha incorporado, para 19.5, una
+  declaración de Custom Emoji: Read en el tipo de los emojis personalizados, tras la
+  cual un token al que solo se le concede Custom Emoji: Create sigue creando el emoji y
+  lee `null`.
+
+Un token cuyo tipo el servidor no pudo averiguar
+([arriba](#cuando-el-servidor-no-sabe-qué-tipo-de-token-tiene)) se sirve como uno
+clásico, y recibe la respuesta que recibe un token clásico, que no dice que la escritura
+probablemente se confirmó. Un token clásico nunca recibe esta respuesta.
+
 ## Los rechazos del propio GitLab
 
 Una llamada que el servidor deja pasar todavía puede rechazarla GitLab, y el servidor
