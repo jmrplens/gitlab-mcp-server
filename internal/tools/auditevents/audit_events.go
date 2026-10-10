@@ -18,6 +18,7 @@ type ListInstanceInput struct {
 	CreatedAfter  string `json:"created_after,omitempty"  jsonschema:"Return events created after this date (ISO 8601 YYYY-MM-DD)"`
 	CreatedBefore string `json:"created_before,omitempty" jsonschema:"Return events created before this date (ISO 8601 YYYY-MM-DD)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInstanceInput defines parameters for retrieving a single instance audit event.
@@ -31,6 +32,7 @@ type ListGroupInput struct {
 	CreatedAfter  string               `json:"created_after,omitempty"  jsonschema:"Return events created after this date (ISO 8601 YYYY-MM-DD)"`
 	CreatedBefore string               `json:"created_before,omitempty" jsonschema:"Return events created before this date (ISO 8601 YYYY-MM-DD)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetGroupInput defines parameters for retrieving a single group audit event.
@@ -45,6 +47,7 @@ type ListProjectInput struct {
 	CreatedAfter  string               `json:"created_after,omitempty"  jsonschema:"Return events created after this date (ISO 8601 YYYY-MM-DD)"`
 	CreatedBefore string               `json:"created_before,omitempty" jsonschema:"Return events created before this date (ISO 8601 YYYY-MM-DD)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetProjectInput defines parameters for retrieving a single project audit event.
@@ -157,7 +160,11 @@ func toOutput(e *gl.AuditEvent) Output {
 	return o
 }
 
-func buildListOpts(after, before string, pag toolutil.PaginationInput) *gl.ListAuditEventsOptions {
+// buildListOpts maps the date filters and the offset and keyset pagination of
+// an audit event list onto client-go's options. All three lists page by
+// cursor under pagination=keyset, the continuation of which travels on the
+// call as [toolutil.KeysetContinuation] rather than on these options.
+func buildListOpts(after, before string, pag toolutil.PaginationInput, keyset toolutil.KeysetPaginationInput) *gl.ListAuditEventsOptions {
 	opts := &gl.ListAuditEventsOptions{}
 	if after != "" {
 		if t, err := time.Parse("2006-01-02", after); err == nil {
@@ -169,13 +176,19 @@ func buildListOpts(after, before string, pag toolutil.PaginationInput) *gl.ListA
 			opts.CreatedBefore = &t
 		}
 	}
-	if pag.Page > 0 {
-		opts.Page = int64(pag.Page)
-	}
-	if pag.PerPage > 0 {
-		opts.PerPage = int64(pag.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, pag, keyset)
 	return opts
+}
+
+// listOutput maps one page of audit events, from any of the three scopes, and
+// the pagination of the response that carried it, a keyset page's
+// next_page_token included.
+func listOutput(events []*gl.AuditEvent, resp *gl.Response) ListOutput {
+	out := make([]Output, len(events))
+	for i, e := range events {
+		out[i] = toOutput(e)
+	}
+	return ListOutput{AuditEvents: out, Pagination: toolutil.PaginationFromResponse(resp)}
 }
 
 // ListInstance lists instance-level audit events (admin only).
@@ -183,17 +196,13 @@ func ListInstance(ctx context.Context, client *gitlabclient.Client, input ListIn
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
 	}
-	opts := buildListOpts(input.CreatedAfter, input.CreatedBefore, input.PaginationInput)
-	events, resp, err := client.GL().AuditEvents.ListInstanceAuditEvents(opts, gl.WithContext(ctx))
+	opts := buildListOpts(input.CreatedAfter, input.CreatedBefore, input.PaginationInput, input.KeysetPaginationInput)
+	events, resp, err := client.GL().AuditEvents.ListInstanceAuditEvents(opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("auditListInstance", err, http.StatusForbidden,
 			"requires administrator access; self-managed Premium/Ultimate only; created_after/created_before must be ISO 8601 dates; entity_type filters: User, Group, Project")
 	}
-	out := make([]Output, len(events))
-	for i, e := range events {
-		out[i] = toOutput(e)
-	}
-	return ListOutput{AuditEvents: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return listOutput(events, resp), nil
 }
 
 // GetInstance retrieves a single instance-level audit event.
@@ -220,17 +229,13 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	if input.GroupID == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
-	opts := buildListOpts(input.CreatedAfter, input.CreatedBefore, input.PaginationInput)
-	events, resp, err := client.GL().AuditEvents.ListGroupAuditEvents(string(input.GroupID), opts, gl.WithContext(ctx))
+	opts := buildListOpts(input.CreatedAfter, input.CreatedBefore, input.PaginationInput, input.KeysetPaginationInput)
+	events, resp, err := client.GL().AuditEvents.ListGroupAuditEvents(string(input.GroupID), opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("auditListGroup", err, http.StatusForbidden,
 			"requires Owner role + Premium/Ultimate; verify group_id with group.list; created_after/created_before must be ISO 8601")
 	}
-	out := make([]Output, len(events))
-	for i, e := range events {
-		out[i] = toOutput(e)
-	}
-	return ListOutput{AuditEvents: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return listOutput(events, resp), nil
 }
 
 // GetGroup retrieves a single group-level audit event.
@@ -260,17 +265,13 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
-	opts := buildListOpts(input.CreatedAfter, input.CreatedBefore, input.PaginationInput)
-	events, resp, err := client.GL().AuditEvents.ListProjectAuditEvents(string(input.ProjectID), opts, gl.WithContext(ctx))
+	opts := buildListOpts(input.CreatedAfter, input.CreatedBefore, input.PaginationInput, input.KeysetPaginationInput)
+	events, resp, err := client.GL().AuditEvents.ListProjectAuditEvents(string(input.ProjectID), opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("auditListProject", err, http.StatusForbidden,
 			"requires Maintainer role + Premium/Ultimate; verify project_id with project.list; created_after/created_before must be ISO 8601")
 	}
-	out := make([]Output, len(events))
-	for i, e := range events {
-		out[i] = toOutput(e)
-	}
-	return ListOutput{AuditEvents: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return listOutput(events, resp), nil
 }
 
 // GetProject retrieves a single project-level audit event.

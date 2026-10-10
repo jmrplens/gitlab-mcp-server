@@ -354,7 +354,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		opts.Sort = input.Sort
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	_, resp, err := client.GL().Branches.ListBranches(string(input.ProjectID), opts, gl.WithContext(ctx))
+	_, resp, err := client.GL().Branches.ListBranches(string(input.ProjectID), opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil && !misreadByClientGo(err) {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("branchList", err, http.StatusNotFound,
 			"verify project_id with project.get")

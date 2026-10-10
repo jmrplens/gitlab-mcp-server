@@ -16,6 +16,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -33,7 +35,7 @@ func TestRawHelpers_UnescapablePath_FailBeforeTheRequest(t *testing.T) {
 	const badPath = "projects/%zz/jobs"
 
 	t.Run("list", func(t *testing.T) {
-		jobs, resp, err := rawListJobs(t.Context(), client, badPath, nil)
+		jobs, resp, err := rawListJobs(client, badPath, nil, gl.WithContext(t.Context()))
 		if err == nil || jobs != nil || resp != nil {
 			t.Fatalf("rawListJobs = %v/%v/%v, want only an error", jobs, resp, err)
 		}
@@ -3097,4 +3099,25 @@ func jobSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolut
 		byTool[spec.IndividualTool.Name] = spec
 	}
 	return byTool
+}
+
+// TestListProject_KeysetPage_FollowsTheNextPageToken verifies that a
+// project's job list, which GitLab pages by cursor under keyset pagination,
+// can be followed past the first page through the next_page_token it
+// publishes (issue 1165).
+func TestListProject_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
+	listing := &testutil.KeysetListing{
+		Path: "/api/v4/projects/42/jobs", Param: "cursor", Value: "eyJpZCI6IjIifQ",
+		First:  `[{"id":1,"name":"a"},{"id":2,"name":"b"}]`,
+		Second: `[{"id":3,"name":"c"}]`,
+	}
+	client := testutil.NewTestClient(t, listing)
+	testutil.FollowKeyset(t, listing, func(token string) (testutil.KeysetPage, error) {
+		out, err := ListProject(t.Context(), client, ListProjectInput{
+			ProjectID:  "42",
+			Pagination: "keyset",
+			PageToken:  token,
+		})
+		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Jobs)}, err
+	})
 }

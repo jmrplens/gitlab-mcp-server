@@ -13,6 +13,9 @@
 //   - Response writers: [RespondJSON], [RespondJSONWithPagination],
 //     [RespondGraphQL], and [RespondGraphQLError] keep response shapes
 //     consistent across packages.
+//   - Keyset pagination: [KeysetListing] answers a two-page list the way
+//     GitLab answers one paged by keyset, and [FollowKeyset] holds a handler
+//     to following it through the next_page_token its first page publishes.
 //   - Request assertions: [AssertRequestMethod], [AssertRequestPath], and
 //     [AssertQueryParam] validate inbound HTTP calls in mock handlers.
 //   - Context and logging: [CancelledCtx] returns a pre-cancelled context;

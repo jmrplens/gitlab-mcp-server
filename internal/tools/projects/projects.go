@@ -1292,7 +1292,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	opts := buildListOpts(input)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	projects, resp, err := client.GL().Projects.ListProjects(opts, gl.WithContext(ctx))
+	projects, resp, err := client.GL().Projects.ListProjects(opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithMessage("projectList", err)
 	}
@@ -2051,7 +2051,7 @@ func ListForks(ctx context.Context, client *gitlabclient.Client, input ListForks
 	}
 	opts := buildForkListOpts(input)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	forks, resp, err := client.GL().Projects.ListProjectForks(string(input.ProjectID), opts, gl.WithContext(ctx))
+	forks, resp, err := client.GL().Projects.ListProjectForks(string(input.ProjectID), opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return ListForksOutput{}, toolutil.WrapErrWithStatusHint("projectListForks", err, http.StatusNotFound,
 			"verify the parent project exists with project.get")
@@ -2682,7 +2682,7 @@ func listUserScopedProjects(ctx context.Context, userID toolutil.StringOrInt, op
 		return ListOutput{}, errors.New(missingUserMsg)
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	projects, resp, err := list(string(userID), buildUserProjectOpts(filters), gl.WithContext(ctx))
+	projects, resp, err := list(string(userID), buildUserProjectOpts(filters), gl.WithContext(ctx), toolutil.KeysetContinuation(filters.KeysetPaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, notFoundHint)
 	}
@@ -3089,8 +3089,22 @@ type ListUserContributedProjectsInput struct {
 	userProjectFilterInput
 }
 
-// ListUserContributedProjects lists projects a specific user has contributed to.
+// contributedKeysetRefusal is what a keyset request for a user's contributed
+// projects is answered with, before any request is made. GitLab serves the
+// route a keyset page and writes an id_before or id_after into its next link,
+// but the route builds ContributedProjectsFinder with no params, so the
+// finder never reads either and the link answers the first page again
+// (upstream-bugs row 112). Followed, it read the first page twice as two
+// pages and then reported the listing complete.
+const contributedKeysetRefusal = "projectListUserContributed: GitLab does not page a user's contributed projects by keyset: the route ignores the id_before and id_after its own next link names, so a second keyset page would repeat the first. Leave pagination and page_token empty and read on with page and per_page"
+
+// ListUserContributedProjects lists projects a specific user has contributed
+// to, by offset pages only, since GitLab cannot follow this list by keyset
+// (see [contributedKeysetRefusal]).
 func ListUserContributedProjects(ctx context.Context, client *gitlabclient.Client, input ListUserContributedProjectsInput) (ListOutput, error) {
+	if input.Pagination == "keyset" || input.PageToken != "" {
+		return ListOutput{}, errors.New(contributedKeysetRefusal)
+	}
 	return listUserScopedProjects(ctx, input.UserID, "projectListUserContributed", "projectListUserContributed: user_id is required. Use user.get to find the user ID",
 		"user not found - use user.get to verify user_id", input.toFilter(),
 		client.GL().Projects.ListUserContributedProjects)

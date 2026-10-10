@@ -90,6 +90,12 @@ func TestFormatPagination_Cases_WritesWhatIsKnown(t *testing.T) {
 		{name: "keyset pagination whose only evidence is the flag", p: PaginationOutput{Page: 1, PerPage: 20, HasMore: true}, want: "Page 1 | 20 per page | more pages available"},
 		{name: "keyset pagination whose only evidence is the next page", p: PaginationOutput{Page: 1, PerPage: 20, NextPage: 2}, want: "Page 1 | 20 per page | more pages available"},
 		{name: "keyset pagination on the last page", p: PaginationOutput{Page: 3, PerPage: 20}, want: "Page 3 | 20 per page | no more pages"},
+		// A page GitLab served by keyset carries no page number, no total and
+		// no page size, only the link to its successor, so the token is the
+		// whole line and is written where a model reading the Markdown can
+		// copy it (issue 1165).
+		{name: "a keyset page naming its successor", p: PaginationOutput{HasMore: true, NextPageToken: "https://gitlab.example.com/api/v4/projects?id_after=42"}, want: "more pages available | page_token for the next page: `https://gitlab.example.com/api/v4/projects?id_after=42`"},
+		{name: "a keyset token beside a page number is written once", p: PaginationOutput{Page: 1, PerPage: 20, HasMore: true, NextPageToken: "https://h/x?cursor=a`b"}, want: "Page 1 | 20 per page | more pages available | page_token for the next page: ``https://h/x?cursor=a`b``"},
 		{name: "a page count without a total", p: PaginationOutput{Page: 1, TotalPages: 2, PerPage: 2}, want: "Page 1 of 2 | 2 per page"},
 		// A page count with no page number is the shape that produced "Page 0
 		// of 5": the totals are GitLab's, the page number is not there, and a

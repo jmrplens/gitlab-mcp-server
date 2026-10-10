@@ -105,12 +105,14 @@ Una lista cierra su tabla con una línea que dice lo que GitLab contó al servid
 Page 1 of 3 | 45 items total | 20 per page
 Page 1 | 20 per page | more pages available
 Page 1 | 20 per page | no more pages
+more pages available | page_token for the next page: `https://gitlab.example.com/api/v4/projects?id_after=42&order_by=id&pagination=keyset&per_page=20&sort=asc`
 Showing 20 items | next page cursor: `eyJpZCI6IjQyIn0`
 Showing 20 items | no more pages
 ```
 
 - La primera línea es paginación por desplazamiento con total.
 - La segunda y la tercera no tienen total, que es lo que envía GitLab para una lista de más de 10.000 elementos, y dicen si queda otra página.
+- La cuarta es una página que GitLab sirvió con paginación keyset, que no lleva número de página ni total: el fragmento de código es el `next_page_token` que devolver como `page_token`, y la última página keyset no escribe ninguna línea.
 - Las dos últimas son una lista leída por GraphQL, que pagina por cursor; una lista que además pagina hacia atrás añade `prev page cursor: ...`.
 
 Una paginación que no dice nada (ni página, ni total, ni tamaño de página) no escribe ninguna línea.
@@ -121,21 +123,24 @@ Una paginación que no dice nada (ni página, ni total, ni tamaño de página) n
 
 Una lista leída por REST:
 
-| Campo         | Significado                                                      |
-| ------------- | ---------------------------------------------------------------- |
-| `page`        | La página devuelta, contando desde 1                             |
-| `per_page`    | Elementos por página                                             |
-| `total_items` | Elementos en todas las páginas, `0` cuando GitLab no envió total |
-| `total_pages` | Páginas en total, `0` cuando GitLab no envió total               |
-| `next_page`   | La página que pedir a continuación, `0` en la última             |
-| `prev_page`   | La página anterior a esta, `0` en la primera                     |
-| `has_more`    | `true` cuando queda otra página                                  |
+| Campo             | Significado                                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `page`            | La página devuelta, contando desde 1                                                                                     |
+| `per_page`        | Elementos por página                                                                                                     |
+| `total_items`     | Elementos en todas las páginas, `0` cuando GitLab no envió total                                                         |
+| `total_pages`     | Páginas en total, `0` cuando GitLab no envió total                                                                       |
+| `next_page`       | La página que pedir a continuación, `0` en la última y en toda página keyset                                             |
+| `prev_page`       | La página anterior a esta, `0` en la primera                                                                             |
+| `has_more`        | `true` cuando GitLab nombró una página siguiente; en una página keyset puede ser una página vacía tras las últimas filas |
+| `next_page_token` | En una página que GitLab sirvió con paginación keyset, el valor que devolver como `page_token` para la página siguiente  |
 
-Los siete campos están siempre presentes. Para seguir leyendo, llama a la misma acción con `page` igual a `next_page`; `per_page` admite como máximo 100.
+Los siete primeros campos están siempre presentes, y `next_page_token` solo en una página keyset que tiene sucesora. Para seguir leyendo, llama a la misma acción con `page` igual a `next_page`, o en una página keyset con `page_token` igual a `next_page_token`; `per_page` admite como máximo 100.
 
 La búsqueda es la excepción al `0`: la API de búsqueda de GitLab no envía totales, así que allí `total_items` es el número de elementos de esta página y `total_pages` es `next_page`, o `page` en la última. Los dos son una cota inferior deducida de lo que llegó, no una cuenta del resultado completo.
 
-Una lista pedida con `pagination: "keyset"` no se puede seguir más allá de su primera página por ahora: GitLab la responde con un enlace a la página siguiente que el bloque no lleva, así que `has_more` vale `false` aunque queden más ([issue 1165](https://github.com/jmrplens/gitlab-mcp-server/issues/1165)). Deja `pagination` en su valor por defecto para leer una lista larga página a página.
+Una lista pedida con `pagination: "keyset"` se pagina por una posición que nombra GitLab y no por un número de página, así que sus páginas no llevan `page`, ni totales, y su `next_page` vale `0`. GitLab nombra la página siguiente en un enlace, y el servidor publica ese enlace como `next_page_token`. Devuélvelo sin cambios como `page_token`, a la misma acción, para leer la página siguiente: lleva la posición del listado y todos los filtros que leyó GitLab, así que sirve sea cual sea el parámetro por el que se reanuda la lista (`id_before` en los proyectos, o `id_after` si se ordenan de forma ascendente, un cursor en las incidencias, los trabajos, los usuarios y los eventos de auditoría, un token de página de Gitaly en el árbol del repositorio, los commits, las ramas y las etiquetas). El token es la consulta completa de la llamada que lo lleva: los filtros que se envían otra vez a su lado no se le añaden, porque GitLab escribe en su enlace un filtro de lista como `labels` o `topic` como `labels[]` y rechaza una petición que lleve además el `labels` separado por comas. GitLab solo pagina los proyectos por keyset cuando se ordenan por `id`, y los proyectos a los que ha contribuido un usuario no los pagina por keyset en absoluto: esa ruta ignora la posición que nombra su propio enlace, así que `project.list_user_contributed` rechaza `pagination: "keyset"` y se pagina solo con `page`. En las listas de proyectos y en las de Gitaly GitLab puede nombrar una página siguiente después de las últimas filas, así que seguirla puede devolver una página vacía sin token, que es el final. Un enlace que enviaría otra vez la petición recién respondida no se publica, así que una lista cuyo enlace deja de avanzar termina tras leer una página por segunda vez en lugar de dar vueltas, y un `page_token` que lleva una credencial o `sudo` se rechaza, porque este servidor nunca envía una en la consulta, así que ningún enlace que GitLab escribe para él la lleva.
+
+No toda acción que acepta `pagination` es una que GitLab pagine por keyset: algunas responden páginas por desplazamiento se pida lo que se pida, y otras rechazan `pagination: "keyset"` con un 405 ([issue 1165](https://github.com/jmrplens/gitlab-mcp-server/issues/1165) sigue la retirada del parámetro en esas). Deja ahí `pagination` en su valor por defecto y pagina con `page`.
 
 Una lista leída por GraphQL:
 
@@ -393,7 +398,7 @@ Cada acción publica el JSON Schema de su salida, y dónde se lee depende de la 
 | Meta       | El `outputSchema` de la herramienta es un envoltorio compartido (`next_steps`, `pagination` y cualquier otro campo). El esquema propio de cada acción se publica en [llms-full-meta-tools.txt](https://jmrp.io/docs/gitlab-mcp-server/llms-full-meta-tools.txt) bajo **Action Output Schemas** |
 | Dinámica   | `gitlab_execute_action` declara el mismo envoltorio, y `gitlab_find_action` devuelve el esquema de cada acción encontrada como `output_schema`, junto a su `input_schema` ([Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/))                                    |
 
-El objeto `pagination` del envoltorio declara los siete campos de una lista leída por REST, con los nombres de [El JSON estructurado](#el-json-estructurado), y su descripción nombra los campos de cursor que lleva en su lugar una lista leída por GraphQL. No exige ninguno y acepta otros, porque las dos formas viajan bajo la misma clave.
+El objeto `pagination` del envoltorio declara los ocho campos de una lista leída por REST, con los nombres de [El JSON estructurado](#el-json-estructurado), y su descripción nombra los campos de cursor que lleva en su lugar una lista leída por GraphQL. No exige ninguno y acepta otros, porque las dos formas viajan bajo la misma clave.
 
 Los esquemas siguen el nivel de la instancia. En un nivel inferior, un campo que solo rellena un nivel superior se deja fuera del esquema de salida, mientras que la salida en sí no se filtra, así que un campo que GitLab envía de todos modos sigue llegando.
 

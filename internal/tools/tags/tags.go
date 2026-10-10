@@ -210,7 +210,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		opts.Sort = new(input.Sort)
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
-	tags, resp, err := client.GL().Tags.ListTags(string(input.ProjectID), opts, gl.WithContext(ctx))
+	tags, resp, err := client.GL().Tags.ListTags(string(input.ProjectID), opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("tagList", err, http.StatusNotFound,
 			"verify project_id with project.get")
@@ -535,16 +535,20 @@ func formatIDCell(id int64) string {
 
 // formatAccessLevelSummary renders a single access level entry as a human-readable
 // string. It appends user/group/deploy-key context when the IDs are non-zero.
+//
+// Separate ifs rather than a tagless switch: a case expression carries no
+// statement counter, so the mutation gate reports every mutant of one as not
+// covered whatever the tests assert.
 func formatAccessLevelSummary(al TagAccessLevelOutput) string {
 	desc := al.AccessLevelDescription
-	switch {
-	case al.UserID != 0:
+	if al.UserID != 0 {
 		return fmt.Sprintf("%s (User #%d)", desc, al.UserID)
-	case al.GroupID != 0:
-		return fmt.Sprintf("%s (Group #%d)", desc, al.GroupID)
-	case al.DeployKeyID != 0:
-		return fmt.Sprintf("%s (Deploy Key #%d)", desc, al.DeployKeyID)
-	default:
-		return desc
 	}
+	if al.GroupID != 0 {
+		return fmt.Sprintf("%s (Group #%d)", desc, al.GroupID)
+	}
+	if al.DeployKeyID != 0 {
+		return fmt.Sprintf("%s (Deploy Key #%d)", desc, al.DeployKeyID)
+	}
+	return desc
 }

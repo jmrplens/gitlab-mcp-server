@@ -307,6 +307,7 @@ func ListTags(ctx context.Context, client *gitlabclient.Client, input ListTagsIn
 	}
 	tags, resp, err := client.GL().ContainerRegistry.ListRegistryRepositoryTags(
 		string(input.ProjectID), input.RepositoryID, opts, gl.WithContext(ctx),
+		toolutil.KeysetContinuation(input.KeysetPaginationInput),
 	)
 	if err != nil {
 		return TagListOutput{}, toolutil.WrapErrWithStatusHint("registry_list_tags", err, http.StatusNotFound,

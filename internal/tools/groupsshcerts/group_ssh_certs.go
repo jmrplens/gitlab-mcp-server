@@ -102,6 +102,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 		in.GroupID.String(),
 		gl.WithContext(ctx),
 		listQueryParameters(in),
+		toolutil.KeysetContinuation(in.KeysetPaginationInput),
 	)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list group SSH certificates", err, http.StatusNotFound, "verify group_id. Requires Owner role or admin access")

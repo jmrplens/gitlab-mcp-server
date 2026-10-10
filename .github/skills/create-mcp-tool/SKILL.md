@@ -64,7 +64,7 @@ type ListOutput struct {
 Rules:
 
 - Embed `toolutil.HintableOutput` as first field (enables `next_steps` in JSON)
-- Embed `toolutil.PaginationInput` for list operations, and `toolutil.KeysetPaginationInput` beside it when the GitLab endpoint supports keyset pagination
+- Embed `toolutil.PaginationInput` for list operations, and `toolutil.KeysetPaginationInput` beside it when the GitLab endpoint supports keyset pagination; such a list also passes `toolutil.KeysetContinuation(input.KeysetPaginationInput)` on its SDK call, last, after `gl.WithContext(ctx)` (it makes the token the whole query, so an option after it would add to GitLab's link), or the `next_page_token` its keyset pages publish cannot be followed (`testutil.KeysetListing` and `testutil.FollowKeyset` test it)
 - Use `toolutil.StringOrInt` for project/group IDs
 - Tag fields that only exist at a higher GitLab tier with `tier:"premium"` or `tier:"ultimate"`; the catalog prunes them from the schema below that tier
 - Use `jsonschema:"description,required"` for a field GitLab requires on the route the action sends, and only for that: the marker is the one required list all three surfaces serve (`omitempty` no longer decides it), and `make audit-1to1-required` fails on a marker the live record disagrees with unless `cmd/audit_1to1/internal/required/declarations.go` says why. A choice between fields GitLab states as `at_least_one_of` or `exactly_one_of` is an `anyOf` through `toolutil.SchemaAnyOfRequired` in the spec's `InputSchemaOverrides`, with neither field marked

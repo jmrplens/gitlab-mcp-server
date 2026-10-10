@@ -32,14 +32,16 @@ func authorCell(a *SnippetAuthorOutput) string {
 	}
 	handle := toolutil.MdUserHandle(a.Username)
 	name := toolutil.EscapeMdTableCell(a.Name)
-	switch {
-	case name == "":
+	// An if chain rather than a tagless switch: a case expression carries no
+	// statement counter, so the mutation gate reports every mutant of one as
+	// not covered whatever the tests assert.
+	if name == "" {
 		return handle
-	case handle == "":
-		return name
-	default:
-		return name + " (" + handle + ")"
 	}
+	if handle == "" {
+		return name
+	}
+	return name + " (" + handle + ")"
 }
 
 // FormatMarkdown renders one snippet as the card of one object.

@@ -1348,3 +1348,27 @@ func TestUploadedByLabel(t *testing.T) {
 		})
 	}
 }
+
+// TestList_Continuation_IsAppliedRatherThanSentAsPageToken verifies that the
+// upload list, which builds its query by hand because client-go gives its
+// method no options struct, carries a next_page_token through the shared
+// continuation like every keyset-capable list: the link's parameters reach
+// the request, and the link never reaches GitLab whole as a page_token
+// (issue 1165). GitLab pages this list by offset today, so the listing below
+// stands for an answer it does not give yet.
+func TestList_Continuation_IsAppliedRatherThanSentAsPageToken(t *testing.T) {
+	listing := &testutil.KeysetListing{
+		Path: "/api/v4/projects/42/uploads", Param: "id_after", Value: "2",
+		First:  `[{"id":1,"filename":"a.png"},{"id":2,"filename":"b.png"}]`,
+		Second: `[{"id":3,"filename":"c.png"}]`,
+	}
+	client := testutil.NewTestClient(t, listing)
+	testutil.FollowKeyset(t, listing, func(token string) (testutil.KeysetPage, error) {
+		out, err := List(t.Context(), client, ListInput{
+			ProjectID:  "42",
+			Pagination: "keyset",
+			PageToken:  token,
+		})
+		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Uploads)}, err
+	})
+}

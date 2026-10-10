@@ -6178,3 +6178,54 @@ func TestListAll_Unauthorized_PointsAtTheTokenAlone(t *testing.T) {
 		t.Errorf("ListAll() error = %q, offers a narrowing as the remedy for a refused token", err)
 	}
 }
+
+// TestList_KeysetPage_FollowsTheNextPageToken verifies that a project's issue
+// list, which GitLab pages by cursor under keyset pagination, can be followed
+// past its first page: the first page publishes the next link as
+// next_page_token, and the call that hands it back sends the cursor it names
+// (issue 1165). Before, has_more read false on a page with a successor and
+// the token reached GitLab as a page_token it does not read.
+func TestList_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
+	listing := &testutil.KeysetListing{
+		Path: "/api/v4/projects/42/issues", Param: "cursor", Value: "eyJpZCI6IjIifQ",
+		First:  `[{"id":1,"iid":1,"title":"a"},{"id":2,"iid":2,"title":"b"}]`,
+		Second: `[{"id":3,"iid":3,"title":"c"}]`,
+	}
+	client := testutil.NewTestClient(t, listing)
+	testutil.FollowKeyset(t, listing, func(token string) (testutil.KeysetPage, error) {
+		out, err := List(t.Context(), client, ListInput{
+			ProjectID:  "42",
+			Pagination: "keyset",
+			PageToken:  token,
+		})
+		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Issues)}, err
+	})
+}
+
+// TestList_KeysetPage_FiltersSentAgain_ReachGitLabInOneForm verifies that a
+// caller who sends a listing's label filters again beside the page_token, as
+// the usual call does, still reaches the second page. GitLab writes an Array
+// parameter into its next link in Rack's bracket form (labels[]=bug), while
+// client-go sends the same filter comma-separated under the bare name; with
+// the link applied over the request both forms went out, and Rack refuses
+// such a query with 400 before the API runs. The link is now the whole query
+// of the call that carries it back.
+func TestList_KeysetPage_FiltersSentAgain_ReachGitLabInOneForm(t *testing.T) {
+	listing := &testutil.KeysetListing{
+		Path: "/api/v4/projects/42/issues", Param: "cursor", Value: "eyJpZCI6IjIifQ",
+		First:  `[{"id":1,"iid":1,"title":"a"},{"id":2,"iid":2,"title":"b"}]`,
+		Second: `[{"id":3,"iid":3,"title":"c"}]`,
+		Arrays: []string{"labels", "not[labels]"},
+	}
+	client := testutil.NewTestClient(t, listing)
+	testutil.FollowKeyset(t, listing, func(token string) (testutil.KeysetPage, error) {
+		out, err := List(t.Context(), client, ListInput{
+			ProjectID:  "42",
+			Labels:     []string{"bug", "x"},
+			NotLabels:  []string{"wontfix"},
+			Pagination: "keyset",
+			PageToken:  token,
+		})
+		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Issues)}, err
+	})
+}

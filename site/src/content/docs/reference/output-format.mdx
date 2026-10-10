@@ -105,12 +105,14 @@ A list closes its table with one line saying what GitLab told the server about t
 Page 1 of 3 | 45 items total | 20 per page
 Page 1 | 20 per page | more pages available
 Page 1 | 20 per page | no more pages
+more pages available | page_token for the next page: `https://gitlab.example.com/api/v4/projects?id_after=42&order_by=id&pagination=keyset&per_page=20&sort=asc`
 Showing 20 items | next page cursor: `eyJpZCI6IjQyIn0`
 Showing 20 items | no more pages
 ```
 
 - The first line is offset pagination with a total.
 - The second and third have no total, which is what GitLab sends for a list of more than 10,000 items, and say whether another page follows.
+- The fourth is a page GitLab served by keyset pagination, which carries no page number and no total: the code span is the `next_page_token` to pass back as `page_token`, and the last keyset page writes no line at all.
 - The last two are a list read over GraphQL, which pages by cursor; a list that also pages backward adds `prev page cursor: ...`.
 
 A pagination that says nothing (no page, no total, no page size) writes no line at all.
@@ -121,21 +123,24 @@ A pagination that says nothing (no page, no total, no page size) writes no line 
 
 A list read over REST:
 
-| Field         | Meaning                                               |
-| ------------- | ----------------------------------------------------- |
-| `page`        | The page returned, counted from 1                     |
-| `per_page`    | Items per page                                        |
-| `total_items` | Items across all pages, `0` when GitLab sent no total |
-| `total_pages` | Pages in all, `0` when GitLab sent no total           |
-| `next_page`   | The page to ask for next, `0` on the last page        |
-| `prev_page`   | The page before this one, `0` on the first            |
-| `has_more`    | `true` when another page follows                      |
+| Field             | Meaning                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------ |
+| `page`            | The page returned, counted from 1                                                                      |
+| `per_page`        | Items per page                                                                                         |
+| `total_items`     | Items across all pages, `0` when GitLab sent no total                                                  |
+| `total_pages`     | Pages in all, `0` when GitLab sent no total                                                            |
+| `next_page`       | The page to ask for next, `0` on the last page and on every keyset page                                |
+| `prev_page`       | The page before this one, `0` on the first                                                             |
+| `has_more`        | `true` when GitLab named a next page; on a keyset page that can be one empty page after the last rows  |
+| `next_page_token` | On a page GitLab served by keyset pagination, the value to pass back as `page_token` for the next page |
 
-All seven fields are always present. To read on, call the same action with `page` set to `next_page`; `per_page` takes at most 100.
+The first seven fields are always present, and `next_page_token` only on a keyset page that has a successor. To read on, call the same action with `page` set to `next_page`, or on a keyset page with `page_token` set to `next_page_token`; `per_page` takes at most 100.
 
 Search is the exception to the `0`: GitLab's search API sends no totals, so there `total_items` is the number of items on this page and `total_pages` is `next_page`, or `page` on the last one. Both are a lower bound inferred from what arrived, not a count of the whole result.
 
-A list asked for with `pagination: "keyset"` cannot be followed past its first page today: GitLab answers it with a link to the next page that the block does not carry, so `has_more` reads `false` even when more follow ([issue 1165](https://github.com/jmrplens/gitlab-mcp-server/issues/1165)). Leave `pagination` at its default to read a long list page by page.
+A list asked for with `pagination: "keyset"` is paged by a position GitLab names rather than by a page number, so its pages carry no `page`, no totals and a `next_page` of `0`. GitLab names the next page in a link, and the server publishes that link as `next_page_token`. Pass it back unchanged as `page_token`, to the same action, to read the page after: it carries the listing's position and every filter GitLab read, so it works whatever the list resumes by (`id_before` on projects, or `id_after` when sorted ascending, a cursor on issues, jobs, users and audit events, a Gitaly page token on the repository tree, commits, branches and tags). The token is the whole query of the call that carries it: filters sent again beside it are not added to it, since GitLab writes a list filter such as `labels` or `topic` into its link as `labels[]` and refuses a request that also carries the comma-separated `labels`. GitLab pages projects by keyset only when they are ordered by `id`, and a user's contributed projects not at all: that route ignores the position its own link names, so `project.list_user_contributed` refuses `pagination: "keyset"` and pages by `page` alone. On the project lists and on the Gitaly lists GitLab can name a next page after the last rows, so following it can return one empty page with no token, which is the end. A link that would send again the request just answered is not published, so a list whose link stops advancing ends after reading one page a second time rather than going round, and a `page_token` carrying a credential or `sudo` is refused, since this server never sends one in a query, so no link GitLab writes for it carries one.
+
+Not every action that takes `pagination` is one GitLab pages by keyset: some answer offset pages whatever was asked, and some refuse `pagination: "keyset"` with a 405 ([issue 1165](https://github.com/jmrplens/gitlab-mcp-server/issues/1165) tracks taking the parameter off those). Leave `pagination` at its default there and page with `page`.
 
 A list read over GraphQL:
 
@@ -393,7 +398,7 @@ Every action publishes the JSON Schema of its output, and where to read it depen
 | Meta       | The tool's `outputSchema` is a shared envelope (`next_steps`, `pagination` and any other field). Each action's own schema is published in [llms-full-meta-tools.txt](https://jmrp.io/docs/gitlab-mcp-server/llms-full-meta-tools.txt) under **Action Output Schemas** |
 | Dynamic    | `gitlab_execute_action` declares the same envelope, and `gitlab_find_action` returns each matched action's schema as `output_schema`, beside its `input_schema` ([Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/))                                          |
 
-The envelope's `pagination` object declares the seven fields of a list read over REST, named as in [The structured JSON](#the-structured-json), and its description names the cursor fields a list read over GraphQL carries in their place. It requires none of them and accepts others, since both shapes travel under the same key.
+The envelope's `pagination` object declares the eight fields of a list read over REST, named as in [The structured JSON](#the-structured-json), and its description names the cursor fields a list read over GraphQL carries in their place. It requires none of them and accepts others, since both shapes travel under the same key.
 
 The schemas follow the instance tier. On a lower tier a field that only a higher tier fills is left out of the output schema, while the output itself is not filtered, so a field GitLab sends anyway still arrives.
 

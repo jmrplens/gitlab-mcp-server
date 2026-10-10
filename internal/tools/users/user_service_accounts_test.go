@@ -794,3 +794,23 @@ func TestFormatServiceAccountMarkdownString_NoEmail(t *testing.T) {
 			"- **Username**: svc-8\n"+
 			"- **Name**: Service Eight\n")
 }
+
+// TestListServiceAccounts_KeysetPage_FollowsTheNextPageToken verifies that
+// the instance's service accounts, a list of users GitLab pages by cursor
+// under keyset pagination, can be followed past the first page through the
+// next_page_token it publishes (issue 1165).
+func TestListServiceAccounts_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
+	listing := &testutil.KeysetListing{
+		Path: "/api/v4/service_accounts", Param: "cursor", Value: "eyJpZCI6IjIifQ",
+		First:  `[{"id":1,"username":"svc-1"},{"id":2,"username":"svc-2"}]`,
+		Second: `[{"id":3,"username":"svc-3"}]`,
+	}
+	client := testutil.NewTestClient(t, listing)
+	testutil.FollowKeyset(t, listing, func(token string) (testutil.KeysetPage, error) {
+		out, err := ListServiceAccounts(t.Context(), client, ListServiceAccountsInput{
+			Pagination: "keyset",
+			PageToken:  token,
+		})
+		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Accounts)}, err
+	})
+}

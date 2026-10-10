@@ -175,7 +175,7 @@ func Tree(ctx context.Context, client *gitlabclient.Client, input TreeInput) (Tr
 	if input.WithLastCommit {
 		ctx, captured = gitlabclient.WithResponseCapture(ctx)
 	}
-	nodes, resp, err := client.GL().Repositories.ListTree(string(input.ProjectID), opts, gl.WithContext(ctx), withLastCommitParam(input.WithLastCommit))
+	nodes, resp, err := client.GL().Repositories.ListTree(string(input.ProjectID), opts, gl.WithContext(ctx), withLastCommitParam(input.WithLastCommit), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return TreeOutput{}, toolutil.WrapErrWithStatusHint("repositoryTree", err, http.StatusNotFound,
 			"verify project_id and ref (branch/tag/SHA) with branch.list or tag.list; check the path exists in the tree")

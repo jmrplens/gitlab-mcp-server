@@ -2691,3 +2691,24 @@ func TestToManagerOutput_Timestamps(t *testing.T) {
 		t.Fatalf("ContactedAt = %q, want RFC3339 timestamp", out.ContactedAt)
 	}
 }
+
+// TestListJobs_KeysetPage_FollowsTheNextPageToken verifies that a runner's
+// job list, which GitLab pages by cursor under keyset pagination, can be
+// followed past the first page through the next_page_token it publishes
+// (issue 1165).
+func TestListJobs_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
+	listing := &testutil.KeysetListing{
+		Path: "/api/v4/runners/9/jobs", Param: "cursor", Value: "eyJpZCI6IjIifQ",
+		First:  `[{"id":1,"name":"a"},{"id":2,"name":"b"}]`,
+		Second: `[{"id":3,"name":"c"}]`,
+	}
+	client := testutil.NewTestClient(t, listing)
+	testutil.FollowKeyset(t, listing, func(token string) (testutil.KeysetPage, error) {
+		out, err := ListJobs(t.Context(), client, ListJobsInput{
+			RunnerID:   9,
+			Pagination: "keyset",
+			PageToken:  token,
+		})
+		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Jobs)}, err
+	})
+}

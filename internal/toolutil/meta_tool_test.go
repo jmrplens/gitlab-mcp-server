@@ -3117,7 +3117,7 @@ func TestActionDispatchOutputSchema_PaginationProperties_MatchPaginationOutputTa
 	if !ok {
 		t.Fatal("pagination object declares no properties")
 	}
-	schemaTypeOf := map[reflect.Kind]string{reflect.Int64: "integer", reflect.Bool: "boolean"}
+	schemaTypeOf := map[reflect.Kind]string{reflect.Int64: "integer", reflect.Bool: "boolean", reflect.String: "string"}
 	typ := reflect.TypeFor[PaginationOutput]()
 	want := make(map[string]string, typ.NumField())
 	for f := range typ.Fields() {
@@ -3165,6 +3165,8 @@ func TestActionDispatchOutputSchema_PaginationDescription_NamesTheFieldsAListPag
 		{name: "REST has_more", typ: reflect.TypeFor[PaginationOutput](), field: "HasMore"},
 		{name: "REST next_page", typ: reflect.TypeFor[PaginationOutput](), field: "NextPage"},
 		{name: "REST page input", typ: reflect.TypeFor[PaginationInput](), field: "Page"},
+		{name: "REST keyset next_page_token", typ: reflect.TypeFor[PaginationOutput](), field: "NextPageToken"},
+		{name: "REST keyset page_token input", typ: reflect.TypeFor[KeysetPaginationInput](), field: "PageToken"},
 		{name: "GraphQL has_next_page", typ: reflect.TypeFor[GraphQLForwardPaginationOutput](), field: "HasNextPage"},
 		{name: "GraphQL end_cursor", typ: reflect.TypeFor[GraphQLForwardPaginationOutput](), field: "EndCursor"},
 		{name: "GraphQL after input", typ: reflect.TypeFor[GraphQLPaginationInput](), field: "After"},

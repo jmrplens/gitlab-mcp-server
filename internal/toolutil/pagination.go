@@ -2,6 +2,9 @@ package toolutil
 
 import (
 	"fmt"
+	"maps"
+	"net/url"
+	"slices"
 	"strconv"
 
 	"github.com/hashicorp/go-retryablehttp"
@@ -20,18 +23,27 @@ type PaginationInput struct {
 
 // KeysetPaginationInput holds GitLab keyset-pagination parameters for list
 // endpoints that support keyset pagination in addition to offset pagination.
-// Embed it alongside PaginationInput on a list input and wire it with
-// ApplyListOptions. Keyset pagination is more efficient than offset pagination
-// for deep pages of large, ordered result sets.
+// Embed it alongside PaginationInput on a list input, wire it with
+// ApplyListOptions, and pass [KeysetContinuation] on the SDK call so the
+// next_page_token a keyset page publishes can be followed. Keyset pagination
+// is more efficient than offset pagination for deep pages of large, ordered
+// result sets.
 type KeysetPaginationInput struct {
-	Pagination string `json:"pagination,omitempty" jsonschema:"Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost."`
-	PageToken  string `json:"page_token,omitempty" jsonschema:"Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'."`
+	Pagination string `json:"pagination,omitempty" jsonschema:"Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost, and a keyset page names the next one in next_page_token rather than next_page."`
+	PageToken  string `json:"page_token,omitempty" jsonschema:"Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page."`
 }
 
 // ApplyListOptions copies offset (PaginationInput) and keyset
 // (KeysetPaginationInput) parameters onto a gl.ListOptions, setting only the
 // values the caller supplied. Pass a zero KeysetPaginationInput for endpoints
 // that only support offset pagination.
+//
+// A page_token that is a next_page_token a previous response published is not
+// copied: it is a link carrying the listing's parameters, which
+// [KeysetContinuation] makes the query of the request, and sent whole as
+// page_token it would reach GitLab as a parameter of its own, which GitLab
+// copies into the next link it writes. Only a raw GitLab page token goes on
+// PageToken.
 func ApplyListOptions(opts *gl.ListOptions, page PaginationInput, keyset KeysetPaginationInput) {
 	if opts == nil {
 		return
@@ -45,7 +57,7 @@ func ApplyListOptions(opts *gl.ListOptions, page PaginationInput, keyset KeysetP
 	if keyset.Pagination != "" {
 		opts.Pagination = keyset.Pagination
 	}
-	if keyset.PageToken != "" {
+	if _, continuation := keysetContinuationLink(keyset.PageToken); keyset.PageToken != "" && !continuation {
 		opts.PageToken = keyset.PageToken
 	}
 }
@@ -76,8 +88,10 @@ func PaginationRequestOption(page PaginationInput) gl.RequestOptionFunc {
 
 // PaginationOutput holds pagination metadata extracted from GitLab API responses.
 // Fields map to GitLab's X-Page, X-Per-Page, X-Total, X-Total-Pages, X-Next-Page,
-// X-Prev-Page headers. HasMore is a derived convenience flag (NextPage > 0) so
-// LLM clients can decide whether to paginate without inspecting NextPage.
+// X-Prev-Page headers, and NextPageToken to the next link of the Link header
+// on a keyset page. HasMore is a derived convenience flag (NextPage > 0, or a
+// NextPageToken) so LLM clients can decide whether to paginate without
+// inspecting either.
 type PaginationOutput struct {
 	Page       int64 `json:"page"`
 	PerPage    int64 `json:"per_page"`
@@ -86,30 +100,137 @@ type PaginationOutput struct {
 	NextPage   int64 `json:"next_page"`
 	PrevPage   int64 `json:"prev_page"`
 	HasMore    bool  `json:"has_more"`
+
+	// NextPageToken is the continuation of a page GitLab served by keyset
+	// pagination: the next link of its Link header, verbatim, which is exactly
+	// what [gl.WithKeysetPaginationParameters] takes. A keyset page carries no
+	// X-Next-Page, so NextPage stays 0 on it and this is the one way to ask
+	// for its successor, by passing it back as page_token. It is empty on an
+	// offset page and on the last keyset page.
+	NextPageToken string `json:"next_page_token,omitempty"`
 }
 
-// PaginationFromResponse extracts pagination metadata from a GitLab API response.
+// PaginationFromResponse extracts pagination metadata from a GitLab API
+// response: the offset headers as client-go parsed them, and the keyset
+// continuation [keysetNextPageToken] reads from the Link header.
 func PaginationFromResponse(resp *gl.Response) PaginationOutput {
 	if resp == nil {
 		return PaginationOutput{}
 	}
+	token := keysetNextPageToken(resp)
 	return PaginationOutput{
-		Page:       resp.CurrentPage,
-		PerPage:    resp.ItemsPerPage,
-		TotalItems: resp.TotalItems,
-		TotalPages: resp.TotalPages,
-		NextPage:   resp.NextPage,
-		PrevPage:   resp.PreviousPage,
-		HasMore:    resp.NextPage > 0,
+		Page:          resp.CurrentPage,
+		PerPage:       resp.ItemsPerPage,
+		TotalItems:    resp.TotalItems,
+		TotalPages:    resp.TotalPages,
+		NextPage:      resp.NextPage,
+		PrevPage:      resp.PreviousPage,
+		HasMore:       resp.NextPage > 0 || token != "",
+		NextPageToken: token,
 	}
+}
+
+// keysetNextPageToken returns the next link of a page GitLab served by keyset
+// pagination, or "" when the response names no keyset successor.
+//
+// GitLab names the next page in the Link header under both strategies, and
+// only an offset page also sends X-Next-Page, so a next link with no next
+// page number is a keyset continuation: an id_before or id_after on projects,
+// by the sort, a cursor on issues, jobs and audit events, a page_token on the
+// repository tree. The link is returned whole because it carries every
+// parameter of the listing as GitLab read it, which is what lets
+// [KeysetContinuation] resume it. A link with no query carries no position,
+// and one that would send again exactly the request just answered names the
+// page that was read rather than the next one; publishing either would send a
+// caller round the same page for ever. That guard stops such a list on the
+// second reading of a page, since the first request carries no position to
+// compare the link's with, which is why the one route known to write such a
+// link, a user's contributed projects, is never asked for by keyset at all.
+func keysetNextPageToken(resp *gl.Response) string {
+	if resp.NextPage > 0 || resp.NextLink == "" {
+		return ""
+	}
+	next, err := url.Parse(resp.NextLink)
+	if err != nil || next.RawQuery == "" {
+		return ""
+	}
+	if resp.Response != nil && resp.Request != nil && !linkAdvances(resp.Request.URL.Query(), next.Query()) {
+		return ""
+	}
+	return resp.NextLink
+}
+
+// linkAdvances reports whether following a next link changes the request
+// that was just answered. [KeysetContinuation] sends the link's query as the
+// whole query of the next request, so a link whose query is the one the
+// request already carried would send that request again.
+func linkAdvances(sent, next url.Values) bool {
+	return !maps.EqualFunc(sent, next, slices.Equal)
+}
+
+// credentialParameters are the query parameters GitLab authenticates a request
+// by, or acts as another user under: a personal, OAuth or CI job token, and
+// sudo. GitLab copies every parameter of a request into the next link it
+// writes, but this server never sends one of these in a query, so no link
+// GitLab writes for it carries one, and a page_token that does was not
+// published by a response.
+var credentialParameters = []string{"private_token", "access_token", "job_token", "sudo"}
+
+// KeysetContinuation returns the request option every handler of a list GitLab
+// pages by keyset passes on its SDK call, last, after [gl.WithContext]. When
+// page_token is a next_page_token a previous response published, the next
+// link's query becomes the whole query of the request through
+// [gl.WithKeysetPaginationParameters], so each endpoint is sent the parameter
+// it pages by (id_before or id_after, cursor, page_token or last) and the rest
+// of the listing's arguments exactly as GitLab read them and wrote them into
+// the link. Whatever else the call sends in its query is dropped: GitLab
+// writes every parameter of the listing into its link, an Array one such as
+// labels or topic in Rack's bracket form (labels[]=a), while client-go sends
+// the same filter comma-separated under the bare name, and Rack refuses with
+// 400 a query that carries both. Any other page_token is a raw GitLab page
+// token, which [ApplyListOptions] has already put on the request, and an
+// empty one is the first page: neither changes it.
+//
+// A continuation that carries a credential or sudo is refused rather than
+// applied, because passing it on would let a page_token authenticate, or act
+// as another user, where no argument of the action can.
+func KeysetContinuation(keyset KeysetPaginationInput) gl.RequestOptionFunc {
+	return func(req *retryablehttp.Request) error {
+		next, ok := keysetContinuationLink(keyset.PageToken)
+		if !ok {
+			return nil
+		}
+		query := next.Query()
+		for _, name := range credentialParameters {
+			if query.Has(name) {
+				return fmt.Errorf("page_token carries %s, a parameter no next_page_token holds: pass back the next_page_token of the previous response unchanged", name)
+			}
+		}
+		req.URL.RawQuery = ""
+		return gl.WithKeysetPaginationParameters(keyset.PageToken)(req)
+	}
+}
+
+// keysetContinuationLink parses a page_token as the next link a previous
+// keyset response published, and reports whether it is one. A raw GitLab page
+// token is a branch or tag name or a record ID, none of which can hold the
+// '?' a link's query starts with, since Git refuses it in a ref name.
+func keysetContinuationLink(token string) (*url.URL, bool) {
+	next, err := url.Parse(token)
+	if err != nil || next.RawQuery == "" {
+		return nil, false
+	}
+	return next, true
 }
 
 // AdjustPagination corrects pagination metadata when the GitLab API does not
 // return X-Total and X-Total-Pages headers (e.g., the Search API).
 // It infers TotalItems and TotalPages from the actual item count received
-// and the presence of a NextPage indicator.
+// and the presence of a NextPage indicator. A keyset page is left as
+// [PaginationFromResponse] described it: it has no page number or total to
+// infer from, and its successor is its next_page_token rather than a page.
 func AdjustPagination(p *PaginationOutput, itemCount int) {
-	if itemCount == 0 {
+	if itemCount == 0 || p.NextPageToken != "" {
 		return
 	}
 	if p.Page == 0 {

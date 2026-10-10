@@ -11,6 +11,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1226,5 +1227,62 @@ func TestToOutput_UndecodableChangeObject_KeepsTheBytesAsText(t *testing.T) {
 
 	if got, ok := out.Details.ChangeObject.(string); !ok || got != truncated {
 		t.Errorf("ChangeObject = %#v, want the raw bytes as the string %q", out.Details.ChangeObject, truncated)
+	}
+}
+
+// TestToOutput_EmptyChanges_PublishesNone verifies that an event whose
+// details carry an empty changes array publishes no changes list at all,
+// rather than an empty one: the mapping makes the list only when GitLab sent
+// at least one change, so the details of an event without any read the same
+// whether GitLab omitted the array or sent it empty.
+func TestToOutput_EmptyChanges_PublishesNone(t *testing.T) {
+	event := &gl.AuditEvent{ID: 1}
+	event.Details.Changes = []gl.AuditEventChange{}
+
+	if out := toOutput(event); out.Details.Changes != nil {
+		t.Errorf("Changes = %#v, want nil for an empty changes array", out.Details.Changes)
+	}
+}
+
+// TestAuditEventLists_KeysetPage_FollowsTheNextPageToken verifies that the
+// instance, group and project audit event lists, which GitLab pages by cursor
+// under pagination=keyset, can be asked for keyset pages and followed past
+// the first through the next_page_token each publishes. None of the three
+// offered keyset pagination before, so a caller reading a long audit trail
+// had only deep offsets, which GitLab caps (issue 1165).
+func TestAuditEventLists_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
+	keyset := func(token string) toolutil.KeysetPaginationInput {
+		return toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: token}
+	}
+	page := func(out ListOutput, err error) (testutil.KeysetPage, error) {
+		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.AuditEvents)}, err
+	}
+	cases := []struct {
+		name string
+		path string
+		call func(client *gitlabclient.Client, token string) (testutil.KeysetPage, error)
+	}{
+		{name: "instance", path: "/api/v4/audit_events", call: func(client *gitlabclient.Client, token string) (testutil.KeysetPage, error) {
+			return page(ListInstance(t.Context(), client, ListInstanceInput{KeysetPaginationInput: keyset(token)}))
+		}},
+		{name: "group", path: "/api/v4/groups/5/audit_events", call: func(client *gitlabclient.Client, token string) (testutil.KeysetPage, error) {
+			return page(ListGroup(t.Context(), client, ListGroupInput{GroupID: "5", KeysetPaginationInput: keyset(token)}))
+		}},
+		{name: "project", path: "/api/v4/projects/42/audit_events", call: func(client *gitlabclient.Client, token string) (testutil.KeysetPage, error) {
+			return page(ListProject(t.Context(), client, ListProjectInput{ProjectID: "42", KeysetPaginationInput: keyset(token)}))
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			listing := &testutil.KeysetListing{
+				Path: tc.path, Param: "cursor", Value: "eyJpZCI6IjIifQ",
+				First:  `[{"id":1,"entity_type":"Project"},{"id":2,"entity_type":"Project"}]`,
+				Second: `[{"id":3,"entity_type":"Project"}]`,
+			}
+			client := testutil.NewTestClient(t, listing)
+			testutil.FollowKeyset(t, listing, func(token string) (testutil.KeysetPage, error) {
+				return tc.call(client, token)
+			})
+		})
 	}
 }

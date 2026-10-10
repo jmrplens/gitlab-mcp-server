@@ -1875,3 +1875,24 @@ func tagSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolut
 	}
 	return byTool
 }
+
+// TestList_KeysetPage_FollowsTheNextPageToken verifies that a tag list, which
+// GitLab pages by a Gitaly page_token under keyset pagination, can be
+// followed past the first page through the next_page_token it publishes
+// (issue 1165).
+func TestList_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
+	listing := &testutil.KeysetListing{
+		Path: "/api/v4/projects/42/repository/tags", Param: "page_token", Value: "v1.1.0",
+		First:  `[{"name":"v1.0.0"},{"name":"v1.1.0"}]`,
+		Second: `[{"name":"v1.2.0"}]`,
+	}
+	client := testutil.NewTestClient(t, listing)
+	testutil.FollowKeyset(t, listing, func(token string) (testutil.KeysetPage, error) {
+		out, err := List(t.Context(), client, ListInput{
+			ProjectID:  "42",
+			Pagination: "keyset",
+			PageToken:  token,
+		})
+		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Tags)}, err
+	})
+}

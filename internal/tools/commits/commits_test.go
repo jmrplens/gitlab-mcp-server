@@ -4056,3 +4056,24 @@ func TestCapturedOutputs_UnreadableCapture_ReportsTheDecodeFailure(t *testing.T)
 		t.Errorf("CapturedOutputs() = %+v, want the one commit with its trailers", out)
 	}
 }
+
+// TestList_KeysetPage_FollowsTheNextPageToken verifies that a commit list,
+// which GitLab pages by a Gitaly page_token under keyset pagination where the
+// commits_keyset_pagination flag is on, can be followed past the first page
+// through the next_page_token it publishes (issue 1165).
+func TestList_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
+	listing := &testutil.KeysetListing{
+		Path: "/api/v4/projects/42/repository/commits", Param: "page_token", Value: "b2",
+		First:  `[{"id":"a1","short_id":"a1","title":"a"},{"id":"b2","short_id":"b2","title":"b"}]`,
+		Second: `[{"id":"c3","short_id":"c3","title":"c"}]`,
+	}
+	client := testutil.NewTestClient(t, listing)
+	testutil.FollowKeyset(t, listing, func(token string) (testutil.KeysetPage, error) {
+		out, err := List(t.Context(), client, ListInput{
+			ProjectID:  "42",
+			Pagination: "keyset",
+			PageToken:  token,
+		})
+		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Commits)}, err
+	})
+}

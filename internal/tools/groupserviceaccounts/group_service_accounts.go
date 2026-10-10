@@ -133,7 +133,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Sort != "" {
 		opts.Sort = &input.Sort
 	}
-	accounts, resp, err := client.GL().Groups.ListServiceAccounts(input.GroupID, opts, gl.WithContext(ctx))
+	accounts, resp, err := client.GL().Groups.ListServiceAccounts(input.GroupID, opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return ListOutput{}, fmt.Errorf("list group service accounts: %w", err)
 	}

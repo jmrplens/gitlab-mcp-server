@@ -186,7 +186,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	opts := buildListUsersOptions(input)
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	users, resp, err := client.GL().Users.ListUsers(opts, gl.WithContext(ctx))
+	users, resp, err := client.GL().Users.ListUsers(opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_users", err, http.StatusForbidden,
 			"listing all users may require admin token on private instances; use search by username/email/two_factor filters to narrow results")

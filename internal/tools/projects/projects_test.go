@@ -10038,3 +10038,125 @@ func TestEmptyListFilters_SendNoKey(t *testing.T) {
 		})
 	}
 }
+
+// TestProjectLists_KeysetPage_FollowsTheNextPageToken verifies that every
+// project list GitLab pages by keyset can be followed past its first page.
+// GitLab answers a keyset page with a Link header naming the next page and no
+// X-Next-Page, so each list used to report has_more false and publish nothing
+// to send back, and a page_token handed back reached GitLab as a parameter of
+// its own (issue 1165). Each list now publishes the next link as
+// next_page_token and sends its query, id_after among it, as the whole query
+// of the call that carries it back. The project list repeats a topic filter
+// beside the token: GitLab declares topic an Array and writes it as topic[]
+// in its link, so a request carrying client-go's topic as well is one Rack
+// refuses.
+func TestProjectLists_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
+	keyset := func(token string) toolutil.KeysetPaginationInput {
+		return toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: token}
+	}
+	filter := func(token string) userProjectFilterInput {
+		return userProjectFilterInput{OrderBy: "id", KeysetPaginationInput: keyset(token)}
+	}
+	page := func(out ListOutput, err error) (testutil.KeysetPage, error) {
+		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Projects)}, err
+	}
+	cases := []struct {
+		name   string
+		path   string
+		arrays []string
+		call   func(client *gitlabclient.Client, token string) (testutil.KeysetPage, error)
+	}{
+		{name: "all projects", path: "/api/v4/projects", arrays: []string{"topic"}, call: func(client *gitlabclient.Client, token string) (testutil.KeysetPage, error) {
+			return page(List(context.Background(), client, ListInput{OrderBy: "id", Topic: "api", KeysetPaginationInput: keyset(token)}))
+		}},
+		{name: "forks", path: "/api/v4/projects/42/forks", call: func(client *gitlabclient.Client, token string) (testutil.KeysetPage, error) {
+			out, err := ListForks(context.Background(), client, ListForksInput{ProjectID: "42", OrderBy: "id", KeysetPaginationInput: keyset(token)})
+			return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Forks)}, err
+		}},
+		{name: "a user's projects", path: "/api/v4/users/7/projects", call: func(client *gitlabclient.Client, token string) (testutil.KeysetPage, error) {
+			return page(ListUserProjects(context.Background(), client, ListUserProjectsInput{UserID: "7", userProjectFilterInput: filter(token)}))
+		}},
+		{name: "a user's starred projects", path: "/api/v4/users/7/starred_projects", call: func(client *gitlabclient.Client, token string) (testutil.KeysetPage, error) {
+			return page(ListUserStarredProjects(context.Background(), client, ListUserStarredProjectsInput{UserID: "7", userProjectFilterInput: filter(token)}))
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			listing := &testutil.KeysetListing{
+				Path: tc.path, Param: "id_after", Value: "2",
+				First:  `[{"id":1,"name":"a"},{"id":2,"name":"b"}]`,
+				Second: `[{"id":3,"name":"c"}]`,
+				Arrays: tc.arrays,
+			}
+			client := testutil.NewTestClient(t, listing)
+			testutil.FollowKeyset(t, listing, func(token string) (testutil.KeysetPage, error) {
+				return tc.call(client, token)
+			})
+		})
+	}
+}
+
+// TestListUserContributedProjects_Keyset_IsRefusedBeforeGitLab verifies that
+// a user's contributed projects are never asked for by keyset. GitLab serves
+// the route a keyset page and writes an id_before or id_after into its next
+// link, but the route's finder never reads either (ContributedProjectsFinder
+// takes no params), so following the link answers the first page again.
+// Published as a next_page_token, it read the first page twice as two pages
+// and then reported the listing complete. The action now refuses pagination
+// keyset and any page_token before a request is made, naming offset pages as
+// the way to read on, and an offset listing still pages by next_page.
+func TestListUserContributedProjects_Keyset_IsRefusedBeforeGitLab(t *testing.T) {
+	var requests atomic.Int32
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.URL.Query().Get("pagination") == "keyset" || r.URL.Query().Has("page_token") {
+			// What GitLab 19.4.1 answers: a keyset page whose link the route
+			// never honors. Reaching this branch is the failure.
+			w.Header().Set("Link", `<https://gitlab.example.com/api/v4/users/7/contributed_projects?id_before=8&order_by=id&pagination=keyset&per_page=2>; rel="next"`)
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":9,"name":"a"},{"id":8,"name":"b"}]`)
+			return
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":9,"name":"a"},{"id":8,"name":"b"}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "2", NextPage: "2"})
+	}))
+
+	refused := []struct {
+		name   string
+		keyset toolutil.KeysetPaginationInput
+	}{
+		{name: "pagination keyset", keyset: toolutil.KeysetPaginationInput{Pagination: "keyset"}},
+		{name: "a next_page_token", keyset: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "https://gitlab.example.com/api/v4/users/7/contributed_projects?id_before=8&order_by=id&pagination=keyset&per_page=2"}},
+		{name: "a raw page_token", keyset: toolutil.KeysetPaginationInput{PageToken: "8"}},
+	}
+	for _, tc := range refused {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := ListUserContributedProjects(t.Context(), client, ListUserContributedProjectsInput{
+				UserID:                "7",
+				OrderBy:               "id",
+				KeysetPaginationInput: tc.keyset,
+			})
+			if err == nil || !strings.Contains(err.Error(), "does not page a user's contributed projects by keyset") || !strings.Contains(err.Error(), "page and per_page") {
+				t.Errorf("ListUserContributedProjects() error = %v, want the keyset refusal naming offset pages", err)
+			}
+			if out.Pagination.NextPageToken != "" {
+				t.Errorf("NextPageToken = %q, want none", out.Pagination.NextPageToken)
+			}
+		})
+	}
+	if got := requests.Load(); got != 0 {
+		t.Fatalf("%d requests reached GitLab for a refused keyset listing, want none", got)
+	}
+
+	t.Run("an offset listing still pages", func(t *testing.T) {
+		out, err := ListUserContributedProjects(t.Context(), client, ListUserContributedProjectsInput{
+			UserID:     "7",
+			Pagination: "offset",
+		})
+		if err != nil {
+			t.Fatalf("ListUserContributedProjects() error = %v", err)
+		}
+		if out.Pagination.NextPage != 2 || !out.Pagination.HasMore || out.Pagination.NextPageToken != "" || len(out.Projects) != 2 {
+			t.Errorf("pagination = %+v with %d projects, want next_page 2 and no token", out.Pagination, len(out.Projects))
+		}
+	})
+}

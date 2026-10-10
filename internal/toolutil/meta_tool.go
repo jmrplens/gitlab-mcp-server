@@ -3050,16 +3050,20 @@ func ActionDispatchOutputSchema() map[string]any {
 			},
 			"pagination": map[string]any{
 				"type":                 "object",
-				"description":          "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
+				"description":          "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`, or on a keyset page with `page_token` set to `next_page_token`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
 				"additionalProperties": true,
 				"properties": map[string]any{
 					"page":        map[string]any{"type": "integer", "description": "Current 1-based page index."},
 					"per_page":    map[string]any{"type": "integer", "description": "Items per page."},
 					"total_items": map[string]any{"type": "integer", "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page."},
 					"total_pages": map[string]any{"type": "integer", "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page."},
-					"next_page":   map[string]any{"type": "integer", "description": "Next page index when `has_more` is true."},
+					"next_page":   map[string]any{"type": "integer", "description": "Next page index on an offset page that has a successor. It is 0 on the last page and on every keyset page, whose successor is `next_page_token`."},
 					"prev_page":   map[string]any{"type": "integer", "description": "Previous page index when applicable."},
-					"has_more":    map[string]any{"type": "boolean", "description": "True when more pages are available after the current one."},
+					"has_more":    map[string]any{"type": "boolean", "description": "True when GitLab named a next page: `next_page` on an offset page, `next_page_token` on a keyset page. A keyset link can lead to one empty page after the last rows."},
+					"next_page_token": map[string]any{
+						"type":        "string",
+						"description": "On a page GitLab served by keyset pagination, which names no next_page, the value to pass back unchanged as `page_token` for the next page. Absent otherwise.",
+					},
 				},
 			},
 		},

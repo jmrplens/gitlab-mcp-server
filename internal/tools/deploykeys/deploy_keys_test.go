@@ -1982,3 +1982,66 @@ func TestFormatDeployKeyMarkdown_SentFields(t *testing.T) {
 		})
 	}
 }
+
+// TestProjectKeyHandlers_UndecodableProjects_AreReportedUnderTheirOperation
+// verifies that every project-scoped handler reports an answer whose project
+// lists the output type cannot hold. client-go models neither
+// projects_with_write_access nor projects_with_readonly_access, so a key whose
+// list arrives as something other than an array decodes into the SDK's struct
+// and fails only the read of the captured answer; the handler returns that
+// failure under its own operation rather than a key with its projects
+// silently missing.
+func TestProjectKeyHandlers_UndecodableProjects_AreReportedUnderTheirOperation(t *testing.T) {
+	const key = `{"id":1,"title":"my-key","key":"ssh-rsa AAAA","can_push":false,"projects_with_write_access":"not a list"}`
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/123/deploy_keys", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			testutil.RespondJSON(w, http.StatusCreated, key)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, "["+key+"]")
+	})
+	mux.HandleFunc("/api/v4/projects/123/deploy_keys/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, key)
+	})
+	mux.HandleFunc("/api/v4/projects/123/deploy_keys/1/enable", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, key)
+	})
+	client := testutil.NewTestClient(t, mux)
+	ctx := context.Background()
+	project := toolutil.StringOrInt("123")
+
+	for _, tc := range []struct {
+		name string
+		op   string
+		call func() error
+	}{
+		{name: "list", op: "deploy_key_list_project", call: func() error {
+			_, err := ListProject(ctx, client, ListProjectInput{ProjectID: project})
+			return err
+		}},
+		{name: "get", op: "deploy_key_get", call: func() error {
+			_, err := Get(ctx, client, GetInput{ProjectID: project, DeployKeyID: 1})
+			return err
+		}},
+		{name: "add", op: "deploy_key_add", call: func() error {
+			_, err := Add(ctx, client, AddInput{ProjectID: project, Title: "my-key", Key: "ssh-rsa AAAA"})
+			return err
+		}},
+		{name: "update", op: "deploy_key_update", call: func() error {
+			_, err := Update(ctx, client, UpdateInput{ProjectID: project, DeployKeyID: 1, Title: "my-key"})
+			return err
+		}},
+		{name: "enable", op: "deploy_key_enable", call: func() error {
+			_, err := Enable(ctx, client, EnableInput{ProjectID: project, DeployKeyID: 1})
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.call()
+			if err == nil || !strings.Contains(err.Error(), tc.op) {
+				t.Errorf("error = %v, want the capture failure reported under %s", err, tc.op)
+			}
+		})
+	}
+}

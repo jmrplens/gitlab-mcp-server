@@ -20,7 +20,7 @@ const hintVerifyJobID = "verify job_id with job.list"
 
 // maxTraceBytes limits the trace log returned by [Trace] so a single
 // response cannot exceed roughly 100 KB.
-const maxTraceBytes = 100 * 1024
+const maxTraceBytes = 100 << 10
 
 // readFull is the trace body reader, a variable so a test can reach the read
 // failure branch: client-go hands [Trace] an in-memory *bytes.Reader, which
@@ -65,8 +65,11 @@ func applyListOpts(opts *gl.ListJobsOptions, page toolutil.PaginationInput, keys
 // and runner extras) into a slice of [jobAPI]. The supplied opts encode scope,
 // include_retried, and pagination via their url struct tags, and the returned
 // gl.Response preserves the pagination headers for [toolutil.PaginationFromResponse].
-func rawListJobs(ctx context.Context, client *gitlabclient.Client, path string, opts *gl.ListJobsOptions) ([]*jobAPI, *gl.Response, error) {
-	req, err := client.GL().NewRequest(http.MethodGet, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+// The request options are the caller's, in the order they run: its
+// gl.WithContext, then, on a list GitLab pages by keyset, its
+// [toolutil.KeysetContinuation].
+func rawListJobs(client *gitlabclient.Client, path string, opts *gl.ListJobsOptions, options ...gl.RequestOptionFunc) ([]*jobAPI, *gl.Response, error) {
+	req, err := client.GL().NewRequest(http.MethodGet, path, opts, options)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -173,7 +176,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	// Raw REST fetch so the documented archived/source/runner_manager and runner
 	// extras (absent from gl.Job) are surfaced 1:1 with the Jobs API.
 	path := fmt.Sprintf("projects/%s/pipelines/%d/jobs", gl.PathEscape(string(input.ProjectID)), input.PipelineID)
-	jobs, resp, err := rawListJobs(ctx, client, path, opts)
+	jobs, resp, err := rawListJobs(client, path, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("jobList", err, http.StatusNotFound,
 			"verify pipeline_id with pipeline.list and that you have Reporter+ role on the project")
@@ -405,7 +408,7 @@ func ToOutput(j *gl.Job) Output {
 
 // maxArtifactBytes limits artifact content returned by [readArtifactContent]
 // and [readSingleArtifactContent] to roughly 1 MB to keep responses bounded.
-const maxArtifactBytes = 1 * 1024 * 1024
+const maxArtifactBytes = 1 << 20
 
 // ListProjectInput defines parameters for listing all jobs in a project.
 type ListProjectInput struct {
@@ -439,7 +442,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	// Raw REST fetch so the documented archived/source/runner_manager and runner
 	// extras (absent from gl.Job) are surfaced 1:1 with the Jobs API.
 	path := fmt.Sprintf("projects/%s/jobs", gl.PathEscape(string(input.ProjectID)))
-	jbs, resp, err := rawListJobs(ctx, client, path, opts)
+	jbs, resp, err := rawListJobs(client, path, opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("jobListProject", err, http.StatusNotFound,
 			"verify the project exists with project.get and that you have Reporter+ role")

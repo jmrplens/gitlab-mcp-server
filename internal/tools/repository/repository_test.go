@@ -2331,3 +2331,25 @@ func TestActionSpecs_RelatedActionsAreCanonicalIDs(t *testing.T) {
 		})
 	}
 }
+
+// TestRepositoryTree_KeysetPage_FollowsTheNextPageToken verifies that the
+// repository tree, which GitLab pages by a Gitaly page_token under keyset
+// pagination, can be followed past the first page through the
+// next_page_token it publishes, and that the token reaches GitLab as the
+// page_token its link names rather than as the link itself (issue 1165).
+func TestRepositoryTree_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
+	listing := &testutil.KeysetListing{
+		Path: "/api/v4/projects/42/repository/tree", Param: "page_token", Value: "tree-page-2",
+		First:  `[{"id":"a1","name":"a","type":"blob","path":"a","mode":"100644"},{"id":"a2","name":"b","type":"blob","path":"b","mode":"100644"}]`,
+		Second: `[{"id":"a3","name":"c","type":"blob","path":"c","mode":"100644"}]`,
+	}
+	client := testutil.NewTestClient(t, listing)
+	testutil.FollowKeyset(t, listing, func(token string) (testutil.KeysetPage, error) {
+		out, err := Tree(t.Context(), client, TreeInput{
+			ProjectID:  "42",
+			Pagination: "keyset",
+			PageToken:  token,
+		})
+		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Tree)}, err
+	})
+}

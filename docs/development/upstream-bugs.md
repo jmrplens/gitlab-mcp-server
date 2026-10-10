@@ -136,6 +136,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The releases list caches one rendering for both values of include_html_description](#the-releases-list-caches-one-rendering-for-both-values-of-include_html_description)
   - [The API pages list access levels the API refuses](#the-api-pages-list-access-levels-the-api-refuses)
   - [The forks list returns statistics when asked not to](#the-forks-list-returns-statistics-when-asked-not-to)
+  - [The contributed projects route writes a keyset link its finder never reads](#the-contributed-projects-route-writes-a-keyset-link-its-finder-never-reads)
 - [GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)](#gitlab-orbit-gitlab-orgorbitknowledge-graph)
   - [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types)
   - [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both)
@@ -332,6 +333,7 @@ readable without opening the tracker:
 | 109 | gitlab-org/gitlab | [The releases list caches one rendering for both values of `include_html_description`](#the-releases-list-caches-one-rendering-for-both-values-of-include_html_description) | Yes, by another user, [gitlab-org/gitlab#588980](https://gitlab.com/gitlab-org/gitlab/-/issues/588980), which the merge request closes | Yes, [gitlab-org/gitlab!261176](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261176), open, in milestone 19.5, the backend review pending | No | No; `release.list` can answer the other variant for five minutes | None taken |
 | 110 | gitlab-org/gitlab | [The API pages list access levels the API refuses](#the-api-pages-list-access-levels-the-api-refuses) | Yes, by the merge request | Yes, [gitlab-org/gitlab!261285](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261285), open, the documentation review pending | No | No; a refused value is answered 400, except that `access.approve_project` and `access.approve_group` grant Developer for `0` and report as approved a request that `5` leaves pending where GitLab does not accept it | None yet; this server's own schemas offer refused values: eleven filters `5` (six of them `60` too), six writes `0`, five project writes `5` and the group member update `60`; #1280 tracks it |
 | 111 | gitlab-org/gitlab | [The forks list returns statistics when asked not to](#the-forks-list-returns-statistics-when-asked-not-to) | Yes, [gitlab-org/gitlab#633318](https://gitlab.com/gitlab-org/gitlab/-/issues/633318) | No | No | No; `project.list_forks` with `statistics: false` answers every fork's statistics, and an administrator's `project.list_user_starred` with `with_custom_attributes: false` the custom attributes | None taken |
+| 112 | gitlab-org/gitlab | [The contributed projects route writes a keyset link its finder never reads](#the-contributed-projects-route-writes-a-keyset-link-its-finder-never-reads) | No | No | No | No | Yes, `project.list_user_contributed` refuses keyset pagination and pages by offset only |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -11811,6 +11813,49 @@ API accepts, during the GitLab Hackathon of October 2026.
   `with_custom_attributes` the same way.
 - **Workaround**: none taken. Sending nothing for `false` would get what
   both routes answer when the parameter is absent.
+
+### The contributed projects route writes a keyset link its finder never reads
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no. Read in 19.4.1 and on master at `f23a2b35383` (2026-09-23),
+  which carry the same lines.
+- **Blocking**: no.
+- **Workaround**: yes. `project.list_user_contributed` refuses
+  `pagination: "keyset"` and any `page_token` before it sends a request
+  (`contributedKeysetRefusal` in `internal/tools/projects/projects.go`), and
+  its usage line and description say the list pages by offset only. Beside it,
+  `toolutil.PaginationFromResponse` withholds a next link that would send again
+  the request just answered (`linkAdvances`), which stops any other route that
+  behaves this way on its second reading of a page. A fix upstream retires the
+  refusal.
+
+**Where**: `lib/api/projects.rb`, `GET /users/:user_id/contributed_projects`,
+which builds `ContributedProjectsFinder.new(user: user, current_user:
+current_user)` with no `params`, and `app/finders/contributed_projects_finder.rb`,
+which reads no `id_after` or `id_before`.
+
+**What**: the route declares `use :pagination` and presents its projects
+through `present_projects`, so `pagination=keyset&order_by=id` is served by
+`Gitlab::Pagination::Keyset::Pager`. That pager only limits the relation and
+writes a next link naming `id_before` (or `id_after` for `sort=asc`) from the
+last row; it leaves the filtering to the finder, as `ProjectsFinder` does
+through `project_finder_params`. `ContributedProjectsFinder` is given no
+params and filters on neither, so the request the link names answers the
+first page again, under the same link. A client following GitLab's own link
+reads the first page for ever; one that stops on a repeated link, as this
+server does, reads it twice.
+
+**What it costs this server**: nothing at run time once the action refuses
+keyset; a caller pages a user's contributed projects with `page` and
+`per_page`. Before the refusal, a caller following `next_page_token` read the
+first page twice as two pages and was then told the listing was complete.
+
+**How we found it**: the review of the keyset continuation of
+[issue 1165](https://github.com/jmrplens/gitlab-mcp-server/issues/1165), which
+mocked each project list the way GitLab answers it and found that the
+contributed route's link does not advance; read from the 19.4.1 source and
+from master.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 

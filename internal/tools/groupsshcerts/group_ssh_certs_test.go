@@ -499,3 +499,27 @@ func TestGroupSSHCerts_ContextCancelledMidFlight_AbandonsTheRequest(t *testing.T
 		})
 	}
 }
+
+// TestList_Continuation_IsAppliedRatherThanSentAsPageToken verifies that the
+// group SSH certificate list, which builds its query by hand because
+// client-go gives its method no options struct, carries a next_page_token
+// through the shared continuation like every keyset-capable list: the link's
+// parameters reach the request, and the link never reaches GitLab whole as a
+// page_token (issue 1165). GitLab pages this list by offset today, so the
+// listing below stands for an answer it does not give yet.
+func TestList_Continuation_IsAppliedRatherThanSentAsPageToken(t *testing.T) {
+	listing := &testutil.KeysetListing{
+		Path: "/api/v4/groups/5/ssh_certificates", Param: "id_after", Value: "2",
+		First:  `[{"id":1,"title":"a"},{"id":2,"title":"b"}]`,
+		Second: `[{"id":3,"title":"c"}]`,
+	}
+	client := testutil.NewTestClient(t, listing)
+	testutil.FollowKeyset(t, listing, func(token string) (testutil.KeysetPage, error) {
+		out, err := List(t.Context(), client, ListInput{
+			GroupID:    "5",
+			Pagination: "keyset",
+			PageToken:  token,
+		})
+		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Certificates)}, err
+	})
+}

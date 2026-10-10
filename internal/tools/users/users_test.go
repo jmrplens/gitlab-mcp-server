@@ -2541,3 +2541,23 @@ func TestListSSHKeys_OrderSort(t *testing.T) {
 		t.Errorf("query = %v, want order_by=id sort=desc", query.Encode())
 	}
 }
+
+// TestList_KeysetPage_FollowsTheNextPageToken verifies that the instance's
+// user list, which GitLab pages by cursor under keyset pagination, can be
+// followed past its first page through the next_page_token it publishes
+// (issue 1165).
+func TestList_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
+	listing := &testutil.KeysetListing{
+		Path: "/api/v4/users", Param: "cursor", Value: "eyJpZCI6IjIifQ",
+		First:  `[{"id":1,"username":"a"},{"id":2,"username":"b"}]`,
+		Second: `[{"id":3,"username":"c"}]`,
+	}
+	client := testutil.NewTestClient(t, listing)
+	testutil.FollowKeyset(t, listing, func(token string) (testutil.KeysetPage, error) {
+		out, err := List(t.Context(), client, ListInput{
+			Pagination: "keyset",
+			PageToken:  token,
+		})
+		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Users)}, err
+	})
+}

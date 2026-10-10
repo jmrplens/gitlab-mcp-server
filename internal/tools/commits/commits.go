@@ -416,7 +416,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	// The response it hands back with that failure still carries the page's
 	// headers.
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	_, resp, err := client.GL().Commits.ListCommits(string(input.ProjectID), opts, gl.WithContext(ctx))
+	_, resp, err := client.GL().Commits.ListCommits(string(input.ProjectID), opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil && !MisreadByClientGo(err) {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("commitList", err, http.StatusNotFound,
 			"verify project_id with project.get and ref_name (branch/tag/SHA) with branch.list or tag.list")

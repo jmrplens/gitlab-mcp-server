@@ -572,7 +572,7 @@ func ListJobs(ctx context.Context, client *gitlabclient.Client, input ListJobsIn
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
-	jobList, resp, err := client.GL().Runners.ListRunnerJobs(int(input.RunnerID), opts, gl.WithContext(ctx))
+	jobList, resp, err := client.GL().Runners.ListRunnerJobs(int(input.RunnerID), opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return JobListOutput{}, toolutil.WrapErrWithStatusHint("list runner jobs", err, http.StatusNotFound,
 			"runner not found. Verify runner_id with runner.get or runner.list")

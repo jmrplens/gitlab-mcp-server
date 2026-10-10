@@ -133,7 +133,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	accounts, resp, err := client.GL().Projects.ListProjectServiceAccounts(input.ProjectID.String(), opts, gl.WithContext(ctx))
+	accounts, resp, err := client.GL().Projects.ListProjectServiceAccounts(input.ProjectID.String(), opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErr("list project service accounts", err)
 	}

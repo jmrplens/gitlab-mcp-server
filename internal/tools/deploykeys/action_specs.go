@@ -89,7 +89,7 @@ func deployKeyOptions(actionName, individualTool string) toolutil.ActionSpecOpti
 			},
 			"per_page": {
 				SemanticRole: "page_size",
-				ValueSource:  "Items per page (1-100). For bulk enumeration prefer keyset pagination via order_by+sort+page_token instead of repeated offset pages.",
+				ValueSource:  "Items per page (1-100). GitLab pages this list by offset only, so use 100 and follow next_page to enumerate the instance's keys in the fewest calls.",
 			},
 		}
 	}

@@ -127,8 +127,10 @@ func WritePagination(b *strings.Builder, p PaginationOutput) {
 
 // formatPagination renders pagination metadata as a compact line of what is
 // known: the page and the page count when GitLab sent a total, the page alone
-// under keyset pagination where no total exists, and whether more pages
-// follow. Nothing known renders as nothing.
+// where no total exists, and whether more pages follow. A page GitLab served
+// by keyset ends the line with its next_page_token as a code span, since it
+// carries no page number and the token is the only way on. Nothing known
+// renders as nothing.
 func formatPagination(p PaginationOutput) string {
 	var parts []string
 	if p.Page > 0 {
@@ -144,7 +146,12 @@ func formatPagination(p PaginationOutput) string {
 	if p.PerPage > 0 {
 		parts = append(parts, fmt.Sprintf("%d per page", p.PerPage))
 	}
-	if p.TotalPages == 0 && p.Page > 0 {
+	// An if chain rather than a tagless switch: a case expression carries no
+	// statement counter, so the mutation gate reports every mutant of one as
+	// not covered whatever the tests assert.
+	if p.NextPageToken != "" {
+		parts = append(parts, "more pages available", "page_token for the next page: "+MdCodeSpan(p.NextPageToken))
+	} else if p.TotalPages == 0 && p.Page > 0 {
 		if p.HasMore || p.NextPage > 0 {
 			parts = append(parts, "more pages available")
 		} else {

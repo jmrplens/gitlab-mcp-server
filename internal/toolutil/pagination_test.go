@@ -1,7 +1,9 @@
 // pagination_test.go contains unit tests for PaginationFromResponse,
-// PaginationRequestOption and DeleteResult. Tests cover nil response, fully
-// populated headers, single-page results, the page and per_page a request
-// option carries onto a request, and the standard delete output builder.
+// PaginationRequestOption, KeysetContinuation and DeleteResult. Tests cover
+// nil response, fully populated headers, single-page results, the keyset
+// continuation a Link header names and its round trip back onto a request,
+// the page and per_page a request option carries onto a request, and the
+// standard delete output builder.
 package toolutil
 
 import (
@@ -187,6 +189,18 @@ func TestAdjustPagination(t *testing.T) {
 			wantPage:  2,
 			wantMore:  true,
 		},
+		// A keyset page has no page number and no total to infer, and its
+		// successor is the token: recomputing has_more from next_page alone
+		// would report its last page wherever it has one.
+		{
+			name:      "keyset page is left as GitLab described it",
+			input:     PaginationOutput{HasMore: true, NextPageToken: keysetNextLink},
+			itemCount: 2,
+			wantItems: 0,
+			wantPages: 0,
+			wantPage:  0,
+			wantMore:  true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -316,6 +330,193 @@ func TestApplyListOptions_OnlyNonZero(t *testing.T) {
 		t.Errorf("zero inputs mutated opts: %+v", opts)
 	}
 	ApplyListOptions(nil, PaginationInput{Page: 1}, KeysetPaginationInput{}) // must not panic
+}
+
+// keysetNextLink is a next link the way GitLab writes one for a keyset page of
+// GET /projects: every parameter the request carried, as Grape read it, plus
+// the position to resume from.
+const keysetNextLink = "https://gitlab.example.com/api/v4/projects?id_after=42&order_by=id&pagination=keyset&per_page=2&sort=asc"
+
+// responseTo builds a client-go response to a request for rawURL, carrying
+// next as its keyset next link, the way client-go fills one from a Link
+// header.
+func responseTo(t *testing.T, rawURL, next string) *gl.Response {
+	t.Helper()
+	sent, err := url.Parse(rawURL)
+	if err != nil {
+		t.Fatalf("parse %q: %v", rawURL, err)
+	}
+	return &gl.Response{
+		Response: &http.Response{Request: &http.Request{URL: sent}},
+		NextLink: next,
+	}
+}
+
+// TestPaginationFromResponse_KeysetLink_PublishesTheContinuation verifies the
+// pagination block of each shape a response can name its successor in. Under
+// keyset pagination GitLab answers with a Link header naming the next page and
+// no X-Next-Page, so the block used to report has_more false on a page that
+// had a successor and carry nothing a caller could send back (issue 1165).
+// The next link is now published as next_page_token, verbatim, since it is
+// exactly what gl.WithKeysetPaginationParameters takes, and has_more follows
+// it. An offset page keeps next_page as its continuation and publishes no
+// token, and a link that cannot carry a position, or names the page just
+// read, is not one.
+func TestPaginationFromResponse_KeysetLink_PublishesTheContinuation(t *testing.T) {
+	const sentFirst = "https://gitlab.example.com/api/v4/projects?order_by=id&pagination=keyset&per_page=2&sort=asc"
+	cases := []struct {
+		name      string
+		resp      *gl.Response
+		wantToken string
+		wantMore  bool
+	}{
+		{name: "a keyset page names its successor in the link alone", resp: &gl.Response{NextLink: keysetNextLink}, wantToken: keysetNextLink, wantMore: true},
+		{name: "a keyset page answering a request names its successor", resp: responseTo(t, sentFirst, keysetNextLink), wantToken: keysetNextLink, wantMore: true},
+		{name: "a response that kept no request still names its successor", resp: &gl.Response{Response: &http.Response{}, NextLink: keysetNextLink}, wantToken: keysetNextLink, wantMore: true},
+		{name: "an offset page keeps next_page and publishes no token", resp: &gl.Response{NextPage: 3, NextLink: "https://gitlab.example.com/api/v4/projects?page=3&per_page=2"}, wantMore: true},
+		{name: "the last keyset page names no successor", resp: &gl.Response{}},
+		{name: "a link with no query carries no position", resp: &gl.Response{NextLink: "https://gitlab.example.com/api/v4/projects"}},
+		{name: "a link that does not parse is not published", resp: &gl.Response{NextLink: "https://gitlab.example.com/%zz?id_after=1"}},
+		// GitLab's contributed projects route answers keyset pages with an
+		// id_after its finder never reads, so the page after the first is the
+		// first again, under the same link. Publishing that link would send a
+		// caller round the same page for ever.
+		{name: "a link naming the page just read does not advance", resp: responseTo(t, keysetNextLink, keysetNextLink)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := PaginationFromResponse(tc.resp)
+			if got.NextPageToken != tc.wantToken {
+				t.Errorf("NextPageToken = %q, want %q", got.NextPageToken, tc.wantToken)
+			}
+			if got.HasMore != tc.wantMore {
+				t.Errorf("HasMore = %v, want %v", got.HasMore, tc.wantMore)
+			}
+		})
+	}
+}
+
+// TestPaginationFromResponse_KeysetToken_IsWhatTheContinuationTakes verifies
+// the round trip the issue asked for: the token a keyset page publishes,
+// handed back as page_token, makes the next request carry exactly the next
+// link's parameters, so each endpoint is sent the one it pages by.
+func TestPaginationFromResponse_KeysetToken_IsWhatTheContinuationTakes(t *testing.T) {
+	token := PaginationFromResponse(&gl.Response{NextLink: keysetNextLink}).NextPageToken
+	req, err := retryablehttp.NewRequest(http.MethodGet, "https://gitlab.example.com/api/v4/projects?per_page=20", nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	if err = KeysetContinuation(KeysetPaginationInput{PageToken: token})(req); err != nil {
+		t.Fatalf("continuation returned %v, want nil", err)
+	}
+	want, err := url.Parse(keysetNextLink)
+	if err != nil {
+		t.Fatalf("parse next link: %v", err)
+	}
+	if got := req.URL.Query(); !reflect.DeepEqual(got, want.Query()) {
+		t.Errorf("query = %v, want the next link's %v", got, want.Query())
+	}
+}
+
+// TestKeysetContinuation_Cases_CarriesTheListingOn verifies the request
+// option every keyset-capable handler passes on its SDK call. A token a
+// previous response published becomes the request's whole query, since
+// GitLab writes every parameter it read into the link; nothing else changes
+// the request, since a raw GitLab page token is already on it through
+// [ApplyListOptions]. A token carrying a credential or an identity is refused,
+// because passing it on would let a page_token authenticate or impersonate
+// where no argument of the action can.
+func TestKeysetContinuation_Cases_CarriesTheListingOn(t *testing.T) {
+	cases := []struct {
+		name    string
+		query   string
+		token   string
+		want    url.Values
+		wantErr string
+	}{
+		{name: "no token leaves the request alone", query: "order_by=id&pagination=keyset", want: url.Values{"order_by": {"id"}, "pagination": {"keyset"}}},
+		{name: "a raw page token is left where ApplyListOptions put it", query: "page_token=main&pagination=keyset", token: "main", want: url.Values{"page_token": {"main"}, "pagination": {"keyset"}}},
+		// Git allows a percent sign in a branch name, and such a name does
+		// not parse as a URL at all, so it is a raw token like any other.
+		{name: "a raw page token that does not parse as a link is left alone", query: "page_token=100%25&pagination=keyset", token: "100%", want: url.Values{"page_token": {"100%"}, "pagination": {"keyset"}}},
+		// GitLab writes the link from every parameter it read, so the link is
+		// the whole of the next request: a parameter sent beside the token
+		// and missing from it was not part of the listing the token resumes.
+		{
+			name:  "an id_after continuation is the whole of the next query",
+			query: "order_by=id&per_page=20&search=api",
+			token: keysetNextLink,
+			want:  url.Values{"id_after": {"42"}, "order_by": {"id"}, "pagination": {"keyset"}, "per_page": {"2"}, "sort": {"asc"}},
+		},
+		// GitLab writes an Array parameter of the listing in Rack's bracket
+		// form, while client-go sends the same filter comma-separated under
+		// the bare name. Both forms on one request make Rack refuse the query
+		// before the API runs, so the filter the caller sends again beside
+		// the token must not survive it.
+		{
+			name:  "an Array filter in GitLab's form replaces client-go's comma form",
+			query: "labels=bug%2Cx&not%5Blabels%5D=wontfix&pagination=keyset&per_page=20",
+			token: "https://gitlab.example.com/api/v4/projects/42/issues?cursor=NEXT&id=42&labels%5B%5D=bug&labels%5B%5D=x&not%5Blabels%5D%5B%5D=wontfix&pagination=keyset&per_page=20",
+			want:  url.Values{"cursor": {"NEXT"}, "id": {"42"}, "labels[]": {"bug", "x"}, "not[labels][]": {"wontfix"}, "pagination": {"keyset"}, "per_page": {"20"}},
+		},
+		{
+			name:  "a cursor continuation",
+			query: "pagination=keyset",
+			token: "https://gitlab.example.com/api/v4/projects/7/issues?cursor=eyJpZCI6IjQyIn0&pagination=keyset&per_page=20",
+			want:  url.Values{"cursor": {"eyJpZCI6IjQyIn0"}, "pagination": {"keyset"}, "per_page": {"20"}},
+		},
+		{
+			name:  "a page_token continuation",
+			query: "pagination=keyset",
+			token: "https://gitlab.example.com/api/v4/projects/7/repository/tree?page_token=a1e8f8d7&pagination=keyset&per_page=20",
+			want:  url.Values{"page_token": {"a1e8f8d7"}, "pagination": {"keyset"}, "per_page": {"20"}},
+		},
+		{name: "a private_token is refused", token: "https://gitlab.example.com/api/v4/projects?id_after=1&private_token=glpat-x", wantErr: "private_token"},
+		{name: "an access_token is refused", token: "https://gitlab.example.com/api/v4/projects?access_token=x&id_after=1", wantErr: "access_token"},
+		{name: "a job_token is refused", token: "https://gitlab.example.com/api/v4/projects?id_after=1&job_token=x", wantErr: "job_token"},
+		{name: "sudo is refused", token: "https://gitlab.example.com/api/v4/projects?id_after=1&sudo=root", wantErr: "sudo"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := retryablehttp.NewRequest(http.MethodGet, "https://gitlab.example.com/api/v4/projects?"+tc.query, nil)
+			if err != nil {
+				t.Fatalf("NewRequest: %v", err)
+			}
+			err = KeysetContinuation(KeysetPaginationInput{Pagination: "keyset", PageToken: tc.token})(req)
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("continuation error = %v, want one naming %q", err, tc.wantErr)
+				}
+				if req.URL.RawQuery != tc.query {
+					t.Errorf("query = %q after a refusal, want it untouched as %q", req.URL.RawQuery, tc.query)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("continuation returned %v, want nil", err)
+			}
+			if got := req.URL.Query(); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("query = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestApplyListOptions_Continuation_IsNotAPageToken verifies that a token a
+// previous keyset response published stays off gl.ListOptions.PageToken. It is
+// a link carrying the listing's parameters, which [KeysetContinuation] applies
+// one by one; sent whole as page_token it would reach GitLab as a parameter
+// of its own, which GitLab copies into the next link it writes, so every page
+// would carry the links of all the pages before it.
+func TestApplyListOptions_Continuation_IsNotAPageToken(t *testing.T) {
+	var opts gl.ListOptions
+	ApplyListOptions(&opts, PaginationInput{}, KeysetPaginationInput{Pagination: "keyset", PageToken: keysetNextLink})
+	if opts.PageToken != "" {
+		t.Errorf("PageToken = %q, want it left empty for a continuation", opts.PageToken)
+	}
+	if opts.Pagination != "keyset" {
+		t.Errorf("Pagination = %q, want keyset", opts.Pagination)
+	}
 }
 
 // TestPaginationRequestOption_AddsWhatTheCallerAskedFor verifies the request

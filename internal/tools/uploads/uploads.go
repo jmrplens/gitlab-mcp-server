@@ -210,6 +210,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		string(input.ProjectID),
 		gl.WithContext(ctx),
 		listQueryParameters(input),
+		toolutil.KeysetContinuation(input.KeysetPaginationInput),
 	)
 	if err != nil {
 		return ListOutput{}, fmt.Errorf("list uploads for project %s: %w", input.ProjectID, err)

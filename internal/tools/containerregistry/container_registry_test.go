@@ -1968,3 +1968,25 @@ func TestRegistryOptions_ToolWithoutAUsageLine_FallsBackToTheDomainUsage(t *test
 		t.Errorf("shared metadata = %+v, want the tool name, the owner package and the tags", got)
 	}
 }
+
+// TestListTags_KeysetPage_FollowsTheNextPageToken verifies that a registry
+// repository's tag list, which GitLab pages under keyset pagination by the
+// last tag name where the registry speaks GitLab's API, can be followed past
+// the first page through the next_page_token it publishes (issue 1165).
+func TestListTags_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
+	listing := &testutil.KeysetListing{
+		Path: "/api/v4/projects/42/registry/repositories/3/tags", Param: "last", Value: "v2",
+		First:  `[{"name":"v1","path":"app:v1"},{"name":"v2","path":"app:v2"}]`,
+		Second: `[{"name":"v3","path":"app:v3"}]`,
+	}
+	client := testutil.NewTestClient(t, listing)
+	testutil.FollowKeyset(t, listing, func(token string) (testutil.KeysetPage, error) {
+		out, err := ListTags(t.Context(), client, ListTagsInput{
+			ProjectID:    "42",
+			RepositoryID: 3,
+			Pagination:   "keyset",
+			PageToken:    token,
+		})
+		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Tags)}, err
+	})
+}

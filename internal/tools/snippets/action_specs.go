@@ -132,7 +132,7 @@ const (
 // snippetActionMeta maps each individual snippet tool to its discovery metadata.
 var snippetActionMeta = map[string]snippetActionMetaEntry{
 	"gitlab_snippet_list": {
-		usage:       "List snippets owned by the authenticated user. Use order_by and sort for keyset ordering and page/per_page or page_token for pagination when the prompt asks for the caller's own snippets.",
+		usage:       "List snippets owned by the authenticated user. Page through it with page and per_page, since GitLab pages this list by offset only, when the prompt asks for the caller's own snippets.",
 		aliases:     []string{"list my snippets", "show my snippets", "list user snippets"},
 		related:     []string{actionSnippetGet, "snippet.create", "snippet.explore"},
 		description: "List snippets owned by the authenticated user. Returns: snippets with title, visibility, author, files, and pagination metadata. See also: gitlab_snippet_get, gitlab_snippet_create, gitlab_snippet_explore.",

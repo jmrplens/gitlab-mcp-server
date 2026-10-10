@@ -103,7 +103,7 @@ func ListServiceAccounts(ctx context.Context, client *gitlabclient.Client, input
 		opts.Sort = new(input.Sort)
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	accounts, resp, err := client.GL().Users.ListServiceAccounts(opts, gl.WithContext(ctx))
+	accounts, resp, err := client.GL().Users.ListServiceAccounts(opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return ServiceAccountListOutput{}, toolutil.WrapErrWithStatusHint("list_service_accounts", err, http.StatusForbidden,
 			"listing service accounts requires an admin token")

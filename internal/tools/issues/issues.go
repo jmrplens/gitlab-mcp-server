@@ -589,7 +589,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	issues, resp, err := client.GL().Issues.ListProjectIssues(string(input.ProjectID), opts, gl.WithContext(ctx))
+	issues, resp, err := client.GL().Issues.ListProjectIssues(string(input.ProjectID), opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("issueList", err, http.StatusNotFound,
 			"verify the project exists with project.get. Issues must be enabled in project settings")
