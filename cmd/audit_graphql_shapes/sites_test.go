@@ -43,9 +43,10 @@ func TestLoadProgram_TreeThatCannotBeWalked_IsRefused(t *testing.T) {
 	}
 }
 
-// TestPairingLess_OrdersByTheCallThenByWhereTheDocumentCameFrom verifies the
-// order the report is read in, at each of the four levels that decide it and
-// in both directions.
+// TestComparePairings_OrdersByTheCallThenByWhereTheDocumentCameFrom verifies
+// the order the report is read in, at each of the four levels that decide it
+// and in both directions. A pairing comes first when the comparison is
+// negative.
 //
 // The order matters because a pairing is collected in whatever order the walk
 // reaches it (a document handed over through a wrapper is completed after
@@ -53,7 +54,7 @@ func TestLoadProgram_TreeThatCannotBeWalked_IsRefused(t *testing.T) {
 // tree have to print the same list. Each level is checked both ways round,
 // since a comparator that answers one direction correctly and the other by
 // accident sorts correctly only on input that was already sorted.
-func TestPairingLess_OrdersByTheCallThenByWhereTheDocumentCameFrom(t *testing.T) {
+func TestComparePairings_OrdersByTheCallThenByWhereTheDocumentCameFrom(t *testing.T) {
 	at := func(file string, line, column int) token.Position {
 		return token.Position{Filename: file, Line: line, Column: column}
 	}
@@ -120,8 +121,8 @@ func TestPairingLess_OrdersByTheCallThenByWhereTheDocumentCameFrom(t *testing.T)
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			if got := pairingLess(testCase.left, testCase.right); got != testCase.want {
-				t.Errorf("pairingLess(%v@%v, %v@%v) = %t, want %t",
+			if got := comparePairings(testCase.left, testCase.right) < 0; got != testCase.want {
+				t.Errorf("comparePairings(%v@%v, %v@%v) < 0 = %t, want %t",
 					testCase.left.Position, testCase.left.Origin,
 					testCase.right.Position, testCase.right.Origin, got, testCase.want)
 			}

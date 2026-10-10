@@ -1,13 +1,15 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"go/ast"
 	"go/constant"
 	"go/token"
 	"go/types"
 	"maps"
-	"sort"
+	"slices"
+	"strings"
 
 	"golang.org/x/tools/go/packages"
 
@@ -168,8 +170,8 @@ func (p *program) pairings() ([]pairing, []problem) {
 		pairings = append(pairings, completed...)
 		problems = append(problems, unresolved...)
 	}
-	sort.Slice(pairings, func(i, j int) bool { return pairingLess(pairings[i], pairings[j]) })
-	sort.Slice(problems, func(i, j int) bool { return positionLess(problems[i].Position, problems[j].Position) })
+	slices.SortFunc(pairings, comparePairings)
+	slices.SortFunc(problems, func(a, b problem) int { return comparePositions(a.Position, b.Position) })
 	return pairings, problems
 }
 
@@ -608,22 +610,15 @@ func bindings(carried, added map[*types.TypeParam]types.Type) map[*types.TypePar
 	return joined
 }
 
-// pairingLess orders pairings the way a reader walks a repository: by the call
-// they judge, then by where the document was handed over.
-func pairingLess(a, b pairing) bool {
-	if a.Position != b.Position {
-		return positionLess(a.Position, b.Position)
-	}
-	return positionLess(a.Origin, b.Origin)
+// comparePairings orders pairings the way a reader walks a repository: by the
+// call they judge, then by where the document was handed over.
+func comparePairings(a, b pairing) int {
+	return cmp.Or(comparePositions(a.Position, b.Position), comparePositions(a.Origin, b.Origin))
 }
 
-// positionLess orders positions by file, then line, then column.
-func positionLess(a, b token.Position) bool {
-	if a.Filename != b.Filename {
-		return a.Filename < b.Filename
-	}
-	if a.Line != b.Line {
-		return a.Line < b.Line
-	}
-	return a.Column < b.Column
+// comparePositions orders positions by file, then line, then column. Each
+// level is decided by the sign of one comparison, and a tie falls through to
+// the next.
+func comparePositions(a, b token.Position) int {
+	return cmp.Or(strings.Compare(a.Filename, b.Filename), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Column, b.Column))
 }
