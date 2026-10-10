@@ -485,9 +485,9 @@ func TestHeldRequestsMiddleware_RefusesEachMethodTheWayItsBucketDoes(t *testing.
 			check: func(t *testing.T, result mcp.Result, err error) {
 				t.Helper()
 				var rpc *jsonrpc.Error
-				if result != nil || !errors.As(err, &rpc) || rpc.Code != tenancy.CodeTooManyRequests || rpc.Message != heldRefusalText {
+				if result != nil || !errors.As(err, &rpc) || rpc.Code != tenancy.CodeUnavailable || rpc.Message != heldRefusalText {
 					t.Errorf("result %#v, error %v; want a JSON-RPC error %d saying %q", result, err,
-						tenancy.CodeTooManyRequests, heldRefusalText)
+						tenancy.CodeUnavailable, heldRefusalText)
 				}
 			},
 		},
@@ -1024,8 +1024,8 @@ func TestHeldCeiling_CountsEachCallTheSDKDispatches(t *testing.T) {
 		read := `{"jsonrpc":"2.0","id":11,"method":"resources/read","params":{"uri":"gitlab://project/2"}}`
 		status, _, got := postHeld(t, srv, gateTestToken, read, legacyHeader("2025-11-25"))
 		if status != http.StatusOK || !strings.Contains(got, busy) ||
-			!strings.Contains(got, strconv.Itoa(tenancy.CodeTooManyRequests)) {
-			t.Errorf("status %d, body %s; want a JSON-RPC error %d", status, got, tenancy.CodeTooManyRequests)
+			!strings.Contains(got, strconv.Itoa(tenancy.CodeUnavailable)) {
+			t.Errorf("status %d, body %s; want a JSON-RPC error %d", status, got, tenancy.CodeUnavailable)
 		}
 	})
 	for _, tc := range []struct{ name, body string }{

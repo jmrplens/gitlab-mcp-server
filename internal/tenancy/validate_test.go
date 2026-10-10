@@ -137,8 +137,10 @@ func TestValidate_ChannelCarried(t *testing.T) {
 		{"the bottom of MCP's range", with(rpc(-32099)), "reserves and does not define"},
 		{"the bottom of the legacy range", with(rpc(-32019)), "legacy range"},
 		{"a reserved code MCP defines", with(rpc(codeUnsupportedProtocolVersion)), ""},
-		{"the legacy range", with(rpc(CodeServerBusyLegacy)), "legacy range"},
-		{"the legacy range, recorded", with(rpc(CodeServerBusyLegacy), "F-07"), ""},
+		{"the legacy range", with(rpc(-32000)), "legacy range"},
+		// No finding excuses it any longer: issue 956 retired -32000 from
+		// every refusal, and F-07, which used to, is answered.
+		{"the legacy range, even recorded", with(rpc(-32000), "F-07"), "legacy range"},
 	})
 }
 
@@ -346,41 +348,65 @@ func TestValidate_WellFormed(t *testing.T) {
 	})
 }
 
-// TestValidate_OneCodePerAnswer holds each answer class to one code this
-// server allocates, across rows, except where a finding records the
-// divergence; JSON-RPC's own codes are left out of the comparison.
-func TestValidate_OneCodePerAnswer(t *testing.T) {
+// TestValidate_CodeMirrorsStatus holds every in-band code this server
+// allocates to the status the standard assigns to what the refusal says,
+// mirrored as the status times -100 (issue 956): an in-band code mirrors a
+// status the gate answers the same class with somewhere in the register, so
+// retry later is -42900 where the caller made too many requests and -50300
+// where the server cannot serve it right now, and nothing else. JSON-RPC's
+// own codes, the gate's own literals and a row that records the departure
+// are left out.
+func TestValidate_CodeMirrorsStatus(t *testing.T) {
 	refusing := func(id string, channel Channel, code int, answer Answer, findings ...string) Decision {
-		return Decision{ID: id, Findings: findings, Refusals: []Refusal{{Channel: channel, Code: code, Answer: answer}}}
+		r := Refusal{Channel: channel, Code: code, Answer: answer}
+		if channel == Gate {
+			r.Status = code / -100
+		}
+		return Decision{ID: id, Findings: findings, Refusals: []Refusal{r}}
 	}
+	tooMany := refusing("G1", Gate, CodeTooManyRequests, RetryLater)
+	unavailable := refusing("G2", Gate, CodeUnavailable, RetryLater)
+	forbidden := refusing("G3", Gate, CodeForbidden, WidenScope)
 	for _, tc := range []struct {
 		name string
 		rows []Decision
 		want string
 	}{
-		{"one code", []Decision{
-			refusing("A", RPC, CodeTooManyRequests, RetryLater), refusing("B", RPC, CodeTooManyRequests, RetryLater),
+		{"too many requests", []Decision{tooMany, unavailable, refusing("A", RPC, CodeTooManyRequests, RetryLater)}, ""},
+		{"cannot serve right now", []Decision{tooMany, unavailable, refusing("A", RPC, CodeUnavailable, RetryLater)}, ""},
+		{"both, each saying its own", []Decision{
+			tooMany, unavailable, refusing("A", RPC, CodeTooManyRequests, RetryLater), refusing("B", RPC, CodeUnavailable, RetryLater),
 		}, ""},
-		{"two codes", []Decision{
-			refusing("A", RPC, CodeTooManyRequests, RetryLater), refusing("B", RPC, CodeServerBusyLegacy, RetryLater),
-		}, `B: one-code-per-answer (INV-012): answers "retry later" in-band with code -32000 where A uses -42900`},
-		{"two codes, recorded", []Decision{
-			refusing("A", RPC, CodeTooManyRequests, RetryLater), refusing("B", RPC, CodeServerBusyLegacy, RetryLater, "F-07"),
-		}, ""},
-		{"two answers", []Decision{
-			refusing("A", RPC, CodeTooManyRequests, RetryLater), refusing("B", RPC, CodeServerBusyLegacy, FixRequest),
-		}, ""},
-		{"a protocol code", []Decision{
-			refusing("A", RPC, CodeTooManyRequests, RetryLater), refusing("B", RPC, codeInternalError, RetryLater),
-		}, ""},
-		{"the gate", []Decision{
-			refusing("A", RPC, CodeTooManyRequests, RetryLater), refusing("B", Gate, CodeUnavailable, RetryLater),
-		}, ""},
+		{
+			"the legacy busy code",
+			[]Decision{tooMany, unavailable, refusing("B", RPC, -32000, RetryLater)},
+			`B: code-mirrors-status (INV-012): answers "retry later" in-band with code -32000, which mirrors no status the gate answers it with (429, 503)`,
+		},
+		{"the legacy busy code, recorded", []Decision{tooMany, unavailable, refusing("B", RPC, -32000, RetryLater, "F-07")}, ""},
+		{
+			"a status of another class",
+			[]Decision{tooMany, unavailable, forbidden, refusing("B", RPC, CodeForbidden, RetryLater)},
+			`B: code-mirrors-status (INV-012): answers "retry later" in-band with code -40300, which mirrors no status the gate answers it with (429, 503)`,
+		},
+		{
+			"a class the gate never answers",
+			[]Decision{tooMany, refusing("B", RPC, CodeForbidden, WidenScope)},
+			`B: code-mirrors-status (INV-012): answers "widen the scope" in-band with code -40300, which mirrors no status the gate answers it with (none)`,
+		},
+		{
+			"a code that mirrors no status",
+			[]Decision{tooMany, refusing("B", RPC, -42901, RetryLater)},
+			`B: code-mirrors-status (INV-012): answers "retry later" in-band with code -42901, which mirrors no status the gate answers it with (429)`,
+		},
+		{"another class, mirrored", []Decision{forbidden, refusing("B", RPC, CodeForbidden, WidenScope)}, ""},
+		{"a protocol code", []Decision{tooMany, refusing("B", RPC, codeInternalError, RetryLater)}, ""},
+		{"the gate alone", []Decision{tooMany, unavailable, forbidden}, ""},
+		{"a tool error", []Decision{refusing("B", ToolError, 0, RetryLater)}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var got []string
-			for _, v := range checkOneCodePerAnswer(tc.rows) {
-				v.Rule, v.Invariant = "one-code-per-answer", "INV-012"
+			for _, v := range checkCodeMirrorsStatus(tc.rows) {
+				v.Rule, v.Invariant = "code-mirrors-status", "INV-012"
 				got = append(got, v.Error())
 			}
 			if strings.Join(got, "\n") != tc.want {

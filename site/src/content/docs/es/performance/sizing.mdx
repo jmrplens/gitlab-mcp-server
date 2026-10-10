@@ -289,10 +289,12 @@ El techo de watchers del proceso rechaza en lugar de detener la vigilancia de
 otra credencial, porque un watcher pertenece a una credencial y detener uno para
 admitir otro es el intercambio que este servidor no hace; en su propio techo de
 diez, una credencial cede primero su vigilancia degradada más antigua para hacer
-sitio y solo se rechaza cuando no tiene ninguna degradada. Ambos rechazos llevan
-`-32000`: el del proceso dice `server-wide` con todas las letras, y el de por
-credencial lleva la cuenta de esa credencial, así que el error de un cliente
-dice con qué número se encontró. Una credencial se acuña con una llamada a la
+sitio y solo se rechaza cuando no tiene ninguna degradada. Los dos rechazos
+dicen cosas distintas y llevan códigos distintos: el del proceso dice que el
+servidor no puede vigilar otro recurso ahora, `server-wide`, con `-50300`, y el
+de por credencial dice que quien llama tiene demasiados, con la cuenta de esa
+credencial y `-42900`, así que el error de un cliente dice con qué número se
+encontró. Una credencial se acuña con una llamada a la
 API, así que un número por credencial se multiplica por cuantas tenga quien
 llame y solo el del proceso acota el proceso: 52 credenciales en su tope de diez
 bastan para alcanzarlo. Mantenerlo es barato con `--stateless=false`, donde un

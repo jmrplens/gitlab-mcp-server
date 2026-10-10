@@ -161,10 +161,10 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
 
 - **With no exception**: a share on any mintable key (`INV-003`); a charge to anything but
   a budget before admission (`INV-007`); a refusal on a channel its method cannot carry,
-  or with a status, a code, a `Retry-After` or a challenge the channel forbids
-  (`INV-011`); a process partner that is configurable or not keyed on the process, and a
-  reason about the process on a row that does not say it protects one (`INV-004`); a
-  valued row that does not say what zero means (`INV-015`); and a variable without the
+  or with a status, a code, a `Retry-After` or a challenge the channel forbids, a code
+  in the legacy `-32000` range among them (`INV-011`); a process partner that is
+  configurable or not keyed on the process, and a reason about the process on a row that
+  does not say it protects one (`INV-004`); a valued row that does not say what zero means (`INV-015`); and a variable without the
   `GITLAB_MCP_` prefix, or a configurable value with no flag, variable or malformed-value
   policy (`INV-017`).
 - **With a recorded decision**: a holding taken across keys (`INV-005`); and a process
@@ -174,11 +174,11 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   decisions are about something else does not pass that way.
 - **With a finding recorded for the invariant**: a per-key ceiling on a process resource
   with no partner (`INV-004`); a table keyed on a mintable value with no capacity
-  (`INV-010`); a code in the legacy `-32000` range (`INV-011`); a second in-band code for
-  one class of next action (`INV-012`); a zero that does not mean off (`INV-015`); a reason
-  whose unit differs from its key or misstates its own (`INV-016`); a value only an
-  environment variable or a Go option reaches (`INV-017`); and a ceiling nothing bounds
-  (`INV-018`).
+  (`INV-010`); an in-band code of the server's own that mirrors no status the gate
+  answers its class of next action with (`INV-012`); a zero that does not mean off
+  (`INV-015`); a reason whose unit differs from its key or misstates its own
+  (`INV-016`); a value only an environment variable or a Go option reaches (`INV-017`);
+  and a ceiling nothing bounds (`INV-018`).
 
 - **INV-001 Identity from the credential.** A limit derives who a caller is from the
   credential on the request, never from the connection, a session id, `clientInfo`, a
@@ -235,8 +235,15 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   shape key holds nothing about the credential's identity beyond what changes the catalog.
 - **INV-011 Every refusal uses a channel the protocol and the SDK carry** (see
   [Refusal channels](#refusal-channels)).
-- **INV-012 One class and one next action per refusal.** A refusal belongs to exactly one
-  class of next action and says which. Within one layer, a class uses one code.
+- **INV-012 One class and one next action per refusal, and the code the standard gives
+  it.** A refusal belongs to exactly one class of next action and says which. Its code is
+  the one the standard assigns to what it says: a refusal telling the caller it made too
+  many requests or holds too many is HTTP 429 (RFC 6585) with `Retry-After`, mirrored
+  in-band as `-42900`, and one saying the server cannot serve it right now is 503 (RFC
+  9110), mirrored as `-50300`. An in-band code of the server's own is the status the gate
+  answers the same class with, multiplied by `-100` (issue 956); a code JSON-RPC defines
+  (`-32603` for a request no credential was bound to) is GitLab's or the protocol's, not
+  the server's, and is exempt.
 - **INV-013 Telemetry names the reason, never the caller.** Refusal telemetry carries the
   reason, never the address or the identity, and `/health` carries no pool state.
 - **INV-014 Only the pool decides who chose the destination** (ADR-0022).
@@ -353,10 +360,12 @@ What the protocol and the SDK leave a server:
   message.
 - **A code this server allocates sits outside the JSON-RPC reserved range.** The gate's
   codes mirror their status multiplied by -100 (`-40100`, `-40300`, `-42900`, `-50300`),
-  and the in-band "retry later" code mirrors 429 the same way. Nothing is emitted in
-  `-32020` to `-32099` that MCP does not define there. `-32000` sits in the legacy
-  sub-range that new implementations should not use; the listen and watcher ceilings still
-  refuse with it, which is a finding.
+  and an in-band code mirrors the status the gate answers the same refusal with: `-42900`
+  where the caller made or holds too many, `-50300` where the server cannot serve it right
+  now. Nothing is emitted in `-32020` to `-32099` that MCP does not define there, nor in
+  the legacy sub-range `-32000` to `-32019`, where MCP 2026-07-28 says new codes must not
+  be allocated; the listen and watcher ceilings and the readiness gate refused with
+  `-32000` until issue 956 retired it.
 - **A `subscriptions/listen` refusal is made before the acknowledgment**, and a modern Go
   SDK client never observes it.
 - **Ending is not refusing.** A conformant client comes back after a session closes or a
@@ -399,13 +408,13 @@ itself, and a row that adds a channel adds it here.
 
 | Answer           | Channels the rows declare                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Retry later      | A gate 429 with `Retry-After`; a gate 503, with `Retry-After` where GitLab's verification failed, no verification slot came free or the process holds as many requests as it serves at once; in-band `-42900`, `-32000`, or `-32603` for a request no credential was bound to; a tool error saying to back off, or saying the call could not be attributed; an empty completion; a listen ended with `shutdown`                                                                                                                                                                                |
+| Retry later      | A gate 429 with `Retry-After`; a gate 503, with `Retry-After` where GitLab's verification failed, no verification slot came free or the process holds as many requests as it serves at once; in-band `-42900`, `-50300`, or `-32603` for a request no credential was bound to; a tool error saying to back off, or saying the call could not be attributed; an empty completion; a listen ended with `shutdown`                                                                                                                                                                                |
 | Reauthorize      | A gate 401 with a challenge, `invalid_token` where GitLab refused the credential; a listen ended with `credential_revoked`                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Widen the scope  | A gate 403 with `insufficient_scope`; a gate 403 for a fine-grained token GitLab accepted and refused User: Read, uncharged and remembered; a gate 403 for a token GitLab accepted below the `read_api` minimum, uncharged and remembered; on stdio, every catalog method refused in-band with `-40300` for a process token below that minimum; a listen ended with `credential_insufficient`; a surface narrowed by the credential's scope; a surface narrowed for a fine-grained token, a call to which names the permission its grant lacks or why no fine-grained token reaches the action |
-| Ask the operator | A surface narrowed by the operator; a gate 400 refusing a destination the caller named; a gate 403 for an untrusted origin or host, or for an instance the deployment does not publish; a tool error naming an allow-list variable or a refused destination; the process refusing to start                                                                                                                                                                                                                                                                                                     |
+| Ask the operator | A surface narrowed by the operator, or by the tier, a call to which names the tier the action needs and whether the session's was pinned or detected; a gate 400 refusing a destination the caller named; a gate 403 for an untrusted origin or host, or for an instance the deployment does not publish; a tool error naming an allow-list variable or a refused destination; the process refusing to start                                                                                                                                                                                   |
 | Fix the request  | In-band `-32602` or `-32600`; a gate 400 for a missing or invalid instance header; a listen ended with `resource_gone`                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Start over       | A gate 404 for a foreign session; a closed session; a listen ended with `credential_evicted`, `credential_reset`, `lifetime_reached` or `watcher_evicted`                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| None given       | A tier narrowing, answered as an unknown action; a failure a full tracking table stops counting; a watch's notifications delayed after GitLab's 429                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| None given       | A failure a full tracking table stops counting; a watch's notifications delayed after GitLab's 429                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 ## The five questions
 
@@ -538,7 +547,7 @@ departure from `INV-010`. The map was first recorded under F-29, whose issue (95
 about OAuth verification while the map is kept in both authentication modes, and it was
 given a finding of its own once it was filed.
 
-Ten findings are answered, and stay in the list with their issues. F-03, the listing
+Twelve findings are answered, and stay in the list with their issues. F-03, the listing
 bucket with no process partner, is answered by `RTC-007`, the first of issue 951's three
 changes: a `tools/list` bucket keyed on the process and counted in the tools a listing
 carries, which `RTC-003` names as its partner and which no row carries F-03 for any
@@ -560,8 +569,9 @@ opens and kept until it ends, so the GET takes none. A POST on protocol 2026-07-
 whose `Mcp-Method` header the SDK holds to the body, takes its slot in the gate instead
 and is refused there, a 503 `-50300` with `Retry-After` and the connection closed; a
 call on an older revision is refused where it is dispatched,
-the way `RTC-001` refuses the same method (a result flagged with `isError`, `-42900`, or
-an empty completion). Every refusal says `This server is busy. Retry later.` and is
+on the channel `RTC-001` refuses the same method on (a result flagged with `isError`, an
+in-band error, or an empty completion), the in-band code being `-50300`, the one the gate
+answers the same refusal with (issue 956). Every refusal says `This server is busy. Retry later.` and is
 charged to nothing. The slot is taken after admission, which departs from what issue 951
 asks, that the process slot be taken before anything keyed on the credential: a slot
 taken first would let a caller with no credential hold one for as long as its
@@ -767,7 +777,7 @@ answered for still count as write-capable (`ADM-003`), and a tier neither the li
 a namespace plan answers for is still Free, recorded as `INV-008`'s one exception, with
 the warning an enterprise build gives naming `GITLAB_MCP_TIER` and `--tier` (`AUT-003`,
 issue 900). `ADM-003` records ADR-0018 and issue 952, `AUT-003` issues 900 and 952, and
-neither carries F-09 any longer; `AUT-003` keeps F-10. `AUT-003` also records issue 1224,
+neither carries F-09 any longer, nor does `AUT-003` carry F-10 (below). `AUT-003` also records issue 1224,
 which gave the tier a third question on GitLab.com: GitLab.com reports a namespace's plan
 only to a caller who may administer it and serves a licensed feature to every member, so
 a member of a paid group who owned no paid namespace resolved Free. Unless a namespace
@@ -797,7 +807,40 @@ and is a refusal on its own: the version endpoint takes `read_user`, `ai_feature
 `ai_workflows`, `api` and `read_api`, so a token it refuses carries neither of the two,
 and the process refuses even when the token's description went unanswered.
 `ADM-001` records ADR-0018 and issue 952, and neither it nor `ADM-002` carries F-08 any
-longer. Four more
+longer. F-07 and F-10 are answered by issue 956, whose decision is that each refusal
+carries the code the standard assigns to what it says. A refusal telling the caller it
+made or holds too many is answered in-band `-42900`, mirroring 429, and one saying the
+server cannot serve it right now `-50300`, mirroring 503, so the legacy `-32000` is
+answered by nothing: the per-credential listen ceiling (`HLD-001`) and watcher ceiling
+(`HLD-003`) and a GitLab 429 on a first read (`RTC-005`) moved to `-42900`, the process
+listen and watcher ceilings (`HLD-002`, `HLD-004`), a subscribe during shutdown and the
+readiness gate abandoning a request to `-50300`, and `HLD-011`'s in-band refusal from
+`-42900` to `-50300`, since the gate answers that same refusal 503. The two listen
+ceilings, which shared one sentence naming its scope, now refuse in words and codes of
+their own, and the process watcher ceiling refuses with a sentinel of its own
+(`ErrServerAtCapacity`), so the code is chosen by what the refusal says and not by the
+layer that made it. The process's listing bucket (`RTC-007`) keeps the credential's
+words and so 429's code: issue 951 chose those words so that a refusal names no process,
+and issue 956 did not reopen that choice. `Validate`
+holds that rule as `INV-012` (`code-mirrors-status`): an in-band code of the server's own
+must be a status the gate answers the same class of next action with, times `-100`, and
+the legacy range is refused with no exception (`INV-011`). The tier narrowing, which
+answered an action above the instance's tier as unknown, now answers it as withheld,
+naming the tier it needs, the tier the session was built for and whether that tier was
+pinned or detected, and asks the operator (`AUT-003`), since the caller cannot change the
+licence and an operator can pin the tier when detection was wrong. When read-only mode or
+a scope the credential lacks would still withhold the action once the tier served it, the
+same answer says so, so the operator is not sent to pin a tier that only uncovers the
+next refusal. The meta surface still refuses a paid action of a base group, such as
+`gitlab_project`'s `approval_config_get`, through the tool's action enum, as it refuses
+an action the scope or the operator withheld; only the dynamic surface answers with the
+cause. The dynamic surface
+learns which actions the tier removed from the catalog built without the tier filter
+(`tools.TierWithheld`), never naming one the operator excluded by name, so the
+`related_actions` links that the session dropped at Free (five in three packages) are
+published like the links a scope or operator filter withheld. `RTC-005`, `HLD-001` to
+`HLD-004`, `HLD-011` and `AUT-003` record the issue, and none carries F-07 or F-10. Four
+more
 have been carried by no row since the register landed, because each records something no
 row decides: F-18 a budget GitLab.com keeps that the process does not account for, F-24 a
 message the SDK gives the server no way to send, and F-23 and F-27 stale statements.

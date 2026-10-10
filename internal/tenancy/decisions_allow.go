@@ -23,18 +23,28 @@ func allowDecisions() []Decision {
 	const heldRefusalPrefix = "This server is busy."
 	heldRefusal := refuse(pkgServer, "heldRequestsRefusal")
 	busyFailure := refuse(pkgServer, "processBusyFailure")
-	busy := refuse(pkgServer, "listenLimits.busy")
-	listenRefusal := Refusal{
-		Methods: []string{"subscriptions/listen"}, Era: EraModern, Channel: RPC, Code: CodeServerBusyLegacy,
-		Prefix: "too many open subscriptions/listen streams (", Answer: RetryLater, At: busy,
-	}
+	// The listen and watcher ceilings refuse with the code the standard
+	// assigns to what each says (issue 956): a caller past its own ceiling is
+	// told it holds too many, 429's code, and one past the process's that the
+	// server cannot take another right now, 503's.
+	tooManyListens := refuse(pkgServer, "listenLimits.tooMany")
+	fullListens := refuse(pkgServer, "listenLimits.full")
 	tooMany := refuse(pkgSubscriptions, "ErrTooManySubscriptions")
+	atCapacity := refuse(pkgSubscriptions, "ErrServerAtCapacity")
 	wire := refuse(pkgServer, "wireSubscribeError")
-	watcherRefusal := Refusal{
-		Methods: subscribeMethods(), Channel: RPC, Code: CodeServerBusyLegacy,
-		Prefix: "subscriptions: too many active subscriptions", Answer: RetryLater, At: tooMany, Via: wire,
-	}
 	rateLimitedError := refuse(pkgToolutil, "rateLimitedError")
+	// processPartner fills in what the process partner of a per-credential
+	// ceiling declares, HLD-002 beside HLD-001 and HLD-004 beside HLD-003: a
+	// ceiling keyed on the process on either transport, stated and reasoned
+	// about the process it protects, a constant no setting reaches (INV-004)
+	// with no zero to mean anything, refusing the newcomer. The row it is
+	// given carries the rest.
+	processPartner := func(d Decision) Decision {
+		d.Question, d.Kind, d.Class, d.Disposition = Allow, Ceiling, ClassP, Valued
+		d.Key, d.StdioKey, d.StatedUnit, d.ReasonUnit = KeyProcess, KeyProcess, KeyProcess, KeyProcess
+		d.ProtectsProcess, d.Source, d.Zero, d.AtCapacity = true, Constant, ZeroNotApplicable, RefuseNewcomer
+		return d
+	}
 
 	return []Decision{
 		{
@@ -182,10 +192,13 @@ func allowDecisions() []Decision {
 			ReasonAt: reasonAt(pkgSubscriptions, "ErrRateLimited"),
 			Values:   []string{"WatchRateLimitPause", "WatchRateLimitPauseMax", "WatchRateLimitJitter"},
 			Source:   Constant, Zero: ZeroNotApplicable,
-			Findings: []string{"F-06", "F-07", "F-32"},
+			// GitLab answered the first read 429, so the refusal says the
+			// caller made too many requests and carries 429's code (issue 956).
+			Decided:  []string{"issue 956"},
+			Findings: []string{"F-06", "F-32"},
 			Refusals: []Refusal{
 				{
-					Methods: subscribeMethods(), Channel: RPC, Code: CodeServerBusyLegacy,
+					Methods: subscribeMethods(), Channel: RPC, Code: CodeTooManyRequests,
 					Prefix: "subscriptions: rate limited", Answer: RetryLater,
 					At: refuse(pkgSubscriptions, "ErrRateLimited"), Via: wire,
 				},
@@ -243,6 +256,16 @@ func allowDecisions() []Decision {
 			// bit INV-019 accepts for a bound keyed on the process; the wording
 			// adds nothing to it. The log line it writes is where an operator
 			// tells the two apart.
+			//
+			// Issue 956 left it there. Its decision is that a refusal carries
+			// the code the standard assigns to what the refusal says, and this
+			// one says the caller's rate limit was exceeded, so it carries 429's
+			// -42900 like RTC-003. The process's listen and watcher ceilings
+			// (HLD-002, HLD-004) carry 503's -50300 for the same reason read the
+			// other way: their words said the limit was server-wide before that
+			// issue, so they say the server cannot take another now. Giving this
+			// row words of its own and 503's code would reverse issue 951's
+			// decision on its words, which issue 956 did not reopen.
 			ID: "RTC-007", Question: Allow, Kind: Rate, Class: ClassP, Disposition: Valued,
 			Resource: "tools/list across every credential, counted in the tools listed",
 			Key:      KeyProcess, StdioKey: KeyProcess,
@@ -292,43 +315,58 @@ func allowDecisions() []Decision {
 			Values:   []string{"ListenStreamsPerCredential"},
 			Source:   EnvOnly, Envs: []string{"GITLAB_MCP_MAX_LISTEN_STREAMS"}, Malformed: WarnKeepDefault,
 			Zero: ZeroOffKeepsCount, AtCapacity: RefuseNewcomer,
-			Decided:  []string{"issue 540"},
-			Findings: []string{"F-04", "F-07", "F-13", "F-21"},
-			Refusals: []Refusal{listenRefusal},
-			// codeServerBusy is declared here, with the row whose layer moves
-			// it: the listen ceilings are what it refuses with first.
+			Decided:  []string{"issue 540", "issue 956"},
+			Findings: []string{"F-04", "F-13", "F-21"},
+			Refusals: []Refusal{
+				{
+					Methods: []string{"subscriptions/listen"}, Era: EraModern, Channel: RPC, Code: CodeTooManyRequests,
+					Prefix: "too many open subscriptions/listen streams (", Answer: RetryLater, At: tooManyListens,
+				},
+			},
+			// codeTooManyRequests is declared here, with the row whose layer
+			// moves it: a listen past its caller's ceiling is what it refuses
+			// first, and the watcher ceiling and GitLab's 429 read it too.
 			Sites: []Site{
 				alias(pkgServer, "maxListenStreamsPerServer", "ListenStreamsPerCredential"),
-				alias(pkgServer, "codeServerBusy", "CodeServerBusyLegacy"),
+				alias(pkgServer, "codeTooManyRequests", "CodeTooManyRequests"),
 				enforce(pkgServer, "maxListenStreamsEnv"),
 				enforce(pkgServer, "listenLimitsFromEnv"),
 				enforce(pkgServer, "listenLimits.middleware"),
-				busy,
+				tooManyListens,
 			},
 		},
-		{
-			// It refuses with HLD-001's refusal, naming its scope: a caller
-			// counting its own streams learns that the process is at this
-			// ceiling whatever the words say, and that one bit is what INV-019
-			// accepts for a bound keyed on the process (issue 951).
-			ID: "HLD-002", Question: Allow, Kind: Ceiling, Class: ClassP, Disposition: Valued,
+		processPartner(Decision{
+			// It refuses in words of its own, that the server cannot open
+			// another stream now, with 503's code (issue 956), where it used
+			// to share HLD-001's refusal and name its scope. A caller
+			// counting its own streams learned that the process is at this
+			// ceiling whatever the words said, and that one bit is still all
+			// it learns: INV-019 accepts it for a bound keyed on the process
+			// (issue 951), and the words and the code add nothing to it.
+			ID:       "HLD-002",
 			Resource: "open subscriptions/listen streams across every credential",
-			Key:      KeyProcess, StdioKey: KeyProcess,
-			StatedUnit: KeyProcess, ReasonUnit: KeyProcess, ProtectsProcess: true,
 			Reason:   "so the process-wide one is what bounds the process",
 			ReasonAt: reasonAt(pkgServer, "maxListenStreamsPerProcess"),
-			Values:   []string{"ListenStreamsPerProcess"}, Source: Constant, Zero: ZeroNotApplicable,
-			AtCapacity: RefuseNewcomer,
-			Decided:    []string{"issue 540"},
-			Findings:   []string{"F-07", "F-21"},
-			Refusals:   []Refusal{listenRefusal},
+			Values:   []string{"ListenStreamsPerProcess"},
+			Decided:  []string{"issue 540", "issue 956"},
+			Findings: []string{"F-21"},
+			Refusals: []Refusal{
+				{
+					Methods: []string{"subscriptions/listen"}, Era: EraModern, Channel: RPC, Code: CodeUnavailable,
+					Prefix: "the server cannot open another subscriptions/listen stream now (", Answer: RetryLater,
+					At: fullListens,
+				},
+			},
+			// codeUnavailable is declared here, with the first row that
+			// refuses with it in-band; HLD-004 and shutdown read it too.
 			Sites: []Site{
 				alias(pkgServer, "maxListenStreamsPerProcess", "ListenStreamsPerProcess"),
+				alias(pkgServer, "codeUnavailable", "CodeUnavailable"),
 				enforce(pkgServer, "processListenStreams"),
 				enforce(pkgServer, "listenLimits.middleware"),
-				busy,
+				fullListens,
 			},
-		},
+		}),
 		{
 			ID: "HLD-003", Question: Allow, Kind: Ceiling, Class: ClassD, Disposition: Valued,
 			Resource: "resource watchers one credential's manager holds",
@@ -340,11 +378,17 @@ func allowDecisions() []Decision {
 			ReasonAt: reasonAt(pkgSubscriptions, "DefaultMaxWatchers"),
 			Values:   []string{"WatchersPerCredential"}, Source: Constant, Zero: ZeroSelectsDefault,
 			AtCapacity: ReclaimOwnThenRefuse,
-			Findings:   []string{"F-05", "F-07", "F-21", "F-34"},
+			// The refusal says the caller holds too many and carries 429's
+			// code (issue 956).
+			Decided:  []string{"issue 956"},
+			Findings: []string{"F-05", "F-21", "F-34"},
 			// Reclaiming ends the longest-demoted watch of the same manager,
 			// whose listens are told so.
 			Refusals: []Refusal{
-				watcherRefusal,
+				{
+					Methods: subscribeMethods(), Channel: RPC, Code: CodeTooManyRequests,
+					Prefix: "subscriptions: too many active subscriptions", Answer: RetryLater, At: tooMany, Via: wire,
+				},
 				listenEnd("watcher_evicted", StartOver, refuse(pkgServer, "endOfWatcherEviction")),
 			},
 			// The manager is built per credential in newRuntime, which is what
@@ -358,29 +402,35 @@ func allowDecisions() []Decision {
 				tooMany, wire,
 			},
 		},
-		{
-			// It refuses with HLD-003's refusal, word for word, so a caller
-			// under its own ceiling learns only that the process is at this
-			// one, the one bit INV-019 accepts for a bound keyed on the process
-			// (issue 951).
-			ID: "HLD-004", Question: Allow, Kind: Ceiling, Class: ClassP, Disposition: Valued,
+		processPartner(Decision{
+			// It refuses in words of its own, that the server cannot watch
+			// another resource now, with 503's code (issue 956), where it used
+			// to repeat HLD-003's refusal word for word. A caller under its
+			// own ceiling learned that the process is at this one whatever
+			// the words said, and that is still all it learns: the one bit
+			// INV-019 accepts for a bound keyed on the process (issue 951),
+			// to which the words and the code add nothing.
+			ID:       "HLD-004",
 			Resource: "resource watchers across every credential",
-			Key:      KeyProcess, StdioKey: KeyProcess,
-			StatedUnit: KeyProcess, ReasonUnit: KeyProcess, ProtectsProcess: true,
 			Reason:   "only this one bounds the process",
 			ReasonAt: reasonAt(pkgServer, "maxWatchersPerProcess"),
-			Values:   []string{"WatchersPerProcess"}, Source: Constant, Zero: ZeroNotApplicable,
-			AtCapacity: RefuseNewcomer,
-			Decided:    []string{"issue 561"},
-			Findings:   []string{"F-07", "F-21"},
-			Refusals:   []Refusal{watcherRefusal},
+			Values:   []string{"WatchersPerProcess"},
+			Decided:  []string{"issue 561", "issue 956"},
+			Findings: []string{"F-21"},
+			Refusals: []Refusal{
+				{
+					Methods: subscribeMethods(), Channel: RPC, Code: CodeUnavailable,
+					Prefix: "subscriptions: the server cannot watch another resource now", Answer: RetryLater,
+					At: atCapacity, Via: wire,
+				},
+			},
 			Sites: []Site{
 				alias(pkgServer, "maxWatchersPerProcess", "WatchersPerProcess"),
 				enforce(pkgServer, "processWatchers"),
 				enforce(pkgSubscriptions, "WatcherGate.acquire"),
-				tooMany, wire,
+				atCapacity, wire,
 			},
-		},
+		}),
 		{
 			ID: "HLD-007", Question: Allow, Kind: Lifetime, Class: ClassQ, Disposition: Valued,
 			Resource: "a watch's lease, its polling cadence and its lifetime",
@@ -593,7 +643,9 @@ func allowDecisions() []Decision {
 			Functions: []string{"MeterFor"},
 			Source:    Derived, Zero: ZeroNotApplicable,
 			AtCapacity: RefuseNewcomer,
-			Decided:    []string{"issue 951"},
+			// Issue 956 gave its in-band refusal the gate's code, since both
+			// say the server cannot serve the call right now.
+			Decided: []string{"issue 951", "issue 956"},
 			Refusals: []Refusal{
 				{
 					// A POST on protocol 2026-07-28 or later, and a POST that
@@ -609,7 +661,7 @@ func allowDecisions() []Decision {
 				},
 				{
 					Methods: []string{"resources/read", "resources/subscribe", "prompts/get"}, Channel: RPC,
-					Code: CodeTooManyRequests, Prefix: heldRefusalPrefix, Answer: RetryLater, At: heldRefusal,
+					Code: CodeUnavailable, Prefix: heldRefusalPrefix, Answer: RetryLater, At: heldRefusal,
 				},
 				{
 					Methods: []string{"completion/complete"}, Channel: EmptyCompletion, Answer: RetryLater,
@@ -620,7 +672,7 @@ func allowDecisions() []Decision {
 				alias(pkgServer, "heldRequestDescriptors", "HeldRequestDescriptors"),
 				alias(pkgServer, "descriptorSpareDivisor", "DescriptorSpareDivisor"),
 				alias(pkgServer, "fallbackDescriptorLimit", "FallbackDescriptorLimit"),
-				alias(pkgServer, "heldRefusalCode", "CodeTooManyRequests"),
+				alias(pkgServer, "heldRefusalCode", "CodeUnavailable"),
 				enforce(pkgServer, "heldRequestsFor"),
 				enforce(pkgServer, "heldRequestsCeiling"),
 				enforce(pkgServer, "descriptorLimit"),

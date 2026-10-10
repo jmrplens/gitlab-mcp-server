@@ -594,7 +594,11 @@ func respond(req request) []byte {
 	case !limit.allow(req):
 		result, failure = refusal(req)
 	case os.Getenv(failEnv) == req.Method:
-		failure = &rpcError{Code: -32000, Message: "the stand-in refused " + req.Method}
+		// A refusal no bound under test writes: the code the real server
+		// answers with when it cannot serve a request right now, which is
+		// what took the legacy -32000's place there (issue 956), in words
+		// no bound's refusal begins with.
+		failure = &rpcError{Code: busyCode, Message: "the stand-in refused " + req.Method}
 	case req.Method == "tools/list":
 		result = map[string]any{"tools": []map[string]any{
 			{"name": "gitlab_find_action", "description": "find"},

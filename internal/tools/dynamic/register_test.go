@@ -22,6 +22,8 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
@@ -9465,6 +9467,181 @@ func TestExecute_WithheldByScope_NamesEveryScopeTheCredentialLacks(t *testing.T)
 	}
 }
 
+// TestExecute_WithheldByTier_NamesTheTierAndAsksTheOperator pins the answer to
+// a call for an action the instance's licensing tier removed (issue 956). It
+// used to be "unknown action" with near-miss suggestions, because the tier
+// filter runs before the catalog is built and so never reached the withheld
+// bookkeeping: a model reading that concludes the server cannot do the thing.
+// The answer now says the action exists, which tier it needs, which tier the
+// session was built for, and that only the operator can change it; where the
+// tier was detected rather than pinned, it allows that the detection may be
+// wrong, since a Free fallback is what an unanswered detection resolves to.
+func TestExecute_WithheldByTier_NamesTheTierAndAsksTheOperator(t *testing.T) {
+	cases := []struct {
+		name    string
+		needs   string
+		session edition.Tier
+		pinned  bool
+		want    string
+	}{
+		{
+			name: "a Premium action on a detected Free tier", needs: "premium", session: edition.Free,
+			want: `gitlab_execute_action: action "project.hook_add" exists but is not available: it needs GitLab Premium or Ultimate, and this instance's tier was detected as GitLab Free, so a narrowed action surface was built. If the instance is licensed for it, the detection was wrong: ask the operator to pin the tier with GITLAB_MCP_TIER or --tier. Do not report the capability as missing.`,
+		},
+		{
+			name: "an Ultimate action on a pinned Premium tier", needs: "ultimate", session: edition.Premium, pinned: true,
+			want: `gitlab_execute_action: action "project.hook_add" exists but is not available: it needs GitLab Ultimate, and this deployment is configured for GitLab Premium, so a narrowed action surface was built. If the instance is licensed for it, ask the operator to configure the tier it has with GITLAB_MCP_TIER or --tier. Do not report the capability as missing.`,
+		},
+		{
+			name: "an Ultimate action on a detected Free tier", needs: "Ultimate", session: edition.Free,
+			want: `it needs GitLab Ultimate, and this instance's tier was detected as GitLab Free`,
+		},
+		{
+			name: "a session built for Ultimate names it", needs: "ultimate", session: edition.Ultimate, pinned: true,
+			want: `this deployment is configured for GitLab Ultimate`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := newCatalogRegistry(narrowedCatalog(t), WithTierWithheld(
+				[]actioncatalog.TierWithheld{{ID: "project.hook_add", Edition: tc.needs}, {ID: " "}}, tc.session, tc.pinned,
+			))
+			text := executeText(t, registry, "project.hook_add")
+			if !strings.Contains(text, tc.want) {
+				t.Errorf("Execute() error text = %q, want it to contain %q", text, tc.want)
+			}
+			for _, unwanted := range []string{"unknown action", "Did you mean", "Reauthorize"} {
+				if strings.Contains(text, unwanted) {
+					t.Errorf("Execute() error text = %q, must not contain %q", text, unwanted)
+				}
+			}
+			if _, blank := registry.withheldByTier[""]; blank {
+				t.Error("an entry with no key was recorded as withheld")
+			}
+		})
+	}
+
+	t.Run("an alias of a tier-removed action is answered the same way", func(t *testing.T) {
+		registry := newCatalogRegistry(narrowedCatalog(t), WithTierWithheld(
+			[]actioncatalog.TierWithheld{{ID: "project.hook_add", Edition: "premium"}, {ID: "Add Project Hook", Edition: "premium"}},
+			edition.Free, false,
+		))
+		if text := executeText(t, registry, "add project hook"); !strings.Contains(text, "it needs GitLab Premium or Ultimate") {
+			t.Errorf("Execute() error text = %q, want the tier answer for an alias", text)
+		}
+	})
+
+	t.Run("no tier bookkeeping keeps the unknown-action answer", func(t *testing.T) {
+		registry := newCatalogRegistry(narrowedCatalog(t), WithTierWithheld(nil, edition.Free, false))
+		if text := executeText(t, registry, "project.hook_add"); !strings.Contains(text, "unknown action") {
+			t.Errorf("Execute() error text = %q, want the unknown-action message when the tier withheld nothing", text)
+		}
+	})
+}
+
+// TestExecute_WithheldByTier_SaysWhatElseWouldWithholdIt pins the sentence the
+// tier's answer adds when pinning the tier would only uncover the next
+// refusal. A Premium write on a read-only Free deployment used to send the
+// model to ask the operator to pin the tier, and the pinned deployment then
+// answered that it withholds the action, so the operator was asked twice and
+// the read-only mode was named only the second time. The answer now names
+// read-only mode, or the scopes the credential lacks and who asks for each, in
+// the same breath, and still ends by telling the model not to report the
+// capability as missing.
+func TestExecute_WithheldByTier_SaysWhatElseWouldWithholdIt(t *testing.T) {
+	const ending = " Do not report the capability as missing."
+	cases := []struct {
+		name  string
+		entry actioncatalog.TierWithheld
+		want  string
+	}{
+		{
+			name:  "read-only mode",
+			entry: actioncatalog.TierWithheld{ID: "project.hook_add", Edition: "premium", ReadOnlyMode: true},
+			want:  "--tier. This deployment is also read-only, which withholds the action at any tier, so the operator would have to allow writes as well." + ending,
+		},
+		{
+			name:  "a scope GitLab requires",
+			entry: actioncatalog.TierWithheld{ID: "project.hook_add", Edition: "premium", ByGitLab: []string{"api"}},
+			want:  "--tier. Once the tier serves it, GitLab requires the api scope for it and the credential in use does not carry it: reauthorize with the api scope as well." + ending,
+		},
+		{
+			name:  "a scope this server requires",
+			entry: actioncatalog.TierWithheld{ID: "project.hook_add", Edition: "premium", ByServer: []string{"admin_mode"}},
+			want:  "--tier. Once the tier serves it, this server serves this action's group only to a credential carrying the admin_mode scope and the credential in use does not carry it: reauthorize with the admin_mode scope as well." + ending,
+		},
+		{
+			name:  "both scopes",
+			entry: actioncatalog.TierWithheld{ID: "project.hook_add", Edition: "premium", ByGitLab: []string{"api"}, ByServer: []string{"admin_mode"}},
+			want:  "reauthorize with the admin_mode and api scopes as well." + ending,
+		},
+		{
+			name:  "nothing else",
+			entry: actioncatalog.TierWithheld{ID: "project.hook_add", Edition: "premium"},
+			want:  "--tier." + ending,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, pinned := range []bool{false, true} {
+				registry := newCatalogRegistry(narrowedCatalog(t), WithTierWithheld([]actioncatalog.TierWithheld{tc.entry}, edition.Free, pinned))
+				text := executeText(t, registry, "project.hook_add")
+				if !strings.HasSuffix(text, tc.want) {
+					t.Errorf("Execute() error text (pinned %t) = %q, want it to end with %q", pinned, text, tc.want)
+				}
+			}
+		})
+	}
+}
+
+// droppedRelatedActions lists, as "action -> link", every curated cross-link
+// registry would leave out of what it publishes.
+func droppedRelatedActions(registry *Registry) []string {
+	var dropped []string
+	for _, entry := range registry.entries {
+		for _, id := range relatedActionsForEntry(entry) {
+			if _, ok := registry.publishableRelatedAction(id); !ok {
+				dropped = append(dropped, entry.ID+" -> "+id)
+			}
+		}
+	}
+	return dropped
+}
+
+// TestPublishedRelatedActions_AtFree_DropNothingTheTierRemoved measures what
+// issue 956 decided on the real catalogs: at the Free tier a Free action's
+// cross-links to its Premium siblings used to be dropped, five links in three
+// packages when the change was made (group milestones, merge request approvals
+// and project mirrors), because asking for one answered "unknown action". With
+// the tier's bookkeeping in the registry, asking for
+// one names the tier it needs, so every curated link is published, for both
+// instance classes. Without it something is still dropped, which is what keeps
+// this test about the bookkeeping rather than about a catalog that happened to
+// carry no such link.
+func TestPublishedRelatedActions_AtFree_DropNothingTheTierRemoved(t *testing.T) {
+	for _, instance := range []struct {
+		name   string
+		dotcom bool
+	}{{name: "self-managed"}, {name: "GitLab.com", dotcom: true}} {
+		t.Run(instance.name, func(t *testing.T) {
+			catalog, err := tools.SharedBaseCatalog(instance.dotcom, tools.ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+			if err != nil {
+				t.Fatalf("SharedBaseCatalog(Free) error = %v", err)
+			}
+			byTier, err := tools.TierWithheld(instance.dotcom, &config.ServerConfig{Tier: edition.Free})
+			if err != nil {
+				t.Fatalf("TierWithheld(Free) error = %v", err)
+			}
+			if without := droppedRelatedActions(newCatalogRegistry(catalog)); len(without) == 0 {
+				t.Fatal("no cross-link is dropped even without the tier's bookkeeping, so this measures nothing")
+			}
+			if dropped := droppedRelatedActions(newCatalogRegistry(catalog, WithTierWithheld(byTier, edition.Free, false))); len(dropped) != 0 {
+				t.Errorf("at Free %d cross-links are still dropped: %v", len(dropped), dropped)
+			}
+		})
+	}
+}
+
 // crossLinkCatalog builds a catalog whose one described action points at every
 // kind of cross-link target: a sibling the catalog holds, that same sibling
 // under an alias, an action a filter took away, and an action nothing here has
@@ -9546,6 +9723,20 @@ func TestDescribe_RelatedActions_CanonicalizeWhatResolvesAndDropWhatCannotBeExpl
 		want := []string{"widget.audit", "widget.repair", "widget.hidden"}
 		if got := crossLinks(t, registry); !slices.Equal(got, want) {
 			t.Fatalf("RelatedActions = %v, want %v: an operator-withheld link stays for the same reason", got, want)
+		}
+	})
+
+	// The case issue 956 decided: a link the tier removed used to be dropped,
+	// since nothing could say more than "unknown action" about it, and now
+	// asking for it names the tier it needs, so it is published like the
+	// links the other two filters withheld.
+	t.Run("withheld by the tier", func(t *testing.T) {
+		registry := newCatalogRegistry(crossLinkCatalog(t), WithTierWithheld(
+			[]actioncatalog.TierWithheld{{ID: "widget.hidden", Edition: "premium"}}, edition.Free, false,
+		))
+		want := []string{"widget.audit", "widget.repair", "widget.hidden"}
+		if got := crossLinks(t, registry); !slices.Equal(got, want) {
+			t.Fatalf("RelatedActions = %v, want %v: a tier-withheld link stays, since asking for it names the tier", got, want)
 		}
 	})
 

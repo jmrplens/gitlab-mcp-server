@@ -2309,6 +2309,63 @@ func TestProjectTagsResource_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestSingleObjectResources_OnlyAnAbsentObjectIsNotFound pins how the five
+// single-object reads that used to answer every GitLab failure as "resource
+// not found" (project, group, commit, file and wiki page) answer each kind of
+// failure.
+//
+// An object GitLab says is absent or out of the caller's reach (404, 403,
+// 401) is still not found. Anything else is not: a throttled read (429) or a
+// failing instance (500) is passed through classified, so a client reads it as
+// the transient failure it is, and a watcher's first read of a throttled
+// resource is refused as GitLab's rate limit, the retry-later refusal of
+// register row RTC-005, rather than as a resource it should stop asking for
+// (issue 956). Four of the five are subscribable, and an established watch of
+// one used to retire as resource_gone on a single 500.
+func TestSingleObjectResources_OnlyAnAbsentObjectIsNotFound(t *testing.T) {
+	type read struct {
+		template string
+		uri      string
+	}
+	reads := []read{
+		{"gitlab://project/{project_id}", "gitlab://project/42"},
+		{"gitlab://group/{group_id}", "gitlab://group/10"},
+		{"gitlab://project/{project_id}/commit/{sha}", "gitlab://project/42/commit/abc"},
+		{"gitlab://project/{project_id}/file/{ref}/{+path}", "gitlab://project/42/file/main/src/main.go"},
+		{"gitlab://project/{project_id}/wiki/{slug}", "gitlab://project/42/wiki/home"},
+	}
+	for _, r := range reads {
+		for _, tc := range []struct {
+			status   int
+			notFound bool
+		}{
+			{http.StatusNotFound, true},
+			{http.StatusForbidden, true},
+			{http.StatusUnauthorized, true},
+			{http.StatusTooManyRequests, false},
+			{http.StatusInternalServerError, false},
+		} {
+			t.Run(fmt.Sprintf("%s answered %d", r.uri, tc.status), func(t *testing.T) {
+				client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					respondJSON(w, tc.status, `{"message":"`+http.StatusText(tc.status)+`"}`)
+				}))
+				_, err := NewHandlerIndex(client).Read(context.Background(), r.template, r.uri)
+				if err == nil {
+					t.Fatal(msgExpectedAPIErr)
+				}
+				var rpcErr *jsonrpc.Error
+				notFound := errors.As(err, &rpcErr) && strings.Contains(rpcErr.Message, "Resource not found")
+				if notFound != tc.notFound {
+					t.Errorf("read answered %v; want it answered as not found: %v", err, tc.notFound)
+				}
+				if !tc.notFound && !toolutil.IsHTTPStatus(err, tc.status) {
+					t.Errorf("read answered %v, which no longer carries GitLab's %d for a reader to classify", err, tc.status)
+				}
+			})
+		}
+	}
+}
+
 // TestGroupResource_APIError verifies that GroupResource returns an error when the GitLab API responds with a failure status.
 func TestGroupResource_APIError(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

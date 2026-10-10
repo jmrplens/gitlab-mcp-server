@@ -394,12 +394,21 @@ func (b *sessionBridge) releaseSession(session *mcp.ServerSession) {
 	}
 }
 
-// codeServerBusy is the implementation-defined JSON-RPC server-error code
-// (-32000..-32099 are reserved for these) this server uses for refusals
-// that are about server state rather than the request: rate limiting, the
-// watcher cap, and shutdown. The condition is transient, so unlike the
-// invalid-params family a retry later can succeed.
-const codeServerBusy = tenancy.CodeServerBusyLegacy // register row HLD-001
+// The in-band codes this server refuses a well-formed request with when a
+// retry later can succeed, each the one the standard assigns to what its
+// refusal says, mirrored as the HTTP status times -100 (issue 956):
+// codeTooManyRequests where the caller made too many requests or holds too
+// many of something (a GitLab 429 on a watch's first read, the per-credential
+// listen and watcher ceilings), and codeUnavailable where the server cannot
+// serve the request right now, whoever made it (the process's listen and
+// watcher ceilings, shutdown, a catalog still building). Both sit outside the
+// JSON-RPC reserved range: MCP 2026-07-28 tells new implementations not to use
+// the legacy -32000 to -32019, where these refusals used to be answered, and a
+// receiver not to read a meaning into a code there.
+const (
+	codeTooManyRequests = tenancy.CodeTooManyRequests // register row HLD-001
+	codeUnavailable     = tenancy.CodeUnavailable     // register row HLD-002
+)
 
 // wireSubscribeError classifies a subscription failure for the wire.
 //
@@ -409,11 +418,11 @@ const codeServerBusy = tenancy.CodeServerBusyLegacy // register row HLD-001
 // error". This boundary is where the sentinel becomes a deliberate code:
 // a URI that is deliberately not subscribable is an invalid parameter, an
 // unreadable resource gets the code the SDK itself answers an unknown
-// resources/read with, server-state refusals get
-// the implementation-defined busy code, and anything else — a transient
-// GitLab failure on the first read — is an internal error. Messages pass
-// through untouched — they preserve the upstream failure detail — and the
-// code alone carries the retry semantics.
+// resources/read with, a refusal saying the caller made too many requests
+// gets 429's code and one saying the server cannot serve it right now 503's,
+// and anything else, a transient GitLab failure on the first read, is an
+// internal error. Messages pass through untouched, since they preserve the
+// upstream failure detail and say what to do next.
 func wireSubscribeError(err error) error {
 	if err == nil {
 		return nil
@@ -438,9 +447,11 @@ func wireSubscribeError(err error) error {
 		// survives only behind a compat switch this server does not honor).
 		code = jsonrpc.CodeInvalidParams
 	case errors.Is(err, subscriptions.ErrRateLimited),
-		errors.Is(err, subscriptions.ErrTooManySubscriptions),
+		errors.Is(err, subscriptions.ErrTooManySubscriptions):
+		code = codeTooManyRequests
+	case errors.Is(err, subscriptions.ErrServerAtCapacity),
 		errors.Is(err, subscriptions.ErrClosed):
-		code = codeServerBusy
+		code = codeUnavailable
 	default:
 		// No sentinel applies. A code chosen deliberately further down, such as
 		// the stateless refusal building its own, is then the best answer there
@@ -1703,9 +1714,11 @@ func listenLimitsFromEnv() listenLimits {
 // registry on a nil runtime as well: a ceiling on how many streams may exist is
 // not a way to end the ones that do.
 //
-// Refusing with the busy code rather than closing the stream is deliberate:
-// the request is well formed and a retry later can succeed, which is exactly
-// what -32000 already means everywhere else in this file.
+// Refusing with a retry-later code rather than closing the stream is
+// deliberate: the request is well formed and a retry later can succeed. Which
+// code depends on whose ceiling refused it (issue 956): a caller past its own
+// holds too many, and one past the process's is refused because the server
+// cannot open another stream for anybody right now.
 func (l listenLimits) middleware(counterFor func(context.Context) *listenCounter) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
@@ -1714,11 +1727,11 @@ func (l listenLimits) middleware(counterFor func(context.Context) *listenCounter
 			}
 			credential := counterFor(ctx)
 			if !credential.acquire(l.perCredential) {
-				return nil, l.busy(ctx, "per-credential", l.perCredential)
+				return nil, l.tooMany(ctx, l.perCredential)
 			}
 			defer l.releaseCredential(credential)
 			if !l.processOpen.acquire(l.perProcess) {
-				return nil, l.busy(ctx, "server-wide", l.perProcess)
+				return nil, l.full(ctx, l.perProcess)
 			}
 			defer l.releaseProcess()
 			return next(ctx, method, req)
@@ -1737,15 +1750,34 @@ func (l listenLimits) releaseProcess() {
 	l.processOpen.release()
 }
 
-// busy is the refusal, naming which ceiling was reached so an operator
-// reading the client's error knows which number to raise.
-func (l listenLimits) busy(ctx context.Context, scope string, limit int) error {
+// tooMany is the refusal of a listen past its caller's own ceiling. It says
+// the caller holds too many and what to do about it, with 429's code, and
+// names the ceiling and its number so an operator reading the client's error
+// knows which setting to raise.
+func (l listenLimits) tooMany(ctx context.Context, limit int) error {
 	slog.WarnContext(ctx, "subscriptions/listen refused: too many open streams",
-		"scope", scope, "limit", limit)
+		"scope", "per-credential", "limit", limit)
 	return &jsonrpc.Error{
-		Code: codeServerBusy,
+		Code: codeTooManyRequests,
 		Message: fmt.Sprintf(
-			"too many open subscriptions/listen streams (%s limit %d); close one and retry", scope, limit,
+			"too many open subscriptions/listen streams (per-credential limit %d); close one and retry", limit,
+		),
+	}
+}
+
+// full is the refusal of a listen past the process's ceiling. The caller may
+// hold no stream at all, so it is told the server cannot open another right
+// now, with 503's code, rather than that it holds too many; the ceiling and its
+// number are named as tooMany names its own, and the one bit that gives away,
+// that the process is at its bound, is what INV-019 accepts for a bound keyed
+// on the process.
+func (l listenLimits) full(ctx context.Context, limit int) error {
+	slog.WarnContext(ctx, "subscriptions/listen refused: too many open streams",
+		"scope", "server-wide", "limit", limit)
+	return &jsonrpc.Error{
+		Code: codeUnavailable,
+		Message: fmt.Sprintf(
+			"the server cannot open another subscriptions/listen stream now (server-wide limit %d); retry later", limit,
 		),
 	}
 }

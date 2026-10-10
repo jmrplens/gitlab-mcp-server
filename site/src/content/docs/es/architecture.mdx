@@ -76,7 +76,7 @@ Un cliente stdio escribe `initialize` en cuanto ha arrancado el proceso, así qu
 
 1. Carga su configuración y empieza a leer stdin. `initialize` y `ping` se responden al instante, y las notificaciones pasan directamente.
 2. Mientras tanto pregunta a GitLab por su versión, averigua qué es el token (sus scopes, y si es un token de grano fino), resuelve el usuario y el nivel, y registra el catálogo de la superficie activa.
-3. Hasta que termina el registro, toda petición que necesita el catálogo (`tools/list`, `tools/call`, los métodos de recursos y de prompts, `completion/complete`) espera detrás de una compuerta de disponibilidad en lugar de responderse desde un catálogo vacío. Una petición que termina mientras espera se responde con el código JSON-RPC `-32000` y un mensaje para que se reintente.
+3. Hasta que termina el registro, toda petición que necesita el catálogo (`tools/list`, `tools/call`, los métodos de recursos y de prompts, `completion/complete`) espera detrás de una compuerta de disponibilidad en lugar de responderse desde un catálogo vacío. Una petición que termina mientras espera se responde con el código JSON-RPC `-50300`, el que refleja el HTTP 503, y un mensaje para que se reintente.
 
 Dos arranques terminan de otra forma. Un token que GitLab acepta pero que no lleva ni `read_api` ni `api` no alcanza ninguna herramienta: el proceso sigue respondiendo al saludo y rechaza toda petición del catálogo con el código JSON-RPC `-40300`, cuyo mensaje indica reiniciar el servidor con un token que tenga `read_api`, o `api` para escribir. Un GitLab al que no se puede llegar al arrancar no detiene el servidor: registra un aviso, arranca en modo degradado y vuelve a conectar cuando una llamada necesita GitLab.
 

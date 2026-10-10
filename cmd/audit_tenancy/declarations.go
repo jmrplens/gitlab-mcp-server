@@ -129,7 +129,7 @@ func productionRules() rules {
 		toolResult:    mcpPath + ".CallToolResult",
 		isErrorField:  "IsError",
 		formatters:    []string{"fmt.Sprintf", "fmt.Errorf"},
-		policyCodes:   []int{tenancy.CodeTooManyRequests, tenancy.CodeUnauthorized, tenancy.CodeForbidden, tenancy.CodeUnavailable, tenancy.CodeServerBusyLegacy},
+		policyCodes:   []int{tenancy.CodeTooManyRequests, tenancy.CodeUnauthorized, tenancy.CodeForbidden, tenancy.CodeUnavailable},
 		limitStatuses: []int{429, 503},
 
 		headerRetryAfter: "Retry-After",
@@ -289,7 +289,7 @@ var notADecision = map[string]exemption{
 	"cmd/server:stdioRereadTimeout":              {categoryRoundTrip, "one stdio re-read of a fine-grained token's grant and the instance version"},
 
 	// Refusals about the process rather than a caller.
-	"cmd/server:readinessGate.abandoned": {categoryServerState, "answers -32000 to a request that ended while the tool catalog was still building, a fact about the process"},
+	"cmd/server:readinessGate.abandoned": {categoryServerState, "answers -50300 to a request that ended while the tool catalog was still building, a fact about the process"},
 	"cmd/server:writeCardUnavailable":    {categoryServerState, "answers 503 while the server card is still being built, a fact about the process"},
 	"cmd/server:healthHandler":           {categoryServerState, "answers /health with 503 while the process drains, which is what a balancer is asked to read"},
 

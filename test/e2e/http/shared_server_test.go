@@ -67,11 +67,18 @@ type listenStream struct {
 // on what has arrived by a deadline of its own.
 func openListen(t *testing.T, srv *server, token, uri string, id int) *listenStream {
 	t.Helper()
+	return openListenBody(t, srv, token, listenBody(id, uri))
+}
+
+// openListenBody is openListen for a listen spelled in full, so a test can
+// ask for list-changed notifications alone or for several resources at once.
+func openListenBody(t *testing.T, srv *server, token, body string) *listenStream {
+	t.Helper()
 
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, srv.baseURL+"/mcp", strings.NewReader(listenBody(id, uri)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, srv.baseURL+"/mcp", strings.NewReader(body))
 	if err != nil {
 		cancel()
 		t.Fatalf("building the listen request for %s: %v", token, err)

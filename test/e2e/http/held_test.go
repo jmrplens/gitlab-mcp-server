@@ -241,9 +241,12 @@ func heldCallServed(t *testing.T, resp response, err error) bool {
 
 // assertOlderRevisionsAtTheCeiling checks what a client of an older revision
 // meets with every slot taken: its call is refused by the SDK's dispatch as a
-// result flagged with isError, each call of its batch is refused on its own,
-// so a batch cannot carry more calls than there are slots, and its
-// notification is still accepted, since it holds nothing.
+// result flagged with isError, a read, whose answer carries no isError, is
+// refused as a JSON-RPC error with 503's -50300 (issue 956: what it says is
+// that the server cannot serve it now, which the gate answers a modern call
+// with a 503), each call of its batch is refused on its own, so a batch cannot
+// carry more calls than there are slots, and its notification is still
+// accepted, since it holds nothing.
 func assertOlderRevisionsAtTheCeiling(t *testing.T, ctx context.Context, client *http.Client, baseURL string) {
 	t.Helper()
 	older, err := heldPost(ctx, client, baseURL, legacyCall(2), http.Header{"Mcp-Protocol-Version": {"2025-11-25"}})
@@ -251,6 +254,18 @@ func assertOlderRevisionsAtTheCeiling(t *testing.T, ctx context.Context, client 
 		!strings.Contains(older.body, `"isError":true`) {
 		t.Errorf("an older revision's call past the ceiling = %d (%v): %s; want a result flagged with isError saying %q",
 			older.status, err, truncate(older.body), heldBusy)
+	}
+	// Bounded on its own: a read the ceiling let through would wait on a
+	// GitLab that holds every project read until the test releases it.
+	readCtx, cancelRead := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelRead()
+	read, err := heldPost(readCtx, client, baseURL,
+		`{"jsonrpc":"2.0","id":7,"method":"resources/read","params":{"uri":"gitlab://project/2"}}`,
+		http.Header{"Mcp-Protocol-Version": {"2025-11-25"}})
+	if err != nil || read.status != http.StatusOK || !strings.Contains(read.body, `"code":-50300`) ||
+		!strings.Contains(read.body, heldBusy) || strings.Contains(read.body, "-32000") {
+		t.Errorf("an older revision's read past the ceiling = %d (%v): %s; want a JSON-RPC error carrying -50300 and %q",
+			read.status, err, truncate(read.body), heldBusy)
 	}
 	batch, err := heldPost(ctx, client, baseURL, "["+legacyCall(3)+","+legacyCall(4)+"]",
 		http.Header{"Mcp-Protocol-Version": {"2025-03-26"}})
@@ -351,8 +366,10 @@ func offerPastTheCeiling(ctx context.Context, baseURL string, count int) floodRe
 // JSON-RPC body echoes its id and carries -50300, with the register's fixed
 // Retry-After, the connection closed, words that name no bound, and a line in
 // the log naming the process as the scope. A call on an older revision is
-// refused by the SDK's dispatch as a result flagged with isError, and each
-// call of an older revision's batch on its own, so a batch cannot carry more
+// refused by the SDK's dispatch as a result flagged with isError, a read on an
+// older revision as a JSON-RPC error carrying -50300, the gate's code for the
+// same refusal, and each call of an older revision's batch on its own, so a
+// batch cannot carry more
 // calls than there are slots. A notification is still accepted, since it
 // holds nothing, and a listen still reaches the SDK, since the listen ceilings
 // count it rather than this one.

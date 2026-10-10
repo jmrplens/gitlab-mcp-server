@@ -70,8 +70,8 @@ the code; the layers keep enforcing.**
 - **`Validate` and `ValidateFailures`**, which turn the invariants into errors: a share on
   any mintable key, a per-caller number protecting a process resource with no constant
   process partner, a holding taken across keys without a recorded decision, a refusal on
-  a channel its method cannot carry, a second in-band code for one class of next action,
-  a zero that does not mean off (a process partner following its per-key row by a
+  a channel its method cannot carry, an in-band code that is not the one the standard
+  assigns to what its refusal says (issue 956), a zero that does not mean off (a process partner following its per-key row by a
   recorded decision apart), a reason whose unit differs from its key, a structure
   keyed on a mintable value with no capacity, a configurable value that bypasses the
   configuration package, and a charged failure the caller did not cause. They refuse in
@@ -79,7 +79,8 @@ the code; the layers keep enforcing.**
   mintable key (`INV-003`); a charge to what is not a budget before admission, and a
   charged failure the caller did not cause (`INV-007`, the second through
   `ValidateFailures`); a refusal on a channel its method cannot carry, or with a status, a
-  code, a `Retry-After` or a challenge the channel forbids (`INV-011`); a process partner
+  code, a `Retry-After` or a challenge the channel forbids, a code in the legacy `-32000`
+  range among them since issue 956 (`INV-011`); a process partner
   that is configurable or not keyed on the process, and a reason about the process on a
   row that does not say it protects one (`INV-004`); a valued row that does not say what
   zero means (`INV-015`); and a variable without the `GITLAB_MCP_` prefix, or a
@@ -90,8 +91,8 @@ the code; the layers keep enforcing.**
   where the decision is the one the row's `OffWithBy` names, which is how `RTC-007`
   follows `RTC-003` (issue 951). Only through a finding recorded for the invariant: a
   per-caller number protecting a process resource with no partner, a structure keyed on a
-  mintable value with no capacity, a code in the legacy `-32000` range, a second in-band
-  code for one class of next action, any other zero that does not mean off, a reason
+  mintable value with no capacity, an in-band code of the server's own that mirrors no
+  status the gate answers its class of next action with (`INV-012`), any other zero that does not mean off, a reason
   whose unit differs from its key or misstates its own, a value only an environment
   variable or a Go option reaches, and a ceiling nothing bounds.
 

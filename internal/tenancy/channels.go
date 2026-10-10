@@ -50,8 +50,11 @@ type Carriage struct {
 // Three channels record narrowing rather than refusal, on the tools/list and
 // tools/call rows: a listing may leave out
 // what the authorization on the request does not reach (Absent), and a call
-// for such an action is answered with its cause (Withheld) or, for the tier,
-// as unknown (Unknown). The listing may vary with the authorization and never
+// for such an action is answered with its cause (Withheld), the tier's
+// included since issue 956. Unknown remains carried for a surface whose answer
+// calls the action unknown, which no row declares since that issue: the meta
+// surface still refuses an action its group withholds through the tool's
+// action enum. The listing may vary with the authorization and never
 // with the connection (INV-009), which is why no listing row carries anything
 // a rate or a ceiling could produce except an error.
 func Carriages() []Carriage {

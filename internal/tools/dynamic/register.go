@@ -18,6 +18,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
@@ -332,6 +333,16 @@ type Registry struct {
 	// apart by who asks for them, which the answer names.
 	withheldByScope    map[string]actioncatalog.ScopeWithheld
 	withheldByOperator map[string]struct{}
+	// withheldByTier names the actions the instance's licensing tier removed,
+	// each key with the lowest tier that serves its action and what would
+	// still withhold it once the tier did, and sessionTier and tierPinned are
+	// the tier the session was built for and whether an operator named it.
+	// Like the operator's narrowing it is not the caller's to resolve, and
+	// unlike it the answer allows that a detected tier may be wrong (issue
+	// 956).
+	withheldByTier map[string]actioncatalog.TierWithheld
+	sessionTier    edition.Tier
+	tierPinned     bool
 }
 
 // RegistryOption configures the dynamic registry at registration time.
@@ -352,6 +363,42 @@ func WithWithheldActions(byTokenScope []actioncatalog.ScopeWithheld, byOperator 
 		r.withheldByScope = withheldScopes(byTokenScope)
 		r.withheldByOperator = withheldKeySet(byOperator)
 	}
+}
+
+// WithTierWithheld tells the registry which action keys the instance's
+// licensing tier removed, each with the lowest tier that serves its action,
+// together with the tier the session was built for and whether an operator
+// pinned it rather than the server detecting it.
+//
+// The tier filter runs before the catalog this registry is handed exists, so
+// without this a call for one of those actions was answered "unknown action"
+// with near-miss suggestions, and every cross-link to one was dropped, since
+// nothing could say more about it (issue 956). With it the answer names the
+// tier the action needs and asks the operator, who alone can change it, and
+// [Registry.publishedRelatedActions] publishes the links. An action the
+// operator excluded by name must not be among them (AUT-004), and TierWithheld
+// in internal/tools, which builds the list, leaves them out.
+func WithTierWithheld(byTier []actioncatalog.TierWithheld, tier edition.Tier, pinned bool) RegistryOption {
+	return func(r *Registry) {
+		r.withheldByTier = withheldTiers(byTier)
+		r.sessionTier = tier
+		r.tierPinned = pinned
+	}
+}
+
+// withheldTiers indexes the actions the tier withheld by key. An entry with no
+// key withholds nothing.
+func withheldTiers(withheld []actioncatalog.TierWithheld) map[string]actioncatalog.TierWithheld {
+	if len(withheld) == 0 {
+		return nil
+	}
+	tiers := make(map[string]actioncatalog.TierWithheld, len(withheld))
+	for _, entry := range withheld {
+		if key := strings.ToLower(strings.TrimSpace(entry.ID)); key != "" {
+			tiers[key] = entry
+		}
+	}
+	return tiers
 }
 
 // withheldScopes indexes the actions a credential's scopes withheld by key,
@@ -2756,14 +2803,17 @@ func relatedActionsForEntry(entry actionEntry) []string {
 //   - It does not resolve, but the registry knows why. Published as written, so
 //     that asking for it produces [Registry.withheldActionMessage] naming the
 //     narrowing. That message is worth more than silence: it tells the caller
-//     the capability exists and what to widen, and dropping the link would
-//     leave a model concluding the server cannot do it at all.
+//     the capability exists and what to widen, or who to ask, and dropping the
+//     link would leave a model concluding the server cannot do it at all. The
+//     tier is one of these since issue 956 recorded what it removes, which
+//     took the five links a Free instance dropped (Free actions of three
+//     packages naming Premium siblings) back into the published lists.
 //   - Neither. Dropped. Nothing here can say more than "unknown action", whose
 //     near-miss suggestions read as a spelling correction, and a model that
-//     believes one concludes the capability is missing. That is the tier case,
-//     since the tier filter runs before the catalog is built and so never
-//     reaches the withheld lists, and the --exclude-tools case, where naming
-//     the action would contradict the exclusion as well as mislead.
+//     believes one concludes the capability is missing. That is the
+//     --exclude-tools case, where naming the action would contradict the
+//     exclusion as well as mislead, and a link to an action no catalog of this
+//     tree carries.
 //
 // A published list therefore shrinks with the surface instead of pointing off
 // it, and the entry's own order is kept: the curation is a workflow order, and
@@ -2815,8 +2865,11 @@ func (r *Registry) actionWithheld(action string) bool {
 	if _, byScope := r.withheldByScope[key]; byScope {
 		return true
 	}
-	_, byOperator := r.withheldByOperator[key]
-	return byOperator
+	if _, byOperator := r.withheldByOperator[key]; byOperator {
+		return true
+	}
+	_, byTier := r.withheldByTier[key]
+	return byTier
 }
 
 func cloneParameterGuidance(guidance map[string]toolutil.ParameterGuidance) map[string]toolutil.ParameterGuidance {
@@ -2887,7 +2940,65 @@ func (r *Registry) withheldActionMessage(toolName, action string) (string, bool)
 	if _, ok := r.withheldByOperator[key]; ok {
 		return fmt.Sprintf("%s: action %q exists but is not available: this deployment is configured to withhold it, so a narrowed action surface was built. Ask the operator to enable it; do not report the capability as missing.", toolName, action), true
 	}
+	if withheld, ok := r.withheldByTier[key]; ok {
+		return r.tierWithheldMessage(toolName, action, withheld), true
+	}
 	return "", false
+}
+
+// tierWithheldMessage explains an action the instance's licensing tier
+// removed (issue 956, register row AUT-003). The caller cannot change the
+// tier, so the answer asks the operator, and it says which tier the action
+// needs and which one the session was built for. Where the server detected the
+// tier rather than an operator naming it, the answer allows that the detection
+// may be wrong, since a tier nothing answered for resolves to Free and pinning
+// it is how an operator corrects that. What would still withhold the action
+// once the tier served it is said in the same answer ([tierAlsoWithheld]).
+func (r *Registry) tierWithheldMessage(toolName, action string, withheld actioncatalog.TierWithheld) string {
+	required := "GitLab Premium or Ultimate"
+	if edition.TierFromEdition(withheld.Edition) == edition.Ultimate {
+		required = "GitLab Ultimate"
+	}
+	var message string
+	if r.tierPinned {
+		message = fmt.Sprintf("%s: action %q exists but is not available: it needs %s, and this deployment is configured for GitLab %s, so a narrowed action surface was built. If the instance is licensed for it, ask the operator to configure the tier it has with GITLAB_MCP_TIER or --tier.", toolName, action, required, tierName(r.sessionTier))
+	} else {
+		message = fmt.Sprintf("%s: action %q exists but is not available: it needs %s, and this instance's tier was detected as GitLab %s, so a narrowed action surface was built. If the instance is licensed for it, the detection was wrong: ask the operator to pin the tier with GITLAB_MCP_TIER or --tier.", toolName, action, required, tierName(r.sessionTier))
+	}
+	return message + tierAlsoWithheld(withheld) + " Do not report the capability as missing."
+}
+
+// tierAlsoWithheld is the sentence the tier's answer adds when pinning the
+// tier would only uncover the next refusal: the deployment's read-only mode
+// for a write, or the scopes the credential lacks for the action and who asks
+// for each, in the words the scope narrowing's own answer uses. Without it a
+// Premium write on a read-only Free deployment sent the model to ask the
+// operator to pin the tier, and the pinned deployment then answered that it
+// withholds the action, so the operator was asked twice. It is empty when
+// nothing else stands in the way.
+func tierAlsoWithheld(withheld actioncatalog.TierWithheld) string {
+	if withheld.ReadOnlyMode {
+		return " This deployment is also read-only, which withholds the action at any tier, so the operator would have to allow writes as well."
+	}
+	scope := actioncatalog.ScopeWithheld{ByGitLab: withheld.ByGitLab, ByServer: withheld.ByServer}
+	missing := scope.Missing()
+	if len(missing) == 0 {
+		return ""
+	}
+	scopes, _ := scopeWords(missing)
+	return " Once the tier serves it, " + scopeCauses(scope) + ": reauthorize with " + scopes + " as well."
+}
+
+// tierName spells a tier as GitLab names it in prose.
+func tierName(tier edition.Tier) string {
+	switch tier {
+	case edition.Premium:
+		return "Premium"
+	case edition.Ultimate:
+		return "Ultimate"
+	default:
+		return "Free"
+	}
 }
 
 // scopeCauses says who asks for each scope a credential lacks for an action,

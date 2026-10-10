@@ -34,6 +34,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -2050,7 +2051,10 @@ func listPrompts(ctx context.Context, s *mcp.ClientSession) error {
 // TestWireSubscribeError_MapsSentinelsToCodes verifies each manager
 // sentinel leaves the subscribe boundary as a *jsonrpc.Error with a
 // deliberate code instead of the accidental code 0 the SDK marshals for a
-// plain error, with the message preserved verbatim.
+// plain error, with the message preserved verbatim. A refusal that says the
+// caller made too many requests carries 429's code, and one that says the
+// server cannot serve it right now 503's (issue 956); neither is the legacy
+// -32000 any longer.
 func TestWireSubscribeError_MapsSentinelsToCodes(t *testing.T) {
 	tests := []struct {
 		name string
@@ -2059,9 +2063,10 @@ func TestWireSubscribeError_MapsSentinelsToCodes(t *testing.T) {
 	}{
 		{"not subscribable is invalid params", fmt.Errorf("%w: gitlab://project/1/issues", subscriptions.ErrNotSubscribable), jsonrpc.CodeInvalidParams},
 		{"inaccessible is invalid params", fmt.Errorf("%w: 404", subscriptions.ErrInaccessible), jsonrpc.CodeInvalidParams},
-		{"rate limited is server busy", subscriptions.ErrRateLimited, codeServerBusy},
-		{"watcher cap is server busy", subscriptions.ErrTooManySubscriptions, codeServerBusy},
-		{"manager closed is server busy", subscriptions.ErrClosed, codeServerBusy},
+		{"rate limited is too many requests", subscriptions.ErrRateLimited, tenancy.CodeTooManyRequests},
+		{"the caller's watcher cap is too many requests", subscriptions.ErrTooManySubscriptions, tenancy.CodeTooManyRequests},
+		{"the process's watcher cap is unavailable", subscriptions.ErrServerAtCapacity, tenancy.CodeUnavailable},
+		{"manager closed is unavailable", subscriptions.ErrClosed, tenancy.CodeUnavailable},
 		{"transient failure is internal", errors.New("gitlab: 500"), jsonrpc.CodeInternalError},
 	}
 	for _, tt := range tests {
@@ -2519,11 +2524,12 @@ func TestListenLimit_CapsConcurrentStreams(t *testing.T) {
 	}
 }
 
-// TestListenLimit_RefusalCarriesTheBusyCode verifies the wire shape of the
-// refusal: -32000, the code this server already uses for state-dependent
-// refusals a retry can clear, rather than an invalid-params verdict on a
-// request that was well formed.
-func TestListenLimit_RefusalCarriesTheBusyCode(t *testing.T) {
+// TestListenLimit_RefusalCarriesTheTooManyRequestsCode verifies the wire shape
+// of the refusal a caller past its own ceiling gets: 429's -42900, since it
+// says the caller holds too many (issue 956), rather than an invalid-params
+// verdict on a request that was well formed or the legacy -32000 it used to
+// carry.
+func TestListenLimit_RefusalCarriesTheTooManyRequestsCode(t *testing.T) {
 	limits := listenLimits{
 		perCredential: 1,
 		perProcess:    1,
@@ -2553,8 +2559,8 @@ func TestListenLimit_RefusalCarriesTheBusyCode(t *testing.T) {
 	if !ok {
 		t.Fatalf("refusal is %T, want *jsonrpc.Error so the code reaches the client", err)
 	}
-	if wireErr.Code != codeServerBusy {
-		t.Errorf("code = %d, want %d", wireErr.Code, codeServerBusy)
+	if wireErr.Code != tenancy.CodeTooManyRequests {
+		t.Errorf("code = %d, want %d", wireErr.Code, tenancy.CodeTooManyRequests)
 	}
 	if !strings.Contains(wireErr.Message, "subscriptions/listen") {
 		t.Errorf("message = %q, want it to name the method that was refused", wireErr.Message)
@@ -2562,7 +2568,10 @@ func TestListenLimit_RefusalCarriesTheBusyCode(t *testing.T) {
 }
 
 // TestListenLimit_RefusalNamesTheCeilingThatWasReached verifies the refusal
-// tells an operator which of the two ceilings to raise, with its own number.
+// tells an operator which of the two ceilings to raise, with its own number,
+// and tells the caller what it is: a caller past its own ceiling holds too many
+// and is told to close one, with 429's code, and one refused at the process's
+// is told the server cannot open another now, with 503's (issue 956).
 //
 // The two ceilings differ in value here, and each case fills exactly one of
 // them, because a refusal naming the other scope or the other limit sends the
@@ -2577,9 +2586,18 @@ func TestListenLimit_RefusalNamesTheCeilingThatWasReached(t *testing.T) {
 		heldByCaller  int64
 		heldProcess   int64
 		want          string
+		code          int64
 	}{
-		{"the_per_credential_ceiling", 3, 7, 3, 0, "(per-credential limit 3)"},
-		{"the_process_ceiling", 7, 3, 0, 3, "(server-wide limit 3)"},
+		{
+			"the_per_credential_ceiling", 3, 7, 3, 0,
+			"too many open subscriptions/listen streams (per-credential limit 3); close one and retry",
+			tenancy.CodeTooManyRequests,
+		},
+		{
+			"the_process_ceiling", 7, 3, 0, 3,
+			"the server cannot open another subscriptions/listen stream now (server-wide limit 3); retry later",
+			tenancy.CodeUnavailable,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			limits := listenLimits{
@@ -2600,8 +2618,8 @@ func TestListenLimit_RefusalNamesTheCeilingThatWasReached(t *testing.T) {
 			if !ok {
 				t.Fatalf("refusal = %v, want a *jsonrpc.Error", err)
 			}
-			if !strings.Contains(wireErr.Message, tc.want) {
-				t.Errorf("message = %q, want it to name %q", wireErr.Message, tc.want)
+			if wireErr.Message != tc.want || wireErr.Code != tc.code {
+				t.Errorf("refusal = %d %q, want %d %q", wireErr.Code, wireErr.Message, tc.code, tc.want)
 			}
 			if got := credential.count(); got != tc.heldByCaller {
 				t.Errorf("per-credential count after the refusal = %d, want %d", got, tc.heldByCaller)
@@ -2782,16 +2800,16 @@ func TestSubscriptionShape_TheWatcherCeilingBindsAcrossCredentials(t *testing.T)
 	}
 
 	err := newcomer.manager.Subscribe(t.Context(), testSession, "gitlab://project/43/pipeline/99")
-	if !errors.Is(err, subscriptions.ErrTooManySubscriptions) {
-		t.Fatalf("a second credential's subscribe past the shared ceiling = %v, want ErrTooManySubscriptions", err)
+	if !errors.Is(err, subscriptions.ErrServerAtCapacity) {
+		t.Fatalf("a second credential's subscribe past the shared ceiling = %v, want ErrServerAtCapacity", err)
 	}
 	var wireErr *jsonrpc.Error
 	if !errors.As(wireSubscribeError(err), &wireErr) {
 		t.Fatalf("the refusal reaches the wire as %T, want a *jsonrpc.Error carrying a deliberate code", err)
 	}
-	if wireErr.Code != codeServerBusy {
-		t.Errorf("code = %d, want %d: the request is well formed and a later retry can succeed",
-			wireErr.Code, codeServerBusy)
+	if wireErr.Code != tenancy.CodeUnavailable {
+		t.Errorf("code = %d, want %d: the server cannot serve the request right now, and a later retry can succeed",
+			wireErr.Code, tenancy.CodeUnavailable)
 	}
 	if !strings.Contains(wireErr.Message, "server-wide") {
 		t.Errorf("message = %q, want it to name which ceiling was reached", wireErr.Message)
@@ -3565,24 +3583,39 @@ func TestListenStreams_CloseAll_TellsEveryStreamItIsShutdown(t *testing.T) {
 	}
 }
 
-// TestCodeServerBusy_SitsInTheImplementationDefinedServerErrorBand states where
-// this code is allocated from, which is the whole of what makes it the right
-// one to send.
+// TestInBandRefusalCodes_MirrorTheStatusTheirRefusalSays states where the two
+// in-band retry-later codes are allocated from, which is the whole of what
+// makes them the right ones to send (issue 956).
 //
-// The refusals it carries — the rate limit, the watcher cap, shutdown — are
-// about the server's state rather than the request, so a client is meant to
-// read them as transient and retry. JSON-RPC reserves -32000..-32099 for
-// exactly that class, implementation-defined server errors, and a client that
-// classifies by band reads anything outside it as a different kind of failure
-// altogether. Nothing else here asserts the value: the wire tests compare what
-// they received against this same constant, so a code that left the band would
+// They used to be one code, -32000, in the sub-range MCP 2026-07-28 calls
+// legacy: new implementations should not use it and a receiver must not assume
+// a meaning for it, so the retry semantics it was meant to carry reached no
+// conformant client. A code this server allocates now mirrors the HTTP status
+// the standard assigns to what its refusal says, times -100, as the gate's do:
+// a refusal that tells its caller it made too many requests is 429's, and one
+// that says the server cannot serve it right now is 503's, below the whole
+// reserved range. Nothing else here asserts the values: the wire tests compare
+// what they received against these same constants, so a code that drifted would
 // move both sides of every one of them.
-func TestCodeServerBusy_SitsInTheImplementationDefinedServerErrorBand(t *testing.T) {
+func TestInBandRefusalCodes_MirrorTheStatusTheirRefusalSays(t *testing.T) {
 	t.Parallel()
 
-	if codeServerBusy < -32099 || codeServerBusy > -32000 {
-		t.Errorf("codeServerBusy = %d, want a code in -32099..-32000, the band JSON-RPC reserves for "+
-			"implementation-defined server errors; outside it a client cannot read the refusal as transient",
-			codeServerBusy)
+	for name, mapping := range map[string]struct {
+		code   int
+		status int
+	}{
+		"codeTooManyRequests": {codeTooManyRequests, http.StatusTooManyRequests},
+		"codeUnavailable":     {codeUnavailable, http.StatusServiceUnavailable},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if want := -100 * mapping.status; mapping.code != want {
+				t.Errorf("%s = %d, want %d: an in-band code this server allocates mirrors the status its refusal says, times -100",
+					name, mapping.code, want)
+			}
+			if mapping.code > -32768 {
+				t.Errorf("%s = %d is not below the JSON-RPC reserved range -32768..-32000", name, mapping.code)
+			}
+		})
 	}
 }

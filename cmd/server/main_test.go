@@ -10281,6 +10281,100 @@ func TestCreateServer_ReadOnly_DynamicSurfaceRunsReadsAndRejectsWrites(t *testin
 	}
 }
 
+// TestCreateServer_FreeTier_DynamicSurfaceNamesTheTierAPremiumActionNeeds
+// verifies what issue 956 changed on the default surface: at a Free tier, a
+// call for a Premium action used to be answered "unknown action" with near-miss
+// suggestions, since the tier filter runs before the catalog is built and so
+// never reached the withheld bookkeeping. Through the registration cmd/server
+// performs it now names the tier the action needs, says whether the session's
+// tier was pinned or detected, and asks the operator. An action the operator
+// excluded by name is still never named back, whatever tier it needs (AUT-004).
+func TestCreateServer_FreeTier_DynamicSurfaceNamesTheTierAPremiumActionNeeds(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		pinned bool
+		want   string
+	}{
+		{name: "pinned", pinned: true, want: "this deployment is configured for GitLab Free"},
+		{name: "detected", want: "this instance's tier was detected as GitLab Free"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			session := modeTestSession(t, &config.ServerConfig{
+				ToolSurface: config.ToolSurfaceDynamic, Tier: edition.Free, TierExplicit: tc.pinned,
+			})
+			text := callModeTool(t, session, "gitlab_execute_action", map[string]any{
+				"action": "merge_train.list_project",
+				"params": map[string]any{"project_id": "1"},
+			})
+			for _, want := range []string{"exists but is not available", "it needs GitLab Premium or Ultimate", tc.want, "ask the operator"} {
+				if !strings.Contains(text, want) {
+					t.Errorf("execute merge_train.list_project at Free = %q, want it to contain %q", text, want)
+				}
+			}
+			if strings.Contains(text, "unknown action") {
+				t.Errorf("execute merge_train.list_project at Free = %q, must not call the action unknown", text)
+			}
+		})
+	}
+	t.Run("excluded by the operator", func(t *testing.T) {
+		session := modeTestSession(t, &config.ServerConfig{
+			ToolSurface: config.ToolSurfaceDynamic, Tier: edition.Free, ExcludeTools: []string{"gitlab_merge_train"},
+		})
+		text := callModeTool(t, session, "gitlab_execute_action", map[string]any{
+			"action": "merge_train.list_project",
+			"params": map[string]any{"project_id": "1"},
+		})
+		if strings.Contains(text, "exists but is not available") || strings.Contains(text, "needs GitLab") {
+			t.Errorf("execute an excluded Premium action at Free = %q, must not name it back", text)
+		}
+	})
+}
+
+// TestCreateServer_TierRefusal_NamesTheSessionItWasBuiltFor holds the
+// arguments cmd/server hands the tier's answer beyond the Free self-managed
+// session the test above runs: the tier the session was built for, which a
+// detected Premium session has to name when an Ultimate action is asked for,
+// and the configuration the bookkeeping is recorded from, which a read-only
+// Free deployment has to show by naming its read-only mode beside the tier a
+// Premium write needs, so the model is not sent to pin a tier that would only
+// uncover the next refusal.
+func TestCreateServer_TierRefusal_NamesTheSessionItWasBuiltFor(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		cfg    *config.ServerConfig
+		action string
+		want   []string
+	}{
+		{
+			name:   "an Ultimate action on a detected Premium tier",
+			cfg:    &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic, Tier: edition.Premium},
+			action: "attestation.list",
+			want:   []string{"it needs GitLab Ultimate", "this instance's tier was detected as GitLab Premium"},
+		},
+		{
+			name:   "a Premium write on a read-only Free deployment",
+			cfg:    &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic, Tier: edition.Free, ReadOnly: true},
+			action: "merge_train.add",
+			want: []string{
+				"it needs GitLab Premium or Ultimate", "this instance's tier was detected as GitLab Free",
+				"This deployment is also read-only, which withholds the action at any tier",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			text := callModeTool(t, modeTestSession(t, tc.cfg), "gitlab_execute_action", map[string]any{
+				"action": tc.action,
+				"params": map[string]any{"project_id": "1"},
+			})
+			for _, want := range tc.want {
+				if !strings.Contains(text, want) {
+					t.Errorf("execute %s = %q, want it to contain %q", tc.action, text, want)
+				}
+			}
+		})
+	}
+}
+
 // TestCreateServer_ReadOnly_MetaSurfaceKeepsMixedDomainReads verifies that a
 // domain mixing reads and writes survives read-only mode with its read actions
 // intact, instead of being dropped whole because the domain is not read-only.

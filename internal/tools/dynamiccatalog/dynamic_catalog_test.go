@@ -57,6 +57,143 @@ func TestBuild_ReadOnlyWithholdsWritesAndSaysWhose(t *testing.T) {
 	}
 }
 
+// TestBuild_RecordsWhatTheTierWithheldAndNeverAnExcludedAction verifies the
+// dynamic catalog carries the actions the licensing tier removed beside the
+// ones the other filters withheld (issue 956), so the registry built from it
+// can answer a call for one with the tier it needs, that an action the
+// operator excluded by name is not among them (AUT-004), and that at Ultimate
+// nothing is recorded. A Premium action is asked for through the registry the
+// way cmd/server builds it, and the answer names the tier rather than calling
+// the action unknown.
+func TestBuild_RecordsWhatTheTierWithheldAndNeverAnExcludedAction(t *testing.T) {
+	t.Parallel()
+	byID := func(withheld []actioncatalog.TierWithheld) map[string]string {
+		ids := make(map[string]string, len(withheld))
+		for _, entry := range withheld {
+			ids[entry.ID] = entry.Edition
+		}
+		return ids
+	}
+
+	free, withheld, err := Build(nil, &config.ServerConfig{Tier: edition.Free})
+	if err != nil {
+		t.Fatalf("Build(Free) error = %v", err)
+	}
+	if got := byID(withheld.ByTier)["merge_train.list_project"]; got != "premium" {
+		t.Errorf("ByTier[merge_train.list_project] = %q, want premium: the merge train group is Premium", got)
+	}
+	if _, kept := byID(withheld.ByTier)["issue.list"]; kept {
+		t.Error("ByTier names issue.list, which the Free tier serves")
+	}
+	server := mcp.NewServer(&mcp.Implementation{Name: "dynamiccatalog-test", Version: "0"}, nil)
+	dynamictools.RegisterCatalogFindExecuteTools(server, free, dynamictools.WithTierWithheld(withheld.ByTier, edition.Free, true))
+	text := executeError(t, server, "merge_train.list_project")
+	if !strings.Contains(text, "it needs GitLab Premium or Ultimate") || strings.Contains(text, "unknown action") {
+		t.Errorf("execute merge_train.list_project at Free = %q, want the tier it needs rather than an unknown action", text)
+	}
+
+	_, excluded, err := Build(nil, &config.ServerConfig{Tier: edition.Free, ExcludeTools: []string{"gitlab_merge_train"}})
+	if err != nil {
+		t.Fatalf("Build(Free, excluding gitlab_merge_train) error = %v", err)
+	}
+	for id := range byID(excluded.ByTier) {
+		if strings.HasPrefix(id, "merge_train.") {
+			t.Errorf("ByTier names %s, which the operator excluded", id)
+		}
+	}
+	if len(excluded.ByTier) == 0 {
+		t.Error("ByTier is empty, want every other action the Free tier removed")
+	}
+
+	_, ultimate, err := Build(nil, &config.ServerConfig{Tier: edition.Ultimate})
+	if err != nil {
+		t.Fatalf("Build(Ultimate) error = %v", err)
+	}
+	if len(ultimate.ByTier) != 0 {
+		t.Errorf("ByTier at Ultimate = %d entries, want none", len(ultimate.ByTier))
+	}
+}
+
+// TestBuild_TheTierBookkeepingFollowsTheSession holds the arguments Build hands
+// the tier's bookkeeping, which every test above passes for a self-managed Free
+// session with nothing else narrowed. The instance class decides which actions
+// exist at all: Orbit's group is contributed only for a GitLab.com client, so
+// a GitLab.com session at Free has to record orbit.query as needing Premium,
+// where a self-managed one has nothing to record for it. The rest of the
+// configuration decides what else each entry says: a read-only deployment
+// records that read-only mode would withhold a Premium write too, so the
+// answer to it does not send the model to pin a tier that would only uncover
+// the next refusal.
+func TestBuild_TheTierBookkeepingFollowsTheSession(t *testing.T) {
+	t.Parallel()
+	entry := func(withheld []actioncatalog.TierWithheld, id string) (actioncatalog.TierWithheld, bool) {
+		for _, candidate := range withheld {
+			if candidate.ID == id {
+				return candidate, true
+			}
+		}
+		return actioncatalog.TierWithheld{}, false
+	}
+
+	_, dotcom, err := Build(gitlabtools.UnboundClient(true), &config.ServerConfig{Tier: edition.Free})
+	if err != nil {
+		t.Fatalf("Build(GitLab.com, Free) error = %v", err)
+	}
+	if orbit, ok := entry(dotcom.ByTier, "orbit.query"); !ok || orbit.Edition != "premium" {
+		t.Errorf("ByTier[orbit.query] on GitLab.com at Free = %+v (recorded %t), want it recorded as needing premium", orbit, ok)
+	}
+	_, selfManaged, err := Build(nil, &config.ServerConfig{Tier: edition.Free})
+	if err != nil {
+		t.Fatalf("Build(self-managed, Free) error = %v", err)
+	}
+	if _, ok := entry(selfManaged.ByTier, "orbit.query"); ok {
+		t.Error("ByTier names orbit.query on a self-managed instance, which carries no Orbit group at any tier")
+	}
+
+	_, readOnly, err := Build(nil, &config.ServerConfig{Tier: edition.Free, ReadOnly: true})
+	if err != nil {
+		t.Fatalf("Build(Free, read-only) error = %v", err)
+	}
+	if add, ok := entry(readOnly.ByTier, "merge_train.add"); !ok || !add.ReadOnlyMode {
+		t.Errorf("ByTier[merge_train.add] on a read-only Free deployment = %+v (recorded %t), want read-only mode named", add, ok)
+	}
+	if list, ok := entry(readOnly.ByTier, "merge_train.list_project"); !ok || list.ReadOnlyMode {
+		t.Errorf("ByTier[merge_train.list_project] on a read-only Free deployment = %+v (recorded %t), want a read recorded without read-only mode", list, ok)
+	}
+}
+
+// executeError runs gitlab_execute_action for action through an in-memory
+// client of server and returns the text of the tool error it answers with.
+func executeError(t *testing.T, server *mcp.Server, action string) string {
+	t.Helper()
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(t.Context(), serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server Connect() error = %v", err)
+	}
+	t.Cleanup(func() { _ = serverSession.Close() })
+	client := mcp.NewClient(&mcp.Implementation{Name: "dynamiccatalog-client", Version: "0"}, nil)
+	session, err := client.Connect(t.Context(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client Connect() error = %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: dynamictools.ExecuteActionToolName, Arguments: map[string]any{"action": action, "params": map[string]any{}},
+	})
+	if err != nil {
+		t.Fatalf("CallTool() error = %v", err)
+	}
+	if !result.IsError || len(result.Content) == 0 {
+		t.Fatalf("CallTool() = %+v, want a tool error", result)
+	}
+	text, _ := result.Content[0].(*mcp.TextContent)
+	if text == nil {
+		t.Fatalf("CallTool() content = %#v, want text", result.Content[0])
+	}
+	return text.Text
+}
+
 // scopeKeys lists the keys of the token-scope bookkeeping.
 func scopeKeys(withheld []actioncatalog.ScopeWithheld) []string {
 	keys := make([]string, 0, len(withheld))
@@ -567,6 +704,16 @@ func TestBuild_FailuresAreReportedWithTheirStep(t *testing.T) {
 				}
 			},
 			want: "add standalone dynamic actions",
+		},
+		{
+			name: "tier bookkeeping",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := tierWithheld
+				t.Cleanup(func() { tierWithheld = original })
+				tierWithheld = func(bool, *config.ServerConfig) ([]actioncatalog.TierWithheld, error) { return nil, forced }
+			},
+			want: "record what the tier withheld",
 		},
 	}
 	for _, tc := range cases {

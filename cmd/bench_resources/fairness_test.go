@@ -169,14 +169,24 @@ func TestClassifyOutcome_KeepsRefusalsApartFromSuccessAndFailure(t *testing.T) {
 			refusals: processListing.Refusals, want: outcomeFailed,
 		},
 		{
-			// cmd/server's codeServerBusy, which the listen ceiling refuses
-			// with: a different number from the buckets', written literally
-			// for the same reason as the case above.
-			name: "a refused stream carries the server-busy code", method: methodSubscriptionsListen,
+			// cmd/server's codeTooManyRequests, which the per-credential listen
+			// ceiling refuses with since issue 956, written literally for the
+			// same reason as the case above. It is the buckets' number too, so
+			// what makes it this bound's is the method and the words.
+			name: "a refused stream carries the too-many-requests code", method: methodSubscriptionsListen,
 			err: fmt.Errorf("subscriptions/listen: %w", rpcError{
-				Code: -32000, Message: "too many open subscriptions/listen streams for this credential",
+				Code: -42900, Message: "too many open subscriptions/listen streams (per-credential limit 4); close one and retry",
 			}),
 			refusals: listen.Refusals, want: outcomeRefused,
+		},
+		{
+			// The process's ceiling refuses the same method in other words
+			// and with 503's code, and is not the per-credential bound's.
+			name: "a stream the process refused is not the per-credential bound's", method: methodSubscriptionsListen,
+			err: fmt.Errorf("subscriptions/listen: %w", rpcError{
+				Code: -50300, Message: "the server cannot open another subscriptions/listen stream now (server-wide limit 512); retry later",
+			}),
+			refusals: listen.Refusals, want: outcomeFailed,
 		},
 		{
 			name: "the address lockout carries the same code at another status", method: methodToolsList,
@@ -195,7 +205,7 @@ func TestClassifyOutcome_KeepsRefusalsApartFromSuccessAndFailure(t *testing.T) {
 		{
 			name: "a refusal whose code is not the bound's is not the bound's", method: methodToolsList,
 			err: fmt.Errorf("tools/list: %w", rpcError{
-				Code: serverBusyCode, Message: toolutil.RateLimitRefusalPrefix + "tools/list; retry after a short backoff",
+				Code: tenancy.CodeUnavailable, Message: toolutil.RateLimitRefusalPrefix + "tools/list; retry after a short backoff",
 			}),
 			refusals: listing.Refusals, want: outcomeFailed,
 		},
@@ -905,6 +915,34 @@ func TestRegisterRefusal_ReadsTheShapeTheRegisterDeclares(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if got != (refusalSpec{}) {
 				t.Errorf("registerRefusal = %+v, want the zero shape", got)
+			}
+		})
+	}
+}
+
+// TestRegisterInBandRefusal_ReadsTheShapeTheRegisterDeclares verifies the
+// listen bound's refusal comes from the register row that declares it, in the
+// shape it arrives in, a JSON-RPC error inside an HTTP 200, so the code and
+// the words move with the server's (issue 956 moved the code from -32000 to
+// -42900), and that a row, a method or a channel the register does not
+// declare gives a shape that matches nothing.
+func TestRegisterInBandRefusal_ReadsTheShapeTheRegisterDeclares(t *testing.T) {
+	want := refusalSpec{
+		Status: httpOK, Code: tenancy.CodeTooManyRequests,
+		TextPrefix: "too many open subscriptions/listen streams (", Method: methodSubscriptionsListen,
+	}
+	if got := registerInBandRefusal("HLD-001", methodSubscriptionsListen); got != want {
+		t.Errorf("HLD-001 = %+v, want %+v", got, want)
+	}
+	for name, got := range map[string]refusalSpec{
+		"a row the register does not hold":    registerInBandRefusal("HLD-999", methodSubscriptionsListen),
+		"a method the row does not refuse":    registerInBandRefusal("HLD-001", methodToolsCall),
+		"a row that refuses at the gate only": registerInBandRefusal("ADM-014", "http"),
+		"a refusal that is an empty answer":   registerInBandRefusal("RTC-002", "completion/complete"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got != (refusalSpec{}) {
+				t.Errorf("registerInBandRefusal = %+v, want the zero shape", got)
 			}
 		})
 	}

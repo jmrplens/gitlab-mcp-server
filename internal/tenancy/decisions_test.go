@@ -190,7 +190,10 @@ func TestDecisions_ListingBucket_HasAProcessPartnerThatFollowsIt(t *testing.T) {
 // carry with words that say to retry later and charge nothing, and existing
 // only over HTTP. Its gate refusal holds in both eras, since it answers a POST of
 // 2026-07-28 and a POST that would open a stateful session with no slot left
-// for its standalone stream, which only an earlier revision sends.
+// for its standalone stream, which only an earlier revision sends. Its in-band
+// refusal says what the gate's says, that the server cannot serve the call
+// right now, so it carries the gate's -50300 rather than 429's code (issue
+// 956).
 func TestDecisions_HeldRequests_AreBoundedOnTheProcessByIssue951(t *testing.T) {
 	held, _ := Lookup("HLD-011")
 	if !heldIsDecidedByIssue951(held) {
@@ -213,7 +216,7 @@ func TestDecisions_HeldRequests_AreBoundedOnTheProcessByIssue951(t *testing.T) {
 	}{
 		{Gate, CodeUnavailable, 503, RetryAfterFixed},
 		{ToolError, 0, 0, RetryAfterNone},
-		{RPC, CodeTooManyRequests, 0, RetryAfterNone},
+		{RPC, CodeUnavailable, 0, RetryAfterNone},
 		{EmptyCompletion, 0, 0, RetryAfterNone},
 	}
 	if len(held.Refusals) != len(want) {
@@ -379,9 +382,11 @@ func TestDecisions_CodexUserAgentFallback_IsDecidedByIssue1043(t *testing.T) {
 // decision on F-09: unknown scopes resolve wide (ADM-003) and an unknown tier
 // resolves narrow, to Free with an enterprise build's warning (AUT-003, issue
 // 900), and the second is kept as INV-008's recorded exception. Both rows
-// record the decision and carry F-09 no longer; AUT-003 keeps F-10, the tier
-// narrowing that still answers as unknown, which is issue 956's. AUT-003 also
-// records issue 1224, which added the third question the tier is asked on
+// record the decision and carry F-09 no longer. AUT-003 carries F-10 no longer
+// either: issue 956 answers a call for an action the tier removed as existing
+// and needing a higher tier, which an operator can pin when detection was
+// wrong (Ask the operator), where it used to call the action unknown. AUT-003
+// also records issue 1224, which added the third question the tier is asked on
 // GitLab.com, the plans of the top-level groups the caller is a member of,
 // with its own page size and page bound.
 func TestDecisions_TierFallback_IsINV008sRecordedException(t *testing.T) {
@@ -390,7 +395,7 @@ func TestDecisions_TierFallback_IsINV008sRecordedException(t *testing.T) {
 		decided []string
 	}{
 		{"ADM-003", []string{"ADR-0018", "issue 952"}},
-		{"AUT-003", []string{"issue 900", "issue 952", "issue 1224"}},
+		{"AUT-003", []string{"issue 900", "issue 952", "issue 1224", "issue 956"}},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			d, ok := Lookup(tc.id)
@@ -402,8 +407,8 @@ func TestDecisions_TierFallback_IsINV008sRecordedException(t *testing.T) {
 			}
 		})
 	}
-	if tier, _ := Lookup("AUT-003"); !slices.Equal(tier.Findings, []string{"F-10"}) {
-		t.Errorf("AUT-003 carries %v, want F-10 alone", tier.Findings)
+	if tier, _ := Lookup("AUT-003"); len(tier.Findings) != 0 {
+		t.Errorf("AUT-003 carries %v, want nothing: issue 956 answered F-10", tier.Findings)
 	}
 	if FindingIssue("F-09") != 952 {
 		t.Errorf("F-09 is filed as issue %d, want it kept as issue 952's", FindingIssue("F-09"))
@@ -526,8 +531,10 @@ var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
 // did when the tool-call refusal was given its resultType under issue 961,
 // F-17 did when issue 952 stopped misreading a fine-grained token, at the
 // read_api narrowing and at both doors, F-09 did when issue 952 recorded
-// the tier's Free fallback as INV-008's exception, and F-08 did when issue 952
-// set the read_api minimum at the legacy door as well as the OAuth one.
+// the tier's Free fallback as INV-008's exception, F-08 did when issue 952
+// set the read_api minimum at the legacy door as well as the OAuth one, and
+// F-07 and F-10 did when issue 956 gave each refusal the code the standard
+// assigns to what it says and answered a tier-removed action with its cause.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	carried := map[string]bool{}
 	decided := map[string]bool{}
@@ -555,7 +562,7 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-03,F-08,F-09,F-17,F-19,F-20,F-29,F-30,F-31,F-33"; got != want {
+	if got, want := strings.Join(answered, ","), "F-03,F-07,F-08,F-09,F-10,F-17,F-19,F-20,F-29,F-30,F-31,F-33"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }
@@ -613,15 +620,19 @@ const (
 	pinBlocked  = "Too many failed authentication attempts from this address."
 	pinListen   = "too many open subscriptions/listen streams ("
 	pinWatchers = "subscriptions: too many active subscriptions"
-	pinRate     = "rate limit exceeded for "
-	pinSeveral  = "This deployment serves several GitLab instances"
-	pinSubMeths = "resources/subscribe,subscriptions/listen"
-	pinCharged  = "AUB-001,AUB-002,AUB-003"
-	pinRetry503 = "GitLab could not verify this token right now"
-	pinBusy     = "This server is busy."
-	pinGrant    = "GitLab accepted this token and refused it the permission to read its own user."
-	pinBelow    = "GitLab accepted this token, which carries neither the read_api nor the api scope"
-	pinScope    = "GitLab rejected this token for lacking the scope"
+	// The process's two ceilings say the server cannot serve the request now,
+	// in words of their own, since issue 956 gave them 503's code.
+	pinListenFull   = "the server cannot open another subscriptions/listen stream now ("
+	pinWatchersFull = "subscriptions: the server cannot watch another resource now"
+	pinRate         = "rate limit exceeded for "
+	pinSeveral      = "This deployment serves several GitLab instances"
+	pinSubMeths     = "resources/subscribe,subscriptions/listen"
+	pinCharged      = "AUB-001,AUB-002,AUB-003"
+	pinRetry503     = "GitLab could not verify this token right now"
+	pinBusy         = "This server is busy."
+	pinGrant        = "GitLab accepted this token and refused it the permission to read its own user."
+	pinBelow        = "GitLab accepted this token, which carries neither the read_api nor the api scope"
+	pinScope        = "GitLab rejected this token for lacking the scope"
 )
 
 // pinBelowMinimum is the 403 both doors give a credential GitLab accepted that
@@ -835,10 +846,7 @@ func rowPins() map[string]rowPin {
 
 		"AUT-001": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, pinNarrowed(WidenScope)},
 		"AUT-002": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, pinNarrowed(WidenScope)},
-		"AUT-003": {Authorize, Rule, ClassE, Valued, KeyEntry, KeyProcess, KeyNone, KeyNone, []refusalPin{
-			{methods: "tools/call", channel: Unknown, answer: NoAnswer},
-			{methods: "tools/list", channel: Absent, answer: NoAnswer},
-		}},
+		"AUT-003": {Authorize, Rule, ClassE, Valued, KeyEntry, KeyProcess, KeyNone, KeyNone, pinNarrowed(AskOperator)},
 		"AUT-004": {Authorize, Rule, ClassP, Ruled, KeyDeployment, KeyDeployment, KeyNone, KeyNone, pinNarrowed(AskOperator)},
 		"AUT-005": {Authorize, Rule, ClassP, Ruled, KeyProcess, KeyProcess, KeyNone, KeyNone, nil},
 		"AUT-006": {Authorize, Rule, ClassP, Ruled, KeyProcess, KeyProcess, KeyNone, KeyNone, []refusalPin{
@@ -902,7 +910,7 @@ func rowPins() map[string]rowPin {
 		}},
 		"RTC-004": {Allow, Rule, ClassP, Promoted, KeyRequest, KeyRequest, KeyNone, KeyNone, nil},
 		"RTC-005": {Allow, Rate, ClassD, Valued, KeyEntry, KeyProcess, KeyTenant, KeyTenant, []refusalPin{
-			{methods: pinSubMeths, channel: RPC, code: -32000, prefix: "subscriptions: rate limited", answer: RetryLater},
+			{methods: pinSubMeths, channel: RPC, code: -42900, prefix: "subscriptions: rate limited", answer: RetryLater},
 			{methods: "notifications/resources/updated", channel: Silent, answer: NoAnswer},
 		}},
 		"RTC-006": {Allow, Bound, ClassQ, Valued, KeyRequest, KeyRequest, KeyNone, KeyNone, nil},
@@ -910,17 +918,17 @@ func rowPins() map[string]rowPin {
 			{methods: "tools/list", channel: RPC, code: -42900, prefix: pinRate, answer: RetryLater},
 		}},
 		"HLD-001": {Allow, Ceiling, ClassR, Valued, KeyEntry, KeyProcess, KeyEntry, KeyEntry, []refusalPin{
-			{methods: "subscriptions/listen", era: EraModern, channel: RPC, code: -32000, prefix: pinListen, answer: RetryLater},
+			{methods: "subscriptions/listen", era: EraModern, channel: RPC, code: -42900, prefix: pinListen, answer: RetryLater},
 		}},
 		"HLD-002": {Allow, Ceiling, ClassP, Valued, KeyProcess, KeyProcess, KeyProcess, KeyProcess, []refusalPin{
-			{methods: "subscriptions/listen", era: EraModern, channel: RPC, code: -32000, prefix: pinListen, answer: RetryLater},
+			{methods: "subscriptions/listen", era: EraModern, channel: RPC, code: -50300, prefix: pinListenFull, answer: RetryLater},
 		}},
 		"HLD-003": {Allow, Ceiling, ClassD, Valued, KeyEntry, KeyProcess, KeyTenant, KeyTenant, []refusalPin{
-			{methods: pinSubMeths, channel: RPC, code: -32000, prefix: pinWatchers, answer: RetryLater},
+			{methods: pinSubMeths, channel: RPC, code: -42900, prefix: pinWatchers, answer: RetryLater},
 			pinListenEnd("watcher_evicted", StartOver),
 		}},
 		"HLD-004": {Allow, Ceiling, ClassP, Valued, KeyProcess, KeyProcess, KeyProcess, KeyProcess, []refusalPin{
-			{methods: pinSubMeths, channel: RPC, code: -32000, prefix: pinWatchers, answer: RetryLater},
+			{methods: pinSubMeths, channel: RPC, code: -50300, prefix: pinWatchersFull, answer: RetryLater},
 		}},
 		"HLD-007": {Allow, Lifetime, ClassQ, Valued, KeyRequest, KeyRequest, KeyNone, KeyNone, []refusalPin{
 			pinListenEnd("lifetime_reached", StartOver),
@@ -938,7 +946,7 @@ func rowPins() map[string]rowPin {
 			},
 			{methods: "tools/call", channel: ToolError, prefix: pinBusy, answer: RetryLater},
 			{
-				methods: "resources/read,resources/subscribe,prompts/get", channel: RPC, code: -42900,
+				methods: "resources/read,resources/subscribe,prompts/get", channel: RPC, code: -50300,
 				prefix: pinBusy, answer: RetryLater,
 			},
 			{methods: "completion/complete", channel: EmptyCompletion, answer: RetryLater},

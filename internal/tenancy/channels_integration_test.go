@@ -2395,11 +2395,12 @@ func TestSubscriptionsListenResult_BuiltByApplicationCode_AnswersOnlyInPlaceOfTh
 // the Refusal channels statement that a subscriptions/listen refusal is made
 // before the acknowledgment and that a modern Go SDK client never observes it,
 // whether a middleware or the subscribe handler refuses, while a legacy SDK
-// client's subscribe does report the refusal.
+// client's subscribe does report the refusal. The refusal carries the code a
+// listen past its caller's own ceiling is answered with (HLD-001).
 func TestListenRefusal_BeforeTheAcknowledgment_UnseenByTheModernSDKClient(t *testing.T) {
 	sdk := sdkName()
-	refusal := &jsonrpc.Error{Code: tenancy.CodeServerBusyLegacy, Message: refusalText}
-	fix := "The Refusal channels section of docs/development/tenant-policy-spec.md states this: edit it, and the listen row of Carriages() if its channels moved, in this same pull request."
+	refusal := &jsonrpc.Error{Code: tenancy.CodeTooManyRequests, Message: refusalText}
+	fix := "The Refusal channels section of docs/development/tenant-policy-spec.md states this, and so do row 67 of docs/development/upstream-bugs.md and the subscriptions page of the site in English and Spanish (capabilities/subscriptions): edit them, and the listen row of Carriages() if its channels moved, in this same pull request."
 	servers := []struct {
 		name  string
 		build func() *mcp.Server
@@ -2418,9 +2419,9 @@ func TestListenRefusal_BeforeTheAcknowledgment_UnseenByTheModernSDKClient(t *tes
 		for _, tr := range transports() {
 			t.Run(server.name+" on the wire over "+tr.String(), func(t *testing.T) {
 				ex := dial(t, server.build(), route{era: tenancy.EraModern, transport: tr}).call(t, methodListen, listenParams(resourceURI))
-				if we, ok := ex.wireError(); !ok || we.Code != tenancy.CodeServerBusyLegacy || ex.acknowledged() {
+				if we, ok := ex.wireError(); !ok || we.Code != tenancy.CodeTooManyRequests || ex.acknowledged() {
 					t.Errorf("over %s a refused listen reached the client as %s, want error %d with no acknowledgment before it (%s). %s",
-						tr, ex.describe(), tenancy.CodeServerBusyLegacy, sdk, fix)
+						tr, ex.describe(), tenancy.CodeTooManyRequests, sdk, fix)
 				}
 			})
 		}
@@ -2434,8 +2435,8 @@ func TestListenRefusal_BeforeTheAcknowledgment_UnseenByTheModernSDKClient(t *tes
 	t.Run("a legacy SDK client sees the subscribe handler's refusal", func(t *testing.T) {
 		s, _ := newMatrixServer(refusal)
 		err := sdkSession(t, s, tenancy.EraLegacy).Subscribe(context.Background(), &mcp.SubscribeParams{URI: resourceURI})
-		if we, ok := errors.AsType[*jsonrpc.Error](err); !ok || we.Code != tenancy.CodeServerBusyLegacy {
-			t.Errorf("a legacy SDK client's Subscribe to a refused resource returned %v, want error %d (%s). %s", err, tenancy.CodeServerBusyLegacy, sdk, fix)
+		if we, ok := errors.AsType[*jsonrpc.Error](err); !ok || we.Code != tenancy.CodeTooManyRequests {
+			t.Errorf("a legacy SDK client's Subscribe to a refused resource returned %v, want error %d (%s). %s", err, tenancy.CodeTooManyRequests, sdk, fix)
 		}
 	})
 }

@@ -78,12 +78,14 @@ const (
 
 // JSON-RPC error codes emitted by the request gate.
 //
-// The MCP specification partitions the JSON-RPC implementation-defined range:
-// -32000 to -32019 is legacy and must not be used by new implementations, and
-// -32020 to -32099 is reserved for the specification itself. Codes for purposes
-// the specification does not define must be allocated outside the whole
-// reserved range (-32768 to -32000), so the gate's own codes mirror their HTTP
-// status multiplied by -100, well below -32768.
+// The MCP specification (2026-07-28, basic) partitions the JSON-RPC
+// implementation-defined range: -32000 to -32019 is legacy, where new codes
+// must not be allocated, new implementations should not use any, and a
+// receiver must not assume a meaning, and -32020 to -32099 is reserved for the
+// specification itself. Codes for purposes the specification does not define
+// belong outside the whole reserved range (-32768 to -32000), so the gate's own
+// codes mirror their HTTP status multiplied by -100, well below -32768, and the
+// in-band refusals of the same things carry the same codes (issue 956).
 const (
 	errCodeInvalidRequest = -32600 // standard JSON-RPC "Invalid Request"
 	// codeUnsupportedProtocolVersion is defined by the MCP specification, not

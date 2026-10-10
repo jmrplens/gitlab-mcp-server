@@ -274,8 +274,10 @@ func Classify(uri string) (Kind, bool) {
 	}
 
 	if tailPath == "" {
-		kind := bareKinds[prefix]
-		return kind, kind != KindUnknown
+		// Every root splitRoot accepts has a bare kind, so the lookup's own
+		// answer is the verdict; a root added without one is refused here.
+		kind, bare := bareKinds[prefix]
+		return kind, bare
 	}
 
 	segs := strings.Split(tailPath, "/")

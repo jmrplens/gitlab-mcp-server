@@ -16,8 +16,9 @@ import (
 // previews are applied last, over the complete catalog, so the standalone
 // actions are previewed like every other write. The bookkeeping returned
 // beside it is what RegisterCatalogFindExecuteTools needs through
-// WithWithheldActions, so a withheld action is reported with its cause rather
-// than as unknown.
+// WithWithheldActions and WithTierWithheld, so a withheld action is reported
+// with its cause rather than as unknown, the actions the licensing tier
+// removed included (issue 956).
 //
 // The ordering of safe mode is the one thing here that is not a straight move
 // out of cmd/server. There the previews were applied inside the filter, before
@@ -54,6 +55,7 @@ var (
 	filterActionCatalog  = gitlabtools.FilterActionCatalog               // test seam
 	addStandaloneCatalog = dynamictools.AddStandaloneCatalog             // test seam
 	safeModePreviews     = (*actioncatalog.Catalog).WithSafeModePreviews // test seam
+	tierWithheld         = gitlabtools.TierWithheld                      // test seam
 )
 
 // build assembles the dynamic catalog for cfg from the shared base catalog,
@@ -72,6 +74,19 @@ func build(client *gitlabclient.Client, dotcom bool, cfg *config.ServerConfig) (
 	if filterErr != nil {
 		return nil, gitlabtools.WithheldActions{}, fmt.Errorf("filter dynamic action catalog: %w", filterErr)
 	}
+	// What the tier removed, recorded beside what the filter withheld so a
+	// call for one is answered with the tier it needs (issue 956). It is
+	// read here rather than in the filter because the tier removed it before
+	// the catalog the filter is handed was built, and only this surface's
+	// registry answers a call for an action no tool names. The whole
+	// configuration goes with it, so each entry also says what would still
+	// withhold its action once the tier served it: read-only mode for a write,
+	// or the scopes the credential lacks.
+	byTier, tierErr := tierWithheld(dotcom, cfg)
+	if tierErr != nil {
+		return nil, gitlabtools.WithheldActions{}, fmt.Errorf("record what the tier withheld: %w", tierErr)
+	}
+	withheld.ByTier = byTier
 	withStandalone, standaloneErr := addStandaloneCatalog(filtered, client, dynamictools.StandaloneOptions{
 		ExcludeTools: cfg.ExcludeTools,
 	})

@@ -88,6 +88,8 @@ func (k Kind) activityOf(content []byte) activity {
 		if json.Unmarshal(content, &vs) != nil || len(vs) == 0 {
 			return activityUnknown
 		}
+		// A settled job changes nothing: the list stays settled only while
+		// every job is, so only the other two answers are acted on.
 		settled := true
 		for _, v := range vs {
 			switch statusActivity(v.Status) {
@@ -95,7 +97,6 @@ func (k Kind) activityOf(content []byte) activity {
 				return activityBusy
 			case activityUnknown:
 				settled = false
-			case activitySettled:
 			}
 		}
 		if settled {
@@ -151,9 +152,7 @@ func stateActivity(state string) activity {
 // minute, so ten watchers at five seconds would consume such a user's
 // entire budget while that same user is making tool calls through it.
 func (k Kind) pollInterval(content []byte, base, floor time.Duration) time.Duration {
-	if floor > base {
-		floor = base
-	}
+	floor = min(floor, base)
 	switch k.activityOf(content) {
 	case activityBusy:
 		return floor

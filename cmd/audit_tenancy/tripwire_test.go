@@ -159,7 +159,7 @@ func (g *gate) outside(code int) []*gateFailure {
 }
 
 func (g *gate) exempted() *gateFailure {
-	return &gateFailure{status: 400, code: -32000}
+	return &gateFailure{status: 400, code: -50300}
 }
 `
 
@@ -221,10 +221,12 @@ func overLimit() error { return &jsonrpc.Error{Code: -42900, Message: "over"} }
 // literal builds, not whether the function is declared at all. A policy code
 // no refusal there carries fails even in a declared function, and so does a
 // code that is not constant beside a refusal that is no JSON-RPC one; the code
-// and the variable code a declared JSON-RPC refusal carries pass. A 429 or 503
-// written with http.Error or WriteHeader is held to a gate refusal of that
-// status the same way; another status, or one that is not constant, is not
-// read.
+// and the variable code a declared JSON-RPC refusal carries pass. A gate
+// refusal declared in the same function never answers a JSON-RPC literal, even
+// one carrying the gate's own code, since the two are different refusals. A
+// 429 or 503 written with http.Error or WriteHeader is held to a gate refusal
+// of that status the same way; another status, or one that is not constant,
+// is not read.
 func TestCheckTripwire_ARefusalInADeclaredFunction_MustBeTheOneItDeclares(t *testing.T) {
 	rpc := func(at, via string, channel tenancy.Channel, code int) tenancy.Refusal {
 		r := tenancy.Refusal{Channel: channel, Code: code, At: site(at, tenancy.Refuse)}
@@ -238,6 +240,10 @@ func TestCheckTripwire_ARefusalInADeclaredFunction_MustBeTheOneItDeclares(t *tes
 		rpc("busy", "", tenancy.RPC, -32000),
 		rpc("ErrTooMany", "wire", tenancy.RPC, -32000),
 		rpc("callCode", "", tenancy.ToolError, 0),
+		// Declared first, so the walk meets it before the JSON-RPC refusal:
+		// overLimit's literal carries this gate refusal's code and is still
+		// reported, because a gate refusal does not answer an in-band one.
+		{Channel: tenancy.Gate, Status: 429, Code: -42900, At: site("overLimit", tenancy.Refuse)},
 		rpc("overLimit", "", tenancy.RPC, -32000),
 		{Channel: tenancy.Gate, Status: 503, At: site("draining", tenancy.Refuse)},
 		{Channel: tenancy.Gate, Status: 429, At: site("throttled", tenancy.Refuse)},

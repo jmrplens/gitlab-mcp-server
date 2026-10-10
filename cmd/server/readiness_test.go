@@ -360,8 +360,8 @@ func TestReadinessGate_WaitEndsWithoutCatalog_AnswersRatherThanHangs(t *testing.
 			if err := probe.probeError(); !errors.As(err, &rpcErr) {
 				t.Fatalf("error = %v (%T), want a *jsonrpc.Error a client can read", err, err)
 			}
-			if rpcErr.Code != codeServerBusy {
-				t.Errorf("code = %d, want %d so a client knows a retry can succeed", rpcErr.Code, codeServerBusy)
+			if rpcErr.Code != tenancy.CodeUnavailable {
+				t.Errorf("code = %d, want %d: the server cannot serve the request yet, and a retry can succeed", rpcErr.Code, tenancy.CodeUnavailable)
 			}
 			if rpcErr.Message == "" {
 				t.Error("the refusal carries no message, so nobody reading it learns the server was still starting")
@@ -629,8 +629,8 @@ func TestReadinessGate_MarkFailed_ReleasesWaitersWithAnErrorRatherThanAnEmptyCat
 		if !errors.As(err, &rpcErr) {
 			t.Fatalf("await() returned %T, want the gate's own refusal", err)
 		}
-		if rpcErr.Code != codeServerBusy {
-			t.Errorf("await() answered code %d, want %d (server busy)", rpcErr.Code, codeServerBusy)
+		if rpcErr.Code != tenancy.CodeUnavailable {
+			t.Errorf("await() answered code %d, want %d (the server cannot serve it right now)", rpcErr.Code, tenancy.CodeUnavailable)
 		}
 		if !strings.Contains(rpcErr.Message, "retry") {
 			t.Errorf("the refusal %q does not tell the caller to retry", rpcErr.Message)

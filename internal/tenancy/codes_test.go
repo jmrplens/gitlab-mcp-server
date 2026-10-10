@@ -18,7 +18,6 @@ func TestCodes_AreTheirLiterals(t *testing.T) {
 		{"CodeForbidden", CodeForbidden, -40300},
 		{"CodeTooManyRequests", CodeTooManyRequests, -42900},
 		{"CodeUnavailable", CodeUnavailable, -50300},
-		{"CodeServerBusyLegacy", CodeServerBusyLegacy, -32000},
 		{"codeParseError", codeParseError, -32700},
 		{"codeInvalidRequest", codeInvalidRequest, -32600},
 		{"codeMethodNotFound", codeMethodNotFound, -32601},
@@ -79,7 +78,7 @@ func TestCodes_ProtocolClassification(t *testing.T) {
 		{"method-not-found", -32601, false, true},
 		{"invalid-params", -32602, false, true},
 		{"internal-error", -32603, false, true},
-		{"server-busy", -32000, false, false},
+		{"legacy-server-error", -32000, false, false},
 		{"too-many-requests", -42900, false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

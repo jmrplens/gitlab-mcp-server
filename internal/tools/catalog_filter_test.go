@@ -6,7 +6,9 @@ package tools
 
 import (
 	"bytes"
+	"errors"
 	"log/slog"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -622,4 +624,292 @@ func TestFilterActionCatalog_ScopeFilterFails_ReturnsTheErrorAndNoCatalog(t *tes
 	if len(withheld.ByTokenScope) != 0 || len(withheld.ByOperator) != 0 || len(withheld.ExcludedByName) != 0 {
 		t.Errorf("withheld = %+v, want nothing recorded when the rebuild failed", withheld)
 	}
+}
+
+// tierRemovedKeys is the oracle TierWithheld is held to: every name of every
+// action the catalog built at Ultimate carries and the one built at tier does
+// not, with the tier the action needs, read off the two shared catalogs rather
+// than off the specs TierWithheld reads, so the two paths have to agree.
+func tierRemovedKeys(t *testing.T, dotcom bool, tier edition.Tier, skip func(actioncatalog.Action) bool) []actioncatalog.TierWithheld {
+	t.Helper()
+	full, err := SharedBaseCatalog(dotcom, ActionCatalogOptions{Tier: edition.Ultimate})
+	if err != nil {
+		t.Fatalf("SharedBaseCatalog(Ultimate) error = %v", err)
+	}
+	tiered, err := SharedBaseCatalog(dotcom, ActionCatalogOptions{Tier: tier})
+	if err != nil {
+		t.Fatalf("SharedBaseCatalog(%s) error = %v", tier, err)
+	}
+	var want []actioncatalog.TierWithheld
+	for _, action := range removedActions(full, tiered) {
+		if skip(action) {
+			continue
+		}
+		for _, key := range actionKeys(action) {
+			want = append(want, actioncatalog.TierWithheld{ID: key, Edition: action.Edition})
+		}
+	}
+	return want
+}
+
+// sortedTierWithheld orders entries for a comparison that does not depend on
+// the order either side was built in.
+func sortedTierWithheld(entries []actioncatalog.TierWithheld) []actioncatalog.TierWithheld {
+	sorted := slices.Clone(entries)
+	slices.SortFunc(sorted, func(a, b actioncatalog.TierWithheld) int {
+		return strings.Compare(a.ID+"\x00"+a.Edition, b.ID+"\x00"+b.Edition)
+	})
+	return sorted
+}
+
+// sameTierWithheld reports whether two lists hold the same entries in any
+// order, scopes included.
+func sameTierWithheld(got, want []actioncatalog.TierWithheld) bool {
+	return reflect.DeepEqual(sortedTierWithheld(got), sortedTierWithheld(want))
+}
+
+// TestTierWithheld_IsEveryNameOfWhatTheTierRemoved pins the bookkeeping issue
+// 956 added: every name a caller may ask for an action by that the tier filter
+// removed, the canonical ID and every alias, each with the tier the action
+// needs, for both instance classes and both tiers that remove anything. The
+// tier filter runs while the catalog is built, before anything else records
+// what a narrowing took, so without this a call for a Premium action on a
+// Free instance was answered "unknown action". At Ultimate nothing is removed.
+func TestTierWithheld_IsEveryNameOfWhatTheTierRemoved(t *testing.T) {
+	t.Parallel()
+	for _, instance := range []struct {
+		name   string
+		dotcom bool
+	}{{name: "self-managed"}, {name: "GitLab.com", dotcom: true}} {
+		for _, tier := range []edition.Tier{edition.Free, edition.Premium} {
+			t.Run(instance.name+" at "+tier.String(), func(t *testing.T) {
+				t.Parallel()
+				got, err := TierWithheld(instance.dotcom, &config.ServerConfig{Tier: tier})
+				if err != nil {
+					t.Fatalf("TierWithheld() error = %v", err)
+				}
+				want := tierRemovedKeys(t, instance.dotcom, tier, func(actioncatalog.Action) bool { return false })
+				if len(want) == 0 {
+					t.Fatal("the tier removed nothing, so this proves nothing")
+				}
+				if !sameTierWithheld(got, want) {
+					t.Errorf("TierWithheld() = %d entries, want %d: the names of every action the tier removed, with the tier each needs", len(got), len(want))
+				}
+			})
+		}
+	}
+	t.Run("at Ultimate", func(t *testing.T) {
+		t.Parallel()
+		if got, err := TierWithheld(false, &config.ServerConfig{Tier: edition.Ultimate}); err != nil || got != nil {
+			t.Errorf("TierWithheld(Ultimate) = %v, %v; want nothing, since the tier removes nothing", got, err)
+		}
+	})
+}
+
+// TestTierWithheld_NamesNoActionTheOperatorExcluded holds AUT-004 for the tier:
+// an action the operator excluded is never named back, whichever of the three
+// names the exclusion used (a group, an individual tool name, a canonical ID),
+// although the tier removed it before the exclusion could. Every other removed
+// action is still recorded.
+func TestTierWithheld_NamesNoActionTheOperatorExcluded(t *testing.T) {
+	t.Parallel()
+	full, err := SharedBaseCatalog(false, ActionCatalogOptions{Tier: edition.Ultimate})
+	if err != nil {
+		t.Fatalf("SharedBaseCatalog(Ultimate) error = %v", err)
+	}
+	free, err := SharedBaseCatalog(false, ActionCatalogOptions{Tier: edition.Free})
+	if err != nil {
+		t.Fatalf("SharedBaseCatalog(Free) error = %v", err)
+	}
+	removed := removedActions(full, free)
+	if len(removed) < 3 {
+		t.Fatalf("the Free tier removed %d actions, want at least three to exclude by each name", len(removed))
+	}
+	// A whole group, the individual tool of an action of another group, and
+	// the canonical ID of an action of a third.
+	group := removed[0].ToolName
+	var tool, id string
+	for _, action := range removed {
+		switch {
+		case action.ToolName == group:
+		case tool == "" && action.IndividualTool.Name != "":
+			tool = action.IndividualTool.Name
+		case id == "" && tool != "" && action.IndividualTool.Name != tool:
+			id = string(action.ID)
+		}
+	}
+	if tool == "" || id == "" {
+		t.Fatalf("could not pick an individual tool (%q) and an ID (%q) outside %s", tool, id, group)
+	}
+	excluded := func(action actioncatalog.Action) bool {
+		return action.ToolName == group || action.IndividualTool.Name == tool || string(action.ID) == id
+	}
+	got, err := TierWithheld(false, &config.ServerConfig{Tier: edition.Free, ExcludeTools: []string{group, tool, id}})
+	if err != nil {
+		t.Fatalf("TierWithheld() error = %v", err)
+	}
+	want := tierRemovedKeys(t, false, edition.Free, excluded)
+	if !sameTierWithheld(got, want) {
+		t.Errorf("TierWithheld() = %d entries, want %d: every removed action but the three excluded by %q, %q and %q", len(got), len(want), group, tool, id)
+	}
+	for _, entry := range got {
+		action, _ := full.Action(actioncatalog.ActionID(entry.ID))
+		if excluded(action) {
+			t.Errorf("TierWithheld() names %s, which the operator excluded", entry.ID)
+		}
+	}
+}
+
+// TestTierWithheld_TheRemovedActionsCannotBeRead_ReturnsTheError covers the
+// one path out that is not the bookkeeping: an error reading the actions the
+// tier removed is returned, and nothing is recorded.
+func TestTierWithheld_TheRemovedActionsCannotBeRead_ReturnsTheError(t *testing.T) {
+	original := sharedTierRemoved
+	sharedTierRemoved = func(bool, edition.Tier) (*actioncatalog.Catalog, error) {
+		return nil, errors.New("catalog refused")
+	}
+	t.Cleanup(func() { sharedTierRemoved = original })
+
+	got, err := TierWithheld(false, &config.ServerConfig{Tier: edition.Free})
+	if err == nil || !strings.Contains(err.Error(), "catalog refused") || got != nil {
+		t.Errorf("TierWithheld() = %v, %v; want nothing and the error", got, err)
+	}
+}
+
+// TestTierWithheld_AtUltimate_ReadsNothing verifies the promise the function
+// makes at the top tier: Ultimate removes nothing, so the removed actions are
+// not read at all, rather than read and found empty. A session at Ultimate is
+// the one every licensed deployment builds, and the read is a whole catalog.
+func TestTierWithheld_AtUltimate_ReadsNothing(t *testing.T) {
+	original := sharedTierRemoved
+	reads := 0
+	sharedTierRemoved = func(bool, edition.Tier) (*actioncatalog.Catalog, error) {
+		reads++
+		return actioncatalog.NewCatalog(), nil
+	}
+	t.Cleanup(func() { sharedTierRemoved = original })
+
+	for _, tc := range []struct {
+		name   string
+		dotcom bool
+	}{
+		{name: "self-managed", dotcom: false},
+		{name: "GitLab.com", dotcom: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, err := TierWithheld(tc.dotcom, &config.ServerConfig{Tier: edition.Ultimate}); err != nil || got != nil {
+				t.Errorf("TierWithheld(Ultimate) = %v, %v; want nothing", got, err)
+			}
+		})
+	}
+	if reads != 0 {
+		t.Errorf("the removed actions were read %d times at Ultimate, want none", reads)
+	}
+}
+
+// TestTierWithheld_SaysWhatElseWouldWithholdIt verifies the rest of each entry:
+// what would still withhold a tier-removed action once the tier served it, so
+// the answer to a call for one can say so in the same breath. Without it a
+// Premium write on a read-only Free deployment sent the model to ask the
+// operator to pin the tier, and the pinned deployment then answered that it
+// withholds the action, so the operator was asked twice and the read-only
+// mode was named only the second time. Read-only mode is filed first, as the
+// catalog filter files a write it removes under the operator whatever scope
+// the credential lacks besides; otherwise the scopes are named as the scope
+// narrowing names them, api for what GitLab refuses read_api and admin_mode for
+// a group this server serves only to a credential carrying it.
+func TestTierWithheld_SaysWhatElseWouldWithholdIt(t *testing.T) {
+	t.Parallel()
+	entryFor := func(t *testing.T, cfg *config.ServerConfig, id string) actioncatalog.TierWithheld {
+		t.Helper()
+		got, err := TierWithheld(false, cfg)
+		if err != nil {
+			t.Fatalf("TierWithheld() error = %v", err)
+		}
+		for _, entry := range got {
+			if entry.ID == id {
+				return entry
+			}
+		}
+		t.Fatalf("TierWithheld() does not name %s", id)
+		return actioncatalog.TierWithheld{}
+	}
+	cases := []struct {
+		name string
+		cfg  *config.ServerConfig
+		id   string
+		want actioncatalog.TierWithheld
+	}{
+		{
+			name: "a write on a read-only deployment",
+			cfg:  &config.ServerConfig{Tier: edition.Free, ReadOnly: true},
+			id:   "merge_train.add",
+			want: actioncatalog.TierWithheld{ID: "merge_train.add", Edition: "premium", ReadOnlyMode: true},
+		},
+		{
+			name: "a read on a read-only deployment",
+			cfg:  &config.ServerConfig{Tier: edition.Free, ReadOnly: true},
+			id:   "merge_train.list_project",
+			want: actioncatalog.TierWithheld{ID: "merge_train.list_project", Edition: "premium"},
+		},
+		{
+			name: "a write on a credential carrying read_api and not api",
+			cfg:  &config.ServerConfig{Tier: edition.Free, TokenScopes: []string{"read_api"}, ReadAPIOnly: true},
+			id:   "merge_train.add",
+			want: actioncatalog.TierWithheld{ID: "merge_train.add", Edition: "premium", ByGitLab: []string{"api"}},
+		},
+		{
+			name: "a read on a credential carrying read_api and not api",
+			cfg:  &config.ServerConfig{Tier: edition.Free, TokenScopes: []string{"read_api"}, ReadAPIOnly: true},
+			id:   "merge_train.list_project",
+			want: actioncatalog.TierWithheld{ID: "merge_train.list_project", Edition: "premium"},
+		},
+		{
+			name: "an action of a group served only with admin_mode",
+			cfg:  &config.ServerConfig{Tier: edition.Free, TokenScopes: []string{"api"}},
+			id:   "enterprise_user.list",
+			want: actioncatalog.TierWithheld{ID: "enterprise_user.list", Edition: "premium", ByServer: []string{"admin_mode"}},
+		},
+		{
+			name: "a write on a read-only deployment and a narrowed credential",
+			cfg:  &config.ServerConfig{Tier: edition.Free, ReadOnly: true, TokenScopes: []string{"read_api"}, ReadAPIOnly: true},
+			id:   "merge_train.add",
+			want: actioncatalog.TierWithheld{ID: "merge_train.add", Edition: "premium", ReadOnlyMode: true},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := entryFor(t, tc.cfg, tc.id); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("TierWithheld() entry = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTierRemovedCatalog_AGroupThatCannotBeBuilt_NamesIt covers the two ways
+// building the catalog of removed actions can fail: a group that cannot be
+// materialized and one the catalog refuses. Each is returned with the group's
+// name, and no catalog with it, since a partial one would answer some of the
+// removed actions as unknown again.
+func TestTierRemovedCatalog_AGroupThatCannotBeBuilt_NamesIt(t *testing.T) {
+	t.Run("a group that cannot be materialized", func(t *testing.T) {
+		original := tierRemovedGroup
+		tierRemovedGroup = func(ActionSpecGroup) (actioncatalog.Group, error) {
+			return actioncatalog.Group{}, errors.New("spec refused")
+		}
+		t.Cleanup(func() { tierRemovedGroup = original })
+		catalog, err := tierRemovedCatalog(UnboundClient(false), edition.Free)
+		if catalog != nil || err == nil || !strings.Contains(err.Error(), "build tier-removed group") || !strings.Contains(err.Error(), "spec refused") {
+			t.Errorf("tierRemovedCatalog() = %v, %v; want no catalog and the build failure", catalog, err)
+		}
+	})
+	t.Run("a group the catalog refuses", func(t *testing.T) {
+		restore := failAddFilteredGroup(t)
+		t.Cleanup(restore)
+		catalog, err := tierRemovedCatalog(UnboundClient(false), edition.Free)
+		if catalog != nil || err == nil || !strings.Contains(err.Error(), "add tier-removed group") || !strings.Contains(err.Error(), "group refused") {
+			t.Errorf("tierRemovedCatalog() = %v, %v; want no catalog and the refusal", catalog, err)
+		}
+	})
 }

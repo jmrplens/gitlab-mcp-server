@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -440,6 +441,23 @@ func wrapErr(msg string, err error) error {
 	return toolutil.InternalError(fmt.Errorf("%s: %s (%w)", msg, toolutil.ClassifyError(err), err))
 }
 
+// notFoundOr answers a GitLab failure of a single-object read: an object
+// GitLab says is absent or out of the caller's reach (404, 403, 401) is the
+// resource not found it always was, and anything else is passed through
+// [wrapErr], classified and with GitLab's status kept for a reader to act on.
+//
+// Five reads used to answer every failure as not found, so a throttled read
+// (429) or a failing instance (500) told the caller the resource did not
+// exist, and a watch of one was refused, or retired as resource_gone, as a
+// resource to stop asking for rather than a read to retry later (issue 956).
+func notFoundOr(uri, msg string, err error) error {
+	if toolutil.IsNotFound(err) || toolutil.IsHTTPStatus(err, http.StatusForbidden) ||
+		toolutil.IsHTTPStatus(err, http.StatusUnauthorized) {
+		return mcp.ResourceNotFoundError(uri)
+	}
+	return wrapErr(msg, err)
+}
+
 // Register adds every GitLab-backed MCP resource to the given server.
 // The full set of URI shapes exposed by Register is:
 //
@@ -632,7 +650,7 @@ func registerProjectResource(server registrar, base *gitlabclient.Client) {
 		}
 		p, _, err := client.GL().Projects.GetProject(projectID, &gl.GetProjectOptions{}, gl.WithContext(ctx))
 		if err != nil {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+			return nil, notFoundOr(req.Params.URI, "failed to get project", err)
 		}
 		out := ProjectResourceOutput{
 			ID:                p.ID,
@@ -951,7 +969,7 @@ func registerGroupResource(server registrar, base *gitlabclient.Client) {
 		}
 		g, _, err := client.GL().Groups.GetGroup(groupID, &gl.GetGroupOptions{}, gl.WithContext(ctx))
 		if err != nil {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+			return nil, notFoundOr(req.Params.URI, "failed to get group", err)
 		}
 		out := GroupResourceOutput{
 			ID:          g.ID,
@@ -1207,7 +1225,7 @@ func registerCommitResource(server registrar, base *gitlabclient.Client) {
 		}
 		c, _, err := client.GL().Commits.GetCommit(projectID, sha, nil, gl.WithContext(ctx))
 		if err != nil {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+			return nil, notFoundOr(req.Params.URI, "failed to get commit", err)
 		}
 		out := CommitResourceOutput{
 			ID:             c.ID,
@@ -1261,7 +1279,7 @@ func registerFileBlobResource(server registrar, base *gitlabclient.Client) {
 		opts := &gl.GetFileOptions{Ref: &ref}
 		f, _, err := client.GL().RepositoryFiles.GetFile(projectID, filePath, opts, gl.WithContext(ctx))
 		if err != nil {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+			return nil, notFoundOr(req.Params.URI, "failed to get file", err)
 		}
 		out := FileBlobResourceOutput{
 			FileName:     f.FileName,
@@ -1305,7 +1323,7 @@ func registerWikiResource(server registrar, base *gitlabclient.Client) {
 		}
 		w, _, err := client.GL().Wikis.GetWikiPage(projectID, slug, &gl.GetWikiPageOptions{}, gl.WithContext(ctx))
 		if err != nil {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+			return nil, notFoundOr(req.Params.URI, "failed to get wiki page", err)
 		}
 		out := WikiResourceOutput{
 			Title:    w.Title,

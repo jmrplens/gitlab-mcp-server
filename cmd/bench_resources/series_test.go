@@ -21,6 +21,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // TestEstimateRSS_FitsALineThroughThePeaks verifies the budget estimate is a
@@ -424,7 +426,7 @@ func answering(script []error) func(string, int) error {
 func TestColdList_RateRefusal_IsAskedAgainAndAnythingElseStands(t *testing.T) {
 	t.Parallel()
 	refused := fmt.Errorf("tools/list: %w", rpcError{Code: rateLimitCode, Message: "rate limit exceeded for tools/list; retry after a short backoff"})
-	busy := fmt.Errorf("tools/list: %w", rpcError{Code: serverBusyCode, Message: "busy"})
+	busy := fmt.Errorf("tools/list: %w", rpcError{Code: tenancy.CodeUnavailable, Message: "busy"})
 	broken := errors.New("connection reset")
 	lockout := &httpStatusError{Method: methodToolsList, Status: httpTooManyRequests, RPC: &rpcError{Code: rateLimitCode, Message: "blocked"}}
 	ended, cancel := context.WithCancel(t.Context())

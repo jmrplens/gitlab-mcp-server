@@ -2565,7 +2565,8 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 			}
 		}
 		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog,
-			dynamictools.WithWithheldActions(withheld.ByTokenScope, withheld.ByOperator))
+			dynamictools.WithWithheldActions(withheld.ByTokenScope, withheld.ByOperator),
+			dynamictools.WithTierWithheld(withheld.ByTier, cfg.Tier, cfg.TierExplicit))
 		return serverSurfaceRegistration{
 			metaSchemaRoutes: actionCatalog.ActionMaps(),
 			surfaceCatalog:   actionCatalog,

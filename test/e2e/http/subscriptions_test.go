@@ -190,13 +190,14 @@ func startFakeGitLabServingProjects(t *testing.T) *httptest.Server {
 // that asks for more watchers than the credential may hold, and pins two things
 // about the refusal on the wire.
 //
-// The first is the code. A watcher ceiling is server state, not a bad request:
-// the listen is well formed and a retry later can succeed, so it takes the
-// implementation-defined -32000 the rate limit and the stream ceiling already
-// answer with. The manager speaks in sentinels and the SDK marshals an
-// unrecognized error with code 0, which generic clients render as "unknown
-// error", so the mapping is the whole difference between a client that backs
-// off and a client that gives up.
+// The first is the code. A watcher ceiling is not a bad request: the listen is
+// well formed and a retry later can succeed, and what the refusal says is that
+// the caller holds too many, so it takes 429's -42900, which the rate limit and
+// the per-credential stream ceiling answer with too (issue 956 retired the
+// legacy -32000 it used to carry). The manager speaks in sentinels and the SDK
+// marshals an unrecognized error with code 0, which generic clients render as
+// "unknown error", so the mapping is the whole difference between a client
+// that backs off and a client that gives up.
 //
 // The second is that the refusal is whole. The SDK subscribes each URI in turn
 // and returns the first error before acknowledging anything, unwinding the ones
@@ -204,8 +205,9 @@ func startFakeGitLabServingProjects(t *testing.T) *httptest.Server {
 // watching. The check for that is the listen after it: a credential holding ten
 // stranded watchers could not be granted an eleventh.
 //
-// The process-wide ceiling this release adds takes exactly this path, with
-// "server-wide" in the message instead of the count. It is not what this test
+// The process-wide ceiling takes exactly this path, in words of its own and
+// with 503's -50300, since it says the server cannot watch another resource
+// now rather than that the caller holds too many. It is not what this test
 // reaches, because reaching 512 live watchers over the wire needs 52
 // credentials to hold them, so the ceiling itself is pinned in the unit tests
 // of internal/subscriptions and cmd/server, and what is proven here is the road
@@ -227,8 +229,8 @@ func TestSubscriptionsListen_PastTheWatcherCeiling_IsRefusedWhole(t *testing.T) 
 
 	refused := sseFrameContaining(t, srv, "subscriptions/listen", "2026-07-28",
 		`{"jsonrpc":"2.0","id":11,"method":"subscriptions/listen","params":{"notifications":{"resourceSubscriptions":[`+
-			strings.Join(uris, ",")+`]},`+meta+`}}`, `"code":-32000`)
-	for _, want := range []string{"too many active subscriptions", "limit 10"} {
+			strings.Join(uris, ",")+`]},`+meta+`}}`, `"code":-42900`)
+	for _, want := range []string{"too many active subscriptions", "limit 10", "unsubscribe from one and retry"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(refused, want) {
 				t.Errorf("the refusal does not contain %q:\n%s", want, refused)

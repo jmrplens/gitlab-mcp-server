@@ -296,8 +296,13 @@ func TestSubscribe_AtCapacity_IsRejected(t *testing.T) {
 	}
 
 	err := m.Subscribe(ctx, subA, "gitlab://project/42/pipeline/3")
-	if !errors.Is(err, ErrTooManySubscriptions) {
-		t.Fatalf("Subscribe() past the cap = %v, want ErrTooManySubscriptions", err)
+	if !errors.Is(err, ErrTooManySubscriptions) || errors.Is(err, ErrServerAtCapacity) {
+		t.Fatalf("Subscribe() past the cap = %v, want ErrTooManySubscriptions alone", err)
+	}
+	// The caller holds too many, so it is told how many and what to do about
+	// it, which is to let one of its own go (issue 956).
+	if want := "subscriptions: too many active subscriptions: 2 watching, limit 2; unsubscribe from one and retry"; err.Error() != want {
+		t.Errorf("refusal = %q, want %q", err, want)
 	}
 	if m.Len() != 2 {
 		t.Errorf("Len() = %d, want 2", m.Len())
@@ -2151,14 +2156,14 @@ func TestWatcherGate_AtTheSharedLimit_ANewWatcherIsRefused(t *testing.T) {
 	}
 
 	err := second.Subscribe(ctx, subA, gatedURIs[2])
-	if !errors.Is(err, ErrTooManySubscriptions) {
-		t.Fatalf("Subscribe past the shared ceiling = %v, want ErrTooManySubscriptions", err)
+	// The process's ceiling says the server cannot watch another resource
+	// now, not that this caller holds too many, so it is a sentinel of its own
+	// and the wire gives it 503's code (issue 956).
+	if !errors.Is(err, ErrServerAtCapacity) || errors.Is(err, ErrTooManySubscriptions) {
+		t.Fatalf("Subscribe past the shared ceiling = %v, want ErrServerAtCapacity alone", err)
 	}
-	if !strings.Contains(err.Error(), "server-wide") {
-		t.Errorf("refusal = %q, want it to name which ceiling was reached", err)
-	}
-	if !strings.Contains(err.Error(), "limit 2") {
-		t.Errorf("refusal = %q, want it to name the number an operator would have to raise", err)
+	if want := "subscriptions: the server cannot watch another resource now: server-wide, 2 watching, limit 2; retry later"; err.Error() != want {
+		t.Errorf("refusal = %q, want %q: it names which ceiling was reached, the number an operator would raise and what to do", err, want)
 	}
 	if got := reader.readCount(gatedURIs[2]); got != 0 {
 		t.Errorf("reads of the refused URI = %d, want 0: a refusal must not cost an API call", got)
@@ -2211,8 +2216,8 @@ func TestWatcherGate_ARefusalAtTheCeiling_CostsTheCredentialNothing(t *testing.T
 		subscribeAll(t, other, subA, gatedURIs[1])
 
 		err := atCap.Subscribe(context.Background(), subA, gatedURIs[2])
-		if !errors.Is(err, ErrTooManySubscriptions) {
-			t.Fatalf("Subscribe at both ceilings = %v, want ErrTooManySubscriptions", err)
+		if !errors.Is(err, ErrServerAtCapacity) {
+			t.Fatalf("Subscribe at both ceilings = %v, want ErrServerAtCapacity", err)
 		}
 		if !strings.Contains(err.Error(), "server-wide") {
 			t.Errorf("refusal = %q, want the shared ceiling named: it is the one that refused", err)
@@ -2251,8 +2256,8 @@ func TestWatcherGate_ReservesNothingPerCredential(t *testing.T) {
 	}
 
 	err := newcomer.Subscribe(ctx, subA, gatedURIs[1])
-	if !errors.Is(err, ErrTooManySubscriptions) {
-		t.Errorf("Subscribe on a credential holding nothing = %v, want ErrTooManySubscriptions", err)
+	if !errors.Is(err, ErrServerAtCapacity) {
+		t.Errorf("Subscribe on a credential holding nothing = %v, want ErrServerAtCapacity", err)
 	}
 	if got := newcomer.Len(); got != 0 {
 		t.Errorf("the refused credential holds %d watchers, want 0", got)
@@ -2499,5 +2504,108 @@ func TestWatcherGate_WithoutACeiling_AdmitsEveryone(t *testing.T) {
 				t.Errorf("count() = %d after a release, want 0", got)
 			}
 		})
+	}
+}
+
+// TestWatcherGate_AnAdmissionLandingMidAcquire_IsCountedAndNeverOvershot
+// verifies what the compare-and-swap in acquire exists for: another caller's
+// admission landing between this caller's read of the count and its swap. The
+// swap then fails and the read is taken again, so the newcomer is admitted
+// when the racing admission left a slot and refused when it took the last
+// one, and the count never passes the limit either way. The race is placed
+// deterministically through the gate's hook rather than hoped for under load.
+func TestWatcherGate_AnAdmissionLandingMidAcquire_IsCountedAndNeverOvershot(t *testing.T) {
+	tests := []struct {
+		name      string
+		limit     int
+		want      bool
+		wantHeld  int64
+		wantReads int
+	}{
+		{name: "the racing admission left a slot", limit: 2, want: true, wantHeld: 2, wantReads: 2},
+		{name: "the racing admission took the last slot", limit: 1, want: false, wantHeld: 1, wantReads: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWatcherGate(tt.limit)
+			reads := 0
+			g.raced = func() {
+				if reads == 0 {
+					g.held.Add(1) // another caller's admission
+				}
+				reads++
+			}
+			if got := g.acquire(); got != tt.want {
+				t.Errorf("acquire() = %v, want %v", got, tt.want)
+			}
+			if got := g.count(); got != tt.wantHeld {
+				t.Errorf("count() = %d, want %d: the racing admission is counted once and the gate never passes its limit", got, tt.wantHeld)
+			}
+			if reads != tt.wantReads {
+				t.Errorf("the count was read up to the swap %d times, want %d", reads, tt.wantReads)
+			}
+		})
+	}
+}
+
+// TestEvictDemotedLocked_PicksTheLongestDemoted_InEitherMapOrder verifies the
+// victim eviction chooses: the demoted watcher whose lease ended first, never
+// an active one however old its lease, and whatever order the watcher map is
+// walked in. Go randomizes that order, so the walk is repeated until both
+// orders of the two demoted watchers have certainly been met; a choice that
+// depended on the order would pick the other one in about half the rounds.
+func TestEvictDemotedLocked_PicksTheLongestDemoted_InEitherMapOrder(t *testing.T) {
+	base := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
+	for round := range 64 {
+		m := New[string](newFakeReader(), &fakeNotifier{}, quietOptions(Options{}))
+		cancelled := 0
+		older := &watcher[string]{
+			uri: "gitlab://project/1", kind: KindProject, leaseAt: base, demoted: true,
+			cancel: func() { cancelled++ },
+		}
+		newer := &watcher[string]{
+			uri: "gitlab://project/2", kind: KindProject, leaseAt: base.Add(time.Minute), demoted: true,
+			cancel: func() { t.Errorf("round %d: the more recently demoted watcher was cancelled", round) },
+		}
+		active := &watcher[string]{
+			uri: "gitlab://project/3", kind: KindProject, leaseAt: base.Add(-time.Hour),
+			cancel: func() { t.Errorf("round %d: an active watcher was cancelled", round) },
+		}
+		m.watchers = map[string]*watcher[string]{older.uri: older, newer.uri: newer, active.uri: active}
+
+		m.mu.Lock()
+		evicted := m.evictDemotedLocked()
+		m.mu.Unlock()
+
+		if !evicted {
+			t.Fatalf("round %d: evictDemotedLocked() = false with two demoted watchers", round)
+		}
+		if _, kept := m.watchers[older.uri]; kept || !older.evicted || cancelled != 1 {
+			t.Fatalf("round %d: the longest-demoted watcher was not the one evicted (kept=%v, evicted=%v, cancelled=%d)",
+				round, kept, older.evicted, cancelled)
+		}
+		if len(m.watchers) != 2 || newer.evicted || active.evicted {
+			t.Fatalf("round %d: eviction took more than its victim: %d watchers left", round, len(m.watchers))
+		}
+	}
+}
+
+// TestEvictDemotedLocked_AWatcherNotYetPolling_IsEvictedWithoutACancel
+// verifies that a demoted watcher holding no cancel function, which is one
+// whose poll loop was never started, is still evicted and flagged, and that
+// eviction does not call through the missing function.
+func TestEvictDemotedLocked_AWatcherNotYetPolling_IsEvictedWithoutACancel(t *testing.T) {
+	m := New[string](newFakeReader(), &fakeNotifier{}, quietOptions(Options{}))
+	w := &watcher[string]{uri: "gitlab://project/1", kind: KindProject, demoted: true}
+	m.watchers = map[string]*watcher[string]{w.uri: w}
+
+	m.mu.Lock()
+	evicted := m.evictDemotedLocked()
+	m.mu.Unlock()
+
+	if !evicted || !w.evicted || len(m.watchers) != 0 {
+		t.Errorf("evictDemotedLocked() = %v, watcher evicted = %v, %d watchers left; want true, true, 0",
+			evicted, w.evicted, len(m.watchers))
 	}
 }

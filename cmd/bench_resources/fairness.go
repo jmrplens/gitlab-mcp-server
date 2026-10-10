@@ -404,12 +404,6 @@ func (b boundSpec) drain(offered float64) (time.Duration, bool) {
 // restated, so a change of wording there is a compile error here.
 const rateLimitRefusal = toolutil.RateLimitRefusalPrefix
 
-// serverBusyCode is what the listen ceilings refuse with, which is a different
-// number from the buckets': a classifier that keyed on one code alone would
-// count one bound's refusals against the other. Read from the register the
-// server's layers alias, like the wording above.
-const serverBusyCode = tenancy.CodeServerBusyLegacy
-
 // The statuses a refusal can arrive with, spelled here so a refusalSpec reads
 // as data.
 const (
@@ -436,6 +430,28 @@ func registerRefusal(id string, status int) refusalSpec {
 	for _, refusal := range row.Refusals {
 		if refusal.Status == status && refusal.Prefix != "" {
 			return refusalSpec{Status: refusal.Status, Code: refusal.Code, TextPrefix: refusal.Prefix}
+		}
+	}
+	return refusalSpec{}
+}
+
+// registerInBandRefusal is the in-band refusal a register row declares for one
+// method, in the shape this classifier matches: a JSON-RPC error inside an
+// HTTP 200, with the code and the words the register holds to the code that
+// writes them (make check-tenancy, G8), every in-band refusal declaring its
+// words there. Read from the register for registerRefusal's reason: issue 956
+// moved the per-credential listen ceiling's code from -32000 to -42900, and a
+// copy here would have gone on counting every refusal of it as a failure. A
+// row, a method or a channel the register does not declare gives the zero
+// shape, which matches nothing.
+func registerInBandRefusal(id, method string) refusalSpec {
+	row, ok := tenancy.Lookup(id)
+	if !ok {
+		return refusalSpec{}
+	}
+	for _, refusal := range row.Refusals {
+		if refusal.Channel == tenancy.RPC && slices.Contains(refusal.Methods, method) {
+			return refusalSpec{Status: httpOK, Code: refusal.Code, TextPrefix: refusal.Prefix, Method: method}
 		}
 	}
 	return refusalSpec{}
@@ -558,12 +574,12 @@ var fairnessBounds = []boundSpec{
 		ArgsOff: []string{limiterOffArg},
 		ArgsOn:  []string{limiterOffArg},
 		EnvOn:   []string{"GITLAB_MCP_MAX_LISTEN_STREAMS=4"},
-		Refusals: []refusalSpec{
-			{
-				Status: httpOK, Code: serverBusyCode, TextPrefix: "too many open subscriptions/listen streams",
-				Method: methodSubscriptionsListen,
-			},
-		},
+		// The per-credential ceiling (register row HLD-001), whose code is the
+		// buckets' since issue 956: both say the caller made too many
+		// requests, so what makes a refusal this bound's is the method and the
+		// words, and the process's ceiling, which refuses the same method in
+		// other words with 503's code, is not.
+		Refusals:   []refusalSpec{registerInBandRefusal("HLD-001", methodSubscriptionsListen)},
 		NoisyVerbs: []string{verbList},
 		QuietVerbs: []string{verbCall, verbList},
 		Undrivable: "this driver has no verb that opens a stream and holds it, which is what a held-resource ceiling refuses",

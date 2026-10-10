@@ -127,7 +127,7 @@ func filterActionSpecGroupsByTier(groups []ActionSpecGroup, tier edition.Tier) [
 		}
 		kept := make([]toolutil.ActionSpec, 0, len(group.Actions))
 		for _, spec := range group.Actions {
-			if edition.TierFromEdition(spec.Edition) <= tier {
+			if tierServes(tier, spec) {
 				pruned := pruneSpecFieldsByTier(spec, tier)
 				// Apply the default scope-parameter guidance after tier pruning
 				// so the guidance set never references a field that the tier
@@ -141,6 +141,40 @@ func filterActionSpecGroupsByTier(groups []ActionSpecGroup, tier edition.Tier) [
 		}
 		group = actioncatalog.CloneCatalogGroupSpec(group)
 		group.Actions = kept
+		out = append(out, group)
+	}
+	return out
+}
+
+// tierServes reports whether an instance at tier serves the action spec
+// declares: its minimum tier, from [toolutil.ActionSpec.Edition] via
+// [edition.TierFromEdition], is at most tier. It is the one rule the tier
+// filter and the record of what it removed share, so the two cannot disagree
+// about an action.
+func tierServes(tier edition.Tier, spec toolutil.ActionSpec) bool {
+	return edition.TierFromEdition(spec.Edition) <= tier
+}
+
+// tierRemovedSpecGroups returns, group by group, the actions
+// [filterActionSpecGroupsByTier] drops at tier, unpruned, and leaves out a
+// group that loses none. It is the other half of that filter: what a session
+// at tier is not served, which issue 956 records so a call for one of them is
+// answered with the tier it needs (see [TierWithheld]). Input groups are cloned
+// for the filter's reason.
+func tierRemovedSpecGroups(groups []ActionSpecGroup, tier edition.Tier) []ActionSpecGroup {
+	var out []ActionSpecGroup
+	for _, group := range groups {
+		var removed []toolutil.ActionSpec
+		for _, spec := range group.Actions {
+			if !tierServes(tier, spec) {
+				removed = append(removed, spec)
+			}
+		}
+		if len(removed) == 0 {
+			continue
+		}
+		group = actioncatalog.CloneCatalogGroupSpec(group)
+		group.Actions = removed
 		out = append(out, group)
 	}
 	return out

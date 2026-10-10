@@ -10,8 +10,8 @@ package tenancy
 //
 // Authority is the credential's own, which is why most of these are class C:
 // two credentials of one tenant may carry different scopes and so be served
-// different surfaces. A narrowed surface says why wherever it can (Withheld),
-// and a tier narrowing does not yet (F-10, issue 956).
+// different surfaces. A narrowed surface says why (Withheld), a tier narrowing
+// included since issue 956 answered F-10.
 //
 //nolint:maintidx // one table of data, cyclomatic complexity 1: its length is the number of decisions it declares.
 func authorizeDecisions() []Decision {
@@ -108,17 +108,20 @@ func authorizeDecisions() []Decision {
 			Values: []string{"TierNamespacePageSize", "TierNamespaceMaxPages", "TierMembershipPageSize", "TierMembershipMaxPages"},
 			Source: Constant, Zero: ZeroNotApplicable,
 			Flags: []string{"--tier"}, Envs: []string{"GITLAB_MCP_TIER"}, Malformed: RefuseStartup,
-			Decided:  []string{"issue 900", "issue 952", "issue 1224"},
-			Findings: []string{"F-10"},
-			// The tier filter runs before the withheld lists exist, so an action
-			// it removed is answered as unknown rather than withheld.
+			// Issue 956 answered F-10: the actions the tier filter removed are
+			// recorded beside the scope and operator narrowings, so a call for
+			// one is answered as existing and needing a higher tier, and a
+			// cross-link to one is published like any withheld action's. The
+			// answer is Ask the operator: the caller cannot change the license,
+			// and an operator can pin the tier when detection was wrong, which
+			// the answer says where the tier was detected rather than pinned.
+			// An action the operator excluded by name is never recorded, so
+			// no answer names one (AUT-004).
+			Decided: []string{"issue 900", "issue 952", "issue 1224", "issue 956"},
 			Refusals: []Refusal{
+				{Methods: []string{"tools/call"}, Channel: Withheld, Answer: AskOperator, At: withheld},
 				{
-					Methods: []string{"tools/call"}, Channel: Unknown, Answer: NoAnswer,
-					At: refuse(pkgDynamic, "Registry.unknownActionMessage"),
-				},
-				{
-					Methods: []string{"tools/list"}, Channel: Absent, Answer: NoAnswer,
+					Methods: []string{"tools/list"}, Channel: Absent, Answer: AskOperator,
 					At: refuse(pkgTools, "filterActionSpecGroupsByTier"),
 				},
 			},
@@ -128,8 +131,9 @@ func authorizeDecisions() []Decision {
 				alias(pkgGitLab, "membershipPageSize", "TierMembershipPageSize"),
 				alias(pkgGitLab, "membershipMaxPages", "TierMembershipMaxPages"),
 				enforce(pkgGitLab, "Client.DetectTier"),
-				refuse(pkgDynamic, "Registry.unknownActionMessage"),
+				enforce(pkgTools, "TierWithheld"),
 				refuse(pkgTools, "filterActionSpecGroupsByTier"),
+				withheld,
 			},
 		},
 		{

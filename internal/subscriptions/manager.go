@@ -43,8 +43,17 @@ var (
 var ErrNotSubscribable = errors.New("subscriptions: resource is not subscribable")
 
 // ErrTooManySubscriptions is returned when a manager is already watching
-// its configured maximum.
+// its configured maximum, which in HTTP mode is one credential's: the caller
+// holds too many, and letting one of its own go is what admits the next.
 var ErrTooManySubscriptions = errors.New("subscriptions: too many active subscriptions")
+
+// ErrServerAtCapacity is returned when the [WatcherGate] the managers share is
+// full: the server cannot watch another resource right now, whoever asks, and
+// the caller may hold nothing. It is a sentinel of its own rather than a
+// variant of [ErrTooManySubscriptions] because the two say different things,
+// and each refusal carries the code the standard assigns to what it says
+// (issue 956): too many requests for the first, service unavailable for this.
+var ErrServerAtCapacity = errors.New("subscriptions: the server cannot watch another resource now")
 
 // ErrClosed is returned once the manager has been shut down.
 var ErrClosed = errors.New("subscriptions: manager is closed")
@@ -210,26 +219,20 @@ func (o Options) withDefaults() Options {
 	if o.MinInterval <= 0 {
 		o.MinInterval = DefaultMinInterval
 	}
-	if o.MinInterval > o.BaseInterval {
-		o.MinInterval = o.BaseInterval
-	}
+	o.MinInterval = min(o.MinInterval, o.BaseInterval)
 	if o.Lease <= 0 {
 		o.Lease = DefaultLease
 	}
 	if o.SlowInterval <= 0 {
 		o.SlowInterval = DefaultSlowInterval
 	}
-	if o.SlowInterval < o.BaseInterval {
-		// A "slow" cadence faster than the normal one would make demotion
-		// a speed-up, which nothing in the design expects.
-		o.SlowInterval = o.BaseInterval
-	}
+	// A "slow" cadence faster than the normal one would make demotion a
+	// speed-up, which nothing in the design expects.
+	o.SlowInterval = max(o.SlowInterval, o.BaseInterval)
 	if o.MaxLifetime <= 0 {
 		o.MaxLifetime = DefaultMaxLifetime
 	}
-	if o.MaxLifetime < o.Lease {
-		o.MaxLifetime = o.Lease
-	}
+	o.MaxLifetime = max(o.MaxLifetime, o.Lease)
 	if o.MaxWatchers <= 0 {
 		o.MaxWatchers = DefaultMaxWatchers
 	}
@@ -263,6 +266,10 @@ func (o Options) withDefaults() Options {
 type WatcherGate struct {
 	limit int
 	held  atomic.Int64
+	// raced, when set, runs between acquire's read of the count and its swap,
+	// which is where another caller's admission lands under contention. Only
+	// this package's tests set it, to place that race instead of hoping for it.
+	raced func()
 }
 
 // NewWatcherGate returns a gate admitting limit concurrent watchers across
@@ -288,6 +295,9 @@ func (g *WatcherGate) acquire() bool {
 		held := g.held.Load()
 		if held >= int64(g.limit) {
 			return false
+		}
+		if g.raced != nil {
+			g.raced()
 		}
 		if g.held.CompareAndSwap(held, held+1) {
 			return true
@@ -460,12 +470,13 @@ func (m *Manager[S]) Subscribe(ctx context.Context, subscriber S, uri string) er
 		// client's own error names what it asked for.
 		m.opts.Logger.Warn("subscription refused: this process is at its watcher ceiling",
 			"kind", kind.String(), "watching", held, "limit", limit)
-		return fmt.Errorf("%w: server-wide, %d watching, limit %d", ErrTooManySubscriptions, held, limit)
+		return fmt.Errorf("%w: server-wide, %d watching, limit %d; retry later", ErrServerAtCapacity, held, limit)
 	}
 	if len(m.watchers) >= m.opts.MaxWatchers && !m.evictDemotedLocked() {
 		m.opts.SharedWatchers.release()
 		m.mu.Unlock()
-		return fmt.Errorf("%w: %d watching, limit %d", ErrTooManySubscriptions, len(m.watchers), m.opts.MaxWatchers)
+		return fmt.Errorf("%w: %d watching, limit %d; unsubscribe from one and retry",
+			ErrTooManySubscriptions, len(m.watchers), m.opts.MaxWatchers)
 	}
 	// Reserve the slot before releasing the lock so two concurrent
 	// subscribes cannot both pass the cap check. An eviction just above
@@ -1134,8 +1145,11 @@ func (m *Manager[S]) remainingPause() time.Duration {
 // do not resume in lockstep.
 func jitter(d time.Duration) time.Duration {
 	spread := float64(d) * jitterFraction
-	delta := (rand.Float64()*2 - 1) * spread //nolint:gosec // scheduling jitter, not a security decision
-	out := time.Duration(float64(d) + delta)
+	// One uniform draw across the window from d-spread to d+spread. Spelled
+	// from its lower edge rather than as d plus a symmetric delta, because a
+	// symmetric delta reads the same added or subtracted, so a sign error in
+	// it could never be seen.
+	out := time.Duration(float64(d) - spread + 2*spread*rand.Float64()) //nolint:gosec // scheduling jitter, not a security decision
 	if out <= 0 {
 		return d
 	}

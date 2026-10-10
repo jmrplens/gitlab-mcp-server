@@ -297,9 +297,9 @@ var errStoppedBeforeReady = errors.New("the server stopped before its tool catal
 // (jsonrpc2 hands the write a notDone context on purpose). The only choice left
 // is what that response says.
 //
-// codeServerBusy is what this server already uses for refusals that are about
-// server state rather than the request, and it is honest here: the request was
-// well formed and the same request a moment later succeeds. Returning ctx.Err()
+// The code is 503's (issue 956), since what the answer says is that the server
+// cannot serve the request yet, and it is honest here: the request was well
+// formed and the same request a moment later succeeds. Returning ctx.Err()
 // instead would be marshaled as -32001, "unknown error", which tells a client
 // nothing and is indistinguishable from a bug; the cause goes to the log, where
 // whoever is debugging a slow start can read it.
@@ -307,7 +307,7 @@ func (g *readinessGate) abandoned(ctx context.Context, method string, started ti
 	slog.DebugContext(ctx, "method gave up waiting for the tool catalog",
 		"method", method, "waited_ms", time.Since(started).Milliseconds(), "cause", cause)
 	return &jsonrpc.Error{
-		Code: codeServerBusy,
+		Code: codeUnavailable,
 		Message: "the server is still building its tool catalog and this request ended before it was ready; " +
 			"retry it",
 	}

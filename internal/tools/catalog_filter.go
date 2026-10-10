@@ -13,10 +13,13 @@
 package tools
 
 import (
+	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
@@ -30,6 +33,14 @@ import (
 type WithheldActions struct {
 	ByTokenScope []actioncatalog.ScopeWithheld
 	ByOperator   []string
+	// ByTier are the actions the instance's licensing tier removed, each key
+	// with the lowest tier that serves its action, recorded by [TierWithheld]
+	// rather than by [FilterActionCatalog], since the tier filter runs before
+	// any catalog that function sees exists. Only the operator can change the
+	// tier, so the answer to one asks the operator, as for ByOperator, and
+	// says which tier the action needs (issue 956). No action ExcludedByName
+	// is among them.
+	ByTier []actioncatalog.TierWithheld
 	// ExcludedByName are the actions --exclude-tools removed. They are kept
 	// apart from the two above and never reach the dynamic registry's
 	// withheld lists: a withheld action is one the model is told about so it
@@ -212,6 +223,108 @@ func actionScopeWithheld(action actioncatalog.Action, cfg *config.ServerConfig) 
 		withheld = append(withheld, actioncatalog.ScopeWithheld{ID: key, ByGitLab: byGitLab, ByServer: byServer})
 	}
 	return withheld
+}
+
+// TierWithheld lists every key of an action the licensing tier of cfg removes
+// from the catalog an instance class starts from, each with the lowest tier
+// that serves it, leaving out every action cfg's exclusions name (issue 956).
+//
+// The tier filter runs while the catalog is built, before anything
+// [FilterActionCatalog] records, so an action it removed reached none of the
+// withheld bookkeeping: the dynamic surface answered a call for one with
+// "unknown action" and near-miss suggestions, which reads as a capability the
+// server lacks, and dropped every cross-link to one. Recording them lets it
+// answer that the action exists and needs a higher tier, which an operator can
+// pin when detection was wrong, and publish the links as it publishes the ones
+// the other filters withheld.
+//
+// An action the operator excluded by name is left out whatever tier it needs,
+// as [WithheldActions.ExcludedByName] is kept out of the other two lists:
+// naming it back would contradict the exclusion (register row AUT-004). The
+// operator's entries are resolved against the removed actions themselves,
+// since the catalog the exclusions are otherwise resolved against no longer
+// holds them.
+//
+// The removed actions are read once per tier and instance class for the
+// process; at Ultimate nothing is removed and nothing is read.
+func TierWithheld(dotcom bool, cfg *config.ServerConfig) ([]actioncatalog.TierWithheld, error) {
+	if cfg.Tier >= edition.Ultimate {
+		return nil, nil
+	}
+	removed, err := sharedTierRemoved(dotcom, cfg.Tier)
+	if err != nil {
+		return nil, err
+	}
+	excluded := removed.ExcludedActionIDs(cfg.ExcludeTools)
+	var withheld []actioncatalog.TierWithheld
+	for _, action := range removed.Actions() {
+		if _, found := slices.BinarySearch(excluded, string(action.ID)); found {
+			continue
+		}
+		entry := tierWithheldEntry(action, cfg)
+		for _, key := range actionKeys(action) {
+			entry.ID = key
+			withheld = append(withheld, entry)
+		}
+	}
+	return withheld, nil
+}
+
+// tierWithheldEntry is what [TierWithheld] records of one action the tier
+// removed, but for the key: the tier it needs and what would still withhold it
+// from this session once the tier served it, filed as [FilterActionCatalog]
+// files a narrowing. A write of a read-only deployment goes under the operator
+// whatever scope the credential lacks besides, so read-only mode is named
+// alone; otherwise the scopes the credential lacks are named as the scope
+// narrowing names them. Without this a call for a Premium write on a
+// read-only Free deployment asked the operator to pin the tier, and the pinned
+// deployment then answered that it withholds the action, which sent the model
+// to the operator twice.
+func tierWithheldEntry(action actioncatalog.Action, cfg *config.ServerConfig) actioncatalog.TierWithheld {
+	entry := actioncatalog.TierWithheld{Edition: action.Edition}
+	if cfg.ReadOnly && !action.ReadOnly {
+		entry.ReadOnlyMode = true
+		return entry
+	}
+	entry.ByGitLab, entry.ByServer = gitlabclient.MissingClassicScopes(action.ClassicNeed(), MetaToolScopes[action.ToolName], cfg.TokenScopes, cfg.ReadAPIOnly)
+	return entry
+}
+
+// sharedTierRemoved is [sharedTierRemovedCatalog], a seam the tests replace to
+// reach the failure path of [TierWithheld].
+var sharedTierRemoved = sharedTierRemovedCatalog
+
+// sharedTierRemovedCatalog is the catalog of the actions the tier removes,
+// built once per tier and instance class and shared like the base catalog.
+func sharedTierRemovedCatalog(dotcom bool, tier edition.Tier) (*actioncatalog.Catalog, error) {
+	removed, _, err := ShareCatalog("tier-removed|"+BaseCatalogKey(tier, dotcom, false), func() (*actioncatalog.Catalog, WithheldActions, error) {
+		built, buildErr := tierRemovedCatalog(UnboundClient(dotcom), tier)
+		return built, WithheldActions{}, buildErr
+	})
+	return removed, err
+}
+
+// tierRemovedGroup materializes one group of removed actions, a seam the tests
+// replace to reach the failure path of [tierRemovedCatalog].
+var tierRemovedGroup = groupFromActionSpecGroup
+
+// tierRemovedCatalog builds a catalog of the actions the tier filter removes
+// at tier and nothing else, through the path a served catalog's groups take,
+// so each action carries the ID, the aliases, the individual tool name and the
+// edition a served one would. It is never served, so it is not validated as
+// one: it only names what was removed.
+func tierRemovedCatalog(client *gitlabclient.Client, tier edition.Tier) (*actioncatalog.Catalog, error) {
+	catalog := actioncatalog.NewCatalog()
+	for _, specGroup := range tierRemovedSpecGroups(CollectActionSpecs(client), tier) {
+		group, err := tierRemovedGroup(specGroup)
+		if err != nil {
+			return nil, fmt.Errorf("build tier-removed group %q: %w", specGroup.ToolName, err)
+		}
+		if err = addFilteredGroup(catalog, group); err != nil {
+			return nil, fmt.Errorf("add tier-removed group %q: %w", group.ToolName, err)
+		}
+	}
+	return catalog, nil
 }
 
 // RemovedActionKeys lists every canonical action ID, and every alias resolving

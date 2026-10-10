@@ -467,10 +467,11 @@ Write the list against the whole catalog and do not try to gate it by tier.
 What one session is shown is narrowed for it at registration:
 `Registry.publishedRelatedActions` in `internal/tools/dynamic` drops a
 cross-link this session cannot run and cannot be told anything useful about,
-which is an action above the resolved tier or one `--exclude-tools` removed,
-and keeps one a filter withheld, because asking for that one is answered with
-the narrowing rather than with `unknown action`. A cross-link that resolves is
-published under its canonical ID whatever spelling it was written in.
+which is an action `--exclude-tools` removed or one no catalog of this tree
+carries, and keeps one a filter withheld, the licensing tier included since
+issue 956, because asking for that one is answered with the narrowing rather
+than with `unknown action`. A cross-link that resolves is published under its
+canonical ID whatever spelling it was written in.
 
 The same demand holds for every sentence a model reads, not only the fields
 that carry IDs: a hint, the message of an error a handler returns, a refusal,

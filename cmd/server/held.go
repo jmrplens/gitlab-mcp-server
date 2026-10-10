@@ -261,8 +261,10 @@ func heldRequestsRefusal(ctx context.Context, req mcp.Request, method string, li
 }
 
 // heldRefusalCode is the in-band "retry later" code the ceiling refuses with
-// where the method carries a JSON-RPC error.
-const heldRefusalCode = tenancy.CodeTooManyRequests // register row HLD-011
+// where the method carries a JSON-RPC error: 503's, the code the gate answers
+// the same refusal with, since what it says is that the server cannot serve
+// the call right now (issue 956).
+const heldRefusalCode = tenancy.CodeUnavailable // register row HLD-011
 
 // processBusyFailure is the refusal a request the gate counted meets when a
 // ceiling on what the process holds is full: 503, in the gate, before the SDK

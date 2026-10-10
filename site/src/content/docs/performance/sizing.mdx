@@ -279,9 +279,11 @@ The process watcher ceiling refuses rather than stopping another credential's
 watch, because a watcher belongs to one credential and stopping one to admit
 another is the trade this server does not make; at its own ceiling of ten, a
 credential first gives up its longest-demoted watch to make room and is refused
-only when none is demoted. Both refusals carry `-32000`: the process one says
-`server-wide` in as many words, and the per-credential one carries that
-credential's own count, so a client's error says which number it met. A
+only when none is demoted. The two refusals say different things and carry
+different codes: the process one says the server cannot watch another resource
+now, `server-wide`, with `-50300`, and the per-credential one says the caller
+holds too many, with that credential's own count and `-42900`, so a client's
+error says which number it met. A
 credential is one API call to mint, so a per-credential number multiplies by
 however many a caller holds and only the process-wide one bounds the process:
 52 credentials at their cap of ten are enough to reach it. Holding it is cheap

@@ -6899,9 +6899,10 @@ second beside a call the same fine-grained credential is served.
 which sends the request and returns without awaiting its response, so
 `Subscribe` returns nil whatever the server answers. Every refusal this server
 makes on the listen path is therefore invisible to that client: the
-per-credential rate limit (`-42900`); both listen-stream ceilings, both watcher
-caps, a GitLab rate limit on the first read and a server shutting down
-(`-32000`); an unsubscribable or unreadable URI (`-32602`); and a transient
+per-credential rate limit, the per-credential listen-stream ceiling and watcher
+cap, and a GitLab rate limit on the first read (`-42900`); the process
+listen-stream ceiling and watcher cap and a server shutting down (`-50300`, both
+codes the ones issue 956 gave them in place of `-32000`); an unsubscribable or unreadable URI (`-32602`); and a transient
 GitLab failure on the first read (`-32603`).
 `Subscribe` also records the URI as subscribed before it sends the listen, and
 nothing removes the record on a refusal, so a second `Subscribe` to the same URI

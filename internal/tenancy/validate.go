@@ -113,7 +113,7 @@ func rowRules() []rowRule {
 // setRules are the checks made over the register as a whole.
 func setRules() []setRule {
 	return []setRule{
-		{"one-code-per-answer", "INV-012", checkOneCodePerAnswer},
+		{"code-mirrors-status", "INV-012", checkCodeMirrorsStatus},
 		{"unique", "one row per requirement", checkUnique},
 		{"complete", "one row per requirement", checkComplete},
 	}
@@ -170,13 +170,13 @@ func checkAcrossKeys(d Decision, _ map[string]Decision) []string {
 func checkChannelCarried(d Decision, _ map[string]Decision) []string {
 	var out []string
 	for i := range d.Refusals {
-		out = append(out, refusalCarriage(&d.Refusals[i], d.RecordsDeparture("INV-011"))...)
+		out = append(out, refusalCarriage(&d.Refusals[i])...)
 	}
 	return out
 }
 
 // refusalCarriage is [checkChannelCarried] for one refusal.
-func refusalCarriage(r *Refusal, legacyCodeRecorded bool) []string {
+func refusalCarriage(r *Refusal) []string {
 	var out []string
 	if len(r.Methods) == 0 {
 		out = append(out, "a refusal names no method")
@@ -205,11 +205,17 @@ func refusalCarriage(r *Refusal, legacyCodeRecorded bool) []string {
 		}
 		return out
 	}
-	return append(out, codeCarriage(r.Code, legacyCodeRecorded)...)
+	return append(out, codeCarriage(r.Code)...)
 }
 
 // codeCarriage is what MCP and the SDK allow of an error's code.
-func codeCarriage(code int, legacyCodeRecorded bool) []string {
+//
+// The legacy sub-range is refused with no exception. A finding used to excuse
+// it, F-07, while the listen and watcher ceilings still answered -32000; issue
+// 956 retired the code from every refusal, and MCP 2026-07-28 says new codes
+// must not be allocated there and receivers must not assume a meaning, so no
+// row has a reason left to use one.
+func codeCarriage(code int) []string {
 	if code == 0 {
 		return []string{"an error with no code reaches the client as code 0"}
 	}
@@ -219,7 +225,7 @@ func codeCarriage(code int, legacyCodeRecorded bool) []string {
 	if reservedForMCP(code) && !mcpDefinesCode(code) {
 		return []string{fmt.Sprintf("code %d is in the range MCP reserves and does not define", code)}
 	}
-	if inLegacyRange(code) && !legacyCodeRecorded {
+	if inLegacyRange(code) {
 		return []string{fmt.Sprintf("code %d is in the legacy range new implementations should not use", code)}
 	}
 	return nil
@@ -409,17 +415,26 @@ func danglingReferences(d Decision, rows map[string]Decision) []string {
 	return out
 }
 
-// checkOneCodePerAnswer holds each class of answer to one in-band code across
-// the rows, so a client learns one number for "retry later". It compares the
-// codes this server allocates; JSON-RPC's own codes carry the protocol's
-// meaning whichever answer they come with. A row that records the divergence
-// is left out of the comparison.
-func checkOneCodePerAnswer(ds []Decision) []*ViolationError {
-	type first struct {
-		code int
-		id   string
+// checkCodeMirrorsStatus holds every in-band code this server allocates to the
+// HTTP status the standard assigns to what its refusal says, mirrored as the
+// status times -100, the convention the gate's codes already follow (issue
+// 956). A refusal that tells its caller it made too many requests is 429's
+// -42900, and one that says the server cannot serve it right now is 503's
+// -50300, so a client reads the same number for the same thing in-band and at
+// the gate. What a refusal can say is read off its class: its code must mirror
+// a status some gate refusal of the same class answers with, so a class
+// carries one code for each thing it says and none the gate would not answer
+// it with. JSON-RPC's own codes carry the protocol's meaning whichever answer
+// they come with and are left out, and so is a row that records the departure.
+func checkCodeMirrorsStatus(ds []Decision) []*ViolationError {
+	statuses := map[Answer][]int{}
+	for _, d := range ds {
+		for _, r := range d.Refusals {
+			if r.Channel == Gate && !has(statuses[r.Answer], r.Status) {
+				statuses[r.Answer] = append(statuses[r.Answer], r.Status)
+			}
+		}
 	}
-	seen := map[Answer]first{}
 	var out []*ViolationError
 	for _, d := range ds {
 		if d.RecordsDeparture("INV-012") {
@@ -429,19 +444,27 @@ func checkOneCodePerAnswer(ds []Decision) []*ViolationError {
 			if r.Channel != RPC || standardJSONRPCCode(r.Code) {
 				continue
 			}
-			f, ok := seen[r.Answer]
-			if !ok {
-				seen[r.Answer] = first{code: r.Code, id: d.ID}
+			if r.Code%100 == 0 && has(statuses[r.Answer], r.Code/-100) {
 				continue
 			}
-			if f.code != r.Code {
-				out = append(out, &ViolationError{ID: d.ID, Detail: fmt.Sprintf(
-					"answers %q in-band with code %d where %s uses %d", r.Answer, r.Code, f.id, f.code,
-				)})
-			}
+			out = append(out, &ViolationError{ID: d.ID, Detail: fmt.Sprintf(
+				"answers %q in-band with code %d, which mirrors no status the gate answers it with (%s)",
+				r.Answer, r.Code, statusList(statuses[r.Answer]),
+			)})
 		}
 	}
 	return out
+}
+
+// statusList spells the statuses a class is answered with at the gate, in the
+// order the register first declares them, or "none".
+func statusList(statuses []int) string {
+	if len(statuses) == 0 {
+		return "none"
+	}
+	// fmt spells an []int as "[429 503]"; the register imports neither
+	// strconv nor anything else that would spell one number at a time.
+	return strings.ReplaceAll(strings.Trim(fmt.Sprint(statuses), "[]"), " ", ", ")
 }
 
 // checkUnique refuses two rows for one requirement.

@@ -111,7 +111,9 @@ const methodToolsList = "tools/list"
 
 // rateLimitedErrorCode is the JSON-RPC code a refused resource or prompt
 // request carries. It mirrors HTTP 429 the way the transport gates' code
-// does, so a client sees one number for "come back later" on both layers.
+// does, so a client sees one number for "too many requests" on both layers;
+// a refusal saying the server cannot serve the request right now carries
+// 503's instead (issue 956).
 const rateLimitedErrorCode = tenancy.CodeTooManyRequests // register row RTC-001
 
 // RateLimitRefusalPrefix and rateLimitRetrySuffix are how every refusal this
