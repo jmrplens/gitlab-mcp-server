@@ -70,7 +70,7 @@
         },
         {
           "name": "GITLAB_MCP_TIER",
-          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
+          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, then, on GitLab.com, from the top-level groups the token is a member of, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
           "isRequired": false,
           "choices": [
             "free",
@@ -150,7 +150,7 @@
         },
         {
           "name": "GITLAB_MCP_TIER",
-          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
+          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, then, on GitLab.com, from the top-level groups the token is a member of, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
           "isRequired": false,
           "choices": [
             "free",
@@ -230,7 +230,7 @@
         },
         {
           "name": "GITLAB_MCP_TIER",
-          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
+          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, then, on GitLab.com, from the top-level groups the token is a member of, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
           "isRequired": false,
           "choices": [
             "free",
@@ -329,7 +329,7 @@
         },
         {
           "name": "GITLAB_MCP_TIER",
-          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
+          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, then, on GitLab.com, from the top-level groups the token is a member of, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
           "isRequired": false,
           "choices": [
             "free",
@@ -486,7 +486,7 @@
         },
         {
           "name": "GITLAB_MCP_TIER",
-          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
+          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, then, on GitLab.com, from the top-level groups the token is a member of, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
           "isRequired": false,
           "choices": [
             "free",
@@ -645,7 +645,7 @@
         },
         {
           "name": "GITLAB_MCP_TIER",
-          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
+          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, then, on GitLab.com, from the top-level groups the token is a member of, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
           "isRequired": false,
           "choices": [
             "free",
@@ -805,7 +805,7 @@
         },
         {
           "name": "GITLAB_MCP_TIER",
-          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
+          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, then, on GitLab.com, from the top-level groups the token is a member of, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
           "isRequired": false,
           "choices": [
             "free",
@@ -965,7 +965,7 @@
         },
         {
           "name": "GITLAB_MCP_TIER",
-          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
+          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, then, on GitLab.com, from the top-level groups the token is a member of, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
           "isRequired": false,
           "choices": [
             "free",

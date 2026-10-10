@@ -121,7 +121,7 @@ Add these to the `env` block (and, for Docker, a matching `-e NAME` in
 | Variable                 | Default   | Purpose                                                                                          |
 | ------------------------ | --------- | ------------------------------------------------------------------------------------------------ |
 | `GITLAB_MCP_TOOL_SURFACE`           | `dynamic` | Tool surface: `dynamic` (2 find/execute tools, lowest token use), `meta` (one tool per domain group: 34 on Free, up to 52 on GitLab.com Ultimate, fewer for a token without `admin_mode`; see Step 4), `individual` (one tool per action) |
-| `GITLAB_MCP_TIER`            | detected  | Force `free`, `premium`, or `ultimate`, used as written. Unset, the tier is detected from the instance license, then from the plans of the namespaces the token administers, and falls back to `free` |
+| `GITLAB_MCP_TIER`            | detected  | Force `free`, `premium`, or `ultimate`, used as written. Unset, the tier is detected from the instance license, then from the plans of the namespaces the token administers, then on GitLab.com from the top-level groups the token is a member of, and falls back to `free` |
 | `GITLAB_MCP_READ_ONLY`       | `false`   | Remove every mutating action; reads keep working                                                  |
 | `GITLAB_MCP_SAFE_MODE`       | `false`   | Mutating actions answer with a preview card (the action and the arguments it would send) instead of executing |
 | `GITLAB_MCP_SKIP_TLS_VERIFY` | `false`   | Allow self-signed certificates on self-managed instances                                          |

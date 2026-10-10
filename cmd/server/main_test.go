@@ -1690,6 +1690,10 @@ func TestPrintHelp_EachDefaultIsPrintedInItsOwnEntry(t *testing.T) {
 		{entry: "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", want: "a byte count, or one with a KB, MB or GB suffix"},
 		{entry: "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", want: fmt.Sprintf("(default %dGB, at most %dGB)", config.DefaultMaxFileSize>>30, config.MaxFileSize>>30)},
 		{entry: "-resource-documentation string", want: "(default: this project's OAuth application page)"},
+		// The tier entry said "omit to detect from license", the one step
+		// that answers nobody on GitLab.com, and named neither the namespace
+		// plans nor the groups a member of a paid group is detected by.
+		{entry: "GITLAB_MCP_TIER", want: "omit to detect it from the license, then the plans of the namespaces the token administers, then, on GitLab.com, of the groups it is a member of"},
 	} {
 		t.Run(tc.entry+" "+tc.want, func(t *testing.T) {
 			got := helpEntry(help, tc.entry)

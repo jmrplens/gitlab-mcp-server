@@ -630,7 +630,9 @@ ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_MCP_TOOL_SURFACE           Canonical tool surface: dynamic|meta|individual (default dynamic)
   GITLAB_MCP_CAPABILITY_SURFACE     Resource/prompt surface: full|minimal (default full)
   GITLAB_MCP_META_PARAM_SCHEMA      Meta-tool input schema: opaque|compact|full (default opaque)
-  GITLAB_MCP_TIER                   Force licensing tier: free|ce|premium|ultimate; omit to detect from license
+  GITLAB_MCP_TIER                   Force licensing tier: free|ce|premium|ultimate; omit to detect it
+                                    from the license, then the plans of the namespaces the token
+                                    administers, then, on GitLab.com, of the groups it is a member of
   GITLAB_MCP_READ_ONLY              Expose only read-only tools: true/false (default false)
   GITLAB_MCP_SAFE_MODE              Intercept mutating tools and return a preview (default false)
   GITLAB_MCP_EMBEDDED_RESOURCES     Embed canonical MCP resource links in get_* results (default true)
