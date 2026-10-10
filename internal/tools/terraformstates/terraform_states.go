@@ -26,30 +26,38 @@ type ListInput struct {
 // lockedAt and deletedAt are nullable, null for a state that is unlocked and
 // not scheduled for deletion, and client-go decodes a null into the zero time,
 // so they are left out then rather than written as the year one. The latest
-// version's serial and download path are nullable too, for a state nothing
-// has written yet. The package's tests hold each field to the schema.
+// version's serial and download path are nullable too, and its two times,
+// which client-go's documents select and decode as well, are Time! on the
+// version and written whenever there is one: the schema lets latestVersion
+// itself be null, for a state nothing has written yet, and client-go decodes
+// that into a version whose times are zero, so they are left out then. The
+// package's tests hold each field to the schema.
 type StateItem struct {
 	toolutil.HintableOutput
-	Name         string `json:"name"`
-	LatestSerial uint64 `json:"latest_serial,omitempty"`
-	DownloadPath string `json:"download_path,omitempty"`
-	CreatedAt    string `json:"created_at"`
-	UpdatedAt    string `json:"updated_at"`
-	LockedAt     string `json:"locked_at,omitempty"`
-	DeletedAt    string `json:"deleted_at,omitempty"`
+	Name                   string `json:"name"`
+	LatestSerial           uint64 `json:"latest_serial,omitempty"`
+	DownloadPath           string `json:"download_path,omitempty"`
+	LatestVersionCreatedAt string `json:"latest_version_created_at,omitempty"`
+	LatestVersionUpdatedAt string `json:"latest_version_updated_at,omitempty"`
+	CreatedAt              string `json:"created_at"`
+	UpdatedAt              string `json:"updated_at"`
+	LockedAt               string `json:"locked_at,omitempty"`
+	DeletedAt              string `json:"deleted_at,omitempty"`
 }
 
 // toStateItem converts a state as client-go decodes it, which the list and
 // the get both answer with.
 func toStateItem(s gl.TerraformState) StateItem {
 	return StateItem{
-		Name:         s.Name,
-		LatestSerial: s.LatestVersion.Serial,
-		DownloadPath: s.LatestVersion.DownloadPath,
-		CreatedAt:    toolutil.RFC3339(s.CreatedAt),
-		UpdatedAt:    toolutil.RFC3339(s.UpdatedAt),
-		LockedAt:     toolutil.RFC3339(s.LockedAt),
-		DeletedAt:    toolutil.RFC3339(s.DeletedAt),
+		Name:                   s.Name,
+		LatestSerial:           s.LatestVersion.Serial,
+		DownloadPath:           s.LatestVersion.DownloadPath,
+		LatestVersionCreatedAt: toolutil.RFC3339(s.LatestVersion.CreatedAt),
+		LatestVersionUpdatedAt: toolutil.RFC3339(s.LatestVersion.UpdatedAt),
+		CreatedAt:              toolutil.RFC3339(s.CreatedAt),
+		UpdatedAt:              toolutil.RFC3339(s.UpdatedAt),
+		LockedAt:               toolutil.RFC3339(s.LockedAt),
+		DeletedAt:              toolutil.RFC3339(s.DeletedAt),
 	}
 }
 

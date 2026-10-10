@@ -86,11 +86,16 @@ func TestList_Error(t *testing.T) {
 func TestList_ReadsEveryFieldOfEveryState(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"project":{"terraformStates":{"nodes":[
-			{"name":"production","latestVersion":{"serial":11,"downloadPath":"/dl/one"},
+			{"name":"production","latestVersion":{"serial":11,"downloadPath":"/dl/one",
+			  "createdAt":"2026-05-06T07:08:09Z","updatedAt":"2026-06-07T08:09:10Z"},
 			 "createdAt":"2026-01-02T03:04:05Z","updatedAt":"2026-02-03T04:05:06Z",
 			 "lockedAt":"2026-03-04T05:06:07Z","deletedAt":"2026-04-05T06:07:08Z"},
-			{"name":"staging","latestVersion":{"serial":22,"downloadPath":"/dl/two"},
+			{"name":"staging","latestVersion":{"serial":22,"downloadPath":"/dl/two",
+			  "createdAt":"2025-07-08T09:10:11Z","updatedAt":"2025-08-09T10:11:12Z"},
 			 "createdAt":"2025-05-06T07:08:09Z","updatedAt":"2025-06-07T08:09:10Z",
+			 "lockedAt":null,"deletedAt":null},
+			{"name":"unwritten","latestVersion":null,
+			 "createdAt":"2025-09-10T11:12:13Z","updatedAt":"2025-09-10T11:12:13Z",
 			 "lockedAt":null,"deletedAt":null}
 		]}}}}`)
 	}))
@@ -101,12 +106,18 @@ func TestList_ReadsEveryFieldOfEveryState(t *testing.T) {
 	want := []StateItem{
 		{
 			Name: "production", LatestSerial: 11, DownloadPath: "/dl/one",
+			LatestVersionCreatedAt: "2026-05-06T07:08:09Z", LatestVersionUpdatedAt: "2026-06-07T08:09:10Z",
 			CreatedAt: "2026-01-02T03:04:05Z", UpdatedAt: "2026-02-03T04:05:06Z",
 			LockedAt: "2026-03-04T05:06:07Z", DeletedAt: "2026-04-05T06:07:08Z",
 		},
 		{
 			Name: "staging", LatestSerial: 22, DownloadPath: "/dl/two",
+			LatestVersionCreatedAt: "2025-07-08T09:10:11Z", LatestVersionUpdatedAt: "2025-08-09T10:11:12Z",
 			CreatedAt: "2025-05-06T07:08:09Z", UpdatedAt: "2025-06-07T08:09:10Z",
+		},
+		{
+			Name:      "unwritten",
+			CreatedAt: "2025-09-10T11:12:13Z", UpdatedAt: "2025-09-10T11:12:13Z",
 		},
 	}
 	if !reflect.DeepEqual(out.States, want) {
@@ -117,13 +128,15 @@ func TestList_ReadsEveryFieldOfEveryState(t *testing.T) {
 // stateItemSchemaFields maps each field StateItem publishes to the field of
 // the pinned schema it carries, as object and field name.
 var stateItemSchemaFields = map[string][2]string{
-	"name":          {"TerraformState", "name"},
-	"latest_serial": {"TerraformStateVersion", "serial"},
-	"download_path": {"TerraformStateVersion", "downloadPath"},
-	"created_at":    {"TerraformState", "createdAt"},
-	"updated_at":    {"TerraformState", "updatedAt"},
-	"locked_at":     {"TerraformState", "lockedAt"},
-	"deleted_at":    {"TerraformState", "deletedAt"},
+	"name":                      {"TerraformState", "name"},
+	"latest_serial":             {"TerraformStateVersion", "serial"},
+	"download_path":             {"TerraformStateVersion", "downloadPath"},
+	"latest_version_created_at": {"TerraformStateVersion", "createdAt"},
+	"latest_version_updated_at": {"TerraformStateVersion", "updatedAt"},
+	"created_at":                {"TerraformState", "createdAt"},
+	"updated_at":                {"TerraformState", "updatedAt"},
+	"locked_at":                 {"TerraformState", "lockedAt"},
+	"deleted_at":                {"TerraformState", "deletedAt"},
 }
 
 // stateSelection is what one client-go document selects of a Terraform
@@ -184,8 +197,10 @@ func fieldNames(selections ast.SelectionSet) []string {
 
 // TestStateItem_FieldsHeldToThePinnedSchema holds every field StateItem
 // publishes to the field of the pinned schema it carries, in three ways: the
-// schema has the field, a field the schema types non-null is always written
-// and a nullable one is left out when GitLab sent null, and both of
+// schema has the field, a field GitLab always sends is always written and one
+// it can send null is left out when it did (a field of the latest version
+// counts as nullable when the schema lets latestVersion itself be null, which
+// it does for a state nothing has written yet), and both of
 // client-go's documents, the list's and the get's, select it on the object it
 // belongs to. The documents are written inside client-go, and a field one of
 // them stops selecting would arrive empty on that path with every other test
@@ -228,8 +243,9 @@ func TestStateItem_FieldsHeldToThePinnedSchema(t *testing.T) {
 			if definition == nil {
 				t.Fatalf("the pinned schema has no %s.%s", object, name)
 			}
-			if omitted := strings.Contains(options, "omitempty"); omitted == definition.Type.NonNull {
-				t.Errorf("%s omitempty = %v, want %v for %s.%s typed %s", jsonName, omitted, !definition.Type.NonNull, object, name, definition.Type)
+			always := alwaysSent(schema, object, definition)
+			if omitted := strings.Contains(options, "omitempty"); omitted == always {
+				t.Errorf("%s omitempty = %v, want %v for %s.%s typed %s", jsonName, omitted, !always, object, name, definition.Type)
 			}
 			for document, selected := range documents {
 				t.Run(document, func(t *testing.T) {
@@ -240,6 +256,17 @@ func TestStateItem_FieldsHeldToThePinnedSchema(t *testing.T) {
 			}
 		})
 	}
+}
+
+// alwaysSent reports whether GitLab sends a field on every state: the schema
+// types it non-null and, for a field of the latest version, types
+// latestVersion non-null too, which it does not, since a state nothing has
+// written yet has no latest version.
+func alwaysSent(schema *ast.Schema, object string, definition *ast.FieldDefinition) bool {
+	if object == "TerraformStateVersion" {
+		return definition.Type.NonNull && schema.Types["TerraformState"].Fields.ForName("latestVersion").Type.NonNull
+	}
+	return definition.Type.NonNull
 }
 
 // TestSelectedFields_ReadsDirectSelectionsOnly verifies the reading the test
@@ -288,7 +315,8 @@ func TestList_EmptyProject_YieldsAnEmptySliceRatherThanNil(t *testing.T) {
 func TestGet_ReadsEveryFieldOfTheState(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK,
-			`{"data":{"project":{"terraformState":{"name":"production","latestVersion":{"serial":11,"downloadPath":"/dl/one"},`+
+			`{"data":{"project":{"terraformState":{"name":"production","latestVersion":{"serial":11,"downloadPath":"/dl/one",`+
+				`"createdAt":"2026-05-06T07:08:09Z","updatedAt":"2026-06-07T08:09:10Z"},`+
 				`"createdAt":"2026-01-02T03:04:05Z","updatedAt":"2026-02-03T04:05:06Z","lockedAt":"2026-03-04T05:06:07Z","deletedAt":"2026-04-05T06:07:08Z"}}}}`)
 	}))
 	out, err := Get(t.Context(), client, GetInput{ProjectPath: "group/project", Name: "production"})
@@ -297,6 +325,7 @@ func TestGet_ReadsEveryFieldOfTheState(t *testing.T) {
 	}
 	want := StateItem{
 		Name: "production", LatestSerial: 11, DownloadPath: "/dl/one",
+		LatestVersionCreatedAt: "2026-05-06T07:08:09Z", LatestVersionUpdatedAt: "2026-06-07T08:09:10Z",
 		CreatedAt: "2026-01-02T03:04:05Z", UpdatedAt: "2026-02-03T04:05:06Z",
 		LockedAt: "2026-03-04T05:06:07Z", DeletedAt: "2026-04-05T06:07:08Z",
 	}
@@ -691,12 +720,15 @@ func TestFormatStateMarkdown_Coverage(t *testing.T) {
 func TestFormatStateMarkdown_Times(t *testing.T) {
 	got := FormatStateMarkdown(StateItem{
 		Name: "prod-state", LatestSerial: 42, DownloadPath: "/dl/path",
+		LatestVersionCreatedAt: "2026-05-06T07:08:09Z", LatestVersionUpdatedAt: "2026-06-07T08:09:10Z",
 		CreatedAt: "2026-01-02T03:04:05Z", UpdatedAt: "2026-02-03T04:05:06Z",
 		LockedAt: "2026-03-04T05:06:07Z", DeletedAt: "2026-04-05T06:07:08Z",
 	})
 	want := "## Terraform State: prod-state\n\n" +
 		"- **Latest Serial**: 42\n" +
 		"- **Download Path**: `/dl/path`\n" +
+		"- **Latest Version Created**: 6 May 2026 07:08 UTC\n" +
+		"- **Latest Version Updated**: 7 Jun 2026 08:09 UTC\n" +
 		"- **Created**: 2 Jan 2026 03:04 UTC\n" +
 		"- **Updated**: 3 Feb 2026 04:05 UTC\n" +
 		"- **Locked**: 4 Mar 2026 05:06 UTC\n" +
@@ -725,10 +757,11 @@ func TestFormatStateMarkdown_UnwrittenState(t *testing.T) {
 // of the two version fields is not announced as having no versions. The note
 // is written only when both are missing, and nothing held that: with the two
 // conditions joined by "or" instead of "and" the whole suite stayed green,
-// because every card tested had either both fields or neither. Each case here
-// gives the card one field, which are also the two states GitLab really
+// because every card tested had either both fields or neither. The first two
+// cases give the card one field, which are also the two states GitLab really
 // sends: a serial it omits for a version it has, and a download path it
-// withholds.
+// withholds. The third gives it neither and the latest version's times, which
+// GitLab sends whenever there is a latest version, so they alone prove one.
 func TestFormatStateMarkdown_HalfWrittenState(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -747,6 +780,14 @@ func TestFormatStateMarkdown_HalfWrittenState(t *testing.T) {
 			state: StateItem{Name: "serialled", LatestSerial: 7},
 			want: "## Terraform State: serialled\n\n" +
 				"- **Latest Serial**: 7\n" +
+				stateHints,
+		},
+		{
+			name:  "a latest version known only by its times",
+			state: StateItem{Name: "timed", LatestVersionCreatedAt: "2026-05-06T07:08:09Z", LatestVersionUpdatedAt: "2026-05-06T07:08:09Z"},
+			want: "## Terraform State: timed\n\n" +
+				"- **Latest Version Created**: 6 May 2026 07:08 UTC\n" +
+				"- **Latest Version Updated**: 6 May 2026 07:08 UTC\n" +
 				stateHints,
 		},
 	}

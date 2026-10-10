@@ -51597,6 +51597,12 @@
           "minimum": 0,
           "type": "integer"
         },
+        "latest_version_created_at": {
+          "type": "string"
+        },
+        "latest_version_updated_at": {
+          "type": "string"
+        },
         "locked_at": {
           "type": "string"
         },
@@ -126696,6 +126702,12 @@
               "latest_serial": {
                 "minimum": 0,
                 "type": "integer"
+              },
+              "latest_version_created_at": {
+                "type": "string"
+              },
+              "latest_version_updated_at": {
+                "type": "string"
               },
               "locked_at": {
                 "type": "string"

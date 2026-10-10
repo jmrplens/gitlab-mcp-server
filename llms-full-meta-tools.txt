@@ -1697,7 +1697,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>terraform_state_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"deleted_at":{"type":"string"},"download_path":{"type":"string"},"latest_serial":{"minimum":0,"type":"integer"},"locked_at":{"type":"string"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"updated_at":{"type":"string"}},"required":["name","created_at","updated_at"],"type":"object"}
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"deleted_at":{"type":"string"},"download_path":{"type":"string"},"latest_serial":{"minimum":0,"type":"integer"},"latest_version_created_at":{"type":"string"},"latest_version_updated_at":{"type":"string"},"locked_at":{"type":"string"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"updated_at":{"type":"string"}},"required":["name","created_at","updated_at"],"type":"object"}
 ```
 
 </details>
@@ -1705,7 +1705,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>terraform_state_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"states":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"deleted_at":{"type":"string"},"download_path":{"type":"string"},"latest_serial":{"minimum":0,"type":"integer"},"locked_at":{"type":"string"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"updated_at":{"type":"string"}},"required":["name","created_at","updated_at"],"type":"object"},"type":["null","array"]}},"required":["states"],"type":"object"}
+{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"states":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"deleted_at":{"type":"string"},"download_path":{"type":"string"},"latest_serial":{"minimum":0,"type":"integer"},"latest_version_created_at":{"type":"string"},"latest_version_updated_at":{"type":"string"},"locked_at":{"type":"string"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"updated_at":{"type":"string"}},"required":["name","created_at","updated_at"],"type":"object"},"type":["null","array"]}},"required":["states"],"type":"object"}
 ```
 
 </details>

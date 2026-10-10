@@ -5845,9 +5845,10 @@ decided.
 
 The latest version's own `createdAt` and `updatedAt`, which the issue lists
 beside these, are not a client-go gap: both documents select them and
-`TerraformStateVersion` decodes them. That gap is this server's, whose state
-output publishes the latest version's serial and download path and not its
-times.
+`TerraformStateVersion` decodes them. That gap was this server's, whose state
+output published the latest version's serial and download path and not its
+times; it now publishes them as `latest_version_created_at` and
+`latest_version_updated_at`.
 
 **How we found it**: issue 1022, by hand when the GraphQL pin moved from
 19.4.0-pre to 19.5.0-pre, and from then on by the client-go run of

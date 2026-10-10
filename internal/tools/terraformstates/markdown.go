@@ -82,9 +82,12 @@ func deletedCell(deletedAt string) string {
 }
 
 // FormatStateMarkdown formats a single Terraform state as the card of one
-// object. A state nothing has written to yet carries neither a serial nor a
-// download path, and says so once instead of showing two labels with nothing
-// after them. A lock and a pending deletion are written only while they hold.
+// object. A state nothing has written to yet carries no latest version, so
+// neither a serial, a download path nor the version's times, and says so once
+// instead of showing labels with nothing after them; the version's times are
+// what GitLab always sends for a version it has, so a version without a serial
+// or a path is still not announced as missing. A lock and a pending deletion
+// are written only while they hold.
 func FormatStateMarkdown(s StateItem) string {
 	var b strings.Builder
 	// The state's name is chosen by whoever ran terraform against it, and the
@@ -99,11 +102,13 @@ func FormatStateMarkdown(s StateItem) string {
 		c.Field("Latest Serial", strconv.FormatUint(s.LatestSerial, 10))
 	}
 	c.Code("Download Path", s.DownloadPath)
+	c.Time("Latest Version Created", s.LatestVersionCreatedAt)
+	c.Time("Latest Version Updated", s.LatestVersionUpdatedAt)
 	c.Time("Created", s.CreatedAt)
 	c.Time("Updated", s.UpdatedAt)
 	c.Time("Locked", s.LockedAt)
 	c.Time("Deleted", s.DeletedAt)
-	if s.LatestSerial == 0 && strings.TrimSpace(s.DownloadPath) == "" {
+	if s.LatestSerial == 0 && strings.TrimSpace(s.DownloadPath) == "" && s.LatestVersionCreatedAt == "" {
 		c.Note("GitLab has recorded no versions of this state.")
 	}
 	// GitLab deletes a state in the background: the delete marks it, and a

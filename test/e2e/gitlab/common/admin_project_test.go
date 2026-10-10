@@ -165,6 +165,13 @@ func TestAdmin_TerraformStates(t *testing.T) {
 		e.T.Errorf("terraform_state_get answered created %q, updated %q, locked %q, deleted %q; want the first two set and the others empty for an unlocked live state",
 			got.CreatedAt, got.UpdatedAt, got.LockedAt, got.DeletedAt)
 	}
+	// Two pushes wrote two versions, so the state has a latest version and
+	// GitLab sends its creation and update times, which client-go's document
+	// selects and the item publishes beside the serial.
+	if got.LatestVersionCreatedAt == "" || got.LatestVersionUpdatedAt == "" {
+		e.T.Errorf("terraform_state_get answered the latest version created %q, updated %q; want both set for a state written twice",
+			got.LatestVersionCreatedAt, got.LatestVersionUpdatedAt)
+	}
 
 	lockParams := map[string]any{"project_id": project.IDParam(), "name": stateName}
 	// client-go sends no lock-info body, so the backend deterministically
