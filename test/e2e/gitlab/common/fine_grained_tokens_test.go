@@ -709,3 +709,207 @@ func expectEmptyForFineGrained(e *harness.Env, token fixture.Token, field, docum
 		e.T.Errorf("the fine-grained token was answered %s at %s, want it empty", fine.Data[field], field)
 	}
 }
+
+// The assignable permissions the write probes grant, by the names GitLab's
+// token creation route takes.
+const (
+	grantCreateCustomEmoji = "create_custom_emoji"
+	grantCreateAchievement = "create_achievement"
+)
+
+// graphQLResourceAccessError is GitLab's generic refusal of a GraphQL
+// request (Gitlab::Graphql::Authorize::AuthorizeResource::RESOURCE_ACCESS_ERROR),
+// which is also what it refuses a fine-grained token a mutation that declares
+// no fine-grained permission with.
+const graphQLResourceAccessError = "The resource that you are attempting to access does not exist or you don't have permission to perform this action"
+
+// onGroups is a grant of permissions on the named groups and everything below
+// them.
+func onGroups(permissions []string, groups ...fixture.Group) fixture.GranularScope {
+	ids := make([]int64, 0, len(groups))
+	for _, group := range groups {
+		ids = append(ids, group.ID)
+	}
+	return fixture.GranularScope{Access: fixture.AccessSelectedMemberships, Permissions: permissions, GroupIDs: ids}
+}
+
+// expectCommittedWithoutObject holds a write's answer to what GitLab gives a
+// fine-grained token whose grant holds the mutation and not the object its
+// payload returns: the payload itself, with no errors of its own, and the
+// object at objectField null. nulledBy is the top-level error that null
+// writes where the object sits below a non-null position, or "" where it is
+// nullable and no error comes with it.
+func expectCommittedWithoutObject(e *harness.Env, written fixture.GraphQLAnswer, field, objectField, nulledBy string) {
+	e.T.Helper()
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(written.Data[field], &payload); err != nil || payload == nil {
+		e.T.Fatalf("the fine-grained write answered %s at %s, want its payload: %v (errors %v)", written.Data[field], field, err, written.Errors)
+	}
+	if string(payload["errors"]) != "[]" {
+		e.T.Errorf("the fine-grained write's payload carries errors %s, want none", payload["errors"])
+	}
+	if string(payload[objectField]) != "null" {
+		e.T.Errorf("the fine-grained write answered %s at %s.%s, want null", payload[objectField], field, objectField)
+	}
+	switch {
+	case nulledBy == "" && len(written.Errors) > 0:
+		e.T.Errorf("the fine-grained write answered errors %v, want none", written.Errors)
+	case nulledBy != "" && (len(written.Errors) == 0 || !slices.ContainsFunc(written.Errors, func(m string) bool { return strings.HasPrefix(m, nulledBy) })):
+		e.T.Errorf("the fine-grained write answered errors %v, want the one %q writes", written.Errors, nulledBy)
+	}
+}
+
+// expectReadBack reads what a write made with the run's classic token and
+// holds the answer at field to carry want, which is what shows the write
+// GitLab answered a fine-grained token without committed.
+func expectReadBack(e *harness.Env, document string, variables map[string]any, field, want string) {
+	e.T.Helper()
+	after := fixture.ProbeGraphQL(e, fixture.Token{}, document, variables)
+	if len(after.Errors) > 0 || !strings.Contains(string(after.Data[field]), want) {
+		e.T.Errorf("the classic read of %s answered %s %v, want it to carry %s: the write did not commit", field, after.Data[field], after.Errors, want)
+	}
+}
+
+// TestFineGrainedProbes_CustomEmojiCreate_CommitsAndAnswersNull measures what
+// the custom_emoji.create row of the table rests on, and what the handler's
+// probably-committed answer describes (issue 1103): a token granted Custom
+// Emoji: Create on a group passes createCustomEmoji's own check, so GitLab
+// creates the emoji, and then checks the CustomEmoji the payload returns,
+// which at 19.4.1 declares no fine-grained permission (19.5 declares Custom
+// Emoji: Read, which this grant does not hold either), so the payload answers
+// it null with no error. The run's classic token then finds the emoji.
+func TestFineGrainedProbes_CustomEmojiCreate_CommitsAndAnswersNull(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin, harness.NeedFixtureService))
+	group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("fgemoji"))
+	user := fixture.NewUser(e, "fgemoji")
+	fixture.AddGroupMember(e, group, user, gl.MaintainerPermissions)
+	token := fixture.NewFineGrainedToken(e, user, withStartup(onGroups([]string{grantCreateCustomEmoji}, group))...)
+	const name = "fg_committed"
+
+	written := fixture.ProbeGraphQL(e, token, `mutation($group: ID!, $name: String!, $url: String!) {
+  createCustomEmoji(input: {groupPath: $group, name: $name, url: $url}) { customEmoji { id name } errors }
+}`, map[string]any{"group": group.Path, "name": name, "url": fixture.ServiceURL(e, "/emoji.png")})
+
+	expectCommittedWithoutObject(e, written, "createCustomEmoji", "customEmoji", "")
+	expectReadBack(e, `query($group: ID!) { group(fullPath: $group) { customEmoji { nodes { name } } } }`,
+		map[string]any{"group": group.Path}, "group", `"`+name+`"`)
+}
+
+// TestFineGrainedProbes_AchievementCreate_CommitsAndAnswersNull measures the
+// same of achievementsCreate, which the achievement.create row rests on: a
+// token granted Achievement: Create on a group creates the achievement, and
+// GitLab then answers the payload's Achievement, a type that declares no
+// fine-grained permission, null with no error (issue 1103).
+func TestFineGrainedProbes_AchievementCreate_CommitsAndAnswersNull(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin))
+	group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("fgachieve"))
+	user := fixture.NewUser(e, "fgachieve")
+	fixture.AddGroupMember(e, group, user, gl.MaintainerPermissions)
+	token := fixture.NewFineGrainedToken(e, user, withStartup(onGroups([]string{grantCreateAchievement}, group))...)
+	name := e.Name("fg-achievement")
+
+	written := fixture.ProbeGraphQL(e, token, `mutation($namespace: NamespaceID!, $name: String!) {
+  achievementsCreate(input: {namespaceId: $namespace, name: $name}) { achievement { id name } errors }
+}`, map[string]any{"namespace": "gid://gitlab/Namespace/" + strconv.FormatInt(group.ID, 10), "name": name})
+
+	expectCommittedWithoutObject(e, written, "achievementsCreate", "achievement", "")
+	expectReadBack(e, `query($group: ID!) { group(fullPath: $group) { achievements { nodes { name } } } }`,
+		map[string]any{"group": group.Path}, "group", `"`+name+`"`)
+}
+
+// TestFineGrainedProbes_WorkItemCreate_CommitsAndNullsTheWorkItem measures the
+// non-null form of the same answer, which the issue.work_item_create row
+// rests on: a token granted Work Item: Create and Read on a project creates
+// the work item, and GitLab then checks its workItemType, a non-null field of
+// the type WorkItemType, which at 19.4.1 declares no fine-grained permission,
+// so the null takes the work item with it and GitLab's GraphQL library writes
+// the error that says so (issue 1103). It flips once GitLab declares
+// WorkItemType, which its own merge request 251840 proposes.
+func TestFineGrainedProbes_WorkItemCreate_CommitsAndNullsTheWorkItem(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin))
+	project := fixture.NewProject(e, fixture.WithNamePrefix("fgworkitem"))
+	user := developerOf(e, "fgworkitem", project)
+	token := fixture.NewFineGrainedToken(e, user, withStartup(onProjects([]string{grantCreateWorkItem, grantReadWorkItem}, project))...)
+	title := e.Name("fine-grained work item")
+
+	written := fixture.ProbeGraphQL(e, token, `mutation($path: ID!, $title: String!, $type: WorkItemsTypeID!) {
+  workItemCreate(input: {namespacePath: $path, title: $title, workItemTypeId: $type}) { workItem { id title workItemType { name } } errors }
+}`, map[string]any{"path": project.Path, "title": title, "type": string(gl.WorkItemTypeIssue)})
+
+	expectCommittedWithoutObject(e, written, "workItemCreate", "workItem", "Cannot return null for non-nullable field WorkItem.workItemType")
+	expectReadBack(e, `query($path: ID!) { project(fullPath: $path) { workItems(first: 20) { nodes { title } } } }`,
+		map[string]any{"path": project.Path}, "project", strconv.Quote(title))
+}
+
+// TestFineGrainedProbes_UndeclaredMutation_IsRefusedWithTheGenericError
+// measures how GitLab refuses a fine-grained token a mutation that declares
+// no fine-grained permission, which the CauseMutationUndeclared rows of the
+// table rest on: before anything runs, with its generic "does not exist or you
+// don't have permission" sentence, not the "Access denied: This operation
+// requires a fine-grained ..." sentence a declared mutation the grant lacks
+// is refused with, so nothing in the answer says the token is the reason. The
+// mutation is EchoCreate, which changes nothing and is on GitLab's pending
+// list at 19.4.1; the run's classic token is answered its echo. The document
+// passes an empty errors list, because EchoCreate answers its input's errors
+// back in a payload field that cannot be null, and a call that names none is
+// answered null whoever makes it.
+func TestFineGrainedProbes_UndeclaredMutation_IsRefusedWithTheGenericError(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin))
+	user := fixture.NewUser(e, "fgecho")
+	token := fixture.NewFineGrainedToken(e, user, fixture.StartupScopes()...)
+	const document = `mutation($messages: [String!]) { echoCreate(input: {messages: $messages, errors: []}) { echoes errors } }`
+	variables := map[string]any{"messages": []string{"fine-grained"}}
+
+	classic := fixture.ProbeGraphQL(e, fixture.Token{}, document, variables)
+	if len(classic.Errors) > 0 || !strings.Contains(string(classic.Data["echoCreate"]), `"fine-grained"`) {
+		t.Fatalf("the classic token's echo answered %s %v, want the message echoed", classic.Data["echoCreate"], classic.Errors)
+	}
+	fine := fixture.ProbeGraphQL(e, token, document, variables)
+	if string(fine.Data["echoCreate"]) != "null" || !slices.Contains(fine.Errors, graphQLResourceAccessError) {
+		t.Errorf("the fine-grained echo answered %s %v, want null and the generic refusal %q", fine.Data["echoCreate"], fine.Errors, graphQLResourceAccessError)
+	}
+	for _, message := range fine.Errors {
+		if strings.Contains(message, "fine-grained") {
+			t.Errorf("the fine-grained echo's refusal names the token: %q", message)
+		}
+	}
+}
+
+// TestFineGrainedProbes_CatalogListing_AnswersEachResourceNull measures the
+// list-of-nulls answer of issue 1103, which the ci_catalog.list row rests on:
+// CiCatalogResource declares neither an ability nor a fine-grained
+// permission, so GitLab redacts nothing from the listing and checks each
+// resource as it answers it, and a fine-grained token, granted Project: Read
+// on the resource's project, reads one null per resource the classic token
+// reads, with no error. Publishing the version needs a runner, as the catalog
+// read's own scenario does.
+func TestFineGrainedProbes_CatalogListing_AnswersEachResourceNull(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin, harness.NeedRunner), harness.Locks(harness.LockRunner))
+	if !e.DockerMode() {
+		e.Skipf("publishing a catalog version needs the compose-internal GitLab URL and a runner, which only the Docker stack provides")
+	}
+	project := fixture.NewProject(e, fixture.WithNamePrefix("fgcatalog"))
+	if !markCatalogResource(e, project) {
+		return
+	}
+	publishCatalogVersion(e, project)
+	user := developerOf(e, "fgcatalog", project)
+	token := fixture.NewFineGrainedToken(e, user, withStartup(onProjects([]string{grantReadProject}, project))...)
+	const document = `query($search: String) { ciCatalogResources(search: $search) { nodes { id name } } }`
+	variables := map[string]any{"search": project.Name}
+
+	// The catalog index the listing reads is written by a background job, so
+	// the classic listing is waited for before the fine-grained one is asked.
+	var classic fixture.GraphQLAnswer
+	if err := harness.Poll(e.Ctx, 2*time.Second, 60*time.Second, func() (bool, string, error) {
+		classic = fixture.ProbeGraphQL(e, fixture.Token{}, document, variables)
+		listed := string(classic.Data["ciCatalogResources"])
+		return len(classic.Errors) == 0 && strings.Contains(listed, `"name":"`+project.Name+`"`), listed, nil
+	}); err != nil {
+		t.Fatalf("the classic token never listed the published resource: %v", err)
+	}
+	fine := fixture.ProbeGraphQL(e, token, document, variables)
+	if len(fine.Errors) > 0 || !strings.Contains(string(fine.Data["ciCatalogResources"]), `"nodes":[null]`) {
+		t.Errorf("the fine-grained listing answered %s %v, want one null resource and no error", fine.Data["ciCatalogResources"], fine.Errors)
+	}
+}
