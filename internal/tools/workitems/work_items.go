@@ -573,15 +573,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	for _, item := range items {
 		result = append(result, workItemToItem(item))
 	}
-	out := ListOutput{WorkItems: result}
-	if resp != nil && resp.PageInfo != nil {
-		out.Pagination = toolutil.GraphQLPaginationOutput{
-			HasNextPage:     resp.PageInfo.HasNextPage,
-			HasPreviousPage: resp.PageInfo.HasPreviousPage,
-			EndCursor:       resp.PageInfo.EndCursor,
-			StartCursor:     resp.PageInfo.StartCursor,
-		}
-	}
+	out := ListOutput{WorkItems: result, Pagination: pagination(resp)}
 	return out, nil
 }
 
@@ -624,12 +616,34 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return GetOutput{}, fmt.Errorf("create_work_item: %w", err)
 	}
 
-	wi, _, err := client.GL().WorkItems.CreateWorkItem(input.FullPath, gl.WorkItemTypeID(input.WorkItemTypeID), opts, gl.WithContext(ctx))
+	wi, resp, err := client.GL().WorkItems.CreateWorkItem(input.FullPath, gl.WorkItemTypeID(input.WorkItemTypeID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithStatusHint("create_work_item", err, http.StatusBadRequest,
-			"work_item_type_id must be a valid type GID; verify type compatibility with full_path (e.g. Epic only at group level + Premium); title is required; Work Items API is experimental")
+		// A creation GitLab ran and answered without the work item, null with
+		// no error or nulled by its non-null type, which client-go reports as
+		// an empty response and as a failed mutation, is one a fine-grained
+		// session is told probably committed (issue 1103). The creation is one
+		// request; updating sends a lookup of the work item first, whose null
+		// is a write that never ran, so it is not read this way.
+		return GetOutput{}, toolutil.UnconfirmedWrite(client, resp, "create_work_item", "work item", err,
+			toolutil.WrapErrWithStatusHint("create_work_item", err, http.StatusBadRequest,
+				"work_item_type_id must be a valid type GID; verify type compatibility with full_path (e.g. Epic only at group level + Premium); title is required; Work Items API is experimental"))
 	}
 	return GetOutput{WorkItem: workItemToItem(wi)}, nil
+}
+
+// pagination reads the cursor metadata client-go hangs off a list's response.
+// client-go sets it on every list it answers, so the guard is for an answer
+// that reaches here without it rather than for one that does today.
+func pagination(resp *gl.Response) toolutil.GraphQLPaginationOutput {
+	if resp == nil || resp.PageInfo == nil {
+		return toolutil.GraphQLPaginationOutput{}
+	}
+	return toolutil.GraphQLPaginationOutput{
+		HasNextPage:     resp.PageInfo.HasNextPage,
+		HasPreviousPage: resp.PageInfo.HasPreviousPage,
+		EndCursor:       resp.PageInfo.EndCursor,
+		StartCursor:     resp.PageInfo.StartCursor,
+	}
 }
 
 // buildCreateOptions translates the tool input into SDK create options.
@@ -950,16 +964,7 @@ func ListWorkItemTypes(ctx context.Context, client *gitlabclient.Client, input L
 			Enabled: t.Enabled,
 		})
 	}
-	result := WorkItemTypeListOutput{Types: out}
-	if resp != nil && resp.PageInfo != nil {
-		result.Pagination = toolutil.GraphQLPaginationOutput{
-			HasNextPage:     resp.PageInfo.HasNextPage,
-			HasPreviousPage: resp.PageInfo.HasPreviousPage,
-			EndCursor:       resp.PageInfo.EndCursor,
-			StartCursor:     resp.PageInfo.StartCursor,
-		}
-	}
-	return result, nil
+	return WorkItemTypeListOutput{Types: out, Pagination: pagination(resp)}, nil
 }
 
 // Markdown Formatters.

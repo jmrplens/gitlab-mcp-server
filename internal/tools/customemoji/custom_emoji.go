@@ -260,8 +260,14 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return CreateOutput{}, fmt.Errorf("create_custom_emoji: %s", payload.Errors[0])
 	}
 
+	// The payload came back with no emoji and no error, so GitLab ran the
+	// creation: for a fine-grained token that is GitLab checking the emoji
+	// against the token only after it exists (at 19.4.1 CustomEmoji declares
+	// no fine-grained permission, and from 19.5 one the grant may not hold),
+	// and the session is told so rather than that nothing happened (issue
+	// 1103).
 	if payload.CustomEmoji == nil {
-		return CreateOutput{}, errors.New("create_custom_emoji: no emoji returned")
+		return CreateOutput{}, client.Authority().UnconfirmedWrite("create_custom_emoji", "custom emoji", errors.New("create_custom_emoji: no emoji returned"))
 	}
 
 	return CreateOutput{

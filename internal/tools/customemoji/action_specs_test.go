@@ -43,6 +43,21 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
+// TestCustomEmojiOptions_ActionItDoesNotKnow_GetsNoActionMetadata verifies
+// that the per-action metadata is keyed on the three action names and on
+// nothing else: a name the package does not register gets no aliases, no
+// usage and no parameter guidance, rather than borrowing another action's, so
+// a mistyped name in ActionSpecs cannot pass for one of the three.
+func TestCustomEmojiOptions_ActionItDoesNotKnow_GetsNoActionMetadata(t *testing.T) {
+	opts := customEmojiOptions("rename", "gitlab_rename_custom_emoji")
+	if len(opts.Aliases) != 0 || opts.Usage != "" || len(opts.ParameterGuidance) != 0 {
+		t.Errorf("customEmojiOptions(rename) = aliases %q, usage %q, guidance %v, want none of them", opts.Aliases, opts.Usage, opts.ParameterGuidance)
+	}
+	if opts.IndividualTool.Name != "gitlab_rename_custom_emoji" {
+		t.Errorf("IndividualTool.Name = %q, want the name it was given", opts.IndividualTool.Name)
+	}
+}
+
 // TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the route returns the expected error or result.

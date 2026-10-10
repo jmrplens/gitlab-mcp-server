@@ -27,6 +27,8 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1482,4 +1484,163 @@ func TestConverters_NilInput(t *testing.T) {
 			t.Errorf("toUserAchievements(nil) = %v, want an empty slice", got)
 		}
 	})
+}
+
+// achievementWrite is one of the writes that return one object, driven
+// against a mock that answers it as the case says.
+type achievementWrite struct {
+	name   string
+	key    string
+	field  string
+	op     string
+	object string
+	call   func(context.Context, *gitlabclient.Client) error
+}
+
+// achievementWrites are the seven writes of the package that return one
+// object, each with the payload key GitLab answers it under, the field
+// carrying the object, its operation and that object in a reader's words. The
+// eighth, the reorder, returns a list and has a test of its own.
+func achievementWrites() []achievementWrite {
+	award := func(id int64) UserAchievementUpdateInput { return UserAchievementUpdateInput{UserAchievementID: id} }
+	return []achievementWrite{
+		{name: "create", key: keyCreate, field: "achievement", op: opCreate, object: "achievement", call: func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{NamespaceID: 10, Name: "First Commit"})
+			return err
+		}},
+		{name: "update", key: keyUpdate, field: "achievement", op: opUpdate, object: "achievement", call: func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Update(ctx, c, UpdateInput{AchievementID: 1, Name: "Renamed"})
+			return err
+		}},
+		{name: "delete", key: keyDeleteA, field: "achievement", op: opDelete, object: "achievement", call: func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Delete(ctx, c, DeleteInput{AchievementID: 1})
+			return err
+		}},
+		{name: "award", key: keyAward, field: "userAchievement", op: opAward, object: "award", call: func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Award(ctx, c, AwardInput{AchievementID: 1, UserID: 2})
+			return err
+		}},
+		{name: "revoke", key: keyRevoke, field: "userAchievement", op: opRevoke, object: "award", call: func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Revoke(ctx, c, RevokeInput{UserAchievementID: 88})
+			return err
+		}},
+		{name: "award update", key: keyUAUpdate, field: "userAchievement", op: opUserAchievementUpdate, object: "award", call: func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := UserAchievementUpdate(ctx, c, award(88))
+			return err
+		}},
+		{name: "award delete", key: keyUADelete, field: "userAchievement", op: opUserAchievementDelete, object: "award", call: func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := UserAchievementDelete(ctx, c, UserAchievementDeleteInput{UserAchievementID: 88})
+			return err
+		}},
+	}
+}
+
+// fineGrainedClient is a test client carrying the authority a fine-grained
+// session's client carries, so a handler reads it the way production does.
+func fineGrainedClient(t *testing.T, handler http.Handler) *gitlabclient.Client {
+	t.Helper()
+	client := testutil.NewTestClient(t, handler)
+	client.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, ""))
+	return client
+}
+
+// TestWrites_ObjectNulled_FineGrainedSessionIsToldTheWriteProbablyCommitted
+// verifies the answer to a write GitLab ran and answered without the object
+// it returns, which is what it does for a fine-grained token at 19.4.1: the
+// Achievement and UserAchievement types declare no fine-grained permission,
+// and GitLab checks the payload's object only after the write ran. client-go
+// reads that null as its not-found sentinel, which used to reach a model as
+// "not found" with the feature flag note, a write that did not happen. A
+// fine-grained session is now told the write was probably committed; a
+// classic one keeps the answer it had, and is never told so (issue 1103).
+func TestWrites_ObjectNulled_FineGrainedSessionIsToldTheWriteProbablyCommitted(t *testing.T) {
+	for _, write := range achievementWrites() {
+		t.Run(write.name, func(t *testing.T) {
+			handler := testutil.GraphQLHandler(map[string]http.HandlerFunc{
+				write.key: respond(t, `{"data":{"`+write.key+`":{"`+write.field+`":null,"errors":[]}}}`, nil),
+			})
+
+			fine := write.call(t.Context(), fineGrainedClient(t, handler))
+			if !errors.Is(fine, finegrained.ErrUnconfirmedWrite) {
+				t.Fatalf("fine-grained error = %v, want an unconfirmed write", fine)
+			}
+			if want := write.op + ": GitLab answered without the " + write.object + " this write returns."; !strings.HasPrefix(fine.Error(), want) {
+				t.Errorf("fine-grained error = %q, want it to open with %q", fine.Error(), want)
+			}
+
+			classic := write.call(t.Context(), testutil.NewTestClient(t, handler))
+			if errors.Is(classic, finegrained.ErrUnconfirmedWrite) || strings.Contains(classic.Error(), "probably committed") {
+				t.Errorf("classic error = %v, want the handler's own answer", classic)
+			}
+			if !strings.Contains(classic.Error(), "achievements feature flag") {
+				t.Errorf("classic error = %v, want the not-found answer with the availability note it always had", classic)
+			}
+		})
+	}
+}
+
+// TestUserAchievementReorder_AwardsNulled_FineGrainedSessionIsToldTheWriteProbablyCommitted
+// verifies the reorder's form of the same answer. Its payload carries the
+// awards as a non-null list of non-null items, so a denied award cannot be
+// answered null where it sits: GitLab's GraphQL library nulls the payload and
+// writes one error per null instead, naming the element's type with its "!"
+// because the list is itself non-null (graphql-ruby writes the type two
+// wrappers below the field's). A fine-grained session reads that as the
+// write it is; a classic session keeps the hint it had.
+func TestUserAchievementReorder_AwardsNulled_FineGrainedSessionIsToldTheWriteProbablyCommitted(t *testing.T) {
+	handler := testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		keyUAReorder: respond(t, `{"data":{"userAchievementPrioritiesUpdate":null},"errors":[`+
+			`{"message":"Cannot return null for non-nullable element of type 'UserAchievement!' for UserAchievementPrioritiesUpdatePayload.userAchievements"},`+
+			`{"message":"Cannot return null for non-nullable element of type 'UserAchievement!' for UserAchievementPrioritiesUpdatePayload.userAchievements"}]}`, nil),
+	})
+	input := UserAchievementReorderInput{UserAchievementIDs: []int64{88, 89}}
+
+	_, fine := UserAchievementReorder(t.Context(), fineGrainedClient(t, handler), input)
+	if !errors.Is(fine, finegrained.ErrUnconfirmedWrite) {
+		t.Fatalf("fine-grained error = %v, want an unconfirmed write", fine)
+	}
+	if want := opUserAchievementReorder + ": GitLab answered without the awards this write returns."; !strings.HasPrefix(fine.Error(), want) {
+		t.Errorf("fine-grained error = %q, want it to open with %q", fine.Error(), want)
+	}
+
+	_, classic := UserAchievementReorder(t.Context(), testutil.NewTestClient(t, handler), input)
+	if errors.Is(classic, finegrained.ErrUnconfirmedWrite) || !strings.Contains(classic.Error(), "same user") {
+		t.Errorf("classic error = %v, want the same-user hint it always had", classic)
+	}
+}
+
+// TestWrites_FineGrainedSession_RefusalOrMissingEndpointIsNoUnconfirmedWrite
+// verifies the answers a fine-grained write must not read as probably
+// committed: none at all, an error GitLab wrote for a write it refused, and a
+// 404 from the GraphQL endpoint itself, which client-go reports with the same
+// not-found sentinel as a nulled object and which ran nothing.
+func TestWrites_FineGrainedSession_RefusalOrMissingEndpointIsNoUnconfirmedWrite(t *testing.T) {
+	t.Run("no answer at all", func(t *testing.T) {
+		// The request is abandoned before GitLab answers, so client-go hands
+		// back no response: nothing says the write ran.
+		ctx, client := testutil.CancelOnArrival(t, respond(t, `{"data":{"achievementsCreate":{"achievement":null,"errors":[]}}}`, nil))
+		client.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, ""))
+		_, err := Create(ctx, client, CreateInput{NamespaceID: 10, Name: "First Commit"})
+		if !errors.Is(err, context.Canceled) || errors.Is(err, finegrained.ErrUnconfirmedWrite) {
+			t.Errorf("Create() error = %v, want the cancellation and no unconfirmed write", err)
+		}
+	})
+	cases := []struct {
+		name    string
+		handler http.HandlerFunc
+	}{
+		{name: "a refusal", handler: errorResponse},
+		{name: "a missing endpoint", handler: func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := fineGrainedClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{keyCreate: tc.handler}))
+			_, err := Create(t.Context(), client, CreateInput{NamespaceID: 10, Name: "First Commit"})
+			if err == nil || errors.Is(err, finegrained.ErrUnconfirmedWrite) {
+				t.Errorf("Create() error = %v, want GitLab's answer and no unconfirmed write", err)
+			}
+		})
+	}
 }

@@ -5,6 +5,7 @@ package workitems
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -614,6 +616,75 @@ func TestCreate_Error(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal(errExpectedNil)
+	}
+}
+
+// TestCreate_WorkItemNulled_FineGrainedSessionIsToldTheWriteProbablyCommitted
+// verifies the answer to a creation GitLab ran and answered without the work
+// item it returns. At 19.4.1 WorkItemType declares no fine-grained
+// permission, and a work item's type is a non-null field, so GitLab's GraphQL
+// library nulls the work item and writes one error for the type, after the
+// item exists; a grant without Work Item: Read nulls the work item itself,
+// with no error. client-go reports the first as a failed mutation and the
+// second as an empty response, and both used to reach a model as a creation
+// that did not happen. A fine-grained session is now told it probably
+// committed; a classic one keeps its answer, and is never told so (issue
+// 1103).
+func TestCreate_WorkItemNulled_FineGrainedSessionIsToldTheWriteProbablyCommitted(t *testing.T) {
+	tests := []struct {
+		name    string
+		body    string
+		classic string
+	}{
+		{
+			name:    "the type nulled below a non-null field",
+			body:    `{"data":{"workItemCreate":{"workItem":null,"errors":[]}},"errors":[{"message":"Cannot return null for non-nullable field WorkItem.workItemType"}]}`,
+			classic: "Cannot return null for non-nullable field WorkItem.workItemType",
+		},
+		{
+			name:    "the work item nulled",
+			body:    `{"data":{"workItemCreate":{"workItem":null,"errors":[]}}}`,
+			classic: "unexpected empty response",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			})
+			input := CreateInput{FullPath: testFullPath, WorkItemTypeID: testTypeGID, Title: testTitleNewItem}
+
+			fineClient := testutil.NewTestClient(t, handler)
+			fineClient.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, ""))
+			_, fine := Create(t.Context(), fineClient, input)
+			if !errors.Is(fine, finegrained.ErrUnconfirmedWrite) {
+				t.Fatalf("fine-grained error = %v, want an unconfirmed write", fine)
+			}
+			if want := "create_work_item: GitLab answered without the work item this write returns."; !strings.HasPrefix(fine.Error(), want) {
+				t.Errorf("fine-grained error = %q, want it to open with %q", fine.Error(), want)
+			}
+
+			_, classic := Create(t.Context(), testutil.NewTestClient(t, handler), input)
+			if errors.Is(classic, finegrained.ErrUnconfirmedWrite) || !strings.Contains(classic.Error(), tt.classic) {
+				t.Errorf("classic error = %v, want the answer it always had, containing %q", classic, tt.classic)
+			}
+		})
+	}
+}
+
+// TestCreate_FineGrainedSession_RefusalIsNoUnconfirmedWrite verifies that a
+// creation GitLab refused, with an error of its own beside the nulled work
+// item, is the refusal to read rather than a write it ran.
+func TestCreate_FineGrainedSession_RefusalIsNoUnconfirmedWrite(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"workItemCreate":null},"errors":[{"message":"Access denied: This operation requires a fine-grained personal access token with the following project permissions: [Work Item: Create]."}]}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	client.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, ""))
+
+	_, err := Create(t.Context(), client, CreateInput{FullPath: testFullPath, WorkItemTypeID: testTypeGID, Title: testTitleNewItem})
+	if err == nil || errors.Is(err, finegrained.ErrUnconfirmedWrite) {
+		t.Errorf("Create() error = %v, want the refusal and no unconfirmed write", err)
 	}
 }
 
@@ -3406,6 +3477,24 @@ func TestCreate_Widgets_ReachTheWire(t *testing.T) {
 			}
 			assertWire(t, mutationInput(t, got), testCase.wireCase)
 		})
+	}
+}
+
+// TestPagination_ResponseWithoutPageInfo_IsNoPage verifies the guard of the
+// cursor reader both lists share: a response client-go hung no page
+// information on, or none at all, reads as an empty page rather than
+// panicking, and one that carries it is copied whole.
+func TestPagination_ResponseWithoutPageInfo_IsNoPage(t *testing.T) {
+	if got := pagination(nil); got != (toolutil.GraphQLPaginationOutput{}) {
+		t.Errorf("pagination(nil) = %+v, want no page", got)
+	}
+	if got := pagination(&gl.Response{}); got != (toolutil.GraphQLPaginationOutput{}) {
+		t.Errorf("pagination(no page info) = %+v, want no page", got)
+	}
+	info := &gl.PageInfo{HasNextPage: true, HasPreviousPage: true, EndCursor: "end", StartCursor: "start"}
+	want := toolutil.GraphQLPaginationOutput{HasNextPage: true, HasPreviousPage: true, EndCursor: "end", StartCursor: "start"}
+	if got := pagination(&gl.Response{PageInfo: info}); got != want {
+		t.Errorf("pagination(page info) = %+v, want %+v", got, want)
 	}
 }
 

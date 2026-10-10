@@ -24,11 +24,21 @@ var emptyDisplaySettings = json.RawMessage(`{}`)
 // their numeric database ID, not by an IID, and confusing the two is the most
 // likely reason a view that exists cannot be found.
 //
-// The action it sends the reader to is spelled by naming the constant the
-// catalog registers, not by writing the ID out: the hint used to say
-// "work_item_saved_view.list", which no surface resolves, because these
-// actions are routes on the issue domain and carry that prefix.
-const notFoundHint = "verify saved_view_id is the view's numeric ID (from " + actionList + ") and that namespace_path is the full group or project path"
+// The action it sends the reader to is the canonical ID the catalog
+// registers: the hint used to say "work_item_saved_view.list", which no
+// surface resolves, because these actions are routes on the issue domain and
+// carry that prefix. It is written out in one literal rather than joined to
+// actionList, since a constant expression has no statement a test can cover
+// and the mutation gate reports its operators as not covered; a test holds
+// the literal to actionList instead.
+const notFoundHint = "verify saved_view_id is the view's numeric ID (from issue.work_item_saved_view_list) and that namespace_path is the full group or project path"
+
+// objectSavedView is what the four writes that answer with a saved view
+// return, in a reader's words, for the answer a fine-grained session gets
+// when GitLab ran the write and answered without it (issue 1103): at 19.4.1
+// WorkItemSavedViewType declares no fine-grained permission, and GitLab
+// checks the payload's view only after the write ran.
+const objectSavedView = "saved view"
 
 // Hints for the 500 GitLab 19.4 answers a caller authenticated with a token
 // from the step that subscribes a user to a view: it locks the user row while
@@ -39,7 +49,8 @@ const (
 	// createServerErrorHint answers a create's 500. The view is saved before
 	// the step that fails, so the create has usually happened, and a caller
 	// told only that it failed creates the view a second time.
-	createServerErrorHint = "GitLab answered a server error, and on GitLab 19.4 that comes after the view is saved, from subscribing its creator: list the namespace's views with " + actionList + " and look for this name before creating it again, since a second create adds a duplicate"
+	// It names the listing action in one literal, as notFoundHint does.
+	createServerErrorHint = "GitLab answered a server error, and on GitLab 19.4 that comes after the view is saved, from subscribing its creator: list the namespace's views with issue.work_item_saved_view_list and look for this name before creating it again, since a second create adds a duplicate"
 	// subscribeServerErrorHint answers a subscribe's 500, which fails before
 	// anything is recorded.
 	subscribeServerErrorHint = "GitLab answered a server error before recording the subscription, which on GitLab 19.4 is what every subscribe made with a token meets: nothing changed, and the view can be followed from the web interface instead"
@@ -231,15 +242,24 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	for _, view := range views {
 		out.SavedViews = append(out.SavedViews, toItem(view))
 	}
-	if resp != nil && resp.PageInfo != nil {
-		out.Pagination = toolutil.GraphQLPaginationOutput{
-			HasNextPage:     resp.PageInfo.HasNextPage,
-			HasPreviousPage: resp.PageInfo.HasPreviousPage,
-			EndCursor:       resp.PageInfo.EndCursor,
-			StartCursor:     resp.PageInfo.StartCursor,
-		}
-	}
+	out.Pagination = pagination(resp)
 	return out, nil
+}
+
+// pagination reads the cursor metadata client-go hangs off a list's response.
+// client-go sets it on every list it answers, so the guard is for an answer
+// that reaches here without it rather than for one that does today, and a
+// test drives it directly.
+func pagination(resp *gl.Response) toolutil.GraphQLPaginationOutput {
+	if resp == nil || resp.PageInfo == nil {
+		return toolutil.GraphQLPaginationOutput{}
+	}
+	return toolutil.GraphQLPaginationOutput{
+		HasNextPage:     resp.PageInfo.HasNextPage,
+		HasPreviousPage: resp.PageInfo.HasPreviousPage,
+		EndCursor:       resp.PageInfo.EndCursor,
+		StartCursor:     resp.PageInfo.StartCursor,
+	}
 }
 
 // Create creates a saved view under a namespace.
@@ -279,13 +299,14 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		opts.Filters = *filters
 	}
 
-	view, _, err := client.GL().WorkItemSavedViews.CreateWorkItemSavedView(namespacePath, opts, gl.WithContext(ctx))
+	view, resp, err := client.GL().WorkItemSavedViews.CreateWorkItemSavedView(namespacePath, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusInternalServerError) {
 			return MutateOutput{}, toolutil.WrapErrWithHint("create_work_item_saved_view", err, createServerErrorHint)
 		}
-		return MutateOutput{}, toolutil.WrapErrWithHint("create_work_item_saved_view", err,
-			"verify namespace_path is a full group or project path you can write to, and that sort is a WorkItemSort enum value such as CREATED_DESC")
+		return MutateOutput{}, toolutil.UnconfirmedWrite(client, resp, "create_work_item_saved_view", objectSavedView, err,
+			toolutil.WrapErrWithHint("create_work_item_saved_view", err,
+				"verify namespace_path is a full group or project path you can write to, and that sort is a WorkItemSort enum value such as CREATED_DESC"))
 	}
 	return mutateOutput(fmt.Sprintf("Successfully created saved view %q.", name), toItem(view)), nil
 }
@@ -317,9 +338,10 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		opts.DisplaySettings = encoded
 	}
 
-	view, _, err := client.GL().WorkItemSavedViews.UpdateWorkItemSavedView(input.SavedViewID, opts, gl.WithContext(ctx))
+	view, resp, err := client.GL().WorkItemSavedViews.UpdateWorkItemSavedView(input.SavedViewID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return MutateOutput{}, toolutil.WrapErrWithHint("update_work_item_saved_view", err, notFoundHint)
+		return MutateOutput{}, toolutil.UnconfirmedWrite(client, resp, "update_work_item_saved_view", objectSavedView, err,
+			toolutil.WrapErrWithHint("update_work_item_saved_view", err, notFoundHint))
 	}
 	return mutateOutput(fmt.Sprintf("Successfully updated saved view %d.", input.SavedViewID), toItem(view)), nil
 }
@@ -347,12 +369,13 @@ func Subscribe(ctx context.Context, client *gitlabclient.Client, input Subscribe
 	if input.SavedViewID <= 0 {
 		return MutateOutput{}, toolutil.ErrRequiredInt64("subscribe_work_item_saved_view", "saved_view_id")
 	}
-	view, _, err := client.GL().WorkItemSavedViews.SubscribeWorkItemSavedView(input.SavedViewID, gl.WithContext(ctx))
+	view, resp, err := client.GL().WorkItemSavedViews.SubscribeWorkItemSavedView(input.SavedViewID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusInternalServerError) {
 			return MutateOutput{}, toolutil.WrapErrWithHint("subscribe_work_item_saved_view", err, subscribeServerErrorHint)
 		}
-		return MutateOutput{}, toolutil.WrapErrWithHint("subscribe_work_item_saved_view", err, notFoundHint)
+		return MutateOutput{}, toolutil.UnconfirmedWrite(client, resp, "subscribe_work_item_saved_view", objectSavedView, err,
+			toolutil.WrapErrWithHint("subscribe_work_item_saved_view", err, notFoundHint))
 	}
 	return mutateOutput(fmt.Sprintf("Successfully subscribed to saved view %d.", input.SavedViewID), toItem(view)), nil
 }
@@ -365,9 +388,10 @@ func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input Unsubsc
 	if input.SavedViewID <= 0 {
 		return MutateOutput{}, toolutil.ErrRequiredInt64("unsubscribe_work_item_saved_view", "saved_view_id")
 	}
-	view, _, err := client.GL().WorkItemSavedViews.UnsubscribeWorkItemSavedView(input.SavedViewID, gl.WithContext(ctx))
+	view, resp, err := client.GL().WorkItemSavedViews.UnsubscribeWorkItemSavedView(input.SavedViewID, gl.WithContext(ctx))
 	if err != nil {
-		return MutateOutput{}, toolutil.WrapErrWithHint("unsubscribe_work_item_saved_view", err, notFoundHint)
+		return MutateOutput{}, toolutil.UnconfirmedWrite(client, resp, "unsubscribe_work_item_saved_view", objectSavedView, err,
+			toolutil.WrapErrWithHint("unsubscribe_work_item_saved_view", err, notFoundHint))
 	}
 	return mutateOutput(fmt.Sprintf("Successfully unsubscribed from saved view %d.", input.SavedViewID), toItem(view)), nil
 }

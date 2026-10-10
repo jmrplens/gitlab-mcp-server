@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 )
 
 // GraphQLQuickActionsStatusSelection is the selection every createNote and
@@ -44,7 +46,19 @@ type GraphQLNoteMutation struct {
 	Query string
 	// Variables holds the mutation variables.
 	Variables map[string]any
+	// Authority is the fine-grained authority of the client that sends the
+	// mutation, nil for any other credential. Only an updateNote answered
+	// with neither note nor status reads it: see [ExecGraphQLNoteMutation].
+	Authority *finegrained.Authority
 }
+
+// noteEditOrDeletion is what a fine-grained session is told beside the
+// probably committed answer of an edit that came back with neither note nor
+// status, since for such a session that answer is also what a body of
+// commands alone, which deletes the note, comes back as. It is one literal
+// rather than a concatenation, which the mutation tool reports as not covered
+// since a constant expression carries no statement counter.
+const noteEditOrDeletion = " If the new body held only quick actions, GitLab ran them and deleted the note instead of editing it: a fine-grained token is not shown the quick actions status that tells the two apart, so read the item again either way."
 
 // QuickActionsStatusOutput mirrors GitLab's QuickActionsStatus, what a note
 // mutation reports about the quick actions its body carried: the commands it
@@ -125,9 +139,14 @@ type GraphQLNoteMutationResult[N any] struct {
 // (Mutations::Notes::Update::Base in GitLab), which is reported as an error
 // that says what happened, since the call cannot answer with the edited note
 // it promised and a caller told only that no note came back would read the
-// commands as not applied. A refusal GitLab answers at the top level leaves
-// the payload null, and is checked first so that neither reading is ever
-// given to a refusal.
+// commands as not applied. A fine-grained session gets that same payload for
+// an edit GitLab made: Work Item: Update grants update_note and not
+// read_note, the edited note is checked against the token only after the edit
+// ran, and the status declares no fine-grained permission, so such a session
+// never sees one. It is told the edit probably committed, with the deletion as
+// the other reading, since both ran (issue 1103). A refusal GitLab answers at
+// the top level leaves the payload null, and is checked first so that neither
+// reading is ever given to a refusal.
 //
 // A payload error is a refusal, with one exception: a note GitLab kept whose
 // every error is a quick action failure the status reports too. createNote
@@ -160,6 +179,9 @@ func ExecGraphQLNoteMutation[N any](ctx context.Context, gql gl.GraphQLInterface
 			return GraphQLNoteMutationResult[N]{QuickActions: status}, nil
 		}
 		if m.PayloadKey == updateNotePayloadKey {
+			if m.Authority != nil {
+				return GraphQLNoteMutationResult[N]{}, fmt.Errorf("%w%s", m.Authority.UnconfirmedWrite(m.Op, "note", nil), noteEditOrDeletion)
+			}
 			return GraphQLNoteMutationResult[N]{}, errors.New(m.Op + ": GitLab deleted the note instead of editing it. " +
 				"A new body holding only quick actions is run against the item the note is on and the note is removed, " +
 				"and GitLab reports nothing about what the commands did, so read the item again to see what they changed")

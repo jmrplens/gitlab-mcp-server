@@ -4,12 +4,15 @@ package vulnerabilities
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -921,6 +924,79 @@ func TestDismiss_RefusedMutation_IsAnErrorNamingGitLabsReason(t *testing.T) {
 			t.Errorf("SanitizeError(Dismiss()) = %q, want it to lead with the missing permission", got)
 		}
 	})
+}
+
+// TestStateMutations_VulnerabilityNulled_FineGrainedSessionIsToldTheWriteProbablyCommitted
+// verifies the answer to a state change GitLab ran and answered without the
+// vulnerability. Vulnerability: Update grants the four state permissions and
+// not read_vulnerability, which the payload's vulnerability needs, and GitLab
+// checks that object only after the change ran, so a token granted the one
+// and not the other changes the state and gets the vulnerability as null with
+// no error. The handlers used to publish that as a state change with an empty
+// vulnerability whose next steps offered the same change again. A
+// fine-grained session is now told the change was probably committed; a
+// classic one keeps the answer it had, and is never told so (issue 1103).
+func TestStateMutations_VulnerabilityNulled_FineGrainedSessionIsToldTheWriteProbablyCommitted(t *testing.T) {
+	const id = "gid://gitlab/Vulnerability/42"
+	tests := []struct {
+		name    string
+		key     string
+		call    func(*gitlabclient.Client) (MutationOutput, error)
+		opening string
+	}{
+		{
+			name: "dismiss", key: "vulnerabilityDismiss",
+			call: func(c *gitlabclient.Client) (MutationOutput, error) {
+				return Dismiss(context.Background(), c, DismissInput{ID: id})
+			},
+			opening: "dismiss_vulnerability: GitLab answered without the vulnerability this write returns.",
+		},
+		{
+			name: "confirm", key: "vulnerabilityConfirm",
+			call: func(c *gitlabclient.Client) (MutationOutput, error) {
+				return Confirm(context.Background(), c, ConfirmInput{ID: id})
+			},
+			opening: "confirm_vulnerability: GitLab answered without the vulnerability this write returns.",
+		},
+		{
+			name: "resolve", key: "vulnerabilityResolve",
+			call: func(c *gitlabclient.Client) (MutationOutput, error) {
+				return Resolve(context.Background(), c, ResolveInput{ID: id})
+			},
+			opening: "resolve_vulnerability: GitLab answered without the vulnerability this write returns.",
+		},
+		{
+			name: "revert", key: "vulnerabilityRevertToDetected",
+			call: func(c *gitlabclient.Client) (MutationOutput, error) {
+				return Revert(context.Background(), c, RevertInput{ID: id})
+			},
+			opening: "revert_vulnerability: GitLab answered without the vulnerability this write returns.",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := graphqlMux(map[string]http.HandlerFunc{
+				tt.key: func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusOK, `{"data":{"`+tt.key+`":{"vulnerability":null,"errors":[]}}}`)
+				},
+			})
+
+			fineClient := testutil.NewTestClient(t, handler)
+			fineClient.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, ""))
+			out, fine := tt.call(fineClient)
+			if !errors.Is(fine, finegrained.ErrUnconfirmedWrite) {
+				t.Fatalf("fine-grained = %+v, %v; want an unconfirmed write", out, fine)
+			}
+			if !strings.HasPrefix(fine.Error(), tt.opening) {
+				t.Errorf("fine-grained error = %q, want it to open with %q", fine.Error(), tt.opening)
+			}
+
+			classic, err := tt.call(testutil.NewTestClient(t, handler))
+			if err != nil || !reflect.DeepEqual(classic, MutationOutput{Vulnerability: nodeToItem(gqlVulnerabilityNode{})}) {
+				t.Errorf("classic = %+v, %v; want the empty vulnerability and no error it always had", classic, err)
+			}
+		})
+	}
 }
 
 // Confirm tests.

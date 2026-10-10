@@ -539,6 +539,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 			"id":   toolutil.FormatGID("Note", input.NoteID),
 			"body": toolutil.NormalizeText(input.Body),
 		},
+		Authority: client.Authority(),
 	})
 	if err != nil {
 		return Output{}, err

@@ -60,10 +60,12 @@ type MutationOutput struct {
 	Vulnerability Item `json:"vulnerability"`
 }
 
-// gqlMutationPayload is the shared result shape for all vulnerability state mutations.
+// gqlMutationPayload is the shared result shape for all vulnerability state
+// mutations. The vulnerability is a pointer so that a state change GitLab ran
+// and answered without it is told apart from one that answered it.
 type gqlMutationPayload struct {
-	Vulnerability gqlVulnerabilityNode `json:"vulnerability"`
-	Errors        []string             `json:"errors"`
+	Vulnerability *gqlVulnerabilityNode `json:"vulnerability"`
+	Errors        []string              `json:"errors"`
 }
 
 // vulnerabilityMutationResponse is the envelope every state mutation answers
@@ -104,7 +106,20 @@ func runVulnerabilityMutation(ctx context.Context, client *gitlabclient.Client, 
 	if len(result.Errors) > 0 {
 		return MutationOutput{}, fmt.Errorf("%s: %s", operation, result.Errors[0])
 	}
-	return MutationOutput{Vulnerability: nodeToItem(result.Vulnerability)}, nil
+	// No vulnerability and no error is a state change GitLab ran and answered
+	// without it. Vulnerability: Update grants the four state permissions and
+	// not read_vulnerability, which the vulnerability is checked against only
+	// after the change ran, so a fine-grained token granted the one and not the
+	// other is answered this way, and the session is told the change probably
+	// committed rather than handed an empty vulnerability as its result (issue
+	// 1103). A session with no authority keeps the answer it always had.
+	if result.Vulnerability == nil {
+		if unconfirmed := client.Authority().UnconfirmedWrite(operation, "vulnerability", nil); unconfirmed != nil {
+			return MutationOutput{}, unconfirmed
+		}
+		result.Vulnerability = &gqlVulnerabilityNode{}
+	}
+	return MutationOutput{Vulnerability: nodeToItem(*result.Vulnerability)}, nil
 }
 
 // Dismiss.

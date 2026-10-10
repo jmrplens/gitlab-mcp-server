@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -131,6 +132,135 @@ func initBytes(t *testing.T, command ...string) int {
 		}
 	}
 	return total
+}
+
+// committedWithoutObject names every action whose write GitLab can run and
+// answer without the object it returns to a fine-grained token, with how its
+// handler answers that (issue 1103). GitLab checks the token against the
+// mutation before the write runs and against the object the payload carries
+// only after it ran, so the write commits and the object comes back null.
+//
+// Two kinds are listed. The rows the table denies with that effect are
+// withheld from every session carrying an authority, and their handlers answer
+// for a table recorded from a later release that stops withholding one. The
+// rows it does not deny are served, and reach that answer today: a grant that
+// passes the mutation and lacks a permission the payload's object needs, which
+// phase A never asks about and phase B judges at any project or group, not the
+// one written to.
+var committedWithoutObject = map[string]string{
+	"achievement.award":                      "achievements: toolutil.UnconfirmedWrite",
+	"achievement.create":                     "achievements: toolutil.UnconfirmedWrite",
+	"achievement.delete":                     "achievements: toolutil.UnconfirmedWrite",
+	"achievement.revoke":                     "achievements: toolutil.UnconfirmedWrite",
+	"achievement.update":                     "achievements: toolutil.UnconfirmedWrite",
+	"achievement.user_achievement_delete":    "achievements: toolutil.UnconfirmedWrite",
+	"achievement.user_achievement_reorder":   "achievements: toolutil.UnconfirmedWrite",
+	"achievement.user_achievement_update":    "achievements: toolutil.UnconfirmedWrite",
+	"custom_emoji.create":                    "customemoji.Create: the authority at the missing emoji",
+	"custom_emoji.delete":                    "customemoji.Delete selects the errors alone and answers success, which a deletion GitLab ran is",
+	"group.epic_create":                      "epics.Create: toolutil.UnconfirmedWrite",
+	"group.epic_discussion_update_note":      "toolutil.ExecGraphQLNoteMutation: the authority at the missing note",
+	"group.epic_note_update":                 "toolutil.ExecGraphQLNoteMutation: the authority at the missing note",
+	"issue.work_item_create":                 "workitems.Create: toolutil.UnconfirmedWrite",
+	"issue.work_item_saved_view_create":      "workitemsavedviews: toolutil.UnconfirmedWrite",
+	"issue.work_item_saved_view_subscribe":   "workitemsavedviews: toolutil.UnconfirmedWrite",
+	"issue.work_item_saved_view_unsubscribe": "workitemsavedviews: toolutil.UnconfirmedWrite",
+	"issue.work_item_saved_view_update":      "workitemsavedviews: toolutil.UnconfirmedWrite",
+	"project.target_branch_rule_create":      "projects: toolutil.UnconfirmedWrite after the captured refusal",
+	"security_attribute.create":              "securityattributes: toolutil.UnconfirmedWrite and the authority at the empty list",
+	"security_attribute.update":              "securityattributes: toolutil.UnconfirmedWrite and the authority at the missing attribute",
+	"security_category.create":               "securitycategories: toolutil.UnconfirmedWrite",
+	"security_category.update":               "securitycategories: toolutil.UnconfirmedWrite",
+	"vulnerability.confirm":                  "vulnerabilities.runVulnerabilityMutation: the authority at the missing vulnerability",
+	"vulnerability.dismiss":                  "vulnerabilities.runVulnerabilityMutation: the authority at the missing vulnerability",
+	"vulnerability.resolve":                  "vulnerabilities.runVulnerabilityMutation: the authority at the missing vulnerability",
+	"vulnerability.revert":                   "vulnerabilities.runVulnerabilityMutation: the authority at the missing vulnerability",
+}
+
+// TestTable_WritesAnsweredWithoutTheirObject_AreEachAnswered verifies that
+// every action the table says GitLab can run and answer without its object is
+// declared in [committedWithoutObject], so a write a regeneration adds to that
+// set fails here until its handler is looked at, and that every declaration
+// still names one. The handler tests hold what each answers.
+func TestTable_WritesAnsweredWithoutTheirObject_AreEachAnswered(t *testing.T) {
+	found := writesAnsweredWithoutTheirObject(Table())
+	for id, why := range found {
+		if _, declared := committedWithoutObject[id]; !declared {
+			t.Errorf("%s: GitLab can run this write and answer without its object (%s); answer that in its handler "+
+				"through toolutil.UnconfirmedWrite or the client's authority, and declare it in committedWithoutObject", id, why)
+		}
+	}
+	for id := range committedWithoutObject {
+		if _, ok := found[id]; !ok {
+			t.Errorf("%s is declared in committedWithoutObject and the table no longer says it can be answered without its object", id)
+		}
+	}
+}
+
+// writesAnsweredWithoutTheirObject returns, keyed by action ID with the reason,
+// every action the table denies as committed and then answered null, and every
+// action it serves whose mutation's answer spine holds a position needing a
+// permission some grant passing the mutation does not hold.
+func writesAnsweredWithoutTheirObject(table *finegrained.Table) map[string]string {
+	found := map[string]string{}
+	for i := range table.Actions {
+		row := &table.Actions[i]
+		if row.Denied != nil {
+			if row.Denied.Effect == finegrained.EffectCommittedThenNull {
+				found[row.ID] = "denied: " + row.Denied.Element + " is committed and answered null"
+			}
+			continue
+		}
+		for _, path := range row.Paths {
+			for _, index := range path {
+				if why := mutationObjectWithheld(table, &table.Operations[index]); why != "" {
+					found[row.ID] = why
+				}
+			}
+		}
+	}
+	return found
+}
+
+// mutationObjectWithheld names the first position on a mutation's answer
+// spine some grant passing the mutation cannot read, or returns "" when there
+// is none or the operation is no mutation.
+func mutationObjectWithheld(table *finegrained.Table, op *finegrained.Operation) string {
+	if !strings.HasPrefix(op.Name, "mutation ") {
+		return ""
+	}
+	held := map[uint16]bool{}
+	for _, group := range op.Groups {
+		for _, perm := range table.Groups[group].Perms {
+			held[perm] = true
+		}
+	}
+	for _, index := range op.Spine {
+		element := &table.Elements[index]
+		for _, group := range element.Groups {
+			for _, perm := range table.Groups[group].Perms {
+				if !held[perm] && grantableWithout(table, held, perm) {
+					return element.Path + " needs " + table.Permissions[perm]
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// grantableWithout reports whether a grant can hold every permission of
+// needed without perm: for each one, some assignable a token may be granted
+// carries it and not perm. Assignables are granted whole, so this is exactly
+// whether the union of one choice per permission leaves perm out.
+func grantableWithout(table *finegrained.Table, needed map[uint16]bool, perm uint16) bool {
+	for want := range needed {
+		if !slices.ContainsFunc(table.Assignables, func(a finegrained.Assignable) bool {
+			return a.Grantable && slices.Contains(a.Permissions, want) && !slices.Contains(a.Permissions, perm)
+		}) {
+			return false
+		}
+	}
+	return true
 }
 
 // TestTable_NamesTheRoutesTheHandlersSend holds the generated table's routes

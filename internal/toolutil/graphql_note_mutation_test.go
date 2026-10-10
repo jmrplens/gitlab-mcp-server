@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 )
 
 // fakeGraphQL is a stub gl.GraphQLInterface that either fails with err or
@@ -159,6 +161,43 @@ func TestExecGraphQLNoteMutation_UpdateToCommandsOnly_SaysTheNoteWasDeleted(t *t
 		"and GitLab reports nothing about what the commands did, so read the item again to see what they changed"
 	if err == nil || err.Error() != want {
 		t.Errorf("err = %v, want %q", err, want)
+	}
+}
+
+// TestExecGraphQLNoteMutation_UpdateWithoutNote_FineGrainedSessionIsToldTheEditProbablyCommitted
+// verifies the same payload answered to a fine-grained session. Work Item:
+// Update grants update_note and not read_note, which the edited note needs,
+// and GitLab checks the note only after the edit ran, so a token granted the
+// one and not the other edits the note and gets it back null; the quick
+// actions status beside it declares no fine-grained permission, so such a
+// session never sees one. The payload is then either an edit GitLab made or a
+// body of commands that deleted the note, and both ran, so the session is
+// told the write probably committed, with the deletion named as the other
+// reading, rather than that the note was deleted. The creation keeps its
+// answer: no fine-grained session reaches one, since each resolves the epic
+// through a namespace no fine-grained token can read.
+func TestExecGraphQLNoteMutation_UpdateWithoutNote_FineGrainedSessionIsToldTheEditProbablyCommitted(t *testing.T) {
+	authority := finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, "")
+	gql := fakeGraphQL{body: `{"data":{"updateNote":{"note":null,"errors":[],"quickActionsStatus":null}}}`}
+	_, err := ExecGraphQLNoteMutation[testNote](context.Background(), gql, GraphQLNoteMutation{
+		Op: "epicNoteUpdate", PayloadKey: "updateNote", Authority: authority,
+	})
+	if !errors.Is(err, finegrained.ErrUnconfirmedWrite) {
+		t.Fatalf("err = %v, want an unconfirmed write", err)
+	}
+	const opening = "epicNoteUpdate: GitLab answered without the note this write returns."
+	const deletion = " If the new body held only quick actions, GitLab ran them and deleted the note instead of editing it: " +
+		"a fine-grained token is not shown the quick actions status that tells the two apart, so read the item again either way."
+	if !strings.HasPrefix(err.Error(), opening) || !strings.HasSuffix(err.Error(), deletion) {
+		t.Errorf("err = %q, want it to open with %q and end with %q", err, opening, deletion)
+	}
+
+	created := fakeGraphQL{body: `{"data":{"createNote":{"note":null,"errors":[],"quickActionsStatus":null}}}`}
+	_, err = ExecGraphQLNoteMutation[testNote](context.Background(), created, GraphQLNoteMutation{
+		Op: "epicNoteCreate", PayloadKey: "createNote", Authority: authority,
+	})
+	if err == nil || err.Error() != "epicNoteCreate: no note returned" {
+		t.Errorf("creation err = %v, want the answer it always had", err)
 	}
 }
 

@@ -62,10 +62,11 @@ func ListTargetBranchRules(ctx context.Context, client *gitlabclient.Client, inp
 	if input.ProjectID == "" {
 		return ListTargetBranchRulesOutput{}, errors.New("projectListTargetBranchRules: project_id is required. Pass the full project path (namespace/project); the target branch rules query does not accept a numeric ID")
 	}
-	rules, _, err := client.GL().Projects.ListProjectTargetBranchRules(input.ProjectID.String(), gl.WithContext(ctx))
+	captured, capture := gitlabclient.WithResponseCapture(ctx)
+	rules, _, err := client.GL().Projects.ListProjectTargetBranchRules(input.ProjectID.String(), gl.WithContext(captured))
 	if err != nil {
 		return ListTargetBranchRulesOutput{}, toolutil.WrapErrWithStatusHint(
-			"projectListTargetBranchRules", err, http.StatusNotFound,
+			opListTargetBranchRules, refusalOr(opListTargetBranchRules, err, capture), http.StatusNotFound,
 			"pass the full project path (namespace/project), not a numeric ID. Target branch rules require Premium/Ultimate",
 		)
 	}
@@ -108,11 +109,53 @@ func CreateTargetBranchRule(ctx context.Context, client *gitlabclient.Client, in
 		Name:         input.Name,
 		TargetBranch: input.TargetBranch,
 	}
-	rule, _, err := client.GL().Projects.CreateTargetBranchRule(pid, opts, gl.WithContext(ctx))
+	captured, capture := gitlabclient.WithResponseCapture(ctx)
+	rule, resp, err := client.GL().Projects.CreateTargetBranchRule(pid, opts, gl.WithContext(captured))
 	if err != nil {
-		return TargetBranchRuleOutput{}, toolutil.WrapErrWithMessage("projectCreateTargetBranchRule", err)
+		// A creation GitLab ran and answered without the rule is one a
+		// fine-grained session is told probably committed (issue 1103): at
+		// 19.4.1 ProjectTargetBranchRule declares no fine-grained permission,
+		// and GitLab checks the payload's rule only after it exists. client-go
+		// reports that null and a refusal alike, as its not-found sentinel, so
+		// the refusal is read from the answer first.
+		err = refusalOr(opCreateTargetBranchRule, err, capture)
+		return TargetBranchRuleOutput{}, toolutil.UnconfirmedWrite(client, resp, opCreateTargetBranchRule, objectTargetBranchRule, err,
+			toolutil.WrapErrWithMessage(opCreateTargetBranchRule, err))
 	}
 	return targetBranchRuleToOutput(rule), nil
+}
+
+// The operations the target branch rule handlers name in their errors, and
+// the rule in a reader's words, for the answer a fine-grained session gets
+// when GitLab ran a creation and answered without it.
+const (
+	opListTargetBranchRules  = "projectListTargetBranchRules"
+	opCreateTargetBranchRule = "projectCreateTargetBranchRule"
+	opDeleteTargetBranchRule = "projectDeleteTargetBranchRule"
+	objectTargetBranchRule   = "target branch rule"
+)
+
+// refusalOr returns the refusal GitLab answered a target branch rule request
+// with, read from the captured answer, or err when it answered none.
+//
+// client-go's three target branch rule methods decode the top-level errors
+// GitLab refuses a request with and never read them, so a refused list and a
+// refused creation reach a caller as the not-found sentinel the null beside
+// the errors becomes, and a refused delete as a success (row 103 of
+// docs/development/upstream-bugs.md). The capture holds the same bytes the
+// SDK decoded (ADR-0021). An answer that is not GraphQL's, a 404 page of the
+// endpoint among them, carries no refusal of GraphQL's, so err stands.
+func refusalOr(operation string, err error, capture *gitlabclient.ResponseCapture) error {
+	var answer struct {
+		Errors []toolutil.GraphQLError `json:"errors"`
+	}
+	if capture.Decode(&answer) != nil {
+		return err
+	}
+	if refusal := toolutil.GraphQLTopLevelError(operation, answer.Errors); refusal != nil {
+		return refusal
+	}
+	return err
 }
 
 // DeleteTargetBranchRuleInput defines parameters for deleting a target branch
@@ -130,9 +173,15 @@ func DeleteTargetBranchRule(ctx context.Context, client *gitlabclient.Client, in
 	if input.RuleID == 0 {
 		return errors.New("projectDeleteTargetBranchRule: rule_id is required. Use the list action to find target branch rule IDs")
 	}
-	_, err := client.GL().Projects.DeleteTargetBranchRule(input.RuleID, gl.WithContext(ctx))
+	captured, capture := gitlabclient.WithResponseCapture(ctx)
+	_, err := client.GL().Projects.DeleteTargetBranchRule(input.RuleID, gl.WithContext(captured))
+	if err == nil {
+		// client-go answers a refused delete as a success, so the refusal is
+		// read from the answer.
+		err = refusalOr(opDeleteTargetBranchRule, nil, capture)
+	}
 	if err != nil {
-		return toolutil.WrapErrWithMessage("projectDeleteTargetBranchRule", err)
+		return toolutil.WrapErrWithMessage(opDeleteTargetBranchRule, err)
 	}
 	return nil
 }

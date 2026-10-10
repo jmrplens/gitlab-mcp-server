@@ -318,27 +318,40 @@ func workItemsPathReason(in ListInput) string {
 // author_username and confidential are here although GitLab's REST epics
 // endpoint documents both: client-go's ListGroupEpicsOptions declares neither,
 // so the Work Items query is the only way either one reaches GitLab from here.
+//
+// Separate ifs rather than a tagless switch here and in
+// [namesWorkItemsAttribute]: a case expression carries no statement counter,
+// so the mutation tool reports every mutant of one as not covered whatever the
+// tests assert.
 func namesWorkItemsIdentity(in ListInput) string {
-	switch {
-	case in.AuthorUsername != "":
+	if in.AuthorUsername != "" {
 		return "author_username"
-	case in.Confidential != nil:
+	}
+	if in.Confidential != nil {
 		return "confidential"
-	case in.After != "":
+	}
+	if in.After != "" {
 		return "after"
-	case in.Before != "":
+	}
+	if in.Before != "" {
 		return "before"
-	case in.Last != nil:
+	}
+	if in.Last != nil {
 		return "last"
-	case len(in.AssigneeUsernames) > 0:
+	}
+	if len(in.AssigneeUsernames) > 0 {
 		return "assignee_usernames"
-	case in.AssigneeWildcardID != "":
+	}
+	if in.AssigneeWildcardID != "" {
 		return "assignee_wildcard_id"
-	case len(in.IIDs) > 0:
+	}
+	if len(in.IIDs) > 0 {
 		return "iids"
-	case len(in.IDs) > 0:
+	}
+	if len(in.IDs) > 0 {
 		return "ids"
-	case len(in.ParentIDs) > 0:
+	}
+	if len(in.ParentIDs) > 0 {
 		return "parent_ids"
 	}
 	return ""
@@ -347,28 +360,37 @@ func namesWorkItemsIdentity(in ListInput) string {
 // namesWorkItemsAttribute covers the filters that describe an epic rather than
 // naming one.
 func namesWorkItemsAttribute(in ListInput) string {
-	switch {
-	case len(in.In) > 0:
+	if len(in.In) > 0 {
 		return "in"
-	case len(in.MilestoneTitle) > 0:
+	}
+	if len(in.MilestoneTitle) > 0 {
 		return "milestone_title"
-	case in.MilestoneWildcardID != "":
+	}
+	if in.MilestoneWildcardID != "" {
 		return "milestone_wildcard_id"
-	case in.ClosedAfter != "":
+	}
+	if in.ClosedAfter != "" {
 		return "closed_after"
-	case in.ClosedBefore != "":
+	}
+	if in.ClosedBefore != "" {
 		return "closed_before"
-	case in.DueAfter != "":
+	}
+	if in.DueAfter != "" {
 		return "due_after"
-	case in.DueBefore != "":
+	}
+	if in.DueBefore != "" {
 		return "due_before"
-	case in.HealthStatusFilter != "":
+	}
+	if in.HealthStatusFilter != "" {
 		return "health_status_filter"
-	case in.Weight != "":
+	}
+	if in.Weight != "" {
 		return "weight"
-	case in.WeightWildcardID != "":
+	}
+	if in.WeightWildcardID != "" {
 		return "weight_wildcard_id"
-	case in.Subscribed != "":
+	}
+	if in.Subscribed != "" {
 		return "subscribed"
 	}
 	return ""
@@ -1017,16 +1039,23 @@ func listWithWorkItems(ctx context.Context, client *gitlabclient.Client, input L
 	for _, wi := range items {
 		out = append(out, toOutput(wi))
 	}
-	result := ListOutput{Epics: out}
-	if resp != nil && resp.PageInfo != nil {
-		result.Pagination = &toolutil.GraphQLPaginationOutput{
-			HasNextPage:     resp.PageInfo.HasNextPage,
-			HasPreviousPage: resp.PageInfo.HasPreviousPage,
-			EndCursor:       resp.PageInfo.EndCursor,
-			StartCursor:     resp.PageInfo.StartCursor,
-		}
+	return ListOutput{Epics: out, Pagination: cursorPagination(resp)}, nil
+}
+
+// cursorPagination reads the cursor metadata client-go hangs off the work
+// items listing's response, or nil when there is none. client-go sets it on
+// every list it answers, so the guard is for an answer that reaches here
+// without it rather than for one that does today.
+func cursorPagination(resp *gl.Response) *toolutil.GraphQLPaginationOutput {
+	if resp == nil || resp.PageInfo == nil {
+		return nil
 	}
-	return result, nil
+	return &toolutil.GraphQLPaginationOutput{
+		HasNextPage:     resp.PageInfo.HasNextPage,
+		HasPreviousPage: resp.PageInfo.HasPreviousPage,
+		EndCursor:       resp.PageInfo.EndCursor,
+		StartCursor:     resp.PageInfo.StartCursor,
+	}
 }
 
 // buildWorkItemsListOptions maps a ListInput onto the Work Items query
@@ -1217,12 +1246,19 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Title == "" {
 		return Output{}, errors.New("epicCreate: title is required")
 	}
-	wi, _, err := client.GL().WorkItems.CreateWorkItem(
+	wi, resp, err := client.GL().WorkItems.CreateWorkItem(
 		input.FullPath, gl.WorkItemTypeEpic, buildCreateOptions(input), gl.WithContext(ctx),
 	)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("epicCreate", err, http.StatusForbidden,
-			"creating epics requires Reporter role or higher; epics require GitLab Premium or Ultimate")
+		// A creation GitLab ran and answered without the epic, null with no
+		// error or nulled by its non-null type, which client-go reports as an
+		// empty response and as a failed mutation, is one a fine-grained
+		// session is told probably committed (issue 1103): GitLab declares
+		// WorkItem at the project boundary only, so an epic resolves none for
+		// such a token and is answered null after it exists.
+		return Output{}, toolutil.UnconfirmedWrite(client, resp, "epicCreate", "epic", err,
+			toolutil.WrapErrWithStatusHint("epicCreate", err, http.StatusForbidden,
+				"creating epics requires Reporter role or higher; epics require GitLab Premium or Ultimate"))
 	}
 	return toOutput(wi), nil
 }

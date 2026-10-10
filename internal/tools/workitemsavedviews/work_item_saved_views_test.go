@@ -15,6 +15,10 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -977,5 +981,145 @@ func TestUpdate_ServerError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "saved_view_id") {
 		t.Errorf("Update() error = %q, want the identifier hint", err)
+	}
+}
+
+// TestHints_NameTheListingByItsCanonicalID verifies that the two hints that
+// send a reader to the listing name it by the ID the catalog registers. They
+// spell it in one literal, which nothing but this test ties to actionList.
+func TestHints_NameTheListingByItsCanonicalID(t *testing.T) {
+	for name, hint := range map[string]string{"not found": notFoundHint, "create server error": createServerErrorHint} {
+		t.Run(name, func(t *testing.T) {
+			// The ID is followed by a space or a closing parenthesis, never
+			// by more of an identifier, which would name another action.
+			if !strings.Contains(hint, " "+actionList+" ") && !strings.Contains(hint, " "+actionList+")") {
+				t.Errorf("hint %q does not name %s", hint, actionList)
+			}
+		})
+	}
+}
+
+// TestPagination_ResponseWithoutPageInfo_IsNoPage verifies the guard of the
+// listing's cursor reader: a response client-go hung no page information on,
+// or none at all, reads as an empty page rather than panicking, and one that
+// carries it is copied whole.
+func TestPagination_ResponseWithoutPageInfo_IsNoPage(t *testing.T) {
+	if got := pagination(nil); got != (toolutil.GraphQLPaginationOutput{}) {
+		t.Errorf("pagination(nil) = %+v, want no page", got)
+	}
+	if got := pagination(&gl.Response{}); got != (toolutil.GraphQLPaginationOutput{}) {
+		t.Errorf("pagination(no page info) = %+v, want no page", got)
+	}
+	info := &gl.PageInfo{HasNextPage: true, HasPreviousPage: true, EndCursor: "end", StartCursor: "start"}
+	want := toolutil.GraphQLPaginationOutput{HasNextPage: true, HasPreviousPage: true, EndCursor: "end", StartCursor: "start"}
+	if got := pagination(&gl.Response{PageInfo: info}); got != want {
+		t.Errorf("pagination(page info) = %+v, want %+v", got, want)
+	}
+}
+
+// fineGrainedClient is a test client carrying the authority a fine-grained
+// session's client carries, so a handler reads it the way production does.
+func fineGrainedClient(t *testing.T, handler http.Handler) *gitlabclient.Client {
+	t.Helper()
+	client := testutil.NewTestClient(t, handler)
+	client.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, ""))
+	return client
+}
+
+// savedViewWrite is one of the four writes that answer with a saved view.
+type savedViewWrite struct {
+	name string
+	key  string
+	op   string
+	call func(*gitlabclient.Client) error
+}
+
+// savedViewWrites are the create, the update and the two subscription
+// writes, each with the payload key GitLab answers it under and the
+// operation its errors name.
+func savedViewWrites() []savedViewWrite {
+	return []savedViewWrite{
+		{name: "create", key: "workItemSavedViewCreate", op: "create_work_item_saved_view", call: func(c *gitlabclient.Client) error {
+			_, err := Create(context.Background(), c, CreateInput{NamespacePath: "my-group", Name: "My open tasks", Sort: "CREATED_DESC"})
+			return err
+		}},
+		{name: "update", key: "workItemSavedViewUpdate", op: "update_work_item_saved_view", call: func(c *gitlabclient.Client) error {
+			_, err := Update(context.Background(), c, UpdateInput{SavedViewID: 7, Name: "Renamed"})
+			return err
+		}},
+		{name: "subscribe", key: "workItemSavedViewSubscribe", op: "subscribe_work_item_saved_view", call: func(c *gitlabclient.Client) error {
+			_, err := Subscribe(context.Background(), c, SubscribeInput{SavedViewID: 7})
+			return err
+		}},
+		{name: "unsubscribe", key: "workItemSavedViewUnsubscribe", op: "unsubscribe_work_item_saved_view", call: func(c *gitlabclient.Client) error {
+			_, err := Unsubscribe(context.Background(), c, UnsubscribeInput{SavedViewID: 7})
+			return err
+		}},
+	}
+}
+
+// TestWrites_SavedViewNulled_FineGrainedSessionIsToldTheWriteProbablyCommitted
+// verifies the answer to a saved view write GitLab ran and answered without
+// the saved view, which is what it does for a fine-grained token at 19.4.1:
+// WorkItemSavedViewType declares no fine-grained permission, and GitLab checks
+// the payload's object only after the write ran. client-go reads the null as
+// an empty response, which used to reach a model as a write that failed. A
+// fine-grained session is now told it probably committed; a classic one keeps
+// the answer it had and is never told so (issue 1103).
+func TestWrites_SavedViewNulled_FineGrainedSessionIsToldTheWriteProbablyCommitted(t *testing.T) {
+	for _, write := range savedViewWrites() {
+		t.Run(write.name, func(t *testing.T) {
+			handler := testutil.GraphQLHandler(map[string]http.HandlerFunc{
+				write.key: func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"`+write.key+`":{"savedView":null,"errors":[]}}`)
+				},
+			})
+
+			fine := write.call(fineGrainedClient(t, handler))
+			if !errors.Is(fine, finegrained.ErrUnconfirmedWrite) {
+				t.Fatalf("fine-grained error = %v, want an unconfirmed write", fine)
+			}
+			if want := write.op + ": GitLab answered without the saved view this write returns."; !strings.HasPrefix(fine.Error(), want) {
+				t.Errorf("fine-grained error = %q, want it to open with %q", fine.Error(), want)
+			}
+
+			classic := write.call(testutil.NewTestClient(t, handler))
+			if errors.Is(classic, finegrained.ErrUnconfirmedWrite) || !strings.Contains(classic.Error(), "unexpected empty response") {
+				t.Errorf("classic error = %v, want the empty response it always reported", classic)
+			}
+		})
+	}
+}
+
+// TestWrites_FineGrainedSession_RefusalIsNoUnconfirmedWrite verifies that a
+// saved view write GitLab refused, with an error of its own beside the null
+// payload, is the refusal to read rather than a write it ran, and that a
+// payload error is too.
+func TestWrites_FineGrainedSession_RefusalIsNoUnconfirmedWrite(t *testing.T) {
+	answers := []struct {
+		name string
+		body func(key string) string
+	}{
+		{name: "a refusal", body: func(key string) string {
+			return `{"data":{"` + key + `":null},"errors":[{"message":"The resource that you are attempting to access does not exist or you don't have permission to perform this action"}]}`
+		}},
+		{name: "a payload error", body: func(key string) string {
+			return `{"data":{"` + key + `":{"savedView":null,"errors":["Name has already been taken"]}}}`
+		}},
+	}
+	for _, write := range savedViewWrites() {
+		for _, answer := range answers {
+			t.Run(write.name+" "+answer.name, func(t *testing.T) {
+				handler := testutil.GraphQLHandler(map[string]http.HandlerFunc{
+					write.key: func(w http.ResponseWriter, _ *http.Request) {
+						testutil.RespondJSON(w, http.StatusOK, answer.body(write.key))
+					},
+				})
+				err := write.call(fineGrainedClient(t, handler))
+				if err == nil || errors.Is(err, finegrained.ErrUnconfirmedWrite) {
+					t.Errorf("error = %v, want GitLab's answer and no unconfirmed write", err)
+				}
+			})
+		}
 	}
 }
