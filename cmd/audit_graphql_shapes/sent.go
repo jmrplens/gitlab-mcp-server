@@ -1,9 +1,10 @@
 package main
 
 import (
+	"cmp"
 	"go/token"
 	"go/types"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/vektah/gqlparser/v2/ast"
@@ -686,14 +687,12 @@ func dedupeSent(found []sentField, published publishedIndex, selected map[string
 
 // sortSent orders the findings the way a reader reads them: by package, then
 // by the object they were read on, then by field.
+//
+// It compares rather than asks which comes first, so each level is decided
+// once, by the sign of the comparison, and a tie on one level falls through
+// to the next without a second test of the same two values.
 func sortSent(found []sentField) {
-	sort.Slice(found, func(i, j int) bool {
-		if found[i].Package != found[j].Package {
-			return found[i].Package < found[j].Package
-		}
-		if found[i].SchemaType != found[j].SchemaType {
-			return found[i].SchemaType < found[j].SchemaType
-		}
-		return found[i].Field < found[j].Field
+	slices.SortFunc(found, func(a, b sentField) int {
+		return cmp.Or(strings.Compare(a.Package, b.Package), strings.Compare(a.SchemaType, b.SchemaType), strings.Compare(a.Field, b.Field))
 	})
 }

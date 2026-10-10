@@ -380,14 +380,17 @@ func TestDecisions_CodexUserAgentFallback_IsDecidedByIssue1043(t *testing.T) {
 // resolves narrow, to Free with an enterprise build's warning (AUT-003, issue
 // 900), and the second is kept as INV-008's recorded exception. Both rows
 // record the decision and carry F-09 no longer; AUT-003 keeps F-10, the tier
-// narrowing that still answers as unknown, which is issue 956's.
+// narrowing that still answers as unknown, which is issue 956's. AUT-003 also
+// records issue 1224, which added the third question the tier is asked on
+// GitLab.com, the plans of the top-level groups the caller is a member of,
+// with its own page size and page bound.
 func TestDecisions_TierFallback_IsINV008sRecordedException(t *testing.T) {
 	for _, tc := range []struct {
 		id      string
 		decided []string
 	}{
 		{"ADM-003", []string{"ADR-0018", "issue 952"}},
-		{"AUT-003", []string{"issue 900", "issue 952"}},
+		{"AUT-003", []string{"issue 900", "issue 952", "issue 1224"}},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			d, ok := Lookup(tc.id)

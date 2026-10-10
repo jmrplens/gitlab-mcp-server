@@ -351,8 +351,9 @@ type graphQLShape struct {
 // would put a fixture's typo in the inventory, so it is left out; the schema
 // gate is what judges documents, and this only describes them.
 func summarizeGraphQL(document string) (graphQLShape, bool) {
+	// ParseQuery hands back a document whenever it reports no error.
 	parsed, err := parser.ParseQuery(&ast.Source{Input: document})
-	if err != nil || parsed == nil || len(parsed.Operations) == 0 {
+	if err != nil || len(parsed.Operations) == 0 {
 		return graphQLShape{}, false
 	}
 

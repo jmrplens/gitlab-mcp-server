@@ -253,11 +253,14 @@ func GFMCells(line string) []string {
 			cell.WriteRune(r)
 		}
 	}
+	// The last cell is appended whatever the line held, so there is always a
+	// first cell to look at; and a leading pipe has already closed one cell
+	// before that last one, so cutting the first leaves a last.
 	cells = append(cells, strings.TrimSpace(cell.String()))
-	if len(cells) > 0 && cells[0] == "" && strings.HasPrefix(strings.TrimSpace(line), "|") {
+	if cells[0] == "" && strings.HasPrefix(strings.TrimSpace(line), "|") {
 		cells = cells[1:]
 	}
-	if len(cells) > 0 && cells[len(cells)-1] == "" && strings.HasSuffix(strings.TrimSpace(line), "|") {
+	if cells[len(cells)-1] == "" && strings.HasSuffix(strings.TrimSpace(line), "|") {
 		cells = cells[:len(cells)-1]
 	}
 	return cells
@@ -286,8 +289,10 @@ func isDelimiterRow(line string) bool {
 // rendered as text.
 func (s *gfmScanner) tables() {
 	lines := s.doc.Lines
+	// A table's own lines are never asked about: the loop resumes at the
+	// line that ended the table, which body leaves unmarked.
 	for i := 0; i+1 < len(lines); i++ {
-		if s.kinds[i] != gfmPipe || s.kinds[i+1] != gfmPipe || !isDelimiterRow(lines[i+1]) || s.inTable[i] {
+		if s.kinds[i] != gfmPipe || s.kinds[i+1] != gfmPipe || !isDelimiterRow(lines[i+1]) {
 			continue
 		}
 		table := GFMTable{Header: i, Delimiter: i + 1, Columns: len(GFMCells(lines[i]))}
@@ -456,7 +461,7 @@ func elideCodeSpans(line string) string {
 			continue
 		}
 		open := backtickRun(line, i)
-		if closer := nextBacktickRun(line, i+open, open); closer >= 0 {
+		if closer := nextBacktickRun(line, i+open, open); closer != -1 {
 			b.WriteString(gfmCodeSpanPlaceholder)
 			i = closer + open
 			continue

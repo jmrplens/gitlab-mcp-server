@@ -6954,14 +6954,21 @@ markdown. We keep emitting both.
 - **Blocking**: no. The tier can always be pinned with `--tier` or
   `GITLAB_MCP_TIER`, which skips detection entirely.
 - **Workaround**: yes, the detection cascade in `internal/gitlab/client.go`.
-  `GET /license` first, then the namespace plans, then Free with a warning.
-  The namespace step answers only on gitlab.com, where a namespace plan is the
-  subscription; on a self-managed instance it reads `default` for everyone, so
-  a non-administrator there falls through both steps to Free, and that caller
-  is the one the merge request is for. Once a release carries it, a step
-  reading `plan` from `GET /metadata` answers that caller, which needs
-  client-go's `Metadata` struct (`version`, `revision`, `kas` and `enterprise`
-  at the v3.15.0 pin) to gain the field, or a captured-response read under
+  `GET /license` first, then the namespace plans, then, on gitlab.com alone,
+  the top-level groups the caller is a member of (issue 1224), then Free with
+  a warning. The namespace step answers only on gitlab.com, where a namespace
+  plan is the subscription; on a self-managed instance it reads `default` for
+  everyone, so a non-administrator there falls through every step to Free, and
+  that caller is the one the merge request is for. The membership step asks
+  `licensedFeatureAvailability` of each group, which by GitLab's source
+  (`load_feature_available` in `ee/app/models/ee/namespace.rb`) answers from
+  the instance license wherever namespace plans are not checked, so it could
+  answer this caller without the merge request; it is kept to gitlab.com until
+  that is measured on a licensed self-managed instance. Once a release carries
+  the merge request, a step reading `plan` from `GET /metadata` answers that
+  caller, which needs client-go's `Metadata` struct (`version`, `revision`,
+  `kas` and `enterprise` at the v3.15.0 pin) to gain the field, or a
+  captured-response read under
   [ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)
   until it does.
 

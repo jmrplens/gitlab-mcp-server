@@ -66,6 +66,37 @@ func TestTierFromPlan(t *testing.T) {
 	}
 }
 
+// TestTierFromPlan_GitLabDotComTrialAndProgramPlans holds the plans GitLab.com
+// reports for a namespace on a trial or on the open source program to the tier
+// whose features they carry. GitLab's own table (LICENSE_PLANS_TO_SAAS_PLANS in
+// ee/app/models/gitlab_subscriptions/features.rb) files premium_trial under
+// Premium and ultimate_trial, ultimate_trial_paid_customer and opensource under
+// Ultimate; read as anything else they resolved Free, so the owner of a group
+// on an automatic Ultimate trial was served the Free catalog by the namespace
+// step (issue 1224).
+func TestTierFromPlan_GitLabDotComTrialAndProgramPlans(t *testing.T) {
+	tests := []struct {
+		plan string
+		want Tier
+	}{
+		{plan: "premium_trial", want: Premium},
+		{plan: "ultimate_trial", want: Ultimate},
+		{plan: "ultimate_trial_paid_customer", want: Ultimate},
+		{plan: "opensource", want: Ultimate},
+		{plan: " Ultimate_Trial ", want: Ultimate},
+	}
+	for _, tc := range tests {
+		t.Run(tc.plan, func(t *testing.T) {
+			if got := TierFromPlan(tc.plan); got != tc.want {
+				t.Errorf("TierFromPlan(%q) = %v, want %v", tc.plan, got, tc.want)
+			}
+			if got, ok := ParseTier(tc.plan); ok || got != Free {
+				t.Errorf("ParseTier(%q) = (%v, %v), want (free, false): a plan name is not a setting", tc.plan, got, ok)
+			}
+		})
+	}
+}
+
 // TestTierFromEdition verifies the per-action Edition metadata string maps to
 // the correct minimum tier, including the legacy "core" marker and the Free
 // default for empty/unknown values.

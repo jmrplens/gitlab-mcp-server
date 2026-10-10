@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
@@ -84,8 +85,8 @@ func uncoveredGraphQL(inventory requestinventory.Inventory, pairings []pairing) 
 		uncovered.Packages = append(uncovered.Packages, sentUncoveredPackage{Package: pkg, Operations: operations})
 		uncovered.Operations += len(operations)
 	}
-	sort.Slice(uncovered.Packages, func(i, j int) bool {
-		return uncovered.Packages[i].Package < uncovered.Packages[j].Package
+	slices.SortFunc(uncovered.Packages, func(a, b sentUncoveredPackage) int {
+		return strings.Compare(a.Package, b.Package)
 	})
 	return uncovered
 }

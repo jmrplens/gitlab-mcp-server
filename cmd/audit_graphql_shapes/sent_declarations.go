@@ -131,10 +131,13 @@ const (
 // mutations a shared toolutil wrapper sends are answered under the domain that
 // decodes the note and not under the wrapper; the payload around the note is
 // the wrapper's own struct, and is answered under toolutilDir, as a shape two
-// domains decode through one struct of toolutil's is, once.
+// domains decode through one struct of toolutil's is, once. The tier probe the
+// GitLab client sends decodes into structs of its own, and is answered under
+// gitlabClientDir.
 const (
-	toolsDir    = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
-	toolutilDir = "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+	toolsDir        = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	toolutilDir     = "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+	gitlabClientDir = "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
 // The two epic packages whose note and discussion declarations below name
@@ -321,8 +324,39 @@ func epicIssueDeclarations() []sentDeclaration {
 // on a real run. The two GraphQL-only security domains and the shapes they
 // share keep their answers in [securitySentDeclarations], which is most of the
 // table. The branch rules, CI catalog, custom emoji and security attribute and
-// category domains keep theirs in [domainSentDeclarations].
-var declaredSent = slices.Concat(epicSentDeclarations(), securitySentDeclarations(), domainSentDeclarations()) //nolint:gochecknoglobals // the adjudication table this repository answers with
+// category domains keep theirs in [domainSentDeclarations], and the GitLab
+// client's tier probe its own in [tierProbeSentDeclarations].
+var declaredSent = slices.Concat(epicSentDeclarations(), securitySentDeclarations(), domainSentDeclarations(), tierProbeSentDeclarations()) //nolint:gochecknoglobals // the adjudication table this repository answers with
+
+// tierProbeSentDeclarations answers what the tier probe's membership document
+// leaves out (internal/gitlab.MembershipTierQuery, issue 1224). The client
+// sends it while it detects the licensing tier, before any tool is served, and
+// what it hands on is the tier, never the groups it read.
+func tierProbeSentDeclarations() []sentDeclaration {
+	return []sentDeclaration{
+		{
+			Package:    gitlabClientDir,
+			SchemaType: "Group",
+			Field:      declaredSegment,
+			Category:   categoryLookup,
+			Reason: "MembershipTierQuery reads the top-level groups a GitLab.com caller works in only to learn which " +
+				"plan each one carries, through two licensedFeatureAvailability selections, and names a group by its " +
+				"fullPath in a debug line. What leaves the probe is the tier, which decides the actions served; a " +
+				"group's own fields are the groups domain's surface, published through gitlab_group, and reach nobody " +
+				"through this document.",
+		},
+		{
+			Package:    gitlabClientDir,
+			SchemaType: "LicensedFeatureAvailability",
+			Field:      "requiredPlan",
+			Category:   categoryLookup,
+			Reason: "The plan a licensed feature needs, which is a constant of GitLab's feature table rather than a " +
+				"property of the group: EPICS is a Premium feature and SECURITY_DASHBOARD an Ultimate one in " +
+				"GitlabSubscriptions::Features, and the document's premium and ultimate aliases already say which " +
+				"tier each answer stands for. The probe reads whether the group's plan carries the feature.",
+		},
+	}
+}
 
 // epicSentDeclarations answers the epic domains' findings, and those of the
 // shared note wrapper every epic note and discussion mutation goes through.

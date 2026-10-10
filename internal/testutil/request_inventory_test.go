@@ -139,6 +139,14 @@ func TestDescribeRequest_JSONBody_RecordsItsFieldNames(t *testing.T) {
 			request.Body = failingBody{}
 			return request
 		}, nil},
+		// A request a test builds by hand may carry no body at all while
+		// declaring JSON, which a server never hands a handler: there is
+		// nothing to read field names from.
+		{"a request declaring JSON with no body", func() *http.Request {
+			request := jsonRequest(t, http.MethodPost, "application/json", `{"title":"t"}`)
+			request.Body = nil
+			return request
+		}, nil},
 	}
 
 	for _, tt := range tests {

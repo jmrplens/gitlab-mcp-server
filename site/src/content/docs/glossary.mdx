@@ -59,7 +59,7 @@ head:
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#tier-gating",
             "name": "Tier gating",
-            "description": "Registering only the actions and schema fields the connected GitLab licence supports. The tier is taken from GITLAB_MCP_TIER when set, otherwise detected from the instance licence and then the plans of the namespaces the token administers, falling back to Free. Input schemas are pruned strictly so a lower tier never sees higher-tier fields; output schemas are pruned leniently so data still comes through.",
+            "description": "Registering only the actions and schema fields the connected GitLab licence supports. The tier is taken from GITLAB_MCP_TIER when set, otherwise detected from the instance licence, then the plans of the namespaces the token administers, then on GitLab.com the plans of the top-level groups the token is a member of, falling back to Free. Input schemas are pruned strictly so a lower tier never sees higher-tier fields; output schemas are pruned leniently so data still comes through.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
           },
           {
@@ -165,7 +165,7 @@ A **meta-tool** is a domain-level MCP tool that groups related operations behind
 
 ## Tier gating
 
-**Tier gating** registers only the actions and schema fields the connected GitLab licence supports. The tier comes from `GITLAB_MCP_TIER` when set, otherwise it is detected from the instance licence and then the plans of the namespaces the token administers, falling back to Free. Input schemas are pruned strictly, so a lower tier never sees higher-tier fields; output schemas are pruned leniently, so data still reaches the client.
+**Tier gating** registers only the actions and schema fields the connected GitLab licence supports. The tier comes from `GITLAB_MCP_TIER` when set, otherwise it is detected from the instance licence, then the plans of the namespaces the token administers, then on GitLab.com the plans of the top-level groups the token is a member of, falling back to Free. Input schemas are pruned strictly, so a lower tier never sees higher-tier fields; output schemas are pruned leniently, so data still reaches the client.
 
 ## Safe mode
 

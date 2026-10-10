@@ -278,6 +278,12 @@ func TestRun_WritesLLMSTxt(t *testing.T) {
 		// includes a few writes, so the quick start must not promise a
 		// read-only session to it (ADR-0026).
 		"A `read_api` token is also admitted and is served the actions GitLab accepts from `read_api`, a few of which write; pair it with `GITLAB_MCP_READ_ONLY=true` for a session that writes nothing\n",
+		// On GitLab.com a member of a paid group who administers no paid
+		// namespace is detected through the groups it belongs to (issue 1224),
+		// so the configuration line names that step.
+		"- GITLAB_MCP_TIER: Licensing tier (free/ce, premium, ultimate); unset detects it from the instance license, " +
+			"then from the plans of the namespaces the token administers, then on GitLab.com from the plans of the top-level groups " +
+			"the token is a member of, falling back to free.",
 		"## Documentation\n\n- [Documentation site index](https://jmrp.io/docs/gitlab-mcp-server/llms.txt): ",
 		"- [Spanish documentation index](https://jmrp.io/docs/gitlab-mcp-server/es/llms.txt): ",
 		"- [Getting started](https://jmrp.io/docs/gitlab-mcp-server/getting-started/): Installation and first-run guide\n",
@@ -446,7 +452,8 @@ func TestRun_WritesLLMSFullTxt(t *testing.T) {
 			"**Action Output Schemas:**\n\n<details><summary>list</summary>\n\n```json\n" +
 			`{"properties":{"issues":{"type":"array"}},"type":"object"}` + "\n```\n\n</details>\n\n",
 		"### gitlab_project\n\nManage projects.\n\n\n## Enterprise-Only Meta-Tools\n\n" +
-			"These 2 tools require GITLAB_MCP_TIER=premium or GITLAB_MCP_TIER=ultimate (or a detected Premium/Ultimate license or namespace plan). " +
+			"These 2 tools require GITLAB_MCP_TIER=premium or GITLAB_MCP_TIER=ultimate (or a detected Premium/Ultimate license, namespace plan or, " +
+			"on GitLab.com, top-level group the token is a member of). " +
 			"GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.\n\n" +
 			"### gitlab_epic\n\n**Epics**\n\nManage epics.\n\n\n**Action Output Schemas:**\n\n<details><summary>list</summary>",
 		"### gitlab_orbit\n\nQuery the Knowledge Graph.\n\n\n## Individual Tools\n\n" +

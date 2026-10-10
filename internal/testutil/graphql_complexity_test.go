@@ -6,6 +6,9 @@ import (
 	"testing"
 
 	"github.com/vektah/gqlparser/v2/ast"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // measuredEpicNotesDocument is the epic notes list document as issue 968
@@ -140,6 +143,14 @@ func TestGitLabQueryComplexity_MatchesWhatGitLabMeasured(t *testing.T) {
 		{name: "notes at first 70, decoded from JSON", document: measuredEpicNotesDocument, variables: epicVariables(float64(70)), want: 206},
 		{name: "notes with no first, at the default page size", document: measuredEpicNotesDocument, variables: epicVariables(nil), want: 274},
 		{name: "discussions at first 100", document: measuredEpicDiscussionsDocument, variables: epicVariables(100), want: 250},
+		// The tier probe's membership document (issue 1224), measured on
+		// 2026-10-08 with a queryComplexity selection whose own cost (3 for
+		// score and limit, 2 for score alone) is taken off. Query.groups
+		// costs two, its default sort counting one, and its resolver charges
+		// a hundredth of its cost per item.
+		{name: "top-level groups at first 20", document: gitlabclient.MembershipTierQuery, variables: map[string]any{"first": 20}, want: 13},
+		{name: "top-level groups at first 50", document: gitlabclient.MembershipTierQuery, variables: map[string]any{"first": 50}, want: 16},
+		{name: "top-level groups at first 100", document: gitlabclient.MembershipTierQuery, variables: map[string]any{"first": 100}, want: 22},
 		{
 			name: "a spread with a literal first",
 			document: `query($fullPath: ID!, $iid: String!) {
@@ -186,6 +197,30 @@ fragment Notes on WorkItemWidgetNotes { discussions(first: 10) { nodes { id } } 
 				t.Errorf("GitLabQueryComplexity() = %d, want the %d GitLab.com measured", got, testCase.want)
 			}
 		})
+	}
+}
+
+// TestGitLabQueryComplexity_MembershipTierQueryAtTheRegistersPage_IsTheMeasuredFigure
+// holds the tier probe's membership document (internal/gitlab, issue 1224) at the page
+// size register row AUT-003 sets to the figure GitLab.com measured and under
+// the limit GitLab refuses a query above, so that a change to either the
+// selection or the page size sends whoever made it to measure again. It lives
+// here because internal/gitlab cannot import this package, which imports it.
+// When it fails because the selection changed, send the document to GitLab.com
+// with that page size and a queryComplexity { score } selection, and record the
+// figure less the selection's own 2.
+func TestGitLabQueryComplexity_MembershipTierQueryAtTheRegistersPage_IsTheMeasuredFigure(t *testing.T) {
+	const measured = 22 // 2026-10-08, at first=100
+	got, err := GitLabQueryComplexity(gitlabclient.MembershipTierQuery, map[string]any{"first": tenancy.TierMembershipPageSize})
+	if err != nil {
+		t.Fatalf("GitLabQueryComplexity() error = %v", err)
+	}
+	if got != measured {
+		t.Errorf("the membership document costs %d at first=%d by the estimate, and GitLab measured %d at first=100: measure it again and record the figure",
+			got, tenancy.TierMembershipPageSize, measured)
+	}
+	if got > GitLabAuthenticatedMaxComplexity {
+		t.Errorf("the membership document costs %d, over the %d GitLab refuses a query above", got, GitLabAuthenticatedMaxComplexity)
 	}
 }
 

@@ -92,7 +92,12 @@ type filler struct {
 // fill sets v to a populated value, path being the field path the sentinels
 // are spelled from.
 func (f *filler) fill(v reflect.Value, path string, depth int) {
-	if depth > maxFixtureDepth || !v.CanSet() {
+	// Every value reaching here is settable: the root and each pointer, map
+	// key and map value come from reflect.New, slice elements from MakeSlice,
+	// array elements and struct fields from a settable parent, and
+	// fillStruct passes over the unexported fields, the one place a value
+	// could not be set.
+	if depth > maxFixtureDepth {
 		return
 	}
 	t := v.Type()
@@ -170,7 +175,10 @@ func (f *filler) fillStruct(v reflect.Value, path string, depth int) {
 	}
 }
 
-// fillPagination sets the offset pagination the state asks for.
+// fillPagination sets the offset pagination the state asks for. FixtureZero
+// never reaches it, since [FillFixture] answers that state with the zero value
+// before filling anything, and a state this package does not define asks for
+// none.
 func (f *filler) fillPagination(v reflect.Value) {
 	switch f.opts.State {
 	case FixtureMultiPage:
@@ -190,7 +198,6 @@ func (f *filler) fillPagination(v reflect.Value) {
 		setInt(v, "PerPage", 20)
 		setInt(v, "NextPage", 2)
 		setBool(v, "HasMore", true)
-	case FixtureZero:
 	}
 }
 

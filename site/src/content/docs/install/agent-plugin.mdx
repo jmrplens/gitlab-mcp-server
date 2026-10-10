@@ -58,26 +58,26 @@ bare `-e NAME` copies the variable into the container from the environment
 `docker` itself runs in, and only when it is set there, so unset ones cost
 nothing and the server applies its default:
 
-| Variable                          | Required | Default when unset                                                                          |
-| --------------------------------- | -------- | ------------------------------------------------------------------------------------------- |
-| `GITLAB_URL`                      | No       | `https://gitlab.com`; set it for a self-managed instance                                    |
-| `GITLAB_TOKEN`                    | Yes      | none: a personal access token (`api`, or `read_api` for the actions GitLab accepts from it) |
-| `GITLAB_MCP_SKIP_TLS_VERIFY`      | No       | `false`                                                                                     |
-| `GITLAB_MCP_TOOL_SURFACE`         | No       | `dynamic` (`meta` and `individual` are the alternatives)                                    |
-| `GITLAB_MCP_CAPABILITY_SURFACE`   | No       | `full` (`minimal` keeps only the `gitlab://tools` manifest)                                 |
-| `GITLAB_MCP_META_PARAM_SCHEMA`    | No       | `opaque` (`compact` and `full` are the alternatives)                                        |
-| `GITLAB_MCP_TIER`                 | No       | detected from the license, then the namespace plans, falling back to `free`                 |
-| `GITLAB_MCP_READ_ONLY`            | No       | `false`                                                                                     |
-| `GITLAB_MCP_SAFE_MODE`            | No       | `false`                                                                                     |
-| `GITLAB_MCP_EMBEDDED_RESOURCES`   | No       | `true`                                                                                      |
-| `GITLAB_MCP_EXCLUDE_TOOLS`        | No       | empty: nothing excluded                                                                     |
-| `GITLAB_MCP_IGNORE_SCOPES`        | No       | `false`                                                                                     |
-| `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE` | No       | `2GB`                                                                                       |
-| `GITLAB_MCP_ALLOWED_IMPORT_DIRS`  | No       | empty: no directory beyond the ones always allowed                                          |
-| `GITLAB_MCP_RATE_LIMIT_RPS`       | No       | `0`: no rate limit                                                                          |
-| `GITLAB_MCP_RATE_LIMIT_BURST`     | No       | `40`                                                                                        |
-| `GITLAB_MCP_CLIENT_COMPAT`        | No       | `auto`                                                                                      |
-| `GITLAB_MCP_LOG_LEVEL`            | No       | `info`                                                                                      |
+| Variable                          | Required | Default when unset                                                                                                                            |
+| --------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`                      | No       | `https://gitlab.com`; set it for a self-managed instance                                                                                      |
+| `GITLAB_TOKEN`                    | Yes      | none: a personal access token (`api`, or `read_api` for the actions GitLab accepts from it)                                                   |
+| `GITLAB_MCP_SKIP_TLS_VERIFY`      | No       | `false`                                                                                                                                       |
+| `GITLAB_MCP_TOOL_SURFACE`         | No       | `dynamic` (`meta` and `individual` are the alternatives)                                                                                      |
+| `GITLAB_MCP_CAPABILITY_SURFACE`   | No       | `full` (`minimal` keeps only the `gitlab://tools` manifest)                                                                                   |
+| `GITLAB_MCP_META_PARAM_SCHEMA`    | No       | `opaque` (`compact` and `full` are the alternatives)                                                                                          |
+| `GITLAB_MCP_TIER`                 | No       | detected from the license, then the namespace plans, then on GitLab.com the top-level groups the token is a member of, falling back to `free` |
+| `GITLAB_MCP_READ_ONLY`            | No       | `false`                                                                                                                                       |
+| `GITLAB_MCP_SAFE_MODE`            | No       | `false`                                                                                                                                       |
+| `GITLAB_MCP_EMBEDDED_RESOURCES`   | No       | `true`                                                                                                                                        |
+| `GITLAB_MCP_EXCLUDE_TOOLS`        | No       | empty: nothing excluded                                                                                                                       |
+| `GITLAB_MCP_IGNORE_SCOPES`        | No       | `false`                                                                                                                                       |
+| `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE` | No       | `2GB`                                                                                                                                         |
+| `GITLAB_MCP_ALLOWED_IMPORT_DIRS`  | No       | empty: no directory beyond the ones always allowed                                                                                            |
+| `GITLAB_MCP_RATE_LIMIT_RPS`       | No       | `0`: no rate limit                                                                                                                            |
+| `GITLAB_MCP_RATE_LIMIT_BURST`     | No       | `40`                                                                                                                                          |
+| `GITLAB_MCP_CLIENT_COMPAT`        | No       | `auto`                                                                                                                                        |
+| `GITLAB_MCP_LOG_LEVEL`            | No       | `info`                                                                                                                                        |
 
 What each one does is in [Configuration](/gitlab-mcp-server/configuration/),
 and the [environment variable reference](/gitlab-mcp-server/reference/environment/)

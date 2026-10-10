@@ -273,7 +273,7 @@ func invalidGraphQLAllowed(name string) bool {
 			return true
 		}
 		slash := strings.LastIndex(name, "/")
-		if slash < 0 {
+		if slash == -1 {
 			return false
 		}
 		name = name[:slash]

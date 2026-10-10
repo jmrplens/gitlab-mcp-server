@@ -65,6 +65,25 @@ func TestReadMultipartForm_ReadsValuesAndFiles(t *testing.T) {
 	}
 }
 
+// TestFormFile_UnopenableFileReportsTheOpenError verifies that a file part the
+// form can no longer open is reported as the error opening it gave, and not
+// as a missing field: a form read with no memory to spare spills every file
+// part to disk, and removing the spilled files leaves the part named with
+// nothing behind it.
+func TestFormFile_UnopenableFileReportsTheOpenError(t *testing.T) {
+	form, err := ReadMultipartForm(multipartRequest(t), 0)
+	if err != nil {
+		t.Fatalf("ReadMultipartForm: %v", err)
+	}
+	if removeErr := form.RemoveAll(); removeErr != nil {
+		t.Fatalf("RemoveAll: %v", removeErr)
+	}
+	f, header, err := FormFile(form, "file")
+	if err == nil || errors.Is(err, http.ErrMissingFile) || f != nil || header != nil {
+		t.Errorf("FormFile(file) = (%v, %v, %v), want no file and the error opening the removed part", f, header, err)
+	}
+}
+
 // TestFormFile_MissingFieldReportsErrMissingFile verifies that a field with no
 // file answers the sentinel Request.FormFile would, so a handler ported from
 // it keeps the same branch.

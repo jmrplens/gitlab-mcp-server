@@ -219,10 +219,10 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   carrying `read_api` and not `api` is served the actions whose requests GitLab accepts
   from `read_api`, derived per action from what each sends, which is not the operator's
   read-only surface (`AUT-001`, ADR-0026; the operator's is `AUT-004`). The one
-  exception, recorded under issue 952, is a tier neither the license nor a namespace plan
-  answers for, which is Free: that is the truth on a CE build and on an unlicensed
-  enterprise one, and an enterprise build that could not read its tier warns, naming
-  `GITLAB_MCP_TIER` and `--tier` (`AUT-003`, issue 900). A
+  exception, recorded under issue 952, is a tier neither the license, a namespace plan
+  nor, on GitLab.com, a group membership answers for, which is Free: that is the truth on
+  a CE build and on an unlicensed enterprise one, and an enterprise build that could not
+  read its tier warns, naming `GITLAB_MCP_TIER` and `--tier` (`AUT-003`, issue 900). A
   fine-grained token's scope list, the single value `granular`, is unknown scopes, and
   its grant decides per action what it is shown and may call, judged against what GitLab
   declares (`AUT-007`, `AUT-008`, ADR-0024); an action the generated table has no row for
@@ -767,7 +767,18 @@ answered for still count as write-capable (`ADM-003`), and a tier neither the li
 a namespace plan answers for is still Free, recorded as `INV-008`'s one exception, with
 the warning an enterprise build gives naming `GITLAB_MCP_TIER` and `--tier` (`AUT-003`,
 issue 900). `ADM-003` records ADR-0018 and issue 952, `AUT-003` issues 900 and 952, and
-neither carries F-09 any longer; `AUT-003` keeps F-10. F-08, that the legacy door and the
+neither carries F-09 any longer; `AUT-003` keeps F-10. `AUT-003` also records issue 1224,
+which gave the tier a third question on GitLab.com: GitLab.com reports a namespace's plan
+only to a caller who may administer it and serves a licensed feature to every member, so
+a member of a paid group who owned no paid namespace resolved Free. Unless a namespace
+already answered Ultimate, the probe now reads the top-level groups the caller reaches,
+each with whether its plan carries a Premium and an Ultimate feature, in pages of
+`TierMembershipPageSize` up to `TierMembershipMaxPages` and stopping at the first
+Ultimate, as the namespace pages are bounded; the higher of the namespace and membership
+answers wins, a read that fails keeps what the namespaces answered and a page GitLab
+answered in part keeps the groups it resolved, the side of the asymmetry `INV-008`
+records. The tier is asked when an entry is built and kept while it lives (`POL-007`), so a changed
+membership reaches a caller when the entry is next built. F-08, that the legacy door and the
 OAuth one admitted different minimum authority, is answered by the same decision, which set
 the admission minimum at `read_api` in legacy HTTP and on stdio as well: the legacy door
 asks the predicate the OAuth door asks (`MeetsMinimum`), and refuses a token GitLab

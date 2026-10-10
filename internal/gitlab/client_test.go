@@ -3046,3 +3046,33 @@ func TestVersionRefusedError_NamesTheRefusalAndNotGitLabsSentence(t *testing.T) 
 		t.Errorf("versionRefusedError.Error() = %q, want the refusal named without GitLab's sentence", err.Error())
 	}
 }
+
+// TestClientWaits_HoldWhatTheyAreFor states what the client's fixed waits have
+// to be rather than repeating what they are. Every other test reads each of
+// them through the code that uses it, so a wait that collapsed to zero would
+// move both sides of those comparisons and fail none of them.
+//
+// A health check gets at least a second, since a shorter one measures the
+// network rather than the instance; the cooldown between initialization
+// attempts outlasts that check, so a recovering instance never faces a second
+// attempt while the first may still be waiting on it; and the wait for
+// response headers is at least the minute GitLab's own worker timeout is of
+// the order of.
+func TestClientWaits_HoldWhatTheyAreFor(t *testing.T) {
+	cases := []struct {
+		name  string
+		wait  time.Duration
+		floor time.Duration
+	}{
+		{name: "the health check", wait: healthTimeout, floor: time.Second},
+		{name: "the cooldown between initialization attempts", wait: initCooldown, floor: healthTimeout + time.Nanosecond},
+		{name: "the wait for response headers", wait: responseHeaderTimeout, floor: time.Minute},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.wait < tc.floor {
+				t.Errorf("the wait is %v, want at least %v", tc.wait, tc.floor)
+			}
+		})
+	}
+}

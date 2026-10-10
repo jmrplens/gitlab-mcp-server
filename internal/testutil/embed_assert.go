@@ -93,8 +93,12 @@ func callToolSuccessfully(ctx context.Context, t embedReporter, session *mcp.Cli
 		t.Fatalf("CallTool(%s): %v", name, err)
 		return nil
 	}
-	if result == nil || result.IsError {
-		t.Fatalf("CallTool(%s): expected successful result, got IsError=%v", name, result != nil && result.IsError)
+	if result == nil {
+		t.Fatalf("CallTool(%s): expected a successful result, got none", name)
+		return nil
+	}
+	if result.IsError {
+		t.Fatalf("CallTool(%s): expected successful result, got IsError=true", name)
 		return nil
 	}
 	return result

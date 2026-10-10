@@ -78,6 +78,15 @@ dice qué se pierde sin él.
 | Namespace: Read             | usuario   | Los planes de los namespaces con los que se detecta el nivel de licencia (la suscripción en GitLab.com) | El nivel vuelve a lo que diga la licencia, o a Free; fija `GITLAB_MCP_TIER` (`--tier` en modo HTTP) para elegirlo    |
 | License: Read               | instancia | La licencia de una instancia autogestionada, que solo un administrador puede leer                       | Nada para quien no es administrador, que no puede leerla con ningún token                                            |
 
+En GitLab.com el nivel también se lee de los grupos de nivel superior de los que el
+token es miembro, y ninguna concesión permite a un token de grano fino responder a ese
+paso: GitLab no declara ningún permiso de grano fino para saber si el plan de un grupo
+incluye una funcionalidad con licencia (el tipo `LicensedFeatureAvailability`, en GitLab
+19.4), así que niega esa respuesta a todo token de grano fino y el nivel se queda en lo
+que dijeron los planes de los namespaces. Un token de grano fino en GitLab.com que no
+administra ningún namespace de pago recibe por tanto el catálogo Free; fija
+`GITLAB_MCP_TIER` (`--tier` en modo HTTP) al plan del grupo en el que trabajas.
+
 El servidor pregunta qué tipo de token tiene en
 `GET /api/v4/personal_access_tokens/self` y lee la concesión en
 `GET /api/v4/personal_access_tokens/:id`, que es la que la lleva. Las dos necesitan

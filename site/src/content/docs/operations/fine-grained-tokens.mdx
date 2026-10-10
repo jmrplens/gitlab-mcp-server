@@ -77,6 +77,14 @@ what is lost without it.
 | Namespace: Read             | user     | The namespace plans the licensing tier is detected from (the subscription on GitLab.com)     | The tier falls back to what the license says, or Free; set `GITLAB_MCP_TIER` (`--tier` in HTTP mode) to pin it      |
 | License: Read               | instance | The license of a self-managed instance, which only an administrator may read                 | Nothing for a non-administrator, who cannot read it with any token                                                  |
 
+On GitLab.com the tier is also read from the top-level groups the token is a member of,
+and no grant lets a fine-grained token answer that step: GitLab declares no fine-grained
+permission for whether a group's plan carries a licensed feature (the
+`LicensedFeatureAvailability` type, at GitLab 19.4), so it refuses that answer to every
+fine-grained token and the tier stays what the namespace plans said. A fine-grained token
+on GitLab.com that administers no paid namespace is therefore served the Free catalog;
+set `GITLAB_MCP_TIER` (`--tier` in HTTP mode) to the plan of the group you work in.
+
 The server asks what kind of token it holds at `GET /api/v4/personal_access_tokens/self`
 and reads the grant at `GET /api/v4/personal_access_tokens/:id`, the one that carries
 it. Both need Personal Access Token: Read; without it, GitLab's refusal of the first

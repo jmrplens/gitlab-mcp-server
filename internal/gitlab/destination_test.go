@@ -1931,3 +1931,14 @@ func TestCheckCallerNamedInstance_OptOut(t *testing.T) {
 		}
 	})
 }
+
+// TestInstanceLookupTimeout_GivesAResolverASecond states the floor of the one
+// DNS question the guard asks of its own accord, which every test reaches only
+// through the context it bounds: a timeout of nothing would end the lookup
+// before any resolver answered, and the instance would be judged as one whose
+// address could not be learned.
+func TestInstanceLookupTimeout_GivesAResolverASecond(t *testing.T) {
+	if instanceLookupTimeout < time.Second {
+		t.Errorf("instanceLookupTimeout = %v, want at least a second", instanceLookupTimeout)
+	}
+}

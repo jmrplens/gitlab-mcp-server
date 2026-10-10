@@ -99,6 +99,8 @@ func frozenValues() []frozenValue {
 		{"AuthSweepInterval", AuthSweepInterval, 5 * time.Minute},
 		{"TierNamespacePageSize", TierNamespacePageSize, 100},
 		{"TierNamespaceMaxPages", TierNamespaceMaxPages, 10},
+		{"TierMembershipPageSize", TierMembershipPageSize, 100},
+		{"TierMembershipMaxPages", TierMembershipMaxPages, 10},
 	}
 }
 
