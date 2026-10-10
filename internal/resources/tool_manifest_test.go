@@ -1153,11 +1153,11 @@ func TestManifestRequiredParams_SplitsUnconditionalFromAlternatives(t *testing.T
 			"project_id", "name",
 		},
 		{
-			// A branch that adds nothing beyond the top level is not an
-			// alternative, and publishing it as an empty group would tell a
-			// client "satisfy at least one of: nothing", which any call
-			// already does.
-			"a branch adding nothing beyond the top level contributes no group",
+			// Every call satisfies a branch that adds nothing beyond the top
+			// level, so the anyOf asks nothing more of it. Publishing the
+			// other branch as a group, as this case once expected, told a
+			// client that name was needed when no call has to send it.
+			"a branch adding nothing beyond the top level leaves no group to satisfy",
 			map[string]any{
 				"required": []any{"project_id"},
 				"anyOf": []any{
@@ -1165,7 +1165,15 @@ func TestManifestRequiredParams_SplitsUnconditionalFromAlternatives(t *testing.T
 					map[string]any{"required": []any{"name"}},
 				},
 			},
-			"project_id", "name",
+			"project_id", "",
+		},
+		{
+			"a branch requiring nothing leaves no group to satisfy",
+			map[string]any{"anyOf": []any{
+				map[string]any{"required": []any{}},
+				map[string]any{"required": []any{"files"}},
+			}},
+			"", "",
 		},
 		{
 			// The SDK types a nullable Go slice as ["null","array"], so the
@@ -1219,15 +1227,96 @@ func TestManifestRequiredParams_SplitsUnconditionalFromAlternatives(t *testing.T
 			}
 		})
 	}
+}
 
-	t.Run("dedupe helper drops empties and repeats", func(t *testing.T) {
-		if got := dedupeDynamicStrings(nil); got != nil {
-			t.Fatalf("dedupeDynamicStrings(nil) = %v, want nil", got)
+// TestToolManifest_RequiredParams_AgreeWithFind verifies that the manifest
+// and gitlab_find_action name the same requirements for every action of the
+// Ultimate catalog, self-managed and GitLab.com: the same params every call
+// needs and the same alternative groups, in the same order. Find used to fold
+// every alternative into its required list (issue 1175), so a model reading
+// the manifest and one reading find were told two different things about one
+// call. Both now read actioncatalog's rule, and this holds that both apply it
+// to the same schema, the action's route input schema.
+func TestToolManifest_RequiredParams_AgreeWithFind(t *testing.T) {
+	for _, instance := range []struct {
+		name string
+		url  string
+	}{
+		{name: "self-managed"},
+		{name: "gitlab.com", url: "https://gitlab.com"},
+	} {
+		t.Run(instance.name, func(t *testing.T) {
+			catalog := ultimateSurfaceCatalog(t, instance.url)
+			actions := catalog.Actions()
+			ids := make([]string, 0, len(actions))
+			for _, action := range actions {
+				ids = append(ids, string(action.ID))
+			}
+			_, described, err := dynamictools.NewRegistryFromCatalog(catalog).Describe(t.Context(), nil, dynamictools.DescribeInput{Actions: ids})
+			if err != nil {
+				t.Fatalf("Describe() error = %v", err)
+			}
+			byID := make(map[string]dynamictools.ActionDescription, len(described.Actions))
+			for _, description := range described.Actions {
+				byID[description.ID] = description
+			}
+			for _, action := range actions {
+				found, ok := byID[string(action.ID)]
+				if !ok {
+					t.Errorf("find described no %s", action.ID)
+					continue
+				}
+				checkFindAgreesWithManifest(t, action, found)
+			}
+		})
+	}
+}
+
+// ultimateSurfaceCatalog builds the Ultimate catalog with the standalone
+// actions for a self-managed instance, or for the instance at url.
+func ultimateSurfaceCatalog(t *testing.T, url string) *actioncatalog.Catalog {
+	t.Helper()
+	var client *gitlabclient.Client
+	if url != "" {
+		var err error
+		if client, err = gitlabclient.NewClientWithToken(url, "test-token", false); err != nil {
+			t.Fatalf("NewClientWithToken(%s) error = %v", url, err)
 		}
-		if got := dedupeDynamicStrings([]string{"", "branch", "branch"}); strings.Join(got, ",") != "branch" {
-			t.Fatalf("dedupeDynamicStrings() = %v, want branch", got)
-		}
-	})
+	}
+	catalog, err := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog: %v", err)
+	}
+	if catalog, err = dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{}); err != nil {
+		t.Fatalf("AddStandaloneCatalog: %v", err)
+	}
+	return catalog
+}
+
+// checkFindAgreesWithManifest holds one action's find description to the
+// requirements the manifest derives from the same route schema.
+func checkFindAgreesWithManifest(t *testing.T, action actioncatalog.Action, found dynamictools.ActionDescription) {
+	t.Helper()
+	if want := paramNames(manifestRequiredParams(action.Route.InputSchema)); !slices.Equal(found.RequiredParams, want) {
+		t.Errorf("%s: find required_params = %v, manifest = %v", action.ID, found.RequiredParams, want)
+	}
+	groups := manifestAlternativeRequiredParams(action.Route.InputSchema)
+	want := make([][]string, 0, len(groups))
+	for _, group := range groups {
+		want = append(want, paramNames(group))
+	}
+	if !slices.EqualFunc(found.RequiredParamsAnyOf, want, slices.Equal[[]string]) {
+		t.Errorf("%s: find required_params_any_of = %v, manifest = %v", action.ID, found.RequiredParamsAnyOf, want)
+	}
+}
+
+// paramNames returns the names of typed params, in order.
+func paramNames(params []ToolSurfaceRequiredParam) []string {
+	names := make([]string, 0, len(params))
+	for _, param := range params {
+		names = append(names, param.Name)
+	}
+	return names
 }
 
 // renderParams flattens typed params to "name:type" (type omitted when

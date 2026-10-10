@@ -155,55 +155,30 @@ type ToolSurfaceRequiredParam struct {
 }
 
 // manifestRequiredParams pairs a schema's unconditionally required
-// parameter names — the top-level "required" list only — with their flat
+// parameter names, the top-level "required" list only, with their flat
 // types. Alternative-branch requirements (anyOf/oneOf) are published
 // separately by [manifestAlternativeRequiredParams]: a branch name is not
 // unconditionally required, and declaring it so invites a client to send
-// every branch at once.
+// every branch at once. The names are actioncatalog's reading, the one
+// gitlab_find_action publishes and gitlab_execute_action enforces, so the
+// three never describe one call differently.
 func manifestRequiredParams(schema map[string]any) []ToolSurfaceRequiredParam {
-	if schema == nil {
-		return nil
-	}
-	names := dedupeDynamicStrings(sortedStrings(appendDynamicRequiredParamNames(nil, schema["required"])))
+	names := actioncatalog.RequiredParams(schema)
 	if len(names) == 0 {
 		return nil
 	}
 	return typedParams(schema, names)
 }
 
-// manifestAlternativeRequiredParams extracts the anyOf/oneOf requirement
-// groups: each group is one branch's "required" list, minus names already
-// unconditionally required at the top level. A call must satisfy at least
-// one group.
+// manifestAlternativeRequiredParams pairs the anyOf/oneOf requirement groups
+// actioncatalog reads with their flat types: each group is what one way of
+// meeting the alternatives requires beyond the top-level list (one branch,
+// or one branch of each keyword where a schema declares both), and a call
+// must satisfy at least one group.
 func manifestAlternativeRequiredParams(schema map[string]any) [][]ToolSurfaceRequiredParam {
-	if schema == nil {
-		return nil
-	}
-	top := make(map[string]bool)
-	for _, name := range appendDynamicRequiredParamNames(nil, schema["required"]) {
-		top[name] = true
-	}
 	var groups [][]ToolSurfaceRequiredParam
-	for _, keyword := range []string{"anyOf", "oneOf"} {
-		alternatives, ok := schema[keyword].([]any)
-		if !ok {
-			continue
-		}
-		for _, alternative := range alternatives {
-			branch, isObject := alternative.(map[string]any)
-			if !isObject {
-				continue
-			}
-			var names []string
-			for _, name := range appendDynamicRequiredParamNames(nil, branch["required"]) {
-				if !top[name] {
-					names = append(names, name)
-				}
-			}
-			if len(names) > 0 {
-				groups = append(groups, typedParams(schema, names))
-			}
-		}
+	for _, names := range actioncatalog.RequiredParamAlternatives(schema) {
+		groups = append(groups, typedParams(schema, names))
 	}
 	return groups
 }
@@ -219,13 +194,6 @@ func typedParams(schema map[string]any, names []string) []ToolSurfaceRequiredPar
 		})
 	}
 	return params
-}
-
-// sortedStrings sorts a copy-in-place and returns it, for deterministic
-// manifest output.
-func sortedStrings(values []string) []string {
-	sort.Strings(values)
-	return values
 }
 
 // flatSchemaType reads the plain "type" of one property, joining a
@@ -1056,46 +1024,6 @@ func parseToolManifestURI(uri string) string {
 		return ""
 	}
 	return strings.ToLower(strings.TrimSpace(rest))
-}
-
-// appendDynamicRequiredParamNames appends each non-empty string in raw
-// to names. raw is expected to be either a []any or []string (the two
-// shapes the JSON parser can return for a JSON array); any other type
-// is ignored.
-func appendDynamicRequiredParamNames(names []string, raw any) []string {
-	switch values := raw.(type) {
-	case []any:
-		for _, value := range values {
-			if name, ok := value.(string); ok && name != "" {
-				names = append(names, name)
-			}
-		}
-	case []string:
-		names = append(names, values...)
-	}
-	return names
-}
-
-// dedupeDynamicStrings returns a slice of strings with consecutive
-// duplicates and empty values removed. The input is expected to be
-// pre-sorted by the caller (the only deduplication guarantee provided).
-func dedupeDynamicStrings(values []string) []string {
-	if len(values) == 0 {
-		return nil
-	}
-	out := values[:0]
-	// last starts empty and every empty value is skipped above it, so the
-	// first value can never equal last: an "is this the first iteration"
-	// guard here would be a branch no input can take.
-	var last string
-	for _, value := range values {
-		if value == "" || value == last {
-			continue
-		}
-		out = append(out, value)
-		last = value
-	}
-	return out
 }
 
 // dynamicActionSchema returns the JSON Schema (as a generic map) for

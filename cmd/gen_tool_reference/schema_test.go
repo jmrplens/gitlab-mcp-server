@@ -92,8 +92,47 @@ func TestParameters_Schema_RequiredFirstThenByName(t *testing.T) {
 	if params[3].tier != edition.Premium || params[0].tier != edition.Free {
 		t.Errorf("tiers = %v, %v", params[3].tier, params[0].tier)
 	}
-	if len(oneOf) != 2 || !slices.Equal(oneOf[1], []string{"beta", "zeta"}) {
-		t.Errorf("oneOf = %v", oneOf)
+	// zeta is required by the root list, so the second set is what that
+	// branch adds to it: the page says what a call needs beyond the
+	// required parameters, as find and gitlab://tools do.
+	if !slices.EqualFunc(oneOf, [][]string{{"alpha"}, {"beta"}}, slices.Equal[[]string]) {
+		t.Errorf("oneOf = %v, want [[alpha] [beta]]", oneOf)
+	}
+}
+
+// TestParameters_Alternatives_ReadAsFindAndTheManifestReadThem verifies that
+// the page states an action's alternatives through actioncatalog, the reading
+// gitlab_find_action and gitlab://tools publish: a root oneOf is read as well
+// as an anyOf, and a keyword with a branch every call already satisfies asks
+// for nothing, so the page does not say a call needs one of its other
+// branches.
+func TestParameters_Alternatives_ReadAsFindAndTheManifestReadThem(t *testing.T) {
+	tests := []struct {
+		name   string
+		schema map[string]any
+		want   [][]string
+	}{
+		{
+			name:   "a root oneOf",
+			schema: map[string]any{"oneOf": []any{map[string]any{"required": []any{"branch"}}, map[string]any{"required": []any{"tag"}}}},
+			want:   [][]string{{"branch"}, {"tag"}},
+		},
+		{
+			name: "a branch the root list satisfies",
+			schema: map[string]any{
+				"required": []any{"project_id"},
+				"anyOf":    []any{map[string]any{"required": []any{"name"}}, map[string]any{"required": []any{"project_id"}}},
+			},
+			want: nil,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, oneOf := parameters(tc.schema, nil)
+			if !slices.EqualFunc(oneOf, tc.want, slices.Equal[[]string]) {
+				t.Errorf("oneOf = %v, want %v", oneOf, tc.want)
+			}
+		})
 	}
 }
 
