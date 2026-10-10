@@ -137,8 +137,9 @@ func TestClassifySent_NothingStale_ReportsNilRatherThanAnEmptyList(t *testing.T)
 //
 // The bar is the one the type's own comment sets. Every entry names a package,
 // an object and a field or the star; the package is a domain under
-// internal/tools or internal/toolutil itself, which declares the shapes two
-// domains decode through one struct; the category comes from the closed set,
+// internal/tools, internal/toolutil itself, which declares the shapes two
+// domains decode through one struct, or internal/gitlab, whose tier probe
+// decodes its own answer; the category comes from the closed set,
 // since a category invented at the call site is a vocabulary rather than a
 // decision; the reason is prose a reviewer can judge rather than a word; and
 // no two entries share a key, because the second would be reported stale
@@ -169,8 +170,9 @@ func TestDeclaredSent_EveryEntryMeetsTheBarTheTableSetsItself(t *testing.T) {
 			if declaration.Package == "" || declaration.SchemaType == "" || declaration.Field == "" {
 				t.Errorf("the declaration leaves part of its key empty: %+v", declaration)
 			}
-			if !strings.HasPrefix(declaration.Package, toolsDir+"/") && declaration.Package != toolutilDir {
-				t.Errorf("package = %q, want a package under %s or %s itself, whose shared note wrapper and shared shapes decode a payload", declaration.Package, toolsDir, toolutilDir)
+			if !strings.HasPrefix(declaration.Package, toolsDir+"/") && declaration.Package != toolutilDir && declaration.Package != gitlabClientDir {
+				t.Errorf("package = %q, want a package under %s, %s itself, whose shared note wrapper and shared shapes decode a payload, or %s, whose tier probe decodes its answer",
+					declaration.Package, toolsDir, toolutilDir, gitlabClientDir)
 			}
 			if !categories[declaration.Category] {
 				t.Errorf("category = %q, want one of the %d this table defines", declaration.Category, len(categories))
@@ -186,5 +188,27 @@ func TestDeclaredSent_EveryEntryMeetsTheBarTheTableSetsItself(t *testing.T) {
 	}
 	if len(declaredSent) == 0 {
 		t.Error("the adjudication table is empty, so nothing holds it to this bar")
+	}
+}
+
+// TestDeclaredSent_TierProbe_IsALookup verifies the answer the table gives the
+// tier probe's membership document (internal/gitlab, issue 1224): the groups
+// it reads and the licensed feature it asks each about are a lookup, whose
+// unselected fields were never meant to reach a caller, since what the probe
+// hands on is the tier and nothing of the groups themselves. Without these
+// two entries every field the schema offers on a group reads as a gap in a
+// response nobody receives.
+func TestDeclaredSent_TierProbe_IsALookup(t *testing.T) {
+	for _, finding := range []sentField{
+		{Package: gitlabClientDir, SchemaType: "Group", Field: "description"},
+		{Package: gitlabClientDir, SchemaType: "Group", Field: "achievements"},
+		{Package: gitlabClientDir, SchemaType: "LicensedFeatureAvailability", Field: "requiredPlan"},
+	} {
+		t.Run(finding.SchemaType+"."+finding.Field, func(t *testing.T) {
+			classified, _ := classifySent(declaredSent, []sentField{finding})
+			if len(classified) != 1 || classified[0].Category != categoryLookup {
+				t.Errorf("classifySent(%s %s.%s) = %+v, want it answered as %s", finding.Package, finding.SchemaType, finding.Field, classified, categoryLookup)
+			}
+		})
 	}
 }

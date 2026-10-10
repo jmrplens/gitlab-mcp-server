@@ -698,7 +698,8 @@ func (c *Client) editionUnreadable(ctx context.Context, fallback bool) bool {
 
 // DetectTier resolves the GitLab licensing tier and stores it on the client.
 //
-// It asks two questions, because neither one answers for every deployment:
+// It asks up to three questions, because no one of them answers for every
+// deployment:
 //
 //   - GET /license, which carries the instance's own plan and is **admin-only
 //     on self-managed**. It is the authoritative answer where it is available.
@@ -706,16 +707,30 @@ func (c *Client) editionUnreadable(ctx context.Context, fallback bool) bool {
 //     any token, for the namespaces the caller administers. On GitLab.com that
 //     plan is the subscription; on self-managed it is "default" whatever the
 //     instance is licensed for, since a subscription is a GitLab.com concept.
+//   - On GitLab.com alone, the top-level groups the caller is a member of, each
+//     with whether its plan carries a Premium and an Ultimate feature
+//     ([Client.tierFromMembership]), asked unless the namespaces already
+//     answered Ultimate.
 //
 // Measured on 2026-09-22 against a licensed EE 19.3.1 and against GitLab.com:
 // a non-admin token is refused /license with 403 on both, /namespaces reports
 // "default" for admin and non-admin alike on self-managed, and reports the real
 // plan on GitLab.com for each namespace the caller administers. So the second
-// question rescues every GitLab.com caller, which is the population that used
-// to fall back to Free unconditionally, and rescues nobody on self-managed.
+// question rescues the GitLab.com caller who owns a paid group, and rescues
+// nobody on self-managed. It does not rescue a member: GitLab.com shows a
+// namespace's plan only to a caller who may administer it, while it serves a
+// licensed feature to every member of a group whose top-level group's plan
+// carries it, which is most of the people working in a paid group (issue
+// 1224). The third question is that check, and GitLab.com answered it for the
+// maintainer's account, a Developer of a subgroup of a licensed group, on
+// 2026-10-08.
 //
-// Where neither answers, the tier is [edition.Free] as before. That is right on
-// a CE instance and wrong on a licensed one the caller cannot read the license
+// The highest answer of the second and third wins, on ADR-0018's asymmetry,
+// and a third that fails keeps the second's: a failed read is no evidence that
+// the caller holds less than it was already shown to hold.
+//
+// Where none answers, the tier is [edition.Free] as before. That is right on a
+// CE instance and wrong on a licensed one the caller cannot read the license
 // of, and the two are told apart by the edition rather than guessed at: an
 // enterprise build that could not be resolved gets a warning naming the flag
 // that settles it, and a CE build stays silent because Free is the truth there.
@@ -724,7 +739,13 @@ func (c *Client) DetectTier(ctx context.Context) edition.Tier {
 		c.SetTier(tier)
 		return tier
 	}
-	if tier, ok := c.tierFromNamespaces(ctx); ok {
+	tier, found := c.tierFromNamespaces(ctx)
+	if tier < edition.Ultimate && membershipTierApplies(c) {
+		if member, answered := c.tierFromMembership(ctx); answered {
+			tier, found = max(tier, member), true
+		}
+	}
+	if found {
 		c.SetTier(tier)
 		return tier
 	}
@@ -760,8 +781,9 @@ func (c *Client) tierFromLicense(ctx context.Context) (edition.Tier, bool) {
 // removes tools, and the caller cannot tell the difference between a capability
 // this deployment lacks and one it was not given, while a tier resolved too
 // high surfaces as GitLab's own refusal on the one call that needed it. A
-// GitLab.com account whose personal namespace is Free and who works in an
-// Ultimate group is the case this exists for.
+// GitLab.com account whose personal namespace is Free and who administers an
+// Ultimate group is the case this exists for; one who is only a member of it
+// is [Client.tierFromMembership]'s.
 //
 // **"default" is the one plan that answers nothing**, and telling it apart from
 // "free" is what keeps the warning honest. Measured on 2026-09-22: GitLab.com
@@ -889,7 +911,8 @@ func (c *Client) warnUnresolvedTier(ctx context.Context) {
 		return
 	}
 	slog.WarnContext(ctx, "could not determine the licensing tier of this enterprise instance, serving the Free tool surface; "+
-		"the license is readable only by an administrator, and a namespace plan is reported only on GitLab.com. "+
+		"the license is readable only by an administrator, and the plan of a namespace the token administers or of a group it is a member of "+
+		"is reported only on GitLab.com. "+
 		"Set GITLAB_MCP_TIER (or --tier in HTTP mode) to premium or ultimate if this instance is licensed")
 }
 

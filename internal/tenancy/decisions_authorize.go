@@ -75,8 +75,9 @@ func authorizeDecisions() []Decision {
 			},
 		},
 		{
-			// A tier neither the license nor a namespace plan answers for is
-			// Free, the one place unknown authority resolves narrow (INV-008
+			// A tier neither the license, a namespace plan nor, on GitLab.com,
+			// a group membership answers for is Free, the one place unknown
+			// authority resolves narrow (INV-008
 			// resolves it high everywhere else, ADM-003's scopes included).
 			// Issue 952 kept it and recorded it as that invariant's exception,
 			// which is why F-09 left this row: Free is the truth on a CE build
@@ -86,12 +87,28 @@ func authorizeDecisions() []Decision {
 			// may read the license, so the server cannot tell it from a
 			// licensed instance whose license the caller may not read, which
 			// is the case the warning is for.
+			//
+			// On GitLab.com a third question is asked when the license gave no
+			// answer and no namespace plan answered Ultimate (issue 1224): the
+			// top-level groups the caller reaches, each with whether its plan
+			// carries a Premium and an Ultimate feature, since GitLab.com shows
+			// a plan only to a caller who administers the namespace while it
+			// serves a licensed feature to every member. A license answer is
+			// final and nothing else is asked after it; otherwise the higher of
+			// the namespace and membership answers wins, a membership read that
+			// fails keeps what the namespaces answered (the asymmetry INV-008
+			// records), and the pages are bounded as the namespace pages are. The tier is asked when an entry is built and
+			// kept while the entry lives (POL-007), as a namespace plan always
+			// was, so a plan or a membership that changes reaches a caller when
+			// the entry is next built, after it goes unused (POL-004) or is
+			// evicted, and a stdio process at its next start.
 			ID: "AUT-003", Question: Authorize, Kind: Rule, Class: ClassE, Disposition: Valued,
-			Resource: "the licensing tier, and the namespace pages read to detect it",
+			Resource: "the licensing tier, and the namespace and top-level group pages read to detect it",
 			Key:      KeyEntry, StdioKey: KeyProcess,
-			Values: []string{"TierNamespacePageSize", "TierNamespaceMaxPages"}, Source: Constant, Zero: ZeroNotApplicable,
+			Values: []string{"TierNamespacePageSize", "TierNamespaceMaxPages", "TierMembershipPageSize", "TierMembershipMaxPages"},
+			Source: Constant, Zero: ZeroNotApplicable,
 			Flags: []string{"--tier"}, Envs: []string{"GITLAB_MCP_TIER"}, Malformed: RefuseStartup,
-			Decided:  []string{"issue 900", "issue 952"},
+			Decided:  []string{"issue 900", "issue 952", "issue 1224"},
 			Findings: []string{"F-10"},
 			// The tier filter runs before the withheld lists exist, so an action
 			// it removed is answered as unknown rather than withheld.
@@ -108,6 +125,8 @@ func authorizeDecisions() []Decision {
 			Sites: []Site{
 				alias(pkgGitLab, "namespacePlanPageSize", "TierNamespacePageSize"),
 				alias(pkgGitLab, "namespacePlanMaxPages", "TierNamespaceMaxPages"),
+				alias(pkgGitLab, "membershipPageSize", "TierMembershipPageSize"),
+				alias(pkgGitLab, "membershipMaxPages", "TierMembershipMaxPages"),
 				enforce(pkgGitLab, "Client.DetectTier"),
 				refuse(pkgDynamic, "Registry.unknownActionMessage"),
 				refuse(pkgTools, "filterActionSpecGroupsByTier"),

@@ -60,6 +60,11 @@ var gitLabFieldCosts = map[string]gitLabFieldCost{
 	// Types::WorkItems::WidgetInterface type, complexity: 0, resolved from the
 	// widget already loaded.
 	"WorkItemWidget.type": {own: 0},
+	// Resolvers::GroupsResolver (Namespaces::BaseGroupsResolver): a sort
+	// argument GitLab always supplies a default for ("name_asc"), and
+	// BaseResolver's default complexity_multiplier of 0.01, so a hundred
+	// groups cost twice what one does.
+	"Query.groups": {own: 2, multiplier: 0.01},
 }
 
 // complexitySchema is the loader the estimate goes through. It is a variable

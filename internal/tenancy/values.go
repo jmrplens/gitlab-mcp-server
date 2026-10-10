@@ -245,4 +245,12 @@ const (
 	// TierNamespaceMaxPages is how many pages of it the probe reads at most
 	// (AUT-003).
 	TierNamespaceMaxPages = 10
+	// TierMembershipPageSize is the page size of the top-level groups the tier
+	// probe reads on GitLab.com, each with the licensed features its plan
+	// carries (AUT-003). It is GitLab's largest page, at which the document
+	// costs 22 of the 250 GitLab refuses a query above.
+	TierMembershipPageSize = 100
+	// TierMembershipMaxPages is how many pages of them the probe reads at most
+	// (AUT-003).
+	TierMembershipMaxPages = 10
 )

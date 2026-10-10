@@ -70,6 +70,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	orbit "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/orbit" // the package under test, imported from outside it (see Layout above)
@@ -676,6 +677,36 @@ func liveLLMSchema(ctx context.Context, client *gitlabclient.Client, input orbit
 		return nil, fmt.Errorf("llm schema = %+v, want its compact text in formatted_text", out)
 	}
 	return fmt.Sprintf("formatted_text bytes=%d", len(out.FormattedText)), nil
+}
+
+// TestOrbitLiveGitLabCom_DetectTier_IsPaidWhereOrbitIsServed holds the tier
+// detection to GitLab.com's own answer (issue 1224). GitLab.com serves Orbit
+// only to a member, at Reporter or higher, of a group whose top-level group's
+// plan carries the orbit feature, which GitlabSubscriptions::Features files
+// under Premium, so a token GitLab.com serves Orbit to belongs to a paid group
+// and the server must resolve it to Premium or higher whether or not it
+// administers that group. Before issue 1224 the maintainer's token, a Developer
+// of a subgroup of a licensed group, was served Orbit and resolved Free. A
+// token GitLab.com does not serve Orbit to proves nothing about the tier, and
+// the test says so and skips. It needs no fixture namespace, and reads only:
+// the tier probe sends GET /license, GET /namespaces and one GraphQL query per
+// page of top-level groups.
+func TestOrbitLiveGitLabCom_DetectTier_IsPaidWhereOrbitIsServed(t *testing.T) {
+	client := newLiveClient(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	status, err := orbit.Status(ctx, client, orbit.StatusInput{})
+	if err != nil {
+		t.Fatalf("orbit.Status: %v", err)
+	}
+	if status.User == nil || !status.User.Available {
+		t.Skip("GitLab.com does not serve Orbit to this token, so its answer says nothing about the tier")
+	}
+	if tier := client.DetectTier(ctx); tier < edition.Premium {
+		t.Errorf("DetectTier() = %v for a token GitLab.com serves Orbit to, want Premium or higher: "+
+			"Orbit is served only to a member of a group whose top-level group's plan is paid", tier)
+	}
 }
 
 // TestOrbitLiveGitLabCom_Fixtures exercises the four query_type variants

@@ -336,7 +336,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, referenceSizeBytes map[st
 	b.WriteString("- GITLAB_MCP_CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny (minimal also drops resource subscriptions)\n")
 	b.WriteString("- GITLAB_MCP_READ_ONLY: Remove mutating operations per action; reads keep working (default: false)\n")
 	b.WriteString("- GITLAB_MCP_SAFE_MODE: Answer a mutating action with a JSON preview naming it instead of running it; reads keep working (default: false). GITLAB_MCP_READ_ONLY takes precedence\n")
-	b.WriteString("- GITLAB_MCP_TIER: Licensing tier (free/ce, premium, ultimate); unset detects it from the instance license, then from the plans of the namespaces the token administers, falling back to free. Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools\n")
+	b.WriteString("- GITLAB_MCP_TIER: Licensing tier (free/ce, premium, ultimate); unset detects it from the instance license, then from the plans of the namespaces the token administers, then on GitLab.com from the plans of the top-level groups the token is a member of, falling back to free. Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools\n")
 	b.WriteString("- GITLAB_MCP_LOG_LEVEL: debug, info (default), warn, error. Logs go to stderr; stdout carries nothing but JSON-RPC\n")
 	b.WriteString("- GITLAB_MCP_ENV_FILE: One dotenv file to load besides `~/.gitlab-mcp-server.env`; give an absolute path\n\n")
 
@@ -763,7 +763,7 @@ func writeLLMSFullEnterpriseOnlyMetaTools(b *strings.Builder, catalog llmsCatalo
 		return
 	}
 	b.WriteString("## Enterprise-Only Meta-Tools\n\n")
-	fmt.Fprintf(b, "These %d tools require GITLAB_MCP_TIER=premium or GITLAB_MCP_TIER=ultimate (or a detected Premium/Ultimate license or namespace plan). GitLab.com-only tools, including Orbit, also require GITLAB_URL=%s.\n\n", len(enterpriseOnly), config.DefaultGitLabURL)
+	fmt.Fprintf(b, "These %d tools require GITLAB_MCP_TIER=premium or GITLAB_MCP_TIER=ultimate (or a detected Premium/Ultimate license, namespace plan or, on GitLab.com, top-level group the token is a member of). GitLab.com-only tools, including Orbit, also require GITLAB_URL=%s.\n\n", len(enterpriseOnly), config.DefaultGitLabURL)
 	for _, tool := range enterpriseOnly {
 		writeLLMSFullMetaTool(b, tool, catalog.MetaRoutes)
 	}
