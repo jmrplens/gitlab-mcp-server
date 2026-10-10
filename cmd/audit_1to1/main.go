@@ -19,6 +19,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/merge"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/metadata"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/paths"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/required"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/sdk"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
@@ -39,6 +40,7 @@ var (
 	sdkRun         = sdk.Run
 	pathsRun       = paths.Run
 	grantsRun      = grants.Run
+	requiredRun    = required.Run
 	marshalIndent  = json.MarshalIndent
 )
 
@@ -102,16 +104,19 @@ func run(ctx context.Context, opts options) error {
 		return err
 	}
 
-	var content []byte
-	clean := true
-	switch {
-	case isMergedScope(scopes):
-		content, err = runMerged(opts.gapsOnly)
-	case len(scopes) == 1:
-		content, clean, err = runSingle(ctx, scopes[0], opts)
-	default:
+	// Ifs rather than a tagless switch, so the mutation tool, which cannot see
+	// a case expression, measures each condition.
+	merged := isMergedScope(scopes)
+	if !merged && len(scopes) != 1 {
 		return fmt.Errorf("scope must be a single value or the merged set %s (got %d: %s); other combinations are not supported",
 			strings.Join(mergedScopes, ","), len(scopes), strings.Join(scopes, ","))
+	}
+	var content []byte
+	clean := true
+	if merged {
+		content, err = runMerged(opts.gapsOnly)
+	} else {
+		content, clean, err = runSingle(ctx, scopes[0], opts)
 	}
 	if err != nil {
 		return err
@@ -136,6 +141,8 @@ func gateFailure(scopes []string) string {
 		return "audit_1to1: request-path findings (see report)"
 	case slices.Equal(scopes, []string{scopeGrants}):
 		return "audit_1to1: fine-grained grant inconsistencies (see report)"
+	case slices.Equal(scopes, []string{scopeRequired}):
+		return "audit_1to1: requiredness disagreements with GitLab (see report)"
 	default:
 		return "audit_1to1: SDK parity findings (see report)"
 	}
@@ -216,7 +223,7 @@ func runMerged(gapsOnly bool) ([]byte, error) {
 // backlog entry rather than a defect.
 func runSingle(ctx context.Context, scope string, opts options) (content []byte, clean bool, err error) {
 	switch scope {
-	case "structs", "actions", "enums", "sdk", scopePaths, scopeGrants:
+	case "structs", "actions", "enums", "sdk", scopePaths, scopeGrants, scopeRequired:
 		root, rootErr := repositoryRoot(".")
 		if rootErr != nil {
 			return nil, false, fmt.Errorf("find repository root: %w", rootErr)
@@ -238,6 +245,8 @@ func runSingle(ctx context.Context, scope string, opts options) (content []byte,
 			})
 		case scopeGrants:
 			return grantsRun(root, grants.Options{GapsOnly: opts.gapsOnly, E2ECallsDir: opts.e2eCalls})
+		case scopeRequired:
+			return requiredRun(root, required.Options{GapsOnly: opts.gapsOnly})
 		default:
 			return sdkRun(root, opts.gapsOnly)
 		}
@@ -270,6 +279,10 @@ const scopePaths = "paths"
 // scopeGrants is the fine-grained permission dimension (R-GRANT).
 const scopeGrants = "grants"
 
+// scopeRequired is the requiredness rule of R-INPUT: each parameter the input
+// schema requires, held to what GitLab requires of it.
+const scopeRequired = "required"
+
 // mergedScopes is the set the merged backlog is built from, sorted. The sdk,
 // paths and grants scopes are deliberately not among them: they gate rather
 // than accumulating candidates, and adding any would change the shape of
@@ -277,7 +290,7 @@ const scopeGrants = "grants"
 var mergedScopes = []string{"actions", "enums", "metadata", "structs"}
 
 // validScopes is every value -scope accepts, in the order a message lists them.
-var validScopes = []string{"structs", "actions", "metadata", "enums", "sdk", scopePaths, scopeGrants}
+var validScopes = []string{"structs", "actions", "metadata", "enums", "sdk", scopePaths, scopeGrants, scopeRequired}
 
 // isMergedScope reports whether scopes is exactly the merged set, so a
 // selection that merely happens to have as many entries (say

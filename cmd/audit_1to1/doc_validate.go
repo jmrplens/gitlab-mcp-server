@@ -52,14 +52,17 @@ func runValidateDocs(ctx context.Context, root string, fetcher *apidocs.Fetcher)
 	cmdutil.Progressf("audit_1to1: validating %d cited API docs against the live source...", len(areas))
 	for _, area := range areas {
 		content, fetchErr := fetcher.Fetch(ctx, area)
-		switch {
-		case fetchErr != nil:
+		// Ifs rather than a tagless switch: the mutation tool cannot see a
+		// case expression, so both conditions read as never covered there.
+		if fetchErr != nil {
 			rep.Stale = append(rep.Stale, docCitationIssue{Area: area, Error: fetchErr.Error()})
-		case strings.TrimSpace(content) == "":
-			rep.Stale = append(rep.Stale, docCitationIssue{Area: area, Error: "doc is empty"})
-		default:
-			rep.OK++
+			continue
 		}
+		if strings.TrimSpace(content) == "" {
+			rep.Stale = append(rep.Stale, docCitationIssue{Area: area, Error: "doc is empty"})
+			continue
+		}
+		rep.OK++
 	}
 
 	out, err := marshalIndent(rep, "", "  ")
