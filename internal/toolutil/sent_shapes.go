@@ -539,9 +539,12 @@ type BasicGroupDetailsOutput struct {
 }
 
 // BoardExtra is that reference on the board, which GitLab exposes under no
-// condition and leaves null on a board that belongs to a project.
+// condition and leaves null on a board that belongs to a project, and what
+// each of the board's lists carries beside client-go's BoardList, in the
+// order GitLab sent the lists.
 type BoardExtra struct {
 	Group *BasicGroupDetailsOutput `json:"group"`
+	Lists []BoardListExtra         `json:"lists"`
 }
 
 // CapturedBoard reads it off the captured answer to a request for one board.

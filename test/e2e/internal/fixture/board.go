@@ -57,13 +57,103 @@ const (
 }`
 )
 
+// boardListLimitMutation sets the work-in-progress limit of a board column and
+// the metric it is counted by. The REST update of a column takes its position
+// alone, so this mutation is the only way to give a column the limit_metric
+// the board answers then carry. GitLab runs it only where work-in-progress
+// limits are licensed. It sends both ceilings, as GitLab's own board settings
+// panel does, so the one the metric does not count is set to zero rather than
+// left at whatever the column held.
+const boardListLimitMutation = `mutation($listId: ListID!, $limitMetric: ListLimitMetric, $maxIssueCount: Int, $maxIssueWeight: Int) {
+  boardListUpdateLimitMetrics(input: { listId: $listId, limitMetric: $limitMetric, maxIssueCount: $maxIssueCount, maxIssueWeight: $maxIssueWeight }) {
+    list { id limitMetric maxIssueCount maxIssueWeight }
+    errors
+  }
+}`
+
+// boardListWeightMetric is the limit metric whose ceiling is the total weight
+// of a column's issues, held in maxIssueWeight; issue_count holds its ceiling
+// in maxIssueCount.
+const boardListWeightMetric = "issue_weights"
+
 // boardGIDPrefix is what GitLab puts in front of a board's number in its
 // global ID.
 const boardGIDPrefix = "gid://gitlab/Board/"
 
+// boardListGIDPrefix is what GitLab puts in front of a board column's number
+// in its global ID.
+const boardListGIDPrefix = "gid://gitlab/List/"
+
 // errBoardWithoutID is a board mutation GitLab answered with no board and no
 // refusal, which leaves nothing to address the board by.
 var errBoardWithoutID = errors.New("the board was created with no ID")
+
+// errBoardListNotAnswered is a limit mutation GitLab answered with no list and
+// no refusal, which leaves nothing to say the limit was applied.
+var errBoardListNotAnswered = errors.New("the limit was answered with no list")
+
+// LimitBoardList limits a board column to ceiling, counted by metric, which is
+// what makes GitLab send the column's limit_metric. The ceiling goes where
+// GitLab keeps it for that metric, as its board settings panel puts it: a
+// total weight for issue_weights, and a number of issues for issue_count, the
+// one other metric that panel offers. Work-in-progress limits are Premium, so
+// only a licensed instance applies it. A column goes with its board, so
+// nothing is registered.
+func LimitBoardList(e *harness.Env, listID int64, metric string, ceiling int64) {
+	e.T.Helper()
+
+	if err := limitBoardList(e.Ctx, e.Client(), listID, metric, ceiling); err != nil {
+		e.T.Fatalf("limiting board list %d to %d by %s: %v", listID, ceiling, metric, err)
+	}
+}
+
+// limitBoardList sends the limit mutation for one column and holds GitLab's
+// answer to the metric and the ceilings it was asked for.
+//
+// A refusal GitLab reports inside the payload is an error here, because it
+// arrives as a 200, and so is a list counted by another metric or limited by
+// other ceilings, since a scenario reading the column afterwards would assert
+// a limit GitLab was never told to apply.
+func limitBoardList(ctx context.Context, client *gitlabclient.Client, listID int64, metric string, ceiling int64) error {
+	maxIssueCount, maxIssueWeight := ceiling, int64(0)
+	if metric == boardListWeightMetric {
+		maxIssueCount, maxIssueWeight = 0, ceiling
+	}
+	var limited struct {
+		BoardListUpdateLimitMetrics struct {
+			List *struct {
+				LimitMetric    string `json:"limitMetric"`
+				MaxIssueCount  int64  `json:"maxIssueCount"`
+				MaxIssueWeight int64  `json:"maxIssueWeight"`
+			} `json:"list"`
+			Errors []string `json:"errors"`
+		} `json:"boardListUpdateLimitMetrics"`
+	}
+	variables := map[string]any{
+		"listId":         boardListGIDPrefix + strconv.FormatInt(listID, 10),
+		"limitMetric":    metric,
+		"maxIssueCount":  maxIssueCount,
+		"maxIssueWeight": maxIssueWeight,
+	}
+	if err := runGraphQL(ctx, client, boardListLimitMutation, variables, &limited); err != nil {
+		return err
+	}
+	answer := limited.BoardListUpdateLimitMetrics
+	if len(answer.Errors) > 0 {
+		return fmt.Errorf("GitLab refused the limit: %s", strings.Join(answer.Errors, "; "))
+	}
+	if answer.List == nil {
+		return errBoardListNotAnswered
+	}
+	if answer.List.LimitMetric != metric {
+		return fmt.Errorf("GitLab answered the list counted by %q, want %q", answer.List.LimitMetric, metric)
+	}
+	if answer.List.MaxIssueCount != maxIssueCount || answer.List.MaxIssueWeight != maxIssueWeight {
+		return fmt.Errorf("GitLab answered the list limited to %d issues and a weight of %d, want %d and %d",
+			answer.List.MaxIssueCount, answer.List.MaxIssueWeight, maxIssueCount, maxIssueWeight)
+	}
+	return nil
+}
 
 // NewGroupBoard creates an issue board in the group, named with the run's
 // own scoping.

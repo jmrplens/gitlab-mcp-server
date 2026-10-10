@@ -8,8 +8,11 @@
 package fixture
 
 import (
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 )
 
 // TestBoardIDFromGID_Answers_ReadsTheNumberOrRefuses checks the global ID
@@ -124,6 +127,126 @@ func TestCreateBoard_Answers_RefusesWhatNamesNoBoard(t *testing.T) {
 				t.Errorf("createProjectBoard() = %+v on a failure, want nothing", got)
 			}
 		})
+	}
+}
+
+// TestLimitBoardList_Answered_PutsTheCeilingWhereTheMetricCounts checks the
+// limit mutation names the column by the global ID GitLab gives a list and
+// carries the metric with the ceiling in the field that metric counts, the
+// other ceiling sent as zero, which is what GitLab's own board settings panel
+// sends (board_settings_wip_limit.vue): a column counted by weight is limited
+// by maxIssueWeight, and one counted by issues by maxIssueCount. The document
+// and those variables are held to the pinned schema too, since nothing but a
+// licensed GitLab runs the mutation otherwise and a field spelled wrong would
+// first fail a whole Enterprise run.
+func TestLimitBoardList_Answered_PutsTheCeilingWhereTheMetricCounts(t *testing.T) {
+	cases := []struct {
+		name   string
+		metric string
+		answer string
+		want   map[string]any
+	}{
+		{
+			name:   "by weight",
+			metric: "issue_weights",
+			answer: `{"data":{"boardListUpdateLimitMetrics":{"list":{"id":"gid://gitlab/List/5","limitMetric":"issue_weights","maxIssueCount":0,"maxIssueWeight":4},"errors":[]}}}`,
+			want:   map[string]any{"listId": "gid://gitlab/List/5", "limitMetric": "issue_weights", "maxIssueCount": float64(0), "maxIssueWeight": float64(4)},
+		},
+		{
+			name:   "by issue count",
+			metric: "issue_count",
+			answer: `{"data":{"boardListUpdateLimitMetrics":{"list":{"id":"gid://gitlab/List/5","limitMetric":"issue_count","maxIssueCount":4,"maxIssueWeight":0},"errors":[]}}}`,
+			want:   map[string]any{"listId": "gid://gitlab/List/5", "limitMetric": "issue_count", "maxIssueCount": float64(4), "maxIssueWeight": float64(0)},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			stub, client := newStubGitLab(t)
+			stub.configure(func() { stub.graphqlAnswers = []string{testCase.answer} })
+
+			if err := limitBoardList(t.Context(), client, 5, testCase.metric, 4); err != nil {
+				t.Fatalf("limitBoardList() error = %v, want nil", err)
+			}
+			if len(stub.graphqlDocuments) != 1 || stub.graphqlDocuments[0] != boardListLimitMutation {
+				t.Fatalf("the stub was sent %q, want exactly the list limit mutation", stub.graphqlDocuments)
+			}
+			if got := stub.graphqlVariables[0]; !reflect.DeepEqual(got, testCase.want) {
+				t.Errorf("the mutation carried %v, want %v", got, testCase.want)
+			}
+			if err := graphqlschema.Validate(boardListLimitMutation, testCase.want); err != nil {
+				t.Errorf("the pinned schema refuses the list limit mutation: %v", err)
+			}
+		})
+	}
+}
+
+// TestLimitBoardList_Answers_RefusesALimitThatDidNotApply checks every way the
+// limit mutation's answer can fail to say the column is now limited as asked:
+// GitLab's refusal inside the payload, a payload with no list, a list counted
+// by another metric, a list whose ceiling landed in the other field or not at
+// all, and a document GitLab refused outright. Each is an error, since a
+// scenario that went on would assert a metric or a ceiling GitLab was never
+// told to send.
+func TestLimitBoardList_Answers_RefusesALimitThatDidNotApply(t *testing.T) {
+	cases := []struct {
+		name   string
+		answer string
+		want   string
+	}{
+		{
+			name:   "refused in the payload",
+			answer: `{"data":{"boardListUpdateLimitMetrics":{"list":null,"errors":["List not found"]}}}`,
+			want:   "GitLab refused the limit: List not found",
+		},
+		{name: "no list", answer: `{"data":{"boardListUpdateLimitMetrics":{"list":null,"errors":[]}}}`, want: errBoardListNotAnswered.Error()},
+		{
+			name:   "another metric",
+			answer: `{"data":{"boardListUpdateLimitMetrics":{"list":{"id":"gid://gitlab/List/5","limitMetric":"all_metrics","maxIssueCount":0,"maxIssueWeight":4},"errors":[]}}}`,
+			want:   `GitLab answered the list counted by "all_metrics", want "issue_weights"`,
+		},
+		{
+			name:   "the ceiling on the issue count",
+			answer: `{"data":{"boardListUpdateLimitMetrics":{"list":{"id":"gid://gitlab/List/5","limitMetric":"issue_weights","maxIssueCount":4,"maxIssueWeight":0},"errors":[]}}}`,
+			want:   "GitLab answered the list limited to 4 issues and a weight of 0, want 0 and 4",
+		},
+		{
+			name:   "no ceiling",
+			answer: `{"data":{"boardListUpdateLimitMetrics":{"list":{"id":"gid://gitlab/List/5","limitMetric":"issue_weights","maxIssueCount":0,"maxIssueWeight":0},"errors":[]}}}`,
+			want:   "GitLab answered the list limited to 0 issues and a weight of 0, want 0 and 4",
+		},
+		{name: "document refused", answer: `{"data":null,"errors":[{"message":"The resource that you are attempting to access does not exist"}]}`, want: "GitLab refused the document"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			stub, client := newStubGitLab(t)
+			stub.configure(func() { stub.graphqlAnswers = []string{testCase.answer} })
+
+			err := limitBoardList(t.Context(), client, 5, "issue_weights", 4)
+			if err == nil || !strings.Contains(err.Error(), testCase.want) {
+				t.Errorf("limitBoardList() error = %v, want it to say %q", err, testCase.want)
+			}
+		})
+	}
+}
+
+// TestLimitBoardList_Detached_LimitsTheColumnItWasGiven checks the exported
+// builder hands its column, metric and ceiling to the mutation and returns
+// when GitLab applied them; its failing branch is
+// [TestBuilders_Refused_FailTheirTestNamingWhatTheyWereMaking]'s.
+func TestLimitBoardList_Detached_LimitsTheColumnItWasGiven(t *testing.T) {
+	stub, e := detachedStub(t)
+	stub.configure(func() {
+		stub.graphqlAnswers = []string{`{"data":{"boardListUpdateLimitMetrics":{"list":{"id":"gid://gitlab/List/8","limitMetric":"issue_count","maxIssueCount":3,"maxIssueWeight":0},"errors":[]}}}`}
+	})
+
+	LimitBoardList(e, 8, "issue_count", 3)
+
+	if len(stub.graphqlVariables) != 1 {
+		t.Fatalf("the stub was sent %d document(s), want exactly the list limit mutation", len(stub.graphqlVariables))
+	}
+	want := map[string]any{"listId": "gid://gitlab/List/8", "limitMetric": "issue_count", "maxIssueCount": float64(3), "maxIssueWeight": float64(0)}
+	if got := stub.graphqlVariables[0]; !reflect.DeepEqual(got, want) {
+		t.Errorf("the mutation carried %v, want %v", got, want)
 	}
 }
 

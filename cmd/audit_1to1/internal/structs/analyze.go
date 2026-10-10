@@ -16,6 +16,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 )
 
+// Every citation below is one literal, even where several cite one page and
+// could share its name as a prefix: gremlins mutates the operator of a
+// constant expression and no test can execute a constant to catch it, so each
+// concatenation was a mutant the gate could only report as not covered.
 const (
 	optionsSuffix = "Options"
 	// responseStructName is the client-go pagination wrapper type. Converters that
@@ -33,7 +37,6 @@ const (
 	docPipelineSched    = "pipeline_schedules.md"
 	docPipelineTriggers = "pipeline_triggers.md"
 	docMRApprovals      = "merge_request_approvals.md"
-	docEpics            = "epics.md#list-all-group-epics"
 	// The notes page prints imported and imported_from on every note example
 	// and commands_changes on the wiki note examples alone, though
 	// lib/api/entities/note.rb exposes all three on every note; the
@@ -81,8 +84,8 @@ const (
 	// declares, and the blocked merge request is the other end of a dependency,
 	// which client-go's MergeRequestDependency does not model at all.
 	docMergeRequests      = "merge_requests.md"
-	docMergeRequestRender = docMergeRequests + " (render_html, declared on GET /projects/:id/merge_requests/:merge_request_iid alone)"
-	docMergeRequestBlocks = docMergeRequests + " (blocked_merge_request on GET /projects/:id/merge_requests/:merge_request_iid/blocks)"
+	docMergeRequestRender = "merge_requests.md (render_html, declared on GET /projects/:id/merge_requests/:merge_request_iid alone)"
+	docMergeRequestBlocks = "merge_requests.md (blocked_merge_request on GET /projects/:id/merge_requests/:merge_request_iid/blocks)"
 	// doc/api/users.md prints all ten keys UserPublic adds to the user object
 	// in its single-user and current-user example bodies, and bio_html beside
 	// them on the single-user one. It is cited for the three group-scoped user
@@ -97,9 +100,8 @@ const (
 	// doc/api/service_accounts.md documents it on the service account object
 	// POST /service_accounts answers with.
 	docUsers                = "users.md"
-	docUsersEnterpriseGroup = docUsers + " (enterprise_group_id and enterprise_group_associated_at, exposed by " +
-		"ee/lib/ee/api/entities/user_with_admin.rb under the domain_verification license and printed on no page)"
-	docServiceAccounts = "service_accounts.md"
+	docUsersEnterpriseGroup = "users.md (enterprise_group_id and enterprise_group_associated_at, exposed by ee/lib/ee/api/entities/user_with_admin.rb under the domain_verification license and printed on no page)"
+	docServiceAccounts      = "service_accounts.md"
 	// API::Entities::RelatedIssue inherits API::Entities::Issue and adds four
 	// link keys, so the issue object is what the relation list answers with
 	// and doc/api/issues.md prints that object in full: every key cited here
@@ -109,10 +111,8 @@ const (
 	// ee/lib/ee/api/entities/issue.rb, so the feature gating them is named
 	// beside the page rather than left to the reader.
 	docIssueLinksRelation = "issues.md"
-	docIssueLinksEpic     = docIssueLinksRelation + " (epic and epic_iid, exposed by ee/lib/ee/api/entities/issue.rb when the " +
-		"issue's group has the epics licensed feature)"
-	docIssueLinksLicensed = docIssueLinksRelation + " (health_status under the issuable_health_status licensed feature and " +
-		"iteration under iterations, both exposed by ee/lib/ee/api/entities/issue.rb)"
+	docIssueLinksEpic     = "issues.md (epic and epic_iid, exposed by ee/lib/ee/api/entities/issue.rb when the issue's group has the epics licensed feature)"
+	docIssueLinksLicensed = "issues.md (health_status under the issuable_health_status licensed feature and iteration under iterations, both exposed by ee/lib/ee/api/entities/issue.rb)"
 	// The member role page is the one citation here that is deliberately not a
 	// page reference to the fields themselves, because no page carries them.
 	// doc/api/member_roles.md prints four permission keys in its example
@@ -122,9 +122,7 @@ const (
 	// `default: false` and no condition. The names are in no source a scan
 	// could read, which is why the committed live record is where they came
 	// from.
-	docMemberRolePermissions = "member_roles.md (ee/lib/api/entities/member_role.rb exposes every " +
-		"::MemberRole.all_customizable_permissions entry with default: false and no condition; the page prints four of the " +
-		"forty-five in its examples and refers to user/custom_roles/abilities.md for the rest)"
+	docMemberRolePermissions = "member_roles.md (ee/lib/api/entities/member_role.rb exposes every ::MemberRole.all_customizable_permissions entry with default: false and no condition; the page prints four of the forty-five in its examples and refers to user/custom_roles/abilities.md for the rest)"
 	// The twelve keys API::Entities::Ci::Pipeline adds to the basic entity
 	// reach pipelines.Output through one route, the merge request pipeline
 	// creation, so its section on doc/api/merge_requests.md is the citation
@@ -132,20 +130,16 @@ const (
 	// pipelines.DetailOutput. That example body prints eleven of the twelve
 	// and leaves queued_duration out, which the entity exposes with no
 	// condition beside the other eleven.
-	docMRCreatePipeline      = docMergeRequests + "#create-merge-request-pipeline"
-	docMRCreatePipelineQueue = docMRCreatePipeline + " (queued_duration, exposed unconditionally by " +
-		"lib/api/entities/ci/pipeline.rb and absent from that section's example body)"
+	docMRCreatePipeline      = "merge_requests.md#create-merge-request-pipeline"
+	docMRCreatePipelineQueue = "merge_requests.md#create-merge-request-pipeline (queued_duration, exposed unconditionally by lib/api/entities/ci/pipeline.rb and absent from that section's example body)"
 	// lib/api/entities/plan_limit.rb exposes twenty-nine limits and the change
 	// history, every one with no condition, and client-go's PlanLimit models
 	// the eight package file sizes. The page lists the rest among the update
 	// parameters, except the two webhook tiers GitLab.com uses, and neither of
 	// its example bodies carries the webhook limits or the history, so the
 	// entity is the oracle for those four.
-	docPlanLimits = "plan_limits.md (lib/api/entities/plan_limit.rb exposes every limit and limits_history " +
-		"with no condition; web_hook_calls_low, web_hook_calls_mid and limits_history are on the entity and not on the page)"
-	docOrbitSchemaText = "orbit.md, which defers to the generated reference, and that gives GET /orbit/schema no response " +
-		"schema; get_graph_schema in ee/lib/analytics/knowledge_graph/grpc_client.rb answers the llm format with " +
-		"`{ formatted_text: response.formatted_text }`, recorded in docs/development/orbit-responses.json as orbit.schema (llm)"
+	docPlanLimits         = "plan_limits.md (lib/api/entities/plan_limit.rb exposes every limit and limits_history with no condition; web_hook_calls_low, web_hook_calls_mid and limits_history are on the entity and not on the page)"
+	docOrbitSchemaText    = "orbit.md, which defers to the generated reference, and that gives GET /orbit/schema no response schema; get_graph_schema in ee/lib/analytics/knowledge_graph/grpc_client.rb answers the llm format with `{ formatted_text: response.formatted_text }`, recorded in docs/development/orbit-responses.json as orbit.schema (llm)"
 	docPATList            = "personal_access_tokens.md#list-all-personal-access-tokens"
 	docProjectTokensList  = "project_access_tokens.md#list-all-project-access-tokens"
 	docGroupTokensList    = "group_access_tokens.md"
@@ -154,24 +148,18 @@ const (
 	// The dual-shape labels array cannot be two types under one key in a typed
 	// schema, so the object half is published beside the names the way issues
 	// and merge requests publish theirs.
-	docEpicsLabelDetails = docEpics + " (with_labels_details returns each label whole in the labels array)"
+	docEpicsLabelDetails = "epics.md#list-all-group-epics (with_labels_details returns each label whole in the labels array)"
 	// The OpenAPI record lists the properties of the epic and not those of the
 	// user object inside it, so the author's own field set is read off the
 	// response GitLab sends.
-	docEpicsAuthor = docEpics + " (a live GET /api/v4/groups/gitlab-org/epics on 2026-09-07 answered with " +
-		"eight author keys; gl.EpicAuthor declares six and gl.BasicUser seven, neither of them locked or public_email)"
+	docEpicsAuthor = "epics.md#list-all-group-epics (a live GET /api/v4/groups/gitlab-org/epics on 2026-09-07 answered with eight author keys; gl.EpicAuthor declares six and gl.BasicUser seven, neither of them locked or public_email)"
 	// epicPhantomWidget is the reason every widget-backed work item option an
 	// Epic does not carry is absent from the epic inputs.
-	epicPhantomWidget = "an Epic carries no STATUS, ITERATION or CRM_CONTACTS widget, so GitLab refuses the field; " +
-		"exposed on internal/tools/workitems, where the type is the caller's to choose"
+	epicPhantomWidget = "an Epic carries no STATUS, ITERATION or CRM_CONTACTS widget, so GitLab refuses the field; exposed on internal/tools/workitems, where the type is the caller's to choose"
 	// epicReleaseFilter is the reason the two release filters are absent, which
 	// is not the widget one: the schema does accept them here, and it is the
 	// epic that has nothing for them to match.
-	epicReleaseFilter = "Group.workItems declares releaseTag and releaseTagWildcardId, so GitLab accepts them " +
-		"rather than refusing them the way it refuses the widget filters; the schema puts releases on Project " +
-		"and epic.list pins types to EPIC at group scope, so the filter would select epics by an association " +
-		"only a project's work items can have. Exposed on internal/tools/workitems, where the type is the " +
-		"caller's to choose"
+	epicReleaseFilter = "Group.workItems declares releaseTag and releaseTagWildcardId, so GitLab accepts them rather than refusing them the way it refuses the widget filters; the schema puts releases on Project and epic.list pins types to EPIC at group scope, so the filter would select epics by an association only a project's work items can have. Exposed on internal/tools/workitems, where the type is the caller's to choose"
 	// bitbucketAppPasswordPair is the reason the Bitbucket Cloud import
 	// publishes neither half of the app-password authentication client-go's
 	// options still carry. It is one literal rather than a concatenation, so
@@ -180,33 +168,25 @@ const (
 	bitbucketAppPasswordPair = "app-password authentication no current GitLab or Bitbucket accepts: GitLab 19.0 dropped bitbucket_username and bitbucket_app_password from POST /import/bitbucket (lib/api/import_bitbucket.rb at v19.0.0-ee), an earlier instance refuses the app password beside the bitbucket_api_token this action always sends (mutually_exclusive) and the username without the app password (all_or_none_of, both at v18.11.0-ee), and Atlassian disabled app passwords in June 2026"
 	// deploymentMergeRequestsInert is the reason three merge request list
 	// options are absent from the deployment merge request input.
-	deploymentMergeRequestsInert = "declared by GET /projects/:id/deployments/:deployment_id/merge_requests through " +
-		"merge_requests_base_params and read by nothing there: lib/api/deployments.rb presents MergeRequestBasic " +
-		"with current_user alone, and only serializer_options_for in lib/api/merge_requests.rb turns the option " +
-		"into a presenter option; exposed on the merge request list inputs, where it takes effect"
+	deploymentMergeRequestsInert = "declared by GET /projects/:id/deployments/:deployment_id/merge_requests through merge_requests_base_params and read by nothing there: lib/api/deployments.rb presents MergeRequestBasic with current_user alone, and only serializer_options_for in lib/api/merge_requests.rb turns the option into a presenter option; exposed on the merge request list inputs, where it takes effect"
 	// skypeDiscarded is the reason the user create and modify inputs offer no
 	// skype, which client-go's options still carry.
-	skypeDiscarded = "GitLab discards it: the users.skype column is ignored since 18.4 and neither " +
-		"POST /users nor PUT /users/:id declares the param, so a caller who set it changed nothing"
-	tagKeyJSON = "json"
+	skypeDiscarded = "GitLab discards it: the users.skype column is ignored since 18.4 and neither POST /users nor PUT /users/:id declares the param, so a caller who set it changed nothing"
+	tagKeyJSON     = "json"
 	// tagKeyURL is the tag go-querystring names a query parameter by, which
 	// client-go's Options structs carry beside their json tags.
 	tagKeyURL = "url"
 	// projectParamGitLabDropped is the reason a project option client-go still
 	// carries is absent from the project inputs.
-	projectParamGitLabDropped = "not declared by POST /projects or PUT /projects/:id in GitLab 19.3.1 " +
-		"(lib/api/helpers/projects_helpers.rb at v19.3.1-ee) or 19.4.1 (gitlab-api-live.json), so GitLab drops " +
-		"the value; client-go keeps the field"
+	projectParamGitLabDropped = "not declared by POST /projects or PUT /projects/:id in GitLab 19.3.1 (lib/api/helpers/projects_helpers.rb at v19.3.1-ee) or 19.4.1 (gitlab-api-live.json), so GitLab drops the value; client-go keeps the field"
 	// mrApprovalRulesOffsetOnly is the reason the approval rules list offers
 	// no ordering or keyset field of the gl.ListOptions it pages with.
-	mrApprovalRulesOffsetOnly = "GET /projects/:id/merge_requests/:merge_request_iid/approval_rules declares only page " +
-		"and per_page (gitlab-api-live.json, 19.4.1-ee); gl.ListOptions ordering and keyset fields are unused plumbing there"
+	mrApprovalRulesOffsetOnly = "GET /projects/:id/merge_requests/:merge_request_iid/approval_rules declares only page and per_page (gitlab-api-live.json, 19.4.1-ee); gl.ListOptions ordering and keyset fields are unused plumbing there"
 	// achievementAvatarUpload is the reason the avatar upload is absent under
 	// its SDK key.
-	achievementAvatarUpload = "offered as AvatarInput (avatar_filename, avatar_content_type, and avatar_file_path or " +
-		"avatar_content_base64), which the handler assembles into the *gl.GraphQLUpload opts.Avatar takes"
-	typNameString = "string"
-	typNameInt64  = "int64"
+	achievementAvatarUpload = "offered as AvatarInput (avatar_filename, avatar_content_type, and avatar_file_path or avatar_content_base64), which the handler assembles into the *gl.GraphQLUpload opts.Avatar takes"
+	typNameString           = "string"
+	typNameInt64            = "int64"
 )
 
 // acceptedOutputRenames suppresses specific MCP output json tags from
@@ -361,15 +341,6 @@ var docOmittedFields = &declarationTable{name: "docOmittedFields", entries: map[
 	"epics.Output.parent":       "exposed flattened as parent_iid + parent_path (the two fields of gl.WorkItemIID)",
 }}
 
-// docAPIShapesRecord names where the citations below were read.
-//
-// It used to be spelled from the package that held a pinned copy of that
-// document in this repository. The copy is gone, replaced by a record taken
-// from a booted GitLab, and the citations stay as they are because they are
-// evidence about what was read and when, not a path a reader is invited to
-// open here. GitLab publishes the document, so the citation names it there.
-const docAPIShapesRecord = "GitLab's generated OpenAPI document (doc/api/openapi/openapi_v2.yaml) "
-
 // docApprovalsBeforeMergeNeverSent cites the two entities the approvals GET,
 // the approve and the unapprove are answered with, neither of which exposes
 // the key client-go declares.
@@ -389,9 +360,14 @@ const docApprovalStateInvalidRules = "ee/lib/api/entities/approval_state.rb expo
 // docRunnerDetailsGET cites the record rather than the prose page:
 // runners.md prints one example body for the whole page, so the prose
 // cannot tell the registration response from the details one.
-const docRunnerDetailsGET = docAPIShapesRecord +
-	"(GET /api/v4/runners/{id} and PUT /api/v4/runners/{id} declare no token; POST /api/v4/runners, the " +
-	"registration endpoint, answers with id, token and token_expires_at, which runners.Output carries)"
+//
+// The record is GitLab's generated OpenAPI document. The citation used to be
+// spelled from the package that held a pinned copy of it in this repository;
+// the copy is gone, replaced by a record taken from a booted GitLab, and the
+// citation stays as it is because it is evidence about what was read and
+// when, not a path a reader is invited to open here. It is one literal for
+// the reason the constants at the top of this file are.
+const docRunnerDetailsGET = "GitLab's generated OpenAPI document (doc/api/openapi/openapi_v2.yaml) (GET /api/v4/runners/{id} and PUT /api/v4/runners/{id} declare no token; POST /api/v4/runners, the registration endpoint, answers with id, token and token_expires_at, which runners.Output carries)"
 
 // isDocOmittedField reports whether an SDK field is a doc-justified intentional
 // omission on a primary MCP output type.
@@ -420,8 +396,9 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 
 	// boards — limit_metric is documented in doc/api/boards.md on each board list
 	// (all_metrics / issue_count / issue_weights, or null) but absent from
-	// gl.BoardList; fetched via raw REST (rawGetBoard/rawListBoardLists into the
-	// boardListAPI superset).
+	// gl.BoardList; read from the captured response beside the SDK's decode
+	// on every board and list answer (ADR-0021, toolutil.BoardExtra and
+	// CapturedBoardList).
 	"boards.BoardListOutput.limit_metric": "boards.md#list-all-board-lists-in-an-issue-board",
 
 	// deployments — deployable.project {ci_job_token_scope_enabled} is documented in
@@ -1919,18 +1896,20 @@ func dominant(group []fieldCandidate, enc encoder) (fieldCandidate, bool) {
 
 // byDepthThenTag orders two candidates shallowest first and, at one depth, a
 // tagged one before an untagged one.
+//
+// Written as a chain of returns rather than a tagless switch, whose case
+// expressions carry no statement counter for the mutation gate to see.
 func byDepthThenTag(a, b fieldCandidate) int {
 	if byDepth := cmp.Compare(a.depth, b.depth); byDepth != 0 {
 		return byDepth
 	}
-	switch {
-	case a.tagged == b.tagged:
+	if a.tagged == b.tagged {
 		return 0
-	case a.tagged:
-		return -1
-	default:
-		return 1
 	}
+	if a.tagged {
+		return -1
+	}
+	return 1
 }
 
 // typesCompatible reports whether an MCP field type acceptably represents an
@@ -2094,17 +2073,13 @@ func nonResultSDKStruct(named *types.Named) bool {
 // SDK type (pagination wrapper, *Options request struct, or a time value type).
 // Split out from nonResultSDKStruct so the name-based rule is unit-testable
 // without synthesizing go/types objects.
+//
+// Written as one boolean return rather than a tagless switch, whose case
+// expressions carry no statement counter for the mutation gate to see.
 func nonResultStructName(name string) bool {
-	switch {
-	case name == responseStructName:
-		return true
-	case strings.HasSuffix(name, optionsSuffix):
-		return true
-	case name == "ISOTime" || name == "Time":
-		return true
-	default:
-		return false
-	}
+	return name == responseStructName ||
+		strings.HasSuffix(name, optionsSuffix) ||
+		name == "ISOTime" || name == "Time"
 }
 
 func derefNamedStruct(t types.Type) (*types.Named, *types.Struct, bool) {

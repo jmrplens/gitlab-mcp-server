@@ -112,7 +112,7 @@ func writeBoardListsTable(c *toolutil.Card, lists []BoardListOutput) {
 	if len(lists) == 0 {
 		return
 	}
-	t := c.Table("Lists", "ID", "Scope", "Position", "Max Issues", "Max Weight")
+	t := c.Table("Lists", "ID", "Scope", "Position", "Max Issues", "Max Weight", toolutil.BoardListMetricLabel)
 	for _, l := range lists {
 		t.Row(
 			strconv.FormatInt(l.ID, 10),
@@ -120,6 +120,7 @@ func writeBoardListsTable(c *toolutil.Card, lists []BoardListOutput) {
 			strconv.FormatInt(l.Position, 10),
 			boardListLimit(l.MaxIssueCount),
 			boardListLimit(l.MaxIssueWeight),
+			toolutil.CellOr(l.LimitMetric, "-"),
 		)
 	}
 }
@@ -213,9 +214,9 @@ func FormatBoardListMarkdown(out BoardListOutput) string {
 	c.Int("Position", out.Position)
 	c.Count("Max Issue Count", out.MaxIssueCount)
 	c.Count("Max Issue Weight", out.MaxIssueWeight)
-	c.Field("Limit Metric", out.LimitMetric)
+	c.Field(toolutil.BoardListMetricLabel, out.LimitMetric)
 	c.End(
-		toolutil.HintAction(actionBoardListUpdate, "change this column's position or limits"),
+		toolutil.HintAction(actionBoardListUpdate, "move this column to another position"),
 		toolutil.HintAction(actionBoardListDelete, "remove this column"),
 	)
 	return b.String()
@@ -229,7 +230,7 @@ func FormatListBoardListsMarkdown(out ListBoardListsOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Board Lists", len(out.Lists), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("ID", "Scope", "Position", "Max Issues", "Max Weight"))
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Scope", "Position", "Max Issues", "Max Weight", toolutil.BoardListMetricLabel))
 	for _, l := range out.Lists {
 		b.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(l.ID, 10),
@@ -237,6 +238,7 @@ func FormatListBoardListsMarkdown(out ListBoardListsOutput) string {
 			strconv.FormatInt(l.Position, 10),
 			boardListLimit(l.MaxIssueCount),
 			boardListLimit(l.MaxIssueWeight),
+			toolutil.CellOr(l.LimitMetric, "-"),
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,

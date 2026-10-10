@@ -327,10 +327,12 @@ func tailReaderCases() []capturedReaderCase {
 		{
 			name: "board",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedBoard(c) },
-			body: `{"id":1,"group":{"id":4,"name":"Acme","web_url":"https://example/groups/acme"}}`,
+			body: `{"id":1,"group":{"id":4,"name":"Acme","web_url":"https://example/groups/acme"},` +
+				`"lists":[{"id":7,"limit_metric":"issue_count"},{"id":8,"limit_metric":null},{"id":9,"limit_metric":"issue_weights"}]}`,
 			want: func(v any) bool {
 				e, _ := v.(BoardExtra)
-				return e.Group != nil && e.Group.ID == 4 && e.Group.WebURL == "https://example/groups/acme"
+				return e.Group != nil && e.Group.ID == 4 && e.Group.WebURL == "https://example/groups/acme" &&
+					reflect.DeepEqual(e.Lists, []BoardListExtra{{LimitMetric: "issue_count"}, {}, {LimitMetric: "issue_weights"}})
 			},
 		},
 		{

@@ -41,15 +41,20 @@ type GroupBoardOutput struct {
 // BoardListOutput represents a single list within a group board. Nested objects
 // (assignee, label, iteration, milestone) mirror the full client-go gl.BoardList
 // sub-objects per the 1:1 audit policy.
+//
+// LimitMetric, MaxIssueCount and MaxIssueWeight are the list's
+// work-in-progress limits, which ee/lib/ee/api/entities/list.rb exposes only
+// where they are available (the group's wip_limits licensed feature,
+// Premium), so a Free schema does not advertise them.
 type BoardListOutput struct {
 	toolutil.HintableOutput
 	ID             int64                    `json:"id"`
 	Assignee       *BoardListAssigneeOutput `json:"assignee,omitempty" tier:"premium"`
 	Iteration      *IterationOutput         `json:"iteration,omitempty" tier:"premium"`
 	Label          *LabelOutput             `json:"label,omitempty"`
-	LimitMetric    string                   `json:"limit_metric,omitempty"`
-	MaxIssueCount  int64                    `json:"max_issue_count,omitempty"`
-	MaxIssueWeight int64                    `json:"max_issue_weight,omitempty"`
+	LimitMetric    string                   `json:"limit_metric,omitempty" tier:"premium"`
+	MaxIssueCount  int64                    `json:"max_issue_count,omitempty" tier:"premium"`
+	MaxIssueWeight int64                    `json:"max_issue_weight,omitempty" tier:"premium"`
 	Milestone      *MilestoneOutput         `json:"milestone,omitempty" tier:"premium"`
 	Position       int64                    `json:"position"`
 }

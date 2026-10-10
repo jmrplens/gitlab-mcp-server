@@ -345,10 +345,12 @@ func TestCard_Section_BlankTitleContinuesTheList(t *testing.T) {
 // TestCard_Table_StreamsRowsAndTheNextRowSeparates verifies the nested
 // collection: a heading one level below the card's own, the header and
 // delimiter, one row per Row call with the cells written as the caller
-// rendered them, a link surviving intact, and the card's next row starting
-// after a blank line so the table ends where its rows end. A table with a
-// blank title has no heading and still separates itself from the rows before
-// it. This is the nested collection the design document shows.
+// rendered them, a link surviving intact, a cell rendered by CellOr escaped
+// when it holds a value and written as its absent text when it holds none,
+// and the card's next row starting after a blank line so the table ends where
+// its rows end. A table with a blank title has no heading and still separates
+// itself from the rows before it. This is the nested collection the design
+// document shows.
 func TestCard_Table_StreamsRowsAndTheNextRowSeparates(t *testing.T) {
 	var b strings.Builder
 	c := NewCard(&b, "Release v1")
@@ -356,6 +358,7 @@ func TestCard_Table_StreamsRowsAndTheNextRowSeparates(t *testing.T) {
 	assets := c.Table("Assets", "Name", "URL")
 	assets.Row(EscapeMdTableCell("bin | x"), MdTitleLink("bin", "https://gitlab.example.com/bin"))
 	assets.Row(MdCodeSpanCell("a|b"), "-")
+	assets.Row(CellOr("src | y", "-"), CellOr("", "-"))
 	assets.Row()
 	c.Field("Commit", "abc")
 	only := c.Table("", "Only")
@@ -368,7 +371,8 @@ func TestCard_Table_StreamsRowsAndTheNextRowSeparates(t *testing.T) {
 		"| Name | URL |\n" +
 		"| --- | --- |\n" +
 		"| bin &#124; x | [bin](https://gitlab.example.com/bin) |\n" +
-		"| `a\\|b` | - |\n\n" +
+		"| `a\\|b` | - |\n" +
+		"| src &#124; y | - |\n\n" +
 		"- **Commit**: abc\n\n" +
 		"| Only |\n" +
 		"| --- |\n" +

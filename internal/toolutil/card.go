@@ -308,6 +308,18 @@ func (t *CardTable) Row(cells ...string) {
 	t.c.b.WriteString(markdownTableLine(cells))
 }
 
+// CellOr renders a table cell the way [Card.FieldOr] renders a row: value
+// through [EscapeMdTableCell], or absent in its place when value is empty, for
+// a column whose absence is the answer, such as the dash where a board column
+// has no limit metric. absent is the server's own text and is written as
+// given. It serves a [CardTable] row and a [MarkdownTableRow] alike.
+func CellOr(value, absent string) string {
+	if value == "" {
+		return absent
+	}
+	return EscapeMdTableCell(value)
+}
+
 // Fence writes a body inside a fenced code block sized by
 // [MarkdownFencedBlock], under a heading one level below the card's own when
 // the title is not blank: a file, a template, a job log, a diff. An empty body

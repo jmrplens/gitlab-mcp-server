@@ -865,6 +865,14 @@ var builderFatalCases = map[string]func(t *testing.T){
 		})
 		NewGroupBoard(e, Group{Path: "e2e-group"}, "board")
 	},
+	"board list limit": func(t *testing.T) {
+		t.Helper()
+		stub, e := detachedStub(t)
+		stub.configure(func() {
+			stub.graphqlAnswers = []string{`{"data":{"boardListUpdateLimitMetrics":{"list":null,"errors":["List not found"]}}}`}
+		})
+		LimitBoardList(e, 5, "issue_weights", 4)
+	},
 	"environment": func(t *testing.T) {
 		t.Helper()
 		stub, e := detachedStub(t)
@@ -954,6 +962,7 @@ func TestBuilders_Refused_FailTheirTestNamingWhatTheyWereMaking(t *testing.T) {
 		want []string
 	}{
 		{name: "group board", want: []string{"creating a board in group e2e-group: GitLab refused the board: Multiple boards are not available"}},
+		{name: "board list limit", want: []string{"limiting board list 5 to 4 by issue_weights: GitLab refused the limit: List not found"}},
 		{name: "environment", want: []string{`creating environment "env-`, `in project 2: `, "403"}},
 		{name: "deployment", want: []string{`creating a deployment of 01234567 into "env-run" in project 2: `, "403"}},
 		{name: "group label", want: []string{`creating group label "label-`, `in group 1: `, "403"}},

@@ -37,7 +37,7 @@ All measurements are against the current source tree. The catalog is built in-me
 | `meta` / `minimal` (compact) | Free/CE  |            34 |               872 | `compact`                      |            211,937 |           170 |      212,107 |
 | `meta` / `full` (full)       | Free/CE  |            34 |               872 | `full`                         |            306,174 |         9,498 |      315,672 |
 | `meta` / `minimal` (full)    | Free/CE  |            34 |               872 | `full`                         |            306,174 |           170 |      306,344 |
-| `individual` / `full`        | Free/CE  |           868 |               868 | n/a                            |            550,886 |         9,498 |      560,384 |
+| `individual` / `full`        | Free/CE  |           868 |               868 | n/a                            |            550,748 |         9,498 |      560,246 |
 | `dynamic` / `full` (default) | Premium  |             2 |             1,026 | n/a                            |              1,670 |         9,498 |       11,168 |
 | `dynamic` / `minimal`        | Premium  |             2 |             1,026 | n/a                            |              1,670 |           170 |        1,840 |
 | `meta` / `full` (opaque)     | Premium  |            40 |             1,026 | `opaque`                       |            154,833 |         9,498 |      164,331 |

@@ -6,7 +6,7 @@ package boards
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"reflect"
@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hashicorp/go-retryablehttp"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -338,70 +338,6 @@ func TestListBoardLists_Success(t *testing.T) {
 	}
 }
 
-// boardListWithLimitMetricJSON is a board-list array whose entry includes the
-// documented limit_metric REST field that client-go's gl.BoardList omits. Used
-// to verify the raw-superset fetch path surfaces it.
-var boardListWithLimitMetricJSON = `[{
-	"id": 100,
-	"label": {"id": 20, "name": "To Do"},
-	"position": 0,
-	"max_issue_count": 10,
-	"limit_metric": "issue_count"
-}]`
-
-// boardWithLimitMetricJSON is a single board whose list entry includes the
-// documented limit_metric REST field absent from gl.BoardList.
-var boardWithLimitMetricJSON = `{
-	"id": 1,
-	"name": "Development",
-	"lists": [
-		{"id": 100, "label": {"id": 20, "name": "To Do"}, "position": 0, "limit_metric": "all_metrics"}
-	]
-}`
-
-// TestListBoardLists_LimitMetricSurfaced verifies that the documented
-// limit_metric REST field (absent from client-go's gl.BoardList) is surfaced
-// through the raw-superset fetch path used by ListBoardLists.
-func TestListBoardLists_LimitMetricSurfaced(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v4/projects/10/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSONWithPagination(w, http.StatusOK, boardListWithLimitMetricJSON,
-			testutil.PaginationHeaders{TotalPages: "1", Total: "1", Page: "1", PerPage: "20"})
-	})
-	client := testutil.NewTestClient(t, mux)
-
-	out, err := ListBoardLists(context.Background(), client, ListBoardListsInput{
-		ProjectID: toolutil.StringOrInt("10"), BoardID: 1,
-	})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-	if len(out.Lists) != 1 {
-		t.Fatalf("expected 1 list, got %d", len(out.Lists))
-	}
-	if out.Lists[0].LimitMetric != "issue_count" {
-		t.Errorf("expected limit_metric issue_count, got %q", out.Lists[0].LimitMetric)
-	}
-}
-
-// TestGetBoard_LimitMetricSurfaced verifies that each list's documented
-// limit_metric is surfaced through the raw-superset fetch path used by GetBoard.
-func TestGetBoard_LimitMetricSurfaced(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc(pathBoard1, func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, boardWithLimitMetricJSON)
-	})
-	client := testutil.NewTestClient(t, mux)
-
-	out, err := GetBoard(context.Background(), client, GetBoardInput{ProjectID: toolutil.StringOrInt("10"), BoardID: 1})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-	if len(out.Lists) != 1 || out.Lists[0].LimitMetric != "all_metrics" {
-		t.Errorf("expected list limit_metric all_metrics, got %+v", out.Lists)
-	}
-}
-
 // TestListBoardLists_LimitMetricAbsentOmitted verifies version tolerance: when
 // the GitLab response does not include limit_metric (older instances), the field
 // decodes to its zero value and is omitted from the marshaled MCP envelope,
@@ -434,6 +370,239 @@ func TestListBoardLists_LimitMetricAbsentOmitted(t *testing.T) {
 	if strings.Contains(string(data), "limit_metric") {
 		t.Errorf("expected limit_metric omitted from envelope, got %s", data)
 	}
+}
+
+// boardWithThreeMetricsJSON is a board whose columns each say something
+// different about their work-in-progress limit: one counted by issues, one
+// carrying the null GitLab writes for a column with no metric, and one
+// counted by weight. A join that paired a column with its neighbour's metric,
+// or every column with the first one's, publishes something this board does
+// not say.
+const boardWithThreeMetricsJSON = `{
+	"id": 1,
+	"name": "Development",
+	"lists": [
+		{"id": 100, "label": {"id": 20, "name": "To Do"}, "position": 0, "max_issue_count": 10, "limit_metric": "issue_count"},
+		{"id": 101, "label": {"id": 21, "name": "Doing"}, "position": 1, "limit_metric": null},
+		{"id": 102, "label": {"id": 22, "name": "Review"}, "position": 2, "max_issue_weight": 50, "limit_metric": "issue_weights"}
+	]
+}`
+
+// columnMetric is one column of a board as the metric tests read it: which
+// column, and the metric published on it.
+type columnMetric struct {
+	ID     int64
+	Metric string
+}
+
+// TestBoards_EachColumnCarriesItsOwnLimitMetric verifies that every handler
+// answering with a whole board publishes each column's limit_metric, the one
+// key of a column client-go's BoardList does not model, on the column it was
+// sent with and in the order GitLab sent the columns. The list, create and
+// update answers read only the board's group off the captured response and
+// published every column without its metric (issue 1256).
+func TestBoards_EachColumnCarriesItsOwnLimitMetric(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/10/boards", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			testutil.RespondJSON(w, http.StatusCreated, boardWithThreeMetricsJSON)
+			return
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+boardWithThreeMetricsJSON+`]`,
+			testutil.PaginationHeaders{TotalPages: "1", Total: "1", Page: "1", PerPage: "20"})
+	})
+	mux.HandleFunc(pathBoard1, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, boardWithThreeMetricsJSON)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	handlers := []struct {
+		name string
+		call func(context.Context) (BoardOutput, error)
+	}{
+		{"list", func(ctx context.Context) (BoardOutput, error) {
+			out, err := ListBoards(ctx, client, ListBoardsInput{ProjectID: "10"})
+			if err != nil || len(out.Boards) != 1 {
+				return BoardOutput{}, fmt.Errorf("ListBoards answered %d boards, want 1: %w", len(out.Boards), err)
+			}
+			return out.Boards[0], nil
+		}},
+		{"get", func(ctx context.Context) (BoardOutput, error) {
+			return GetBoard(ctx, client, GetBoardInput{ProjectID: "10", BoardID: 1})
+		}},
+		{"create", func(ctx context.Context) (BoardOutput, error) {
+			return CreateBoard(ctx, client, CreateBoardInput{ProjectID: "10", Name: "Development"})
+		}},
+		{"update", func(ctx context.Context) (BoardOutput, error) {
+			return UpdateBoard(ctx, client, UpdateBoardInput{ProjectID: "10", BoardID: 1, Name: "Development"})
+		}},
+	}
+	want := []columnMetric{{100, "issue_count"}, {101, ""}, {102, "issue_weights"}}
+	for _, handler := range handlers {
+		t.Run(handler.name, func(t *testing.T) {
+			board, err := handler.call(t.Context())
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			got := make([]columnMetric, 0, len(board.Lists))
+			for _, list := range board.Lists {
+				got = append(got, columnMetric{list.ID, list.LimitMetric})
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("columns = %+v, want %+v", got, want)
+			}
+		})
+	}
+}
+
+// boardListWithMetricJSON is one column in which no two values of a kind
+// agree, the work-in-progress metric among them.
+const boardListWithMetricJSON = `{
+	"id": 100,
+	"label": {"id": 20, "name": "To Do", "color": "#F0AD4E", "description": "todo"},
+	"position": 3,
+	"max_issue_count": 10,
+	"max_issue_weight": 50,
+	"limit_metric": "issue_weights"
+}`
+
+// boardListWithMetricOutput is what every list handler must make of
+// [boardListWithMetricJSON].
+func boardListWithMetricOutput() BoardListOutput {
+	return BoardListOutput{
+		ID:             100,
+		Label:          &LabelOutput{Name: "To Do", Color: "#F0AD4E", Description: "todo"},
+		Position:       3,
+		MaxIssueCount:  10,
+		MaxIssueWeight: 50,
+		LimitMetric:    "issue_weights",
+	}
+}
+
+// TestBoardLists_EveryListAnswerCarriesTheLimitMetric pins the whole column
+// each list handler publishes, the limit_metric read beside client-go's
+// BoardList among it. The get, create and update answers decoded through the
+// SDK alone and published the column without its metric (issue 1256), which a
+// spot check of the id could not notice.
+func TestBoardLists_EveryListAnswerCarriesTheLimitMetric(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(pathBoardLists, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			testutil.RespondJSON(w, http.StatusCreated, boardListWithMetricJSON)
+			return
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+boardListWithMetricJSON+`]`,
+			testutil.PaginationHeaders{TotalPages: "1", Total: "1", Page: "1", PerPage: "20"})
+	})
+	mux.HandleFunc(pathBoardList100, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, boardListWithMetricJSON)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	handlers := []struct {
+		name string
+		call func(context.Context) (BoardListOutput, error)
+	}{
+		{"list", func(ctx context.Context) (BoardListOutput, error) {
+			out, err := ListBoardLists(ctx, client, ListBoardListsInput{ProjectID: "10", BoardID: 1})
+			if err != nil || len(out.Lists) != 1 {
+				return BoardListOutput{}, fmt.Errorf("ListBoardLists answered %d columns, want 1: %w", len(out.Lists), err)
+			}
+			return out.Lists[0], nil
+		}},
+		{"get", func(ctx context.Context) (BoardListOutput, error) {
+			return GetBoardList(ctx, client, GetBoardListInput{ProjectID: "10", BoardID: 1, ListID: 100})
+		}},
+		{"create", func(ctx context.Context) (BoardListOutput, error) {
+			return CreateBoardList(ctx, client, CreateBoardListInput{ProjectID: "10", BoardID: 1, LabelID: 20})
+		}},
+		{"update", func(ctx context.Context) (BoardListOutput, error) {
+			return UpdateBoardList(ctx, client, UpdateBoardListInput{ProjectID: "10", BoardID: 1, ListID: 100, Position: 3})
+		}},
+	}
+	for _, handler := range handlers {
+		t.Run(handler.name, func(t *testing.T) {
+			got, err := handler.call(t.Context())
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if want := boardListWithMetricOutput(); !reflect.DeepEqual(got, want) {
+				t.Errorf("column\n got %+v\nwant %+v", got, want)
+			}
+		})
+	}
+}
+
+// TestConvertBoard_ColumnWithNoCapturedExtraHasNoMetric holds the join of a
+// board's columns to what was read beside them by position: a column the
+// captured board holds nothing for is published without a metric rather than
+// with another column's, and never indexes past what was read. The SDK and the
+// captured read decode the same bytes, so no answer of GitLab's reaches this
+// through a handler.
+func TestConvertBoard_ColumnWithNoCapturedExtraHasNoMetric(t *testing.T) {
+	board := &gl.IssueBoard{ID: 1, Lists: []*gl.BoardList{{ID: 100}, {ID: 101}}}
+	extra := toolutil.BoardExtra{Lists: []toolutil.BoardListExtra{{LimitMetric: "issue_count"}}}
+
+	out := convertBoard(board, extra)
+
+	got := make([]columnMetric, 0, len(out.Lists))
+	for _, list := range out.Lists {
+		got = append(got, columnMetric{list.ID, list.LimitMetric})
+	}
+	if want := []columnMetric{{100, "issue_count"}, {101, ""}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("columns = %+v, want %+v", got, want)
+	}
+}
+
+// TestBoards_UnreadableCapturedLimitMetric verifies that every handler reading
+// a column's limit_metric off the captured answer returns an error rather than
+// a column without it when GitLab sends the metric as something that is not a
+// string. The SDK ignores the key its own BoardList does not model, so the
+// captured read is the only thing that can notice.
+func TestBoards_UnreadableCapturedLimitMetric(t *testing.T) {
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	const column = `{"id":100,"position":0,"limit_metric":42}`
+	const board = `{"id":1,"name":"dev","lists":[` + column + `]}`
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "board list", Call: func() error {
+			_, err := ListBoards(t.Context(), poisoned(`[`+board+`]`), ListBoardsInput{ProjectID: "10"})
+			return err
+		}},
+		{Name: "board get", Call: func() error {
+			_, err := GetBoard(t.Context(), poisoned(board), GetBoardInput{ProjectID: "10", BoardID: 1})
+			return err
+		}},
+		{Name: "board create", Call: func() error {
+			_, err := CreateBoard(t.Context(), poisoned(board), CreateBoardInput{ProjectID: "10", Name: "dev"})
+			return err
+		}},
+		{Name: "board update", Call: func() error {
+			_, err := UpdateBoard(t.Context(), poisoned(board), UpdateBoardInput{ProjectID: "10", BoardID: 1, Name: "dev"})
+			return err
+		}},
+		{Name: "column list", Call: func() error {
+			_, err := ListBoardLists(t.Context(), poisoned(`[`+column+`]`), ListBoardListsInput{ProjectID: "10", BoardID: 1})
+			return err
+		}},
+		{Name: "column get", Call: func() error {
+			_, err := GetBoardList(t.Context(), poisoned(column), GetBoardListInput{ProjectID: "10", BoardID: 1, ListID: 100})
+			return err
+		}},
+		{Name: "column create", Call: func() error {
+			_, err := CreateBoardList(t.Context(), poisoned(column), CreateBoardListInput{ProjectID: "10", BoardID: 1, LabelID: 20})
+			return err
+		}},
+		{Name: "column update", Call: func() error {
+			_, err := UpdateBoardList(t.Context(), poisoned(column), UpdateBoardListInput{ProjectID: "10", BoardID: 1, ListID: 100, Position: 2})
+			return err
+		}},
+	})
 }
 
 // TestListBoardLists_MissingParams verifies that ListBoardLists_MissingParams returns a wrapped error when the GitLab API responds with an error status.
@@ -635,7 +804,10 @@ func TestDeleteBoardList_MissingParams(t *testing.T) {
 // TestFormatBoardMarkdown_AllFields pins the whole board card: the heading
 // carrying the board's reference, one list item per field with the project,
 // milestone and assignee linked, the two visibility flags as glyphs, the
-// columns as a nested table naming each one's scope, and the hints last.
+// columns as a nested table naming each one's scope, its ceilings and the
+// metric they are counted by, and the hints last. The metric is what the
+// two ceilings mean (issue 1256), so a column whose ceiling the table shows
+// shows it too, and a column with none reads as a dash.
 func TestFormatBoardMarkdown_AllFields(t *testing.T) {
 	out := BoardOutput{
 		ID: 1, Name: "Dev",
@@ -646,7 +818,7 @@ func TestFormatBoardMarkdown_AllFields(t *testing.T) {
 		Labels:          []*LabelDetailsOutput{{ID: 1, Name: "bug"}, nil, {ID: 2, Name: "ux"}},
 		HideBacklogList: false, HideClosedList: true,
 		Lists: []BoardListOutput{
-			{ID: 100, Label: &LabelOutput{Name: "To Do"}, Position: 0, MaxIssueCount: 10, MaxIssueWeight: 50},
+			{ID: 100, Label: &LabelOutput{Name: "To Do"}, Position: 0, MaxIssueWeight: 50, LimitMetric: "issue_weights"},
 			{ID: 101, Position: 1, Assignee: &BoardListAssigneeOutput{ID: 3, Username: "alice"}},
 		},
 	}
@@ -663,10 +835,10 @@ func TestFormatBoardMarkdown_AllFields(t *testing.T) {
 		"- **Hide Backlog**: " + toolutil.EmojiCross + "\n" +
 		"- **Hide Closed**: " + toolutil.EmojiSuccess + "\n\n" +
 		"### Lists\n\n" +
-		"| ID | Scope | Position | Max Issues | Max Weight |\n" +
-		"| --- | --- | --- | --- | --- |\n" +
-		"| 100 | To Do | 0 | 10 | 50 |\n" +
-		"| 101 | @alice | 1 | - | - |\n\n" +
+		"| ID | Scope | Position | Max Issues | Max Weight | Limit Metric |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 100 | To Do | 0 | - | 50 | issue_weights |\n" +
+		"| 101 | @alice | 1 | - | - | - |\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'project.board_list_create' to add a column to this board\n" +
 		"- Use action 'project.board_update' to rename this board or toggle its Open and Closed lists, and on Premium and Ultimate change its scope\n" +
@@ -1224,13 +1396,14 @@ func TestDeleteBoardList_CancelledContext(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // TestFormatListBoardListsMarkdown pins the whole column list: the counted
-// heading, one row per column naming what it collects, a dash where GitLab set
-// no ceiling, and the guidance section last with no preserve-links hint, since
+// heading, one row per column naming what it collects, its ceilings and the
+// metric they are counted by, a dash where GitLab set no ceiling or no
+// metric, and the guidance section last with no preserve-links hint, since
 // the table carries no link.
 func TestFormatListBoardListsMarkdown(t *testing.T) {
 	out := ListBoardListsOutput{
 		Lists: []BoardListOutput{
-			{ID: 100, Label: &LabelOutput{Name: "To Do"}, Position: 0, MaxIssueCount: 10, MaxIssueWeight: 50},
+			{ID: 100, Label: &LabelOutput{Name: "To Do"}, Position: 0, MaxIssueCount: 10, LimitMetric: "issue_count"},
 			{ID: 101, Label: &LabelOutput{Name: "Doing"}, Position: 1},
 			{ID: 102, Position: 2, Milestone: &MilestoneOutput{ID: 5, Title: "v1.0"}},
 		},
@@ -1240,11 +1413,11 @@ func TestFormatListBoardListsMarkdown(t *testing.T) {
 	md := FormatListBoardListsMarkdown(out)
 
 	want := "## Board Lists (3)\n\n" +
-		"| ID | Scope | Position | Max Issues | Max Weight |\n" +
-		"| --- | --- | --- | --- | --- |\n" +
-		"| 100 | To Do | 0 | 10 | 50 |\n" +
-		"| 101 | Doing | 1 | - | - |\n" +
-		"| 102 | Milestone: v1.0 | 2 | - | - |\n\n" +
+		"| ID | Scope | Position | Max Issues | Max Weight | Limit Metric |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 100 | To Do | 0 | 10 | - | issue_count |\n" +
+		"| 101 | Doing | 1 | - | - | - |\n" +
+		"| 102 | Milestone: v1.0 | 2 | - | - | - |\n\n" +
 		"3 items total\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'project.board_list_get' to read one column\n" +
@@ -1265,7 +1438,10 @@ func TestFormatListBoardListsMarkdown_Empty(t *testing.T) {
 
 // TestFormatBoardListMarkdown_AllFields pins the whole column card: the
 // heading naming the column by its label, every scope GitLab sent, the
-// position, the two ceilings and the metric they are counted in.
+// position, the two ceilings and the metric they are counted in. The next
+// step offers the column update for its position alone, because that is all
+// PUT /projects/:id/boards/:board_id/lists/:list_id takes: the limits are set
+// through GraphQL's boardListUpdateLimitMetrics, which no action sends.
 func TestFormatBoardListMarkdown_AllFields(t *testing.T) {
 	out := BoardListOutput{
 		ID: 100, Label: &LabelOutput{Name: "To Do"}, Position: 0,
@@ -1288,7 +1464,7 @@ func TestFormatBoardListMarkdown_AllFields(t *testing.T) {
 		"- **Max Issue Weight**: 50\n" +
 		"- **Limit Metric**: issue_count\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'project.board_list_update' to change this column's position or limits\n" +
+		"- Use action 'project.board_list_update' to move this column to another position\n" +
 		"- Use action 'project.board_list_delete' to remove this column\n"
 	if md != want {
 		t.Errorf("FormatBoardListMarkdown()\n got %q\nwant %q", md, want)
@@ -1305,7 +1481,7 @@ func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 		"- **ID**: 200\n" +
 		"- **Position**: 1\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'project.board_list_update' to change this column's position or limits\n" +
+		"- Use action 'project.board_list_update' to move this column to another position\n" +
 		"- Use action 'project.board_list_delete' to remove this column\n"
 	if md != want {
 		t.Errorf("FormatBoardListMarkdown()\n got %q\nwant %q", md, want)
@@ -1801,10 +1977,10 @@ func TestUpdateBoardList_SendsThePositionTheCallerAsked(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // TestBoards_ListVisibilityFlagsAreNotCrossed drives one flag at a time,
-// through both converters: the raw-superset one a board read uses and the SDK
-// one a board list uses. A board with both flags alike cannot tell
-// hide_backlog_list from hide_closed_list, and a converter that crossed them
-// would tell a model the Open column is hidden when the Closed one is.
+// through the read of one board and the list of boards. A board with both
+// flags alike cannot tell hide_backlog_list from hide_closed_list, and a
+// converter that crossed them would tell a model the Open column is hidden
+// when the Closed one is.
 func TestBoards_ListVisibilityFlagsAreNotCrossed(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -1850,15 +2026,14 @@ func TestBoards_ListVisibilityFlagsAreNotCrossed(t *testing.T) {
 	}
 }
 
-// TestGetBoard_ProjectPathIsEscapedIntoTheRawRequest holds the property that
-// makes the NewRequest error arm of the two raw fetches unreachable: the
-// project a caller names is path-escaped into the URL, so what those handlers
-// hand the SDK is always a valid reference. It is worth holding for its own
-// sake too, since a namespaced path sent unescaped names another route. The
-// expectation carries a literal dot because the SDK escapes one to %2E and
-// net/url writes that back as the dot it encodes; the separator and the space
-// are what have to survive, and they do.
-func TestGetBoard_ProjectPathIsEscapedIntoTheRawRequest(t *testing.T) {
+// TestBoardReads_ProjectPathIsEscapedIntoTheRequest holds that the project a
+// caller names is path-escaped into the URL of the two reads that used to
+// build their own request (issue 1256 moved them onto the SDK's methods), since
+// a namespaced path sent unescaped names another route. The expectation
+// carries a literal dot because the SDK escapes one to %2E and net/url writes
+// that back as the dot it encodes; the separator and the space are what have
+// to survive, and they do.
+func TestBoardReads_ProjectPathIsEscapedIntoTheRequest(t *testing.T) {
 	cases := []struct {
 		name    string
 		fixture string
@@ -1916,13 +2091,13 @@ func TestFormatListBoardListsMarkdown_ScopeFallbacks(t *testing.T) {
 	md := FormatListBoardListsMarkdown(out)
 
 	want := "## Board Lists (5)\n\n" +
-		"| ID | Scope | Position | Max Issues | Max Weight |\n" +
-		"| --- | --- | --- | --- | --- |\n" +
-		"| 1 | @alice | 0 | - | - |\n" +
-		"| 2 |  | 0 | - | - |\n" +
-		"| 3 |  | 0 | - | - |\n" +
-		"| 4 | Iteration: Sprint 3 | 0 | - | - |\n" +
-		"| 5 |  | 0 | - | - |\n\n" +
+		"| ID | Scope | Position | Max Issues | Max Weight | Limit Metric |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | @alice | 0 | - | - | - |\n" +
+		"| 2 |  | 0 | - | - | - |\n" +
+		"| 3 |  | 0 | - | - | - |\n" +
+		"| 4 | Iteration: Sprint 3 | 0 | - | - | - |\n" +
+		"| 5 |  | 0 | - | - | - |\n\n" +
 		"5 items total\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'project.board_list_get' to read one column\n" +
@@ -2084,6 +2259,11 @@ func TestBoards_UnreadableCapturedGroup(t *testing.T) {
 			_, err := ListBoards(context.Background(), client, ListBoardsInput{ProjectID: "42"})
 			return err
 		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"id":1,"name":"dev","group":"not-an-object"}`)
+			_, err := GetBoard(context.Background(), client, GetBoardInput{ProjectID: "42", BoardID: 1})
+			return err
+		}},
 		{Name: "create", Call: func() error {
 			client := poisoned(`{"id":1,"name":"dev","group":"not-an-object"}`)
 			_, err := CreateBoard(context.Background(), client, CreateBoardInput{ProjectID: "42", Name: "dev"})
@@ -2095,29 +2275,6 @@ func TestBoards_UnreadableCapturedGroup(t *testing.T) {
 			return err
 		}},
 	})
-}
-
-// TestBoards_RawRequestConstructionFails_HandlersReturnTheError verifies that
-// both reads issuing a raw request return the error building it fails with,
-// rather than sending anything. No valid input reaches the branch, since
-// PathEscape sanitizes everything interpolated into the path, so the
-// constructor seam is stubbed, and the handler behind the client refuses any
-// request that arrives anyway.
-func TestBoards_RawRequestConstructionFails_HandlersReturnTheError(t *testing.T) {
-	construction := errors.New("construction boom")
-	orig := newRawRequest
-	newRawRequest = func(context.Context, *gitlabclient.Client, string, string, any) (*retryablehttp.Request, error) {
-		return nil, construction
-	}
-	t.Cleanup(func() { newRawRequest = orig })
-	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-
-	if _, err := GetBoard(t.Context(), client, GetBoardInput{ProjectID: "10", BoardID: 1}); !errors.Is(err, construction) {
-		t.Errorf("GetBoard error = %v, want the construction error", err)
-	}
-	if _, err := ListBoardLists(t.Context(), client, ListBoardListsInput{ProjectID: "10", BoardID: 1}); !errors.Is(err, construction) {
-		t.Errorf("ListBoardLists error = %v, want the construction error", err)
-	}
 }
 
 // projectBoardRefusals are the answers GitLab gives a project board route

@@ -19931,7 +19931,10 @@
           "class": "mandatory",
           "classic": "read_api",
           "sites": [
-            "boards.newRawRequest"
+            "boards.GetBoard"
+          ],
+          "sdk_methods": [
+            "IssueBoards.GetIssueBoard"
           ]
         }
       ],
@@ -20058,7 +20061,10 @@
           "class": "mandatory",
           "classic": "read_api",
           "sites": [
-            "boards.newRawRequest"
+            "boards.ListBoardLists"
+          ],
+          "sdk_methods": [
+            "IssueBoards.GetIssueBoardLists"
           ]
         }
       ],

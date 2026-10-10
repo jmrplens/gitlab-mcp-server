@@ -535,10 +535,11 @@ func TestDeleteGroupBoardList_MissingParams(t *testing.T) {
 // TestFormatGroupBoardMarkdown_AllFields pins the whole group board card: the
 // heading carrying the board's reference, one list item per field with the
 // group, milestone and assignee linked, the weight, the two visibility flags
-// as glyphs, and the columns as a nested table naming each one's scope. The
-// label list carries a nil entry and a nameless one because GitLab's arrays
-// carry both, and neither may reach the card as an empty name between two
-// commas.
+// as glyphs, and the columns as a nested table naming each one's scope, its
+// ceilings and the metric they are counted by, which the project board card
+// writes too (issue 1256). The label list carries a nil entry and a nameless
+// one because GitLab's arrays carry both, and neither may reach the card as
+// an empty name between two commas.
 func TestFormatGroupBoardMarkdown_AllFields(t *testing.T) {
 	out := GroupBoardOutput{
 		ID:              1,
@@ -551,7 +552,7 @@ func TestFormatGroupBoardMarkdown_AllFields(t *testing.T) {
 		HideBacklogList: true,
 		HideClosedList:  false,
 		Lists: []BoardListOutput{
-			{ID: 10, Label: &LabelOutput{Name: "To Do"}, Position: 0, MaxIssueCount: 5},
+			{ID: 10, Label: &LabelOutput{Name: "To Do"}, Position: 0, MaxIssueCount: 5, LimitMetric: "issue_count"},
 			{ID: 11, Position: 1, Iteration: &IterationOutput{ID: 9, Title: "Sprint 3"}},
 		},
 	}
@@ -568,10 +569,10 @@ func TestFormatGroupBoardMarkdown_AllFields(t *testing.T) {
 		"- **Hide Backlog**: " + toolutil.EmojiSuccess + "\n" +
 		"- **Hide Closed**: " + toolutil.EmojiCross + "\n\n" +
 		"### Lists\n\n" +
-		"| ID | Scope | Position | Max Issues | Max Weight |\n" +
-		"| --- | --- | --- | --- | --- |\n" +
-		"| 10 | To Do | 0 | 5 | - |\n" +
-		"| 11 | Iteration: Sprint 3 | 1 | - | - |\n\n" +
+		"| ID | Scope | Position | Max Issues | Max Weight | Limit Metric |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 10 | To Do | 0 | 5 | - | issue_count |\n" +
+		"| 11 | Iteration: Sprint 3 | 1 | - | - | - |\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'group.group_board_create_list' to add a column to this board\n" +
 		"- Use action 'group.group_board_update' to rename this board, and on Premium and Ultimate change its scope\n" +
@@ -615,7 +616,8 @@ func TestFormatListGroupBoardsMarkdown(t *testing.T) {
 
 // TestFormatBoardListMarkdown_AllFields pins the whole column card: every
 // scope GitLab sent, the position, the two ceilings and the metric they are
-// counted in.
+// counted in. The next step offers the column update for its position alone,
+// because that is all PUT /groups/:id/boards/:board_id/lists/:list_id takes.
 func TestFormatBoardListMarkdown_AllFields(t *testing.T) {
 	out := BoardListOutput{
 		ID:             10,
@@ -642,7 +644,7 @@ func TestFormatBoardListMarkdown_AllFields(t *testing.T) {
 		"- **Max Issue Weight**: 50\n" +
 		"- **Limit Metric**: all_metrics\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'group.group_board_update_list' to change this column's position or limits\n" +
+		"- Use action 'group.group_board_update_list' to move this column to another position\n" +
 		"- Use action 'group.group_board_delete_list' to remove this column\n"
 	if md != want {
 		t.Errorf("FormatBoardListMarkdown()\n got %q\nwant %q", md, want)
@@ -1176,7 +1178,7 @@ func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 		"- **ID**: 5\n" +
 		"- **Position**: 1\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'group.group_board_update_list' to change this column's position or limits\n" +
+		"- Use action 'group.group_board_update_list' to move this column to another position\n" +
 		"- Use action 'group.group_board_delete_list' to remove this column\n"
 	if md != want {
 		t.Errorf("FormatBoardListMarkdown()\n got %q\nwant %q", md, want)
@@ -1188,14 +1190,15 @@ func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // TestFormatListBoardListsMarkdown_WithData pins the whole column list: the
-// counted heading, one row per column naming what it collects, the pagination
-// line, and the guidance section last with no preserve-links hint, since the
-// table carries no link.
+// counted heading, one row per column naming what it collects, its ceilings
+// and the metric they are counted by (a dash where GitLab sent none), the
+// pagination line, and the guidance section last with no preserve-links
+// hint, since the table carries no link.
 func TestFormatListBoardListsMarkdown_WithData(t *testing.T) {
 	out := ListBoardListsOutput{
 		Lists: []BoardListOutput{
-			{ID: 10, Label: &LabelOutput{Name: "To Do"}, Position: 0, MaxIssueCount: 5, MaxIssueWeight: 20},
-			{ID: 11, Label: &LabelOutput{Name: "Doing"}, Position: 1, MaxIssueCount: 3, MaxIssueWeight: 15},
+			{ID: 10, Label: &LabelOutput{Name: "To Do"}, Position: 0, MaxIssueWeight: 20, LimitMetric: "issue_weights"},
+			{ID: 11, Label: &LabelOutput{Name: "Doing"}, Position: 1, MaxIssueCount: 3},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -1203,10 +1206,10 @@ func TestFormatListBoardListsMarkdown_WithData(t *testing.T) {
 	md := FormatListBoardListsMarkdown(out)
 
 	want := "## Board Lists (2)\n\n" +
-		"| ID | Scope | Position | Max Issues | Max Weight |\n" +
-		"| --- | --- | --- | --- | --- |\n" +
-		"| 10 | To Do | 0 | 5 | 20 |\n" +
-		"| 11 | Doing | 1 | 3 | 15 |\n\n" +
+		"| ID | Scope | Position | Max Issues | Max Weight | Limit Metric |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 10 | To Do | 0 | - | 20 | issue_weights |\n" +
+		"| 11 | Doing | 1 | 3 | - | - |\n\n" +
 		"Page 1 of 1 | 2 items total | 20 per page\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'group.group_board_get_list' to read one column\n" +
@@ -1251,7 +1254,7 @@ func TestFormatListBoardListsMarkdown_ScopeOfEachColumnKind(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			md := FormatListBoardListsMarkdown(ListBoardListsOutput{Lists: []BoardListOutput{tc.list}})
-			want := "| 1 | " + tc.want + " | 0 | - | - |\n"
+			want := "| 1 | " + tc.want + " | 0 | - | - | - |\n"
 			if !strings.Contains(md, want) {
 				t.Errorf("FormatListBoardListsMarkdown() = %q, want a row %q", md, want)
 			}
@@ -1372,9 +1375,9 @@ func TestMarkdownHelpers_NilFallbacks(t *testing.T) {
 		"- **Hide Backlog**: " + toolutil.EmojiCross + "\n" +
 		"- **Hide Closed**: " + toolutil.EmojiCross + "\n\n" +
 		"### Lists\n\n" +
-		"| ID | Scope | Position | Max Issues | Max Weight |\n" +
-		"| --- | --- | --- | --- | --- |\n" +
-		"| 9 |  | 0 | - | - |\n\n" +
+		"| ID | Scope | Position | Max Issues | Max Weight | Limit Metric |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 9 |  | 0 | - | - | - |\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'group.group_board_create_list' to add a column to this board\n" +
 		"- Use action 'group.group_board_update' to rename this board, and on Premium and Ultimate change its scope\n" +

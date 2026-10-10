@@ -212,6 +212,21 @@ const (
 	actionGroupBoardDelete harness.ActionID = "group.group_board_delete"
 )
 
+// The project board actions whose answers carry a column, called here because
+// a column's work-in-progress limit, and with it the limit_metric those
+// answers carry, is licensed; the board and column lifecycle is Free and
+// lives in the common package.
+const (
+	actionProjectBoardCreate     harness.ActionID = "project.board_create"
+	actionProjectBoardList       harness.ActionID = "project.board_list"
+	actionProjectBoardGet        harness.ActionID = "project.board_get"
+	actionProjectBoardUpdate     harness.ActionID = "project.board_update"
+	actionProjectBoardListList   harness.ActionID = "project.board_list_list"
+	actionProjectBoardListCreate harness.ActionID = "project.board_list_create"
+	actionProjectBoardListGet    harness.ActionID = "project.board_list_get"
+	actionProjectBoardListUpdate harness.ActionID = "project.board_list_update"
+)
+
 // Group wikis.
 const (
 	actionGroupWikiCreate harness.ActionID = "group.wiki_create"

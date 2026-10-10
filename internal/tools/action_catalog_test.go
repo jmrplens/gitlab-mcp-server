@@ -1063,6 +1063,46 @@ func TestCentralTierFilter_BoardScopeInputsArePremium(t *testing.T) {
 	}
 }
 
+// TestCentralTierFilter_BoardColumnLimitsArePremium holds the work-in-progress
+// limits of a board column to the tier GitLab sends them on.
+// ee/lib/ee/api/entities/list.rb exposes max_issue_count, max_issue_weight and
+// limit_metric only where list.wip_limits_available? is true, which is the
+// board parent's wip_limits licensed feature, Premium in the live record, so a
+// Free schema advertising the three describes keys a Free instance never
+// sends. The column answers are the six actions whose output is a column at
+// the top level, the only place the output prune reaches; the position beside
+// the three is sent on every tier and stays on the Free schema.
+func TestCentralTierFilter_BoardColumnLimitsArePremium(t *testing.T) {
+	free := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+	premium := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Premium, IncludeMCP: true})
+	columnAnswers := []actioncatalog.ActionID{
+		"project.board_list_get",
+		"project.board_list_create",
+		"project.board_list_update",
+		"group.group_board_get_list",
+		"group.group_board_create_list",
+		"group.group_board_update_list",
+	}
+	limits := []string{"max_issue_count", "max_issue_weight", "limit_metric"}
+	for _, id := range columnAnswers {
+		t.Run(string(id), func(t *testing.T) {
+			freeProps, _ := actionOutputSchema(t, free, id)["properties"].(map[string]any)
+			premiumProps, _ := actionOutputSchema(t, premium, id)["properties"].(map[string]any)
+			for _, field := range limits {
+				if _, has := freeProps[field]; has {
+					t.Errorf("Free %s output schema advertises %q, which GitLab sends only where work-in-progress limits are licensed", id, field)
+				}
+				if _, has := premiumProps[field]; !has {
+					t.Errorf("Premium %s output schema must advertise %q", id, field)
+				}
+			}
+			if _, has := freeProps["position"]; !has {
+				t.Errorf("Free %s output schema lost position, which every tier sends", id)
+			}
+		})
+	}
+}
+
 // TestCentralTierFilter_OutputSchemasArePrunedLenientlyPerTier is the output
 // half of the tier filter, across the three tiers built in one process.
 //

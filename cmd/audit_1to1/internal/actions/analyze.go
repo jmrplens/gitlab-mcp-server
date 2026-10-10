@@ -150,8 +150,6 @@ var acceptedMissingMethods = map[string]string{
 	"MergeRequestApprovals.GetApprovalState":   "COVERED_RAW. gitlab_mr_approval_state",
 	"MergeRequestApprovals.UpdateApprovalRule": "COVERED_RAW. gitlab_mr_approval_rule_update",
 	"PipelineSchedules.GetPipelineSchedule":    "COVERED_RAW. gitlab_pipeline_schedule_get",
-	"IssueBoards.GetIssueBoard":                "COVERED_RAW. gitlab_board_get",
-	"IssueBoards.GetIssueBoardLists":           "COVERED_RAW. gitlab_board_list_lists",
 	"GroupIssueBoards.CreateGroupIssueBoard":   "COVERED_RAW. Groupboards raw",
 	"GroupIssueBoards.GetGroupIssueBoard":      "COVERED_RAW. gitlab_group_board_get",
 	"GroupIssueBoards.ListGroupIssueBoards":    "COVERED_RAW. gitlab_group_board_list",
