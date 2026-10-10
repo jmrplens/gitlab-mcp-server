@@ -539,8 +539,8 @@ The description of each action, and of each of its parameters, is the text the s
 
 | Parameter     | Type             | Mandatory | Description               |
 | ------------- | ---------------- | --------- | ------------------------- |
+| `description` | `string`         | yes       | Trigger token description |
 | `project_id`  | `string/integer` | yes       | Project ID or path        |
-| `description` | `string`         | no        | Trigger token description |
 
 ### `pipeline.trigger_delete`
 
@@ -609,9 +609,9 @@ The description of each action, and of each of its parameters, is the text the s
 | Parameter    | Type             | Mandatory | Description                                                                                                                  |
 | ------------ | ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `project_id` | `string/integer` | yes       | Project ID or path                                                                                                           |
+| `ref`        | `string`         | yes       | Branch or tag name to run pipeline on                                                                                        |
+| `token`      | `string`         | yes       | Pipeline trigger token                                                                                                       |
 | `inputs`     | `object`         | no        | Map of pipeline input name to value (string, number, boolean, or array of strings) for inputs declared in the pipeline spec. |
-| `ref`        | `string`         | no        | Branch or tag name to run pipeline on                                                                                        |
-| `token`      | `string`         | no        | Pipeline trigger token                                                                                                       |
 | `variables`  | `object`         | no        | Map of CI/CD variable name to value injected into the triggered pipeline.                                                    |
 
 ### `pipeline.trigger_update`

@@ -651,7 +651,6 @@ The description of each action, and of each of its parameters, is the text the s
 
 | Parameter                                                 | Type                                                                         | Mandatory | Description                                                                                                                                                                                                          |
 | --------------------------------------------------------- | ---------------------------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`                                                    | `string`                                                                     | yes       | Project name                                                                                                                                                                                                         |
 | `allow_merge_on_skipped_pipeline`                         | `boolean`                                                                    | no        | Allow merge when pipeline is skipped                                                                                                                                                                                 |
 | `analytics_access_level`                                  | `string`                                                                     | no        | Analytics access level (disabled, private, enabled)                                                                                                                                                                  |
 | `approvals_before_merge` (Premium)                        | `integer`                                                                    | no        | Number of approvals required before merge (deprecated: use Merge Request Approvals API)                                                                                                                              |
@@ -704,6 +703,7 @@ The description of each action, and of each of its parameters, is the text the s
 | `model_registry_access_level`                             | `string`                                                                     | no        | Model registry access level (disabled, private, enabled)                                                                                                                                                             |
 | `monitor_access_level`                                    | `string`                                                                     | no        | Monitor access level (disabled, private, enabled)                                                                                                                                                                    |
 | `mr_default_title_template`                               | `string`                                                                     | no        | Template for default merge request titles                                                                                                                                                                            |
+| `name`                                                    | `string`                                                                     | no        | Project name, derived from the path when left out. Provide name, path or both                                                                                                                                        |
 | `namespace_id`                                            | `integer`                                                                    | no        | Namespace ID (defaults to personal namespace)                                                                                                                                                                        |
 | `only_allow_merge_if_all_discussions_are_resolved`        | `boolean`                                                                    | no        | Only allow merge when all discussions are resolved                                                                                                                                                                   |
 | `only_allow_merge_if_all_status_checks_passed` (Ultimate) | `boolean`                                                                    | no        | Only allow merge when all external status checks pass                                                                                                                                                                |
@@ -711,7 +711,7 @@ The description of each action, and of each of its parameters, is the text the s
 | `package_registry_access_level`                           | `string`                                                                     | no        | Package registry access level (disabled, private, enabled)                                                                                                                                                           |
 | `packages_enabled`                                        | `boolean`                                                                    | no        | Enable packages feature (deprecated: use package_registry_access_level)                                                                                                                                              |
 | `pages_access_level`                                      | `string`                                                                     | no        | Pages access level (disabled, private, enabled, public)                                                                                                                                                              |
-| `path`                                                    | `string`                                                                     | no        | Project path slug (defaults from name)                                                                                                                                                                               |
+| `path`                                                    | `string`                                                                     | no        | Project path slug, derived from the name when left out. Provide name, path or both                                                                                                                                   |
 | `printing_merge_request_link_enabled`                     | `boolean`                                                                    | no        | Show the create-merge-request link after pushing                                                                                                                                                                     |
 | `protect_merge_request_pipelines`                         | `boolean`                                                                    | no        | Prevent merge request pipeline settings from being modified by users with lower permissions                                                                                                                          |
 | `public_builds`                                           | `boolean`                                                                    | no        | Enable public access to pipelines (deprecated: use public_jobs)                                                                                                                                                      |
@@ -742,6 +742,8 @@ The description of each action, and of each of its parameters, is the text the s
 | `visibility`                                              | `string` (`private`, `internal`, `public`)                                   | no        | Visibility level (private, internal, public)                                                                                                                                                                         |
 | `wiki_access_level`                                       | `string`                                                                     | no        | Wiki access level (disabled, private, enabled)                                                                                                                                                                       |
 | `wiki_enabled`                                            | `boolean`                                                                    | no        | Enable wiki feature (deprecated: use wiki_access_level)                                                                                                                                                              |
+
+Also needs at least one of: `name`; `path`.
 
 ### `project.create_for_user`
 
@@ -817,7 +819,7 @@ The description of each action, and of each of its parameters, is the text the s
 | `package_registry_access_level`                           | `string`                                                                     | no        | Package registry access level (disabled, private, enabled)                                                                                                                                                           |
 | `packages_enabled`                                        | `boolean`                                                                    | no        | Enable packages feature (deprecated: use package_registry_access_level)                                                                                                                                              |
 | `pages_access_level`                                      | `string`                                                                     | no        | Pages access level (disabled, private, enabled, public)                                                                                                                                                              |
-| `path`                                                    | `string`                                                                     | no        | Project path slug (defaults from name)                                                                                                                                                                               |
+| `path`                                                    | `string`                                                                     | no        | Project path slug, derived from the name when left out. Provide name, path or both                                                                                                                                   |
 | `printing_merge_request_link_enabled`                     | `boolean`                                                                    | no        | Show the create-merge-request link after pushing                                                                                                                                                                     |
 | `protect_merge_request_pipelines`                         | `boolean`                                                                    | no        | Prevent merge request pipeline settings from being modified by users with lower permissions                                                                                                                          |
 | `public_builds`                                           | `boolean`                                                                    | no        | Enable public access to pipelines (deprecated: use public_jobs)                                                                                                                                                      |
@@ -1277,13 +1279,13 @@ The description of each action, and of each of its parameters, is the text the s
 
 | Parameter         | Type      | Mandatory | Description                                                                                                                                                                                                                                               |
 | ----------------- | --------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`            | `string`  | yes       | URL path for the imported project                                                                                                                                                                                                                         |
 | `content_base64`  | `string`  | no        | Base64-encoded export archive content. Only one of file_path or content_base64 should be provided.                                                                                                                                                        |
 | `file_path`       | `string`  | no        | Canonical path to a local export archive (.tar.gz) under the current working directory, OS temp directory, or GITLAB_MCP_ALLOWED_IMPORT_DIRS. Symlinks are resolved and escapes are rejected. Only one of file_path or content_base64 should be provided. |
 | `name`            | `string`  | no        | Name for the imported project                                                                                                                                                                                                                             |
 | `namespace`       | `string`  | no        | Namespace to import the project into (user or group path)                                                                                                                                                                                                 |
 | `override_params` | `object`  | no        | Optional project attributes to override on the imported project (mirrors the create-project attributes accepted by override_params\[\])                                                                                                                   |
 | `overwrite`       | `boolean` | no        | If true, overwrite an existing project with the same path                                                                                                                                                                                                 |
-| `path`            | `string`  | no        | URL path for the imported project                                                                                                                                                                                                                         |
 
 ### `project.import_status`
 
@@ -1506,7 +1508,7 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `project.integration_set_group_datadog`
 
-> Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). At least one of api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events, or use_inherited_settings=true must be supplied.
+> Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). api_key is required on every call, use_inherited_settings=true included. api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility and archive_trace_events are optional.
 >
 > Returns: JSON with the updated Datadog integration details, whose configuration lives in the nested properties object.
 >
@@ -1521,8 +1523,8 @@ The description of each action, and of each of its parameters, is the text the s
 
 | Parameter                | Type             | Mandatory | Description                                                                                                                  |
 | ------------------------ | ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `api_key`                | `string`         | yes       | Datadog API key (write-only. Never returned by the get endpoint). GitLab requires it on every update                         |
 | `group_id`               | `string/integer` | yes       | Group ID or URL-encoded path                                                                                                 |
-| `api_key`                | `string`         | no        | Datadog API key (write-only. Never returned by the get endpoint)                                                             |
 | `api_url`                | `string`         | no        | Datadog API URL (e.g. [`https://api.datadoghq.com`](https://api.datadoghq.com))                                              |
 | `archive_trace_events`   | `boolean`        | no        | Forward CI job trace events to Datadog                                                                                       |
 | `datadog_ci_visibility`  | `boolean`        | no        | Enable Datadog CI Visibility: forward pipeline/job data to Datadog CI Visibility                                             |
@@ -1549,6 +1551,7 @@ The description of each action, and of each of its parameters, is the text the s
 
 | Parameter                         | Type             | Mandatory | Description                                                                                     |
 | --------------------------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------- |
+| `password`                        | `string`         | yes       | Jira password or API token. GitLab requires it on every update                                  |
 | `project_id`                      | `string/integer` | yes       | Project ID or URL-encoded path                                                                  |
 | `url`                             | `string`         | yes       | Jira instance base URL                                                                          |
 | `active`                          | `boolean`        | no        | Enable or disable the integration                                                               |
@@ -1568,7 +1571,6 @@ The description of each action, and of each of its parameters, is the text the s
 | `jira_issue_transition_id`        | `string`         | no        | Jira transition ID                                                                              |
 | `jira_status_check_enabled`       | `boolean`        | no        | Require the referenced Jira issue to be in an allowed status                                    |
 | `merge_requests_events`           | `boolean`        | no        | Trigger on merge request events                                                                 |
-| `password`                        | `string`         | no        | Jira password or API token                                                                      |
 | `project_key`                     | `string`         | no        | Jira project key where vulnerability tickets are created (when vulnerabilities_enabled is true) |
 | `project_keys`                    | `string[]`       | no        | Jira project keys to restrict (used when issues_enabled is true)                                |
 | `use_inherited_settings`          | `boolean`        | no        | Use inherited settings from group                                                               |
@@ -1607,11 +1609,13 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Label: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
-| Parameter    | Type             | Mandatory | Description                                                                    |
-| ------------ | ---------------- | --------- | ------------------------------------------------------------------------------ |
-| `label_id`   | `string/integer` | yes       | Label ID or name                                                               |
-| `project_id` | `string/integer` | yes       | Project ID or URL-encoded path                                                 |
-| `name`       | `string`         | no        | Label name to delete (alternative to label_id for selecting the label by name) |
+| Parameter    | Type             | Mandatory | Description                                                               |
+| ------------ | ---------------- | --------- | ------------------------------------------------------------------------- |
+| `project_id` | `string/integer` | yes       | Project ID or URL-encoded path                                            |
+| `label_id`   | `string/integer` | no        | Label ID or name. Give this or name                                       |
+| `name`       | `string`         | no        | Name of the label to delete, used to select it when label_id is not given |
+
+Also needs at least one of: `label_id`; `name`.
 
 ### `project.label_get`
 
@@ -1712,16 +1716,18 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Label: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Behavior**: writes, idempotent
 
-| Parameter     | Type             | Mandatory | Description                                                                    |
-| ------------- | ---------------- | --------- | ------------------------------------------------------------------------------ |
-| `label_id`    | `string/integer` | yes       | Label ID or name                                                               |
-| `project_id`  | `string/integer` | yes       | Project ID or URL-encoded path                                                 |
-| `archived`    | `boolean`        | no        | Set true to archive, false to unarchive                                        |
-| `color`       | `string`         | no        | New label color in hex format                                                  |
-| `description` | `string`         | no        | New label description                                                          |
-| `name`        | `string`         | no        | Label name to update (alternative to label_id for selecting the label by name) |
-| `new_name`    | `string`         | no        | New label name                                                                 |
-| `priority`    | `integer`        | no        | New label priority, where 0 removes the priority GitLab has                    |
+| Parameter     | Type             | Mandatory | Description                                                               |
+| ------------- | ---------------- | --------- | ------------------------------------------------------------------------- |
+| `project_id`  | `string/integer` | yes       | Project ID or URL-encoded path                                            |
+| `archived`    | `boolean`        | no        | Set true to archive, false to unarchive                                   |
+| `color`       | `string`         | no        | New label color in hex format                                             |
+| `description` | `string`         | no        | New label description                                                     |
+| `label_id`    | `string/integer` | no        | Label ID or name. Give this or name                                       |
+| `name`        | `string`         | no        | Name of the label to update, used to select it when label_id is not given |
+| `new_name`    | `string`         | no        | New label name                                                            |
+| `priority`    | `integer`        | no        | New label priority, where 0 removes the priority GitLab has               |
+
+Also needs at least one of: `label_id`; `name`.
 
 ### `project.languages`
 
@@ -2085,12 +2091,14 @@ The description of each action, and of each of its parameters, is the text the s
 
 | Parameter        | Type             | Mandatory | Description                                                                                                                                                          |
 | ---------------- | ---------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `access_level`   | `integer`        | yes       | Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner) |
 | `project_id`     | `string/integer` | yes       | Project ID or URL-encoded path                                                                                                                                       |
-| `user_id`        | `integer`        | yes       | User ID to add (provide user_id or username)                                                                                                                         |
-| `access_level`   | `integer`        | no        | Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner) |
 | `expires_at`     | `string`         | no        | Membership expiration date (YYYY-MM-DD)                                                                                                                              |
 | `member_role_id` | `integer`        | no        | Custom member role ID                                                                                                                                                |
+| `user_id`        | `integer`        | no        | User ID to add (provide user_id or username)                                                                                                                         |
 | `username`       | `string`         | no        | Username to add (provide user_id or username)                                                                                                                        |
+
+Also needs at least one of: `user_id`; `username`.
 
 ### `project.member_delete`
 
@@ -2121,9 +2129,9 @@ The description of each action, and of each of its parameters, is the text the s
 
 | Parameter        | Type             | Mandatory | Description                                                                                                                                                              |
 | ---------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `access_level`   | `integer`        | yes       | New access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner) |
 | `project_id`     | `string/integer` | yes       | Project ID or URL-encoded path                                                                                                                                           |
 | `user_id`        | `integer`        | yes       | User ID of the member to edit                                                                                                                                            |
-| `access_level`   | `integer`        | no        | New access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner) |
 | `expires_at`     | `string`         | no        | Membership expiration date (YYYY-MM-DD)                                                                                                                                  |
 | `member_role_id` | `integer`        | no        | Custom member role ID                                                                                                                                                    |
 

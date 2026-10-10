@@ -1287,8 +1287,8 @@
         }
       },
       "required": [
-        "namespace_id",
-        "name"
+        "name",
+        "namespace_id"
       ],
       "type": "object"
     },
@@ -1607,8 +1607,8 @@
         }
       },
       "required": [
-        "full_path",
-        "achievement_id"
+        "achievement_id",
+        "full_path"
       ],
       "type": "object"
     },
@@ -1862,8 +1862,8 @@
         }
       },
       "required": [
-        "full_path",
-        "achievement_id"
+        "achievement_id",
+        "full_path"
       ],
       "type": "object"
     },
@@ -2600,10 +2600,10 @@
         }
       },
       "required": [
-        "project_id",
+        "body",
         "commit_sha",
         "discussion_id",
-        "body"
+        "project_id"
       ],
       "type": "object"
     },
@@ -2977,8 +2977,8 @@
         }
       },
       "required": [
-        "user_id",
-        "email"
+        "email",
+        "user_id"
       ],
       "type": "object"
     },
@@ -3041,10 +3041,10 @@
         }
       },
       "required": [
-        "full_path",
-        "epic_iid",
+        "body",
         "discussion_id",
-        "body"
+        "epic_iid",
+        "full_path"
       ],
       "type": "object"
     },
@@ -3242,8 +3242,8 @@
         }
       },
       "required": [
-        "user_id",
-        "key"
+        "key",
+        "user_id"
       ],
       "type": "object"
     },
@@ -3312,8 +3312,8 @@
       },
       "required": [
         "group_id",
-        "link_url",
-        "image_url"
+        "image_url",
+        "link_url"
       ],
       "type": "object"
     },
@@ -3461,10 +3461,10 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid",
+        "body",
         "discussion_id",
-        "body"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -3938,8 +3938,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -4344,9 +4344,9 @@
         }
       },
       "required": [
-        "project_id",
+        "image_url",
         "link_url",
-        "image_url"
+        "project_id"
       ],
       "type": "object"
     },
@@ -4651,10 +4651,10 @@
         }
       },
       "required": [
-        "project_id",
-        "snippet_id",
+        "body",
         "discussion_id",
-        "body"
+        "project_id",
+        "snippet_id"
       ],
       "type": "object"
     },
@@ -4983,8 +4983,8 @@
         }
       },
       "required": [
-        "title",
-        "key"
+        "key",
+        "title"
       ],
       "type": "object"
     },
@@ -5061,9 +5061,9 @@
         }
       },
       "required": [
-        "user_id",
+        "key",
         "title",
-        "key"
+        "user_id"
       ],
       "type": "object"
     },
@@ -5576,8 +5576,8 @@
         }
       },
       "required": [
-        "project_id",
-        "name"
+        "name",
+        "project_id"
       ],
       "type": "object"
     },
@@ -6055,8 +6055,8 @@
         }
       },
       "required": [
-        "project_id",
-        "board_id"
+        "board_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -6112,8 +6112,8 @@
         }
       },
       "required": [
-        "project_id",
-        "board_id"
+        "board_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -7165,8 +7165,8 @@
         }
       },
       "required": [
-        "project_id",
-        "board_id"
+        "board_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -7390,9 +7390,9 @@
         }
       },
       "required": [
-        "project_id",
         "board_id",
-        "list_id"
+        "list_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -7452,9 +7452,9 @@
         }
       },
       "required": [
-        "project_id",
         "board_id",
-        "list_id"
+        "list_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -7701,8 +7701,8 @@
         }
       },
       "required": [
-        "project_id",
-        "board_id"
+        "board_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -7987,10 +7987,10 @@
         }
       },
       "required": [
-        "project_id",
         "board_id",
         "list_id",
-        "position"
+        "position",
+        "project_id"
       ],
       "type": "object"
     },
@@ -8249,8 +8249,8 @@
         }
       },
       "required": [
-        "project_id",
-        "board_id"
+        "board_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -8728,8 +8728,8 @@
         }
       },
       "required": [
-        "project_id",
         "branch_name",
+        "project_id",
         "ref"
       ],
       "type": "object"
@@ -8969,8 +8969,8 @@
         }
       },
       "required": [
-        "project_id",
-        "branch_name"
+        "branch_name",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -9082,8 +9082,8 @@
         }
       },
       "required": [
-        "project_id",
-        "branch_name"
+        "branch_name",
+        "project_id"
       ],
       "type": "object"
     },
@@ -9857,8 +9857,8 @@
         }
       },
       "required": [
-        "project_id",
-        "branch_name"
+        "branch_name",
+        "project_id"
       ],
       "type": "object"
     },
@@ -10034,8 +10034,8 @@
         }
       },
       "required": [
-        "project_id",
-        "branch_name"
+        "branch_name",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -10643,11 +10643,8 @@
         }
       },
       "required": [
-        "project_id",
         "content",
-        "dry_run",
-        "include_jobs",
-        "ref"
+        "project_id"
       ],
       "type": "object"
     },
@@ -10840,12 +10837,7 @@
         }
       },
       "required": [
-        "project_id",
-        "content_ref",
-        "dry_run",
-        "dry_run_ref",
-        "include_jobs",
-        "ref"
+        "project_id"
       ],
       "type": "object"
     },
@@ -11064,15 +11056,9 @@
         }
       },
       "required": [
-        "project_id",
         "key",
-        "value",
-        "description",
-        "protected",
-        "masked",
-        "masked_and_hidden",
-        "raw",
-        "environment_scope"
+        "project_id",
+        "value"
       ],
       "type": "object"
     },
@@ -11177,9 +11163,8 @@
         }
       },
       "required": [
-        "project_id",
         "key",
-        "environment_scope"
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -11253,9 +11238,8 @@
         }
       },
       "required": [
-        "project_id",
         "key",
-        "environment_scope"
+        "project_id"
       ],
       "type": "object"
     },
@@ -11564,14 +11548,8 @@
         }
       },
       "required": [
-        "project_id",
         "key",
-        "value",
-        "description",
-        "protected",
-        "masked",
-        "raw",
-        "environment_scope"
+        "project_id"
       ],
       "type": "object"
     },
@@ -11666,9 +11644,9 @@
         }
       },
       "required": [
+        "branch",
         "project_id",
-        "sha",
-        "branch"
+        "sha"
       ],
       "type": "object"
     },
@@ -11881,9 +11859,9 @@
         }
       },
       "required": [
+        "note",
         "project_id",
-        "sha",
-        "note"
+        "sha"
       ],
       "type": "object"
     },
@@ -12246,10 +12224,10 @@
         }
       },
       "required": [
-        "project_id",
+        "actions",
         "branch",
         "commit_message",
-        "actions"
+        "project_id"
       ],
       "type": "object"
     },
@@ -13494,9 +13472,9 @@
         }
       },
       "required": [
+        "branch",
         "project_id",
-        "sha",
-        "branch"
+        "sha"
       ],
       "type": "object"
     },
@@ -15059,10 +15037,9 @@
         }
       },
       "required": [
-        "project_id",
         "agent_id",
         "name",
-        "description"
+        "project_id"
       ],
       "type": "object"
     },
@@ -15271,9 +15248,9 @@
         }
       },
       "required": [
-        "project_id",
+        "body",
         "commit_sha",
-        "body"
+        "project_id"
       ],
       "type": "object"
     },
@@ -15916,9 +15893,9 @@
         }
       },
       "required": [
-        "full_path",
+        "body",
         "epic_iid",
-        "body"
+        "full_path"
       ],
       "type": "object"
     },
@@ -16217,9 +16194,9 @@
         }
       },
       "required": [
-        "project_id",
+        "freeze_end",
         "freeze_start",
-        "freeze_end"
+        "project_id"
       ],
       "type": "object"
     },
@@ -16380,6 +16357,10 @@
           ]
         }
       },
+      "required": [
+        "name",
+        "url"
+      ],
       "type": "object"
     },
     "outputSchema": {
@@ -16641,7 +16622,7 @@
           ]
         },
         "name": {
-          "description": "Name of the custom role",
+          "description": "Name of the custom role. GitLab names a role created without one",
           "type": "string"
         },
         "read_code": {
@@ -16688,9 +16669,8 @@
         }
       },
       "required": [
-        "group_id",
-        "name",
-        "base_access_level"
+        "base_access_level",
+        "group_id"
       ],
       "type": "object"
     },
@@ -17125,9 +17105,9 @@
         }
       },
       "required": [
-        "user_id",
         "name",
-        "scopes"
+        "scopes",
+        "user_id"
       ],
       "type": "object"
     },
@@ -17364,7 +17344,7 @@
           ]
         },
         "name": {
-          "description": "Name of the custom role",
+          "description": "Name of the custom role. GitLab names a role created without one",
           "type": "string"
         },
         "read_code": {
@@ -17411,7 +17391,6 @@
         }
       },
       "required": [
-        "name",
         "base_access_level"
       ],
       "type": "object"
@@ -17775,9 +17754,9 @@
         }
       },
       "required": [
-        "project_id",
+        "body",
         "issue_iid",
-        "body"
+        "project_id"
       ],
       "type": "object"
     },
@@ -18147,9 +18126,9 @@
         }
       },
       "required": [
-        "project_id",
+        "commits",
         "merge_request_iid",
-        "commits"
+        "project_id"
       ],
       "type": "object"
     },
@@ -18346,9 +18325,9 @@
         }
       },
       "required": [
-        "project_id",
         "package_name_pattern",
-        "package_type"
+        "package_type",
+        "project_id"
       ],
       "type": "object"
     },
@@ -18433,9 +18412,9 @@
         }
       },
       "required": [
-        "user_id",
         "name",
-        "scopes"
+        "scopes",
+        "user_id"
       ],
       "type": "object"
     },
@@ -18650,9 +18629,9 @@
         }
       },
       "required": [
-        "project_id",
+        "external_url",
         "name",
-        "external_url"
+        "project_id"
       ],
       "type": "object"
     },
@@ -18769,8 +18748,8 @@
         }
       },
       "required": [
-        "project_id",
-        "name"
+        "name",
+        "project_id"
       ],
       "type": "object"
     },
@@ -18955,9 +18934,9 @@
         }
       },
       "required": [
-        "namespace_id",
+        "attributes",
         "category_id",
-        "attributes"
+        "namespace_id"
       ],
       "type": "object"
     },
@@ -19084,8 +19063,8 @@
         }
       },
       "required": [
-        "namespace_id",
-        "name"
+        "name",
+        "namespace_id"
       ],
       "type": "object"
     },
@@ -19545,9 +19524,9 @@
         }
       },
       "required": [
+        "body",
         "project_id",
-        "snippet_id",
-        "body"
+        "snippet_id"
       ],
       "type": "object"
     },
@@ -19908,7 +19887,8 @@
         }
       },
       "required": [
-        "name"
+        "name",
+        "title"
       ],
       "type": "object"
     },
@@ -20775,8 +20755,8 @@
       },
       "required": [
         "full_path",
-        "work_item_type_id",
-        "title"
+        "title",
+        "work_item_type_id"
       ],
       "type": "object"
     },
@@ -21202,9 +21182,9 @@
         }
       },
       "required": [
-        "project_id",
         "alert_iid",
-        "image_id"
+        "image_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -21370,8 +21350,8 @@
         }
       },
       "required": [
-        "project_id",
-        "agent_id"
+        "agent_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -21439,10 +21419,10 @@
         }
       },
       "required": [
-        "project_id",
         "commit_sha",
         "discussion_id",
-        "note_id"
+        "note_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -21508,9 +21488,9 @@
         }
       },
       "required": [
-        "resource_type",
+        "key",
         "resource_id",
-        "key"
+        "resource_type"
       ],
       "type": "object",
       "x_destructive": true
@@ -21664,8 +21644,8 @@
         }
       },
       "required": [
-        "user_id",
-        "email_id"
+        "email_id",
+        "user_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -21785,8 +21765,8 @@
         }
       },
       "required": [
-        "full_path",
         "epic_iid",
+        "full_path",
         "note_id"
       ],
       "type": "object",
@@ -21847,8 +21827,8 @@
         }
       },
       "required": [
-        "project_id",
-        "key_id"
+        "key_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -21961,8 +21941,8 @@
         }
       },
       "required": [
-        "project_id",
-        "freeze_period_id"
+        "freeze_period_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -22116,8 +22096,8 @@
         }
       },
       "required": [
-        "user_id",
-        "key_id"
+        "key_id",
+        "user_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -22168,8 +22148,8 @@
         }
       },
       "required": [
-        "group_id",
-        "badge_id"
+        "badge_id",
+        "group_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -22411,9 +22391,9 @@
         }
       },
       "required": [
+        "filename",
         "group_id",
-        "secret",
-        "filename"
+        "secret"
       ],
       "type": "object",
       "x_destructive": true
@@ -22595,8 +22575,8 @@
         }
       },
       "required": [
-        "group_id",
-        "certificate_id"
+        "certificate_id",
+        "group_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -22839,10 +22819,10 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid",
         "discussion_id",
-        "note_id"
+        "issue_iid",
+        "note_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -22965,9 +22945,9 @@
         }
       },
       "required": [
-        "project_id",
+        "commits",
         "merge_request_iid",
-        "commits"
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -23141,8 +23121,8 @@
         }
       },
       "required": [
-        "project_id",
-        "badge_id"
+        "badge_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -23202,8 +23182,8 @@
         }
       },
       "required": [
-        "project_id",
-        "check_id"
+        "check_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -23263,8 +23243,8 @@
         }
       },
       "required": [
-        "project_id",
-        "mirror_id"
+        "mirror_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -23448,10 +23428,10 @@
         }
       },
       "required": [
-        "project_id",
-        "snippet_id",
         "discussion_id",
-        "note_id"
+        "note_id",
+        "project_id",
+        "snippet_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -23552,8 +23532,8 @@
         }
       },
       "required": [
-        "user_id",
-        "key_id"
+        "key_id",
+        "user_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -23715,8 +23695,8 @@
         }
       },
       "required": [
-        "project_id",
-        "name"
+        "name",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -23781,8 +23761,8 @@
         }
       },
       "required": [
-        "project_id",
         "name",
+        "project_id",
         "serial"
       ],
       "type": "object",
@@ -23937,8 +23917,8 @@
         }
       },
       "required": [
-        "user_id",
-        "provider"
+        "provider",
+        "user_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -24063,9 +24043,9 @@
         }
       },
       "required": [
+        "key",
         "project_id",
-        "title",
-        "key"
+        "title"
       ],
       "type": "object"
     },
@@ -24224,8 +24204,8 @@
         }
       },
       "required": [
-        "title",
-        "key"
+        "key",
+        "title"
       ],
       "type": "object"
     },
@@ -24382,8 +24362,8 @@
         }
       },
       "required": [
-        "project_id",
-        "deploy_key_id"
+        "deploy_key_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -24439,8 +24419,8 @@
         }
       },
       "required": [
-        "project_id",
-        "deploy_key_id"
+        "deploy_key_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -24597,8 +24577,8 @@
         }
       },
       "required": [
-        "project_id",
-        "deploy_key_id"
+        "deploy_key_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -25494,8 +25474,8 @@
         }
       },
       "required": [
-        "project_id",
-        "deploy_key_id"
+        "deploy_key_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -25775,8 +25755,8 @@
         }
       },
       "required": [
-        "project_id",
         "name",
+        "project_id",
         "scopes"
       ],
       "type": "object"
@@ -25864,8 +25844,8 @@
         }
       },
       "required": [
-        "group_id",
-        "deploy_token_id"
+        "deploy_token_id",
+        "group_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -25925,8 +25905,8 @@
         }
       },
       "required": [
-        "project_id",
-        "deploy_token_id"
+        "deploy_token_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -25982,8 +25962,8 @@
         }
       },
       "required": [
-        "group_id",
-        "deploy_token_id"
+        "deploy_token_id",
+        "group_id"
       ],
       "type": "object"
     },
@@ -26066,8 +26046,8 @@
         }
       },
       "required": [
-        "project_id",
-        "deploy_token_id"
+        "deploy_token_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -26637,8 +26617,8 @@
         }
       },
       "required": [
-        "project_id",
         "deployment_id",
+        "project_id",
         "status"
       ],
       "type": "object"
@@ -26771,7 +26751,7 @@
           "type": "string"
         },
         "tag": {
-          "description": "Whether the ref is a tag. GitLab 19 requires this explicitly: pass false for branch refs and true for tag refs (default: false)",
+          "description": "Whether the ref is a tag: false for a branch ref, true for a tag ref",
           "type": [
             "null",
             "boolean"
@@ -26779,10 +26759,12 @@
         }
       },
       "required": [
-        "project_id",
         "environment",
+        "project_id",
         "ref",
-        "sha"
+        "sha",
+        "status",
+        "tag"
       ],
       "type": "object"
     },
@@ -27313,8 +27295,8 @@
         }
       },
       "required": [
-        "project_id",
-        "deployment_id"
+        "deployment_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -27370,8 +27352,8 @@
         }
       },
       "required": [
-        "project_id",
-        "deployment_id"
+        "deployment_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -28567,8 +28549,8 @@
         }
       },
       "required": [
-        "project_id",
         "deployment_id",
+        "project_id",
         "status"
       ],
       "type": "object"
@@ -29964,8 +29946,8 @@
         }
       },
       "required": [
-        "project_id",
-        "attestation_iid"
+        "attestation_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -30130,10 +30112,10 @@
         }
       },
       "required": [
-        "project_id",
+        "filename",
         "model_version_id",
         "path",
-        "filename"
+        "project_id"
       ],
       "type": "object"
     },
@@ -30514,8 +30496,8 @@
         }
       },
       "required": [
-        "group_id",
-        "badge_id"
+        "badge_id",
+        "group_id"
       ],
       "type": "object"
     },
@@ -30609,8 +30591,8 @@
         }
       },
       "required": [
-        "project_id",
-        "badge_id"
+        "badge_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -30733,8 +30715,8 @@
         }
       },
       "required": [
-        "project_id",
-        "mirror_id"
+        "mirror_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -30851,9 +30833,9 @@
         }
       },
       "required": [
-        "project_id",
         "key",
-        "process_mode"
+        "process_mode",
+        "project_id"
       ],
       "type": "object"
     },
@@ -31146,9 +31128,8 @@
         }
       },
       "required": [
-        "project_id",
         "active",
-        "integrated"
+        "project_id"
       ],
       "type": "object"
     },
@@ -31256,8 +31237,8 @@
         }
       },
       "required": [
-        "project_id",
-        "name"
+        "name",
+        "project_id"
       ],
       "type": "object"
     },
@@ -31863,8 +31844,8 @@
         }
       },
       "required": [
-        "project_id",
-        "environment_id"
+        "environment_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -31920,8 +31901,8 @@
         }
       },
       "required": [
-        "project_id",
-        "environment_id"
+        "environment_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -33241,8 +33222,8 @@
         }
       },
       "required": [
-        "project_id",
-        "environment_id"
+        "environment_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -33892,8 +33873,8 @@
         }
       },
       "required": [
-        "project_id",
-        "environment_id"
+        "environment_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -35008,8 +34989,8 @@
         }
       },
       "required": [
-        "full_path",
-        "epic_iid"
+        "epic_iid",
+        "full_path"
       ],
       "type": "object",
       "x_destructive": true
@@ -35062,8 +35043,8 @@
         }
       },
       "required": [
-        "full_path",
-        "epic_iid"
+        "epic_iid",
+        "full_path"
       ],
       "type": "object"
     },
@@ -35457,8 +35438,8 @@
         }
       },
       "required": [
-        "full_path",
-        "epic_iid"
+        "epic_iid",
+        "full_path"
       ],
       "type": "object"
     },
@@ -35718,10 +35699,10 @@
         }
       },
       "required": [
-        "full_path",
-        "epic_iid",
+        "child_iid",
         "child_project_path",
-        "child_iid"
+        "epic_iid",
+        "full_path"
       ],
       "type": "object"
     },
@@ -35795,8 +35776,8 @@
         }
       },
       "required": [
-        "full_path",
-        "epic_iid"
+        "epic_iid",
+        "full_path"
       ],
       "type": "object"
     },
@@ -36008,10 +35989,10 @@
         }
       },
       "required": [
-        "full_path",
-        "epic_iid",
+        "child_iid",
         "child_project_path",
-        "child_iid"
+        "epic_iid",
+        "full_path"
       ],
       "type": "object",
       "x_destructive": true
@@ -36080,9 +36061,9 @@
         }
       },
       "required": [
-        "full_path",
+        "child_id",
         "epic_iid",
-        "child_id"
+        "full_path"
       ],
       "type": "object"
     },
@@ -37042,9 +37023,9 @@
         }
       },
       "required": [
-        "full_path",
+        "body",
         "epic_iid",
-        "body"
+        "full_path"
       ],
       "type": "object"
     },
@@ -37273,8 +37254,8 @@
         }
       },
       "required": [
-        "full_path",
         "epic_iid",
+        "full_path",
         "note_id"
       ],
       "type": "object",
@@ -37332,8 +37313,8 @@
         }
       },
       "required": [
-        "full_path",
         "epic_iid",
+        "full_path",
         "note_id"
       ],
       "type": "object"
@@ -37566,8 +37547,8 @@
         }
       },
       "required": [
-        "full_path",
-        "epic_iid"
+        "epic_iid",
+        "full_path"
       ],
       "type": "object"
     },
@@ -37836,10 +37817,10 @@
         }
       },
       "required": [
-        "full_path",
+        "body",
         "epic_iid",
-        "note_id",
-        "body"
+        "full_path",
+        "note_id"
       ],
       "type": "object"
     },
@@ -38150,8 +38131,8 @@
         }
       },
       "required": [
-        "full_path",
-        "epic_iid"
+        "epic_iid",
+        "full_path"
       ],
       "type": "object"
     },
@@ -38646,8 +38627,8 @@
         }
       },
       "required": [
-        "project_id",
-        "name"
+        "name",
+        "project_id"
       ],
       "type": "object"
     },
@@ -38847,8 +38828,8 @@
         }
       },
       "required": [
-        "project_id",
-        "name"
+        "name",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -38904,8 +38885,8 @@
         }
       },
       "required": [
-        "project_id",
-        "name"
+        "name",
+        "project_id"
       ],
       "type": "object"
     },
@@ -39510,8 +39491,8 @@
         }
       },
       "required": [
-        "project_id",
-        "name"
+        "name",
+        "project_id"
       ],
       "type": "object"
     },
@@ -39711,8 +39692,8 @@
         }
       },
       "required": [
-        "project_id",
         "name",
+        "project_id",
         "user_xids"
       ],
       "type": "object"
@@ -40199,13 +40180,14 @@
           "type": "integer"
         },
         "ref": {
-          "description": "Branch, tag, or commit SHA (defaults to default branch)",
+          "description": "Branch, tag, or commit SHA",
           "type": "string"
         }
       },
       "required": [
+        "file_path",
         "project_id",
-        "file_path"
+        "ref"
       ],
       "type": "object"
     },
@@ -40351,11 +40333,11 @@
         }
       },
       "required": [
-        "project_id",
-        "file_path",
         "branch",
+        "commit_message",
         "content",
-        "commit_message"
+        "file_path",
+        "project_id"
       ],
       "type": "object"
     },
@@ -40444,10 +40426,10 @@
         }
       },
       "required": [
-        "project_id",
-        "file_path",
         "branch",
-        "commit_message"
+        "commit_message",
+        "file_path",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -40502,13 +40484,14 @@
           ]
         },
         "ref": {
-          "description": "Branch name, tag, or commit SHA (defaults to default branch)",
+          "description": "Branch name, tag, or commit SHA",
           "type": "string"
         }
       },
       "required": [
+        "file_path",
         "project_id",
-        "file_path"
+        "ref"
       ],
       "type": "object"
     },
@@ -40602,13 +40585,14 @@
           ]
         },
         "ref": {
-          "description": "Branch, tag, or commit SHA (defaults to default branch)",
+          "description": "Branch, tag, or commit SHA",
           "type": "string"
         }
       },
       "required": [
+        "file_path",
         "project_id",
-        "file_path"
+        "ref"
       ],
       "type": "object"
     },
@@ -40709,8 +40693,8 @@
         }
       },
       "required": [
-        "project_id",
-        "file_path"
+        "file_path",
+        "project_id"
       ],
       "type": "object"
     },
@@ -40784,8 +40768,8 @@
         }
       },
       "required": [
-        "project_id",
-        "file_path"
+        "file_path",
+        "project_id"
       ],
       "type": "object"
     },
@@ -40918,11 +40902,11 @@
         }
       },
       "required": [
-        "project_id",
-        "file_path",
         "branch",
+        "commit_message",
         "content",
-        "commit_message"
+        "file_path",
+        "project_id"
       ],
       "type": "object"
     },
@@ -40987,8 +40971,8 @@
         }
       },
       "required": [
-        "project_id",
-        "mirror_id"
+        "mirror_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -41214,8 +41198,7 @@
         }
       },
       "required": [
-        "email",
-        "size"
+        "email"
       ],
       "type": "object"
     },
@@ -42068,8 +42051,8 @@
         }
       },
       "required": [
-        "project_id",
-        "agent_id"
+        "agent_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -42170,8 +42153,8 @@
         }
       },
       "required": [
-        "project_id",
         "agent_id",
+        "project_id",
         "token_id"
       ],
       "type": "object"
@@ -42254,9 +42237,9 @@
         }
       },
       "required": [
-        "project_id",
         "commit_sha",
-        "discussion_id"
+        "discussion_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -42661,9 +42644,9 @@
         }
       },
       "required": [
-        "resource_type",
+        "key",
         "resource_id",
-        "key"
+        "resource_type"
       ],
       "type": "object"
     },
@@ -43195,9 +43178,9 @@
         }
       },
       "required": [
-        "full_path",
+        "discussion_id",
         "epic_iid",
-        "discussion_id"
+        "full_path"
       ],
       "type": "object"
     },
@@ -43490,8 +43473,8 @@
         }
       },
       "required": [
-        "project_id",
-        "freeze_period_id"
+        "freeze_period_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -43811,8 +43794,8 @@
         }
       },
       "required": [
-        "user_id",
-        "key_id"
+        "key_id",
+        "user_id"
       ],
       "type": "object"
     },
@@ -43870,8 +43853,8 @@
         }
       },
       "required": [
-        "group_id",
-        "event_id"
+        "event_id",
+        "group_id"
       ],
       "type": "object"
     },
@@ -44031,8 +44014,8 @@
         }
       },
       "required": [
-        "group_id",
-        "badge_id"
+        "badge_id",
+        "group_id"
       ],
       "type": "object"
     },
@@ -44403,8 +44386,8 @@
         }
       },
       "required": [
-        "group_id",
         "epic_iid",
+        "group_id",
         "label_event_id"
       ],
       "type": "object"
@@ -45269,8 +45252,8 @@
         }
       },
       "required": [
-        "user_id",
-        "token_id"
+        "token_id",
+        "user_id"
       ],
       "type": "object"
     },
@@ -45717,9 +45700,9 @@
         }
       },
       "required": [
-        "project_id",
+        "discussion_id",
         "issue_iid",
-        "discussion_id"
+        "project_id"
       ],
       "type": "object"
     },
@@ -46708,8 +46691,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -47560,8 +47543,8 @@
         }
       },
       "required": [
-        "project_id",
-        "event_id"
+        "event_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -47721,8 +47704,8 @@
         }
       },
       "required": [
-        "project_id",
-        "badge_id"
+        "badge_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -47836,8 +47819,8 @@
         }
       },
       "required": [
-        "project_id",
-        "metric"
+        "metric",
+        "project_id"
       ],
       "type": "object"
     },
@@ -48283,8 +48266,8 @@
         }
       },
       "required": [
-        "project_id",
-        "mirror_id"
+        "mirror_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -48391,8 +48374,8 @@
         }
       },
       "required": [
-        "project_id",
-        "mirror_id"
+        "mirror_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -48875,8 +48858,8 @@
         }
       },
       "required": [
-        "project_id",
-        "id"
+        "id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -48996,9 +48979,9 @@
         }
       },
       "required": [
+        "key",
         "project_id",
-        "template_type",
-        "key"
+        "template_type"
       ],
       "type": "object"
     },
@@ -49242,8 +49225,8 @@
         }
       },
       "required": [
-        "project_id",
-        "key"
+        "key",
+        "project_id"
       ],
       "type": "object"
     },
@@ -49741,9 +49724,9 @@
         }
       },
       "required": [
+        "discussion_id",
         "project_id",
-        "snippet_id",
-        "discussion_id"
+        "snippet_id"
       ],
       "type": "object"
     },
@@ -50215,8 +50198,8 @@
         }
       },
       "required": [
-        "snippet_id",
-        "id"
+        "id",
+        "snippet_id"
       ],
       "type": "object"
     },
@@ -50390,8 +50373,8 @@
         }
       },
       "required": [
-        "user_id",
-        "key_id"
+        "key_id",
+        "user_id"
       ],
       "type": "object"
     },
@@ -51593,8 +51576,8 @@
         }
       },
       "required": [
-        "project_path",
-        "name"
+        "name",
+        "project_path"
       ],
       "type": "object"
     },
@@ -55072,8 +55055,8 @@
         }
       },
       "required": [
-        "group_id",
-        "board_id"
+        "board_id",
+        "group_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -55129,8 +55112,8 @@
         }
       },
       "required": [
-        "group_id",
-        "board_id"
+        "board_id",
+        "group_id"
       ],
       "type": "object"
     },
@@ -56020,8 +56003,8 @@
         }
       },
       "required": [
-        "group_id",
         "board_id",
+        "group_id",
         "label_id"
       ],
       "type": "object"
@@ -56246,8 +56229,8 @@
         }
       },
       "required": [
-        "group_id",
         "board_id",
+        "group_id",
         "list_id"
       ],
       "type": "object",
@@ -56308,8 +56291,8 @@
         }
       },
       "required": [
-        "group_id",
         "board_id",
+        "group_id",
         "list_id"
       ],
       "type": "object"
@@ -56557,8 +56540,8 @@
         }
       },
       "required": [
-        "group_id",
-        "board_id"
+        "board_id",
+        "group_id"
       ],
       "type": "object"
     },
@@ -56843,8 +56826,8 @@
         }
       },
       "required": [
-        "group_id",
         "board_id",
+        "group_id",
         "list_id",
         "position"
       ],
@@ -57091,8 +57074,8 @@
         }
       },
       "required": [
-        "group_id",
-        "board_id"
+        "board_id",
+        "group_id"
       ],
       "type": "object"
     },
@@ -57662,7 +57645,7 @@
           "type": "integer"
         },
         "path": {
-          "description": "Group URL path (defaults to kebab-case of name)",
+          "description": "Group URL path",
           "type": "string"
         },
         "project_creation_level": {
@@ -57779,7 +57762,8 @@
         }
       },
       "required": [
-        "name"
+        "name",
+        "path"
       ],
       "type": "object"
     },
@@ -58958,8 +58942,8 @@
         }
       },
       "required": [
-        "group_id",
-        "board_id"
+        "board_id",
+        "group_id"
       ],
       "type": "object"
     },
@@ -60632,7 +60616,7 @@
           "writeOnly": true
         },
         "url": {
-          "description": "Webhook URL (required for add)",
+          "description": "Webhook URL",
           "format": "uri",
           "type": "string"
         },
@@ -60652,7 +60636,8 @@
         }
       },
       "required": [
-        "group_id"
+        "group_id",
+        "url"
       ],
       "type": "object"
     },
@@ -61263,7 +61248,7 @@
           "writeOnly": true
         },
         "url": {
-          "description": "Webhook URL (required for add)",
+          "description": "New webhook URL",
           "format": "uri",
           "type": "string"
         },
@@ -62059,8 +62044,8 @@
       },
       "required": [
         "group_id",
-        "hook_id",
-        "hook_event_id"
+        "hook_event_id",
+        "hook_id"
       ],
       "type": "object"
     },
@@ -62351,8 +62336,8 @@
         }
       },
       "required": [
-        "group_id",
-        "access_level"
+        "access_level",
+        "group_id"
       ],
       "type": "object"
     },
@@ -63225,9 +63210,9 @@
         }
       },
       "required": [
+        "color",
         "group_id",
-        "name",
-        "color"
+        "name"
       ],
       "type": "object"
     },
@@ -64067,8 +64052,8 @@
         }
       },
       "required": [
-        "group_id",
         "group_access",
+        "group_id",
         "provider"
       ],
       "type": "object"
@@ -64143,7 +64128,8 @@
         }
       },
       "required": [
-        "group_id"
+        "group_id",
+        "provider"
       ],
       "type": "object",
       "x_destructive": true
@@ -64204,9 +64190,9 @@
         }
       },
       "required": [
+        "cn",
         "group_id",
-        "provider",
-        "cn"
+        "provider"
       ],
       "type": "object",
       "x_destructive": true
@@ -65484,6 +65470,18 @@
     "description": "Add a user as a direct member of a group. Returns: the created membership with access level, custom member role, expiry, and seat usage. See also: gitlab_group_members_list, gitlab_group_member_edit, gitlab_group_member_get.",
     "inputSchema": {
       "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "user_id"
+          ]
+        },
+        {
+          "required": [
+            "username"
+          ]
+        }
+      ],
       "properties": {
         "access_level": {
           "description": "Access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
@@ -65506,17 +65504,17 @@
           "type": "integer"
         },
         "user_id": {
-          "description": "User ID to add",
+          "description": "User ID to add (provide user_id or username)",
           "type": "integer"
         },
         "username": {
-          "description": "Username to add (alternative to user_id)",
+          "description": "Username to add (provide user_id or username)",
           "type": "string"
         }
       },
       "required": [
-        "group_id",
-        "access_level"
+        "access_level",
+        "group_id"
       ],
       "type": "object"
     },
@@ -65806,6 +65804,7 @@
         }
       },
       "required": [
+        "access_level",
         "group_id",
         "user_id"
       ],
@@ -68740,8 +68739,8 @@
         }
       },
       "required": [
-        "group_id",
-        "branch"
+        "branch",
+        "group_id"
       ],
       "type": "object"
     },
@@ -69551,8 +69550,8 @@
         }
       },
       "required": [
-        "group_id",
-        "branch"
+        "branch",
+        "group_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -69791,8 +69790,8 @@
         }
       },
       "required": [
-        "group_id",
-        "branch"
+        "branch",
+        "group_id"
       ],
       "type": "object"
     },
@@ -69970,8 +69969,8 @@
         }
       },
       "required": [
-        "group_id",
-        "environment"
+        "environment",
+        "group_id"
       ],
       "type": "object"
     },
@@ -70431,6 +70430,7 @@
         }
       },
       "required": [
+        "deploy_access_levels",
         "group_id",
         "name"
       ],
@@ -70574,8 +70574,8 @@
         }
       },
       "required": [
-        "group_id",
-        "environment"
+        "environment",
+        "group_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -70780,8 +70780,8 @@
         }
       },
       "required": [
-        "group_id",
-        "environment"
+        "environment",
+        "group_id"
       ],
       "type": "object"
     },
@@ -72246,9 +72246,9 @@
         }
       },
       "required": [
+        "access_level",
         "group_id",
-        "saml_group_name",
-        "access_level"
+        "saml_group_name"
       ],
       "type": "object"
     },
@@ -73892,9 +73892,9 @@
       },
       "required": [
         "group_id",
-        "service_account_id",
         "name",
-        "scopes"
+        "scopes",
+        "service_account_id"
       ],
       "type": "object"
     },
@@ -74617,9 +74617,9 @@
         }
       },
       "required": [
+        "group_access",
         "group_id",
-        "share_group_id",
-        "group_access"
+        "share_group_id"
       ],
       "type": "object"
     },
@@ -74744,9 +74744,9 @@
         }
       },
       "required": [
+        "group_access",
         "group_id",
-        "shared_group_id",
-        "group_access"
+        "shared_group_id"
       ],
       "type": "object"
     },
@@ -79048,8 +79048,8 @@
         }
       },
       "required": [
-        "group_id",
-        "filename"
+        "filename",
+        "group_id"
       ],
       "type": "object"
     },
@@ -80558,9 +80558,9 @@
         }
       },
       "required": [
+        "content",
         "group_id",
-        "title",
-        "content"
+        "title"
       ],
       "type": "object"
     },
@@ -80949,19 +80949,11 @@
       "additionalProperties": false,
       "properties": {
         "bitbucket_api_token": {
-          "description": "Bitbucket Cloud API token (replaces app passwords). Treat as secret: do not log or store it, and redact it in telemetry/errors. Requires bitbucket_email",
-          "type": "string"
-        },
-        "bitbucket_app_password": {
-          "description": "Bitbucket Cloud app password (legacy auth). Treat as secret: do not log or store it, and redact it in telemetry/errors. Provide this OR bitbucket_api_token + bitbucket_email",
+          "description": "Bitbucket Cloud API token, which replaced app passwords. Treat as secret: do not log or store it, and redact it in telemetry/errors",
           "type": "string"
         },
         "bitbucket_email": {
-          "description": "Atlassian account email associated with the API token (required when using bitbucket_api_token)",
-          "type": "string"
-        },
-        "bitbucket_username": {
-          "description": "Bitbucket Cloud username",
+          "description": "Atlassian account email the API token belongs to",
           "type": "string"
         },
         "new_name": {
@@ -80978,7 +80970,8 @@
         }
       },
       "required": [
-        "bitbucket_username",
+        "bitbucket_api_token",
+        "bitbucket_email",
         "repo_path",
         "target_namespace"
       ],
@@ -81074,11 +81067,11 @@
         }
       },
       "required": [
+        "bitbucket_server_project",
+        "bitbucket_server_repo",
         "bitbucket_server_url",
         "bitbucket_server_username",
-        "personal_access_token",
-        "bitbucket_server_project",
-        "bitbucket_server_repo"
+        "personal_access_token"
       ],
       "type": "object"
     },
@@ -81315,9 +81308,9 @@
         }
       },
       "required": [
+        "file",
         "name",
-        "path",
-        "file"
+        "path"
       ],
       "type": "object"
     },
@@ -81479,6 +81472,9 @@
           "type": "string"
         }
       },
+      "required": [
+        "path"
+      ],
       "type": "object"
     },
     "outputSchema": {
@@ -86010,8 +86006,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -86134,8 +86130,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -86195,9 +86191,9 @@
         }
       },
       "required": [
-        "project_id",
         "issue_iid",
-        "name"
+        "name",
+        "project_id"
       ],
       "type": "object"
     },
@@ -86312,9 +86308,9 @@
         }
       },
       "required": [
-        "project_id",
+        "award_id",
         "issue_iid",
-        "award_id"
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -86374,9 +86370,9 @@
         }
       },
       "required": [
-        "project_id",
+        "award_id",
         "issue_iid",
-        "award_id"
+        "project_id"
       ],
       "type": "object"
     },
@@ -86514,8 +86510,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -86683,8 +86679,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -88139,9 +88135,9 @@
         }
       },
       "required": [
-        "project_id",
         "issue_iid",
-        "iteration_event_id"
+        "iteration_event_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -88332,8 +88328,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -88558,9 +88554,9 @@
         }
       },
       "required": [
-        "project_id",
         "issue_iid",
-        "label_event_id"
+        "label_event_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -88727,8 +88723,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -88937,11 +88933,10 @@
         }
       },
       "required": [
-        "project_id",
         "issue_iid",
-        "target_project_id",
+        "project_id",
         "target_issue_iid",
-        "link_type"
+        "target_project_id"
       ],
       "type": "object"
     },
@@ -89704,9 +89699,9 @@
         }
       },
       "required": [
-        "project_id",
         "issue_iid",
-        "issue_link_id"
+        "issue_link_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -89766,9 +89761,9 @@
         }
       },
       "required": [
-        "project_id",
         "issue_iid",
-        "issue_link_id"
+        "issue_link_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -90523,8 +90518,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -94170,9 +94165,9 @@
         }
       },
       "required": [
-        "project_id",
         "issue_iid",
-        "milestone_event_id"
+        "milestone_event_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -94372,8 +94367,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -94607,8 +94602,8 @@
         }
       },
       "required": [
-        "project_id",
         "issue_iid",
+        "project_id",
         "to_project_id"
       ],
       "type": "object"
@@ -95369,8 +95364,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -96096,8 +96091,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -96807,9 +96802,9 @@
         }
       },
       "required": [
-        "project_id",
+        "body",
         "issue_iid",
-        "body"
+        "project_id"
       ],
       "type": "object"
     },
@@ -97134,9 +97129,9 @@
         }
       },
       "required": [
-        "project_id",
         "issue_iid",
-        "note_id"
+        "note_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -97200,10 +97195,10 @@
         }
       },
       "required": [
-        "project_id",
         "issue_iid",
+        "name",
         "note_id",
-        "name"
+        "project_id"
       ],
       "type": "object"
     },
@@ -97322,10 +97317,10 @@
         }
       },
       "required": [
-        "project_id",
+        "award_id",
         "issue_iid",
         "note_id",
-        "award_id"
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -97389,10 +97384,10 @@
         }
       },
       "required": [
-        "project_id",
+        "award_id",
         "issue_iid",
         "note_id",
-        "award_id"
+        "project_id"
       ],
       "type": "object"
     },
@@ -97534,9 +97529,9 @@
         }
       },
       "required": [
-        "project_id",
         "issue_iid",
-        "note_id"
+        "note_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -97708,9 +97703,9 @@
         }
       },
       "required": [
-        "project_id",
         "issue_iid",
-        "note_id"
+        "note_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -98062,8 +98057,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -98449,10 +98444,10 @@
         }
       },
       "required": [
-        "project_id",
+        "body",
         "issue_iid",
         "note_id",
-        "body"
+        "project_id"
       ],
       "type": "object"
     },
@@ -98780,8 +98775,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -98923,8 +98918,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -99661,9 +99656,9 @@
         }
       },
       "required": [
-        "project_id",
+        "duration",
         "issue_iid",
-        "duration"
+        "project_id"
       ],
       "type": "object"
     },
@@ -99726,8 +99721,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -99794,8 +99789,8 @@
         }
       },
       "required": [
-        "project_id",
         "issue_iid",
+        "project_id",
         "state_event_id"
       ],
       "type": "object"
@@ -99938,8 +99933,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -100111,8 +100106,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -100841,8 +100836,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -100909,9 +100904,9 @@
         }
       },
       "required": [
-        "project_id",
+        "duration",
         "issue_iid",
-        "duration"
+        "project_id"
       ],
       "type": "object"
     },
@@ -100974,8 +100969,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -101038,8 +101033,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -101876,8 +101871,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -102637,8 +102632,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -102821,8 +102816,8 @@
         }
       },
       "required": [
-        "project_id",
-        "job_id"
+        "job_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -102888,8 +102883,8 @@
         }
       },
       "required": [
-        "project_id",
-        "job_id"
+        "job_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -103294,8 +103289,8 @@
         }
       },
       "required": [
-        "project_id",
-        "job_id"
+        "job_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -103411,9 +103406,9 @@
         }
       },
       "required": [
+        "job",
         "project_id",
-        "ref_name",
-        "job"
+        "ref_name"
       ],
       "type": "object"
     },
@@ -103479,9 +103474,9 @@
         }
       },
       "required": [
-        "project_id",
+        "artifact_path",
         "job_id",
-        "artifact_path"
+        "project_id"
       ],
       "type": "object"
     },
@@ -103555,10 +103550,10 @@
         }
       },
       "required": [
-        "project_id",
-        "ref_name",
         "artifact_path",
-        "job"
+        "job",
+        "project_id",
+        "ref_name"
       ],
       "type": "object"
     },
@@ -103628,8 +103623,8 @@
         }
       },
       "required": [
-        "project_id",
-        "job_id"
+        "job_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -104031,8 +104026,8 @@
         }
       },
       "required": [
-        "project_id",
-        "job_id"
+        "job_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -104433,8 +104428,8 @@
         }
       },
       "required": [
-        "project_id",
-        "job_id"
+        "job_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -104880,8 +104875,8 @@
         }
       },
       "required": [
-        "project_id",
-        "pipeline_id"
+        "pipeline_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -105388,8 +105383,8 @@
         }
       },
       "required": [
-        "project_id",
-        "pipeline_id"
+        "pipeline_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -106699,8 +106694,8 @@
         }
       },
       "required": [
-        "project_id",
-        "job_id"
+        "job_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -107101,8 +107096,8 @@
         }
       },
       "required": [
-        "project_id",
-        "job_id"
+        "job_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -107176,8 +107171,8 @@
         }
       },
       "required": [
-        "project_id",
-        "job_id"
+        "job_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -107631,9 +107626,9 @@
         }
       },
       "required": [
-        "project_id",
+        "color",
         "name",
-        "color"
+        "project_id"
       ],
       "type": "object"
     },
@@ -107727,20 +107722,32 @@
     "description": "Delete a project label by ID or name. Destructive: the label is removed from the project and unassigned from issues and merge requests. Returns: a deletion confirmation. See also: gitlab_label_list, gitlab_label_get, gitlab_label_create.",
     "inputSchema": {
       "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "label_id"
+          ]
+        },
+        {
+          "required": [
+            "name"
+          ]
+        }
+      ],
       "properties": {
         "confirm": {
           "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
           "type": "boolean"
         },
         "label_id": {
-          "description": "Label ID or name",
+          "description": "Label ID or name. Give this or name",
           "type": [
             "string",
             "integer"
           ]
         },
         "name": {
-          "description": "Label name to delete (alternative to label_id for selecting the label by name)",
+          "description": "Name of the label to delete, used to select it when label_id is not given",
           "type": "string"
         },
         "project_id": {
@@ -107752,8 +107759,7 @@
         }
       },
       "required": [
-        "project_id",
-        "label_id"
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -107812,8 +107818,8 @@
         }
       },
       "required": [
-        "project_id",
-        "label_id"
+        "label_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -108132,8 +108138,8 @@
         }
       },
       "required": [
-        "project_id",
-        "label_id"
+        "label_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -108191,8 +108197,8 @@
         }
       },
       "required": [
-        "project_id",
-        "label_id"
+        "label_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -108303,8 +108309,8 @@
         }
       },
       "required": [
-        "project_id",
-        "label_id"
+        "label_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -108345,6 +108351,18 @@
     "description": "Update an existing project label (new_name, color, description, priority, archived). Returns: the updated label (id, name, color, text_color, description, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_list, gitlab_label_delete.",
     "inputSchema": {
       "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "label_id"
+          ]
+        },
+        {
+          "required": [
+            "name"
+          ]
+        }
+      ],
       "properties": {
         "archived": {
           "description": "Set true to archive, false to unarchive",
@@ -108362,14 +108380,14 @@
           "type": "string"
         },
         "label_id": {
-          "description": "Label ID or name",
+          "description": "Label ID or name. Give this or name",
           "type": [
             "string",
             "integer"
           ]
         },
         "name": {
-          "description": "Label name to update (alternative to label_id for selecting the label by name)",
+          "description": "Name of the label to update, used to select it when label_id is not given",
           "type": "string"
         },
         "new_name": {
@@ -108392,8 +108410,7 @@
         }
       },
       "required": [
-        "project_id",
-        "label_id"
+        "project_id"
       ],
       "type": "object"
     },
@@ -108532,8 +108549,8 @@
         }
       },
       "required": [
-        "project_id",
-        "alert_iid"
+        "alert_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -110962,8 +110979,8 @@
         }
       },
       "required": [
-        "project_id",
-        "agent_id"
+        "agent_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -111318,8 +111335,8 @@
         }
       },
       "required": [
-        "project_id",
-        "commit_sha"
+        "commit_sha",
+        "project_id"
       ],
       "type": "object"
     },
@@ -111742,8 +111759,8 @@
         }
       },
       "required": [
-        "resource_type",
-        "resource_id"
+        "resource_id",
+        "resource_type"
       ],
       "type": "object"
     },
@@ -112136,8 +112153,8 @@
         }
       },
       "required": [
-        "project_id",
-        "deployment_id"
+        "deployment_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -113983,8 +114000,8 @@
         }
       },
       "required": [
-        "full_path",
-        "epic_iid"
+        "epic_iid",
+        "full_path"
       ],
       "type": "object"
     },
@@ -115789,8 +115806,8 @@
         }
       },
       "required": [
-        "group_id",
-        "epic_iid"
+        "epic_iid",
+        "group_id"
       ],
       "type": "object"
     },
@@ -118980,8 +118997,8 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid"
+        "issue_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -120479,8 +120496,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -122606,8 +122623,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -123299,8 +123316,8 @@
         }
       },
       "required": [
-        "project_id",
-        "key"
+        "key",
+        "project_id"
       ],
       "type": "object"
     },
@@ -123927,8 +123944,8 @@
         }
       },
       "required": [
-        "project_path",
-        "pipeline_iid"
+        "pipeline_iid",
+        "project_path"
       ],
       "type": "object"
     },
@@ -129511,8 +129528,8 @@
         }
       },
       "required": [
-        "project_id",
-        "name"
+        "name",
+        "project_id"
       ],
       "type": "object"
     },
@@ -129741,8 +129758,8 @@
         }
       },
       "required": [
-        "project_id",
-        "milestone_iid"
+        "milestone_iid",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -129798,8 +129815,8 @@
         }
       },
       "required": [
-        "project_id",
-        "milestone_iid"
+        "milestone_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -129928,8 +129945,8 @@
         }
       },
       "required": [
-        "project_id",
-        "milestone_iid"
+        "milestone_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -130407,8 +130424,8 @@
         }
       },
       "required": [
-        "project_id",
-        "milestone_iid"
+        "milestone_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -130719,8 +130736,8 @@
         }
       },
       "required": [
-        "project_id",
-        "milestone_iid"
+        "milestone_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -131300,9 +131317,9 @@
         }
       },
       "required": [
-        "project_id",
+        "duration",
         "merge_request_iid",
-        "duration"
+        "project_id"
       ],
       "type": "object"
     },
@@ -131365,8 +131382,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -131795,8 +131812,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -131884,10 +131901,10 @@
         }
       },
       "required": [
-        "project_id",
+        "approvals_required",
         "merge_request_iid",
         "name",
-        "approvals_required"
+        "project_id"
       ],
       "type": "object"
     },
@@ -132308,9 +132325,9 @@
         }
       },
       "required": [
-        "project_id",
+        "approval_rule_id",
         "merge_request_iid",
-        "approval_rule_id"
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -132401,9 +132418,9 @@
         }
       },
       "required": [
-        "project_id",
+        "approval_rule_id",
         "merge_request_iid",
-        "approval_rule_id"
+        "project_id"
       ],
       "type": "object"
     },
@@ -132827,8 +132844,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -133302,8 +133319,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -133790,8 +133807,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -134243,8 +134260,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -135234,8 +135251,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -135383,8 +135400,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -136675,8 +136692,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -136888,8 +136905,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -137015,8 +137032,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -137083,8 +137100,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -138266,9 +138283,9 @@
         }
       },
       "required": [
-        "project_id",
+        "blocking_merge_request_id",
         "merge_request_iid",
-        "blocking_merge_request_id"
+        "project_id"
       ],
       "type": "object"
     },
@@ -139393,9 +139410,9 @@
         }
       },
       "required": [
-        "project_id",
+        "blocking_merge_request_id",
         "merge_request_iid",
-        "blocking_merge_request_id"
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -139459,8 +139476,8 @@
         }
       },
       "required": [
-        "project_id",
         "merge_request_iid",
+        "project_id",
         "version_id"
       ],
       "type": "object"
@@ -139733,8 +139750,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -140187,9 +140204,9 @@
         }
       },
       "required": [
-        "project_id",
+        "body",
         "merge_request_iid",
-        "body"
+        "project_id"
       ],
       "type": "object"
     },
@@ -140553,9 +140570,9 @@
         }
       },
       "required": [
-        "project_id",
+        "discussion_id",
         "merge_request_iid",
-        "discussion_id"
+        "project_id"
       ],
       "type": "object"
     },
@@ -140946,8 +140963,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -141380,10 +141397,10 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid",
         "discussion_id",
-        "note_id"
+        "merge_request_iid",
+        "note_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -141462,10 +141479,10 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid",
         "discussion_id",
-        "note_id"
+        "merge_request_iid",
+        "note_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -141795,10 +141812,10 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid",
+        "body",
         "discussion_id",
-        "body"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -142124,9 +142141,9 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid",
         "discussion_id",
+        "merge_request_iid",
+        "project_id",
         "resolved"
       ],
       "type": "object"
@@ -142632,9 +142649,9 @@
         }
       },
       "required": [
-        "project_id",
         "merge_request_iid",
-        "note"
+        "note",
+        "project_id"
       ],
       "type": "object"
     },
@@ -142807,9 +142824,9 @@
         }
       },
       "required": [
-        "project_id",
         "merge_request_iid",
-        "note_id"
+        "note_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -142869,9 +142886,9 @@
         }
       },
       "required": [
-        "project_id",
         "merge_request_iid",
-        "note_id"
+        "note_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -143067,8 +143084,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -143298,9 +143315,9 @@
         }
       },
       "required": [
-        "project_id",
         "merge_request_iid",
-        "note_id"
+        "note_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -143374,8 +143391,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -143564,9 +143581,9 @@
         }
       },
       "required": [
-        "project_id",
         "merge_request_iid",
-        "note_id"
+        "note_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -143735,9 +143752,9 @@
         }
       },
       "required": [
-        "project_id",
         "merge_request_iid",
-        "name"
+        "name",
+        "project_id"
       ],
       "type": "object"
     },
@@ -143852,9 +143869,9 @@
         }
       },
       "required": [
-        "project_id",
+        "award_id",
         "merge_request_iid",
-        "award_id"
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -143914,9 +143931,9 @@
         }
       },
       "required": [
-        "project_id",
+        "award_id",
         "merge_request_iid",
-        "award_id"
+        "project_id"
       ],
       "type": "object"
     },
@@ -144054,8 +144071,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -144244,8 +144261,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -145231,8 +145248,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -145722,9 +145739,9 @@
         }
       },
       "required": [
-        "project_id",
+        "label_event_id",
         "merge_request_iid",
-        "label_event_id"
+        "project_id"
       ],
       "type": "object"
     },
@@ -145891,8 +145908,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -149849,8 +149866,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -150810,9 +150827,9 @@
         }
       },
       "required": [
-        "project_id",
         "merge_request_iid",
-        "milestone_event_id"
+        "milestone_event_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -151012,8 +151029,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -151262,9 +151279,9 @@
         }
       },
       "required": [
-        "project_id",
+        "body",
         "merge_request_iid",
-        "body"
+        "project_id"
       ],
       "type": "object"
     },
@@ -151589,9 +151606,9 @@
         }
       },
       "required": [
-        "project_id",
         "merge_request_iid",
-        "note_id"
+        "note_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -151655,10 +151672,10 @@
         }
       },
       "required": [
-        "project_id",
         "merge_request_iid",
+        "name",
         "note_id",
-        "name"
+        "project_id"
       ],
       "type": "object"
     },
@@ -151777,10 +151794,10 @@
         }
       },
       "required": [
-        "project_id",
+        "award_id",
         "merge_request_iid",
         "note_id",
-        "award_id"
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -151844,10 +151861,10 @@
         }
       },
       "required": [
-        "project_id",
+        "award_id",
         "merge_request_iid",
         "note_id",
-        "award_id"
+        "project_id"
       ],
       "type": "object"
     },
@@ -151989,9 +152006,9 @@
         }
       },
       "required": [
-        "project_id",
         "merge_request_iid",
-        "note_id"
+        "note_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -152163,9 +152180,9 @@
         }
       },
       "required": [
-        "project_id",
         "merge_request_iid",
-        "note_id"
+        "note_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -152490,10 +152507,10 @@
         }
       },
       "required": [
-        "project_id",
+        "body",
         "merge_request_iid",
         "note_id",
-        "body"
+        "project_id"
       ],
       "type": "object"
     },
@@ -152845,8 +152862,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -153235,8 +153252,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -153375,8 +153392,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -153649,8 +153666,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -153709,8 +153726,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -153792,8 +153809,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -154300,8 +154317,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -154385,8 +154402,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -154460,8 +154477,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -154599,9 +154616,9 @@
         }
       },
       "required": [
-        "project_id",
+        "duration",
         "merge_request_iid",
-        "duration"
+        "project_id"
       ],
       "type": "object"
     },
@@ -154668,8 +154685,8 @@
         }
       },
       "required": [
-        "project_id",
         "merge_request_iid",
+        "project_id",
         "state_event_id"
       ],
       "type": "object"
@@ -154812,8 +154829,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -155006,8 +155023,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -155983,8 +156000,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -156055,8 +156072,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -156509,8 +156526,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -157574,8 +157591,8 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid"
+        "merge_request_iid",
+        "project_id"
       ],
       "type": "object"
     },
@@ -160410,8 +160427,8 @@
         }
       },
       "required": [
-        "project_id",
-        "package_id"
+        "package_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -160479,11 +160496,11 @@
         }
       },
       "required": [
-        "project_id",
+        "file_name",
+        "output_path",
         "package_name",
         "package_version",
-        "file_name",
-        "output_path"
+        "project_id"
       ],
       "type": "object"
     },
@@ -160556,9 +160573,9 @@
         }
       },
       "required": [
-        "project_id",
+        "package_file_id",
         "package_id",
-        "package_file_id"
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -160653,8 +160670,8 @@
         }
       },
       "required": [
-        "project_id",
-        "package_id"
+        "package_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -160877,8 +160894,8 @@
         }
       },
       "required": [
-        "project_id",
-        "package_id"
+        "package_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -161620,10 +161637,10 @@
         }
       },
       "required": [
-        "project_id",
+        "file_name",
         "package_name",
         "package_version",
-        "file_name"
+        "project_id"
       ],
       "type": "object"
     },
@@ -161752,10 +161769,10 @@
         }
       },
       "required": [
-        "project_id",
+        "file_name",
         "package_name",
         "package_version",
-        "file_name",
+        "project_id",
         "tag_name"
       ],
       "type": "object"
@@ -161918,10 +161935,10 @@
         }
       },
       "required": [
-        "project_id",
+        "directory_path",
         "package_name",
         "package_version",
-        "directory_path"
+        "project_id"
       ],
       "type": "object"
     },
@@ -162035,8 +162052,8 @@
         }
       },
       "required": [
-        "project_id",
-        "domain"
+        "domain",
+        "project_id"
       ],
       "type": "object"
     },
@@ -162162,8 +162179,8 @@
         }
       },
       "required": [
-        "project_id",
-        "domain"
+        "domain",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -162219,8 +162236,8 @@
         }
       },
       "required": [
-        "project_id",
-        "domain"
+        "domain",
+        "project_id"
       ],
       "type": "object"
     },
@@ -162747,8 +162764,8 @@
         }
       },
       "required": [
-        "project_id",
-        "domain"
+        "domain",
+        "project_id"
       ],
       "type": "object"
     },
@@ -163122,8 +163139,8 @@
         }
       },
       "required": [
-        "project_id",
-        "enabled"
+        "enabled",
+        "project_id"
       ],
       "type": "object"
     },
@@ -163170,9 +163187,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "token_id"
-      ],
       "type": "object"
     },
     "outputSchema": {
@@ -163980,8 +163994,8 @@
         }
       },
       "required": [
-        "project_id",
-        "pipeline_id"
+        "pipeline_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -164473,8 +164487,8 @@
         }
       },
       "required": [
-        "project_id",
-        "pipeline_id"
+        "pipeline_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -164530,8 +164544,8 @@
         }
       },
       "required": [
-        "project_id",
-        "pipeline_id"
+        "pipeline_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -165488,8 +165502,8 @@
         }
       },
       "required": [
-        "project_id",
-        "pipeline_id"
+        "pipeline_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -165753,10 +165767,10 @@
         }
       },
       "required": [
-        "project_id",
+        "cron",
         "description",
-        "ref",
-        "cron"
+        "project_id",
+        "ref"
       ],
       "type": "object"
     },
@@ -165975,9 +165989,9 @@
         }
       },
       "required": [
+        "key",
         "project_id",
         "schedule_id",
-        "key",
         "value"
       ],
       "type": "object"
@@ -166112,9 +166126,9 @@
         }
       },
       "required": [
+        "key",
         "project_id",
-        "schedule_id",
-        "key"
+        "schedule_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -166186,9 +166200,9 @@
         }
       },
       "required": [
+        "key",
         "project_id",
         "schedule_id",
-        "key",
         "value"
       ],
       "type": "object"
@@ -167588,8 +167602,8 @@
         }
       },
       "required": [
-        "project_path",
-        "pipeline_iid"
+        "pipeline_iid",
+        "project_path"
       ],
       "type": "object"
     },
@@ -168304,8 +168318,8 @@
         }
       },
       "required": [
-        "project_id",
-        "pipeline_id"
+        "pipeline_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -168419,8 +168433,8 @@
         }
       },
       "required": [
-        "project_id",
-        "pipeline_id"
+        "pipeline_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -168544,8 +168558,8 @@
         }
       },
       "required": [
-        "project_id",
-        "description"
+        "description",
+        "project_id"
       ],
       "type": "object"
     },
@@ -169392,9 +169406,9 @@
         }
       },
       "required": [
-        "project_id",
+        "name",
         "pipeline_id",
-        "name"
+        "project_id"
       ],
       "type": "object"
     },
@@ -169609,8 +169623,8 @@
         }
       },
       "required": [
-        "project_id",
-        "pipeline_id"
+        "pipeline_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -169705,8 +169719,8 @@
         }
       },
       "required": [
-        "project_id",
-        "pipeline_id"
+        "pipeline_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -169966,8 +169980,8 @@
       },
       "required": [
         "group_id",
-        "link_url",
-        "image_url"
+        "image_url",
+        "link_url"
       ],
       "type": "object"
     },
@@ -170053,9 +170067,9 @@
         }
       },
       "required": [
-        "project_id",
+        "image_url",
         "link_url",
-        "image_url"
+        "project_id"
       ],
       "type": "object"
     },
@@ -170158,8 +170172,8 @@
         }
       },
       "required": [
-        "project_id",
         "name",
+        "project_id",
         "scopes"
       ],
       "type": "object"
@@ -171760,9 +171774,9 @@
         }
       },
       "required": [
-        "project_id",
+        "approvals_required",
         "name",
-        "approvals_required"
+        "project_id"
       ],
       "type": "object"
     },
@@ -173967,6 +173981,18 @@
     "description": "Create a new GitLab project. Returns: the created project with id, path_with_namespace, default_branch, visibility, and web URL. See also: gitlab_project_get, gitlab_project_update, gitlab_project_create_for_user.",
     "inputSchema": {
       "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "required": [
+            "path"
+          ]
+        }
+      ],
       "properties": {
         "allow_merge_on_skipped_pipeline": {
           "description": "Allow merge when pipeline is skipped",
@@ -174288,7 +174314,7 @@
           "type": "string"
         },
         "name": {
-          "description": "Project name",
+          "description": "Project name, derived from the path when left out. Provide name, path or both",
           "type": "string"
         },
         "namespace_id": {
@@ -174326,7 +174352,7 @@
           "type": "string"
         },
         "path": {
-          "description": "Project path slug (defaults from name)",
+          "description": "Project path slug, derived from the name when left out. Provide name, path or both",
           "type": "string"
         },
         "printing_merge_request_link_enabled": {
@@ -174522,9 +174548,6 @@
           ]
         }
       },
-      "required": [
-        "name"
-      ],
       "type": "object"
     },
     "outputSchema": {
@@ -175918,7 +175941,7 @@
           "type": "string"
         },
         "path": {
-          "description": "Project path slug (defaults from name)",
+          "description": "Project path slug, derived from the name when left out. Provide name, path or both",
           "type": "string"
         },
         "printing_merge_request_link_enabled": {
@@ -176119,8 +176142,8 @@
         }
       },
       "required": [
-        "user_id",
-        "name"
+        "name",
+        "user_id"
       ],
       "type": "object"
     },
@@ -177170,8 +177193,8 @@
         }
       },
       "required": [
-        "project_id",
-        "forked_from_id"
+        "forked_from_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -178225,8 +178248,8 @@
         }
       },
       "required": [
-        "project_id",
         "name",
+        "project_id",
         "target_branch"
       ],
       "type": "object"
@@ -178467,8 +178490,8 @@
         }
       },
       "required": [
-        "project_id",
-        "group_id"
+        "group_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -178598,9 +178621,9 @@
         }
       },
       "required": [
-        "project_id",
         "ecosystem",
         "name",
+        "project_id",
         "version"
       ],
       "type": "object"
@@ -181943,8 +181966,8 @@
         }
       },
       "required": [
-        "project_id",
-        "hook_id"
+        "hook_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -182008,9 +182031,9 @@
         }
       },
       "required": [
-        "project_id",
         "hook_id",
-        "key"
+        "key",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -182074,9 +182097,9 @@
         }
       },
       "required": [
-        "project_id",
         "hook_id",
-        "key"
+        "key",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -182325,8 +182348,8 @@
         }
       },
       "required": [
-        "project_id",
-        "hook_id"
+        "hook_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -182546,8 +182569,8 @@
         }
       },
       "required": [
-        "project_id",
-        "hook_id"
+        "hook_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -183083,9 +183106,9 @@
         }
       },
       "required": [
-        "project_id",
         "hook_id",
         "key",
+        "project_id",
         "value"
       ],
       "type": "object"
@@ -183149,9 +183172,9 @@
         }
       },
       "required": [
-        "project_id",
         "hook_id",
         "key",
+        "project_id",
         "value"
       ],
       "type": "object"
@@ -183227,9 +183250,9 @@
         }
       },
       "required": [
-        "project_id",
+        "event",
         "hook_id",
-        "event"
+        "project_id"
       ],
       "type": "object"
     },
@@ -183308,8 +183331,8 @@
         }
       },
       "required": [
-        "project_id",
-        "access_level"
+        "access_level",
+        "project_id"
       ],
       "type": "object"
     },
@@ -191882,6 +191905,18 @@
     "description": "Add a user to a project team by user_id or username with an access level. Optional: expires_at, member_role_id (Premium/Ultimate). Returns: the created membership. See also: gitlab_project_member_edit, gitlab_project_members_list, gitlab_list_users.",
     "inputSchema": {
       "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "user_id"
+          ]
+        },
+        {
+          "required": [
+            "username"
+          ]
+        }
+      ],
       "properties": {
         "access_level": {
           "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
@@ -191913,8 +191948,8 @@
         }
       },
       "required": [
-        "project_id",
-        "access_level"
+        "access_level",
+        "project_id"
       ],
       "type": "object"
     },
@@ -192284,9 +192319,9 @@
         }
       },
       "required": [
+        "access_level",
         "project_id",
-        "user_id",
-        "access_level"
+        "user_id"
       ],
       "type": "object"
     },
@@ -195294,10 +195329,10 @@
         }
       },
       "required": [
-        "project_id",
-        "service_account_id",
         "name",
-        "scopes"
+        "project_id",
+        "scopes",
+        "service_account_id"
       ],
       "type": "object"
     },
@@ -196028,9 +196063,9 @@
         }
       },
       "required": [
-        "project_id",
+        "group_access",
         "group_id",
-        "group_access"
+        "project_id"
       ],
       "type": "object"
     },
@@ -198243,8 +198278,8 @@
         }
       },
       "required": [
-        "project_id",
-        "namespace"
+        "namespace",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -203117,8 +203152,8 @@
         }
       },
       "required": [
-        "project_id",
-        "filename"
+        "filename",
+        "project_id"
       ],
       "type": "object"
     },
@@ -203195,8 +203230,8 @@
         }
       },
       "required": [
-        "project_id",
-        "filename"
+        "filename",
+        "project_id"
       ],
       "type": "object"
     },
@@ -204315,9 +204350,9 @@
         }
       },
       "required": [
+        "filename",
         "project_id",
-        "secret",
-        "filename"
+        "secret"
       ],
       "type": "object",
       "x_destructive": true
@@ -204537,8 +204572,8 @@
         }
       },
       "required": [
-        "project_id",
-        "branch_name"
+        "branch_name",
+        "project_id"
       ],
       "type": "object"
     },
@@ -204893,8 +204928,8 @@
         }
       },
       "required": [
-        "project_id",
-        "branch_name"
+        "branch_name",
+        "project_id"
       ],
       "type": "object"
     },
@@ -205330,8 +205365,8 @@
         }
       },
       "required": [
-        "project_id",
-        "environment"
+        "environment",
+        "project_id"
       ],
       "type": "object"
     },
@@ -205784,8 +205819,9 @@
         }
       },
       "required": [
-        "project_id",
-        "name"
+        "deploy_access_levels",
+        "name",
+        "project_id"
       ],
       "type": "object"
     },
@@ -205920,8 +205956,8 @@
         }
       },
       "required": [
-        "project_id",
-        "environment"
+        "environment",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -206112,8 +206148,8 @@
         }
       },
       "required": [
-        "project_id",
-        "environment"
+        "environment",
+        "project_id"
       ],
       "type": "object"
     },
@@ -206308,9 +206344,9 @@
         }
       },
       "required": [
+        "file_path",
         "project_id",
-        "submodule_path",
-        "file_path"
+        "submodule_path"
       ],
       "type": "object"
     },
@@ -206389,8 +206425,8 @@
         }
       },
       "required": [
-        "project_id",
-        "name"
+        "name",
+        "project_id"
       ],
       "type": "object"
     },
@@ -207864,16 +207900,16 @@
   },
   {
     "name": "gitlab_registry_tag_protection_create",
-    "description": "Create a container registry tag protection rule. Returns: the created rule. Omit both minimum access levels to make matching tags immutable. See also: gitlab_registry_tag_protection_list, gitlab_registry_tag_protection_update, gitlab_registry_protection_create.",
+    "description": "Create a container registry tag protection rule. Returns: the created rule. Both minimum access levels (push and delete) are required. See also: gitlab_registry_tag_protection_list, gitlab_registry_tag_protection_update, gitlab_registry_protection_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "minimum_access_level_for_delete": {
-          "description": "Minimum access level to delete matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable",
+          "description": "Minimum access level to delete matching tags (maintainer, owner, admin)",
           "type": "string"
         },
         "minimum_access_level_for_push": {
-          "description": "Minimum access level to push matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable",
+          "description": "Minimum access level to push matching tags (maintainer, owner, admin)",
           "type": "string"
         },
         "project_id": {
@@ -207889,6 +207925,8 @@
         }
       },
       "required": [
+        "minimum_access_level_for_delete",
+        "minimum_access_level_for_push",
         "project_id",
         "tag_name_pattern"
       ],
@@ -209859,9 +209897,9 @@
         }
       },
       "required": [
+        "name",
         "project_id",
         "tag_name",
-        "name",
         "url"
       ],
       "type": "object"
@@ -209973,9 +210011,9 @@
         }
       },
       "required": [
+        "links",
         "project_id",
-        "tag_name",
-        "links"
+        "tag_name"
       ],
       "type": "object"
     },
@@ -210082,9 +210120,9 @@
         }
       },
       "required": [
+        "link_id",
         "project_id",
-        "tag_name",
-        "link_id"
+        "tag_name"
       ],
       "type": "object",
       "x_destructive": true
@@ -210155,9 +210193,9 @@
         }
       },
       "required": [
+        "link_id",
         "project_id",
-        "tag_name",
-        "link_id"
+        "tag_name"
       ],
       "type": "object"
     },
@@ -210414,9 +210452,9 @@
         }
       },
       "required": [
+        "link_id",
         "project_id",
-        "tag_name",
-        "link_id"
+        "tag_name"
       ],
       "type": "object"
     },
@@ -211530,8 +211568,8 @@
         }
       },
       "required": [
-        "project_id",
-        "file_id"
+        "file_id",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -212180,8 +212218,8 @@
         }
       },
       "required": [
-        "project_id",
         "from",
+        "project_id",
         "to"
       ],
       "type": "object"
@@ -214983,9 +215021,9 @@
         }
       },
       "required": [
-        "project_id",
+        "check_id",
         "merge_request_iid",
-        "check_id"
+        "project_id"
       ],
       "type": "object"
     },
@@ -215606,8 +215644,8 @@
         }
       },
       "required": [
-        "project_id",
         "agent_id",
+        "project_id",
         "token_id"
       ],
       "type": "object",
@@ -215726,8 +215764,8 @@
         }
       },
       "required": [
-        "user_id",
-        "token_id"
+        "token_id",
+        "user_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -219867,6 +219905,9 @@
           ]
         }
       },
+      "required": [
+        "source_storage_name"
+      ],
       "type": "object"
     },
     "outputSchema": {
@@ -219918,6 +219959,9 @@
           ]
         }
       },
+      "required": [
+        "source_storage_name"
+      ],
       "type": "object"
     },
     "outputSchema": {
@@ -219969,6 +220013,9 @@
           ]
         }
       },
+      "required": [
+        "source_storage_name"
+      ],
       "type": "object"
     },
     "outputSchema": {
@@ -223667,9 +223714,9 @@
         }
       },
       "required": [
-        "resource_type",
-        "resource_id",
         "key",
+        "resource_id",
+        "resource_type",
         "value"
       ],
       "type": "object"
@@ -223880,12 +223927,12 @@
   },
   {
     "name": "gitlab_set_group_datadog_integration",
-    "description": "Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). At least one of api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events, or use_inherited_settings=true must be supplied.\n\nReturns: JSON with the updated Datadog integration details, whose configuration lives in the nested properties object.\n\nSee also: gitlab_get_group_datadog_integration, gitlab_delete_group_datadog_integration.",
+    "description": "Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). api_key is required on every call, use_inherited_settings=true included. api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility and archive_trace_events are optional.\n\nReturns: JSON with the updated Datadog integration details, whose configuration lives in the nested properties object.\n\nSee also: gitlab_get_group_datadog_integration, gitlab_delete_group_datadog_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "api_key": {
-          "description": "Datadog API key (write-only. Never returned by the get endpoint)",
+          "description": "Datadog API key (write-only. Never returned by the get endpoint). GitLab requires it on every update",
           "type": "string"
         },
         "api_url": {
@@ -223938,6 +223985,7 @@
         }
       },
       "required": [
+        "api_key",
         "group_id"
       ],
       "type": "object"
@@ -224522,7 +224570,7 @@
           ]
         },
         "password": {
-          "description": "Jira password or API token",
+          "description": "Jira password or API token. GitLab requires it on every update",
           "type": "string"
         },
         "project_id": {
@@ -224578,6 +224626,7 @@
         }
       },
       "required": [
+        "password",
         "project_id",
         "url"
       ],
@@ -224737,10 +224786,10 @@
         }
       },
       "required": [
-        "project_id",
-        "merge_request_iid",
-        "sha",
         "external_status_check_id",
+        "merge_request_iid",
+        "project_id",
+        "sha",
         "status"
       ],
       "type": "object"
@@ -224929,8 +224978,8 @@
         }
       },
       "required": [
-        "project_id",
-        "file_id"
+        "file_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -225410,9 +225459,9 @@
         }
       },
       "required": [
+        "name",
         "project_id",
-        "snippet_id",
-        "name"
+        "snippet_id"
       ],
       "type": "object"
     },
@@ -225527,9 +225576,9 @@
         }
       },
       "required": [
+        "award_id",
         "project_id",
-        "snippet_id",
-        "award_id"
+        "snippet_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -225589,9 +225638,9 @@
         }
       },
       "required": [
+        "award_id",
         "project_id",
-        "snippet_id",
-        "award_id"
+        "snippet_id"
       ],
       "type": "object"
     },
@@ -226142,9 +226191,9 @@
         }
       },
       "required": [
-        "snippet_id",
+        "file_name",
         "ref",
-        "file_name"
+        "snippet_id"
       ],
       "type": "object"
     },
@@ -226873,9 +226922,9 @@
         }
       },
       "required": [
+        "body",
         "project_id",
-        "snippet_id",
-        "body"
+        "snippet_id"
       ],
       "type": "object"
     },
@@ -227200,9 +227249,9 @@
         }
       },
       "required": [
+        "note_id",
         "project_id",
-        "snippet_id",
-        "note_id"
+        "snippet_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -227266,10 +227315,10 @@
         }
       },
       "required": [
-        "project_id",
-        "snippet_id",
+        "name",
         "note_id",
-        "name"
+        "project_id",
+        "snippet_id"
       ],
       "type": "object"
     },
@@ -227388,10 +227437,10 @@
         }
       },
       "required": [
-        "project_id",
-        "snippet_id",
+        "award_id",
         "note_id",
-        "award_id"
+        "project_id",
+        "snippet_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -227455,10 +227504,10 @@
         }
       },
       "required": [
-        "project_id",
-        "snippet_id",
+        "award_id",
         "note_id",
-        "award_id"
+        "project_id",
+        "snippet_id"
       ],
       "type": "object"
     },
@@ -227600,9 +227649,9 @@
         }
       },
       "required": [
+        "note_id",
         "project_id",
-        "snippet_id",
-        "note_id"
+        "snippet_id"
       ],
       "type": "object"
     },
@@ -227774,9 +227823,9 @@
         }
       },
       "required": [
+        "note_id",
         "project_id",
-        "snippet_id",
-        "note_id"
+        "snippet_id"
       ],
       "type": "object"
     },
@@ -228515,10 +228564,10 @@
         }
       },
       "required": [
-        "project_id",
-        "snippet_id",
+        "body",
         "note_id",
-        "body"
+        "project_id",
+        "snippet_id"
       ],
       "type": "object"
     },
@@ -229902,8 +229951,8 @@
       },
       "required": [
         "project_id",
-        "tag_name",
-        "ref"
+        "ref",
+        "tag_name"
       ],
       "type": "object"
     },
@@ -232197,8 +232246,8 @@
         }
       },
       "required": [
-        "project_id",
-        "name"
+        "name",
+        "project_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -232272,11 +232321,9 @@
         }
       },
       "required": [
-        "project_id",
         "alert_iid",
         "image_id",
-        "url",
-        "url_text"
+        "project_id"
       ],
       "type": "object"
     },
@@ -232700,11 +232747,11 @@
         }
       },
       "required": [
-        "project_id",
+        "body",
         "commit_sha",
         "discussion_id",
         "note_id",
-        "body"
+        "project_id"
       ],
       "type": "object"
     },
@@ -233017,6 +233064,9 @@
           ]
         }
       },
+      "required": [
+        "csp_namespace_id"
+      ],
       "type": "object"
     },
     "outputSchema": {
@@ -233074,10 +233124,10 @@
         }
       },
       "required": [
-        "full_path",
+        "body",
         "epic_iid",
-        "note_id",
-        "body"
+        "full_path",
+        "note_id"
       ],
       "type": "object"
     },
@@ -233239,8 +233289,8 @@
         }
       },
       "required": [
-        "project_id",
-        "freeze_period_id"
+        "freeze_period_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -233531,9 +233581,9 @@
         }
       },
       "required": [
+        "extern_uid",
         "group_id",
-        "uid",
-        "extern_uid"
+        "uid"
       ],
       "type": "object"
     },
@@ -233739,11 +233789,11 @@
         }
       },
       "required": [
-        "project_id",
-        "issue_iid",
+        "body",
         "discussion_id",
+        "issue_iid",
         "note_id",
-        "body"
+        "project_id"
       ],
       "type": "object"
     },
@@ -234170,8 +234220,8 @@
         }
       },
       "required": [
-        "project_id",
-        "check_id"
+        "check_id",
+        "project_id"
       ],
       "type": "object"
     },
@@ -234684,10 +234734,10 @@
         }
       },
       "required": [
-        "project_id",
-        "submodule",
         "branch",
-        "commit_sha"
+        "commit_sha",
+        "project_id",
+        "submodule"
       ],
       "type": "object"
     },
@@ -235157,11 +235207,11 @@
         }
       },
       "required": [
-        "project_id",
-        "snippet_id",
+        "body",
         "discussion_id",
         "note_id",
-        "body"
+        "project_id",
+        "snippet_id"
       ],
       "type": "object"
     },
@@ -236038,11 +236088,9 @@
         }
       },
       "required": [
-        "project_id",
         "alert_iid",
         "filename",
-        "url",
-        "url_text"
+        "project_id"
       ],
       "type": "object"
     },
@@ -237408,9 +237456,9 @@
         }
       },
       "required": [
+        "content",
         "project_id",
-        "title",
-        "content"
+        "title"
       ],
       "type": "object"
     },
@@ -237823,8 +237871,8 @@
         }
       },
       "required": [
-        "project_id",
-        "filename"
+        "filename",
+        "project_id"
       ],
       "type": "object"
     },
@@ -238554,8 +238602,8 @@
         }
       },
       "required": [
-        "namespace_path",
         "name",
+        "namespace_path",
         "sort"
       ],
       "type": "object"

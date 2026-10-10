@@ -174,9 +174,9 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | ------------ | ---------------- | --------- | ------------------------------------------------------------ |
 | `branch`     | `string`         | sí        | Target branch name                                           |
 | `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                               |
+| `sha`        | `string`         | sí        | Commit SHA to cherry-pick                                    |
 | `dry_run`    | `boolean`        | no        | If true, does not create the commit but checks for conflicts |
 | `message`    | `string`         | no        | Custom commit message (defaults to original)                 |
-| `sha`        | `string`         | no        | Commit SHA to cherry-pick                                    |
 
 ### `repository.commit_comment_create`
 
@@ -486,7 +486,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | ------------ | ---------------- | --------- | ------------------------------ |
 | `branch`     | `string`         | sí        | Target branch name             |
 | `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
-| `sha`        | `string`         | no        | Commit SHA to revert           |
+| `sha`        | `string`         | sí        | Commit SHA to revert           |
 
 ### `repository.commit_signature`
 
@@ -607,13 +607,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
-| Parámetro     | Tipo             | Requerido | Descripción                                             |
-| ------------- | ---------------- | --------- | ------------------------------------------------------- |
-| `file_path`   | `string`         | sí        | URL-encoded full path of the file                       |
-| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path                          |
-| `range_end`   | `integer`        | no        | End line number for blame range                         |
-| `range_start` | `integer`        | no        | Start line number for blame range                       |
-| `ref`         | `string`         | no        | Branch, tag, or commit SHA (defaults to default branch) |
+| Parámetro     | Tipo             | Requerido | Descripción                       |
+| ------------- | ---------------- | --------- | --------------------------------- |
+| `file_path`   | `string`         | sí        | URL-encoded full path of the file |
+| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path    |
+| `ref`         | `string`         | sí        | Branch, tag, or commit SHA        |
+| `range_end`   | `integer`        | no        | End line number for blame range   |
+| `range_start` | `integer`        | no        | Start line number for blame range |
 
 ### `repository.file_create`
 
@@ -676,7 +676,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | ------------ | ---------------- | --------- | --------------------------------------------------------------------- |
 | `file_path`  | `string`         | sí        | URL-encoded full path of the file (e.g. src%2Fmain.go or src/main.go) |
 | `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                        |
-| `ref`        | `string`         | no        | Branch name, tag, or commit SHA (defaults to default branch)          |
+| `ref`        | `string`         | sí        | Branch name, tag, or commit SHA                                       |
 
 ### `repository.file_history`
 
@@ -719,11 +719,11 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
-| Parámetro    | Tipo             | Requerido | Descripción                                             |
-| ------------ | ---------------- | --------- | ------------------------------------------------------- |
-| `file_path`  | `string`         | sí        | URL-encoded full path of the file                       |
-| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                          |
-| `ref`        | `string`         | no        | Branch, tag, or commit SHA (defaults to default branch) |
+| Parámetro    | Tipo             | Requerido | Descripción                       |
+| ------------ | ---------------- | --------- | --------------------------------- |
+| `file_path`  | `string`         | sí        | URL-encoded full path of the file |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path    |
+| `ref`        | `string`         | sí        | Branch, tag, or commit SHA        |
 
 ### `repository.file_raw`
 

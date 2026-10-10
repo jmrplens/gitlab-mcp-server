@@ -63,19 +63,19 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 | Parámetro                             | Tipo        | Requerido | Descripción                                                 |
 | ------------------------------------- | ----------- | --------- | ----------------------------------------------------------- |
+| `name`                                | `string`    | sí        | Unique name of the Geo site                                 |
+| `url`                                 | `string`    | sí        | External URL of the Geo site                                |
 | `container_repositories_max_capacity` | `integer`   | no        | Max number of concurrent container repository syncs         |
 | `enabled`                             | `boolean`   | no        | Whether the site is enabled                                 |
 | `files_max_capacity`                  | `integer`   | no        | Max number of LFS/attachment backfill downloads             |
 | `internal_url`                        | `string`    | no        | Internal URL of the Geo site                                |
 | `minimum_reverification_interval`     | `integer`   | no        | Minimum interval (days) before re-verification              |
-| `name`                                | `string`    | no        | Unique name of the Geo site                                 |
 | `primary`                             | `boolean`   | no        | Whether this is a primary site                              |
 | `repos_max_capacity`                  | `integer`   | no        | Max number of concurrent repository backfill syncs          |
 | `selective_sync_namespace_ids`        | `integer[]` | no        | Namespace IDs to sync (when selective_sync_type=namespaces) |
 | `selective_sync_shards`               | `string[]`  | no        | Storage shards to sync (when selective_sync_type=shards)    |
 | `selective_sync_type`                 | `string`    | no        | Selective sync type: namespaces or shards                   |
 | `sync_object_storage`                 | `boolean`   | no        | Whether to sync object-stored data                          |
-| `url`                                 | `string`    | no        | External URL of the Geo site                                |
 | `verification_max_capacity`           | `integer`   | no        | Max number of concurrent verification jobs                  |
 
 ### `geo.delete`

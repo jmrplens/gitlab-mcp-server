@@ -881,8 +881,8 @@ Sin parámetros.
 
 | Parámetro    | Tipo             | Requerido | Descripción                      |
 | ------------ | ---------------- | --------- | -------------------------------- |
+| `active`     | `boolean`        | sí        | Enable or disable error tracking |
 | `project_id` | `string/integer` | sí        | Project ID or URL-encoded path   |
-| `active`     | `boolean`        | no        | Enable or disable error tracking |
 | `integrated` | `boolean`        | no        | Use integrated error tracking    |
 
 ### `admin.feature_delete`
@@ -961,15 +961,13 @@ Sin parámetros.
 - **Token de grano fino**: Import: Create en grupo o usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro                | Tipo     | Requerido | Descripción                                                                                                                                                                   |
-| ------------------------ | -------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bitbucket_username`     | `string` | sí        | Bitbucket Cloud username                                                                                                                                                      |
-| `repo_path`              | `string` | sí        | Bitbucket repository path (e.g. owner/repo)                                                                                                                                   |
-| `target_namespace`       | `string` | sí        | Target namespace for the imported project                                                                                                                                     |
-| `bitbucket_api_token`    | `string` | no        | Bitbucket Cloud API token (replaces app passwords). Treat as secret: do not log or store it, and redact it in telemetry/errors. Requires bitbucket_email                      |
-| `bitbucket_app_password` | `string` | no        | Bitbucket Cloud app password (legacy auth). Treat as secret: do not log or store it, and redact it in telemetry/errors. Provide this OR bitbucket_api_token + bitbucket_email |
-| `bitbucket_email`        | `string` | no        | Atlassian account email associated with the API token (required when using bitbucket_api_token)                                                                               |
-| `new_name`               | `string` | no        | New name for the imported project                                                                                                                                             |
+| Parámetro             | Tipo     | Requerido | Descripción                                                                                                                         |
+| --------------------- | -------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `bitbucket_api_token` | `string` | sí        | Bitbucket Cloud API token, which replaced app passwords. Treat as secret: do not log or store it, and redact it in telemetry/errors |
+| `bitbucket_email`     | `string` | sí        | Atlassian account email the API token belongs to                                                                                    |
+| `repo_path`           | `string` | sí        | Bitbucket repository path (e.g. owner/repo)                                                                                         |
+| `target_namespace`    | `string` | sí        | Target namespace for the imported project                                                                                           |
+| `new_name`            | `string` | no        | New name for the imported project                                                                                                   |
 
 ### `admin.import_bitbucket_server`
 
@@ -1548,8 +1546,8 @@ Sin parámetros.
 | Parámetro     | Tipo     | Requerido | Descripción                              |
 | ------------- | -------- | --------- | ---------------------------------------- |
 | `name`        | `string` | sí        | Topic name (slug-like unique identifier) |
+| `title`       | `string` | sí        | Topic display title                      |
 | `description` | `string` | no        | Topic description                        |
-| `title`       | `string` | no        | Topic display title                      |
 
 ### `admin.topic_delete`
 
