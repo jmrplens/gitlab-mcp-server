@@ -117,23 +117,19 @@ var (
 // domains so dynamic find resolves catalog intents unambiguously.
 var catalogActionMeta = map[string]catalogActionMetaEntry{
 	"gitlab_list_catalog_resources": {
-		usage:   "Browse the CI/CD Catalog of published component projects. Use search to match by name or description, scope to limit to your namespaces (NAMESPACES) or the whole instance (ALL), and sort by name, latest release, or star count when the prompt asks for reusable pipeline components or templates to include.",
-		aliases: []string{"browse ci/cd catalog", "list cicd components", "search component catalog", "find reusable pipeline components", "list catalog resources"},
-		related: []string{actionCatalogGet, actionTemplateLint, "pipeline.create"},
-		description: "List published CI/CD Catalog resources (component projects) with optional search, scope, and sort. " +
-			"Returns: catalog resources with id, name, full path, description, icon, latest version and release date, star count, starrers path, 30-day usage count, archived flag, topics, verification and visibility levels, web path, and keyset pagination metadata. " +
-			"See also: gitlab_get_catalog_resource, gitlab_ci_lint, gitlab_pipeline_create.",
+		usage:       "Browse the CI/CD Catalog of published component projects. Use search to match by name or description, scope to limit to your namespaces (NAMESPACES) or the whole instance (ALL), and sort by name, latest release, or star count when the prompt asks for reusable pipeline components or templates to include.",
+		aliases:     []string{"browse ci/cd catalog", "list cicd components", "search component catalog", "find reusable pipeline components", "list catalog resources"},
+		related:     []string{actionCatalogGet, actionTemplateLint, "pipeline.create"},
+		description: "List published CI/CD Catalog resources (component projects) with optional search, scope, and sort. Returns: catalog resources with id, name, full path, description, icon, latest version and release date, star count, starrers path, 30-day usage count, archived flag, topics, verification and visibility levels, web path, and keyset pagination metadata. See also: gitlab_get_catalog_resource, gitlab_ci_lint, gitlab_pipeline_create.",
 		overrides: []toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("scope", catalogScopeValues...),
 			toolutil.SchemaEnumOverride("sort", catalogSortValues...),
 		},
 	},
 	"gitlab_get_catalog_resource": {
-		usage:   "Fetch one CI/CD Catalog resource by its GID or by the full_path of the hosting project. Use after browsing the catalog when the prompt names a specific component project and you need its components, input parameters, README, and released versions to wire an include into a pipeline.",
-		aliases: []string{"get catalog resource", "show cicd component details", "inspect catalog component inputs", "fetch component project versions"},
-		related: []string{actionCatalogList, actionTemplateLint, "project.get"},
-		description: "Get a single CI/CD Catalog resource by GID or full path. " +
-			"Returns: the resource with description, the latest version's README as Markdown and as HTML, latest-version components with their 30-day usage and their typed inputs (default, options, regex and conditional rules), the last ten versions with author and commit, star count, starrers path, and web path. " +
-			"See also: gitlab_list_catalog_resources, gitlab_ci_lint, gitlab_project_get.",
+		usage:       "Fetch one CI/CD Catalog resource by its GID or by the full_path of the hosting project. Use after browsing the catalog when the prompt names a specific component project and you need its components, input parameters, README, and released versions to wire an include into a pipeline.",
+		aliases:     []string{"get catalog resource", "show cicd component details", "inspect catalog component inputs", "fetch component project versions"},
+		related:     []string{actionCatalogList, actionTemplateLint, "project.get"},
+		description: "Get a single CI/CD Catalog resource by GID or full path. Returns: the resource with description, the latest version's README as Markdown and as HTML, latest-version components with their 30-day usage and their typed inputs (default, options, regex and conditional rules), the last ten versions with author and commit, star count, starrers path, and web path. See also: gitlab_list_catalog_resources, gitlab_ci_lint, gitlab_project_get.",
 	},
 }

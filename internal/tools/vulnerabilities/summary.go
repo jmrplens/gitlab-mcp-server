@@ -105,8 +105,14 @@ type gqlScan struct {
 }
 
 // gqlScannedResourcesConnection holds the resources a scan requested.
+//
+// The nodes are pointers because the schema lets each be null, and GitLab
+// answers an item the credential may not read as null with no error: every
+// scanned resource, for a fine-grained token, since at 19.4.1 ScannedResource
+// declares no fine-grained permission. Decoded by value, a null became a
+// request with no method and no address (issue 1103).
 type gqlScannedResourcesConnection struct {
-	Nodes []gqlScannedResource `json:"nodes"`
+	Nodes []*gqlScannedResource `json:"nodes"`
 }
 
 // gqlScannedResource is one resource a DAST or API fuzzing scan requested.
@@ -342,7 +348,9 @@ func gqlToScannerSummary(s *gqlScannerSummary) *ScannerSummaryItem {
 	}
 	if s.ScannedResources != nil {
 		for _, resource := range s.ScannedResources.Nodes {
-			item.ScannedResources = append(item.ScannedResources, ScannedResourceItem(resource))
+			if resource != nil {
+				item.ScannedResources = append(item.ScannedResources, ScannedResourceItem(*resource))
+			}
 		}
 	}
 	return item

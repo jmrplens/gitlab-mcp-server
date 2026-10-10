@@ -395,6 +395,37 @@ func TestPipelineSecuritySummary_OnlyOneScannerRan(t *testing.T) {
 	}
 }
 
+// TestPipelineSecuritySummary_NullScannedResources_AreLeftOut verifies that a
+// scanned resource GitLab answered as null is left out of the list rather
+// than published as a request with no method and no address. GitLab nulls an
+// item the credential may not read, with no error, and ScannedResource
+// declares no fine-grained permission at 19.4.1, so a fine-grained token reads
+// every scanned resource as null; the count GitLab sent beside the list still
+// says how many there were (issue 1103).
+func TestPipelineSecuritySummary_NullScannedResources_AreLeftOut(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"securityReportSummary": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"project": {"pipeline": {"securityReportSummary": {
+				"dast": {"vulnerabilitiesCount": 0, "scannedResourcesCount": 3, "scannedResourcesCsvPath": "",
+					"scannedResources": {"nodes": [null, {"requestMethod": "GET", "url": "https://app.example/login"}, null]}}
+			}}}}`)
+		},
+	})
+
+	out, err := PipelineSecuritySummary(context.Background(), testutil.NewTestClient(t, handler),
+		PipelineSecuritySummaryInput{ProjectPath: "my-group/my-project", PipelineIID: "7"})
+	if err != nil {
+		t.Fatalf("PipelineSecuritySummary() error = %v", err)
+	}
+	want := &ScannerSummaryItem{
+		ScannedResourcesCount: 3,
+		ScannedResources:      []ScannedResourceItem{{RequestMethod: "GET", URL: "https://app.example/login"}},
+	}
+	if !reflect.DeepEqual(out.Dast, want) {
+		t.Errorf("DAST = %+v, want %+v", out.Dast, want)
+	}
+}
+
 // TestPipelineSecuritySummary_PipelineNotFound verifies that the pipeline
 // security summary returns an error when the specified pipeline does not exist.
 func TestPipelineSecuritySummary_PipelineNotFound(t *testing.T) {
