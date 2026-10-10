@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -251,6 +252,35 @@ func TestLegacyHandshake_Failures_AreReported(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestLegacyHandshake_UnansweredExchange_ReportsTheTimeout verifies the wait
+// that turns an exchange blocked for ever into one line: a connection whose
+// read never returns is reported as an exchange that did not finish within
+// handshakeTimeout, and the handshake answers that it failed, instead of the
+// test hanging until the binary's own deadline.
+//
+// It runs in a synctest bubble, whose clock moves only once every goroutine in
+// it is blocked: the exchange is parked on a read nothing releases and the
+// handshake on its timer, so the whole timeout passes at once instead of
+// costing ten seconds of every run of this package, mutation runs included.
+// The read is released before the bubble ends, so the exchange's goroutine
+// returns and the bubble has nothing left to wait for.
+func TestLegacyHandshake_UnansweredExchange_ReportsTheTimeout(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		release := make(chan struct{})
+		reporter := &recordingLegacyReporter{}
+
+		answered := legacyHandshake(t.Context(), reporter, &fakeConn{blockRead: release}, acceptingHandler, LegacyClientOptions{})
+		close(release)
+
+		if answered {
+			t.Error("the handshake reported success for an exchange that never finished")
+		}
+		if want := "did not finish within " + handshakeTimeout.String(); !strings.Contains(reporter.joined(), want) {
+			t.Errorf("report = %q, want it to contain %q", reporter.joined(), want)
+		}
+	})
 }
 
 // TestConnectLegacyElicitationClient_FailedHandshake_ReturnsNoSession verifies

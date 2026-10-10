@@ -394,8 +394,10 @@ func bodyKeys(r *http.Request) []string {
 	if err != nil {
 		return nil
 	}
+	// An empty object needs no case of its own: slices.Sorted of no keys is
+	// nil, the same answer a body that is not an object gets.
 	var fields map[string]json.RawMessage
-	if json.Unmarshal(body, &fields) != nil || len(fields) == 0 {
+	if json.Unmarshal(body, &fields) != nil {
 		return nil
 	}
 	return slices.Sorted(maps.Keys(fields))
@@ -529,7 +531,7 @@ var stackBoundaries = map[string]bool{"testing": true, "runtime": true}
 func packageOf(function string) string {
 	slash := strings.LastIndex(function, "/")
 	dot := strings.Index(function[slash+1:], ".")
-	if dot < 0 {
+	if dot == -1 {
 		return ""
 	}
 	return function[:slash+1+dot]

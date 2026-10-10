@@ -344,6 +344,10 @@ func TestFillFixture_States_SetThePaginationEachRuleReads(t *testing.T) {
 		{name: "multi-page", state: FixtureMultiPage, want: PaginationOutput{Page: 1, PerPage: 20, TotalItems: 45, TotalPages: 3, NextPage: 2, HasMore: true}, cursor: GraphQLPaginationOutput{HasNextPage: true, EndCursor: "cursor7"}, forward: GraphQLForwardPaginationOutput{HasNextPage: true, EndCursor: "cursor7"}, items: 2},
 		{name: "single page", state: FixtureSinglePage, want: PaginationOutput{Page: 1, PerPage: 20, TotalItems: 2, TotalPages: 1}, cursor: GraphQLPaginationOutput{HasNextPage: true, EndCursor: "cursor7"}, forward: GraphQLForwardPaginationOutput{HasNextPage: true, EndCursor: "cursor7"}, items: 2},
 		{name: "keyset", state: FixtureKeyset, want: PaginationOutput{Page: 1, PerPage: 20, NextPage: 2, HasMore: true}, cursor: GraphQLPaginationOutput{HasNextPage: true, EndCursor: "cursor7"}, forward: GraphQLForwardPaginationOutput{HasNextPage: true, EndCursor: "cursor7"}, items: 2},
+		// A state this package does not define is still a populated fill,
+		// since only FixtureZero answers the zero value, and it names no
+		// pagination, so the offset block is left as it was made.
+		{name: "an undefined state", state: FixtureState(9), want: PaginationOutput{}, cursor: GraphQLPaginationOutput{HasNextPage: true, EndCursor: "cursor7"}, forward: GraphQLForwardPaginationOutput{HasNextPage: true, EndCursor: "cursor7"}, items: 2},
 	}
 
 	for _, tc := range cases {
@@ -607,6 +611,20 @@ func TestOptionalFields_PointerType_ListsTheFieldsOfWhatItPointsAt(t *testing.T)
 
 	if len(direct) == 0 || len(direct) != len(through) {
 		t.Errorf("OptionalFields lists %d field(s) through the pointer and %d directly", len(through), len(direct))
+	}
+}
+
+// TestOptionalFields_NotAStruct_ListsNothing checks the walk's first question:
+// a type that is not a struct, directly or through pointers, has no fields a
+// response could omit, which is what a formatter registered for a slice or a
+// bare value is asked about.
+func TestOptionalFields_NotAStruct_ListsNothing(t *testing.T) {
+	for _, typ := range []reflect.Type{reflect.TypeFor[int](), reflect.TypeFor[*[]fixtureItem](), reflect.TypeFor[map[string]string]()} {
+		t.Run(typ.String(), func(t *testing.T) {
+			if fields := OptionalFields(typ); len(fields) != 0 {
+				t.Errorf("OptionalFields(%s) = %+v, want none", typ, fields)
+			}
+		})
 	}
 }
 

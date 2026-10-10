@@ -80,6 +80,13 @@ func TestAssertEmbeddedResource_ToolThatAnswersWrongly_IsReported(t *testing.T) 
 			want: "expected EmbeddedResource for plain",
 		},
 		{
+			name: "an embed that carries no resource",
+			assert: func(reporter embedReporter) {
+				assertResourceEmbedded(t.Context(), reporter, session, "hollow", map[string]any{}, "gitlab://test/resources/1")
+			},
+			want: "expected EmbeddedResource for hollow, got 2 blocks",
+		},
+		{
 			name: "an embed where none was expected",
 			assert: func(reporter embedReporter) {
 				assertResourceNotEmbedded(t.Context(), reporter, session, "embeds", map[string]any{})
@@ -130,10 +137,34 @@ func TestCallToolSuccessfully_ClosedSession_IsReported(t *testing.T) {
 	}
 }
 
-// connectEmbedTestSession serves the three answers these assertions have to
-// tell apart: a tool that embeds a resource, one that does not, and one that
-// fails.
-func connectEmbedTestSession(t *testing.T) *mcp.ClientSession {
+// TestCallToolSuccessfully_NoResult_IsReported covers the answer the SDK hands
+// back when a client middleware answers a call with no result and no error,
+// which it passes through as a nil result: the guard reports the call rather
+// than reading a field of nothing.
+func TestCallToolSuccessfully_NoResult_IsReported(t *testing.T) {
+	session := connectEmbedTestSession(t, func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			if method == "tools/call" {
+				return (*mcp.CallToolResult)(nil), nil
+			}
+			return next(ctx, method, req)
+		}
+	})
+	reporter := &recordingEmbedReporter{}
+
+	if result := callToolSuccessfully(t.Context(), reporter, session, "embeds", map[string]any{}); result != nil {
+		t.Errorf("callToolSuccessfully() = %v, want nil for a call answered with nothing", result)
+	}
+	if want := "CallTool(embeds): expected a successful result, got none"; !strings.Contains(reporter.joined(), want) {
+		t.Errorf("report = %q, want it to contain %q", reporter.joined(), want)
+	}
+}
+
+// connectEmbedTestSession serves the four answers these assertions have to
+// tell apart: a tool that embeds a resource, one that does not, one whose
+// embed carries no resource, and one that fails. Any middleware given is
+// installed on the client's sending side.
+func connectEmbedTestSession(t *testing.T, sending ...mcp.Middleware) *mcp.ClientSession {
 	t.Helper()
 	server := mcp.NewServer(&mcp.Implementation{Name: "embed-test-server", Version: "0.0.1"}, nil)
 	mcp.AddTool(server, &mcp.Tool{Name: "embeds", Description: "Returns an embedded resource."},
@@ -145,6 +176,10 @@ func connectEmbedTestSession(t *testing.T) *mcp.ClientSession {
 	mcp.AddTool(server, &mcp.Tool{Name: "plain", Description: "Returns text only."},
 		func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, any, error) {
 			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+		})
+	mcp.AddTool(server, &mcp.Tool{Name: "hollow", Description: "Returns an embedded resource block with no resource in it."},
+		func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, any, error) {
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}, &mcp.EmbeddedResource{}}}, nil, nil
 		})
 	mcp.AddTool(server, &mcp.Tool{Name: "failing", Description: "Answers with an error result."},
 		func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, any, error) {
@@ -159,6 +194,7 @@ func connectEmbedTestSession(t *testing.T) *mcp.ClientSession {
 		t.Fatalf("server connect: %v", err)
 	}
 	client := mcp.NewClient(&mcp.Implementation{Name: "embed-test-client", Version: "0.0.1"}, nil)
+	client.AddSendingMiddleware(sending...)
 	clientSession, err := client.Connect(ctx, clientTransport, nil)
 	if err != nil {
 		t.Fatalf("client connect: %v", err)

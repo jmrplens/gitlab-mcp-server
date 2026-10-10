@@ -1,10 +1,12 @@
 package testutil
 
 import (
+	"cmp"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -48,7 +50,8 @@ func RespondGraphQLError(w http.ResponseWriter, status int, message string) {
 // by matching the request's query string against handler keys. The first key
 // that appears as a substring of the query wins; keys are therefore evaluated
 // longest-first so specific mutation names take precedence over shorter
-// operation roots (e.g. "vulnerabilityDismiss" matches before "vulnerability").
+// operation roots (e.g. "vulnerabilityDismiss" matches before "vulnerability"),
+// and keys of one length in lexical order.
 //
 // The request body is parsed into a [graphqlRequest], then reattached to r so
 // downstream handlers can read it again. Non-POST requests are rejected with
@@ -63,14 +66,11 @@ func RespondGraphQLError(w http.ResponseWriter, status int, message string) {
 //	    "vulnerabilityDismiss": handleDismissVulnerability,
 //	})
 func GraphQLHandler(handlers map[string]http.HandlerFunc) http.Handler {
-	// Sort keys longest-first so the most specific key matches first,
-	// avoiding non-deterministic map iteration when multiple keys match.
-	keys := make([]string, 0, len(handlers))
-	for k := range handlers {
-		keys = append(keys, k)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		return len(keys[i]) > len(keys[j])
+	// Sort keys longest-first so the most specific key matches first, and
+	// keys of one length lexically, so a query two of them match is routed
+	// the same way on every run rather than by map iteration.
+	keys := slices.SortedFunc(maps.Keys(handlers), func(a, b string) int {
+		return cmp.Or(cmp.Compare(len(b), len(a)), strings.Compare(a, b))
 	})
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

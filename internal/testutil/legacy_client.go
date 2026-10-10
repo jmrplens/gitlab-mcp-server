@@ -251,15 +251,13 @@ func awaitLegacyInitializeResponse(ctx context.Context, conn mcp.Connection, han
 		if msg == nil {
 			return errors.New("read during handshake: the connection answered no message and no error")
 		}
-		switch m := msg.(type) {
-		case *jsonrpc.Response:
-			if m.Error != nil {
-				return fmt.Errorf("initialize failed: %w", m.Error)
+		if response, ok := msg.(*jsonrpc.Response); ok {
+			if response.Error != nil {
+				return fmt.Errorf("initialize failed: %w", response.Error)
 			}
 			return nil
-		case *jsonrpc.Request:
-			respondLegacyRequest(ctx, conn, m, handler)
 		}
+		respondLegacyRequest(ctx, conn, msg, handler)
 	}
 }
 
@@ -271,19 +269,20 @@ func serveLegacyClient(ctx context.Context, conn mcp.Connection, handler ElicitH
 		if err != nil {
 			return
 		}
-		req, ok := msg.(*jsonrpc.Request)
-		if !ok {
-			continue
-		}
-		respondLegacyRequest(ctx, conn, req, handler)
+		respondLegacyRequest(ctx, conn, msg, handler)
 	}
 }
 
-// respondLegacyRequest handles one server-initiated request: elicitation
-// goes to the handler, pings are acknowledged, and anything else fails
-// with MethodNotFound. Notifications are ignored.
-func respondLegacyRequest(ctx context.Context, conn mcp.Connection, req *jsonrpc.Request, handler ElicitHandlerFunc) {
-	if !req.ID.IsValid() {
+// respondLegacyRequest handles one message the server sent: a request is
+// answered, elicitation by the handler, a ping with an empty result and
+// anything else with MethodNotFound, while a notification and a response are
+// ignored. It takes the message rather than the request because jsonrpc's set
+// of messages is closed, a request or a response, so asking here is the one
+// place the question has two answers: the handshake's wait has taken its own
+// response out before it calls this, and the serve loop has not.
+func respondLegacyRequest(ctx context.Context, conn mcp.Connection, msg jsonrpc.Message, handler ElicitHandlerFunc) {
+	req, ok := msg.(*jsonrpc.Request)
+	if !ok || !req.ID.IsValid() {
 		return
 	}
 	switch req.Method {

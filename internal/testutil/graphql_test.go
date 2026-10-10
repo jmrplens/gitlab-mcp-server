@@ -180,6 +180,36 @@ func TestGraphQLHandler_LongestKeyWinsAndRestoresBody(t *testing.T) {
 	}
 }
 
+// TestGraphQLHandler_KeysOfOneLength_RouteTheSameEveryTime verifies that two
+// keys of the same length that a query both carries are tried in one order
+// whatever order the map hands them out in, so a mock answers a run the way it
+// answered the last one. Ordering by length alone left such a tie to map
+// iteration, which Go randomizes, so the same test could reach either handler.
+// The handler is built many times because one build can land on the right
+// order by chance.
+func TestGraphQLHandler_KeysOfOneLength_RouteTheSameEveryTime(t *testing.T) {
+	const body = `{"query":"query { alpha beta }"}`
+	for range 64 {
+		var called string
+		handler := GraphQLHandler(map[string]http.HandlerFunc{
+			"beta": func(w http.ResponseWriter, _ *http.Request) {
+				called = "beta"
+				RespondGraphQL(w, http.StatusOK, `{}`)
+			},
+			"alph": func(w http.ResponseWriter, _ *http.Request) {
+				called = "alph"
+				RespondGraphQL(w, http.StatusOK, `{}`)
+			},
+		})
+
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/graphql", strings.NewReader(body))
+		handler.ServeHTTP(httptest.NewRecorder(), req)
+		if called != "alph" {
+			t.Fatalf("called = %q, want alph: keys of one length are tried in lexical order", called)
+		}
+	}
+}
+
 // graphqlFailReader is an [io.ReadCloser] whose Read method always returns an
 // error. It is used to simulate a client that disconnects mid-request when
 // validating the failure-handling paths of [GraphQLHandler] and
