@@ -110689,6 +110689,10 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "hidden_items": {
+          "description": "Items of this page GitLab answered as null with no error, which it does for an item the credential may not read. They are left out of resources",
+          "type": "integer"
+        },
         "next_steps": {
           "items": {
             "type": "string"

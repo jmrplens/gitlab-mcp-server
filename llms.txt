@@ -57,7 +57,7 @@ Configuration (environment variables, stdio mode). Settings this project defines
 - GITLAB_MCP_CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny (minimal also drops resource subscriptions)
 - GITLAB_MCP_READ_ONLY: Remove mutating operations per action; reads keep working (default: false)
 - GITLAB_MCP_SAFE_MODE: Answer a mutating action with a JSON preview naming it instead of running it; reads keep working (default: false). GITLAB_MCP_READ_ONLY takes precedence
-- GITLAB_MCP_TIER: Licensing tier (free/ce, premium, ultimate); unset detects it from the instance license, then from the plans of the namespaces the token administers, falling back to free. Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools
+- GITLAB_MCP_TIER: Licensing tier (free/ce, premium, ultimate); unset detects it from the instance license, then from the plans of the namespaces the token administers, then on GitLab.com from the plans of the top-level groups the token is a member of, falling back to free. Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools
 - GITLAB_MCP_LOG_LEVEL: debug, info (default), warn, error. Logs go to stderr; stdout carries nothing but JSON-RPC
 - GITLAB_MCP_ENV_FILE: One dotenv file to load besides `~/.gitlab-mcp-server.env`; give an absolute path
 

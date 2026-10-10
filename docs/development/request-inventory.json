@@ -9761,9 +9761,7 @@
       "path": "/import/bitbucket",
       "body": [
         "bitbucket_api_token",
-        "bitbucket_app_password",
         "bitbucket_email",
-        "bitbucket_username",
         "new_name",
         "repo_path",
         "target_namespace"
@@ -11595,6 +11593,19 @@
         "priority"
       ],
       "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/labels",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/projects/:project_id/labels/:label_id",
+      "query": [
+        "name"
+      ],
+      "identifiers": {
+        ":label_id": 1,
         ":project_id": 1
       }
     },
@@ -14745,6 +14756,7 @@
         "package_registry_access_level",
         "packages_enabled",
         "pages_access_level",
+        "path",
         "public_jobs",
         "remove_source_branch_after_merge",
         "reviewer_assignment_strategy",
