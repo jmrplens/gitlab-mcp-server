@@ -76,6 +76,11 @@ for the fork, branch, fix, test and MR workflow.
   - [The board structs miss keys GitLab sends on a board and its lists](#the-board-structs-miss-keys-gitlab-sends-on-a-board-and-its-lists)
   - [No client-go helper returns the RFC 6750 fields of a token refusal](#no-client-go-helper-returns-the-rfc-6750-fields-of-a-token-refusal)
   - [The target branch rule methods discard GraphQL errors](#the-target-branch-rule-methods-discard-graphql-errors)
+  - [The Terraform state documents select neither a state's versions nor when it will be deleted](#the-terraform-state-documents-select-neither-a-states-versions-nor-when-it-will-be-deleted)
+  - [The scan profile status document selects the profile's id, name and type and nothing else](#the-scan-profile-status-document-selects-the-profiles-id-name-and-type-and-nothing-else)
+  - [The work item documents select neither the decision log nor the development widget](#the-work-item-documents-select-neither-the-decision-log-nor-the-development-widget)
+  - [The work item documents leave out fields GitLab sends on a work item](#the-work-item-documents-leave-out-fields-gitlab-sends-on-a-work-item)
+  - [The saved view documents leave out who made a view, when it changed and how to share it](#the-saved-view-documents-leave-out-who-made-a-view-when-it-changed-and-how-to-share-it)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -319,6 +324,11 @@ readable without opening the tracker:
 | 101 | client-go | [The board structs miss keys GitLab sends on a board and its lists](#the-board-structs-miss-keys-gitlab-sends-on-a-board-and-its-lists) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), open, commit 6, beside rows 96 and 98 | No | No; the keys are read around the SDK | Yes; four requests of our own on the group board routes, and the captured response everywhere else; [issue 1283](https://github.com/jmrplens/gitlab-mcp-server/issues/1283) moves three of the four to client-go |
 | 102 | gitlab-org/orbit/knowledge-graph | [The pinned version check stops with "no merge base" on forks and long branches](#the-pinned-version-check-stops-with-no-merge-base-on-forks-and-long-branches) | Yes, by the merge request | Yes, [gitlab-org/orbit/knowledge-graph!2746](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2746), merged | **Yes**, on `main` on 2026-10-09; CI only, so no release carries it | No | Not needed |
 | 103 | client-go | [The target branch rule methods discard GraphQL errors](#the-target-branch-rule-methods-discard-graphql-errors) | No | No | No | No | Yes, the three handlers read the refusal from the captured answer |
+| 104 | client-go | [The Terraform state documents select neither a state's versions nor when it will be deleted](#the-terraform-state-documents-select-neither-a-states-versions-nor-when-it-will-be-deleted) | No; a commit for [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) is prepared and waits on a second review | No | No | No | None possible |
+| 105 | client-go | [The scan profile status document selects the profile's id, name and type and nothing else](#the-scan-profile-status-document-selects-the-profiles-id-name-and-type-and-nothing-else) | No; a commit for [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) is prepared and waits on a second review | No | No | No | None possible |
+| 106 | client-go | [The work item documents select neither the decision log nor the development widget](#the-work-item-documents-select-neither-the-decision-log-nor-the-development-widget) | No; a commit for [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) is prepared and waits on a second review | No | No | No | None possible |
+| 107 | client-go | [The work item documents leave out fields GitLab sends on a work item](#the-work-item-documents-leave-out-fields-gitlab-sends-on-a-work-item) | No; not yet decided | No | No | No | None possible |
+| 108 | client-go | [The saved view documents leave out who made a view, when it changed and how to share it](#the-saved-view-documents-leave-out-who-made-a-view-when-it-changed-and-how-to-share-it) | No; not yet decided | No | No | No | None possible |
 | 109 | gitlab-org/gitlab | [The releases list caches one rendering for both values of `include_html_description`](#the-releases-list-caches-one-rendering-for-both-values-of-include_html_description) | Yes, by another user, [gitlab-org/gitlab#588980](https://gitlab.com/gitlab-org/gitlab/-/issues/588980), which the merge request closes | Yes, [gitlab-org/gitlab!261176](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261176), open, in milestone 19.5, the backend review pending | No | No; `release.list` can answer the other variant for five minutes | None taken |
 | 110 | gitlab-org/gitlab | [The API pages list access levels the API refuses](#the-api-pages-list-access-levels-the-api-refuses) | Yes, by the merge request | Yes, [gitlab-org/gitlab!261285](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261285), open, the documentation review pending | No | No; a refused value is answered 400, except that `access.approve_project` and `access.approve_group` grant Developer for `0` and report as approved a request that `5` leaves pending where GitLab does not accept it | None yet; this server's own schemas offer refused values: eleven filters `5` (six of them `60` too), six writes `0`, five project writes `5` and the group member update `60`; #1280 tracks it |
 | 111 | gitlab-org/gitlab | [The forks list returns statistics when asked not to](#the-forks-list-returns-statistics-when-asked-not-to) | Yes, [gitlab-org/gitlab#633318](https://gitlab.com/gitlab-org/gitlab/-/issues/633318) | No | No | No; `project.list_forks` with `statistics: false` answers every fork's statistics, and an administrator's `project.list_user_starred` with `with_custom_attributes: false` the custom attributes | None taken |
@@ -5785,6 +5795,222 @@ without its object from one it refused, for each of the 20 writes of row 88.
 
 **Effort**: small, as for row 19: `if len(result.Errors) != 0 { return ...,
 &GraphQLResponseError{...} }` in each method, and a test each.
+
+### The Terraform state documents select neither a state's versions nor when it will be deleted
+
+- **Reported**: no. A commit is prepared for
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
+  on a local branch of the merge request's source branch, and waits on this
+  project's second review of it and its text before it is pushed.
+- **In review**: no.
+- **Merged**: no. v3.17.0 and the merge request's branch at `cc6c70bf` send
+  the same two documents as v3.15.0.
+- **Blocking**: no.
+- **Workaround**: none possible. Both documents are format strings inside
+  `terraform_states.go`, and a caller cannot add a field to either.
+
+**Where**: `terraform_states.go`, `List` and `Get`.
+
+**What**: the two documents select a state's name, its four timestamps and
+its latest version's serial, download path and two timestamps. The pinned
+schema (19.5.0-pre) offers more, and nothing reaches a caller:
+
+- `TerraformState.versions(...)`, every version of the state, which GitLab
+  added in 19.5.
+- `TerraformState.permanentDeletionAt`, when a deleted state is removed for
+  good, which GitLab added in 19.5 and marks an experiment.
+- `TerraformState.lockedByUser`, who holds the state's lock.
+- `TerraformStateVersion.createdByUser` and `.job`, who and which CI job wrote
+  the latest version.
+
+Three more are left out on purpose, and the client-go run of
+`cmd/audit_graphql_shapes` holds each to a declaration saying why: the
+state's and the version's GraphQL `id`, which no client-go method takes, and
+`protectionRuleExists`, an experiment since 19.0.
+
+**The commit** (`39a394ce` on the local branch) answers the two 19.5 fields
+of the decision of 2026-10-10 on issue 1022. Neither joins `List` and `Get`,
+because GitLab refuses a whole document that names a field it does not
+have, so selecting one there would break both methods on every earlier
+GitLab: `ListVersions` pages through `versions` instead, most recent first,
+and `ListWithOptions` and `GetWithOptions` select `permanentDeletionAt` when
+a caller asks for it. When the project or state asked for is null and
+GitLab sent errors, the methods now return GitLab's errors rather than
+`ErrNotFound`: an answer with no data at all, which is how GitLab refuses a
+document, and a project or state answered null beside an error GitLab met
+resolving it. A null with no errors is still `ErrNotFound`. `lockedByUser` and the latest version's `createdByUser` and
+`job`, which every GitLab serving Terraform states over GraphQL has served,
+are not in the commit: whether they join the default documents is not yet
+decided.
+
+The latest version's own `createdAt` and `updatedAt`, which the issue lists
+beside these, are not a client-go gap: both documents select them and
+`TerraformStateVersion` decodes them. That gap is this server's, whose state
+output publishes the latest version's serial and download path and not its
+times.
+
+**How we found it**: issue 1022, by hand when the GraphQL pin moved from
+19.4.0-pre to 19.5.0-pre, and from then on by the client-go run of
+`cmd/audit_graphql_shapes` (`make check-graphql-sdk-shapes`), whose
+declarations for these fields name this row and go stale on the client-go
+bump that brings the commit.
+
+**Effort**: small. A paged method and an options pair, with their tests
+and the regenerated mock; three more fields on two documents if they are
+decided.
+
+### The scan profile status document selects the profile's id, name and type and nothing else
+
+- **Reported**: no. A commit is prepared for
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
+  on a local branch of the merge request's source branch, and waits on this
+  project's second review of it and its text before it is pushed.
+- **In review**: no.
+- **Merged**: no. v3.17.0 and the merge request's branch at `cc6c70bf` send
+  the same document as v3.15.0.
+- **Blocking**: no.
+- **Workaround**: none possible; `scanProfileStatusesQuery` is a private
+  constant.
+
+**Where**: `security_scan_profiles.go`, `ListProjectScanProfileStatuses`.
+
+**What**: the document selects each status and its profile's `id`, `name`
+and `scanType`. GitLab also sends the status's two consecutive scan counters,
+the time of its last scan and the job that last updated it, and the profile's
+description, whether GitLab recommends it, its two timestamps, the number of
+projects it is attached to (`projectCount`, an experiment new in 19.5) and
+its trigger settings, each trigger with its effective configuration
+(`triggerSettings`, an experiment since 19.3, whose `ScanProfileConfiguration`
+union grew from two members to seven in 19.4). Two more are left out on
+purpose: `configuration`, a JSON experiment holding the effective
+configuration of one trigger that `triggerSettings` carries typed, and
+`triggers`, the trigger types the settings already name.
+
+**The commit** (`19365a55` on the local branch) answers the two fields of the
+decision of 2026-10-10 on issue 1022.
+`ListProjectScanProfileStatusesWithOptions` selects `projectCount` and
+`triggerSettings` when a caller asks for them, the configuration decoded into
+one struct whose `Type` names the member, since an earlier GitLab refuses a
+document naming the field or the newer union members; the default document
+is unchanged. A union member the document does not name, such as the
+`DependencyScanningConfiguration` gitlab.com has served since 5 October,
+arrives with its type alone. `ScanProfile` gains a slice, so it and the
+`ScanProfileStatus` that embeds it stop being comparable with `==`, which the
+merge request's description adds to the comparability decision it already
+asks for. The status fields and the profile's
+description, recommendation and timestamps, which GitLab has served since it
+first served `scanProfileStatuses` in 19.0, are not in the commit: whether
+they join the default document is not yet decided.
+
+**How we found it**: issue 1022, by hand when the GraphQL pin moved to
+19.5.0-pre, and from then on by the client-go run of
+`cmd/audit_graphql_shapes`, whose declarations name this row.
+
+**Effort**: small to medium: a union decoded into one struct per trigger
+setting, with its tests and the regenerated mock; eight fields on the
+default document if they are decided.
+
+### The work item documents select neither the decision log nor the development widget
+
+- **Reported**: no. A commit is prepared for
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  on top of its commit 8, which built the get, create and update documents
+  from the `ReturnedFields` registry, and waits on this project's second
+  review of it and its text before it is pushed.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: none possible.
+
+**Where**: `workitems.go`, the work item field registry.
+
+**What**: GitLab 19.4 added the decision log widget
+(`WorkItemFeatures.decisionLog`, and `DECISION_LOG` to `WorkItemWidgetType`),
+Enterprise only and an experiment field by field, whose decisions GitLab
+resolves for one work item per request, and the development widget's
+`closingMergeRequestsCount`. The 19.4.0-pre pin predates both, which is why
+they surfaced with the 19.5.0-pre one. The work item fragment selects
+neither widget. client-go models no `WorkItemWidgetType`, so the enum value
+needs nothing of its own.
+
+**The commit** (`68679788` on the local branch): `decisionLog` and
+`development` join the registry as fields `ReturnedFields` selects and the
+default selection of get, create and update leaves out, since an earlier
+GitLab refuses both and Community Edition refuses the decision log.
+`ListWorkItems` refuses `decisionLog` before sending anything, because GitLab
+resolves decisions for one work item per request.
+
+**How we found it**: issue 1022, by hand when the GraphQL pin moved to
+19.5.0-pre, and from then on by the client-go run of
+`cmd/audit_graphql_shapes`, which reads through a work item's features to
+each widget the documents do not select.
+
+**Effort**: small: two registry entries, the structs they decode into, and a
+test each.
+
+### The work item documents leave out fields GitLab sends on a work item
+
+- **Reported**: no. Found on 2026-10-10 and not yet decided: whether these join
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
+  is this project's call.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: none possible.
+
+**Where**: `workitems.go`, the work item fragment the get, create, update and
+list documents share.
+
+**What**: the fragment selects none of these, each of which GitLab sends on
+a work item that has it and a caller of a work item tool would read:
+
+- `reference`, `userDiscussionsCount`, `hidden` and `imported`;
+- `duplicatedToWorkItemUrl`, `movedToWorkItemUrl` and `promotedToEpicUrl`,
+  where a closed work item went;
+- the description (who edited it last, when, and the task completion) and
+  time tracking widgets, and the custom fields and progress widgets, which
+  GitLab attaches only where the licence that enables each (custom fields,
+  and OKRs) is held;
+- the linked items widget's `blocked`, `blockedByCount` and `blockingCount`,
+  and the date and state of each link (`linkCreatedAt`, `linkUpdatedAt`,
+  `workItemState`);
+- the start and due date widget's `isFixed` and the milestone or work item
+  each date is inherited from.
+
+Everything else the schema offers on a work item and its widgets is left out
+on purpose, and the client-go run of `cmd/audit_graphql_shapes` holds each
+to a declaration saying why: an experiment, a deprecated field, a value about
+the viewer, a rendering for the web interface, a reference to another
+domain's object, or a part of GitLab this server serves no tool for.
+
+**How we found it**: the client-go run of `cmd/audit_graphql_shapes`, issue
+1022, against v3.15.0 and the 19.5.0-pre pin.
+
+**Effort**: small per field; most are a line in the fragment and a field on
+the struct.
+
+### The saved view documents leave out who made a view, when it changed and how to share it
+
+- **Reported**: no. Found on 2026-10-10 and not yet decided, like
+  [row 107](#the-work-item-documents-leave-out-fields-gitlab-sends-on-a-work-item).
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: none possible.
+
+**Where**: `work_item_saved_views.go`, every saved view document.
+
+**What**: none selects the view's `author`, `updatedAt` or `shareUrl`, and the
+get document, which selects the filters, does not select `filterWarnings`,
+GitLab's warnings about filter values it could not apply, which it resolves
+once per request as it does the filters. `lastUpdatedBy` is left out on
+purpose as an experiment, and `private` as a field GitLab deprecated for the
+`isPrivate` the documents select.
+
+**How we found it**: the client-go run of `cmd/audit_graphql_shapes`, issue
+1022.
+
+**Effort**: small: four fields and their tests.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
