@@ -3,7 +3,8 @@
 // pipelines_latest_test.go covers what pipeline.latest answers when the
 // commit at the head of the ref has no pipeline on it. GitLab's route answers
 // 403 then, the same status it gives a caller who may not read pipelines, and
-// the action falls back to the newest pipeline on the same ref and says so.
+// the action falls back to the newest pipeline on the same ref and says so,
+// as do the latest_pipeline resource and the two prompts that read it.
 // The fixture reaches that state the way a project that runs merge request
 // pipelines and no push pipelines does: a head commit whose push workflow:rules
 // skips, and a branch with an open merge request, whose head has the merge
@@ -12,14 +13,17 @@
 package common
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
@@ -74,6 +78,15 @@ type headWithoutPipeline struct {
 // request's ref. On the feature branch it is the branch pipeline of its
 // earlier commit, although the merge request's pipeline of the head is the
 // first row GitLab's list gives for that branch.
+//
+// The other readers of the same route are held to the same answer (issue
+// 1242): the latest_pipeline resource and the summarize_pipeline_status and
+// project_health_check prompts, which read the default branch's latest
+// pipeline: the resource used to answer GitLab's 403 with the generic
+// sentence naming a Maintainer or Owner role, the summary passed GitLab's bare
+// "403 Forbidden" on, and the health check wrote N/A. They
+// address the server by a URI or a name rather than through a tool, and are
+// the same on every surface, so they are read once, on the default one.
 func TestPipeline_Latest_HeadCommitWithoutPipeline_ShowsTheEarlierOne(t *testing.T) {
 	e := harness.New(t)
 
@@ -86,7 +99,69 @@ func TestPipeline_Latest_HeadCommitWithoutPipeline_ShowsTheEarlierOne(t *testing
 		assertLatestFallsBack(e, s, onDefault, "with the default branch named", withParams(byProject, map[string]any{"ref": f.project.DefaultBranch}))
 		onFeature := latestFallback{ref: f.feature, earlier: f.featureEarlier.SHA, head: f.featureHead.SHA}
 		assertLatestFallsBack(e, s, onFeature, "with the feature branch named", withParams(byProject, map[string]any{"ref": f.feature}))
+
+		if surface == harness.SurfaceDynamic {
+			assertLatestResourceFallsBack(e, s, f.project, onDefault)
+			assertLatestPromptsFallBack(e, s, f.project, onDefault)
+		}
 	})
+}
+
+// assertLatestResourceFallsBack reads the latest_pipeline resource of the
+// project and holds it to want, as pipeline.latest answers without a ref: the
+// earlier commit's pipeline on the default branch, the head commit beside it
+// and the note.
+func assertLatestResourceFallsBack(e *harness.Env, s *harness.Session, project fixture.Project, want latestFallback) {
+	e.T.Helper()
+
+	uri := "gitlab://project/" + project.IDParam() + "/pipelines/latest"
+	result := s.ReadResource(uri)
+	if len(result.Contents) == 0 {
+		e.T.Fatalf("%s answered with no contents", uri)
+	}
+	var latest resources.LatestPipelineResourceOutput
+	if err := json.Unmarshal([]byte(result.Contents[0].Text), &latest); err != nil {
+		e.T.Fatalf("decoding %s: %v", uri, err)
+	}
+	if latest.Ref != want.ref || latest.SHA != want.earlier {
+		e.T.Errorf("%s answered pipeline %d on %q at %s, want a pipeline on %s at the earlier commit %s",
+			uri, latest.ID, latest.Ref, fixture.ShortSHA(latest.SHA), want.ref, fixture.ShortSHA(want.earlier))
+	}
+	if latest.HeadSHA != want.head {
+		e.T.Errorf("%s head_sha = %q, want the head commit %s", uri, latest.HeadSHA, want.head)
+	}
+	if !strings.Contains(latest.FallbackNote, "earlier commit") {
+		e.T.Errorf("%s fallback_note = %q, want it to say the pipeline ran for an earlier commit", uri, latest.FallbackNote)
+	}
+}
+
+// assertLatestPromptsFallBack renders the two prompts that read the latest
+// pipeline of the project's default branch and holds each to want: the
+// earlier commit's pipeline, the head commit beside it and the note, where
+// the summary used to be refused with GitLab's bare 403 and the health check
+// to read N/A.
+func assertLatestPromptsFallBack(e *harness.Env, s *harness.Session, project fixture.Project, want latestFallback) {
+	e.T.Helper()
+
+	for _, name := range []string{"summarize_pipeline_status", "project_health_check"} {
+		result := s.GetPrompt(name, map[string]string{"project_id": project.IDParam()})
+		if len(result.Messages) == 0 {
+			e.T.Fatalf("prompt %s answered with no message", name)
+		}
+		content, ok := result.Messages[0].Content.(*mcp.TextContent)
+		if !ok {
+			e.T.Fatalf("prompt %s answered %T, want text", name, result.Messages[0].Content)
+		}
+		for _, part := range []string{
+			"**SHA**: " + fixture.ShortSHA(want.earlier),
+			"**Head SHA**: " + fixture.ShortSHA(want.head),
+			"earlier commit",
+		} {
+			if !strings.Contains(content.Text, part) {
+				e.T.Errorf("prompt %s does not hold %q:\n%s", name, part, content.Text)
+			}
+		}
+	}
 }
 
 // The bounds of the wait for the merge request's pipeline of the feature

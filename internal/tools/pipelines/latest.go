@@ -50,6 +50,18 @@ const (
 	noteHeadUnreadable      = "GitLab reports no latest pipeline for this ref, and the commit at its head could not be read: the ref does not exist, or the token cannot read the repository. This is the first pipeline on the ref that the pipeline list returns."
 )
 
+// latestFallbackMaxPages is how many pages of the pipeline list the fallback
+// reads at most looking for a row of the ref's own, see [firstPipelineOnRef]
+// (register row RQB-012). The walk has no other end while the rows are merge
+// request pipelines of the branch or from a source that does not set its
+// status, and the latest_pipeline resource runs it on every poll of a watch.
+const latestFallbackMaxPages = 10
+
+// errFallbackPagesRead is what the walk's page function returns in place of
+// a request once it has read latestFallbackMaxPages pages, which ends the
+// walk without sending one.
+var errFallbackPagesRead = errors.New("the fallback read every page it may")
+
 // danglingSources are the pipeline sources GitLab leaves out of the latest
 // pipeline of a ref, because their pipelines do not set its status
 // (Enums::Ci::Pipeline.dangling_sources, which Project#latest_pipeline leaves
@@ -183,13 +195,16 @@ func getLatestFallback(ctx context.Context, client *gitlabclient.Client, input G
 // fine-grained token granted Pipeline: Read alone may. With a ref the
 // fallback does not read the project, so the error says to pass one. It is
 // written here rather than as a hint, because a hint on a refusal of a
-// fine-grained grant is dropped.
+// fine-grained grant is dropped. It names the action whose ref that is,
+// because the latest_pipeline resource and the summarize_pipeline_status and
+// project_health_check prompts read the latest pipeline through this function
+// too, and none of them has a ref to pass (issue 1242).
 func defaultBranch(ctx context.Context, client *gitlabclient.Client, projectID toolutil.StringOrInt) (string, error) {
 	project, _, err := client.GL().Projects.GetProject(string(projectID), nil, gl.WithContext(ctx))
 	if err != nil {
 		wrapped := toolutil.WrapErrWithMessage(opGetLatestDefaultBranch, err)
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return "", fmt.Errorf("%s: pass ref to name the branch or tag, because the project, which names the default branch, could not be read, and with a ref the fallback does not read it: %w", opGetLatest, wrapped)
+			return "", fmt.Errorf("%s: pass the branch or tag as the ref of pipeline.latest, because the project, which names the default branch, could not be read, and with a ref the fallback does not read it: %w", opGetLatest, wrapped)
 		}
 		return "", wrapped
 	}
@@ -204,19 +219,22 @@ func defaultBranch(ctx context.Context, client *gitlabclient.Client, projectID t
 // caller can read the project's pipelines is still open, so one row of the
 // project's whole pipeline list settles it: its refusal is the permission
 // refusal the latest route's 403 could not name, and its answer leaves the
-// ref as the one thing missing.
+// ref as the one thing missing, which the error names as pipeline.latest's
+// for the reason [defaultBranch] gives.
 func refUnknown(ctx context.Context, client *gitlabclient.Client, projectID toolutil.StringOrInt) error {
 	opts := &gl.ListProjectPipelinesOptions{PerPage: 1}
 	if _, _, err := client.GL().Pipelines.ListProjectPipelines(string(projectID), opts, gl.WithContext(ctx)); err != nil {
 		return listError(err)
 	}
-	return fmt.Errorf("%s: GitLab did not send the default branch of project %s, which it leaves out for a caller who cannot read the repository, so the ref whose latest pipeline is asked for is unknown. Pass ref to name a branch or tag", opGetLatest, projectID)
+	return fmt.Errorf("%s: GitLab did not send the default branch of project %s, which it leaves out for a caller who cannot read the repository, so the ref whose latest pipeline is asked for is unknown. Pass the branch or tag as the ref of pipeline.latest", opGetLatest, projectID)
 }
 
 // firstPipelineOnRef returns the ID of the first pipeline on ref the
 // project's list returns under the caller's filters, newest first unless the
 // caller ordered it otherwise, reading the list a page at a time until one
-// turns up.
+// turns up, and at most latestFallbackMaxPages pages: past them it answers
+// that the pages it read held no row of the ref's own, and says where to read
+// further.
 //
 // The list cannot be asked for that alone. For a branch it adds the pipelines
 // on the refs of every merge request the branch is the source of
@@ -259,10 +277,18 @@ func firstPipelineOnRef(ctx context.Context, client *gitlabclient.Client, input 
 	if listOpts.Sort == nil {
 		listOpts.Sort = new("desc")
 	}
+	read := 0
 	rows := gl.Scan2(func(page gl.PaginationOptionFunc) ([]*gl.PipelineInfo, *gl.Response, error) {
+		if read == latestFallbackMaxPages {
+			return nil, nil, errFallbackPagesRead
+		}
+		read++
 		return client.GL().Pipelines.ListProjectPipelines(string(input.ProjectID), listOpts, gl.WithContext(ctx), page)
 	})
 	for row, err := range rows {
+		if errors.Is(err, errFallbackPagesRead) {
+			return 0, fmt.Errorf("%s: no pipeline on ref %q in the %d pages of the pipeline list read: GitLab reports none for the commit at its head, and every row on those pages is a merge request pipeline of the branch or comes from a source that does not set the ref's status. Ask pipeline.latest for the ref with a source, such as push, or read further pages with pipeline.list", opGetLatest, ref, latestFallbackMaxPages)
+		}
 		if err != nil {
 			return 0, listError(err)
 		}
@@ -285,10 +311,18 @@ func listError(err error) error {
 
 // noPipelineOnRef is the error for a list that held no pipeline on ref. When
 // the caller's own filters may have emptied it, it names them, since the ref
-// itself may well have pipelines; otherwise it is the ref that has none.
+// itself may well have pipelines; otherwise it is the ref that has none. A
+// ref the caller named may be misspelled, so the error sends the caller to
+// check it. The default branch was read from the project rather than chosen,
+// and it is the one ref the latest_pipeline resource and the two prompts ever
+// read, so for it the error says the branch has no pipeline yet: checking a
+// ref nobody chose cannot help.
 func noPipelineOnRef(input GetLatestInput, ref string) error {
 	if filtersGiven(input) {
 		return fmt.Errorf("%s: no pipeline found on ref %q under the filters given: GitLab reports none for the commit at its head, and the pipeline list returns none on that ref that matches them. Drop the filters to ask for the newest pipeline on the ref", opGetLatest, ref)
+	}
+	if input.Ref == "" {
+		return fmt.Errorf("%s: no pipeline found on ref %q, the project's default branch: GitLab reports none for the commit at its head, and the pipeline list returns none on that ref, so the branch has no pipeline yet", opGetLatest, ref)
 	}
 	return fmt.Errorf("%s: no pipeline found on ref %q: GitLab reports none for the commit at its head, and the pipeline list returns none on that ref. Verify the ref with branch.get or tag.get", opGetLatest, ref)
 }

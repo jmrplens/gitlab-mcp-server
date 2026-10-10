@@ -15,6 +15,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -83,8 +84,8 @@ func groupMemberResourceOutput(member *gl.GroupMember) MemberResourceOutput {
 }
 
 // PipelineResourceOutput is the JSON payload returned by the pipeline
-// detail resources ("gitlab://project/{id}/pipelines/latest" and
-// "gitlab://project/{id}/pipeline/{pipeline_id}"). It contains the
+// detail resource ("gitlab://project/{id}/pipeline/{pipeline_id}"), and the
+// pipeline [LatestPipelineResourceOutput] embeds. It contains the
 // pipeline's ID, IID, status, ref, SHA, web URL, and source
 // ("push", "web", etc.).
 type PipelineResourceOutput struct {
@@ -95,6 +96,18 @@ type PipelineResourceOutput struct {
 	SHA    string `json:"sha"`
 	WebURL string `json:"web_url"`
 	Source string `json:"source"`
+}
+
+// LatestPipelineResourceOutput is the JSON payload of the
+// "gitlab://project/{id}/pipelines/latest" resource: the pipeline, and, when
+// GitLab has no pipeline for the commit at the head of the default branch and
+// the newest pipeline on the branch is shown instead, that head commit and the
+// note saying so, as pipeline.latest answers them. Both are left out of
+// GitLab's own answer.
+type LatestPipelineResourceOutput struct {
+	PipelineResourceOutput
+	HeadSHA      string `json:"head_sha,omitempty"`
+	FallbackNote string `json:"fallback_note,omitempty"`
 }
 
 // JobResourceOutput is the JSON payload for a single pipeline job
@@ -696,13 +709,21 @@ func registerProjectMembersResource(server registrar, base *gitlabclient.Client)
 // pipeline of the default branch. The description used to promise the
 // project's most recent pipeline, which is another one whenever a branch other
 // than the default ran last (issue 1169).
+//
+// It reads through pipeline.latest's own resolution ([pipelines.GetLatest])
+// rather than the route alone, because GitLab answers the route 403 both when
+// the commit at the head of the branch has no pipeline and when the caller may
+// not read pipelines, and only the reads the action makes after it tell the
+// two apart (issue 1242). The resource reported every such 403 as a role the
+// caller lacked, and a watch on it was refused for a project whose newest push
+// ran no pipeline.
 func registerLatestPipelineResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/pipelines/latest",
 		Name:        "latest_pipeline",
 		Title:       "Latest Pipeline",
 		MIMEType:    mimeJSON,
-		Description: "Get the latest CI/CD pipeline of a GitLab project's default branch. Returns pipeline ID, status (running/pending/success/failed/canceled), ref, SHA, source, and web URL.",
+		Description: "Get the latest CI/CD pipeline of a GitLab project's default branch. Returns pipeline ID, status (running/pending/success/failed/canceled), ref, SHA, source, and web URL. When the commit at the head of the branch has no pipeline, returns the newest pipeline on the branch with fallback_note saying so, and that commit in head_sha when it could be read.",
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconPipeline,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -711,12 +732,21 @@ func registerLatestPipelineResource(server registrar, base *gitlabclient.Client)
 		if projectID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
-		p, _, err := client.GL().Pipelines.GetLatestPipeline(projectID, &gl.GetLatestPipelineOptions{}, gl.WithContext(ctx))
+		latest, err := pipelines.GetLatest(ctx, client, pipelines.GetLatestInput{ProjectID: toolutil.StringOrInt(projectID)})
 		if err != nil {
-			return nil, wrapErr("failed to get latest pipeline", err)
+			// The action already described every answer GitLab gave, a
+			// refused pipeline list with the generic 403 sentence and then the
+			// one that names the role, so the error is wrapped as it came:
+			// classifying it again would repeat the generic sentence ahead of
+			// the action's own description, and prefix an error GitLab did not
+			// send, the branch with no pipeline, with "unexpected error".
+			return nil, toolutil.InternalError(fmt.Errorf("failed to get latest pipeline: %w", err))
 		}
-		out := pipelineToResourceOutput(p)
-		return marshalResourceJSON(out)
+		return marshalResourceJSON(LatestPipelineResourceOutput{
+			ID: latest.ID, IID: latest.IID, Status: latest.Status, Ref: latest.Ref,
+			SHA: latest.SHA, WebURL: latest.WebURL, Source: latest.Source,
+			HeadSHA: latest.HeadSHA, FallbackNote: latest.FallbackNote,
+		})
 	})
 }
 

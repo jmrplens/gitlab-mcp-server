@@ -4,6 +4,7 @@ package pipelines
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"slices"
@@ -406,6 +407,74 @@ func TestGetLatest_NoPipelineOnTheRefItself_SaysSo(t *testing.T) {
 	}
 }
 
+// ceilingGitLab is the stand-in for a branch whose own pipeline is on page
+// ownPage of the list, every page before it holding a merge request pipeline
+// of the branch and nothing else.
+func ceilingGitLab(ownPage int) *latestGitLab {
+	g := newLatestGitLab()
+	mrPage := `[` + listRow(102, latestMRHeadRef, "merge_request_event", latestHeadSHA) + `]`
+	for range ownPage - 1 {
+		g.listPages = append(g.listPages, mrPage)
+	}
+	g.listPages = append(g.listPages, latestListedRow)
+	return g
+}
+
+// listReads counts the requests g saw for the project's pipeline list.
+func (g *latestGitLab) listReads() int {
+	listed := 0
+	for _, seen := range g.requests() {
+		if strings.HasPrefix(seen, "GET "+pathProjectPipelines+"?") {
+			listed++
+		}
+	}
+	return listed
+}
+
+// TestGetLatest_ThePageCeiling_FindsTheRowOnTheLastPageItReads verifies the
+// bound on the walk, latestFallbackMaxPages pages of the list (register row
+// RQB-012), from the side it still answers: a branch whose own row is on the
+// last page the walk may read is found there, after exactly that many list
+// requests. The bound itself is pinned, since a change of it is a change of
+// policy and its own pull request.
+func TestGetLatest_ThePageCeiling_FindsTheRowOnTheLastPageItReads(t *testing.T) {
+	if latestFallbackMaxPages != 10 {
+		t.Fatalf("latestFallbackMaxPages = %d, want 10", latestFallbackMaxPages)
+	}
+	g := ceilingGitLab(latestFallbackMaxPages)
+
+	out, err := callLatest(t, g, GetLatestInput{})
+	if err != nil || out.ID != 99 {
+		t.Fatalf("GetLatest() = pipeline %d, %v, want pipeline 99", out.ID, err)
+	}
+	if got := g.listReads(); got != latestFallbackMaxPages {
+		t.Errorf("the list was read %d times, want %d", got, latestFallbackMaxPages)
+	}
+}
+
+// TestGetLatest_ThePageCeiling_StopsTheWalkPastIt verifies the walk ends at
+// the bound: the latest_pipeline resource polls it for as long as a watch on
+// it lasts, and on a branch whose rows are merge request pipelines nothing
+// else would end it. A branch whose own rows lie past the last page the walk
+// may read is answered with an error saying how far the walk read and where to
+// read further, after exactly that many list requests and with neither its
+// head nor a pipeline read.
+func TestGetLatest_ThePageCeiling_StopsTheWalkPastIt(t *testing.T) {
+	g := ceilingGitLab(latestFallbackMaxPages + 1)
+
+	_, err := callLatest(t, g, GetLatestInput{})
+	want := fmt.Sprintf(`no pipeline on ref "main" in the %d pages of the pipeline list read`, latestFallbackMaxPages)
+	if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "pipeline.list") {
+		t.Fatalf("GetLatest() error = %v, want it to say %q and name pipeline.list", err, want)
+	}
+	if got := g.listReads(); got != latestFallbackMaxPages {
+		t.Errorf("the list was read %d times, want %d", got, latestFallbackMaxPages)
+	}
+	if g.asked("GET /api/v4/projects/42/repository/commits/") || g.asked("GET /api/v4/projects/42/pipelines/99?") {
+		t.Errorf("a head or a pipeline was read past the ceiling: %v", g.requests())
+	}
+}
+
 // TestGetLatest_DanglingSources_CountOnlyWhenAskedFor verifies the other half
 // of what Project#latest_pipeline counts: the pipelines of the ref from a
 // source that sets its status, which leaves out a Web IDE terminal, an
@@ -505,24 +574,41 @@ func TestGetLatest_TheHeadLookupFails_ReturnsTheError(t *testing.T) {
 
 // TestGetLatest_NoPipelineOnTheRef_SaysSo verifies a ref the list holds no
 // pipeline for: the action answers with an error naming the ref, and reads
-// neither its head nor a pipeline.
+// neither its head nor a pipeline. What the error asks of the caller depends
+// on where the ref came from. A ref the caller named may be misspelled, so it
+// sends the caller to check it; the default branch was read from the project,
+// which the latest_pipeline resource and the two prompts always read, so it
+// says that branch has no pipeline yet, since checking a ref nobody chose
+// cannot help.
 func TestGetLatest_NoPipelineOnTheRef_SaysSo(t *testing.T) {
-	g := newLatestGitLab()
-	g.listBody = `[]`
-
-	_, err := callLatest(t, g, GetLatestInput{})
-	if err == nil {
-		t.Fatal("GetLatest() error = nil, want one saying main has no pipeline")
+	cases := []struct {
+		name    string
+		ref     string
+		says    string
+		notSays string
+	}{
+		{name: "the default branch", says: `ref "main", the project's default branch`, notSays: "branch.get"},
+		{name: "a ref the caller named", ref: "main", says: "Verify the ref with branch.get or tag.get", notSays: "default branch"},
 	}
-	for _, part := range []string{`"main"`, "no pipeline", "branch.get"} {
-		t.Run(part, func(t *testing.T) {
-			if !strings.Contains(err.Error(), part) {
-				t.Errorf("error = %q, want it to name %q", err, part)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := newLatestGitLab()
+			g.listBody = `[]`
+
+			_, err := callLatest(t, g, GetLatestInput{Ref: tc.ref})
+			if err == nil {
+				t.Fatal("GetLatest() error = nil, want one saying main has no pipeline")
+			}
+			if !strings.Contains(err.Error(), `no pipeline found on ref "main"`) || !strings.Contains(err.Error(), tc.says) {
+				t.Errorf("error = %q, want it to say main has no pipeline and %q", err, tc.says)
+			}
+			if strings.Contains(err.Error(), tc.notSays) {
+				t.Errorf("error = %q, want no %q", err, tc.notSays)
+			}
+			if g.asked("GET /api/v4/projects/42/repository/commits/") || g.asked("GET /api/v4/projects/42/pipelines/99") {
+				t.Errorf("a head or a pipeline was read for a ref with none: %v", g.requests())
 			}
 		})
-	}
-	if g.asked("GET /api/v4/projects/42/repository/commits/") || g.asked("GET /api/v4/projects/42/pipelines/99") {
-		t.Errorf("a head or a pipeline was read for a ref with none: %v", g.requests())
 	}
 }
 
@@ -654,13 +740,20 @@ func TestGetLatest_TheProjectCannotBeRead_ReturnsTheError(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), opGetLatestDefaultBranch) {
 		t.Fatalf("GetLatest() error = %v, want the project read's failure", err)
 	}
-	if strings.Contains(err.Error(), "pass ref") {
+	if strings.Contains(err.Error(), latestRefAdvice) {
 		t.Errorf("error = %q, want no pointer to ref for a project GitLab did not find", err)
 	}
 	if g.asked("GET " + pathProjectPipelines + "?") {
 		t.Errorf("the list was asked without a ref: %v", g.requests())
 	}
 }
+
+// latestRefAdvice is what an error the fallback cannot settle without a ref
+// tells its reader: to name the branch or tag as pipeline.latest's ref. It
+// names the action rather than a parameter, because the latest_pipeline
+// resource and the two prompts that read the latest pipeline read it too,
+// and none of them has a ref to pass (issue 1242).
+const latestRefAdvice = "as the ref of pipeline.latest"
 
 // TestGetLatest_TheProjectReadIsRefused_SaysToPassRef verifies a project
 // read GitLab refused after its latest route found the project: a token
@@ -682,7 +775,7 @@ func TestGetLatest_TheProjectReadIsRefused_SaysToPassRef(t *testing.T) {
 			g.projectStatus, g.projectBody = http.StatusForbidden, tc.body
 
 			_, err := callLatest(t, g, GetLatestInput{})
-			if err == nil || !strings.Contains(err.Error(), "pass ref") {
+			if err == nil || !strings.Contains(err.Error(), "pass the branch or tag "+latestRefAdvice) {
 				t.Fatalf("GetLatest() error = %v, want one saying to pass ref", err)
 			}
 			if !toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -710,7 +803,7 @@ func TestGetLatest_TheDefaultBranchIsWithheld_AsksTheListWhetherPipelinesCanBeRe
 		listBody   string
 		want       string
 	}{
-		{name: "pipelines readable", listBody: latestListedRow, want: "Pass ref"},
+		{name: "pipelines readable", listBody: latestListedRow, want: "Pass the branch or tag " + latestRefAdvice},
 		{name: "pipelines refused", listStatus: http.StatusForbidden, listBody: latestPlainRefusal, want: "needs the Reporter role or higher"},
 		{name: "list failed", listStatus: http.StatusInternalServerError, listBody: `{"message":"500 Internal Server Error"}`, want: opGetLatestFallback},
 	}

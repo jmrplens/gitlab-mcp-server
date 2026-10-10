@@ -23,6 +23,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -861,6 +862,174 @@ func TestLatestPipelineResource_DescribesTheDefaultBranchItReads(t *testing.T) {
 	}
 	if n := refs.Load(); n != 0 {
 		t.Errorf("%d request(s) named a ref, so GitLab read another branch than the description names", n)
+	}
+}
+
+// The commits the latest_pipeline fallback fixtures speak about: the head of
+// the default branch, which has no pipeline on it, and the earlier commit the
+// newest pipeline on the branch ran for.
+const (
+	latestHeadSHA    = "1111111111111111111111111111111111111111"
+	latestEarlierSHA = "2222222222222222222222222222222222222222"
+	latestURI        = "gitlab://project/42/pipelines/latest"
+	latestTemplate   = "gitlab://project/{project_id}/pipelines/latest"
+)
+
+// latestPipelineGitLab stands in for a project whose latest route answers 403,
+// as GitLab answers it both for a head commit with no pipeline and for a
+// caller who may not read pipelines. It answers the routes pipeline.latest
+// reads to tell the two apart: the project, which names main as the default
+// branch, the pipeline list of main, under listStatus and listBody, the commit
+// at the head of main, and pipeline 99 in full.
+func latestPipelineGitLab(listStatus int, listBody string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.EscapedPath() {
+		case "/api/v4/projects/42/pipelines/latest":
+			respondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+		case "/api/v4/projects/42":
+			respondJSON(w, http.StatusOK, `{"id":42,"default_branch":"main"}`)
+		case "/api/v4/projects/42/pipelines":
+			respondJSON(w, listStatus, listBody)
+		case "/api/v4/projects/42/repository/commits/main":
+			respondJSON(w, http.StatusOK, `{"id":"`+latestHeadSHA+`"}`)
+		case "/api/v4/projects/42/pipelines/99":
+			respondJSON(w, http.StatusOK, `{"id":99,"iid":7,"status":"success","source":"push","ref":"main","sha":"`+
+				latestEarlierSHA+`","web_url":"https://gitlab.example.com/g/p/-/pipelines/99"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+}
+
+// TestLatestPipelineResource_HeadWithoutPipeline_ShowsTheNewestOnTheDefaultBranch
+// is the case of issue 1242: the commit at the head of the default branch has
+// no pipeline, so GitLab answers the latest route 403, which the resource used
+// to report as a role the caller lacked. It answers as pipeline.latest does:
+// the newest pipeline on the branch, with the head commit beside it and the
+// note saying the pipeline ran for an earlier one.
+func TestLatestPipelineResource_HeadWithoutPipeline_ShowsTheNewestOnTheDefaultBranch(t *testing.T) {
+	session := newMCPSession(t, latestPipelineGitLab(http.StatusOK,
+		`[{"id":99,"status":"success","ref":"main","source":"push","sha":"`+latestEarlierSHA+`"}]`))
+
+	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: latestURI})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var latest LatestPipelineResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &latest); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if latest.ID != 99 || latest.Ref != "main" || latest.SHA != latestEarlierSHA {
+		t.Errorf("pipeline = %d on %q at %s, want 99 on main at %s", latest.ID, latest.Ref, latest.SHA, latestEarlierSHA)
+	}
+	if latest.HeadSHA != latestHeadSHA {
+		t.Errorf("head_sha = %q, want %q", latest.HeadSHA, latestHeadSHA)
+	}
+	if !strings.Contains(latest.FallbackNote, "earlier commit") {
+		t.Errorf("fallback_note = %q, want it to say the pipeline ran for an earlier commit", latest.FallbackNote)
+	}
+}
+
+// TestLatestPipelineResource_GitLabsOwnAnswer_CarriesNoFallback verifies the
+// latest route's own answer is the pipeline alone: no head commit and no note,
+// which the payload leaves out rather than sending empty.
+func TestLatestPipelineResource_GitLabsOwnAnswer_CarriesNoFallback(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/pipelines/latest" {
+			respondJSON(w, http.StatusOK, `{"id":100,"iid":10,"status":"running","ref":"main","sha":"abc12345","web_url":"https://gitlab.example.com/pipelines/100","source":"push"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: latestURI})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	text := result.Contents[0].Text
+	for _, field := range []string{`"head_sha"`, `"fallback_note"`} {
+		t.Run(field, func(t *testing.T) {
+			if strings.Contains(text, field) {
+				t.Errorf("payload = %s, want no %s for GitLab's own answer", text, field)
+			}
+		})
+	}
+	var latest LatestPipelineResourceOutput
+	if err = json.Unmarshal([]byte(text), &latest); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	want := PipelineResourceOutput{ID: 100, IID: 10, Status: "running", Ref: "main", SHA: "abc12345", WebURL: "https://gitlab.example.com/pipelines/100", Source: "push"}
+	if latest.PipelineResourceOutput != want {
+		t.Errorf("pipeline = %+v, want %+v", latest.PipelineResourceOutput, want)
+	}
+}
+
+// TestLatestPipelineResource_TheLatestRouteRefuses_TellsItsTwoMeaningsApart
+// verifies the two readings of the latest route's 403 the pipeline list
+// settles. A list refused as well is the caller's permission: the error names
+// the role that reads pipelines, and it keeps GitLab's 403, so a watch on the
+// resource stops rather than polling with a token that cannot read it. A list
+// holding no pipeline on the default branch is a branch with none: the error
+// says so and names no permission, and a watch would read that as a state that
+// can change, which is what a first pipeline on the branch would do.
+//
+// Each reading is the action's own sentence, said once: the generic
+// description of a 403 appears once in the first, which the action already
+// wrote ahead of its Reporter hint, and not at all in the second, and neither
+// is prefixed with the "unexpected error" a second classification of an error
+// GitLab did not send would write.
+func TestLatestPipelineResource_TheLatestRouteRefuses_TellsItsTwoMeaningsApart(t *testing.T) {
+	const generic403 = "your token lacks the required permissions"
+	cases := []struct {
+		name         string
+		listStatus   int
+		listBody     string
+		want         string
+		generic      int
+		inaccessible bool
+	}{
+		{name: "pipelines refused", listStatus: http.StatusForbidden, listBody: `{"message":"403 Forbidden"}`, want: "needs the Reporter role or higher", generic: 1, inaccessible: true},
+		{name: "no pipeline on the default branch", listStatus: http.StatusOK, listBody: `[]`, want: `no pipeline found on ref "main"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := latestPipelineGitLab(tc.listStatus, tc.listBody)
+
+			_, err := newMCPSession(t, handler).ReadResource(t.Context(), &mcp.ReadResourceParams{URI: latestURI})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("ReadResource() error = %v, want it to say %q", err, tc.want)
+			}
+			if got := strings.Count(err.Error(), generic403); got != tc.generic {
+				t.Errorf("ReadResource() error = %v, says %q %d times, want %d", err, generic403, got, tc.generic)
+			}
+			if strings.Contains(err.Error(), "unexpected error") {
+				t.Errorf("ReadResource() error = %v, want the action's own description with no second classification", err)
+			}
+			_, err = NewHandlerIndex(newTestClient(t, handler)).Read(t.Context(), latestTemplate, latestURI)
+			if got := errors.Is(subscriptions.TranslateReadError(err), subscriptions.ErrInaccessible); got != tc.inaccessible {
+				t.Errorf("a watch reads %v as inaccessible = %t, want %t", err, got, tc.inaccessible)
+			}
+		})
+	}
+}
+
+// TestLatestPipelineResource_TheDefaultBranchCannotBeRead_PointsToTheActionsRef
+// verifies the one answer only a ref settles: a token that may read pipelines
+// and not the project, which names the default branch. The resource has no
+// ref to pass, so the error names the action that takes one.
+func TestLatestPipelineResource_TheDefaultBranchCannotBeRead_PointsToTheActionsRef(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.EscapedPath() {
+		case "/api/v4/projects/42/pipelines/latest", "/api/v4/projects/42":
+			respondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	_, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: latestURI})
+	if err == nil || !strings.Contains(err.Error(), "pass the branch or tag as the ref of pipeline.latest") {
+		t.Fatalf("ReadResource() error = %v, want it to point to pipeline.latest's ref", err)
 	}
 }
 

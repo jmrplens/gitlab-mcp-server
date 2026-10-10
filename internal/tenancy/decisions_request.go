@@ -92,5 +92,13 @@ func requestDecisions() []Decision {
 			enforce(pkgGitLab, "GrantMaxBytes"),
 			enforce(pkgGitLab, "GrantMaxScopes"),
 			enforce(pkgGitLab, "WithResponseLimit")),
+		// The latest-pipeline fallback reads the pipeline list of one ref a
+		// page at a time until a row of the ref's own turns up, and on a
+		// branch whose rows are merge request pipelines or from a source that
+		// does not set its status nothing else ends the walk. The
+		// latest_pipeline resource runs it on every poll of a watch, so the
+		// pages one read sends are bounded where the walk is (issue 1242).
+		bound("RQB-012", "the pages of the pipeline list one latest-pipeline fallback reads",
+			enforce("internal/tools/pipelines", "latestFallbackMaxPages")),
 	}
 }

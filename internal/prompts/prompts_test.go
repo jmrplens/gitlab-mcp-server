@@ -352,6 +352,158 @@ func TestSummarizePipelineStatusPrompt_SubscriptionHint_NamesAURIThatRoutes(t *t
 	}
 }
 
+// The commits the latest-pipeline fallback fixtures speak about: the head of
+// the default branch, which has no pipeline on it, and the earlier commit the
+// newest pipeline on the branch ran for.
+const (
+	latestHeadSHA    = "1111111111111111111111111111111111111111"
+	latestEarlierSHA = "2222222222222222222222222222222222222222"
+)
+
+// latestPipelineGitLab stands in for a project whose latest-pipeline route
+// answers 403, as GitLab answers it both for a head commit with no pipeline
+// and for a caller who may not read pipelines. It answers what pipeline.latest
+// reads to tell the two apart (the project, which names main as the default
+// branch, the pipeline list of main under listStatus and listBody, the commit
+// at the head of main and pipeline 99 in full), and what the two prompts read
+// besides: the jobs of pipeline 99, the merge requests and the branches.
+func latestPipelineGitLab(listStatus int, listBody string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.EscapedPath() {
+		case pathPipelinesLatest:
+			respondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+		case "/api/v4/projects/42":
+			respondJSON(w, http.StatusOK, `{"id":42,"path_with_namespace":"g/p","default_branch":"main"}`)
+		case "/api/v4/projects/42/pipelines":
+			respondJSON(w, listStatus, listBody)
+		case "/api/v4/projects/42/repository/commits/main":
+			respondJSON(w, http.StatusOK, `{"id":"`+latestHeadSHA+`"}`)
+		case "/api/v4/projects/42/pipelines/99":
+			respondJSON(w, http.StatusOK, `{"id":99,"iid":7,"status":"failed","source":"push","ref":"main","sha":"`+
+				latestEarlierSHA+`","web_url":"https://gitlab.example.com/g/p/-/pipelines/99"}`)
+		case "/api/v4/projects/42/pipelines/99/jobs":
+			respondJSON(w, http.StatusOK, `[{"id":1,"name":"build","stage":"build","status":"failed","failure_reason":"script_failure"}]`)
+		case pathMRs, "/api/v4/projects/42/repository/branches":
+			respondJSON(w, http.StatusOK, `[]`)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+}
+
+// latestListedRow is the pipeline list of main holding pipeline 99, which ran
+// for the earlier commit.
+const latestListedRow = `[{"id":99,"status":"failed","ref":"main","source":"push","sha":"` + latestEarlierSHA + `"}]`
+
+// TestSummarizePipelineStatus_HeadWithoutPipeline_SummarizesTheNewestOnTheBranch
+// is the case of issue 1242: the commit at the head of the default branch has
+// no pipeline, so GitLab answers the latest route 403, which the prompt used
+// to hand the model as GitLab's bare "403 Forbidden", read as a permission
+// problem. It summarizes what
+// pipeline.latest answers instead, the newest pipeline on the branch and its
+// jobs, with the head commit and the note saying the pipeline ran for an
+// earlier one.
+func TestSummarizePipelineStatus_HeadWithoutPipeline_SummarizesTheNewestOnTheBranch(t *testing.T) {
+	text := getPromptText(t, latestPipelineGitLab(http.StatusOK, latestListedRow),
+		promptSummarizePipelineStatus, map[string]string{"project_id": "42"})
+
+	for _, want := range []string{
+		"# Pipeline #99 Status: FAILED",
+		"**SHA**: " + latestEarlierSHA[:8],
+		"**Head SHA**: " + latestHeadSHA[:8],
+		"**Note**: GitLab has no pipeline on this ref for the commit at its head",
+		"script_failure",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("prompt text does not hold %q:\n%s", want, text)
+			}
+		})
+	}
+}
+
+// TestSummarizePipelineStatus_TheLatestRouteRefuses_TellsItsTwoMeaningsApart
+// verifies the other readings of the latest route's 403: a pipeline list
+// refused as well is the caller's permission, and the error names the role
+// that reads pipelines; a list with no pipeline on the default branch is a
+// branch with none, and the error says so and names no permission.
+func TestSummarizePipelineStatus_TheLatestRouteRefuses_TellsItsTwoMeaningsApart(t *testing.T) {
+	cases := []struct {
+		name       string
+		listStatus int
+		listBody   string
+		want       string
+	}{
+		{name: "pipelines refused", listStatus: http.StatusForbidden, listBody: `{"message":"403 Forbidden"}`, want: "needs the Reporter role or higher"},
+		{name: "no pipeline on the default branch", listStatus: http.StatusOK, listBody: `[]`, want: `no pipeline found on ref "main"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := newMCPSession(t, latestPipelineGitLab(tc.listStatus, tc.listBody)).GetPrompt(t.Context(), &mcp.GetPromptParams{
+				Name: promptSummarizePipelineStatus, Arguments: map[string]string{"project_id": "42"},
+			})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("GetPrompt() error = %v, want it to say %q", err, tc.want)
+			}
+			if tc.listStatus == http.StatusOK && strings.Contains(err.Error(), "access denied") {
+				t.Errorf("GetPrompt() error = %v, want no permission named for a branch with no pipeline", err)
+			}
+		})
+	}
+}
+
+// TestProjectHealthCheck_HeadWithoutPipeline_ShowsTheNewestOnTheBranch verifies
+// the health check's pipeline section reads the latest pipeline the way
+// pipeline.latest does. A head commit with no pipeline used to leave the
+// section at N/A, which reads as nothing the project could have; it now shows
+// the newest pipeline on the default branch with the head commit and the note.
+func TestProjectHealthCheck_HeadWithoutPipeline_ShowsTheNewestOnTheBranch(t *testing.T) {
+	text := getPromptText(t, latestPipelineGitLab(http.StatusOK, latestListedRow),
+		"project_health_check", map[string]string{"project_id": "42"})
+
+	for _, want := range []string{
+		"## Latest Pipeline: FAILED",
+		"- **Ref**: main | **SHA**: " + latestEarlierSHA[:8],
+		"- **Head SHA**: " + latestHeadSHA[:8],
+		"- **Note**: GitLab has no pipeline on this ref for the commit at its head",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("prompt text does not hold %q:\n%s", want, text)
+			}
+		})
+	}
+}
+
+// TestLatestPipelinePrompts_GitLabsOwnAnswer_CarryNoFallback verifies the two
+// prompts write neither the head commit nor the note when the latest route
+// answered itself, so a pipeline that did run for the head reads as it did.
+func TestLatestPipelinePrompts_GitLabsOwnAnswer_CarryNoFallback(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/projects/42":
+			respondJSON(w, http.StatusOK, `{"id":42,"path_with_namespace":"g/p"}`)
+		case pathPipelinesLatest:
+			respondJSON(w, http.StatusOK, `{"id":100,"status":"success","ref":"main","sha":"abc12345","web_url":"https://gitlab.example.com/pipelines/100"}`)
+		case "/api/v4/projects/42/pipelines/100/jobs", pathMRs, "/api/v4/projects/42/repository/branches":
+			respondJSON(w, http.StatusOK, `[]`)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	for _, name := range []string{promptSummarizePipelineStatus, "project_health_check"} {
+		t.Run(name, func(t *testing.T) {
+			text := getPromptText(t, handler, name, map[string]string{"project_id": "42"})
+			if strings.Contains(text, "Head SHA") || strings.Contains(text, "**Note**") {
+				t.Errorf("prompt text names a fallback for GitLab's own answer:\n%s", text)
+			}
+			if !strings.Contains(text, "**URL**: https://gitlab.example.com/pipelines/100\n\n") {
+				t.Errorf("prompt text does not close the pipeline block after its URL:\n%s", text)
+			}
+		})
+	}
+}
+
 // TestSuggestMRReviewersPrompt_Success verifies that the suggest_mr_reviewers
 // prompt includes active members (excluding the MR author and blocked users)
 // as reviewer candidates.

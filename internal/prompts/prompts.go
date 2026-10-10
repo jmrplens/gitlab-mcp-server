@@ -14,6 +14,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -383,7 +384,7 @@ func registerSummarizePipelineStatusPrompt(server promptAdder, client *gitlabcli
 	addPrompt(server, &mcp.Prompt{
 		Name:        "summarize_pipeline_status",
 		Title:       toolutil.TitleFromName("summarize_pipeline_status"),
-		Description: "Summarize the latest CI/CD pipeline of a project's default branch. Groups up to 100 of its jobs by outcome (failed/passed/other) and includes failure reasons for debugging.",
+		Description: "Summarize the latest CI/CD pipeline of a project's default branch, or the newest pipeline on the branch when the commit at its head has none, saying so. Groups up to 100 of its jobs by outcome (failed/passed/other) and includes failure reasons for debugging.",
 		Icons:       toolutil.IconPipeline,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -396,17 +397,18 @@ func registerSummarizePipelineStatusPrompt(server promptAdder, client *gitlabcli
 // handleSummarizePipelineStatus fetches the latest pipeline and its jobs to
 // produce a pipeline status summary.
 //
-// The latest-pipeline route is asked with no ref, and GitLab answers that with
+// The latest pipeline is asked for with no ref, and GitLab answers that with
 // the latest pipeline of the default branch, which is what the description
 // names: the project's most recent pipeline is another one whenever a branch
-// other than the default ran last.
+// other than the default ran last. It is read through pipeline.latest's own
+// resolution, see [latestPipeline].
 func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
 		return nil, toolutil.InvalidParams(fmt.Errorf(fmtOneArgRequired, argProjectID))
 	}
 
-	pipeline, _, err := client.GL().Pipelines.GetLatestPipeline(projectID, &gl.GetLatestPipelineOptions{}, gl.WithContext(ctx))
+	pipeline, err := latestPipeline(ctx, client, projectID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest pipeline: %w", err)
 	}
@@ -419,7 +421,7 @@ func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Cli
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Pipeline #%d Status: %s\n\n", pipeline.ID, mdHeading(strings.ToUpper(pipeline.Status)))
 	fmt.Fprintf(&b, "**Ref**: %s | **SHA**: %s\n", mdInline(pipeline.Ref), mdInline(shortSHA(pipeline.SHA)))
-	fmt.Fprintf(&b, "**URL**: %s\n\n", mdInline(pipeline.WebURL))
+	writeLatestPipelineLines(&b, pipeline, "")
 
 	var failed, passed, other []string
 	for _, j := range jobs {
@@ -753,7 +755,7 @@ func registerProjectHealthCheckPrompt(server promptAdder, client *gitlabclient.C
 	addPrompt(server, &mcp.Prompt{
 		Name:        "project_health_check",
 		Title:       toolutil.TitleFromName("project_health_check"),
-		Description: "Project health assessment combining the latest pipeline of the default branch, up to 100 open merge requests, and branch hygiene (merged/stale counts among up to 100 branches). Provides actionable recommendations for project maintenance.",
+		Description: "Project health assessment combining the latest pipeline of the default branch (the newest on the branch when the commit at its head has none, saying so), up to 100 open merge requests, and branch hygiene (merged/stale counts among up to 100 branches). Provides actionable recommendations for project maintenance.",
 		Icons:       toolutil.IconHealth,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -788,16 +790,48 @@ func handleProjectHealthCheck(ctx context.Context, client *gitlabclient.Client, 
 	return promptResult(b.String()), nil
 }
 
-// writePipelineSection appends the latest pipeline status to the builder.
+// writePipelineSection appends the latest pipeline status to the builder, read
+// as [latestPipeline] reads it, and N/A when there is none to show.
 func writePipelineSection(ctx context.Context, b *strings.Builder, client *gitlabclient.Client, projectID string) {
-	pipeline, _, err := client.GL().Pipelines.GetLatestPipeline(projectID, &gl.GetLatestPipelineOptions{}, gl.WithContext(ctx))
+	pipeline, err := latestPipeline(ctx, client, projectID)
 	if err != nil {
 		b.WriteString("## Latest Pipeline: N/A\n\n")
 		return
 	}
 	fmt.Fprintf(b, "## Latest Pipeline: %s\n", mdHeading(strings.ToUpper(pipeline.Status)))
 	fmt.Fprintf(b, "- **Ref**: %s | **SHA**: %s\n", mdInline(pipeline.Ref), mdInline(shortSHA(pipeline.SHA)))
-	fmt.Fprintf(b, "- **URL**: %s\n\n", mdInline(pipeline.WebURL))
+	writeLatestPipelineLines(b, pipeline, "- ")
+}
+
+// latestPipeline reads the latest pipeline of the project's default branch
+// the way pipeline.latest reads it for a call that names no ref
+// ([pipelines.GetLatest]).
+//
+// GitLab answers the latest-pipeline route 403 both when the commit at the
+// head of the branch has no pipeline and when the caller may not read
+// pipelines, and only the reads the action makes after it tell the two apart
+// (issue 1242). Asking the route alone handed the summary GitLab's bare
+// "403 Forbidden", which reads as a permission problem, for a project whose
+// newest push ran no pipeline, and left the health check at N/A for it.
+func latestPipeline(ctx context.Context, client *gitlabclient.Client, projectID string) (pipelines.LatestOutput, error) {
+	return pipelines.GetLatest(ctx, client, pipelines.GetLatestInput{ProjectID: toolutil.StringOrInt(projectID)})
+}
+
+// writeLatestPipelineLines writes the rest of a latest pipeline's block, each
+// line opened with prefix: the head commit when the pipeline ran for an
+// earlier one, the URL, and the note pipeline.latest gives when the pipeline
+// is not GitLab's own answer; then the blank line that closes the block.
+func writeLatestPipelineLines(b *strings.Builder, pipeline pipelines.LatestOutput, prefix string) {
+	if pipeline.HeadSHA != "" {
+		fmt.Fprintf(b, "%s**Head SHA**: %s\n", prefix, mdInline(shortSHA(pipeline.HeadSHA)))
+	}
+	fmt.Fprintf(b, "%s**URL**: %s\n", prefix, mdInline(pipeline.WebURL))
+	if pipeline.FallbackNote != "" {
+		// The note is one of the two internal/tools/pipelines writes: the
+		// server's own prose, which names no value, so it is written as it is.
+		fmt.Fprintf(b, "%s**Note**: %s\n", prefix, pipeline.FallbackNote)
+	}
+	b.WriteString("\n")
 }
 
 // writeOpenMRsSection appends a list of open merge requests to the builder.

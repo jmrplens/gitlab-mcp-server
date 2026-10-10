@@ -52,7 +52,7 @@ func requirementIDs() []string {
 		{"AUT", 8},
 		{"DST", 3},
 		{"END", 5},
-		{"RQB", 11},
+		{"RQB", 12},
 	}
 	var ids []string
 	for _, f := range families {

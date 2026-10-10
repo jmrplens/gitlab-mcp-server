@@ -30,7 +30,7 @@ var specRequirementIDs = []string{
 	"DST-001", "DST-002", "DST-003",
 	"END-001", "END-002", "END-003", "END-004", "END-005",
 	"RQB-001", "RQB-002", "RQB-003", "RQB-004", "RQB-005", "RQB-006", "RQB-007",
-	"RQB-008", "RQB-009", "RQB-010", "RQB-011",
+	"RQB-008", "RQB-009", "RQB-010", "RQB-011", "RQB-012",
 }
 
 // TestDecisions_EveryRequirementHasOneRow holds the register to the
@@ -93,7 +93,10 @@ func TestDecisions_AreGroupedByQuestion(t *testing.T) {
 // is also why there was one ruled row fewer. AUT-007, the actions issue 952
 // withholds from a fine-grained session, is the thirty-fifth ruled row, and
 // AUT-008, what such a session's grant does not reach, the thirty-sixth;
-// RQB-011, the bounds on reading that grant, is the eleventh request bound.
+// RQB-011, the bounds on reading that grant, is the eleventh request bound,
+// and RQB-012, the pages the latest-pipeline fallback reads, which the
+// latest_pipeline resource runs on every poll of a watch (issue 1242), the
+// twelfth.
 func TestDecisions_DispositionCounts(t *testing.T) {
 	counts := map[Disposition]int{}
 	for _, d := range Decisions() {
@@ -108,7 +111,7 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		{"ruled", Ruled, 36},
 		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
-		{"request-bound", RequestBound, 11},
+		{"request-bound", RequestBound, 12},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if counts[tc.disposition] != tc.want {
@@ -986,7 +989,7 @@ func rowPins() map[string]rowPin {
 	}
 	for _, id := range []string{
 		"RQB-001", "RQB-002", "RQB-003", "RQB-004", "RQB-005", "RQB-006", "RQB-007",
-		"RQB-008", "RQB-009", "RQB-010", "RQB-011",
+		"RQB-008", "RQB-009", "RQB-010", "RQB-011", "RQB-012",
 	} {
 		pins[id] = rowPin{Allow, Bound, ClassP, RequestBound, KeyRequest, KeyRequest, KeyNone, KeyNone, nil}
 	}
