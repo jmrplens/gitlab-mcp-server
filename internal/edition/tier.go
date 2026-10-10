@@ -100,18 +100,25 @@ func TierFromEdition(edition string) Tier {
 // Plan field) to a [Tier]. The mapping follows GitLab's tier model, including
 // legacy plan names:
 //
-//   - "premium", "starter", "bronze", "silver" → [Premium]
-//   - "ultimate", "gold"                        → [Ultimate]
-//   - anything else (incl. "free", "", unknown) → [Free]
+//   - "premium", "starter", "bronze", "silver", "premium_trial" → [Premium]
+//   - "ultimate", "gold", "ultimate_trial",
+//     "ultimate_trial_paid_customer", "opensource"             → [Ultimate]
+//   - anything else (incl. "free", "", unknown)                 → [Free]
 //
 // Legacy paid plans (starter/bronze/silver) predate the Free/Premium/Ultimate
 // rename; they are mapped to [Premium] because their feature set corresponds to
 // the modern Premium tier. "gold" was the legacy name for Ultimate.
+//
+// The trial and program plans are GitLab.com's, reported as a namespace's
+// plan: GitLab files each under the license plan whose features it carries
+// (LICENSE_PLANS_TO_SAAS_PLANS in
+// ee/app/models/gitlab_subscriptions/features.rb), and a trial is served what
+// the plan it tries is served.
 func TierFromPlan(plan string) Tier {
 	switch strings.ToLower(strings.TrimSpace(plan)) {
-	case "premium", "starter", "bronze", "silver":
+	case "premium", "starter", "bronze", "silver", "premium_trial":
 		return Premium
-	case "ultimate", "gold":
+	case "ultimate", "gold", "ultimate_trial", "ultimate_trial_paid_customer", "opensource":
 		return Ultimate
 	default:
 		return Free
