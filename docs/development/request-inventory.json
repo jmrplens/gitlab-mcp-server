@@ -2375,7 +2375,9 @@
       "query": [
         "created_after",
         "created_before",
+        "cursor",
         "page",
+        "pagination",
         "per_page"
       ]
     },
@@ -2395,7 +2397,10 @@
       "path": "/groups/:group_id/audit_events",
       "query": [
         "created_after",
-        "created_before"
+        "created_before",
+        "cursor",
+        "pagination",
+        "per_page"
       ],
       "identifiers": {
         ":group_id": 1
@@ -2417,7 +2422,10 @@
       "method": "GET",
       "path": "/projects/:project_id/audit_events",
       "query": [
-        "created_after"
+        "created_after",
+        "cursor",
+        "pagination",
+        "per_page"
       ],
       "identifiers": {
         ":project_id": 1
@@ -4683,14 +4691,16 @@
       "method": "GET",
       "path": "/projects/:project_id/registry/repositories/:repository_id/tags",
       "query": [
+        "last",
         "order_by",
         "page_token",
         "pagination",
+        "per_page",
         "sort"
       ],
       "identifiers": {
         ":project_id": 3,
-        ":repository_id": 2
+        ":repository_id": 3
       }
     },
     {
@@ -9191,8 +9201,13 @@
       "kind": "rest",
       "method": "GET",
       "path": "/groups/:group_id/service_accounts",
+      "query": [
+        "cursor",
+        "pagination",
+        "per_page"
+      ],
       "identifiers": {
-        ":group_id": 1
+        ":group_id": 2
       }
     },
     {
@@ -9344,8 +9359,13 @@
       "kind": "rest",
       "method": "GET",
       "path": "/groups/:group_id/ssh_certificates",
+      "query": [
+        "id_after",
+        "pagination",
+        "per_page"
+      ],
       "identifiers": {
-        ":group_id": 1
+        ":group_id": 2
       }
     },
     {
@@ -10852,12 +10872,14 @@
         "confidential",
         "created_after",
         "created_before",
+        "cursor",
         "due_date",
         "iids[]",
         "in",
         "issue_type",
         "iteration_id",
         "labels",
+        "labels[]",
         "milestone",
         "my_reaction_emoji",
         "not[assignee_id]",
@@ -10866,6 +10888,7 @@
         "not[author_username]",
         "not[in]",
         "not[labels]",
+        "not[labels][]",
         "not[milestone]",
         "not[my_reaction_emoji]",
         "order_by",
@@ -11224,6 +11247,7 @@
       "method": "GET",
       "path": "/projects/:project_id/jobs",
       "query": [
+        "cursor",
         "include_retried",
         "order_by",
         "page",
@@ -14729,9 +14753,11 @@
         "order_by",
         "owned",
         "page",
+        "pagination",
         "per_page",
         "sort",
         "topic",
+        "topic[]",
         "with_programming_language"
       ]
     },
@@ -14968,8 +14994,11 @@
       "path": "/projects/:project_id/forks",
       "query": [
         "custom_attributes[tier]",
+        "id_after",
         "order_by",
         "owned",
+        "pagination",
+        "per_page",
         "search",
         "sort",
         "visibility"
@@ -15480,8 +15509,14 @@
       "kind": "rest",
       "method": "GET",
       "path": "/users/:user_id/contributed_projects",
+      "query": [
+        "id_after",
+        "order_by",
+        "pagination",
+        "per_page"
+      ],
       "identifiers": {
-        ":user_id": 1
+        ":user_id": 2
       }
     },
     {
@@ -15489,6 +15524,12 @@
       "kind": "rest",
       "method": "GET",
       "path": "/users/:user_id/projects",
+      "query": [
+        "id_after",
+        "order_by",
+        "pagination",
+        "per_page"
+      ],
       "identifiers": {
         ":user_id": 2
       }
@@ -15498,8 +15539,14 @@
       "kind": "rest",
       "method": "GET",
       "path": "/users/:user_id/starred_projects",
+      "query": [
+        "id_after",
+        "order_by",
+        "pagination",
+        "per_page"
+      ],
       "identifiers": {
-        ":user_id": 1
+        ":user_id": 2
       }
     },
     {
@@ -15565,6 +15612,7 @@
       "method": "GET",
       "path": "/projects/:project_id/service_accounts",
       "query": [
+        "cursor",
         "order_by",
         "page",
         "page_token",
@@ -17137,6 +17185,7 @@
       "method": "GET",
       "path": "/runners/:runner_id/jobs",
       "query": [
+        "cursor",
         "order_by",
         "page",
         "page_token",
@@ -17146,7 +17195,7 @@
         "status"
       ],
       "identifiers": {
-        ":runner_id": 2
+        ":runner_id": 3
       }
     },
     {
@@ -18442,6 +18491,7 @@
       "method": "GET",
       "path": "/projects/:project_id/uploads",
       "query": [
+        "id_after",
         "order_by",
         "page",
         "page_token",
@@ -18719,8 +18769,10 @@
       "method": "GET",
       "path": "/service_accounts",
       "query": [
+        "cursor",
         "order_by",
         "page",
+        "pagination",
         "per_page",
         "sort"
       ]
@@ -18885,6 +18937,7 @@
         "blocked",
         "created_after",
         "created_before",
+        "cursor",
         "custom_attributes[role]",
         "custom_attributes[team]",
         "exclude_active",

@@ -1285,7 +1285,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 - gitlab_project_list_invited_groups: List groups invited to a project.
 - gitlab_project_list_starrers: List a project's starrers.
 - gitlab_project_list_target_branch_rules: List a project's target branch rules.
-- gitlab_project_list_user_contributed: List projects a user contributed to.
+- gitlab_project_list_user_contributed: List projects a user contributed to, by offset pages only, since GitLab does not page this list by keyset.
 - gitlab_project_list_user_projects: List a user's owned projects.
 - gitlab_project_list_user_starred: List projects a user starred.
 - gitlab_project_list_users: List a project's users.
