@@ -2399,8 +2399,7 @@
         "created_after",
         "created_before",
         "cursor",
-        "pagination",
-        "per_page"
+        "pagination"
       ],
       "identifiers": {
         ":group_id": 1
@@ -2424,8 +2423,7 @@
       "query": [
         "created_after",
         "cursor",
-        "pagination",
-        "per_page"
+        "pagination"
       ],
       "identifiers": {
         ":project_id": 1
@@ -4695,7 +4693,6 @@
         "order_by",
         "page_token",
         "pagination",
-        "per_page",
         "sort"
       ],
       "identifiers": {
@@ -9203,8 +9200,7 @@
       "path": "/groups/:group_id/service_accounts",
       "query": [
         "cursor",
-        "pagination",
-        "per_page"
+        "pagination"
       ],
       "identifiers": {
         ":group_id": 2
@@ -9361,8 +9357,7 @@
       "path": "/groups/:group_id/ssh_certificates",
       "query": [
         "id_after",
-        "pagination",
-        "per_page"
+        "pagination"
       ],
       "identifiers": {
         ":group_id": 2
@@ -14998,7 +14993,6 @@
         "order_by",
         "owned",
         "pagination",
-        "per_page",
         "search",
         "sort",
         "visibility"
@@ -15510,10 +15504,7 @@
       "method": "GET",
       "path": "/users/:user_id/contributed_projects",
       "query": [
-        "id_after",
-        "order_by",
-        "pagination",
-        "per_page"
+        "pagination"
       ],
       "identifiers": {
         ":user_id": 2
@@ -15527,8 +15518,7 @@
       "query": [
         "id_after",
         "order_by",
-        "pagination",
-        "per_page"
+        "pagination"
       ],
       "identifiers": {
         ":user_id": 2
@@ -15542,8 +15532,7 @@
       "query": [
         "id_after",
         "order_by",
-        "pagination",
-        "per_page"
+        "pagination"
       ],
       "identifiers": {
         ":user_id": 2
