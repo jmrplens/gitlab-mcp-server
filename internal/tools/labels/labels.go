@@ -208,20 +208,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		opts.Description = new(input.Description)
 	}
 	if input.Priority != nil {
-		switch {
-		case *input.Priority > 0:
-			opts.Priority = gl.NewNullableWithValue(*input.Priority)
-		case *input.Priority == 0:
-			// Zero is the removal the schema promises, and it goes out as an
-			// explicit null: sending the number 0 would set a priority of
-			// zero, which is a priority rather than the absence of one.
-			opts.Priority = gl.NewNullNullable[int64]()
-		default:
-			// A negative is neither a priority GitLab accepts nor the removal
-			// zero asks for, and treating it as removal would perform a change
-			// the caller did not ask for on a value they got wrong.
-			return Output{}, errors.New("labelUpdate: priority must be zero or greater. Pass 0 to remove the label's priority, or a positive number to set one")
+		priority, err := updatedPriority(*input.Priority)
+		if err != nil {
+			return Output{}, err
 		}
+		opts.Priority = priority
 	}
 	if input.Archived != nil {
 		opts.Archived = input.Archived
@@ -258,6 +249,25 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 			"deleting project labels requires Maintainer or Owner role; group-inherited labels must be deleted at the group level")
 	}
 	return nil
+}
+
+// updatedPriority is the priority an update sends for the one a caller asked
+// for. Early returns rather than a tagless switch, so the mutation tool, which
+// cannot see a case expression, measures each condition.
+func updatedPriority(priority int64) (gl.Nullable[int64], error) {
+	if priority > 0 {
+		return gl.NewNullableWithValue(priority), nil
+	}
+	if priority == 0 {
+		// Zero is the removal the schema promises, and it goes out as an
+		// explicit null: sending the number 0 would set a priority of zero,
+		// which is a priority rather than the absence of one.
+		return gl.NewNullNullable[int64](), nil
+	}
+	// A negative is neither a priority GitLab accepts nor the removal zero
+	// asks for, and treating it as removal would perform a change the caller
+	// did not ask for on a value they got wrong.
+	return nil, errors.New("labelUpdate: priority must be zero or greater. Pass 0 to remove the label's priority, or a positive number to set one")
 }
 
 // labelSelector is the label argument client-go takes for an update or a

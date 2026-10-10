@@ -98,21 +98,19 @@ func decorateMemberRoleMeta(opts *toolutil.ActionSpecOptions, name string) {
 	if !ok {
 		return
 	}
+	// Usage and the aliases have catalog defaults an empty entry must not
+	// blank. The other three have none, so an empty value copied over them
+	// leaves what was there, and a guard would be a condition with no
+	// observable other side.
 	if meta.usage != "" {
 		opts.Usage = meta.usage
 	}
 	if len(meta.aliases) > 0 {
 		opts.Aliases = append([]string(nil), meta.aliases...)
 	}
-	if len(meta.related) > 0 {
-		opts.RelatedActions = append([]string(nil), meta.related...)
-	}
-	if len(meta.guidance) > 0 {
-		opts.ParameterGuidance = meta.guidance
-	}
-	if meta.description != "" {
-		opts.IndividualTool.Description = meta.description
-	}
+	opts.RelatedActions = append([]string(nil), meta.related...)
+	opts.ParameterGuidance = meta.guidance
+	opts.IndividualTool.Description = meta.description
 }
 
 // memberRoleActionMetaEntry is the discovery metadata for one custom

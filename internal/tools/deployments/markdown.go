@@ -75,11 +75,12 @@ func statusCell(status string) string {
 
 // shortSHA renders the first eight characters of a commit SHA, the form GitLab
 // itself shows, and leaves a shorter value alone.
+//
+// It slices to the shorter of the two lengths rather than comparing the length
+// with eight, because a SHA of exactly eight characters reads the same either
+// way, which left a boundary no test could pin.
 func shortSHA(sha string) string {
-	if len(sha) <= 8 {
-		return sha
-	}
-	return sha[:8]
+	return sha[:min(len(sha), 8)]
 }
 
 // writeApprovals writes what has been recorded against the deployment so far.
@@ -141,15 +142,17 @@ func levelCell(r toolutil.DeploymentApprovalRuleOutput) string {
 
 // granteeCell names who a granular rule is about, and nothing for a rule that
 // grants a role to everyone who holds it.
+//
+// Early returns rather than a tagless switch, so the mutation tool, which
+// cannot see a case expression, measures each condition.
 func granteeCell(r toolutil.DeploymentApprovalRuleOutput) string {
-	switch {
-	case r.UserID != 0:
+	if r.UserID != 0 {
 		return fmt.Sprintf("user #%d", r.UserID)
-	case r.GroupID != 0:
-		return fmt.Sprintf("group #%d", r.GroupID)
-	default:
-		return ""
 	}
+	if r.GroupID != 0 {
+		return fmt.Sprintf("group #%d", r.GroupID)
+	}
+	return ""
 }
 
 // approvedCount counts the approvals recorded against a rule, rejections
