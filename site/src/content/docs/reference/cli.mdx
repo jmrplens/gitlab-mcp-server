@@ -227,7 +227,7 @@ Call gitlab_execute_action with {"action": "<ACTION>", "params": {...}}. TOOL is
 ACTION                                     TOOL                                          DESCRIPTION
 ```
 
-`ACTION` is the canonical ID, which is what `gitlab_execute_action` takes on the dynamic surface. `TOOL` is the individual tool name on the dynamic and individual surfaces, or the meta group tool followed by `action=<name>` on the meta surface; `-` marks an action the individual surface does not register. `DESCRIPTION` is cut at 80 characters. A query nothing matches prints `No actions found matching` with the query, the tier and the surface.
+`ACTION` is the canonical ID, which is what `gitlab_execute_action` takes on the dynamic surface. `TOOL` is the individual tool name on the dynamic and individual surfaces, or the meta group tool followed by `action=<name>` on the meta surface, where project discovery and the guided `gitlab_interactive_*` flows are tools of their own and show their own name with no `action=`; `-` marks an action the individual surface does not register. `DESCRIPTION` is cut at 80 characters. A query nothing matches prints `No actions found matching` with the query, the tier and the surface.
 
 ### Shutdown mode
 

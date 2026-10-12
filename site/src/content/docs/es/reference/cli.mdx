@@ -227,7 +227,7 @@ Call gitlab_execute_action with {"action": "<ACTION>", "params": {...}}. TOOL is
 ACTION                                     TOOL                                          DESCRIPTION
 ```
 
-`ACTION` es el ID canónico, que es lo que recibe `gitlab_execute_action` en la superficie dinámica. `TOOL` es el nombre de la herramienta individual en las superficies dinámica e individual, o la meta-herramienta del grupo seguida de `action=<name>` en la superficie meta; `-` marca una acción que la superficie individual no registra. `DESCRIPTION` se corta en 80 caracteres. Una consulta que no coincide con nada imprime `No actions found matching` con la consulta, el nivel y la superficie.
+`ACTION` es el ID canónico, que es lo que recibe `gitlab_execute_action` en la superficie dinámica. `TOOL` es el nombre de la herramienta individual en las superficies dinámica e individual, o la meta-herramienta del grupo seguida de `action=<name>` en la superficie meta, donde el descubrimiento de proyectos y los flujos guiados `gitlab_interactive_*` son herramientas propias y muestran su propio nombre sin `action=`; `-` marca una acción que la superficie individual no registra. `DESCRIPTION` se corta en 80 caracteres. Una consulta que no coincide con nada imprime `No actions found matching` con la consulta, el nivel y la superficie.
 
 ### Modo de apagado (shutdown)
 

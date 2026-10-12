@@ -5065,7 +5065,7 @@ func doToolSearch(query, toolSurface string, tier edition.Tier) error {
 	// EffectiveToolSurface answers one of exactly these three, so there is no
 	// fourth case to refuse.
 	surface := config.EffectiveToolSurface(toolSurface)
-	matches := matchCatalogActions(catalog.Actions(), terms, surface)
+	matches := matchCatalogActions(catalog.Actions(), terms, surface, standaloneToolGroups(catalog))
 	if len(matches) == 0 {
 		fmt.Printf("No actions found matching %q (tier %s, %s surface)\n", query, tier, surface)
 		return nil
@@ -5082,8 +5082,10 @@ func doToolSearch(query, toolSurface string, tier edition.Tier) error {
 }
 
 // matchCatalogActions returns the actions whose searchable text contains every
-// term, ordered by canonical ID so two runs of one query agree.
-func matchCatalogActions(actions []actioncatalog.Action, terms []string, surface string) []toolSearchMatch {
+// term, ordered by canonical ID so two runs of one query agree. standalone
+// names the catalog groups whose actions are tools of their own rather than
+// arguments of a dispatcher ([standaloneToolGroups]).
+func matchCatalogActions(actions []actioncatalog.Action, terms []string, surface string, standalone map[string]bool) []toolSearchMatch {
 	matches := make([]toolSearchMatch, 0, len(actions))
 	for _, action := range actions {
 		if !matchesAllTerms(actionSearchText(action), terms) {
@@ -5091,7 +5093,7 @@ func matchCatalogActions(actions []actioncatalog.Action, terms []string, surface
 		}
 		matches = append(matches, toolSearchMatch{
 			action:      string(action.ID),
-			tool:        toolSearchCallForm(surface, action),
+			tool:        toolSearchCallForm(surface, action, standalone[action.ToolName]),
 			description: truncateDescription(actionSearchDescription(action)),
 		})
 	}
@@ -5141,14 +5143,36 @@ func actionSearchDescription(action actioncatalog.Action) string {
 	return strings.TrimSpace(action.Usage)
 }
 
+// standaloneToolGroups names the catalog groups whose actions the meta surface
+// registers as tools of their own rather than as values of a dispatcher's
+// action argument: the standalone utilities, project discovery and the guided
+// flows, which join the search catalog from their surface specs and keep the
+// kind those specs declare. Every group built from domain ActionSpecs is a
+// meta dispatcher.
+func standaloneToolGroups(catalog *actioncatalog.Catalog) map[string]bool {
+	groups := make(map[string]bool)
+	for _, group := range catalog.Groups() {
+		if group.SurfaceKind == actioncatalog.SurfaceKindRuntimeUtility || group.SurfaceKind == actioncatalog.SurfaceKindInteractiveUtility {
+			groups[group.ToolName] = true
+		}
+	}
+	return groups
+}
+
 // toolSearchCallForm is how the configured surface names one action.
-func toolSearchCallForm(surface string, action actioncatalog.Action) string {
-	if surface == config.ToolSurfaceMeta {
+// standalone says the action's group is a standalone utility, which the meta
+// surface serves as one tool per action under the action's own tool name,
+// taking no action argument: `gitlab_interactive action=issue_create` named a
+// tool meta does not list, and `gitlab_discover_project action=resolve` an
+// argument its schema refuses.
+func toolSearchCallForm(surface string, action actioncatalog.Action, standalone bool) string {
+	if surface == config.ToolSurfaceMeta && !standalone {
 		return action.ToolName + " action=" + action.Name
 	}
 	// Individual and dynamic both show the individual tool name: on one it is
 	// the call, and on the other it is the cross-reference a reader coming
-	// from another client's tool list needs.
+	// from another client's tool list needs. A standalone utility on meta is
+	// registered under that same name.
 	if name := strings.TrimSpace(action.IndividualTool.Name); name != "" {
 		return name
 	}
@@ -5162,7 +5186,7 @@ func toolSearchCallHint(surface string) string {
 	case config.ToolSurfaceIndividual:
 		return `Call the tool named under TOOL. An action shown as "-" is not registered on this surface.`
 	case config.ToolSurfaceMeta:
-		return "Call the tool named under TOOL with that action argument."
+		return "Call the tool named under TOOL, with the action argument it shows when it shows one."
 	default:
 		return `Call gitlab_execute_action with {"action": "<ACTION>", "params": {...}}. TOOL is the name the individual surface would register.`
 	}
