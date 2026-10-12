@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -100,6 +101,121 @@ func addressLiteral(host string) (netip.Addr, bool) {
 	return addr, true
 }
 
+// numericHostAddress reads a host that ends in a number the way the WHATWG URL
+// standard's IPv4 parser does, which is the inet_aton grammar a libc resolver
+// applies: one to four dot-separated parts, each decimal, 0x hexadecimal or
+// 0-prefixed octal, every part but the last one byte and the last filling the
+// bytes the others leave. 2852039166, 0xa9fea9fe, 0251.0376.0251.0376,
+// 169.254.43518 and 169.254.169.254. are each 169.254.169.254 to such a
+// resolver, and none of them is an address to [netip.ParseAddr].
+//
+// endsInNumber reports whether host's last label (a trailing empty label
+// dropped) is a number, which is the condition for reading it at all; a host
+// that ends in a number and does not parse is reported with an error, since
+// the standard makes it an invalid host and a proxy may read it anyway. A host
+// that does not end in a number is a name, and is returned as neither.
+//
+// It is asked only where this server cannot see what a host resolves to: the
+// destination behind a proxy and the instance a caller names at the door. The
+// dialer needs none of it, because it judges the address a name resolved to,
+// whatever spelling produced it.
+func numericHostAddress(host string) (addr netip.Addr, endsInNumber bool, err error) {
+	labels := strings.Split(host, ".")
+	if len(labels) > 1 && labels[len(labels)-1] == "" {
+		labels = labels[:len(labels)-1]
+	}
+	last := labels[len(labels)-1]
+	if _, isNumber := ipv4Number(last); !isNumber && !allDigits(last) {
+		return netip.Addr{}, false, nil
+	}
+	if len(labels) > 4 {
+		return netip.Addr{}, true, fmt.Errorf("%q has more than four parts", host)
+	}
+	var value uint64
+	for i, label := range labels {
+		n, isNumber := ipv4Number(label)
+		if !isNumber {
+			return netip.Addr{}, true, fmt.Errorf("%q has a part that is not a number", host)
+		}
+		if i == len(labels)-1 {
+			if n >= 1<<(8*(5-len(labels))) {
+				return netip.Addr{}, true, fmt.Errorf("%q has a last part too large for the bytes it fills", host)
+			}
+			value += n
+			continue
+		}
+		if n > 255 {
+			return netip.Addr{}, true, fmt.Errorf("%q has a part larger than one byte", host)
+		}
+		value += n << (8 * (3 - i))
+	}
+	return netip.AddrFrom4([4]byte{byte(value >> 24), byte(value >> 16), byte(value >> 8), byte(value)}), true, nil
+}
+
+// ipv4Number parses one part of a numeric host as the WHATWG IPv4 number
+// parser does: a 0x or 0X prefix is hexadecimal and may be followed by
+// nothing, a leading 0 before more digits is octal, and anything else is
+// decimal. A part too large for 64 bits is no number, which leaves the host
+// refused rather than wrapped onto a smaller address.
+func ipv4Number(part string) (uint64, bool) {
+	if part == "" {
+		return 0, false
+	}
+	digits, base := ipv4NumberBase(part)
+	if digits == "" {
+		return 0, true
+	}
+	n, err := strconv.ParseUint(digits, base, 64)
+	return n, err == nil
+}
+
+// ipv4NumberBase splits the radix prefix off a part that is not empty: 0x or
+// 0X for hexadecimal, a leading 0 for octal, none for decimal. A lone 0 reads
+// as an octal prefix with no digits after it, which is zero either way.
+//
+// Separate ifs in a function of their own rather than a tagless switch: a case
+// expression carries no statement counter, so the mutation gate reports every
+// mutant of one as not covered whatever the tests assert.
+func ipv4NumberBase(part string) (digits string, base int) {
+	if len(part) > 1 && (part[:2] == "0x" || part[:2] == "0X") {
+		return part[2:], 16
+	}
+	if part[0] == '0' {
+		return part[1:], 8
+	}
+	return part, 10
+}
+
+// allDigits reports whether s is one or more ASCII digits, which ends a host
+// in a number however large that number is.
+func allDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := range len(s) {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// judgedSpelling is what a host this guard cannot resolve is spelled as: an
+// address, read by [netip.ParseAddr] or by [numericHostAddress], or a name
+// (spelled false). A host that ends in a number and is no address is
+// refused, since the WHATWG standard makes it invalid and a proxy may still
+// read it as an address.
+func judgedSpelling(host string) (addr netip.Addr, spelled bool, err error) {
+	if literal, ok := addressLiteral(host); ok {
+		return literal, true, nil
+	}
+	numeric, endsInNumber, parseErr := numericHostAddress(host)
+	if parseErr != nil {
+		return netip.Addr{}, true, fmt.Errorf("%w: %q ends in a number but is not an IPv4 address: %w", ErrDestinationRefused, host, parseErr)
+	}
+	return numeric, endsInNumber, nil
+}
+
 // dialHostname is the host net/http hands the dialer for host, and asks a
 // SOCKS proxy or an HTTP CONNECT for: host itself when it is ASCII, and
 // otherwise its IDNA form under the Lookup profile, or host as written when
@@ -143,9 +259,21 @@ func dialHostname(host string) string {
 // an interface named. An operating system ignores the zone of a destination
 // that is not link-local, so a lookup that kept it would let the spelling
 // reach the endpoint the table exists to refuse.
+//
+// An address behind a NAT64 prefix is judged by the IPv4 address it embeds as
+// well ([nat64Embedded]), since a translator on the path reaches exactly that
+// address: 64:ff9b::a9fe:a9fe is 169.254.169.254 wherever NAT64 is deployed.
 func metadataAddress(addr netip.Addr) (string, bool) {
-	name, ok := metadataAddresses[addr.WithZone("").Unmap()]
-	return name, ok
+	addr = addr.WithZone("").Unmap()
+	if name, ok := metadataAddresses[addr]; ok {
+		return name, true
+	}
+	for _, embedded := range nat64Embedded(addr) {
+		if name, ok := metadataAddresses[embedded]; ok {
+			return name + " behind a NAT64 prefix", true
+		}
+	}
+	return "", false
 }
 
 // isPrivateAddress reports whether addr is one of the classes a destination
@@ -154,19 +282,150 @@ func metadataAddress(addr netip.Addr) (string, bool) {
 // The unmapping is not a detail: ::ffff:10.0.0.1 is 10.0.0.1 written as IPv6,
 // and every predicate below answers false for that spelling. A guard that
 // skipped the unmapping would be bypassed by writing the address differently.
+// The zone is dropped for the same reason, since a prefix contains no address
+// that carries one.
+//
+// Three IPv6 forms name an IPv4 address rather than a host of their own. An
+// address behind a NAT64 prefix is private when any IPv4 address it can stand
+// for is ([nat64Embedded]), since which prefix length a deployment chose is
+// not written in the address and a refusal must hold whichever it was. The
+// 6to4 prefix 2002::/16 (RFC 7526) and the deprecated IPv4-compatible prefix
+// ::/96 (RFC 4291 section 2.5.5.1) name a tunnel endpoint, and are private
+// whatever they embed: nothing a GitLab redirect has reason to reach is served
+// from one, and judging the endpoint by the address it carries would be a rule
+// about tunnels this guard has no business guessing at.
+//
+// Both rules decide what a destination may be refused, and neither is a fact
+// about the address, so the exemption an instance that is itself private earns
+// asks [isPrivateInstanceAddress] instead.
 func isPrivateAddress(addr netip.Addr) bool {
-	addr = addr.Unmap()
+	addr = addr.WithZone("").Unmap()
 	if !addr.IsValid() {
 		// An address that cannot be classified is not one to connect to.
 		return true
 	}
+	if sixToFourPrefix.Contains(addr) || ipv4CompatiblePrefix.Contains(addr) {
+		return true
+	}
+	return inPrivateClass(addr) || slices.ContainsFunc(nat64Embedded(addr), inPrivateClass)
+}
+
+// isPrivateInstanceAddress reports whether the operator's instance, reached at
+// addr, is private in fact, which is what lets a redirect away from it reach a
+// private address ([destinationPolicy.resolveInstancePrivate]).
+//
+// It answers the opposite question from [isPrivateAddress], and so reads the
+// two cautious rules the other way. A NAT64 address counts only when every
+// IPv4 address it can stand for is private, and the tunnel prefixes never
+// count: a public instance called private here would let its redirects reach
+// the private network, so a wrong answer is a weakening, where a wrong answer
+// there refuses one hop.
+func isPrivateInstanceAddress(addr netip.Addr) bool {
+	addr = addr.WithZone("").Unmap()
+	if inPrivateClass(addr) {
+		return true
+	}
+	embedded := nat64Embedded(addr)
+	return len(embedded) > 0 && !slices.ContainsFunc(embedded, isPublicClass)
+}
+
+// inPrivateClass reports whether addr, already unmapped and without a zone,
+// is in one of the private classes by itself: loopback, unspecified, RFC 1918
+// or unique-local, link-local unicast or multicast, or CGNAT.
+func inPrivateClass(addr netip.Addr) bool {
 	switch {
 	case addr.IsLoopback(), addr.IsUnspecified(), addr.IsPrivate(),
 		addr.IsLinkLocalUnicast(), addr.IsLinkLocalMulticast():
 		return true
-	default:
-		return cgnatPrefix.Contains(addr)
 	}
+	return cgnatPrefix.Contains(addr)
+}
+
+// isPublicClass is the negation of [inPrivateClass], for asking whether every
+// address of a list is private.
+func isPublicClass(addr netip.Addr) bool {
+	return !inPrivateClass(addr)
+}
+
+// The IPv6 prefixes that carry an IPv4 address.
+var (
+	// nat64WellKnownPrefix is the RFC 6052 well-known prefix, which embeds the
+	// IPv4 address in its last 32 bits.
+	nat64WellKnownPrefix = netip.MustParsePrefix("64:ff9b::/96")
+	// nat64LocalUsePrefix is the RFC 8215 local-use prefix, inside which an
+	// operator may use any RFC 6052 prefix length from /48 on, so the IPv4
+	// address can sit in any of [nat64Layouts].
+	nat64LocalUsePrefix = netip.MustParsePrefix("64:ff9b:1::/48")
+	// sixToFourPrefix is 6to4 (RFC 7526).
+	sixToFourPrefix = netip.MustParsePrefix("2002::/16")
+	// ipv4CompatiblePrefix is the IPv4-compatible form RFC 4291 deprecated.
+	ipv4CompatiblePrefix = netip.MustParsePrefix("::/96")
+)
+
+// nat64Layout is where RFC 6052 section 2.2 puts the four IPv4 bytes for one
+// prefix length, and the byte the all-zero suffix after them starts at.
+type nat64Layout struct {
+	octets     [4]int
+	suffixFrom int
+}
+
+// nat64Layouts are the RFC 6052 layouts whose prefix fits inside
+// [nat64LocalUsePrefix]: /48, /56, /64 and /96. Byte 8 is reserved and zero in
+// every one of them, which is what skips the IPv4 bytes the /48 and /56
+// layouts split around it.
+var nat64Layouts = []nat64Layout{
+	{octets: [4]int{6, 7, 9, 10}, suffixFrom: 11},
+	{octets: [4]int{7, 9, 10, 11}, suffixFrom: 12},
+	{octets: [4]int{9, 10, 11, 12}, suffixFrom: 13},
+	{octets: [4]int{12, 13, 14, 15}, suffixFrom: 16},
+}
+
+// nat64Embedded returns the IPv4 addresses addr can stand for behind a NAT64
+// translator: the one in its last 32 bits under the well-known prefix, and
+// under the local-use prefix the one of each layout addr is a well-formed
+// instance of, its reserved byte and its suffix zero as RFC 6052 requires. An
+// address that is no NAT64 address, or no well-formed one, embeds nothing.
+//
+// Every candidate is returned rather than one guessed at, because which prefix
+// length a local-use deployment chose is not written in the address; a
+// well-formed /64 address whose /96 reading is also well formed stands for
+// both.
+//
+// A local-use reading of 0.0.0.0 is no candidate. A shorter layout leaves
+// zeros where a longer one reads its IPv4 bytes, so the /96 reading of every
+// /48 and /56 address is 0.0.0.0, which is that layout's suffix rather than an
+// address: no translator forwards to 0.0.0.0 (RFC 6890 makes it no
+// destination), and counting it would make every host behind those layouts
+// private. The other readings of such an address stay, since each is a host
+// some deployment reaches.
+func nat64Embedded(addr netip.Addr) []netip.Addr {
+	b := addr.As16()
+	if nat64WellKnownPrefix.Contains(addr) {
+		return []netip.Addr{netip.AddrFrom4([4]byte(b[12:16]))}
+	}
+	if !nat64LocalUsePrefix.Contains(addr) || b[8] != 0 {
+		return nil
+	}
+	var embedded []netip.Addr
+	for _, layout := range nat64Layouts {
+		o := layout.octets
+		v4 := [4]byte{b[o[0]], b[o[1]], b[o[2]], b[o[3]]}
+		if !allZeroBytes(b[layout.suffixFrom:]) || v4 == [4]byte{} {
+			continue
+		}
+		embedded = append(embedded, netip.AddrFrom4(v4))
+	}
+	return embedded
+}
+
+// allZeroBytes reports whether every byte of b is zero.
+func allZeroBytes(b []byte) bool {
+	for _, c := range b {
+		if c != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // allowPrivateInstances reads the tier B opt-out.
@@ -362,7 +621,7 @@ func (p *destinationPolicy) resolveInstancePrivate(ctx context.Context) bool {
 	}
 	dialed := dialHostname(p.instanceHost)
 	if addr, spelledAsAddress := addressLiteral(dialed); spelledAsAddress {
-		return isPrivateAddress(addr)
+		return isPrivateInstanceAddress(addr)
 	}
 	if p.lookupIP == nil {
 		return false
@@ -377,7 +636,7 @@ func (p *destinationPolicy) resolveInstancePrivate(ctx context.Context) bool {
 	// one public address is not a private deployment, and taking the first
 	// would make the answer depend on resolver ordering.
 	for _, addr := range addrs {
-		if !isPrivateAddress(addr) {
+		if !isPrivateInstanceAddress(addr) {
 			return false
 		}
 	}
@@ -423,6 +682,15 @@ func (target dialTarget) judge(ctx context.Context, addr netip.Addr) error {
 		return nil
 	}
 	return target.policy.checkPrivate(ctx, addr, target.offOrigin)
+}
+
+// operatorNamed reports whether this request is to the instance the operator
+// named: on that instance's own host, of an instance no caller named. Nothing
+// tier B decides applies to it ([destinationPolicy.permitsPrivate]), and a
+// request that carries no policy is no such request, since nothing says whose
+// destination it is.
+func (target dialTarget) operatorNamed() bool {
+	return target.policy != nil && !target.offOrigin && !target.policy.callerChosen
 }
 
 // dialTargetKey is the private context key for [dialTarget].
@@ -614,7 +882,41 @@ func (t *destinationTransport) RoundTrip(req *http.Request) (*http.Response, err
 			return nil, refuseUnsent(req, err)
 		}
 	}
-	return pool.RoundTrip(req.WithContext(withDialTarget(req.Context(), target)))
+	resp, err := pool.RoundTrip(req.WithContext(withDialTarget(req.Context(), target)))
+	// No err != nil beside it: errors.Is is false for nil, and every other
+	// dial error goes back as it came, *net.OpError included, so client-go
+	// keeps retrying what is worth retrying.
+	if errors.Is(err, ErrDestinationRefused) {
+		return nil, refusalWithoutDialError(err)
+	}
+	return resp, err
+}
+
+// refusalWithoutDialError returns the guard's refusal out of the dial error
+// net wrapped it in.
+//
+// The dialer reports a ControlContext refusal as a *net.OpError with Op
+// "dial", and client-go's retry policy retries every dial error, on the
+// reasoning that a dial which failed sent nothing. That is true here and
+// beside the point: a refusal is final, so the instance was asked the same
+// request again for every retry and the caller waited out the backoff to learn
+// what had been decided before the first packet. Without the OpError the
+// error reaches client-go as a *url.Error whose text says nothing about a
+// refused connection, which its policy does not retry. The refusal keeps its
+// own text and still wraps [ErrDestinationRefused].
+//
+// The loop declares its target on each pass and leaves on the negated
+// condition, so no change to one operator in it can keep it spinning on an
+// error it already unwrapped: the mutation gate cannot evaluate a mutant that
+// never ends.
+func refusalWithoutDialError(err error) error {
+	for {
+		var opErr *net.OpError
+		if !errors.As(err, &opErr) || opErr.Err == nil {
+			return err
+		}
+		err = opErr.Err
+	}
 }
 
 // proxyDialAddress reports the address the transport serving req will dial
@@ -690,10 +992,22 @@ var proxySchemePorts = map[string]string{
 // host in the request line under another IDNA profile, which leaves such a
 // spelling a name, so judging the mapped form there refuses more than the
 // proxy would have reached and never less.
+//
+// "Spelled as an address" includes a host that ends in a number
+// ([numericHostAddress]): a libc proxy reads 2852039166 or 169.254.43518 as
+// 169.254.169.254 with inet_aton, so they are judged as that address, and one
+// that ends in a number without being an address is refused, except as the
+// instance the operator named. That spelling is no address, so nothing tier A
+// knows can be in it, and an address --gitlab-url or GITLAB_URL named is
+// never checked: such an instance is a name, left to the proxy to resolve as
+// it was before numeric spellings were read at all.
 func judgeProxiedDestination(ctx context.Context, target dialTarget, dest *url.URL) error {
-	addr, spelledAsAddress := addressLiteral(dialHostname(dest.Hostname()))
-	if !spelledAsAddress {
+	addr, spelledAsAddress, err := judgedSpelling(dialHostname(dest.Hostname()))
+	if err != nil && target.operatorNamed() {
 		return nil
+	}
+	if err != nil || !spelledAsAddress {
+		return err
 	}
 	return target.judge(ctx, addr)
 }
@@ -753,12 +1067,13 @@ func (c *Client) MarkInstanceCallerNamed() {
 // request at the door would put a resolver timeout in front of every caller
 // and would still not be authoritative. A spelling is read as net/http will
 // dial it ([dialHostname]), so an address written in fullwidth digits is the
-// address it reaches rather than a name.
+// address it reaches rather than a name, and a host that ends in a number is
+// read as the address a libc proxy would make of it ([numericHostAddress]).
 func CheckCallerNamedInstance(rawURL string) error {
 	host, _ := credentialScope(rawURL)
-	addr, spelledAsAddress := addressLiteral(dialHostname(host))
-	if !spelledAsAddress {
-		return nil
+	addr, spelledAsAddress, err := judgedSpelling(dialHostname(host))
+	if err != nil || !spelledAsAddress {
+		return err
 	}
 	if name, ok := metadataAddress(addr); ok {
 		return fmt.Errorf("%w: %s is %s, which never serves a GitLab API", ErrDestinationRefused, addr, name)
