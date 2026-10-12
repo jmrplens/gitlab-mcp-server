@@ -95,6 +95,17 @@ func TestToSAMLUserOutput_AllFields(t *testing.T) {
 	}
 }
 
+// TestSAMLUsersList_TimestampFilterThatDoesNotParse_IsRefusedBeforeAnyRequest
+// verifies the SAML user list refuses a created bound it cannot read, naming
+// the field and quoting the value, before any request (issue 1308).
+func TestSAMLUsersList_TimestampFilterThatDoesNotParse_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := SAMLUsersList(context.Background(), client, SAMLUsersListInput{GroupID: "10", CreatedBefore: "not-a-date"})
+	if err == nil || !strings.Contains(err.Error(), "created_before must be") || !strings.Contains(err.Error(), `"not-a-date"`) {
+		t.Errorf("SAMLUsersList() error = %v, want the created_before refusal quoting the value", err)
+	}
+}
+
 // TestToSAMLUserOutput_NilOptionals verifies the converter leaves optional
 // pointer-backed fields zero-valued when the upstream user omits them, that
 // created_by stays nil, and that a response GitLab sent none of the captured

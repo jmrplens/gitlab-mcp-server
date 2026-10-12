@@ -238,10 +238,14 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Status != "" {
 		opts.Status = &input.Status
 	}
-	opts.UpdatedAfter = toolutil.ParseOptionalTime(input.UpdatedAfter)
-	opts.UpdatedBefore = toolutil.ParseOptionalTime(input.UpdatedBefore)
-	opts.FinishedAfter = toolutil.ParseOptionalTime(input.FinishedAfter)
-	opts.FinishedBefore = toolutil.ParseOptionalTime(input.FinishedBefore)
+	if err := toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "updated_after", Value: input.UpdatedAfter, Dest: &opts.UpdatedAfter},
+		toolutil.TimeInput{Field: "updated_before", Value: input.UpdatedBefore, Dest: &opts.UpdatedBefore},
+		toolutil.TimeInput{Field: "finished_after", Value: input.FinishedAfter, Dest: &opts.FinishedAfter},
+		toolutil.TimeInput{Field: "finished_before", Value: input.FinishedBefore, Dest: &opts.FinishedBefore},
+	); err != nil {
+		return ListOutput{}, err
+	}
 
 	// Raw REST fetch so the documented deployable.project object
 	// ({ci_job_token_scope_enabled}), absent from gl.DeploymentDeployable, is

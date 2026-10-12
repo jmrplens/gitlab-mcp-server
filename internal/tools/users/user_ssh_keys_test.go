@@ -452,18 +452,23 @@ func TestAddSSHKey_WithExpiresAtAndUsageType(t *testing.T) {
 // and compares the whole body against the two required keys plus that one. The
 // expiry is the reason to compare rather than read the response: the fixture
 // answers with an expiry whether or not one was asked for, so the test above
-// passes with the option dropped. The unparsable case is the other half: a
-// date the handler could not read must be sent as nothing rather than as the
-// year 1, which is an expiry GitLab would honor.
+// passes with the option dropped. An RFC 3339 expiry is the case issue 1308
+// found dropped, which created a key that never expired. GitLab takes a
+// timestamp here, so the instant is sent as given, offset included, rather
+// than the date client-go's option struct would write, which GitLab reads as
+// midnight UTC (register row 126); a bare date is that midnight. A value that
+// is no timestamp at all is refused, see
+// [TestAddSSHKey_UnparsableExpiresAt_IsRefused].
 func TestAddSSHKey_EachOptionReachesTheRequest(t *testing.T) {
 	tests := []struct {
 		name  string
 		input AddSSHKeyInput
 		want  map[string]any
 	}{
-		{"expires_at", AddSSHKeyInput{ExpiresAt: "2026-01-15"}, map[string]any{"expires_at": "2026-01-15"}},
+		{"expires_at", AddSSHKeyInput{ExpiresAt: "2026-01-15"}, map[string]any{"expires_at": "2026-01-15T00:00:00Z"}},
+		{"rfc3339 expires_at", AddSSHKeyInput{ExpiresAt: "2026-12-31T23:00:00Z"}, map[string]any{"expires_at": "2026-12-31T23:00:00Z"}},
+		{"expires_at with an offset", AddSSHKeyInput{ExpiresAt: "2026-12-31T23:00:00-05:00"}, map[string]any{"expires_at": "2026-12-31T23:00:00-05:00"}},
 		{"usage_type", AddSSHKeyInput{UsageType: "signing"}, map[string]any{"usage_type": "signing"}},
-		{"unparsable expires_at", AddSSHKeyInput{ExpiresAt: "not-a-date"}, map[string]any{}},
 		{"nothing", AddSSHKeyInput{}, map[string]any{}},
 	}
 
@@ -482,6 +487,38 @@ func TestAddSSHKey_EachOptionReachesTheRequest(t *testing.T) {
 			maps.Copy(want, tt.want)
 			assertSent(t, "add key body", got.body, want)
 		})
+	}
+}
+
+// TestAddSSHKeyForUser_ExpiresAt_ReachesTheRequestAsTheInstant verifies the
+// administrator's key creation sends the expiry as the instant it was given,
+// as [TestAddSSHKey_EachOptionReachesTheRequest] holds for the caller's own:
+// both share one option builder, and this holds the second call site to it.
+func TestAddSSHKeyForUser_ExpiresAt_ReachesTheRequestAsTheInstant(t *testing.T) {
+	var got capturedRequest
+	client := testutil.NewTestClient(t, recordRequest(t, "/api/v4/users/42/keys", &got, http.StatusCreated, sshKeyJSON))
+	if _, err := AddSSHKeyForUser(context.Background(), client, AddSSHKeyForUserInput{
+		UserID: 42, Title: "my-key", Key: "ssh-rsa AAAA", ExpiresAt: "2026-12-31T23:00:00Z",
+	}); err != nil {
+		t.Fatalf("AddSSHKeyForUser() unexpected error: %v", err)
+	}
+	assertSent(t, "add key for user body", got.body, map[string]any{
+		"title": "my-key", "key": "ssh-rsa AAAA", "expires_at": "2026-12-31T23:00:00Z",
+	})
+}
+
+// TestAddSSHKey_UnparsableExpiresAt_IsRefused verifies that both key
+// creations refuse an expiry they cannot read, naming it, before any request,
+// rather than create a key that never expires.
+func TestAddSSHKey_UnparsableExpiresAt_IsRefused(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := AddSSHKey(context.Background(), client, AddSSHKeyInput{Title: "k", Key: "ssh-rsa AAAA", ExpiresAt: "not-a-date"})
+	if err == nil || !strings.Contains(err.Error(), "expires_at must be an ISO 8601 timestamp") {
+		t.Errorf("AddSSHKey() error = %v, want the refusal of expires_at", err)
+	}
+	_, err = AddSSHKeyForUser(context.Background(), client, AddSSHKeyForUserInput{UserID: 7, Title: "k", Key: "ssh-rsa AAAA", ExpiresAt: "31/12/2026"})
+	if err == nil || !strings.Contains(err.Error(), "expires_at must be an ISO 8601 timestamp") {
+		t.Errorf("AddSSHKeyForUser() error = %v, want the refusal of expires_at", err)
 	}
 }
 

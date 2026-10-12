@@ -566,14 +566,14 @@ func TestListPATs(t *testing.T) {
 			input:      ListPATInput{GroupID: "mygroup", ServiceAccountID: 42, ExpiresAfter: "not-a-date"},
 			handler:    func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) },
 			wantErr:    true,
-			errContain: "invalid expires_after format",
+			errContain: "expires_after must be a date",
 		},
 		{
 			name:       "returns error on invalid expires_before",
 			input:      ListPATInput{GroupID: "mygroup", ServiceAccountID: 42, ExpiresBefore: "not-a-date"},
 			handler:    func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) },
 			wantErr:    true,
-			errContain: "invalid expires_before format",
+			errContain: "expires_before must be a date",
 		},
 		{
 			name:       "returns error when group_id is empty",
@@ -699,7 +699,7 @@ func TestCreatePAT(t *testing.T) {
 			},
 			handler:    func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) },
 			wantErr:    true,
-			errContain: "invalid expires_at format",
+			errContain: "expires_at must be a date",
 		},
 		{
 			name: "returns error on API failure",
@@ -857,7 +857,7 @@ func TestRotatePAT(t *testing.T) {
 			input:      RotatePATInput{GroupID: "mygroup", ServiceAccountID: 42, TokenID: 10, ExpiresAt: "not-a-date"},
 			handler:    func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) },
 			wantErr:    true,
-			errContain: "invalid expires_at format",
+			errContain: "expires_at must be a date",
 		},
 		{
 			name:  "returns error on API failure",
@@ -1275,4 +1275,15 @@ func TestList_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
 		})
 		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Accounts)}, err
 	})
+}
+
+// TestListPATs_TimestampFilterThatDoesNotParse_IsRefusedBeforeAnyRequest
+// verifies the token list refuses a timestamp filter it cannot read, naming
+// the field and quoting the value, before any request (issue 1308).
+func TestListPATs_TimestampFilterThatDoesNotParse_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := ListPATs(context.Background(), client, ListPATInput{GroupID: "10", ServiceAccountID: 7, LastUsedBefore: "not-a-date"})
+	if err == nil || !strings.Contains(err.Error(), "last_used_before must be") || !strings.Contains(err.Error(), `"not-a-date"`) {
+		t.Errorf("ListPATs() error = %v, want the last_used_before refusal quoting the value", err)
+	}
 }

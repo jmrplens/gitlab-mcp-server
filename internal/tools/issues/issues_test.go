@@ -11,6 +11,7 @@ import (
 	"maps"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -172,8 +173,8 @@ func TestCreate_InvalidDueDate(t *testing.T) {
 	if err == nil {
 		t.Fatal("Create() expected error for invalid due_date, got nil")
 	}
-	if !strings.Contains(err.Error(), "invalid due_date") {
-		t.Errorf("error = %q, want it to contain 'invalid due_date'", err.Error())
+	if !strings.Contains(err.Error(), "due_date must be a date") {
+		t.Errorf("error = %q, want it to contain 'due_date must be a date'", err.Error())
 	}
 }
 
@@ -2356,6 +2357,69 @@ func TestHandleList(t *testing.T) {
 	}
 }
 
+// TestListers_DueDateThatIsNotAKeyword_IsRefusedBeforeAnyRequest verifies the
+// three issue listings refuse a due_date filter GitLab's finder matches no
+// keyword for, naming the keywords and quoting the value, before any request.
+// A date is what a model sends to a filter named due_date, and GitLab answers
+// it with the list unfiltered rather than an error (issue 1308).
+func TestListers_DueDateThatIsNotAKeyword_IsRefusedBeforeAnyRequest(t *testing.T) {
+	const notAKeyword = "2026-01-01"
+	listers := map[string]func(*gitlabclient.Client) error{
+		"list": func(client *gitlabclient.Client) error {
+			_, err := List(context.Background(), client, ListInput{ProjectID: testProjectID, DueDate: notAKeyword})
+			return err
+		},
+		"list_all": func(client *gitlabclient.Client) error {
+			_, err := ListAll(context.Background(), client, ListAllInput{DueDate: notAKeyword})
+			return err
+		},
+		"list_group": func(client *gitlabclient.Client) error {
+			_, err := ListGroup(context.Background(), client, ListGroupInput{GroupID: "10", DueDate: notAKeyword})
+			return err
+		},
+	}
+	for name, list := range listers {
+		t.Run(name, func(t *testing.T) {
+			err := list(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
+			if err == nil {
+				t.Fatalf("%s with due_date=%q returned no error, want a refusal", name, notAKeyword)
+			}
+			for _, fragment := range []string{"due_date must be one of", "overdue", "next_month_and_previous_two_weeks", strconv.Quote(notAKeyword)} {
+				if !strings.Contains(err.Error(), fragment) {
+					t.Errorf("%s error = %q, want it to carry %q", name, err, fragment)
+				}
+			}
+		})
+	}
+}
+
+// TestListers_DueDateKeyword_ReachesTheQuery verifies every keyword GitLab's
+// finder matches is forwarded to the query as written.
+func TestListers_DueDateKeyword_ReachesTheQuery(t *testing.T) {
+	for _, keyword := range dueDateFilterKeywords {
+		t.Run(keyword, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertQueryParam(t, r, "due_date", keyword)
+				testutil.RespondJSON(w, http.StatusOK, "[]")
+			}))
+			if _, err := List(context.Background(), client, ListInput{ProjectID: testProjectID, DueDate: keyword}); err != nil {
+				t.Fatalf("List(due_date=%q) unexpected error: %v", keyword, err)
+			}
+		})
+	}
+}
+
+// TestList_TimestampFilterThatDoesNotParse_IsRefusedBeforeAnyRequest verifies
+// the project issue list refuses a created or updated bound it cannot read,
+// naming the field and quoting the value, before any request (issue 1308).
+func TestList_TimestampFilterThatDoesNotParse_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := List(context.Background(), client, ListInput{ProjectID: testProjectID, UpdatedBefore: "not-a-date"})
+	if err == nil || !strings.Contains(err.Error(), "updated_before must be") || !strings.Contains(err.Error(), `"not-a-date"`) {
+		t.Errorf("List() error = %v, want the updated_before refusal quoting the value", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // parseDueDate
 // ---------------------------------------------------------------------------.
@@ -2377,26 +2441,34 @@ func TestParseDueDate_Invalid(t *testing.T) {
 	if err == nil {
 		t.Fatal("parseDueDate invalid: expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "invalid due_date") {
-		t.Errorf("parseDueDate error = %q, want 'invalid due_date' substring", err.Error())
+	if !strings.Contains(err.Error(), "due_date must be a date") {
+		t.Errorf("parseDueDate error = %q, want 'due_date must be a date' substring", err.Error())
 	}
 }
 
-// TestParseDueDate_RFC3339Rejected verifies that parseDueDate rejects RFC 3339
-// timestamps (a common LLM mistake). Only YYYY-MM-DD format is accepted.
-func TestParseDueDate_RFC3339Rejected(t *testing.T) {
-	cases := []string{
-		"2026-01-15T10:00:00Z",
-		"2026-01-15T10:00:00+02:00",
-		"2026-01-15 10:00:00",
-		"01/15/2026",
-		"15-01-2026",
+// TestParseDueDate_OtherSpellings verifies the spellings around YYYY-MM-DD.
+// An RFC 3339 timestamp is read for the day it names, which is what GitLab's
+// Date parameter does with it and what the date inputs across the catalog now
+// share (issue 1308); a locale-ordered or space-separated value is still
+// refused, since nothing in it says which field is the month.
+func TestParseDueDate_OtherSpellings(t *testing.T) {
+	accepted := map[string]string{
+		"2026-01-15T10:00:00Z":      "2026-01-15",
+		"2026-01-15T23:00:00-05:00": "2026-01-15",
 	}
-	for _, tc := range cases {
+	for in, want := range accepted {
+		t.Run(in, func(t *testing.T) {
+			got, err := parseDueDate(in)
+			if err != nil || got == nil || got.String() != want {
+				t.Errorf("parseDueDate(%q) = %v, %v, want %s", in, got, err, want)
+			}
+		})
+	}
+	for _, tc := range []string{"2026-01-15 10:00:00", "01/15/2026", "15-01-2026"} {
 		t.Run(tc, func(t *testing.T) {
 			_, err := parseDueDate(tc)
 			if err == nil {
-				t.Errorf("parseDueDate(%q): expected error for non-YYYY-MM-DD format", tc)
+				t.Errorf("parseDueDate(%q): expected error for a value that is not a date", tc)
 			}
 		})
 	}

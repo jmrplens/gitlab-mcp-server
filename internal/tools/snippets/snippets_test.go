@@ -904,47 +904,60 @@ func TestBuildUpdateFileOpts_WithoutContentOrPreviousPath(t *testing.T) {
 	}
 }
 
-// TestListAll_CreatedFilters verifies the admin listing sends the two date
-// filters when they parse and leaves them out when they do not, since a
-// half-understood filter would silently narrow the answer.
+// TestListAll_CreatedFilters verifies the admin listing sends the two
+// creation bounds as the instants the caller gave, offset included, and a
+// bare date as its midnight UTC, and leaves out what the caller did not give.
+// GitLab takes a timestamp for both, and client-go's option struct carries
+// them as dates, which reached GitLab as midnight UTC and moved a bound of
+// 18:00 back to the start of its day (register row 126). A filter that does
+// not parse is refused rather than dropped, see TestListAll_InvalidDateFilters:
+// dropping it widened the answer in silence (issue 1308).
 func TestListAll_CreatedFilters(t *testing.T) {
 	for _, testCase := range []struct {
 		name  string
 		input ListAllInput
-		want  []string
+		want  map[string]string
 		omit  []string
 	}{
 		{
-			name: "dates that parse",
+			name: "timestamps",
 			input: ListAllInput{
-				CreatedAfter: "2026-01-01T00:00:00Z", CreatedBefore: "2026-02-01T00:00:00Z",
+				CreatedAfter: "2026-01-01T08:30:00Z", CreatedBefore: "2026-02-01T18:00:00+02:00",
 				RepositoryStorage: "nfs-01",
 			},
-			want: []string{"created_after=2026-01-01", "created_before=2026-02-01", "repository_storage=nfs-01"},
+			want: map[string]string{
+				"created_after": "2026-01-01T08:30:00Z", "created_before": "2026-02-01T18:00:00+02:00",
+				"repository_storage": "nfs-01",
+			},
 		},
 		{
-			name:  "dates that do not parse",
-			input: ListAllInput{CreatedAfter: "yesterday", CreatedBefore: "tomorrow"},
-			omit:  []string{"created_after", "created_before", "repository_storage"},
+			name:  "bare dates",
+			input: ListAllInput{CreatedAfter: "2026-01-01", CreatedBefore: "2026-02-01"},
+			want:  map[string]string{"created_after": "2026-01-01T00:00:00Z", "created_before": "2026-02-01T00:00:00Z"},
+			omit:  []string{"repository_storage"},
+		},
+		{
+			name: "nothing",
+			omit: []string{"created_after", "created_before", "repository_storage"},
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			var query string
+			var query url.Values
 			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				query = r.URL.RawQuery
+				query = r.URL.Query()
 				testutil.RespondJSON(w, http.StatusOK, `[`+snippetSentJSON+`]`)
 			}))
 			if _, err := ListAll(context.Background(), client, testCase.input); err != nil {
 				t.Fatalf("ListAll: %v", err)
 			}
-			for _, want := range testCase.want {
-				if !strings.Contains(query, want) {
-					t.Errorf("query %q missing %q", query, want)
+			for key, want := range testCase.want {
+				if got := query[key]; len(got) != 1 || got[0] != want {
+					t.Errorf("query %s = %q, want only %q", key, got, want)
 				}
 			}
 			for _, omit := range testCase.omit {
-				if strings.Contains(query, omit) {
-					t.Errorf("query %q carries %q it could not read", query, omit)
+				if query.Has(omit) {
+					t.Errorf("query carries %s = %q the caller did not give", omit, query.Get(omit))
 				}
 			}
 		})

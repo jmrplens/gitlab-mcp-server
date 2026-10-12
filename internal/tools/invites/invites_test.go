@@ -486,9 +486,9 @@ func TestProjectInvites_WithUserID(t *testing.T) {
 //
 // It asserts the status alone and reads nothing of the request, so a date that
 // was parsed and then dropped looks the same from here. Whether expires_at
-// reaches the body, and whether an unparseable one is withheld, is held by
-// TestProjectInvites_CreateBodyParams and
-// TestInvites_OptionalParametersReachTheRequestOnlyWhenGiven.
+// reaches the body is held by TestProjectInvites_CreateBodyParams and
+// TestInvites_OptionalParametersReachTheRequestOnlyWhenGiven, and that an
+// unparseable one is refused by TestInvites_UnparseableExpiresAt_IsRefused.
 func TestProjectInvites_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/projects/42/invitations" {
@@ -1478,15 +1478,51 @@ func recordInvitationBody(t *testing.T, send func(*gitlabclient.Client) error) s
 	return sent
 }
 
+// TestInvites_UnparseableExpiresAt_IsRefused verifies that both invitations
+// refuse an expiry they cannot read, naming it, before any request. The guard
+// this replaced dropped it, an RFC 3339 timestamp included, and the
+// membership was granted with no expiry while the result said success (issue
+// 1308).
+func TestInvites_UnparseableExpiresAt_IsRefused(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := ProjectInvites(context.Background(), client, ProjectInvitesInput{
+		ProjectID: "42", Email: "alice@example.com", AccessLevel: 30, ExpiresAt: "31 January 2027",
+	})
+	if err == nil || !strings.Contains(err.Error(), "expires_at must be a date") {
+		t.Errorf("ProjectInvites() error = %v, want the refusal of expires_at", err)
+	}
+	_, err = GroupInvites(context.Background(), client, GroupInvitesInput{
+		GroupID: "7", UserID: 7, AccessLevel: 30, ExpiresAt: "2027-02-30",
+	})
+	if err == nil || !strings.Contains(err.Error(), "expires_at must be a date") {
+		t.Errorf("GroupInvites() error = %v, want the refusal of expires_at", err)
+	}
+}
+
+// TestProjectInvites_TimestampExpiresAt_IsSentAsItsDate verifies that an RFC
+// 3339 expiry, which the guard before this dropped, reaches the body as the
+// date it names.
+func TestProjectInvites_TimestampExpiresAt_IsSentAsItsDate(t *testing.T) {
+	sent := recordInvitationBody(t, func(client *gitlabclient.Client) error {
+		_, err := ProjectInvites(context.Background(), client, ProjectInvitesInput{
+			ProjectID: "42", Email: "alice@example.com", AccessLevel: 30, ExpiresAt: "2026-12-31T00:00:00Z",
+		})
+		return err
+	})
+	if !strings.Contains(sent, `"expires_at":"2026-12-31"`) {
+		t.Errorf("body %q, want expires_at 2026-12-31", sent)
+	}
+}
+
 // TestInvites_OptionalParametersReachTheRequestOnlyWhenGiven verifies both
 // invitation handlers put each optional parameter in the POST body when the
 // input carries one, and leave it out entirely when it does not.
 //
 // Only the request shows any of this: GitLab answers with the same status
 // either way, so a test reading the output cannot tell a parameter that was
-// sent from one that was dropped. expires_at is the sharpest of them, since a
-// value that is not a date is deliberately not sent at all rather than
-// forwarded for GitLab to refuse.
+// sent from one that was dropped. expires_at is the sharpest of them: a value
+// that is not a date used to be left out, which granted a membership with no
+// expiry, and is now refused (TestInvites_UnparseableExpiresAt_IsRefused).
 func TestInvites_OptionalParametersReachTheRequestOnlyWhenGiven(t *testing.T) {
 	full := map[string]func(*gitlabclient.Client) error{
 		"project": func(client *gitlabclient.Client) error {
@@ -1507,7 +1543,7 @@ func TestInvites_OptionalParametersReachTheRequestOnlyWhenGiven(t *testing.T) {
 	bare := map[string]func(*gitlabclient.Client) error{
 		"project": func(client *gitlabclient.Client) error {
 			_, err := ProjectInvites(context.Background(), client, ProjectInvitesInput{
-				ProjectID: "42", Email: "alice@example.com", AccessLevel: 30, ExpiresAt: "31 January 2027",
+				ProjectID: "42", Email: "alice@example.com", AccessLevel: 30,
 			})
 			return err
 		},
@@ -1529,9 +1565,11 @@ func TestInvites_OptionalParametersReachTheRequestOnlyWhenGiven(t *testing.T) {
 				})
 			}
 
-			// The bare call omits id everywhere, and then one of the pair the
-			// endpoint accepts either half of: a project invitation names only
-			// an email and a malformed date, a group invitation only a user id.
+			// The bare call omits id and the expiry everywhere, and then one of
+			// the pair the endpoint accepts either half of: a project
+			// invitation names only an email, a group invitation only a user
+			// id. A malformed expiry is refused rather than omitted, see
+			// TestInvites_UnparseableExpiresAt_IsRefused.
 			omitted := map[string][]string{
 				"project": {`"id"`, `"user_id"`, `"expires_at"`},
 				"group":   {`"id"`, `"email"`, `"expires_at"`},

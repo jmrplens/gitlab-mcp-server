@@ -173,6 +173,24 @@ func TestActionSpecs_InputSchemaOverridesReachTheSpec(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_SSHKeyExpiry_ServesATimestampFormat verifies both SSH key
+// creations publish expires_at as a date-time. The parameter is a DateTime at
+// GitLab and the handler now sends the instant it is given, while the
+// canonical format for expires_at is a date, which would tell a model to drop
+// the time of day the key is meant to expire at.
+func TestActionSpecs_SSHKeyExpiry_ServesATimestampFormat(t *testing.T) {
+	byTool := userSpecsByTool(t, ActionSpecs(newUserActionSpecClient(t)))
+	for _, tool := range []string{"gitlab_add_ssh_key", "gitlab_add_ssh_key_for_user"} {
+		t.Run(tool, func(t *testing.T) {
+			properties, _ := byTool[tool].Route.InputSchema["properties"].(map[string]any)
+			expiresAt, _ := properties["expires_at"].(map[string]any)
+			if format := expiresAt["format"]; format != "date-time" {
+				t.Errorf("expires_at format = %v, want date-time", format)
+			}
+		})
+	}
+}
+
 // TestActionSpecs_ContributionEvents_ServesTheEventFilterValues verifies that
 // user.contribution_events serves the same action and target_type overrides
 // as the two listings of the events package. Its route declares the same

@@ -108,6 +108,14 @@ func TestApplyCanonicalParamFormats_TypeGuard(t *testing.T) {
 			property:   map[string]any{"type": "string", "format": formatDateTime},
 			wantFormat: formatDateTime,
 		},
+		{
+			// The issue lists' due_date is a keyword filter (overdue, week,
+			// month), not a date. A date format on it told a model to send a
+			// date, which GitLab matches against no keyword and answers with
+			// the list unfiltered.
+			name:     "enumerated_property_is_a_keyword_not_a_date",
+			property: map[string]any{"type": "string", "enum": []any{"overdue", "week"}},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

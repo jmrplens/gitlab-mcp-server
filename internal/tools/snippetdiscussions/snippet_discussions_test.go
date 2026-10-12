@@ -930,3 +930,35 @@ func refusingHandler(status int) http.Handler {
 		testutil.RespondJSON(w, status, `{"message":"refused"}`)
 	})
 }
+
+// TestWrites_CreatedAtThatIsNotATimestamp_IsRefusedBeforeAnyRequest verifies
+// the three writes that can backdate a note refuse a created_at they cannot
+// read, naming the field and quoting the value, before any request. The
+// parser before it answered nil for such a value and the note was dated now
+// (issue 1308).
+func TestWrites_CreatedAtThatIsNotATimestamp_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	ctx := context.Background()
+	writes := map[string]func() error{
+		"create": func() error {
+			_, err := Create(ctx, client, CreateInput{ProjectID: "42", SnippetID: 3, Body: "b", CreatedAt: "not-a-date"})
+			return err
+		},
+		"add_note": func() error {
+			_, err := AddNote(ctx, client, AddNoteInput{ProjectID: "42", SnippetID: 3, DiscussionID: "d1", Body: "b", CreatedAt: "not-a-date"})
+			return err
+		},
+		"update_note": func() error {
+			_, err := UpdateNote(ctx, client, UpdateNoteInput{ProjectID: "42", SnippetID: 3, DiscussionID: "d1", NoteID: 7, Body: "b", CreatedAt: "not-a-date"})
+			return err
+		},
+	}
+	for name, write := range writes {
+		t.Run(name, func(t *testing.T) {
+			err := write()
+			if err == nil || !strings.Contains(err.Error(), "created_at must be an ISO 8601 timestamp") || !strings.Contains(err.Error(), `"not-a-date"`) {
+				t.Errorf("%s error = %v, want the created_at refusal quoting the value", name, err)
+			}
+		})
+	}
+}

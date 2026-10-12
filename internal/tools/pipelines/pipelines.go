@@ -3,6 +3,7 @@ package pipelines
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -83,8 +84,9 @@ type ListOutput struct {
 }
 
 // buildListOpts maps ListInput fields to the GitLab API list
-// options, applying only non-zero values so that unset filters are omitted.
-func buildListOpts(input ListInput) *gl.ListProjectPipelinesOptions {
+// options, applying only non-zero values so that unset filters are omitted,
+// and refusing a date filter that does not parse.
+func buildListOpts(input ListInput) (*gl.ListProjectPipelinesOptions, error) {
 	opts := &gl.ListProjectPipelinesOptions{}
 	if input.Scope != "" {
 		opts.Scope = new(input.Scope)
@@ -116,12 +118,16 @@ func buildListOpts(input ListInput) *gl.ListProjectPipelinesOptions {
 	if input.Sort != "" {
 		opts.Sort = new(input.Sort)
 	}
-	opts.CreatedAfter = toolutil.ParseOptionalTime(input.CreatedAfter)
-	opts.CreatedBefore = toolutil.ParseOptionalTime(input.CreatedBefore)
-	opts.UpdatedAfter = toolutil.ParseOptionalTime(input.UpdatedAfter)
-	opts.UpdatedBefore = toolutil.ParseOptionalTime(input.UpdatedBefore)
+	if err := toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "created_after", Value: input.CreatedAfter, Dest: &opts.CreatedAfter},
+		toolutil.TimeInput{Field: "created_before", Value: input.CreatedBefore, Dest: &opts.CreatedBefore},
+		toolutil.TimeInput{Field: "updated_after", Value: input.UpdatedAfter, Dest: &opts.UpdatedAfter},
+		toolutil.TimeInput{Field: "updated_before", Value: input.UpdatedBefore, Dest: &opts.UpdatedBefore},
+	); err != nil {
+		return nil, err
+	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
-	return opts
+	return opts, nil
 }
 
 // List retrieves a paginated list of pipelines for a GitLab project.
@@ -134,7 +140,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("pipelineList: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 
-	opts := buildListOpts(input)
+	opts, err := buildListOpts(input)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("pipelineList: %w", err)
+	}
 	pipelines, resp, err := client.GL().Pipelines.ListProjectPipelines(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("pipelineList", err, http.StatusNotFound,

@@ -3,6 +3,7 @@ package users
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -183,7 +184,10 @@ type ListOutput struct {
 
 // List retrieves a paginated list of GitLab users.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	opts := buildListUsersOptions(input)
+	opts, err := buildListUsersOptions(input)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("list_users: %w", err)
+	}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	users, resp, err := client.GL().Users.ListUsers(opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
@@ -208,8 +212,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 // buildListUsersOptions maps a ListInput onto the client-go ListUsersOptions,
 // including offset and keyset pagination. All optional filters use omitempty
-// pointers, so nil values are simply omitted from the request.
-func buildListUsersOptions(input ListInput) *gl.ListUsersOptions {
+// pointers, so nil values are simply omitted from the request. A creation
+// bound that does not parse is refused.
+func buildListUsersOptions(input ListInput) (*gl.ListUsersOptions, error) {
 	opts := &gl.ListUsersOptions{
 		Active:               input.Active,
 		Blocked:              input.Blocked,
@@ -230,13 +235,17 @@ func buildListUsersOptions(input ListInput) *gl.ListUsersOptions {
 		ExternalUID:          strPtr(input.ExternUID),
 		Provider:             strPtr(input.Provider),
 		PublicEmail:          strPtr(input.PublicEmail),
-		CreatedAfter:         toolutil.ParseOptionalTime(input.CreatedAfter),
-		CreatedBefore:        toolutil.ParseOptionalTime(input.CreatedBefore),
 		OrderBy:              strPtr(input.OrderBy),
 		Sort:                 strPtr(input.Sort),
 	}
+	if err := toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "created_after", Value: input.CreatedAfter, Dest: &opts.CreatedAfter},
+		toolutil.TimeInput{Field: "created_before", Value: input.CreatedBefore, Dest: &opts.CreatedBefore},
+	); err != nil {
+		return nil, err
+	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
-	return opts
+	return opts, nil
 }
 
 // applyOrderSort copies the optional order_by and sort parameters onto a
@@ -507,17 +516,14 @@ func ListContributionEvents(ctx context.Context, client *gitlabclient.Client, in
 		t := gl.EventTargetTypeValue(input.TargetType)
 		opts.TargetType = &t
 	}
-	if input.Before != "" {
-		if t, err := time.Parse(toolutil.DateFormatISO, input.Before); err == nil {
-			d := gl.ISOTime(t)
-			opts.Before = &d
-		}
-	}
-	if input.After != "" {
-		if t, err := time.Parse(toolutil.DateFormatISO, input.After); err == nil {
-			d := gl.ISOTime(t)
-			opts.After = &d
-		}
+	// A bound that does not parse refuses the call: the guard this replaced
+	// dropped it, and an RFC 3339 value with it, and answered the user's
+	// events unfiltered (issue 1308).
+	if err := toolutil.ParseDateInputs(
+		toolutil.DateInput{Field: "before", Value: input.Before, Dest: &opts.Before},
+		toolutil.DateInput{Field: "after", Value: input.After, Dest: &opts.After},
+	); err != nil {
+		return ContributionEventsOutput{}, fmt.Errorf("list_contribution_events: %w", err)
 	}
 	if input.Scope != "" {
 		opts.Scope = new(input.Scope)

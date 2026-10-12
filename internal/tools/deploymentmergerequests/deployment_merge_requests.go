@@ -117,8 +117,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // buildListOptions maps ListInput onto the shared gl.ListMergeRequestsOptions,
 // setting only the filters the caller supplied. Interface-typed ID filters are
 // wrapped via the SDK constructors (gl.AssigneeID, gl.ApproverIDs); date filters
-// are parsed with toolutil.ParseOptionalTime; offset and keyset pagination are
-// applied via toolutil.ApplyListOptions.
+// are parsed with toolutil.ParseTimeInputs, which refuses one it cannot read;
+// offset and keyset pagination are applied via toolutil.ApplyListOptions.
 func buildListOptions(input ListInput) (*gl.ListMergeRequestsOptions, error) {
 	opts := &gl.ListMergeRequestsOptions{}
 
@@ -127,7 +127,9 @@ func buildListOptions(input ListInput) (*gl.ListMergeRequestsOptions, error) {
 	if err := applyIDFilters(input, opts); err != nil {
 		return nil, err
 	}
-	applyDateFilters(input, opts)
+	if err := applyDateFilters(input, opts); err != nil {
+		return nil, err
+	}
 
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	return opts, nil
@@ -215,21 +217,15 @@ func applyIDFilters(input ListInput, opts *gl.ListMergeRequestsOptions) error {
 	return nil
 }
 
-// applyDateFilters parses the ISO 8601 created/updated bounds with
-// toolutil.ParseOptionalTime and sets them when present.
-func applyDateFilters(input ListInput, opts *gl.ListMergeRequestsOptions) {
-	if t := toolutil.ParseOptionalTime(input.CreatedAfter); t != nil {
-		opts.CreatedAfter = t
-	}
-	if t := toolutil.ParseOptionalTime(input.CreatedBefore); t != nil {
-		opts.CreatedBefore = t
-	}
-	if t := toolutil.ParseOptionalTime(input.UpdatedAfter); t != nil {
-		opts.UpdatedAfter = t
-	}
-	if t := toolutil.ParseOptionalTime(input.UpdatedBefore); t != nil {
-		opts.UpdatedBefore = t
-	}
+// applyDateFilters parses the created and updated bounds, setting each one
+// supplied and refusing the call on the first that does not parse.
+func applyDateFilters(input ListInput, opts *gl.ListMergeRequestsOptions) error {
+	return toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "created_after", Value: input.CreatedAfter, Dest: &opts.CreatedAfter},
+		toolutil.TimeInput{Field: "created_before", Value: input.CreatedBefore, Dest: &opts.CreatedBefore},
+		toolutil.TimeInput{Field: "updated_after", Value: input.UpdatedAfter, Dest: &opts.UpdatedAfter},
+		toolutil.TimeInput{Field: "updated_before", Value: input.UpdatedBefore, Dest: &opts.UpdatedBefore},
+	)
 }
 
 // labelOptions converts a label-name slice into a *gl.LabelOptions, returning

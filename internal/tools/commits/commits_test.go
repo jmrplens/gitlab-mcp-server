@@ -4139,3 +4139,15 @@ func TestList_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
 		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Commits)}, err
 	})
 }
+
+// TestList_UntilThatIsNotATimestamp_IsRefusedBeforeAnyRequest verifies the
+// commit list refuses an until bound it cannot read, naming the field and
+// quoting the value, before any request. The parser before it answered nil for
+// such a value and the list went out unbounded (issue 1308).
+func TestList_UntilThatIsNotATimestamp_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := List(context.Background(), client, ListInput{ProjectID: "42", Until: "not-a-date"})
+	if err == nil || !strings.Contains(err.Error(), "until must be") || !strings.Contains(err.Error(), `"not-a-date"`) {
+		t.Errorf("List() error = %v, want the until refusal quoting the value", err)
+	}
+}

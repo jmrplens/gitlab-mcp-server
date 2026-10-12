@@ -4624,11 +4624,14 @@ func TestProjectEditHook_AllOptionalEvents(t *testing.T) {
 // TestBuildUserProjectOpts_AllFields verifies BuildUserProjectOpts when all fields.
 func TestBuildUserProjectOpts_AllFields(t *testing.T) {
 	archived := true
-	opts := buildUserProjectOpts(userProjectFilter{
+	opts, err := buildUserProjectOpts(userProjectFilter{
 		Search: "query", Visibility: testPrivate, Archived: &archived,
 		OrderBy: "name", Sort: "desc", Simple: true,
 		Page: 2, PerPage: 25,
 	})
+	if err != nil {
+		t.Fatalf("buildUserProjectOpts() error = %v", err)
+	}
 
 	if opts.Search == nil || *opts.Search != "query" {
 		t.Error("Search not set")
@@ -4658,7 +4661,10 @@ func TestBuildUserProjectOpts_AllFields(t *testing.T) {
 
 // TestBuildUserProjectOpts_NoFields verifies BuildUserProjectOpts when no fields.
 func TestBuildUserProjectOpts_NoFields(t *testing.T) {
-	opts := buildUserProjectOpts(userProjectFilter{})
+	opts, err := buildUserProjectOpts(userProjectFilter{})
+	if err != nil {
+		t.Fatalf("buildUserProjectOpts() error = %v", err)
+	}
 	if opts.Search != nil {
 		t.Error("Search should be nil")
 	}
@@ -5216,7 +5222,10 @@ func TestBuildListOpts_AllBranches(t *testing.T) {
 		PageToken:  "tok-1",
 	}
 
-	opts := buildListOpts(input)
+	opts, err := buildListOpts(input)
+	if err != nil {
+		t.Fatalf("buildListOpts() error = %v", err)
+	}
 	assertListProjectOpts(t, opts)
 	assertListProjectAdminOpts(t, opts)
 }
@@ -6617,6 +6626,45 @@ func TestDeleteForkRelation_ContextCancelled(t *testing.T) {
 	err := DeleteForkRelation(ctx, client, DeleteForkRelationInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpectedCtxErr)
+	}
+}
+
+// TestHandlers_DateThatDoesNotParse_IsRefusedBeforeAnyRequest verifies each
+// project handler that reads a date refuses one it cannot read, naming the
+// field and quoting the value, before any request: the three lists and the
+// group share. The lists used to go out unfiltered and the share's expiry was
+// forwarded as written (issue 1308).
+func TestHandlers_DateThatDoesNotParse_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	ctx := context.Background()
+	cases := []struct {
+		name, field string
+		call        func() error
+	}{
+		{"list", "last_activity_after", func() error {
+			_, err := List(ctx, client, ListInput{LastActivityAfter: "not-a-date"})
+			return err
+		}},
+		{"list_forks", "last_activity_after", func() error {
+			_, err := ListForks(ctx, client, ListForksInput{ProjectID: "42", LastActivityAfter: "not-a-date"})
+			return err
+		}},
+		{"list_user_projects", "last_activity_before", func() error {
+			_, err := ListUserProjects(ctx, client, ListUserProjectsInput{UserID: "7", LastActivityBefore: "not-a-date"})
+			return err
+		}},
+		{"share", "expires_at", func() error {
+			_, err := ShareProjectWithGroup(ctx, client, ShareProjectInput{ProjectID: "42", GroupID: 10, GroupAccess: 30, ExpiresAt: "not-a-date"})
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.call()
+			if err == nil || !strings.Contains(err.Error(), tc.field+" must be") || !strings.Contains(err.Error(), `"not-a-date"`) {
+				t.Errorf("%s error = %v, want the %s refusal quoting the value", tc.name, err, tc.field)
+			}
+		})
 	}
 }
 
@@ -8628,7 +8676,10 @@ func TestBuildForkListOpts_AllBranches(t *testing.T) {
 		PageToken:  "tok-fork",
 	}
 
-	opts := buildForkListOpts(input)
+	opts, err := buildForkListOpts(input)
+	if err != nil {
+		t.Fatalf("buildForkListOpts() error = %v", err)
+	}
 	assertAllListProjectFiltersSet(t, opts)
 	assertKeysetPagination(t, opts, 3, 40, "tok-fork")
 }
@@ -8683,7 +8734,10 @@ func assertKeysetPagination(t *testing.T, opts *gl.ListProjectsOptions, page, pe
 
 // TestBuildForkListOpts_NoFields verifies buildForkListOpts leaves unset filters nil.
 func TestBuildForkListOpts_NoFields(t *testing.T) {
-	opts := buildForkListOpts(ListForksInput{ProjectID: "1"})
+	opts, err := buildForkListOpts(ListForksInput{ProjectID: "1"})
+	if err != nil {
+		t.Fatalf("buildForkListOpts() error = %v", err)
+	}
 	if opts.Owned != nil || opts.Search != nil || opts.Archived != nil ||
 		opts.Active != nil || opts.RepositoryStorage != nil || opts.IDAfter != nil {
 		t.Error("unset fork filters should be nil")
@@ -8729,7 +8783,10 @@ func TestBuildUserProjectOpts_FullFilterSet(t *testing.T) {
 		PageToken:  "tok-user",
 	}
 
-	opts := buildUserProjectOpts(f.toFilter())
+	opts, err := buildUserProjectOpts(f.toFilter())
+	if err != nil {
+		t.Fatalf("buildUserProjectOpts() error = %v", err)
+	}
 	assertAllListProjectFiltersSet(t, opts)
 	assertKeysetPagination(t, opts, 2, 25, "tok-user")
 }

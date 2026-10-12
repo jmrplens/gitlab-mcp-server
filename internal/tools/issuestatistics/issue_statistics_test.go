@@ -857,6 +857,38 @@ func TestActionSpecs_CallRouteErrors(t *testing.T) {
 	}
 }
 
+// TestStatistics_TimestampFilterThatDoesNotParse_IsRefusedBeforeAnyRequest
+// verifies the three statistics reads refuse a created or updated bound they
+// cannot read, naming the field and quoting the value, before any request.
+// The parser before it answered nil for such a value and the counts covered
+// every issue (issue 1308).
+func TestStatistics_TimestampFilterThatDoesNotParse_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	ctx := context.Background()
+	reads := map[string]func() error{
+		"instance": func() error {
+			_, err := Get(ctx, client, GetInput{CreatedAfter: "not-a-date"})
+			return err
+		},
+		"group": func() error {
+			_, err := GetGroup(ctx, client, GetGroupInput{GroupID: "10", CreatedAfter: "not-a-date"})
+			return err
+		},
+		"project": func() error {
+			_, err := GetProject(ctx, client, GetProjectInput{ProjectID: "42", CreatedAfter: "not-a-date"})
+			return err
+		},
+	}
+	for name, read := range reads {
+		t.Run(name, func(t *testing.T) {
+			err := read()
+			if err == nil || !strings.Contains(err.Error(), "created_after must be") || !strings.Contains(err.Error(), `"not-a-date"`) {
+				t.Errorf("%s error = %v, want the created_after refusal quoting the value", name, err)
+			}
+		})
+	}
+}
+
 // TestMarkdownInit validates the init-registered markdown formatter is callable
 // via the toolutil registry.
 func TestMarkdownInit(t *testing.T) {

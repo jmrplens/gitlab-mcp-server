@@ -3,6 +3,7 @@ package groups
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -728,8 +729,9 @@ func memberRoleOutput(r *gl.MemberRole) *MemberRoleOutput {
 }
 
 // listGroupsOptions builds the SDK options for [List] from the tool input,
-// applying pagination and every supported group filter.
-func listGroupsOptions(input ListInput) *gl.ListGroupsOptions {
+// applying pagination and every supported group filter, and refusing a
+// marked_for_deletion_on it cannot read.
+func listGroupsOptions(input ListInput) (*gl.ListGroupsOptions, error) {
 	opts := &gl.ListGroupsOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.Search != "" {
@@ -779,12 +781,20 @@ func listGroupsOptions(input ListInput) *gl.ListGroupsOptions {
 	if input.Archived != nil {
 		opts.Archived = input.Archived
 	}
-	if input.MarkedForDeletionOn != "" {
-		if t, perr := gl.ParseISOTime(input.MarkedForDeletionOn); perr == nil {
-			opts.MarkedForDeletionOn = &t
-		}
+	markedOn, err := markedForDeletionOn(input.MarkedForDeletionOn)
+	if err != nil {
+		return nil, err
 	}
-	return opts
+	opts.MarkedForDeletionOn = markedOn
+	return opts, nil
+}
+
+// markedForDeletionOn reads the marked_for_deletion_on filter both group
+// lists share. A value that does not parse is refused: the guard this
+// replaced dropped it, and the list answered every group rather than those
+// marked on the day asked for (issue 1308).
+func markedForDeletionOn(value string) (*gl.ISOTime, error) {
+	return toolutil.ParseDateField("marked_for_deletion_on", value)
 }
 
 // List retrieves a paginated list of GitLab groups visible to the
@@ -795,7 +805,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 
-	opts := listGroupsOptions(input)
+	opts, err := listGroupsOptions(input)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("List: %w", err)
+	}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	groups, resp, err := client.GL().Groups.ListGroups(opts, gl.WithContext(ctx))
@@ -912,7 +925,10 @@ func SubgroupsList(ctx context.Context, client *gitlabclient.Client, input Subgr
 		return ListOutput{}, errors.New("SubgroupsList: group_id is required. Use group.list to find the ID first, then pass it as group_id")
 	}
 
-	opts := subgroupsListOptions(input)
+	opts, err := subgroupsListOptions(input)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("SubgroupsList: %w", err)
+	}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	groups, resp, err := client.GL().Groups.ListDescendantGroups(string(input.GroupID), opts, gl.WithContext(ctx))
@@ -927,8 +943,8 @@ func SubgroupsList(ctx context.Context, client *gitlabclient.Client, input Subgr
 // subgroupsListOptions builds the ListDescendantGroups options from the input,
 // applying offset/keyset pagination and every supported descendant-group
 // filter. Split out of SubgroupsList to keep that handler's cyclomatic
-// complexity flat.
-func subgroupsListOptions(input SubgroupsListInput) *gl.ListDescendantGroupsOptions {
+// complexity flat. A marked_for_deletion_on it cannot read is refused.
+func subgroupsListOptions(input SubgroupsListInput) (*gl.ListDescendantGroupsOptions, error) {
 	opts := &gl.ListDescendantGroupsOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.Search != "" {
@@ -978,12 +994,12 @@ func subgroupsListOptions(input SubgroupsListInput) *gl.ListDescendantGroupsOpti
 	if input.Archived != nil {
 		opts.Archived = input.Archived
 	}
-	if input.MarkedForDeletionOn != "" {
-		if t, perr := gl.ParseISOTime(input.MarkedForDeletionOn); perr == nil {
-			opts.MarkedForDeletionOn = &t
-		}
+	markedOn, err := markedForDeletionOn(input.MarkedForDeletionOn)
+	if err != nil {
+		return nil, err
 	}
-	return opts
+	opts.MarkedForDeletionOn = markedOn
+	return opts, nil
 }
 
 // ---------------------------------------------------------------------------

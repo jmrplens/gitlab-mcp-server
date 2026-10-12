@@ -368,17 +368,15 @@ func TestListAll_WithDateFilters(t *testing.T) {
 	}
 }
 
-// TestListAll_InvalidDateFilters verifies ListAll when invalid date filters.
+// TestListAll_InvalidDateFilters verifies that ListAll refuses a date filter
+// it cannot read, naming it, before any request (issue 1308).
 func TestListAll_InvalidDateFilters(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListAll(context.Background(), client, ListAllInput{
-		CreatedAfter:  "bad-date",
 		CreatedBefore: "bad-date",
 	})
-	if err != nil {
-		t.Fatalf(fmtUnexpectedErr, err)
+	if err == nil || !strings.Contains(err.Error(), "created_before must be an ISO 8601 timestamp") {
+		t.Fatalf("ListAll() error = %v, want the refusal of created_before", err)
 	}
 }
 

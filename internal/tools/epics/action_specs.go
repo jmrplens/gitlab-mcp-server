@@ -99,10 +99,10 @@ func epicDeleteSpec(name string, route toolutil.ActionRoute, individualTool stri
 // The four new date filters take their format here rather than from
 // toolutil's canonical map, which carries the created, updated, last_used,
 // last_activity, started, finished, deployed and expires pairs and none of
-// these four. All eight parse through
-// toolutil.ParseOptionalTime, which accepts RFC 3339 and silently ignores
-// anything else, so the schema has to say date-time for all eight or the four
-// new ones read as free text beside four siblings that do not.
+// these four. All eight parse through toolutil.ParseTimeInputs, which takes
+// RFC 3339, a local date-time or a bare date and refuses anything else, so the
+// schema says date-time for all eight rather than let the four new ones read
+// as free text beside four siblings that do not.
 func epicListEnumOverrides() []toolutil.InputSchemaOverride {
 	return []toolutil.InputSchemaOverride{
 		toolutil.SchemaPropertyOverride("state", map[string]any{
@@ -135,9 +135,9 @@ func epicListEnumOverrides() []toolutil.InputSchemaOverride {
 // link_type values are the WorkItemRelatedLinkType enum.
 //
 // created_at declares its format for the reason the list filters do: the
-// handler parses it with toolutil.ParseOptionalTime, which takes RFC 3339 and
-// leaves anything else unset, so a caller sending a bare date would get an
-// epic stamped with now and no complaint.
+// handler parses it with toolutil.ParseTimeField and refuses a value it
+// cannot read. The parser before it left such a value unset, so a caller
+// sending a bare date got an epic stamped with now and no complaint.
 func epicCreateEnumOverrides() []toolutil.InputSchemaOverride {
 	return []toolutil.InputSchemaOverride{
 		toolutil.SchemaPropertyOverride("health_status", map[string]any{

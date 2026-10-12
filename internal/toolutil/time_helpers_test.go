@@ -3,15 +3,21 @@ package toolutil
 
 import (
 	"bufio"
+	"encoding/json"
+	"errors"
+	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/sourcewalk"
@@ -74,31 +80,364 @@ func TestFormatTime_InvalidFormat_ContainsTheValue(t *testing.T) {
 	}
 }
 
-// TestParseOptionalTime_Valid verifies that ParseOptionalTime correctly
-// parses a valid RFC 3339 timestamp string.
-func TestParseOptionalTime_Valid(t *testing.T) {
-	got := ParseOptionalTime("2026-01-01T00:00:00Z")
-	if got == nil {
-		t.Fatal("ParseOptionalTime() returned nil for valid input")
+// TestParseTimeField_ReadsEverySpellingAGitLabTimestampTakes verifies the
+// three spellings a timestamp input accepts: RFC 3339 with any offset, a
+// local date-time read as UTC, and a bare date read as midnight UTC. The
+// second and third are what a model told the input is a date sends, and GitLab
+// itself reads both.
+func TestParseTimeField_ReadsEverySpellingAGitLabTimestampTakes(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  time.Time
+	}{
+		{"rfc3339 in UTC", "2026-01-02T03:04:05Z", time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)},
+		{"rfc3339 with an offset", "2026-01-02T03:04:05-05:00", time.Date(2026, 1, 2, 8, 4, 5, 0, time.UTC)},
+		{"rfc3339 with fractional seconds", "2026-01-02T03:04:05.5Z", time.Date(2026, 1, 2, 3, 4, 5, 500000000, time.UTC)},
+		{"local date-time", "2026-01-02T03:04:05", time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)},
+		{"bare date", "2026-01-02", time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseTimeField("created_after", tt.value)
+			if err != nil {
+				t.Fatalf("ParseTimeField(%q) error = %v", tt.value, err)
+			}
+			if got == nil || !got.Equal(tt.want) {
+				t.Errorf("ParseTimeField(%q) = %v, want %v", tt.value, got, tt.want)
+			}
+		})
 	}
 }
 
-// TestParseOptionalTime_Empty verifies that ParseOptionalTime returns a
-// zero time when given an empty string.
-func TestParseOptionalTime_Empty(t *testing.T) {
-	got := ParseOptionalTime("")
-	if got != nil {
-		t.Errorf("ParseOptionalTime(\"\") = %v, want nil", got)
+// TestParseTimeField_EmptyIsAbsent verifies that an empty value is the input
+// left out: no time and no error, so the caller sends no filter.
+func TestParseTimeField_EmptyIsAbsent(t *testing.T) {
+	got, err := ParseTimeField("created_after", "")
+	if err != nil || got != nil {
+		t.Errorf("ParseTimeField(\"\") = %v, %v, want nil, nil", got, err)
 	}
 }
 
-// TestParseOptionalTime_Invalid verifies that ParseOptionalTime returns a
-// zero time when given an unparseable timestamp string.
-func TestParseOptionalTime_Invalid(t *testing.T) {
-	got := ParseOptionalTime("invalid")
-	if got != nil {
-		t.Errorf("ParseOptionalTime(\"invalid\") = %v, want nil", got)
+// TestParseTimeField_RefusesWhatDoesNotParse verifies that a value that is
+// not a timestamp is refused with the field it came from, the value and the
+// forms that are accepted, rather than dropped. Dropping it is what issue 1308
+// found at 84 sites: the request went out unfiltered, or a note was dated now
+// instead of when it was asked to be.
+func TestParseTimeField_RefusesWhatDoesNotParse(t *testing.T) {
+	for _, value := range []string{"not-a-date", "2026-02-30", "01/04/2026", "2026-01-02 03:04:05", " 2026-01-02"} {
+		t.Run(value, func(t *testing.T) {
+			got, err := ParseTimeField("updated_before", value)
+			if err == nil {
+				t.Fatalf("ParseTimeField(%q) = %v, want an error", value, got)
+			}
+			for _, part := range []string{"updated_before", strconv.Quote(value), "2025-01-01T00:00:00Z", "2025-01-01"} {
+				if !strings.Contains(err.Error(), part) {
+					t.Errorf("ParseTimeField(%q) error = %q, want it to name %s", value, err, part)
+				}
+			}
+		})
 	}
+}
+
+// TestParseDateField_ReadsADateAndTheDateOfATimestamp verifies the spellings
+// a date-only input accepts: YYYY-MM-DD, and an RFC 3339 timestamp, whose
+// calendar date is taken as written rather than in UTC, since the caller wrote
+// that day and the offset only says where.
+func TestParseDateField_ReadsADateAndTheDateOfATimestamp(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{"bare date", "2026-12-31", "2026-12-31"},
+		{"rfc3339 in UTC", "2026-12-31T00:00:00Z", "2026-12-31"},
+		{"rfc3339 late in the day behind UTC", "2026-12-31T23:00:00-05:00", "2026-12-31"},
+		{"local date-time", "2026-12-31T08:00:00", "2026-12-31"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseDateField("expires_at", tt.value)
+			if err != nil {
+				t.Fatalf("ParseDateField(%q) error = %v", tt.value, err)
+			}
+			if got == nil || got.String() != tt.want {
+				t.Errorf("ParseDateField(%q) = %v, want %s", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestParseDateField_EmptyIsAbsent verifies that an empty value is the input
+// left out.
+func TestParseDateField_EmptyIsAbsent(t *testing.T) {
+	got, err := ParseDateField("due_date", "")
+	if err != nil || got != nil {
+		t.Errorf("ParseDateField(\"\") = %v, %v, want nil, nil", got, err)
+	}
+}
+
+// TestParseDateField_RefusesWhatDoesNotParse verifies that a value that is
+// not a date is refused with the field, the value and the accepted form. An
+// impossible day is refused too, which time.Parse does on its own and a
+// hand-written split would not.
+func TestParseDateField_RefusesWhatDoesNotParse(t *testing.T) {
+	for _, value := range []string{"not-a-date", "2026-02-30", "01/04/2026", "2026/12/31", "20261231"} {
+		t.Run(value, func(t *testing.T) {
+			got, err := ParseDateField("due_date", value)
+			if err == nil {
+				t.Fatalf("ParseDateField(%q) = %v, want an error", value, got)
+			}
+			for _, part := range []string{"due_date", strconv.Quote(value), "YYYY-MM-DD"} {
+				if !strings.Contains(err.Error(), part) {
+					t.Errorf("ParseDateField(%q) error = %q, want it to name %s", value, err, part)
+				}
+			}
+		})
+	}
+}
+
+// TestParseTimeInputs_FillsEachDestinationAndStopsAtTheFirstRefusal verifies
+// the batch form the list filters use: every non-empty input lands in its
+// destination, an empty one leaves its destination alone, and the first value
+// that does not parse refuses the whole call before a later one is read.
+func TestParseTimeInputs_FillsEachDestinationAndStopsAtTheFirstRefusal(t *testing.T) {
+	t.Run("all parse", func(t *testing.T) {
+		var after, before, untouched *time.Time
+		err := ParseTimeInputs(
+			TimeInput{Field: "created_after", Value: "2026-01-01", Dest: &after},
+			TimeInput{Field: "created_before", Value: "2026-02-01T00:00:00Z", Dest: &before},
+			TimeInput{Field: "updated_after", Value: "", Dest: &untouched},
+		)
+		if err != nil {
+			t.Fatalf("ParseTimeInputs() error = %v", err)
+		}
+		if after == nil || !after.Equal(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("created_after = %v, want 2026-01-01 midnight UTC", after)
+		}
+		if before == nil || !before.Equal(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("created_before = %v, want 2026-02-01 midnight UTC", before)
+		}
+		if untouched != nil {
+			t.Errorf("updated_after = %v, want nil for an empty value", untouched)
+		}
+	})
+	t.Run("first refusal wins", func(t *testing.T) {
+		var first, second *time.Time
+		err := ParseTimeInputs(
+			TimeInput{Field: "created_after", Value: "garbage", Dest: &first},
+			TimeInput{Field: "created_before", Value: "also-garbage", Dest: &second},
+		)
+		if err == nil || !strings.Contains(err.Error(), "created_after") || strings.Contains(err.Error(), "created_before") {
+			t.Errorf("ParseTimeInputs() error = %v, want the refusal of created_after alone", err)
+		}
+		if first != nil || second != nil {
+			t.Errorf("destinations = %v, %v, want both untouched after a refusal", first, second)
+		}
+	})
+}
+
+// TestParseDateInputs_FillsEachDestinationAndStopsAtTheFirstRefusal verifies
+// the batch form for date-only inputs.
+func TestParseDateInputs_FillsEachDestinationAndStopsAtTheFirstRefusal(t *testing.T) {
+	t.Run("all parse", func(t *testing.T) {
+		var start, due, untouched *gl.ISOTime
+		err := ParseDateInputs(
+			DateInput{Field: "start_date", Value: "2026-01-01", Dest: &start},
+			DateInput{Field: "due_date", Value: "2026-02-01T10:00:00Z", Dest: &due},
+			DateInput{Field: "end_date", Value: "", Dest: &untouched},
+		)
+		if err != nil {
+			t.Fatalf("ParseDateInputs() error = %v", err)
+		}
+		if start == nil || start.String() != "2026-01-01" {
+			t.Errorf("start_date = %v, want 2026-01-01", start)
+		}
+		if due == nil || due.String() != "2026-02-01" {
+			t.Errorf("due_date = %v, want 2026-02-01", due)
+		}
+		if untouched != nil {
+			t.Errorf("end_date = %v, want nil for an empty value", untouched)
+		}
+	})
+	t.Run("first refusal wins", func(t *testing.T) {
+		var first, second *gl.ISOTime
+		err := ParseDateInputs(
+			DateInput{Field: "start_date", Value: "2026-02-30", Dest: &first},
+			DateInput{Field: "due_date", Value: "nope", Dest: &second},
+		)
+		if err == nil || !strings.Contains(err.Error(), "start_date") || strings.Contains(err.Error(), "due_date") {
+			t.Errorf("ParseDateInputs() error = %v, want the refusal of start_date alone", err)
+		}
+		if first != nil || second != nil {
+			t.Errorf("destinations = %v, %v, want both untouched after a refusal", first, second)
+		}
+	})
+}
+
+// TestParseDateFieldString_WritesTheDateAClientGoStringFieldCarries verifies
+// the string form for the client-go options that carry a date as a plain
+// string: a date or a timestamp becomes YYYY-MM-DD, an empty value stays
+// absent, and anything else is refused in [ParseDateField]'s words.
+func TestParseDateFieldString_WritesTheDateAClientGoStringFieldCarries(t *testing.T) {
+	for _, tc := range []struct {
+		name, value, want string
+	}{
+		{"date", "2026-12-31", "2026-12-31"},
+		{"timestamp_read_for_the_day_it_names", "2026-12-31T23:00:00-05:00", "2026-12-31"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ParseDateFieldString("expires_at", tc.value)
+			if err != nil || got == nil || *got != tc.want {
+				t.Errorf("ParseDateFieldString(%q) = %v, %v; want %q", tc.value, got, err, tc.want)
+			}
+		})
+	}
+	t.Run("empty_is_absent", func(t *testing.T) {
+		got, err := ParseDateFieldString("expires_at", "")
+		if got != nil || err != nil {
+			t.Errorf("ParseDateFieldString(\"\") = %v, %v; want nil, nil", got, err)
+		}
+	})
+	t.Run("refused", func(t *testing.T) {
+		got, err := ParseDateFieldString("expires_at", "31/12/2026")
+		if got != nil || err == nil || !strings.Contains(err.Error(), `expires_at must be a date in YYYY-MM-DD form such as 2025-01-31, got "31/12/2026"`) {
+			t.Errorf("ParseDateFieldString(31/12/2026) = %v, %v; want a refusal naming the field and quoting the value", got, err)
+		}
+	})
+}
+
+// TestTimestampParam_NilIsNoOption verifies that a timestamp left out gives
+// no request option at all, so the request goes out exactly as client-go
+// encoded it.
+func TestTimestampParam_NilIsNoOption(t *testing.T) {
+	if TimestampParam("expires_at", nil) != nil {
+		t.Error("TimestampParam(nil) returned an option, want none")
+	}
+}
+
+// timestampParamInstant is the instant the TimestampParam tests send, written
+// with an offset so a test can tell it was not moved to UTC or truncated to
+// its day: client-go carries these parameters as dates, which reach GitLab as
+// midnight UTC, so an SSH key asked to expire at 23:00 expired 23 hours early
+// (register row 126).
+const timestampParamInstant = "2026-12-31T23:00:00-05:00"
+
+// applyTimestampParam builds a request the way client-go would, with the given
+// method, URL and body, and applies TimestampParam for name to it.
+func applyTimestampParam(t *testing.T, method, url string, body any, name string) *retryablehttp.Request {
+	t.Helper()
+	at, err := time.Parse(time.RFC3339, timestampParamInstant)
+	if err != nil {
+		t.Fatalf("time.Parse: %v", err)
+	}
+	req, err := retryablehttp.NewRequest(method, url, body)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	if err = TimestampParam(name, &at)(req); err != nil {
+		t.Fatalf("option: %v", err)
+	}
+	return req
+}
+
+// TestTimestampParam_BodyMethods_WriteTheInstantIntoTheBody verifies the
+// option writes the timestamp, with the offset it was given in, into the JSON
+// body of a POST, PUT or PATCH, which is where client-go encodes their
+// options, replacing the date client-go wrote under the same name and leaving
+// every other key as it was, a number too large for a float64 included.
+func TestTimestampParam_BodyMethods_WriteTheInstantIntoTheBody(t *testing.T) {
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch} {
+		t.Run(method, func(t *testing.T) {
+			req := applyTimestampParam(t, method, "https://gitlab.example.com/api/v4/user/keys",
+				[]byte(`{"title":"k","expires_at":"2026-12-31","count":12345678901234567890}`), "expires_at")
+			raw, err := req.BodyBytes()
+			if err != nil {
+				t.Fatalf("BodyBytes: %v", err)
+			}
+			var body map[string]json.RawMessage
+			if err = json.Unmarshal(raw, &body); err != nil {
+				t.Fatalf("decode body %s: %v", raw, err)
+			}
+			want := map[string]string{"expires_at": `"` + timestampParamInstant + `"`, "title": `"k"`, "count": "12345678901234567890"}
+			if len(body) != len(want) {
+				t.Errorf("body %s carries %d keys, want %d", raw, len(body), len(want))
+			}
+			for key, value := range want {
+				if string(body[key]) != value {
+					t.Errorf("body %s = %s, want %s (body %s)", key, body[key], value, raw)
+				}
+			}
+			if req.URL.RawQuery != "" {
+				t.Errorf("query = %q, want none on a %s", req.URL.RawQuery, method)
+			}
+		})
+	}
+}
+
+// TestTimestampParam_EmptyBody_GainsTheTimestampAlone verifies a POST whose
+// body client-go left empty is sent as an object holding the timestamp.
+func TestTimestampParam_EmptyBody_GainsTheTimestampAlone(t *testing.T) {
+	req := applyTimestampParam(t, http.MethodPost, "https://gitlab.example.com/api/v4/user/keys", nil, "expires_at")
+	raw, err := req.BodyBytes()
+	if err != nil || string(raw) != `{"expires_at":"`+timestampParamInstant+`"}` {
+		t.Errorf("body = %s, %v; want the timestamp alone", raw, err)
+	}
+}
+
+// TestTimestampParam_OtherMethods_WriteTheInstantIntoTheQuery verifies the
+// option writes the timestamp into the query of a GET or DELETE, where
+// client-go encodes their options, replacing the date client-go wrote and
+// keeping every other parameter.
+func TestTimestampParam_OtherMethods_WriteTheInstantIntoTheQuery(t *testing.T) {
+	for _, method := range []string{http.MethodGet, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			req := applyTimestampParam(t, method,
+				"https://gitlab.example.com/api/v4/snippets/all?created_after=2026-12-31&repository_storage=nfs-01", nil, "created_after")
+			query := req.URL.Query()
+			if got := query["created_after"]; len(got) != 1 || got[0] != timestampParamInstant {
+				t.Errorf("created_after = %q, want only %q", got, timestampParamInstant)
+			}
+			if got := query.Get("repository_storage"); got != "nfs-01" {
+				t.Errorf("repository_storage = %q, want it kept", got)
+			}
+		})
+	}
+}
+
+// TestTimestampParam_UnreadableBody_IsAnError verifies a body the option
+// cannot read or decode fails the request rather than going out with the
+// date client-go wrote in place of the instant the caller asked for.
+func TestTimestampParam_UnreadableBody_IsAnError(t *testing.T) {
+	at := time.Date(2026, 12, 31, 23, 0, 0, 0, time.UTC)
+	t.Run("not_JSON", func(t *testing.T) {
+		req, err := retryablehttp.NewRequest(http.MethodPost, "https://gitlab.example.com/api/v4/user/keys", []byte("not json"))
+		if err != nil {
+			t.Fatalf("NewRequest: %v", err)
+		}
+		if err = TimestampParam("expires_at", &at)(req); err == nil || !strings.Contains(err.Error(), "expires_at") {
+			t.Errorf("option error = %v, want a refusal naming expires_at", err)
+		}
+	})
+	t.Run("reader_fails", func(t *testing.T) {
+		// retryablehttp calls the reader once when the request is built, to
+		// size it, so the reader fails from its second call on.
+		calls := 0
+		req, err := retryablehttp.NewRequest(http.MethodPost, "https://gitlab.example.com/api/v4/user/keys",
+			retryablehttp.ReaderFunc(func() (io.Reader, error) {
+				calls++
+				if calls > 1 {
+					return nil, errors.New("gone")
+				}
+				return strings.NewReader("{}"), nil
+			}))
+		if err != nil {
+			t.Fatalf("NewRequest: %v", err)
+		}
+		if err = TimestampParam("expires_at", &at)(req); err == nil || !strings.Contains(err.Error(), "gone") {
+			t.Errorf("option error = %v, want the reader's error", err)
+		}
+	})
 }
 
 // TestFormatTime_DateOnly verifies that FormatTime handles YYYY-MM-DD format.

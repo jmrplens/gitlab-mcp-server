@@ -155,13 +155,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Description != "" {
 		opts.Description = new(toolutil.NormalizeText(input.Description))
 	}
-	if input.ReleasedAt != "" {
-		t, err := time.Parse(time.RFC3339, input.ReleasedAt)
-		if err != nil {
-			return Output{}, fmt.Errorf("releaseCreate: invalid released_at format (expected ISO 8601/RFC 3339): %w", err)
-		}
-		opts.ReleasedAt = &t
+	releasedAt, err := toolutil.ParseTimeField("released_at", input.ReleasedAt)
+	if err != nil {
+		return Output{}, fmt.Errorf("releaseCreate: %w", err)
 	}
+	opts.ReleasedAt = releasedAt
 	if input.Ref != "" {
 		opts.Ref = new(input.Ref)
 	}
@@ -202,13 +200,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Description != "" {
 		opts.Description = new(toolutil.NormalizeText(input.Description))
 	}
-	if input.ReleasedAt != "" {
-		t, err := time.Parse(time.RFC3339, input.ReleasedAt)
-		if err != nil {
-			return Output{}, fmt.Errorf("releaseUpdate: invalid released_at format (expected ISO 8601/RFC 3339): %w", err)
-		}
-		opts.ReleasedAt = &t
+	releasedAt, err := toolutil.ParseTimeField("released_at", input.ReleasedAt)
+	if err != nil {
+		return Output{}, fmt.Errorf("releaseUpdate: %w", err)
 	}
+	opts.ReleasedAt = releasedAt
 	if len(input.Milestones) > 0 {
 		opts.Milestones = &input.Milestones
 	}

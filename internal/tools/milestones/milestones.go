@@ -326,19 +326,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Description != "" {
 		opts.Description = new(input.Description)
 	}
-	if input.StartDate != "" {
-		d, err := parseISODate(input.StartDate)
-		if err != nil {
-			return Output{}, fmt.Errorf("milestoneCreate: start_date: %w", err)
-		}
-		opts.StartDate = d
-	}
-	if input.DueDate != "" {
-		d, err := parseISODate(input.DueDate)
-		if err != nil {
-			return Output{}, fmt.Errorf("milestoneCreate: due_date: %w", err)
-		}
-		opts.DueDate = d
+	if err := parseMilestoneDates(input.StartDate, input.DueDate, &opts.StartDate, &opts.DueDate); err != nil {
+		return Output{}, fmt.Errorf("milestoneCreate: %w", err)
 	}
 
 	m, _, err := client.GL().Milestones.CreateMilestone(string(input.ProjectID), opts, gl.WithContext(ctx))
@@ -363,33 +352,23 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, toolutil.ErrRequiredInt64("milestoneUpdate", "milestone_iid")
 	}
 
+	// The dates are read before the IID is resolved, so one that does not
+	// parse is refused without a request rather than after one.
+	opts := &gl.UpdateMilestoneOptions{}
+	if err := parseMilestoneDates(input.StartDate, input.DueDate, &opts.StartDate, &opts.DueDate); err != nil {
+		return Output{}, fmt.Errorf("milestoneUpdate: %w", err)
+	}
+
 	globalID, err := resolveIID(ctx, client, input.ProjectID, input.MilestoneIID)
 	if err != nil {
 		return Output{}, fmt.Errorf("milestoneUpdate: %w", err)
 	}
 
-	opts := &gl.UpdateMilestoneOptions{}
 	if input.Title != "" {
 		opts.Title = new(input.Title)
 	}
 	if input.Description != "" {
 		opts.Description = new(input.Description)
-	}
-	if input.StartDate != "" {
-		var d *gl.ISOTime
-		d, err = parseISODate(input.StartDate)
-		if err != nil {
-			return Output{}, fmt.Errorf("milestoneUpdate: start_date: %w", err)
-		}
-		opts.StartDate = d
-	}
-	if input.DueDate != "" {
-		var d *gl.ISOTime
-		d, err = parseISODate(input.DueDate)
-		if err != nil {
-			return Output{}, fmt.Errorf("milestoneUpdate: due_date: %w", err)
-		}
-		opts.DueDate = d
 	}
 	if input.StateEvent != "" {
 		opts.StateEvent = new(input.StateEvent)
@@ -544,13 +523,12 @@ func GetMergeRequests(ctx context.Context, client *gitlabclient.Client, input Ge
 
 // ---------- Helpers ----------.
 
-// parseISODate converts a YYYY-MM-DD milestone date string to the
-// [gl.ISOTime] type expected by the GitLab API.
-func parseISODate(s string) (*gl.ISOTime, error) {
-	t, err := time.Parse("2006-01-02", s)
-	if err != nil {
-		return nil, fmt.Errorf("invalid date format (expected YYYY-MM-DD): %w", err)
-	}
-	d := gl.ISOTime(t)
-	return &d, nil
+// parseMilestoneDates reads a milestone's start and due dates into their
+// option fields through the parser every date input shares, refusing the
+// first that does not parse.
+func parseMilestoneDates(startDate, dueDate string, start, due **gl.ISOTime) error {
+	return toolutil.ParseDateInputs(
+		toolutil.DateInput{Field: "start_date", Value: startDate, Dest: start},
+		toolutil.DateInput{Field: "due_date", Value: dueDate, Dest: due},
+	)
 }

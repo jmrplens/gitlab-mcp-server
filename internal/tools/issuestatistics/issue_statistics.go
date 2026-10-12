@@ -3,6 +3,7 @@ package issuestatistics
 import (
 	"context"
 	"net/http"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -148,10 +149,13 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Stat
 		MyReactionEmoji:  optStr(input.MyReactionEmoji),
 		IIDs:             optIIDs(input.IIDs),
 		Confidential:     input.Confidential,
-		CreatedAfter:     toolutil.ParseOptionalTime(input.CreatedAfter),
-		CreatedBefore:    toolutil.ParseOptionalTime(input.CreatedBefore),
-		UpdatedAfter:     toolutil.ParseOptionalTime(input.UpdatedAfter),
-		UpdatedBefore:    toolutil.ParseOptionalTime(input.UpdatedBefore),
+	}
+	dates := statisticsFilters{
+		CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore,
+		UpdatedAfter: input.UpdatedAfter, UpdatedBefore: input.UpdatedBefore,
+	}
+	if err := parseStatisticsDates(dates, &opts.CreatedAfter, &opts.CreatedBefore, &opts.UpdatedAfter, &opts.UpdatedBefore); err != nil {
+		return StatisticsOutput{}, err
 	}
 	stats, _, err := client.GL().IssuesStatistics.GetIssuesStatistics(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -186,24 +190,69 @@ type GetGroupInput struct {
 // descendant projects via the GitLab Group Issue statistics API
 // (GET /groups/:id/issues_statistics).
 func GetGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupInput) (StatisticsOutput, error) {
-	stats, _, err := client.GL().IssuesStatistics.GetGroupIssuesStatistics(input.GroupID, groupIssueStatsOptions(statisticsFilters{
-		Labels: input.Labels, Milestone: input.Milestone, Scope: input.Scope, Search: input.Search,
-		AssigneeID: input.AssigneeID, AssigneeUsername: input.AssigneeUsername,
-		AuthorID: input.AuthorID, AuthorUsername: input.AuthorUsername,
-		Confidential: input.Confidential, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore,
-		UpdatedAfter: input.UpdatedAfter, UpdatedBefore: input.UpdatedBefore,
-		IIDs: input.IIDs, MyReactionEmoji: input.MyReactionEmoji,
-	}), gl.WithContext(ctx))
+	//gitlab:request mandatory: scopedStatistics sends this read on every call whose filters parse
+	return scopedStatistics(ctx, scopedStatisticsRead[*gl.GetGroupIssuesStatisticsOptions]{
+		id: input.GroupID,
+		filters: statisticsFilters{
+			Labels: input.Labels, Milestone: input.Milestone, Scope: input.Scope, Search: input.Search,
+			AssigneeID: input.AssigneeID, AssigneeUsername: input.AssigneeUsername,
+			AuthorID: input.AuthorID, AuthorUsername: input.AuthorUsername,
+			Confidential: input.Confidential, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore,
+			UpdatedAfter: input.UpdatedAfter, UpdatedBefore: input.UpdatedBefore,
+			IIDs: input.IIDs, MyReactionEmoji: input.MyReactionEmoji,
+		},
+		build:     groupIssueStatsOptions,
+		get:       client.GL().IssuesStatistics.GetGroupIssuesStatistics,
+		operation: "gitlab_get_group_issue_statistics",
+		hint:      "verify group_id with group.get",
+	})
+}
+
+// scopedStatisticsRead is one statistics read scoped to a group or a project:
+// the scope's ID, the filters the caller set, how they become the route's
+// options, and the client-go method that reads it.
+type scopedStatisticsRead[O any] struct {
+	id        string
+	filters   statisticsFilters
+	build     func(statisticsFilters) (O, error)
+	get       func(any, O, ...gl.RequestOptionFunc) (*gl.IssuesStatistics, *gl.Response, error)
+	operation string
+	hint      string
+}
+
+// scopedStatistics builds the options of read, refusing a filter that does not
+// parse before any request, and reads the statistics, answering a 404 with the
+// read's hint.
+func scopedStatistics[O any](ctx context.Context, read scopedStatisticsRead[O]) (StatisticsOutput, error) {
+	opts, err := read.build(read.filters)
 	if err != nil {
-		return StatisticsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_group_issue_statistics", err, http.StatusNotFound, "verify group_id with group.get")
+		return StatisticsOutput{}, err
+	}
+	stats, _, err := read.get(read.id, opts, gl.WithContext(ctx))
+	if err != nil {
+		return StatisticsOutput{}, toolutil.WrapErrWithStatusHint(read.operation, err, http.StatusNotFound, read.hint)
 	}
 	return fromGL(stats), nil
 }
 
+// parseStatisticsDates parses the created and updated bounds of filters, which
+// every statistics route shares, into their option fields, refusing the call
+// on the first value that does not parse. The parser before it answered nil
+// for such a value and the counts covered every issue the range was meant to
+// leave out (issue 1308).
+func parseStatisticsDates(filters statisticsFilters, createdAfter, createdBefore, updatedAfter, updatedBefore **time.Time) error {
+	return toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "created_after", Value: filters.CreatedAfter, Dest: createdAfter},
+		toolutil.TimeInput{Field: "created_before", Value: filters.CreatedBefore, Dest: createdBefore},
+		toolutil.TimeInput{Field: "updated_after", Value: filters.UpdatedAfter, Dest: updatedAfter},
+		toolutil.TimeInput{Field: "updated_before", Value: filters.UpdatedBefore, Dest: updatedBefore},
+	)
+}
+
 // groupIssueStatsOptions builds a [gl.GetGroupIssuesStatisticsOptions]
 // from the shared [statisticsFilters] set.
-func groupIssueStatsOptions(filters statisticsFilters) *gl.GetGroupIssuesStatisticsOptions {
-	return &gl.GetGroupIssuesStatisticsOptions{
+func groupIssueStatsOptions(filters statisticsFilters) (*gl.GetGroupIssuesStatisticsOptions, error) {
+	opts := &gl.GetGroupIssuesStatisticsOptions{
 		Labels:           labelOptions(filters.Labels),
 		IIDs:             optIIDs(filters.IIDs),
 		Milestone:        optStr(filters.Milestone),
@@ -214,12 +263,12 @@ func groupIssueStatsOptions(filters statisticsFilters) *gl.GetGroupIssuesStatist
 		AssigneeUsername: optStrings(filters.AssigneeUsername),
 		MyReactionEmoji:  optStr(filters.MyReactionEmoji),
 		Search:           optStr(filters.Search),
-		CreatedAfter:     toolutil.ParseOptionalTime(filters.CreatedAfter),
-		CreatedBefore:    toolutil.ParseOptionalTime(filters.CreatedBefore),
-		UpdatedAfter:     toolutil.ParseOptionalTime(filters.UpdatedAfter),
-		UpdatedBefore:    toolutil.ParseOptionalTime(filters.UpdatedBefore),
 		Confidential:     filters.Confidential,
 	}
+	if err := parseStatisticsDates(filters, &opts.CreatedAfter, &opts.CreatedBefore, &opts.UpdatedAfter, &opts.UpdatedBefore); err != nil {
+		return nil, err
+	}
+	return opts, nil
 }
 
 // GetProject.
@@ -248,24 +297,28 @@ type GetProjectInput struct {
 // the GitLab Project Issue statistics API
 // (GET /projects/:id/issues_statistics).
 func GetProject(ctx context.Context, client *gitlabclient.Client, input GetProjectInput) (StatisticsOutput, error) {
-	stats, _, err := client.GL().IssuesStatistics.GetProjectIssuesStatistics(input.ProjectID, projectIssueStatsOptions(statisticsFilters{
-		Labels: input.Labels, Milestone: input.Milestone, Scope: input.Scope, Search: input.Search,
-		AssigneeID: input.AssigneeID, AssigneeUsername: input.AssigneeUsername,
-		AuthorID: input.AuthorID, AuthorUsername: input.AuthorUsername,
-		Confidential: input.Confidential, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore,
-		UpdatedAfter: input.UpdatedAfter, UpdatedBefore: input.UpdatedBefore,
-		IIDs: input.IIDs, MyReactionEmoji: input.MyReactionEmoji,
-	}), gl.WithContext(ctx))
-	if err != nil {
-		return StatisticsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_project_issue_statistics", err, http.StatusNotFound, "verify project_id with project.get")
-	}
-	return fromGL(stats), nil
+	//gitlab:request mandatory: scopedStatistics sends this read on every call whose filters parse
+	return scopedStatistics(ctx, scopedStatisticsRead[*gl.GetProjectIssuesStatisticsOptions]{
+		id: input.ProjectID,
+		filters: statisticsFilters{
+			Labels: input.Labels, Milestone: input.Milestone, Scope: input.Scope, Search: input.Search,
+			AssigneeID: input.AssigneeID, AssigneeUsername: input.AssigneeUsername,
+			AuthorID: input.AuthorID, AuthorUsername: input.AuthorUsername,
+			Confidential: input.Confidential, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore,
+			UpdatedAfter: input.UpdatedAfter, UpdatedBefore: input.UpdatedBefore,
+			IIDs: input.IIDs, MyReactionEmoji: input.MyReactionEmoji,
+		},
+		build:     projectIssueStatsOptions,
+		get:       client.GL().IssuesStatistics.GetProjectIssuesStatistics,
+		operation: "gitlab_get_project_issue_statistics",
+		hint:      "verify project_id with project.get",
+	})
 }
 
 // projectIssueStatsOptions builds a [gl.GetProjectIssuesStatisticsOptions]
 // from the shared [statisticsFilters] set.
-func projectIssueStatsOptions(filters statisticsFilters) *gl.GetProjectIssuesStatisticsOptions {
-	return &gl.GetProjectIssuesStatisticsOptions{
+func projectIssueStatsOptions(filters statisticsFilters) (*gl.GetProjectIssuesStatisticsOptions, error) {
+	opts := &gl.GetProjectIssuesStatisticsOptions{
 		IIDs:             optIIDs(filters.IIDs),
 		Labels:           labelOptions(filters.Labels),
 		Milestone:        optStr(filters.Milestone),
@@ -276,12 +329,12 @@ func projectIssueStatsOptions(filters statisticsFilters) *gl.GetProjectIssuesSta
 		AssigneeUsername: optStrings(filters.AssigneeUsername),
 		MyReactionEmoji:  optStr(filters.MyReactionEmoji),
 		Search:           optStr(filters.Search),
-		CreatedAfter:     toolutil.ParseOptionalTime(filters.CreatedAfter),
-		CreatedBefore:    toolutil.ParseOptionalTime(filters.CreatedBefore),
-		UpdatedAfter:     toolutil.ParseOptionalTime(filters.UpdatedAfter),
-		UpdatedBefore:    toolutil.ParseOptionalTime(filters.UpdatedBefore),
 		Confidential:     filters.Confidential,
 	}
+	if err := parseStatisticsDates(filters, &opts.CreatedAfter, &opts.CreatedBefore, &opts.UpdatedAfter, &opts.UpdatedBefore); err != nil {
+		return nil, err
+	}
+	return opts, nil
 }
 
 // formatters.

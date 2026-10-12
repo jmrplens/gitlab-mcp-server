@@ -206,16 +206,19 @@ func ListPendingGroupInvitations(ctx context.Context, client *gitlabclient.Clien
 	})
 }
 
-// applyInviteExpiresAt parses the date-only invitation expires_at parameter
-// (YYYY-MM-DD ISOTime, not an RFC3339 timestamp) onto the SDK options.
-func applyInviteExpiresAt(opts *gl.InvitesOptions, expiresAt string) {
-	if expiresAt == "" {
-		return
+// applyInviteExpiresAt parses the invitation expires_at onto the SDK options,
+// which carry it as a date: YYYY-MM-DD, or an RFC 3339 timestamp sent as the
+// date it names. A value that does not parse refuses the call. The guard this
+// replaced read only YYYY-MM-DD and dropped anything else, an RFC 3339
+// timestamp included, so the membership was granted with no expiry and the
+// result said success (issue 1308).
+func applyInviteExpiresAt(opts *gl.InvitesOptions, expiresAt string) error {
+	parsed, err := toolutil.ParseDateField("expires_at", expiresAt)
+	if err != nil {
+		return err
 	}
-	if t, err := time.Parse("2006-01-02", expiresAt); err == nil {
-		d := gl.ISOTime(t)
-		opts.ExpiresAt = &d
-	}
+	opts.ExpiresAt = parsed
+	return nil
 }
 
 // invitesRequest is the documented POST body of an invitation: client-go's own
@@ -266,7 +269,11 @@ type sendInvitationArgs struct {
 	forbiddenHint string
 	email         string
 	userID        int64
-	body          invitesRequest
+	// expiresAt is the caller's expires_at, read onto body by runInvitation
+	// before anything else is checked, so a value that does not parse is the
+	// first thing a caller is told.
+	expiresAt string
+	body      invitesRequest
 	// path formats the invitations endpoint for the scope, given the escaped
 	// identifier, so the two handlers differ only in the route they name.
 	path func(string) string
@@ -280,6 +287,9 @@ type sendInvitationArgs struct {
 // from client-go's own options struct, so the parameters it does model keep the
 // SDK's spelling.
 func runInvitation(ctx context.Context, client *gitlabclient.Client, args sendInvitationArgs) (InviteResultOutput, error) {
+	if err := applyInviteExpiresAt(args.body.InvitesOptions, args.expiresAt); err != nil {
+		return InviteResultOutput{}, fmt.Errorf("%s: %w", args.operation, err)
+	}
 	if args.scopeID == "" {
 		return InviteResultOutput{}, toolutil.WrapErrWithMessage(args.operation, toolutil.ErrFieldRequired(args.requiredField))
 	}
@@ -304,7 +314,8 @@ func runInvitation(ctx context.Context, client *gitlabclient.Client, args sendIn
 // The &gl.InvitesOptions{} literal is built here, in the handler that takes the
 // model-facing ProjectInvitesInput, so every documented add-a-member POST body
 // parameter (id, email, user_id, access_level, expires_at) is mapped 1:1 from a
-// public input field. invite_source and member_role_id sit beside it on
+// public input field, expires_at by [runInvitation], which parses it before it
+// checks anything else. invite_source and member_role_id sit beside it on
 // [invitesRequest]: invitations.md documents both and gl.InvitesOptions carries
 // neither.
 func ProjectInvites(ctx context.Context, client *gitlabclient.Client, input ProjectInvitesInput) (InviteResultOutput, error) {
@@ -319,7 +330,6 @@ func ProjectInvites(ctx context.Context, client *gitlabclient.Client, input Proj
 	if input.UserID != 0 {
 		opts.UserID = input.UserID
 	}
-	applyInviteExpiresAt(opts, input.ExpiresAt)
 	return runInvitation(ctx, client, sendInvitationArgs{
 		scopeID:       input.ProjectID,
 		operation:     "project_invite",
@@ -327,6 +337,7 @@ func ProjectInvites(ctx context.Context, client *gitlabclient.Client, input Proj
 		forbiddenHint: "inviting users requires Maintainer or Owner role on the project",
 		email:         input.Email,
 		userID:        input.UserID,
+		expiresAt:     input.ExpiresAt,
 		body:          invitesRequest{InvitesOptions: opts, InviteSource: input.InviteSource, MemberRoleID: input.MemberRoleID},
 		path:          projectInvitationsPath,
 	})
@@ -351,7 +362,6 @@ func GroupInvites(ctx context.Context, client *gitlabclient.Client, input GroupI
 	if input.UserID != 0 {
 		opts.UserID = input.UserID
 	}
-	applyInviteExpiresAt(opts, input.ExpiresAt)
 	return runInvitation(ctx, client, sendInvitationArgs{
 		scopeID:       input.GroupID,
 		operation:     "group_invite",
@@ -359,6 +369,7 @@ func GroupInvites(ctx context.Context, client *gitlabclient.Client, input GroupI
 		forbiddenHint: "inviting users requires Owner role on the group",
 		email:         input.Email,
 		userID:        input.UserID,
+		expiresAt:     input.ExpiresAt,
 		body:          invitesRequest{InvitesOptions: opts, InviteSource: input.InviteSource, MemberRoleID: input.MemberRoleID},
 		path:          groupInvitationsPath,
 	})

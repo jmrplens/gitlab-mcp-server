@@ -7032,6 +7032,17 @@ func updateBody(t *testing.T, input UpdateInput) map[string]json.RawMessage {
 	return body
 }
 
+// TestList_TimestampFilterThatDoesNotParse_IsRefusedBeforeAnyRequest verifies
+// the merge request list refuses a created or updated bound it cannot read,
+// naming the field and quoting the value, before any request (issue 1308).
+func TestList_TimestampFilterThatDoesNotParse_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := List(context.Background(), client, ListInput{ProjectID: "42", CreatedAfter: "not-a-date"})
+	if err == nil || !strings.Contains(err.Error(), "created_after must be") || !strings.Contains(err.Error(), `"not-a-date"`) {
+		t.Errorf("List() error = %v, want the created_after refusal quoting the value", err)
+	}
+}
+
 // TestUpdate_OptionalFields_ReachTheBody holds the update body to exactly the
 // keys the caller set, each with a value of its own, and to an empty object
 // when the caller set none. milestone_id has a case of its own at zero: GitLab

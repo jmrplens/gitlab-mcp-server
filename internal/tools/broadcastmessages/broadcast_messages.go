@@ -162,19 +162,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	opts := &gl.CreateBroadcastMessageOptions{
 		Message: new(input.Message),
 	}
-	if input.StartsAt != "" {
-		t, err := time.Parse(time.RFC3339, input.StartsAt)
-		if err != nil {
-			return CreateOutput{}, toolutil.WrapErrWithMessage("broadcast_message_create", fmt.Errorf("invalid starts_at: %w", err))
-		}
-		opts.StartsAt = &t
-	}
-	if input.EndsAt != "" {
-		t, err := time.Parse(time.RFC3339, input.EndsAt)
-		if err != nil {
-			return CreateOutput{}, toolutil.WrapErrWithMessage("broadcast_message_create", fmt.Errorf("invalid ends_at: %w", err))
-		}
-		opts.EndsAt = &t
+	if err := toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "starts_at", Value: input.StartsAt, Dest: &opts.StartsAt},
+		toolutil.TimeInput{Field: "ends_at", Value: input.EndsAt, Dest: &opts.EndsAt},
+	); err != nil {
+		return CreateOutput{}, fmt.Errorf("broadcast_message_create: %w", err)
 	}
 	if input.Font != "" {
 		opts.Font = new(input.Font)
@@ -263,19 +255,11 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateBroadcastMessageOptions, erro
 	if input.Message != "" {
 		opts.Message = new(input.Message)
 	}
-	if input.StartsAt != "" {
-		t, err := time.Parse(time.RFC3339, input.StartsAt)
-		if err != nil {
-			return nil, fmt.Errorf("invalid starts_at: %w", err)
-		}
-		opts.StartsAt = &t
-	}
-	if input.EndsAt != "" {
-		t, err := time.Parse(time.RFC3339, input.EndsAt)
-		if err != nil {
-			return nil, fmt.Errorf("invalid ends_at: %w", err)
-		}
-		opts.EndsAt = &t
+	if err := toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "starts_at", Value: input.StartsAt, Dest: &opts.StartsAt},
+		toolutil.TimeInput{Field: "ends_at", Value: input.EndsAt, Dest: &opts.EndsAt},
+	); err != nil {
+		return nil, err
 	}
 	if input.Font != "" {
 		opts.Font = new(input.Font)

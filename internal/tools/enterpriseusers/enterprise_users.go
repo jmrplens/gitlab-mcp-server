@@ -2,7 +2,6 @@ package enterpriseusers
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"time"
 
@@ -295,19 +294,11 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	if in.TwoFactor != "" {
 		opts.TwoFactor = in.TwoFactor
 	}
-	if in.CreatedAfter != "" {
-		t, err := time.Parse(time.RFC3339, in.CreatedAfter)
-		if err != nil {
-			return ListOutput{}, errors.New("created_after must be a valid ISO 8601 date")
-		}
-		opts.CreatedAfter = &t
-	}
-	if in.CreatedBefore != "" {
-		t, err := time.Parse(time.RFC3339, in.CreatedBefore)
-		if err != nil {
-			return ListOutput{}, errors.New("created_before must be a valid ISO 8601 date")
-		}
-		opts.CreatedBefore = &t
+	if err := toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "created_after", Value: in.CreatedAfter, Dest: &opts.CreatedAfter},
+		toolutil.TimeInput{Field: "created_before", Value: in.CreatedBefore, Dest: &opts.CreatedBefore},
+	); err != nil {
+		return ListOutput{}, err
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	users, resp, err := client.GL().EnterpriseUsers.ListEnterpriseUsers(in.GroupID.String(), opts, gl.WithContext(ctx))

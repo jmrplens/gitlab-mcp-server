@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -1615,29 +1617,39 @@ func TestFormatListMarkdown_ReturnsCallToolResult(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// parseISODate edge case
+// parseMilestoneDates edge case
 // ---------------------------------------------------------------------------.
 
-// TestParseISODate_Valid verifies the ParseISODate_Valid handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestParseISODate_Valid(t *testing.T) {
-	d, err := parseISODate("2026-06-15")
-	if err != nil {
+// TestParseMilestoneDates_ReadsBoth verifies that both dates land in their
+// own fields, an RFC 3339 due date read for the day it names.
+func TestParseMilestoneDates_ReadsBoth(t *testing.T) {
+	var start, due *gl.ISOTime
+	if err := parseMilestoneDates("2026-06-15", "2026-07-01T09:00:00Z", &start, &due); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if d == nil {
-		t.Fatal("expected non-nil ISOTime")
+	if start == nil || start.String() != "2026-06-15" || due == nil || due.String() != "2026-07-01" {
+		t.Errorf("start, due = %v, %v, want 2026-06-15, 2026-07-01", start, due)
 	}
 }
 
-// TestParseISODate_Invalid verifies the ParseISODate_Invalid handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestParseISODate_Invalid(t *testing.T) {
-	_, err := parseISODate("June 15, 2026")
-	if err == nil {
-		t.Fatal("expected error for invalid date format")
+// TestParseMilestoneDates_Invalid verifies that a date that does not parse
+// is refused, naming the field.
+func TestParseMilestoneDates_Invalid(t *testing.T) {
+	var start, due *gl.ISOTime
+	err := parseMilestoneDates("", "June 15, 2026", &start, &due)
+	if err == nil || !strings.Contains(err.Error(), "due_date must be a date") {
+		t.Fatalf("parseMilestoneDates() error = %v, want the refusal of due_date", err)
+	}
+}
+
+// TestUpdate_InvalidDate_IsRefusedBeforeTheIIDIsResolved verifies that the
+// update refuses a date it cannot read without first resolving the IID, which
+// used to cost a request for a call that was refused anyway.
+func TestUpdate_InvalidDate_IsRefusedBeforeTheIIDIsResolved(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := Update(context.Background(), client, UpdateInput{GroupID: "7", MilestoneIID: 3, StartDate: "2026-02-30"})
+	if err == nil || !strings.Contains(err.Error(), "start_date must be a date") {
+		t.Fatalf("Update() error = %v, want the refusal of start_date", err)
 	}
 }
 

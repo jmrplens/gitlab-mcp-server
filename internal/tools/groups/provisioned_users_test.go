@@ -114,8 +114,8 @@ func TestListProvisionedUsers_Validation(t *testing.T) {
 		wantErr string
 	}{
 		{"missing group_id", ListProvisionedUsersInput{}, "group_id is required"},
-		{"bad created_after", ListProvisionedUsersInput{GroupID: "99", CreatedAfter: "not-a-time"}, "created_after must be an RFC3339"},
-		{"bad created_before", ListProvisionedUsersInput{GroupID: "99", CreatedBefore: "not-a-time"}, "created_before must be an RFC3339"},
+		{"bad created_after", ListProvisionedUsersInput{GroupID: "99", CreatedAfter: "not-a-time"}, `created_after must be an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 (read as midnight UTC), got "not-a-time"`},
+		{"bad created_before", ListProvisionedUsersInput{GroupID: "99", CreatedBefore: "not-a-time"}, `created_before must be an ISO 8601 timestamp`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

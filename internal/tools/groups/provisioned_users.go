@@ -3,6 +3,7 @@ package groups
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -327,19 +328,11 @@ func provisionedUsersOptions(input ListProvisionedUsersInput) (*gl.ListProvision
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
-	if input.CreatedAfter != "" {
-		t, err := time.Parse(time.RFC3339, input.CreatedAfter)
-		if err != nil {
-			return nil, errors.New("ListProvisionedUsers: created_after must be an RFC3339 timestamp (e.g. 2024-01-02T15:04:05Z)")
-		}
-		opts.CreatedAfter = &t
-	}
-	if input.CreatedBefore != "" {
-		t, err := time.Parse(time.RFC3339, input.CreatedBefore)
-		if err != nil {
-			return nil, errors.New("ListProvisionedUsers: created_before must be an RFC3339 timestamp (e.g. 2024-12-31T23:59:59Z)")
-		}
-		opts.CreatedBefore = &t
+	if err := toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "created_after", Value: input.CreatedAfter, Dest: &opts.CreatedAfter},
+		toolutil.TimeInput{Field: "created_before", Value: input.CreatedBefore, Dest: &opts.CreatedBefore},
+	); err != nil {
+		return nil, fmt.Errorf("ListProvisionedUsers: %w", err)
 	}
 	return opts, nil
 }

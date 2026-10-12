@@ -855,29 +855,14 @@ func TestFormatDeleteUserIdentityMarkdownString(t *testing.T) {
 	}
 }
 
-// TestParseDate_ValidDate verifies parseDate returns a valid time for YYYY-MM-DD.
-func TestParseDate_ValidDate(t *testing.T) {
-	d := parseDate("2026-06-15")
-	if d.IsZero() {
-		t.Fatal("expected non-zero time for valid date")
-	}
-	if d.Year() != 2026 || d.Month() != 6 || d.Day() != 15 {
-		t.Errorf("date = %v, want 2026-06-15", d)
-	}
-}
-
-// TestParseDate_InvalidDate verifies parseDate returns zero time for invalid input.
-func TestParseDate_InvalidDate(t *testing.T) {
-	d := parseDate("not-a-date")
-	if !d.IsZero() {
-		t.Errorf("expected zero time for invalid date, got %v", d)
-	}
-}
-
-// TestParseDate_Empty verifies parseDate returns zero time for empty string.
-func TestParseDate_Empty(t *testing.T) {
-	d := parseDate("")
-	if !d.IsZero() {
-		t.Errorf("expected zero time for empty string, got %v", d)
+// TestGetUserActivities_InvalidFrom_IsRefused verifies that a from date the
+// handler cannot read is refused, naming it, before any request. The parser
+// this replaced answered the zero time for it, so the request asked for every
+// activity since 0001-01-01 (issue 1308).
+func TestGetUserActivities_InvalidFrom_IsRefused(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := GetUserActivities(context.Background(), client, GetUserActivitiesInput{From: "not-a-date"})
+	if err == nil || !strings.Contains(err.Error(), "from must be a date") {
+		t.Fatalf("GetUserActivities() error = %v, want the refusal of from", err)
 	}
 }

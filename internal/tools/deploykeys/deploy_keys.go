@@ -221,7 +221,7 @@ type AddInput struct {
 	Title     string               `json:"title" jsonschema:"Deploy key title,required"`
 	Key       string               `json:"key" jsonschema:"Public SSH key content,required"`
 	CanPush   *bool                `json:"can_push,omitempty" jsonschema:"Whether the key can push to the project"`
-	ExpiresAt string               `json:"expires_at,omitempty" jsonschema:"Expiry date (YYYY-MM-DD)"`
+	ExpiresAt string               `json:"expires_at,omitempty" jsonschema:"Expiry, an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC"`
 }
 
 // UpdateInput represents parameters for updating a deploy key.
@@ -257,7 +257,7 @@ type ListAllInput struct {
 type AddInstanceInput struct {
 	Title     string `json:"title" jsonschema:"Deploy key title,required"`
 	Key       string `json:"key" jsonschema:"Public SSH key content,required"`
-	ExpiresAt string `json:"expires_at,omitempty" jsonschema:"Expiry date (YYYY-MM-DD)"`
+	ExpiresAt string `json:"expires_at,omitempty" jsonschema:"Expiry, an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC"`
 }
 
 // ListUserProjectInput represents parameters for listing a user's project deploy keys.
@@ -336,13 +336,11 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 		opts.CanPush = input.CanPush
 	}
 
-	if input.ExpiresAt != "" {
-		t, err := time.Parse("2006-01-02", input.ExpiresAt)
-		if err != nil {
-			return Output{}, fmt.Errorf("invalid expires_at format, use YYYY-MM-DD: %w", err)
-		}
-		opts.ExpiresAt = &t
+	expiresAt, err := toolutil.ParseTimeField("expires_at", input.ExpiresAt)
+	if err != nil {
+		return Output{}, fmt.Errorf("deploy_key_add: %w", err)
 	}
+	opts.ExpiresAt = expiresAt
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	key, _, err := client.GL().DeployKeys.AddDeployKey(string(input.ProjectID), opts, gl.WithContext(ctx))
@@ -466,13 +464,11 @@ func AddInstance(ctx context.Context, client *gitlabclient.Client, input AddInst
 		Key:   new(input.Key),
 	}
 
-	if input.ExpiresAt != "" {
-		t, err := time.Parse("2006-01-02", input.ExpiresAt)
-		if err != nil {
-			return InstanceOutput{}, fmt.Errorf("invalid expires_at format, use YYYY-MM-DD: %w", err)
-		}
-		opts.ExpiresAt = &t
+	expiresAt, err := toolutil.ParseTimeField("expires_at", input.ExpiresAt)
+	if err != nil {
+		return InstanceOutput{}, fmt.Errorf("deploy_key_add_instance: %w", err)
 	}
+	opts.ExpiresAt = expiresAt
 
 	key, _, err := client.GL().DeployKeys.AddInstanceDeployKey(opts, gl.WithContext(ctx))
 	if err != nil {

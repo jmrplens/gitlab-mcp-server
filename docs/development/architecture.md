@@ -231,7 +231,7 @@ domain package.
 | `surface_tool.go`  | `RegisterSurfaceToolFromSpec`: registers an `ActionSpec` as a standalone visible tool                                                                                                                                                        |
 | `icons.go`         | The icon set ([Capabilities and Icons](capabilities.md#icons))                                                                                                                                                                               |
 | `string_or_int.go` | `StringOrInt`, for fields a model sends as either                                                                                                                                                                                            |
-| `time_helpers.go`  | `ParseOptionalTime`, `FormatTime` and its variants                                                                                                                                                                                           |
+| `time_helpers.go`  | `ParseTimeField` and `ParseDateField`, which refuse a value that does not parse, their batch forms, and `FormatTime` and its variants                                                                                                        |
 
 ## Server pool (`internal/serverpool`)
 

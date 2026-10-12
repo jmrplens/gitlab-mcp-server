@@ -3,6 +3,7 @@ package snippetnotes
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -152,9 +153,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	opts := &gl.CreateSnippetNoteOptions{
 		Body: &body,
 	}
-	if t := toolutil.ParseOptionalTime(input.CreatedAt); t != nil {
-		opts.CreatedAt = t
+	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
+	if err != nil {
+		return Output{}, fmt.Errorf("snippetNoteCreate: %w", err)
 	}
+	opts.CreatedAt = createdAt
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	n, _, err := client.GL().Notes.CreateSnippetNote(string(input.ProjectID), input.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {

@@ -331,9 +331,11 @@ func AddMember(ctx context.Context, client *gitlabclient.Client, input AddInput)
 	if input.Username != "" {
 		opts.Username = new(input.Username)
 	}
-	if input.ExpiresAt != "" {
-		opts.ExpiresAt = new(input.ExpiresAt)
+	expiresAt, err := toolutil.ParseDateFieldString("expires_at", input.ExpiresAt)
+	if err != nil {
+		return Output{}, fmt.Errorf("group_member_add: %w", err)
 	}
+	opts.ExpiresAt = expiresAt
 	if input.MemberRoleID != 0 {
 		opts.MemberRoleID = new(input.MemberRoleID)
 	}
@@ -372,12 +374,13 @@ func EditMember(ctx context.Context, client *gitlabclient.Client, input EditInpu
 	if input.UserID == 0 {
 		return Output{}, toolutil.WrapErrWithMessage("group_member_edit", toolutil.ErrFieldRequired("user_id"))
 	}
-	opts := &gl.EditGroupMemberOptions{}
+	expiresAt, err := toolutil.ParseDateFieldString("expires_at", input.ExpiresAt)
+	if err != nil {
+		return Output{}, fmt.Errorf("group_member_edit: %w", err)
+	}
+	opts := &gl.EditGroupMemberOptions{ExpiresAt: expiresAt}
 	if input.AccessLevel != 0 {
 		opts.AccessLevel = new(gl.AccessLevelValue(input.AccessLevel))
-	}
-	if input.ExpiresAt != "" {
-		opts.ExpiresAt = new(input.ExpiresAt)
 	}
 	if input.MemberRoleID != 0 {
 		opts.MemberRoleID = new(input.MemberRoleID)
@@ -469,16 +472,14 @@ func ShareGroup(ctx context.Context, client *gitlabclient.Client, input ShareInp
 	default:
 		return ShareOutput{}, toolutil.WrapErrWithMessage("group_share", errShareGroupAccess)
 	}
+	expiresAt, err := toolutil.ParseDateField("expires_at", input.ExpiresAt)
+	if err != nil {
+		return ShareOutput{}, fmt.Errorf("group_share: %w", err)
+	}
 	opts := &gl.ShareGroupWithGroupOptions{
 		GroupID:     new(input.ShareGroupID),
 		GroupAccess: new(gl.AccessLevelValue(input.GroupAccess)),
-	}
-	if input.ExpiresAt != "" {
-		expiresAt, err := gl.ParseISOTime(input.ExpiresAt)
-		if err != nil {
-			return ShareOutput{}, toolutil.WrapErrWithMessage("group_share", fmt.Errorf("expires_at must be a date in YYYY-MM-DD form: %w", err))
-		}
-		opts.ExpiresAt = &expiresAt
+		ExpiresAt:   expiresAt,
 	}
 	if input.MemberRoleID != 0 {
 		opts.MemberRoleID = new(input.MemberRoleID)

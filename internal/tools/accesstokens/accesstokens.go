@@ -17,8 +17,6 @@ import (
 const (
 	// errTokenIDInvalid identifies the err token ID invalid constant used by this package.
 	errTokenIDInvalid = "token_id is required and must be > 0" //#nosec G101 -- false positive: error message, not a credential
-	// errInvalidExpiresAtFmt identifies the err invalid expires at fmt constant used by this package.
-	errInvalidExpiresAtFmt = "invalid expires_at format (expected YYYY-MM-DD): %w"
 	// hintTokenAlreadyRevoked is returned when revoking a token that the API
 	// reports as not found.
 	hintTokenAlreadyRevoked = "token already revoked or never existed. Nothing to do" //#nosec G101 -- error hint, not a credential
@@ -442,13 +440,9 @@ func createAccessToken(ctx context.Context, args accessTokenCreateArgs) (Output,
 	if err := ctx.Err(); err != nil {
 		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
-	expiresAtValue, hasExpiresAt, err := parseAccessTokenExpiresAt(args.req.ExpiresAt)
+	expiresAt, err := toolutil.ParseDateField("expires_at", args.req.ExpiresAt)
 	if err != nil {
 		return Output{}, err
-	}
-	var expiresAt *gl.ISOTime
-	if hasExpiresAt {
-		expiresAt = &expiresAtValue
 	}
 	out, err := args.create(string(args.scopeID), args.req, expiresAt)
 	if err != nil {
@@ -520,13 +514,9 @@ func rotateAccessToken(ctx context.Context, args accessTokenRotateArgs) (Output,
 	if err := ctx.Err(); err != nil {
 		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
-	expiresAtParsed, hasExpiresAt, err := parseAccessTokenExpiresAt(args.expiresAtValue)
+	expiresAt, err := toolutil.ParseDateField("expires_at", args.expiresAtValue)
 	if err != nil {
 		return Output{}, err
-	}
-	var expiresAt *gl.ISOTime
-	if hasExpiresAt {
-		expiresAt = &expiresAtParsed
 	}
 	out, err := args.rotate(string(args.scopeID), args.tokenID, expiresAt)
 	if err != nil {
@@ -640,21 +630,14 @@ func GroupList(ctx context.Context, client *gitlabclient.Client, input GroupList
 	if input.Revoked != nil {
 		opts.Revoked = input.Revoked
 	}
-	if err := applyAccessTokenDateFilters(accessTokenDateFilters{
+	if err := toolutil.ParseDateInputs(accessTokenDateInputs(accessTokenDateFilters{
 		createdAfter:   input.CreatedAfter,
 		createdBefore:  input.CreatedBefore,
 		expiresAfter:   input.ExpiresAfter,
 		expiresBefore:  input.ExpiresBefore,
 		lastUsedAfter:  input.LastUsedAfter,
 		lastUsedBefore: input.LastUsedBefore,
-	}, accessTokenDateTargets{
-		createdAfter:   func(v *gl.ISOTime) { opts.CreatedAfter = v },
-		createdBefore:  func(v *gl.ISOTime) { opts.CreatedBefore = v },
-		expiresAfter:   func(v *gl.ISOTime) { opts.ExpiresAfter = v },
-		expiresBefore:  func(v *gl.ISOTime) { opts.ExpiresBefore = v },
-		lastUsedAfter:  func(v *gl.ISOTime) { opts.LastUsedAfter = v },
-		lastUsedBefore: func(v *gl.ISOTime) { opts.LastUsedBefore = v },
-	}); err != nil {
+	}, &opts.CreatedAfter, &opts.CreatedBefore, &opts.ExpiresAfter, &opts.ExpiresBefore, &opts.LastUsedAfter, &opts.LastUsedBefore)...); err != nil {
 		return ListOutput{}, err
 	}
 	if input.OrderBy != "" {
@@ -767,15 +750,11 @@ func GroupRotate(ctx context.Context, client *gitlabclient.Client, input GroupRo
 		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
-	opts := &gl.RotateGroupAccessTokenOptions{}
-	if input.ExpiresAt != "" {
-		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresAt)
-		if err != nil {
-			return Output{}, fmt.Errorf(errInvalidExpiresAtFmt, err)
-		}
-		isoT := gl.ISOTime(t)
-		opts.ExpiresAt = &isoT
+	expiresAt, err := toolutil.ParseDateField("expires_at", input.ExpiresAt)
+	if err != nil {
+		return Output{}, err
 	}
+	opts := &gl.RotateGroupAccessTokenOptions{ExpiresAt: expiresAt}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().GroupAccessTokens.RotateGroupAccessToken(string(input.GroupID), input.TokenID, opts, gl.WithContext(ctx))
@@ -850,13 +829,9 @@ func rotateSelfAccessToken(ctx context.Context, scopeID toolutil.StringOrInt, ex
 	if err := ctx.Err(); err != nil {
 		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
-	expiresAtParsed, hasExpiresAt, err := parseAccessTokenExpiresAt(expiresAtValue)
+	expiresAt, err := toolutil.ParseDateField("expires_at", expiresAtValue)
 	if err != nil {
 		return Output{}, err
-	}
-	var expiresAt *gl.ISOTime
-	if hasExpiresAt {
-		expiresAt = &expiresAtParsed
 	}
 	out, err := rotate(string(scopeID), expiresAt)
 	if err != nil {
@@ -873,8 +848,8 @@ func rotateSelfAccessToken(ctx context.Context, scopeID toolutil.StringOrInt, ex
 	return out, nil
 }
 
-// accessTokenDateFilters holds the raw YYYY-MM-DD date-filter strings supplied
-// on a list input. Empty strings are ignored.
+// accessTokenDateFilters holds the raw date-filter strings supplied on a list
+// input. Empty strings are ignored.
 type accessTokenDateFilters struct {
 	createdAfter   string
 	createdBefore  string
@@ -884,54 +859,19 @@ type accessTokenDateFilters struct {
 	lastUsedBefore string
 }
 
-// accessTokenDateTargets holds setters that assign a parsed *gl.ISOTime onto the
-// matching field of an SDK list-options struct.
-type accessTokenDateTargets struct {
-	createdAfter   func(*gl.ISOTime)
-	createdBefore  func(*gl.ISOTime)
-	expiresAfter   func(*gl.ISOTime)
-	expiresBefore  func(*gl.ISOTime)
-	lastUsedAfter  func(*gl.ISOTime)
-	lastUsedBefore func(*gl.ISOTime)
-}
-
-// applyAccessTokenDateFilters parses each supplied YYYY-MM-DD date filter and
-// assigns the resulting *gl.ISOTime via the matching target setter. A blank
-// value leaves the corresponding option untouched. The first parse failure is
-// returned without mutating remaining targets.
-func applyAccessTokenDateFilters(filters accessTokenDateFilters, targets accessTokenDateTargets) error {
-	pairs := []struct {
-		value string
-		set   func(*gl.ISOTime)
-	}{
-		{filters.createdAfter, targets.createdAfter},
-		{filters.createdBefore, targets.createdBefore},
-		{filters.expiresAfter, targets.expiresAfter},
-		{filters.expiresBefore, targets.expiresBefore},
-		{filters.lastUsedAfter, targets.lastUsedAfter},
-		{filters.lastUsedBefore, targets.lastUsedBefore},
+// accessTokenDateInputs names the six date filters the group and personal
+// token lists share, each with the option field it fills. Each refusal names
+// its own filter: the parser these replaced reported every one of the six as
+// expires_at.
+func accessTokenDateInputs(filters accessTokenDateFilters, createdAfter, createdBefore, expiresAfter, expiresBefore, lastUsedAfter, lastUsedBefore **gl.ISOTime) []toolutil.DateInput {
+	return []toolutil.DateInput{
+		{Field: "created_after", Value: filters.createdAfter, Dest: createdAfter},
+		{Field: "created_before", Value: filters.createdBefore, Dest: createdBefore},
+		{Field: "expires_after", Value: filters.expiresAfter, Dest: expiresAfter},
+		{Field: "expires_before", Value: filters.expiresBefore, Dest: expiresBefore},
+		{Field: "last_used_after", Value: filters.lastUsedAfter, Dest: lastUsedAfter},
+		{Field: "last_used_before", Value: filters.lastUsedBefore, Dest: lastUsedBefore},
 	}
-	for _, pair := range pairs {
-		parsed, ok, err := parseAccessTokenExpiresAt(pair.value)
-		if err != nil {
-			return err
-		}
-		if ok {
-			pair.set(&parsed)
-		}
-	}
-	return nil
-}
-
-func parseAccessTokenExpiresAt(value string) (gl.ISOTime, bool, error) {
-	if value == "" {
-		return gl.ISOTime{}, false, nil
-	}
-	t, err := time.Parse(toolutil.DateFormatISO, value)
-	if err != nil {
-		return gl.ISOTime{}, false, fmt.Errorf(errInvalidExpiresAtFmt, err)
-	}
-	return gl.ISOTime(t), true, nil
 }
 
 var validAccessTokenScopeNames = []string{
@@ -1026,21 +966,14 @@ func PersonalList(ctx context.Context, client *gitlabclient.Client, input Person
 	if input.Revoked != nil {
 		opts.Revoked = input.Revoked
 	}
-	if err := applyAccessTokenDateFilters(accessTokenDateFilters{
+	if err := toolutil.ParseDateInputs(accessTokenDateInputs(accessTokenDateFilters{
 		createdAfter:   input.CreatedAfter,
 		createdBefore:  input.CreatedBefore,
 		expiresAfter:   input.ExpiresAfter,
 		expiresBefore:  input.ExpiresBefore,
 		lastUsedAfter:  input.LastUsedAfter,
 		lastUsedBefore: input.LastUsedBefore,
-	}, accessTokenDateTargets{
-		createdAfter:   func(v *gl.ISOTime) { opts.CreatedAfter = v },
-		createdBefore:  func(v *gl.ISOTime) { opts.CreatedBefore = v },
-		expiresAfter:   func(v *gl.ISOTime) { opts.ExpiresAfter = v },
-		expiresBefore:  func(v *gl.ISOTime) { opts.ExpiresBefore = v },
-		lastUsedAfter:  func(v *gl.ISOTime) { opts.LastUsedAfter = v },
-		lastUsedBefore: func(v *gl.ISOTime) { opts.LastUsedBefore = v },
-	}); err != nil {
+	}, &opts.CreatedAfter, &opts.CreatedBefore, &opts.ExpiresAfter, &opts.ExpiresBefore, &opts.LastUsedAfter, &opts.LastUsedBefore)...); err != nil {
 		return ListOutput{}, err
 	}
 	if input.OrderBy != "" {
@@ -1136,15 +1069,11 @@ func PersonalRotate(ctx context.Context, client *gitlabclient.Client, input Pers
 		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
-	opts := &gl.RotatePersonalAccessTokenOptions{}
-	if input.ExpiresAt != "" {
-		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresAt)
-		if err != nil {
-			return Output{}, fmt.Errorf(errInvalidExpiresAtFmt, err)
-		}
-		isoT := gl.ISOTime(t)
-		opts.ExpiresAt = &isoT
+	expiresAt, err := toolutil.ParseDateField("expires_at", input.ExpiresAt)
+	if err != nil {
+		return Output{}, err
 	}
+	opts := &gl.RotatePersonalAccessTokenOptions{ExpiresAt: expiresAt}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().PersonalAccessTokens.RotatePersonalAccessToken(input.TokenID, opts, gl.WithContext(ctx))
@@ -1198,15 +1127,11 @@ func PersonalRotateSelf(ctx context.Context, client *gitlabclient.Client, input 
 		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
-	opts := &gl.RotatePersonalAccessTokenOptions{}
-	if input.ExpiresAt != "" {
-		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresAt)
-		if err != nil {
-			return Output{}, fmt.Errorf(errInvalidExpiresAtFmt, err)
-		}
-		isoT := gl.ISOTime(t)
-		opts.ExpiresAt = &isoT
+	expiresAt, err := toolutil.ParseDateField("expires_at", input.ExpiresAt)
+	if err != nil {
+		return Output{}, err
 	}
+	opts := &gl.RotatePersonalAccessTokenOptions{ExpiresAt: expiresAt}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().PersonalAccessTokens.RotatePersonalAccessTokenSelf(opts, gl.WithContext(ctx))

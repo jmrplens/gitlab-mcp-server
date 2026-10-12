@@ -743,34 +743,19 @@ func TestCreate_CreatedAtBackdated(t *testing.T) {
 	}
 }
 
-// TestCreate_CreatedAtUnparseableIgnored verifies an unparseable created_at is
-// silently dropped (ParseOptionalTime returns nil) and no created_at is sent.
-func TestCreate_CreatedAtUnparseableIgnored(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == pathMR1Notes {
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				t.Errorf("read body: %v", err)
-				http.Error(w, "read body", http.StatusInternalServerError)
-				return
-			}
-			if strings.Contains(string(body), "created_at") {
-				t.Errorf("body = %s, want no created_at", body)
-			}
-			testutil.RespondJSON(w, http.StatusCreated, mrNoteJSON)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
+// TestCreate_CreatedAtUnparseable_IsRefused verifies an unparseable
+// created_at refuses the call, naming it, before any request. It used to be
+// dropped and the note dated now (issue 1308).
+func TestCreate_CreatedAtUnparseable_IsRefused(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Create(context.Background(), client, CreateInput{
 		ProjectID: testProjectID,
 		MRIID:     1,
 		Body:      testNoteBody,
 		CreatedAt: "not-a-timestamp",
 	})
-	if err != nil {
-		t.Fatalf("Create() unexpected error: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "created_at must be") {
+		t.Fatalf("Create() error = %v, want the refusal of created_at", err)
 	}
 }
 

@@ -1408,3 +1408,15 @@ func TestList_HeadPipelineThatNeverRan_PublishesNoDuration(t *testing.T) {
 		})
 	}
 }
+
+// TestList_DateFilterThatIsNotATimestamp_IsRefusedBeforeAnyRequest verifies
+// the list refuses a date filter it cannot read, naming the field and quoting
+// the value, before any request. The parser before it answered nil for such a
+// value and the list went out unfiltered (issue 1308).
+func TestList_DateFilterThatIsNotATimestamp_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := List(context.Background(), client, ListInput{ProjectID: "42", DeploymentID: 1, UpdatedAfter: "not-a-date"})
+	if err == nil || !strings.Contains(err.Error(), "updated_after must be") || !strings.Contains(err.Error(), `"not-a-date"`) {
+		t.Errorf("List() error = %v, want the updated_after refusal quoting the value", err)
+	}
+}

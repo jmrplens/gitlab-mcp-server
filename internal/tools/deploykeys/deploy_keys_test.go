@@ -554,7 +554,7 @@ func TestAdd_WithInvalidExpiresAt(t *testing.T) {
 	_, err := Add(context.Background(), client, AddInput{
 		ProjectID: "1", Title: "k", Key: "ssh-rsa AAAA", ExpiresAt: "not-a-date",
 	})
-	if err == nil || !strings.Contains(err.Error(), "invalid expires_at") {
+	if err == nil || !strings.Contains(err.Error(), "expires_at must be") {
 		t.Fatalf("expected invalid expires_at error, got %v", err)
 	}
 }
@@ -817,7 +817,7 @@ func TestAddInstance_WithInvalidExpiresAt(t *testing.T) {
 	_, err := AddInstance(context.Background(), client, AddInstanceInput{
 		Title: "k", Key: "ssh-rsa AAAA", ExpiresAt: "bad-date",
 	})
-	if err == nil || !strings.Contains(err.Error(), "invalid expires_at") {
+	if err == nil || !strings.Contains(err.Error(), "expires_at must be") {
 		t.Fatalf("expected invalid expires_at error, got %v", err)
 	}
 }

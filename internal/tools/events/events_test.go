@@ -644,19 +644,36 @@ func TestListCurrentUserContributionEvents_AllFilters(t *testing.T) {
 	}
 }
 
-// TestListCurrentUserContributionEvents_InvalidDates verifies the ListCurrentUserContributionEvents_InvalidDates handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestListCurrentUserContributionEvents_InvalidDates verifies that a before or
+// after date the handler cannot read is refused, naming it, before any
+// request. Both used to be dropped and the list answered unfiltered (issue
+// 1308).
 func TestListCurrentUserContributionEvents_InvalidDates(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListCurrentUserContributionEvents(t.Context(), client, ListContributionEventsInput{
 		Before: "not-a-date",
 		After:  "not-a-date",
 	})
+	if err == nil || !strings.Contains(err.Error(), "before must be a date") {
+		t.Errorf("error = %v, want the refusal of before", err)
+	}
+}
+
+// TestListCurrentUserContributionEvents_TimestampDates_AreSentAsDays verifies
+// that an RFC 3339 before or after is read for the day it names, which the
+// parser these replaced dropped because it read only YYYY-MM-DD.
+func TestListCurrentUserContributionEvents_TimestampDates_AreSentAsDays(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertQueryParam(t, r, "before", "2026-02-01")
+		testutil.AssertQueryParam(t, r, "after", "2026-01-01")
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	_, err := ListCurrentUserContributionEvents(t.Context(), client, ListContributionEventsInput{
+		Before: "2026-02-01T10:00:00Z",
+		After:  "2026-01-01",
+	})
 	if err != nil {
-		t.Errorf("invalid dates should not error, got %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -707,20 +724,16 @@ func TestListProjectEvents_AllFilters(t *testing.T) {
 	}
 }
 
-// TestListProjectEvents_InvalidDates verifies the ListProjectEvents_InvalidDates handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestListProjectEvents_InvalidDates verifies that the project event list
+// refuses an after date it cannot read, naming it, before any request.
 func TestListProjectEvents_InvalidDates(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListProjectEvents(t.Context(), client, ListProjectEventsInput{
 		ProjectID: "proj",
-		Before:    "nope",
 		After:     "nope",
 	})
-	if err != nil {
-		t.Errorf("invalid dates should not error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "after must be a date") {
+		t.Errorf("error = %v, want the refusal of after", err)
 	}
 }
 

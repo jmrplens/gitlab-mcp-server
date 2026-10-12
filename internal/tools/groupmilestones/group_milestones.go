@@ -304,42 +304,17 @@ func applyListFilters(opts *gl.ListGroupMilestonesOptions, input ListInput) {
 	opts.IIDs = new(input.IIDs)
 }
 
-// applyListDates applies list dates transformations.
+// applyListDates reads the five date filters of a group milestone list into
+// their option fields, refusing the first that does not parse.
 func applyListDates(opts *gl.ListGroupMilestonesOptions, input ListInput) error {
-	if input.UpdatedBefore != "" {
-		d, err := parseISODate(input.UpdatedBefore)
-		if err != nil {
-			return fmt.Errorf("groupMilestoneList: updated_before: %w", err)
-		}
-		opts.UpdatedBefore = d
-	}
-	if input.UpdatedAfter != "" {
-		d, err := parseISODate(input.UpdatedAfter)
-		if err != nil {
-			return fmt.Errorf("groupMilestoneList: updated_after: %w", err)
-		}
-		opts.UpdatedAfter = d
-	}
-	if input.ContainingDate != "" {
-		d, err := parseISODate(input.ContainingDate)
-		if err != nil {
-			return fmt.Errorf("groupMilestoneList: containing_date: %w", err)
-		}
-		opts.ContainingDate = d
-	}
-	if input.StartDate != "" {
-		d, err := parseISODate(input.StartDate)
-		if err != nil {
-			return fmt.Errorf("groupMilestoneList: start_date: %w", err)
-		}
-		opts.StartDate = d
-	}
-	if input.EndDate != "" {
-		d, err := parseISODate(input.EndDate)
-		if err != nil {
-			return fmt.Errorf("groupMilestoneList: end_date: %w", err)
-		}
-		opts.EndDate = d
+	if err := toolutil.ParseDateInputs(
+		toolutil.DateInput{Field: "updated_before", Value: input.UpdatedBefore, Dest: &opts.UpdatedBefore},
+		toolutil.DateInput{Field: "updated_after", Value: input.UpdatedAfter, Dest: &opts.UpdatedAfter},
+		toolutil.DateInput{Field: "containing_date", Value: input.ContainingDate, Dest: &opts.ContainingDate},
+		toolutil.DateInput{Field: "start_date", Value: input.StartDate, Dest: &opts.StartDate},
+		toolutil.DateInput{Field: "end_date", Value: input.EndDate, Dest: &opts.EndDate},
+	); err != nil {
+		return fmt.Errorf("groupMilestoneList: %w", err)
 	}
 	return nil
 }
@@ -401,19 +376,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Description != "" {
 		opts.Description = new(input.Description)
 	}
-	if input.StartDate != "" {
-		d, err := parseISODate(input.StartDate)
-		if err != nil {
-			return Output{}, fmt.Errorf("groupMilestoneCreate: start_date: %w", err)
-		}
-		opts.StartDate = d
-	}
-	if input.DueDate != "" {
-		d, err := parseISODate(input.DueDate)
-		if err != nil {
-			return Output{}, fmt.Errorf("groupMilestoneCreate: due_date: %w", err)
-		}
-		opts.DueDate = d
+	if err := parseMilestoneDates(input.StartDate, input.DueDate, &opts.StartDate, &opts.DueDate); err != nil {
+		return Output{}, fmt.Errorf("groupMilestoneCreate: %w", err)
 	}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
@@ -441,33 +405,23 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, errors.New("groupMilestoneUpdate: milestone_iid is required")
 	}
 
+	// The dates are read before the IID is resolved, so one that does not
+	// parse is refused without a request rather than after one.
+	opts := &gl.UpdateGroupMilestoneOptions{}
+	if err := parseMilestoneDates(input.StartDate, input.DueDate, &opts.StartDate, &opts.DueDate); err != nil {
+		return Output{}, fmt.Errorf("groupMilestoneUpdate: %w", err)
+	}
+
 	globalID, err := resolveGroupIID(ctx, client, input.GroupID, input.MilestoneIID)
 	if err != nil {
 		return Output{}, err
 	}
 
-	opts := &gl.UpdateGroupMilestoneOptions{}
 	if input.Title != "" {
 		opts.Title = new(input.Title)
 	}
 	if input.Description != "" {
 		opts.Description = new(input.Description)
-	}
-	if input.StartDate != "" {
-		var d *gl.ISOTime
-		d, err = parseISODate(input.StartDate)
-		if err != nil {
-			return Output{}, fmt.Errorf("groupMilestoneUpdate: start_date: %w", err)
-		}
-		opts.StartDate = d
-	}
-	if input.DueDate != "" {
-		var d *gl.ISOTime
-		d, err = parseISODate(input.DueDate)
-		if err != nil {
-			return Output{}, fmt.Errorf("groupMilestoneUpdate: due_date: %w", err)
-		}
-		opts.DueDate = d
 	}
 	if input.StateEvent != "" {
 		opts.StateEvent = new(input.StateEvent)
@@ -706,14 +660,14 @@ func toOutput(m *gl.GroupMilestone, extra toolutil.MilestoneExtra) Output {
 	return out
 }
 
-// parseISODate converts a YYYY-MM-DD string to *gl.ISOTime.
-func parseISODate(s string) (*gl.ISOTime, error) {
-	t, err := time.Parse("2006-01-02", s)
-	if err != nil {
-		return nil, fmt.Errorf("invalid date format (expected YYYY-MM-DD): %w", err)
-	}
-	d := gl.ISOTime(t)
-	return &d, nil
+// parseMilestoneDates reads a group milestone's start and due dates into
+// their option fields through the parser every date input shares, refusing
+// the first that does not parse.
+func parseMilestoneDates(startDate, dueDate string, start, due **gl.ISOTime) error {
+	return toolutil.ParseDateInputs(
+		toolutil.DateInput{Field: "start_date", Value: startDate, Dest: start},
+		toolutil.DateInput{Field: "due_date", Value: dueDate, Dest: due},
+	)
 }
 
 // ---------- Formatters ----------.

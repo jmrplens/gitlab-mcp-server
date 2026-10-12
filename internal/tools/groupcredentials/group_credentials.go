@@ -3,7 +3,6 @@ package groupcredentials
 import (
 	"context"
 	"net/http"
-	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -98,21 +97,6 @@ type SSHKeyListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// parseISODate converts a YYYY-MM-DD string into a *gl.ISOTime for date-only
-// list filters. It returns nil for empty or unparseable input so callers can
-// assign the result unconditionally.
-func parseISODate(s string) *gl.ISOTime {
-	if s == "" {
-		return nil
-	}
-	t, err := time.Parse(toolutil.DateFormatISO, s)
-	if err != nil {
-		return nil
-	}
-	d := gl.ISOTime(t)
-	return &d
-}
-
 func toPATOutput(t *gl.GroupPersonalAccessToken) PATOutput {
 	if t == nil {
 		return PATOutput{}
@@ -175,10 +159,16 @@ func ListPATs(ctx context.Context, client *gitlabclient.Client, in ListPATsInput
 	if in.Revoked != nil {
 		opts.Revoked = in.Revoked
 	}
-	opts.CreatedAfter = parseISODate(in.CreatedAfter)
-	opts.CreatedBefore = parseISODate(in.CreatedBefore)
-	opts.LastUsedAfter = parseISODate(in.LastUsedAfter)
-	opts.LastUsedBefore = parseISODate(in.LastUsedBefore)
+	// A filter that does not parse refuses the call: the parser before this
+	// dropped it and the inventory answered unfiltered (issue 1308).
+	if err := toolutil.ParseDateInputs(
+		toolutil.DateInput{Field: "created_after", Value: in.CreatedAfter, Dest: &opts.CreatedAfter},
+		toolutil.DateInput{Field: "created_before", Value: in.CreatedBefore, Dest: &opts.CreatedBefore},
+		toolutil.DateInput{Field: "last_used_after", Value: in.LastUsedAfter, Dest: &opts.LastUsedAfter},
+		toolutil.DateInput{Field: "last_used_before", Value: in.LastUsedBefore, Dest: &opts.LastUsedBefore},
+	); err != nil {
+		return PATListOutput{}, err
+	}
 	tokens, resp, err := client.GL().GroupCredentials.ListGroupPersonalAccessTokens(in.GroupID.String(), opts, gl.WithContext(ctx))
 	if err != nil {
 		return PATListOutput{}, toolutil.WrapErrWithStatusHint("list group PATs", err, http.StatusNotFound, groupCredentialInventoryHint)
@@ -207,10 +197,14 @@ func ListSSHKeys(ctx context.Context, client *gitlabclient.Client, in ListSSHKey
 	if in.Sort != "" {
 		opts.Sort = in.Sort
 	}
-	opts.CreatedAfter = parseISODate(in.CreatedAfter)
-	opts.CreatedBefore = parseISODate(in.CreatedBefore)
-	opts.ExpiresAfter = parseISODate(in.ExpiresAfter)
-	opts.ExpiresBefore = parseISODate(in.ExpiresBefore)
+	if err := toolutil.ParseDateInputs(
+		toolutil.DateInput{Field: "created_after", Value: in.CreatedAfter, Dest: &opts.CreatedAfter},
+		toolutil.DateInput{Field: "created_before", Value: in.CreatedBefore, Dest: &opts.CreatedBefore},
+		toolutil.DateInput{Field: "expires_after", Value: in.ExpiresAfter, Dest: &opts.ExpiresAfter},
+		toolutil.DateInput{Field: "expires_before", Value: in.ExpiresBefore, Dest: &opts.ExpiresBefore},
+	); err != nil {
+		return SSHKeyListOutput{}, err
+	}
 	keys, resp, err := client.GL().GroupCredentials.ListGroupSSHKeys(in.GroupID.String(), opts, gl.WithContext(ctx))
 	if err != nil {
 		return SSHKeyListOutput{}, toolutil.WrapErrWithStatusHint("list group SSH keys", err, http.StatusNotFound, groupCredentialInventoryHint)

@@ -718,6 +718,33 @@ func TestCreate_PipelineMissingRef(t *testing.T) {
 	}
 }
 
+// TestLists_TimestampFilterThatDoesNotParse_IsRefusedBeforeAnyRequest verifies
+// the pipeline list and the latest-pipeline read refuse a created or updated
+// bound they cannot read, naming the field and quoting the value, before any
+// request (issue 1308).
+func TestLists_TimestampFilterThatDoesNotParse_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	ctx := context.Background()
+	reads := map[string]func() error{
+		"list": func() error {
+			_, err := List(ctx, client, ListInput{ProjectID: "42", UpdatedBefore: "not-a-date"})
+			return err
+		},
+		"latest": func() error {
+			_, err := GetLatest(ctx, client, GetLatestInput{ProjectID: "42", UpdatedBefore: "not-a-date"})
+			return err
+		},
+	}
+	for name, read := range reads {
+		t.Run(name, func(t *testing.T) {
+			err := read()
+			if err == nil || !strings.Contains(err.Error(), "updated_before must be") || !strings.Contains(err.Error(), `"not-a-date"`) {
+				t.Errorf("%s error = %v, want the updated_before refusal quoting the value", name, err)
+			}
+		})
+	}
+}
+
 // TestUpdateMetadata_Success verifies UpdateMetadata when success.
 func TestUpdateMetadata_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -845,7 +872,10 @@ func TestBuildListOpts_AllFilters(t *testing.T) {
 		PageToken:  "cursor-123",
 	}
 
-	opts := buildListOpts(input)
+	opts, err := buildListOpts(input)
+	if err != nil {
+		t.Fatalf("buildListOpts() error = %v", err)
+	}
 	assertPipelineListStringFilters(t, opts)
 	assertPipelineListTimeAndPaginationFilters(t, opts)
 	if opts.Pagination != "keyset" || opts.PageToken != "cursor-123" {
@@ -911,7 +941,10 @@ func assertPipelineListTimeAndPaginationFilters(t *testing.T, opts *gl.ListProje
 
 // TestBuildListOpts_Defaults verifies BuildListOpts when defaults.
 func TestBuildListOpts_Defaults(t *testing.T) {
-	opts := buildListOpts(ListInput{ProjectID: "1"})
+	opts, err := buildListOpts(ListInput{ProjectID: "1"})
+	if err != nil {
+		t.Fatalf("buildListOpts() error = %v", err)
+	}
 
 	if opts.Scope != nil {
 		t.Errorf("Scope should be nil, got %v", opts.Scope)

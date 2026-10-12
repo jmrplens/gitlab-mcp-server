@@ -2,7 +2,6 @@ package deploytokens
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -103,7 +102,7 @@ type GetGroupInput struct {
 type CreateProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Name      string               `json:"name" jsonschema:"Deploy token name,required"`
-	ExpiresAt string               `json:"expires_at,omitempty" jsonschema:"Expiry date (YYYY-MM-DD)"`
+	ExpiresAt string               `json:"expires_at,omitempty" jsonschema:"Expiry, an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC"`
 	Username  string               `json:"username,omitempty" jsonschema:"Username for the deploy token"`
 	Scopes    []string             `json:"scopes" jsonschema:"Array of scopes (read_repository, read_registry, write_registry, read_package_registry, write_package_registry),required"`
 }
@@ -112,7 +111,7 @@ type CreateProjectInput struct {
 type CreateGroupInput struct {
 	GroupID   toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	Name      string               `json:"name" jsonschema:"Deploy token name,required"`
-	ExpiresAt string               `json:"expires_at,omitempty" jsonschema:"Expiry date (YYYY-MM-DD)"`
+	ExpiresAt string               `json:"expires_at,omitempty" jsonschema:"Expiry, an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC"`
 	Username  string               `json:"username,omitempty" jsonschema:"Username for the deploy token"`
 	Scopes    []string             `json:"scopes" jsonschema:"Array of scopes (read_repository, read_registry, write_registry, read_package_registry, write_package_registry),required"`
 }
@@ -284,30 +283,15 @@ func createDeployToken(_ context.Context, scopeID toolutil.StringOrInt, required
 		return Output{}, toolutil.ErrFieldRequired("scopes")
 	}
 
-	expiresAtValue, hasExpiresAt, err := parseDeployTokenExpiresAt(req.ExpiresAt)
+	expiresAt, err := toolutil.ParseTimeField("expires_at", req.ExpiresAt)
 	if err != nil {
 		return Output{}, err
-	}
-	var expiresAt *time.Time
-	if hasExpiresAt {
-		expiresAt = &expiresAtValue
 	}
 	token, _, err := create(string(scopeID), req, expiresAt)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusBadRequest, badRequestHint)
 	}
 	return toOutput(token), nil
-}
-
-func parseDeployTokenExpiresAt(value string) (time.Time, bool, error) {
-	if value == "" {
-		return time.Time{}, false, nil
-	}
-	expiresAt, err := time.Parse("2006-01-02", value)
-	if err != nil {
-		return time.Time{}, false, fmt.Errorf("invalid expires_at format, use YYYY-MM-DD: %w", err)
-	}
-	return expiresAt, true, nil
 }
 
 // DeleteProject deletes a project deploy token.

@@ -101,11 +101,15 @@ func repositoryOptionsForAction(individualTool string) toolutil.ActionSpecOption
 		options.Aliases = []string{"preview changelog notes", "generate release notes from commits", "build changelog for version", "render changelog without committing"}
 		options.RelatedActions = []string{actionChangelogAdd, actionReleaseCreate, actionTagList}
 		options.IndividualTool.Description = "Generate changelog notes for a version range without committing. Returns: the rendered changelog notes (read-only preview). See also: gitlab_repository_changelog_add, gitlab_release_create."
+		// GitLab takes the release date as a DateTime and the handler sends
+		// the instant it is given.
+		options.InputSchemaOverrides = append(options.InputSchemaOverrides, toolutil.SchemaFormatOverride("date", "date-time"))
 	case "gitlab_repository_changelog_add":
 		options.Usage = "Create or append changelog entries in the repository for a version. Use in release workflows when structured changelog updates are requested."
 		options.Aliases = []string{"add changelog", "update changelog", "write release notes file"}
 		options.RelatedActions = []string{actionChangelogGenerate, actionReleaseCreate, actionTagCreate}
 		options.IndividualTool.Description = "Add changelog data to a changelog file by committing the generated entries. Returns: a success confirmation with the version. See also: gitlab_repository_changelog_generate, gitlab_release_create."
+		options.InputSchemaOverrides = append(options.InputSchemaOverrides, toolutil.SchemaFormatOverride("date", "date-time"))
 	}
 
 	return options

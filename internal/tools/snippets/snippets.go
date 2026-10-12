@@ -338,8 +338,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // gl.ListAllSnippetsOptions, while OrderBy/Sort/pagination/page_token map onto
 // the embedded gl.ListOptions.
 type ListAllInput struct {
-	CreatedAfter      string `json:"created_after,omitempty"      jsonschema:"Filter snippets created after (ISO 8601)"`
-	CreatedBefore     string `json:"created_before,omitempty"     jsonschema:"Filter snippets created before (ISO 8601)"`
+	CreatedAfter      string `json:"created_after,omitempty"      jsonschema:"Filter snippets created after this time, an ISO 8601 timestamp such as 2026-01-01T08:30:00Z. A date such as 2026-01-01 is read as midnight UTC"`
+	CreatedBefore     string `json:"created_before,omitempty"     jsonschema:"Filter snippets created before this time, an ISO 8601 timestamp such as 2026-02-01T18:00:00Z. A date such as 2026-02-01 is read as midnight UTC"`
 	RepositoryStorage string `json:"repository_storage,omitempty" tier:"premium" jsonschema:"Filter by repository storage name (admin only)"`
 	OrderBy           string `json:"order_by,omitempty"           jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
 	Sort              string `json:"sort,omitempty"               jsonschema:"Sort direction (asc, desc)"`
@@ -355,21 +355,22 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInpu
 	if input.RepositoryStorage != "" {
 		opts.RepositoryStorage = new(input.RepositoryStorage)
 	}
-	if input.CreatedAfter != "" {
-		t, err := time.Parse(time.RFC3339, input.CreatedAfter)
-		if err == nil {
-			isoTime := gl.ISOTime(t)
-			opts.CreatedAfter = &isoTime
-		}
+	// A bound that does not parse refuses the call. The guard this replaced
+	// read only RFC 3339 and dropped anything else, a bare date included, so
+	// the list answered every snippet the range was meant to leave out (issue
+	// 1308). GitLab takes a timestamp for both bounds while client-go carries
+	// them as dates, which would move a bound of 18:00 back to midnight UTC
+	// (register row 126), so the option struct's fields are left unset and
+	// each bound is written as the instant given.
+	var createdAfter, createdBefore *time.Time
+	if err := toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "created_after", Value: input.CreatedAfter, Dest: &createdAfter},
+		toolutil.TimeInput{Field: "created_before", Value: input.CreatedBefore, Dest: &createdBefore},
+	); err != nil {
+		return ListOutput{}, fmt.Errorf("snippet_list_all: %w", err)
 	}
-	if input.CreatedBefore != "" {
-		t, err := time.Parse(time.RFC3339, input.CreatedBefore)
-		if err == nil {
-			isoTime := gl.ISOTime(t)
-			opts.CreatedBefore = &isoTime
-		}
-	}
-	snippets, resp, err := client.GL().Snippets.ListAllSnippets(opts, gl.WithContext(ctx))
+	snippets, resp, err := client.GL().Snippets.ListAllSnippets(opts, gl.WithContext(ctx),
+		toolutil.TimestampParam("created_after", createdAfter), toolutil.TimestampParam("created_before", createdBefore))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_list_all", err, http.StatusForbidden,
 			"listing all public snippets across the instance requires admin privileges")

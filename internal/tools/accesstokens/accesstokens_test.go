@@ -36,7 +36,7 @@ const (
 	stateActive        = "active"
 
 	// coverage_test.go.
-	errInvalidExpiresAt  = "invalid expires_at"
+	errInvalidExpiresAt  = "expires_at must be a date"
 	fmtExpInvalidDateErr = "expected invalid date error, got: %v"
 	fmtExpErrContaining  = "expected error containing %q, got: %v"
 	errCreatedAtEmpty    = "CreatedAt should be populated"

@@ -8,8 +8,10 @@ import (
 	"os"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -1695,5 +1697,227 @@ func TestPermissionRefusedWith401_EveryServedUnauthorizedRoute_CarriesAHint(t *t
 				t.Errorf("%s (%s) after a revoked token = %q, want no permission suggestion", route.action, route.site, rejected)
 			}
 		})
+	}
+}
+
+// notADateInput declares the date-named inputs that are not dates, keyed by
+// canonical action ID and input name, each with what the input is instead.
+// The name is what [isDateNamedInput] judges, and a name alone cannot tell a
+// date from a ref that happens to be called "from"; this table is where that
+// is said. A row no input of the catalog matches fails the test, so a renamed
+// input cannot leave a stale excuse behind.
+var notADateInput = map[string]string{
+	"repository.compare from":            "a branch, tag or commit SHA to compare from",
+	"repository.changelog_add from":      "the commit SHA or tag the changelog range starts at",
+	"repository.changelog_generate from": "the commit SHA or tag the changelog range starts at",
+}
+
+// dateInputName matches the input names that carry a date or a timestamp
+// across the catalog: the suffixes GitLab gives them (created_at,
+// created_after, created_before, due_date, marked_for_deletion_on) and the
+// bare names a few endpoints use (date, from, since, until, and before and
+// after where they are not cursors).
+var dateInputName = regexp.MustCompile(`(^|_)(at|after|before|date|on)$|^(date|from|since|until)$`)
+
+// isDateNamedInput reports whether the input named name, described by prop,
+// in an input schema whose properties are props, is one a caller writes a
+// date into. An input with an enum is a keyword, not a free date
+// (clear_status_after), and before and after beside a first or last are the
+// cursors of a GraphQL connection rather than dates.
+func isDateNamedInput(name string, prop, props map[string]any) bool {
+	if !dateInputName.MatchString(name) || !schemaAcceptsString(prop) {
+		return false
+	}
+	if _, keyword := prop["enum"]; keyword {
+		return false
+	}
+	if name == "after" || name == "before" {
+		_, first := props["first"]
+		_, last := props["last"]
+		return !first && !last
+	}
+	return true
+}
+
+// schemaAcceptsString reports whether a property schema's type admits a string.
+func schemaAcceptsString(prop map[string]any) bool {
+	switch typ := prop["type"].(type) {
+	case string:
+		return typ == "string"
+	case []any:
+		return slices.Contains(typ, any("string"))
+	}
+	return false
+}
+
+// requiredInputs returns the names a schema's required list holds, whichever
+// of the two slice types the schema was built with.
+func requiredInputs(schema map[string]any) []string {
+	switch required := schema["required"].(type) {
+	case []string:
+		return required
+	case []any:
+		names := make([]string, 0, len(required))
+		for _, r := range required {
+			if name, ok := r.(string); ok {
+				names = append(names, name)
+			}
+		}
+		return names
+	}
+	return nil
+}
+
+// dateInputCompanions holds, per canonical action ID, the inputs an action
+// validates before it reads its dates that no placeholder can satisfy: a
+// value from a closed list the schema does not enumerate, or one of two
+// inputs the handler requires either of. Without them the action refuses for
+// the companion and the date is never reached.
+var dateInputCompanions = map[string]map[string]any{
+	"access.token_group_create":   {"scopes": []any{"api"}},
+	"access.token_project_create": {"scopes": []any{"api"}},
+	"group.group_member_add":      {"user_id": 7},
+	"group.group_member_share":    {"group_access": 30},
+	"project.member_add":          {"user_id": 7},
+}
+
+// placeholderParam returns a value a handler accepts for the required input
+// name, so that driving an action reaches the input under test rather than
+// stopping at a required field the test left out.
+func placeholderParam(name string, prop map[string]any) any {
+	if values, ok := prop["enum"].([]any); ok && len(values) > 0 {
+		return values[0]
+	}
+	typ, _ := prop["type"].(string)
+	if types, ok := prop["type"].([]any); ok {
+		for _, candidate := range types {
+			if s, _ := candidate.(string); s != "null" {
+				typ = s
+				break
+			}
+		}
+	}
+	switch typ {
+	case "integer", "number":
+		return 7
+	case "boolean":
+		return true
+	case "array":
+		items, _ := prop["items"].(map[string]any)
+		return []any{placeholderParam(name, items)}
+	case "object":
+		return map[string]any{}
+	}
+	switch {
+	case dateInputName.MatchString(name):
+		return "2030-01-01"
+	case strings.Contains(name, "url"):
+		return "https://example.com/x"
+	case strings.Contains(name, "path"):
+		return "group/project"
+	}
+	return "7"
+}
+
+// TestEveryDateInput_RefusesAValueThatIsNotADate drives every date-named
+// input of the Ultimate catalog with a value that is not a date, through the
+// action's own catalog handler, and requires a refusal that quotes the value
+// before any request reaches GitLab.
+//
+// It is the gate issue 1308 asked for. Eighty-four sites read a timestamp
+// through a parser that answered nil for what it could not read and a dozen
+// more wrote their own `if err == nil` guard, so a malformed date was dropped
+// and the call went on: a list answered unfiltered, a note was dated now
+// rather than when it was asked to be, an SSH key and an invitation were
+// granted with no expiry, and each was reported as a success. One test per
+// site would have been a hundred tests that a new site is not obliged to
+// join; this one enumerates the served inputs, so a new date input is held to
+// the rule the day it is published.
+func TestEveryDateInput_RefusesAValueThatIsNotADate(t *testing.T) {
+	var requests atomic.Int64
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+	catalog := mustBuildActionCatalog(t, client, ActionCatalogOptions{Tier: edition.Ultimate})
+	declared := make(map[string]bool, len(notADateInput))
+	drivenActions := make(map[string]bool)
+	driven := 0
+	for _, input := range dateNamedInputs(catalog.Actions()) {
+		key := string(input.action.ID) + " " + input.name
+		if _, excused := notADateInput[key]; excused {
+			declared[key] = true
+			continue
+		}
+		driven++
+		drivenActions[string(input.action.ID)] = true
+		t.Run(key, func(t *testing.T) {
+			assertDateInputRefused(t, input, &requests)
+		})
+	}
+	if driven == 0 {
+		t.Fatal("no date-named input was found in the Ultimate catalog, so the rule judged nothing")
+	}
+	for key := range notADateInput {
+		if !declared[key] {
+			t.Errorf("notADateInput declares %q, which no date-named input of the catalog matches: drop the row", key)
+		}
+	}
+	for id := range dateInputCompanions {
+		if !drivenActions[id] {
+			t.Errorf("dateInputCompanions names %q, which drives no date-named input of the catalog: drop the row", id)
+		}
+	}
+}
+
+// dateNamedInput is one date-named input of a catalog action, with the
+// properties of the schema it sits in.
+type dateNamedInput struct {
+	action actioncatalog.Action
+	name   string
+	props  map[string]any
+}
+
+// dateNamedInputs lists every date-named input of actions, in action order and
+// then by name.
+func dateNamedInputs(actions []actioncatalog.Action) []dateNamedInput {
+	var inputs []dateNamedInput
+	for _, action := range actions {
+		props, _ := action.Route.InputSchema["properties"].(map[string]any)
+		for _, name := range slices.Sorted(maps.Keys(props)) {
+			prop, _ := props[name].(map[string]any)
+			if isDateNamedInput(name, prop, props) {
+				inputs = append(inputs, dateNamedInput{action: action, name: name, props: props})
+			}
+		}
+	}
+	return inputs
+}
+
+// assertDateInputRefused drives input's action through its catalog handler
+// with "not-a-date" in the input and a placeholder in every other required
+// one, and requires a refusal naming the input and quoting the value, sent
+// before requests counted any request.
+func assertDateInputRefused(t *testing.T, input dateNamedInput, requests *atomic.Int64) {
+	t.Helper()
+	const notADate = "not-a-date"
+	params := map[string]any{input.name: notADate}
+	for _, field := range requiredInputs(input.action.Route.InputSchema) {
+		if field != input.name {
+			fieldProp, _ := input.props[field].(map[string]any)
+			params[field] = placeholderParam(field, fieldProp)
+		}
+	}
+	maps.Copy(params, dateInputCompanions[string(input.action.ID)])
+	requests.Store(0)
+	result, err := input.action.Route.Handler(context.Background(), params)
+	if err == nil {
+		t.Fatalf("%s with %s=%q answered %v with no error, want a refusal", input.action.ID, input.name, notADate, result)
+	}
+	if !strings.Contains(err.Error(), strconv.Quote(notADate)) || !strings.Contains(err.Error(), input.name) {
+		t.Errorf("%s with %s=%q error = %q, want one naming the input and quoting the value", input.action.ID, input.name, notADate, err)
+	}
+	if got := requests.Load(); got != 0 {
+		t.Errorf("%s with %s=%q sent %d request(s) before refusing, want none", input.action.ID, input.name, notADate, got)
 	}
 }

@@ -1101,3 +1101,16 @@ func TestCreateAndUpdate_EscapedNewlines_ReachGitLabAsRealNewlines(t *testing.T)
 		})
 	}
 }
+
+// TestCreate_CreatedAtThatIsNotATimestamp_IsRefusedBeforeAnyRequest verifies
+// a note asked to be backdated to a value that is not a timestamp is refused,
+// naming the field and quoting the value, before any request. The parser
+// before it answered nil for such a value and the note was dated now (issue
+// 1308).
+func TestCreate_CreatedAtThatIsNotATimestamp_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", SnippetID: 3, Body: "b", CreatedAt: "not-a-date"})
+	if err == nil || !strings.Contains(err.Error(), "created_at must be an ISO 8601 timestamp") || !strings.Contains(err.Error(), `"not-a-date"`) {
+		t.Errorf("Create() error = %v, want the created_at refusal quoting the value", err)
+	}
+}

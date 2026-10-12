@@ -291,12 +291,23 @@ func applyMergeRequestListFilters(input mergeRequestListFilters, target mergeReq
 	if input.NonArchived != nil {
 		target.nonArchived(input.NonArchived)
 	}
-	setTime(toolutil.ParseOptionalTime(input.CreatedAfter), target.createdAfter)
-	setTime(toolutil.ParseOptionalTime(input.CreatedBefore), target.createdBefore)
-	setTime(toolutil.ParseOptionalTime(input.UpdatedAfter), target.updatedAfter)
-	setTime(toolutil.ParseOptionalTime(input.UpdatedBefore), target.updatedBefore)
-	setTime(toolutil.ParseOptionalTime(input.DeployedAfter), target.deployedAfter)
-	setTime(toolutil.ParseOptionalTime(input.DeployedBefore), target.deployedBefore)
+	timeFilters := []struct {
+		field  string
+		value  string
+		setter func(*time.Time)
+	}{
+		{"created_after", input.CreatedAfter, target.createdAfter},
+		{"created_before", input.CreatedBefore, target.createdBefore},
+		{"updated_after", input.UpdatedAfter, target.updatedAfter},
+		{"updated_before", input.UpdatedBefore, target.updatedBefore},
+		{"deployed_after", input.DeployedAfter, target.deployedAfter},
+		{"deployed_before", input.DeployedBefore, target.deployedBefore},
+	}
+	for _, filter := range timeFilters {
+		if err := setTime(filter.field, filter.value, filter.setter); err != nil {
+			return err
+		}
+	}
 	toolutil.ApplyListOptions(target.listOptions, toolutil.PaginationInput{Page: input.Page, PerPage: input.PerPage}, input.Keyset)
 	return nil
 }
@@ -333,10 +344,19 @@ func setString(value string, setter func(*string)) {
 	}
 }
 
-func setTime(value *time.Time, setter func(*time.Time)) {
-	if value != nil {
-		setter(value)
+// setTime parses one timestamp filter and hands it to the setter, leaving the
+// option untouched when the filter is empty and refusing one that does not
+// parse. The parser before it answered nil for such a value and the list went
+// out without the filter (issue 1308).
+func setTime(field, value string, setter func(*time.Time)) error {
+	parsed, err := toolutil.ParseTimeField(field, value)
+	if err != nil {
+		return err
 	}
+	if parsed != nil {
+		setter(parsed)
+	}
+	return nil
 }
 
 // UpdateInput defines parameters for updating a merge request.

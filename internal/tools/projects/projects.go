@@ -1247,7 +1247,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 // ListForksInput, and the user-scoped filters all target the same
 // ListProjectsOptions filter surface, so option building is centralized in
 // buildUserProjectOpts and each input only contributes a userProjectFilter.
-func buildListOpts(input ListInput) *gl.ListProjectsOptions {
+func buildListOpts(input ListInput) (*gl.ListProjectsOptions, error) {
 	return buildUserProjectOpts(input.toFilter())
 }
 
@@ -1290,7 +1290,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
 	}
-	opts := buildListOpts(input)
+	opts, err := buildListOpts(input)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("projectList: %w", err)
+	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	projects, resp, err := client.GL().Projects.ListProjects(opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
@@ -2016,7 +2019,7 @@ type ListForksOutput struct {
 // buildForkListOpts maps ListForksInput filters onto the shared
 // ListProjectsOptions used by the project forks endpoint, delegating to the
 // centralized buildUserProjectOpts.
-func buildForkListOpts(input ListForksInput) *gl.ListProjectsOptions {
+func buildForkListOpts(input ListForksInput) (*gl.ListProjectsOptions, error) {
 	return buildUserProjectOpts(input.toFilter())
 }
 
@@ -2049,7 +2052,10 @@ func ListForks(ctx context.Context, client *gitlabclient.Client, input ListForks
 	if input.ProjectID == "" {
 		return ListForksOutput{}, errors.New("projectListForks: project_id is required. Use project.list to find the ID, then pass it as project_id")
 	}
-	opts := buildForkListOpts(input)
+	opts, err := buildForkListOpts(input)
+	if err != nil {
+		return ListForksOutput{}, fmt.Errorf("projectListForks: %w", err)
+	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	forks, resp, err := client.GL().Projects.ListProjectForks(string(input.ProjectID), opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
@@ -2681,8 +2687,12 @@ func listUserScopedProjects(ctx context.Context, userID toolutil.StringOrInt, op
 	if userID == "" {
 		return ListOutput{}, errors.New(missingUserMsg)
 	}
+	opts, err := buildUserProjectOpts(filters)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("%s: %w", operation, err)
+	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	projects, resp, err := list(string(userID), buildUserProjectOpts(filters), gl.WithContext(ctx), toolutil.KeysetContinuation(filters.KeysetPaginationInput))
+	projects, resp, err := list(string(userID), opts, gl.WithContext(ctx), toolutil.KeysetContinuation(filters.KeysetPaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, notFoundHint)
 	}
@@ -2967,19 +2977,23 @@ func ShareProjectWithGroup(ctx context.Context, client *gitlabclient.Client, inp
 	if input.GroupAccess == 0 {
 		return ShareProjectOutput{}, errors.New("projectShareWithGroup: group_access is required. Valid levels: 10 (Guest), 20 (Reporter), 30 (Developer), 40 (Maintainer). Level 25 (Security Manager) is not valid for project shares")
 	}
+	// The expiry used to be forwarded as written, so a value that is not a
+	// date reached GitLab and came back as its 400 (issue 1308).
+	expiresAt, err := toolutil.ParseDateFieldString("expires_at", input.ExpiresAt)
+	if err != nil {
+		return ShareProjectOutput{}, fmt.Errorf("projectShareWithGroup: %w", err)
+	}
 	opts := &gl.ShareWithGroupOptions{
 		GroupID:     new(input.GroupID),
 		GroupAccess: new(gl.AccessLevelValue(input.GroupAccess)),
-	}
-	if input.ExpiresAt != "" {
-		opts.ExpiresAt = new(input.ExpiresAt)
+		ExpiresAt:   expiresAt,
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	_, err := client.GL().Projects.ShareProjectWithGroup(string(input.ProjectID), opts, gl.WithContext(ctx))
+	_, err = client.GL().Projects.ShareProjectWithGroup(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return ShareProjectOutput{}, toolutil.WrapErrWithHint("projectShareWithGroup", err,
-				"group_access must be 10/20/30/40 (Guest/Reporter/Developer/Maintainer); 25 (Security Manager) is not valid for project shares; expires_at must be YYYY-MM-DD; the project may already be shared with this group. Use project.list_groups to verify")
+				"group_access must be 10/20/30/40 (Guest/Reporter/Developer/Maintainer); 25 (Security Manager) is not valid for project shares; the project may already be shared with this group. Use project.list_groups to verify")
 		}
 		return ShareProjectOutput{}, toolutil.WrapErrWithStatusHint("projectShareWithGroup", err, http.StatusNotFound,
 			"verify project_id and group_id with project.get and group.get")
@@ -3220,8 +3234,9 @@ type userProjectFilter struct {
 	toolutil.KeysetPaginationInput
 }
 
-// buildUserProjectOpts centralizes option building for user-scoped project listings.
-func buildUserProjectOpts(f userProjectFilter) *gl.ListProjectsOptions {
+// buildUserProjectOpts centralizes option building for user-scoped project
+// listings, refusing a last-activity bound that does not parse.
+func buildUserProjectOpts(f userProjectFilter) (*gl.ListProjectsOptions, error) {
 	opts := &gl.ListProjectsOptions{}
 	if f.Search != "" {
 		opts.Search = new(f.Search)
@@ -3250,11 +3265,15 @@ func buildUserProjectOpts(f userProjectFilter) *gl.ListProjectsOptions {
 	if f.WithProgrammingLanguage != "" {
 		opts.WithProgrammingLanguage = new(f.WithProgrammingLanguage)
 	}
-	opts.LastActivityAfter = toolutil.ParseOptionalTime(f.LastActivityAfter)
-	opts.LastActivityBefore = toolutil.ParseOptionalTime(f.LastActivityBefore)
+	if err := toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "last_activity_after", Value: f.LastActivityAfter, Dest: &opts.LastActivityAfter},
+		toolutil.TimeInput{Field: "last_activity_before", Value: f.LastActivityBefore, Dest: &opts.LastActivityBefore},
+	); err != nil {
+		return nil, err
+	}
 	applyUserProjectFilterPtrs(opts, f)
 	toolutil.ApplyListOptions(&opts.ListOptions, f.PaginationInput, f.KeysetPaginationInput)
-	return opts
+	return opts, nil
 }
 
 // applyUserProjectFilterPtrs sets the optional boolean-pointer and keyset-bound

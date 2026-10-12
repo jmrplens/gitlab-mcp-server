@@ -3,6 +3,7 @@ package issuediscussions
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -154,9 +155,13 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.IssueIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("issue_discussion_create", "issue_iid")
 	}
+	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
+	if err != nil {
+		return Output{}, fmt.Errorf("issue_discussion_create: %w", err)
+	}
 	opts := &gl.CreateIssueDiscussionOptions{
 		Body:      new(input.Body),
-		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
+		CreatedAt: createdAt,
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	d, _, err := client.GL().Discussions.CreateIssueDiscussion(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
@@ -181,9 +186,13 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 	if input.DiscussionID == "" {
 		return NoteOutput{}, errors.New("issue_discussion_add_note: discussion_id is required")
 	}
+	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
+	if err != nil {
+		return NoteOutput{}, fmt.Errorf("issue_discussion_add_note: %w", err)
+	}
 	opts := &gl.AddIssueDiscussionNoteOptions{
 		Body:      new(input.Body),
-		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
+		CreatedAt: createdAt,
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	note, _, err := client.GL().Discussions.AddIssueDiscussionNote(string(input.ProjectID), input.IssueIID, input.DiscussionID, opts, gl.WithContext(ctx))
@@ -211,9 +220,13 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 	if input.NoteID <= 0 {
 		return NoteOutput{}, toolutil.ErrRequiredInt64("issue_discussion_update_note", "note_id")
 	}
+	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
+	if err != nil {
+		return NoteOutput{}, fmt.Errorf("issue_discussion_update_note: %w", err)
+	}
 	opts := &gl.UpdateIssueDiscussionNoteOptions{
 		Body:      new(input.Body),
-		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
+		CreatedAt: createdAt,
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	note, _, err := client.GL().Discussions.UpdateIssueDiscussionNote(string(input.ProjectID), input.IssueIID, input.DiscussionID, input.NoteID, opts, gl.WithContext(ctx))

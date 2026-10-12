@@ -2453,3 +2453,15 @@ func deploymentSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string
 	}
 	return byTool
 }
+
+// TestList_DateFilterThatIsNotATimestamp_IsRefusedBeforeAnyRequest verifies
+// the deployment list refuses a date filter it cannot read, naming the field
+// and quoting the value, before any request. The parser before it answered
+// nil for such a value and the list went out unfiltered (issue 1308).
+func TestList_DateFilterThatIsNotATimestamp_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := List(context.Background(), client, ListInput{ProjectID: "42", FinishedBefore: "not-a-date"})
+	if err == nil || !strings.Contains(err.Error(), "finished_before must be") || !strings.Contains(err.Error(), `"not-a-date"`) {
+		t.Errorf("List() error = %v, want the finished_before refusal quoting the value", err)
+	}
+}

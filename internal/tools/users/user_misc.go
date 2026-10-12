@@ -3,6 +3,7 @@ package users
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -110,18 +111,21 @@ func GetUserActivities(ctx context.Context, client *gitlabclient.Client, input G
 		return UserActivitiesOutput{}, err
 	}
 
-	opts := &gl.GetUserActivitiesOptions{}
+	// A from date that does not parse is refused. The parser this replaced
+	// answered the zero time for it, so the request asked for every activity
+	// since the year one (issue 1308).
+	from, err := toolutil.ParseDateField("from", input.From)
+	if err != nil {
+		return UserActivitiesOutput{}, fmt.Errorf("get_user_activities: %w", err)
+	}
+	opts := &gl.GetUserActivitiesOptions{From: from}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
-	if input.From != "" {
-		d := gl.ISOTime(parseDate(input.From))
-		opts.From = &d
-	}
 
 	activities, resp, err := client.GL().Users.GetUserActivities(opts, gl.WithContext(ctx))
 	if err != nil {
 		return UserActivitiesOutput{}, toolutil.WrapErrWithStatusHint("get_user_activities", err, http.StatusForbidden,
-			"user activities require admin token; from format YYYY-MM-DD; activity is reported as last_activity_on date")
+			"user activities require admin token; activity is reported as last_activity_on date")
 	}
 
 	out := make([]UserActivityOutput, 0, len(activities))
@@ -382,10 +386,4 @@ func FormatDeleteUserIdentityMarkdownString(o DeleteUserIdentityOutput) string {
 	card.Bool("Deleted", o.Deleted)
 	card.End()
 	return b.String()
-}
-
-// parseDate parses a YYYY-MM-DD string to time.Time, returning zero on failure.
-func parseDate(s string) time.Time {
-	t, _ := time.Parse(toolutil.DateFormatISO, s)
-	return t
 }

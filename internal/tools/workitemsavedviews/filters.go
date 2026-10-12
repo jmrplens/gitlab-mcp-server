@@ -1,17 +1,12 @@
 package workitemsavedviews
 
 import (
-	"fmt"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
-)
 
-// timeLayouts are the timestamp spellings accepted for the eight time filters.
-// RFC 3339 is the documented form; the two shorter layouts exist because a model
-// that is told "2025-01-01" is a date will send exactly that, and rejecting it
-// would cost a round trip to learn nothing.
-var timeLayouts = []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02"}
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
 
 // Filters mirrors [gl.WorkItemSavedViewFilters], the WorkItemSavedViewFilterInput
 // GraphQL input a saved view stores.
@@ -297,17 +292,10 @@ func optionalString(s string) *string {
 	return &s
 }
 
-// parseTimestamp parses one filter timestamp, accepting the layouts in
-// [timeLayouts]. An empty value yields a nil time rather than an error, because
-// every time filter is optional.
+// parseTimestamp parses one filter timestamp through the parser every date
+// input shares: RFC 3339, a local date-time or a bare date, the last two read
+// as UTC. An empty value yields a nil time rather than an error, because every
+// time filter is optional.
 func parseTimestamp(field, value string) (*time.Time, error) {
-	if value == "" {
-		return nil, nil //nolint:nilnil // an unset optional timestamp is not an error
-	}
-	for _, layout := range timeLayouts {
-		if parsed, err := time.Parse(layout, value); err == nil {
-			return &parsed, nil
-		}
-	}
-	return nil, fmt.Errorf("%s must be an ISO 8601 timestamp (e.g. 2025-01-01T00:00:00Z), got %q", field, value)
+	return toolutil.ParseTimeField(field, value)
 }

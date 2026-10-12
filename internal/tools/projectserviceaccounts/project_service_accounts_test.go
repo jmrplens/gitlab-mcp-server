@@ -614,7 +614,7 @@ func TestPATValidation(t *testing.T) {
 			_, err := CreatePAT(context.Background(), testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) })), CreatePATInput{ProjectID: "42", ServiceAccountID: 7, Name: "tok"})
 			return err
 		}},
-		{name: "create PAT validates expires_at", errContain: "invalid expires_at format", call: func() error {
+		{name: "create PAT validates expires_at", errContain: "expires_at must be a date", call: func() error {
 			_, err := CreatePAT(context.Background(), testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) })), CreatePATInput{ProjectID: "42", ServiceAccountID: 7, Name: "tok", Scopes: []string{"api"}, ExpiresAt: "bad"})
 			return err
 		}},
@@ -639,31 +639,31 @@ func TestPATValidation(t *testing.T) {
 			_, err := RotatePAT(context.Background(), testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) })), RotatePATInput{ProjectID: "42", ServiceAccountID: 7})
 			return err
 		}},
-		{name: "rotate PAT validates expires_at", errContain: "invalid expires_at format", call: func() error {
+		{name: "rotate PAT validates expires_at", errContain: "expires_at must be a date", call: func() error {
 			_, err := RotatePAT(context.Background(), testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) })), RotatePATInput{ProjectID: "42", ServiceAccountID: 7, TokenID: 11, ExpiresAt: "bad"})
 			return err
 		}},
-		{name: "list PAT validates created_after", errContain: "invalid created_after format", call: func() error {
+		{name: "list PAT validates created_after", errContain: "created_after must be", call: func() error {
 			_, err := ListPATs(context.Background(), testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) })), ListPATInput{ProjectID: "42", ServiceAccountID: 7, CreatedAfter: "bad"})
 			return err
 		}},
-		{name: "list PAT validates created_before", errContain: "invalid created_before format", call: func() error {
+		{name: "list PAT validates created_before", errContain: "created_before must be", call: func() error {
 			_, err := ListPATs(context.Background(), testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) })), ListPATInput{ProjectID: "42", ServiceAccountID: 7, CreatedBefore: "bad"})
 			return err
 		}},
-		{name: "list PAT validates last_used_after", errContain: "invalid last_used_after format", call: func() error {
+		{name: "list PAT validates last_used_after", errContain: "last_used_after must be", call: func() error {
 			_, err := ListPATs(context.Background(), testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) })), ListPATInput{ProjectID: "42", ServiceAccountID: 7, LastUsedAfter: "bad"})
 			return err
 		}},
-		{name: "list PAT validates last_used_before", errContain: "invalid last_used_before format", call: func() error {
+		{name: "list PAT validates last_used_before", errContain: "last_used_before must be", call: func() error {
 			_, err := ListPATs(context.Background(), testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) })), ListPATInput{ProjectID: "42", ServiceAccountID: 7, LastUsedBefore: "bad"})
 			return err
 		}},
-		{name: "list PAT validates expires_after", errContain: "invalid expires_after format", call: func() error {
+		{name: "list PAT validates expires_after", errContain: "expires_after must be a date", call: func() error {
 			_, err := ListPATs(context.Background(), testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) })), ListPATInput{ProjectID: "42", ServiceAccountID: 7, ExpiresAfter: "bad"})
 			return err
 		}},
-		{name: "list PAT validates expires_before", errContain: "invalid expires_before format", call: func() error {
+		{name: "list PAT validates expires_before", errContain: "expires_before must be a date", call: func() error {
 			_, err := ListPATs(context.Background(), testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) })), ListPATInput{ProjectID: "42", ServiceAccountID: 7, ExpiresBefore: "bad"})
 			return err
 		}},

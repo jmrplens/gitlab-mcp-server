@@ -85,6 +85,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The model package file path segment cannot be omitted](#the-model-package-file-path-segment-cannot-be-omitted)
   - [A measure GitLab sends as null decodes as 0](#a-measure-gitlab-sends-as-null-decodes-as-0)
   - [Block, unblock and deactivate drop the answer that says whether anything changed](#block-unblock-and-deactivate-drop-the-answer-that-says-whether-anything-changed)
+  - [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -347,6 +348,7 @@ readable without opening the tracker:
 | 116 | client-go | [A measure GitLab sends as null decodes as 0](#a-measure-gitlab-sends-as-null-decodes-as-0) | No; for the joint merge request | No | No | No | Yes, for every measure but a deployable's, which is still left out at 0 |
 | 117 | client-go | [Block, unblock and deactivate drop the answer that says whether anything changed](#block-unblock-and-deactivate-drop-the-answer-that-says-whether-anything-changed) | No; for the joint merge request | No | No | No | Yes, the three handlers read the answer from the captured response |
 | 118 | gitlab-org/gitlab | [The REST delete of a locked Terraform state answers 200 and deletes nothing](#the-rest-delete-of-a-locked-terraform-state-answers-200-and-deletes-nothing) | No | No | No | No | Yes, `admin.terraform_state_delete` reads the state first and refuses a locked one |
+| 126 | client-go | [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date) | No | No | No | No | Yes, `user.add_ssh_key`, `user.add_ssh_key_for_user`, `snippet.list_all` and the two changelog actions leave the field unset and write the instant given through a request option |
 | 127 | gitlab-org/gitlab | [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text) | No | No | No | No; GitLab's pages leave such a submodule unlinked | Yes, `repository.list_submodules` and `repository.read_submodule_file` resolve a sibling namespace and the other spellings of the instance's clone URLs |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
@@ -6244,6 +6246,48 @@ so the status already tells their outcome.
 
 **Effort**: small: return the decoded bool, a signature change that a major
 release of client-go carries, with a test per answer.
+
+### Three option structs carry a timestamp parameter as a date
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no. v3.17.0 carries the same types.
+- **Blocking**: no.
+- **Workaround**: yes. The handlers read the input through
+  `toolutil.ParseTimeField`, leave the option struct's field unset, and pass
+  `toolutil.TimestampParam`, a request option that writes the instant given,
+  in RFC 3339 with its offset, into the JSON body client-go encoded for a
+  POST and into the query for a GET. `user.add_ssh_key`,
+  `user.add_ssh_key_for_user`, `snippet.list_all`,
+  `repository.changelog_add` and `repository.changelog_generate` use it, and
+  their schemas publish the parameter as a `date-time`. It retires when the
+  fields take a `*time.Time`.
+
+**Where**: `users.go`, `AddSSHKeyOptions.ExpiresAt`, which `AddSSHKey` and
+`AddSSHKeyForUser` send to `POST /user/keys` and `POST /users/:user_id/keys`;
+`snippets.go`, `ListAllSnippetsOptions.CreatedAfter` and `CreatedBefore`, for
+`GET /snippets/all`; and `repositories.go`, the `Date` of
+`AddChangelogOptions` and `GenerateChangelogDataOptions`, for
+`POST` and `GET /projects/:id/repository/changelog`. All five are `*ISOTime`
+at v3.15.0 and v3.17.0.
+
+**What**: GitLab declares each of these parameters `DateTime` (the live
+record of 19.4.1 holds every one of them so), and `ISOTime` encodes as
+`YYYY-MM-DD`, which Grape reads as midnight UTC. So a key asked to expire at
+2026-12-31T23:00:00Z expires at the start of that day, 23 hours early, one
+asked to expire later today is refused as already expired, and a
+`created_before` of 2026-10-12T18:00:00Z excludes every snippet of that day
+after midnight. The changelog date only titles the release with its day, so
+the date there loses nothing a reader sees. `InvitesOptions.ExpiresAt` is the
+same type for a `DateTime` parameter too, but a membership's expiry is a date
+column, so it loses nothing either and is left out of this row.
+
+**How we found it**: issue 1308, moving every date input of the catalog onto
+one parser and checking each field it fills against the route it reaches.
+
+**Effort**: small: the five fields become `*time.Time`, a breaking change for
+callers that build the options, so it waits for a major version or a parallel
+field.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

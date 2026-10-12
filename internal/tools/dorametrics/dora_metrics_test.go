@@ -255,23 +255,25 @@ func TestGetProjectMetrics(t *testing.T) {
 			wantErr: []string{"doraProjectMetrics", "422 Unprocessable"},
 		},
 		{
-			name: "drops a start_date and an end_date it cannot parse",
+			// It used to drop both and answer for GitLab's default three
+			// months, which read as the range the caller asked for.
+			name: "refuses a start_date it cannot parse, naming it",
 			input: ProjectInput{
 				ProjectID: "42",
 				Metric:    "deployment_frequency",
 				StartDate: "not-a-date",
-				EndDate:   "also-bad",
+				EndDate:   "2026-03-04",
 			},
-			handler: metricsHandler(t, metricsRequest{
-				Path:   "/api/v4/projects/42/dora/metrics",
-				Metric: "deployment_frequency",
-			}, `[{"date":"2026-03-01","value":0.5}]`),
-			validate: func(t *testing.T, out Output) {
-				t.Helper()
-				if len(out.Metrics) != 1 {
-					t.Fatalf("got %d metrics, want 1", len(out.Metrics))
-				}
+			wantErr: []string{"start_date must be", `"not-a-date"`},
+		},
+		{
+			name: "refuses an end_date it cannot parse, naming it",
+			input: ProjectInput{
+				ProjectID: "42",
+				Metric:    "deployment_frequency",
+				EndDate:   "2026-02-30",
 			},
+			wantErr: []string{"end_date must be", `"2026-02-30"`},
 		},
 	}
 
@@ -490,6 +492,11 @@ func TestGetGroupMetrics(t *testing.T) {
 			handler: metricsStatusHandler(http.StatusUnprocessableEntity, `{"message":"422 Unprocessable"}`),
 			wantErr: []string{"doraGroupMetrics", "422 Unprocessable"},
 		},
+		{
+			name:    "refuses a date it cannot parse before any request",
+			input:   GroupInput{GroupID: "5", Metric: "deployment_frequency", StartDate: "01/04/2026"},
+			wantErr: []string{"start_date must be", `"01/04/2026"`},
+		},
 	}
 
 	for _, tt := range tests {
@@ -573,7 +580,10 @@ func TestGetGroupMetrics_BadRequestHint(t *testing.T) {
 // repeated here because this is where a date written into its neighbour's field
 // would show as a value rather than as a missing assertion.
 func TestBuildOpts_EachOptionCarriesItsOwnValue(t *testing.T) {
-	bare := buildOpts("deployment_frequency", "", "", "", nil)
+	bare, err := buildOpts("deployment_frequency", "", "", "", nil)
+	if err != nil {
+		t.Fatalf("buildOpts(no dates) error = %v", err)
+	}
 	if bare.Metric == nil || string(*bare.Metric) != "deployment_frequency" {
 		t.Errorf("metric = %v, want deployment_frequency", bare.Metric)
 	}
@@ -590,7 +600,10 @@ func TestBuildOpts_EachOptionCarriesItsOwnValue(t *testing.T) {
 		t.Errorf("environment_tiers = %v, want unset", *bare.EnvironmentTiers)
 	}
 
-	full := buildOpts("change_failure_rate", "2026-01-02", "2026-03-04", "monthly", []string{"production", "staging"})
+	full, err := buildOpts("change_failure_rate", "2026-01-02", "2026-03-04T23:00:00-05:00", "monthly", []string{"production", "staging"})
+	if err != nil {
+		t.Fatalf("buildOpts(dates) error = %v", err)
+	}
 	if full.Metric == nil || string(*full.Metric) != "change_failure_rate" {
 		t.Errorf("metric = %v, want change_failure_rate", full.Metric)
 	}

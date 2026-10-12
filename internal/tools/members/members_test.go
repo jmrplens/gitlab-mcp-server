@@ -1128,6 +1128,34 @@ func TestToOutput_WithCreatedAt(t *testing.T) {
 	}
 }
 
+// TestAddAndEdit_ExpiresAtThatIsNotADate_IsRefusedBeforeAnyRequest verifies
+// a membership expiry that is not a date is refused, naming the field and
+// quoting the value, before any request. It used to be forwarded as written,
+// so a value GitLab could not read was sent and refused only by GitLab, if at
+// all (issue 1308).
+func TestAddAndEdit_ExpiresAtThatIsNotADate_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	ctx := context.Background()
+	writes := map[string]func() error{
+		"add": func() error {
+			_, err := Add(ctx, client, AddInput{ProjectID: "42", UserID: 7, AccessLevel: 30, ExpiresAt: "not-a-date"})
+			return err
+		},
+		"edit": func() error {
+			_, err := Edit(ctx, client, EditInput{ProjectID: "42", UserID: 7, AccessLevel: 30, ExpiresAt: "not-a-date"})
+			return err
+		},
+	}
+	for name, write := range writes {
+		t.Run(name, func(t *testing.T) {
+			err := write()
+			if err == nil || !strings.Contains(err.Error(), "expires_at must be a date") || !strings.Contains(err.Error(), `"not-a-date"`) {
+				t.Errorf("%s error = %v, want the expires_at refusal quoting the value", name, err)
+			}
+		})
+	}
+}
+
 // TestToOutput_WithExpiresAt verifies ToOutput when with expires at.
 func TestToOutput_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

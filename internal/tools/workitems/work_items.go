@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -435,52 +434,16 @@ func applyPlanningFilters(opts *gl.ListWorkItemsOptions, input ListInput) {
 // items than were asked for, and nothing in the answer says the range was not
 // applied.
 func applyTimeFilters(opts *gl.ListWorkItemsOptions, input ListInput) error {
-	filters := []struct {
-		name  string
-		value string
-		dest  **time.Time
-	}{
-		{"closed_after", input.ClosedAfter, &opts.ClosedAfter},
-		{"closed_before", input.ClosedBefore, &opts.ClosedBefore},
-		{"created_after", input.CreatedAfter, &opts.CreatedAfter},
-		{"created_before", input.CreatedBefore, &opts.CreatedBefore},
-		{"due_after", input.DueAfter, &opts.DueAfter},
-		{"due_before", input.DueBefore, &opts.DueBefore},
-		{"updated_after", input.UpdatedAfter, &opts.UpdatedAfter},
-		{"updated_before", input.UpdatedBefore, &opts.UpdatedBefore},
-	}
-	for _, filter := range filters {
-		if filter.value == "" {
-			continue
-		}
-		parsed, err := parseWorkItemTime(filter.name, filter.value)
-		if err != nil {
-			return err
-		}
-		*filter.dest = parsed
-	}
-	return nil
-}
-
-// workItemTimeLayouts are the timestamp spellings the time filters accept.
-//
-// RFC 3339 is what the published schema advertises through its date-time
-// format and what GitLab's Time scalar wants. The two shorter forms are here
-// because a model told a value is a date sends exactly "2025-01-01", and
-// refusing that would cost a round trip to learn nothing.
-// internal/tools/workitemsavedviews accepts the same three spellings for the
-// same eight filter names.
-var workItemTimeLayouts = []string{time.RFC3339, "2006-01-02T15:04:05", toolutil.DateFormatISO}
-
-// parseWorkItemTime reads one timestamp, naming the field it came from so the
-// caller learns which of eight filters was malformed.
-func parseWorkItemTime(field, value string) (*time.Time, error) {
-	for _, layout := range workItemTimeLayouts {
-		if parsed, err := time.Parse(layout, value); err == nil {
-			return &parsed, nil
-		}
-	}
-	return nil, fmt.Errorf("%s must be an ISO 8601 timestamp (e.g. 2025-01-01T00:00:00Z), got %q", field, value)
+	return toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "closed_after", Value: input.ClosedAfter, Dest: &opts.ClosedAfter},
+		toolutil.TimeInput{Field: "closed_before", Value: input.ClosedBefore, Dest: &opts.ClosedBefore},
+		toolutil.TimeInput{Field: "created_after", Value: input.CreatedAfter, Dest: &opts.CreatedAfter},
+		toolutil.TimeInput{Field: "created_before", Value: input.CreatedBefore, Dest: &opts.CreatedBefore},
+		toolutil.TimeInput{Field: "due_after", Value: input.DueAfter, Dest: &opts.DueAfter},
+		toolutil.TimeInput{Field: "due_before", Value: input.DueBefore, Dest: &opts.DueBefore},
+		toolutil.TimeInput{Field: "updated_after", Value: input.UpdatedAfter, Dest: &opts.UpdatedAfter},
+		toolutil.TimeInput{Field: "updated_before", Value: input.UpdatedBefore, Dest: &opts.UpdatedBefore},
+	)
 }
 
 // workItemEEListFields are the five field names client-go keeps out of its
@@ -659,13 +622,11 @@ func buildCreateOptions(input CreateInput) (*gl.CreateWorkItemOptions, error) {
 	if err := applyCreateWidgets(opts, input); err != nil {
 		return nil, err
 	}
-	if input.CreatedAt != "" {
-		createdAt, err := parseWorkItemTime("created_at", input.CreatedAt)
-		if err != nil {
-			return nil, err
-		}
-		opts.CreatedAt = createdAt
+	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
+	if err != nil {
+		return nil, err
 	}
+	opts.CreatedAt = createdAt
 	// Only the nil check is ours: client-go folds the linked items into a
 	// widget of its own on the same non-empty-length condition, so a second
 	// copy of that length test here decided nothing a caller could see.
@@ -733,36 +694,10 @@ func applyCreateWidgets(opts *gl.CreateWorkItemOptions, input CreateInput) error
 // date had been discarded. That is the same failure the eight list filters
 // refuse and the same one created_at refuses; these two now match.
 func applyWorkItemDates(startDate, dueDate string, start, due **gl.ISOTime) error {
-	dates := []struct {
-		name  string
-		value string
-		dest  **gl.ISOTime
-	}{
-		{"start_date", startDate, start},
-		{"due_date", dueDate, due},
-	}
-	for _, date := range dates {
-		if date.value == "" {
-			continue
-		}
-		parsed, err := parseWorkItemDate(date.name, date.value)
-		if err != nil {
-			return err
-		}
-		*date.dest = parsed
-	}
-	return nil
-}
-
-// parseWorkItemDate reads one calendar date, naming the field it came from so
-// the caller learns which of the two was malformed.
-func parseWorkItemDate(field, value string) (*gl.ISOTime, error) {
-	parsed, err := time.Parse(toolutil.DateFormatISO, value)
-	if err != nil {
-		return nil, fmt.Errorf("%s must be a date in YYYY-MM-DD form (e.g. 2025-01-31), got %q", field, value)
-	}
-	isoDate := gl.ISOTime(parsed)
-	return &isoDate, nil
+	return toolutil.ParseDateInputs(
+		toolutil.DateInput{Field: "start_date", Value: startDate, Dest: start},
+		toolutil.DateInput{Field: "due_date", Value: dueDate, Dest: due},
+	)
 }
 
 // Update.

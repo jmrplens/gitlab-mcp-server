@@ -489,11 +489,14 @@ func userInputSchemaOverrides(individualTool string) []toolutil.InputSchemaOverr
 	case "gitlab_add_ssh_key", "gitlab_add_ssh_key_for_user":
 		// Docs: https://docs.gitlab.com/ee/api/user_keys.html#add-an-ssh-key
 		// SDK: AddSSHKeyOptions.UsageType *string (no consts, string param)
+		// expires_at is a DateTime at GitLab and the handler sends the
+		// instant it is given, unlike the date-only canonical default.
 		return []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("usage_type", map[string]any{
 				"enum":        []any{"auth", "signing", "auth_and_signing"},
 				"description": "SSH key usage scope: auth (authentication), signing (commit signing), or auth_and_signing (both). Default: auth_and_signing.",
 			}),
+			toolutil.SchemaFormatOverride("expires_at", "date-time"),
 		}
 	case "gitlab_create_user_runner":
 		// Docs: https://docs.gitlab.com/ee/api/users.html#create-a-runner-linked-to-a-user

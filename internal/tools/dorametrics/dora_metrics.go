@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -16,8 +15,8 @@ import (
 type ProjectInput struct {
 	ProjectID        toolutil.StringOrInt `json:"project_id"                  jsonschema:"Project ID or URL-encoded path,required"`
 	Metric           string               `json:"metric"                      jsonschema:"DORA metric type: deployment_frequency, lead_time_for_changes, time_to_restore_service, change_failure_rate,required"`
-	StartDate        string               `json:"start_date,omitempty"        jsonschema:"Start date (YYYY-MM-DD)"`
-	EndDate          string               `json:"end_date,omitempty"          jsonschema:"End date (YYYY-MM-DD)"`
+	StartDate        string               `json:"start_date,omitempty"        jsonschema:"Start date (YYYY-MM-DD). A timestamp is read for its date. GitLab defaults to three months ago"`
+	EndDate          string               `json:"end_date,omitempty"          jsonschema:"End date (YYYY-MM-DD). A timestamp is read for its date. GitLab defaults to today"`
 	Interval         string               `json:"interval,omitempty"          jsonschema:"Aggregation interval: daily, monthly, all (default: daily)"`
 	EnvironmentTiers []string             `json:"environment_tiers,omitempty" jsonschema:"Filter by environment tiers (e.g. production, staging)"`
 }
@@ -26,8 +25,8 @@ type ProjectInput struct {
 type GroupInput struct {
 	GroupID          toolutil.StringOrInt `json:"group_id"                    jsonschema:"Group ID or URL-encoded path,required"`
 	Metric           string               `json:"metric"                      jsonschema:"DORA metric type: deployment_frequency, lead_time_for_changes, time_to_restore_service, change_failure_rate,required"`
-	StartDate        string               `json:"start_date,omitempty"        jsonschema:"Start date (YYYY-MM-DD)"`
-	EndDate          string               `json:"end_date,omitempty"          jsonschema:"End date (YYYY-MM-DD)"`
+	StartDate        string               `json:"start_date,omitempty"        jsonschema:"Start date (YYYY-MM-DD). A timestamp is read for its date. GitLab defaults to three months ago"`
+	EndDate          string               `json:"end_date,omitempty"          jsonschema:"End date (YYYY-MM-DD). A timestamp is read for its date. GitLab defaults to today"`
 	Interval         string               `json:"interval,omitempty"          jsonschema:"Aggregation interval: daily, monthly, all (default: daily)"`
 	EnvironmentTiers []string             `json:"environment_tiers,omitempty" jsonschema:"Filter by environment tiers (e.g. production, staging)"`
 }
@@ -57,21 +56,19 @@ type Output struct {
 	Metrics []MetricOutput `json:"metrics"`
 }
 
-func buildOpts(metric, startDate, endDate, interval string, tiers []string) gl.GetDORAMetricsOptions {
+// buildOpts maps a DORA query onto client-go's options, refusing a start or
+// end date it cannot read. Both used to be dropped, and GitLab then answered
+// for its default three months rather than the range the caller named
+// (issue 1308).
+func buildOpts(metric, startDate, endDate, interval string, tiers []string) (gl.GetDORAMetricsOptions, error) {
 	opts := gl.GetDORAMetricsOptions{
 		Metric: new(gl.DORAMetricType(metric)),
 	}
-	if startDate != "" {
-		if t, err := time.Parse("2006-01-02", startDate); err == nil {
-			iso := gl.ISOTime(t)
-			opts.StartDate = &iso
-		}
-	}
-	if endDate != "" {
-		if t, err := time.Parse("2006-01-02", endDate); err == nil {
-			iso := gl.ISOTime(t)
-			opts.EndDate = &iso
-		}
+	if err := toolutil.ParseDateInputs(
+		toolutil.DateInput{Field: "start_date", Value: startDate, Dest: &opts.StartDate},
+		toolutil.DateInput{Field: "end_date", Value: endDate, Dest: &opts.EndDate},
+	); err != nil {
+		return gl.GetDORAMetricsOptions{}, err
 	}
 	if interval != "" {
 		opts.Interval = new(gl.DORAMetricInterval(interval))
@@ -79,7 +76,7 @@ func buildOpts(metric, startDate, endDate, interval string, tiers []string) gl.G
 	if len(tiers) > 0 {
 		opts.EnvironmentTiers = &tiers
 	}
-	return opts
+	return opts, nil
 }
 
 // capturedValues reads each data point's value from the captured answer, one
@@ -138,7 +135,10 @@ func GetProjectMetrics(ctx context.Context, client *gitlabclient.Client, input P
 	if err := validateMetricsInput(input.ProjectID, "project_id", input.Metric); err != nil {
 		return Output{}, err
 	}
-	opts := buildOpts(input.Metric, input.StartDate, input.EndDate, input.Interval, input.EnvironmentTiers)
+	opts, err := buildOpts(input.Metric, input.StartDate, input.EndDate, input.Interval, input.EnvironmentTiers)
+	if err != nil {
+		return Output{}, err
+	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	metrics, _, err := client.GL().DORAMetrics.GetProjectDORAMetrics(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -155,7 +155,10 @@ func GetGroupMetrics(ctx context.Context, client *gitlabclient.Client, input Gro
 	if err := validateMetricsInput(input.GroupID, "group_id", input.Metric); err != nil {
 		return Output{}, err
 	}
-	opts := buildOpts(input.Metric, input.StartDate, input.EndDate, input.Interval, input.EnvironmentTiers)
+	opts, err := buildOpts(input.Metric, input.StartDate, input.EndDate, input.Interval, input.EnvironmentTiers)
+	if err != nil {
+		return Output{}, err
+	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	metrics, _, err := client.GL().DORAMetrics.GetGroupDORAMetrics(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {

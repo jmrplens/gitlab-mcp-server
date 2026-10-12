@@ -131,6 +131,13 @@ func GetLatest(ctx context.Context, client *gitlabclient.Client, input GetLatest
 	if input.ProjectID == "" {
 		return LatestOutput{}, errors.New("pipelineGetLatest: project_id is required")
 	}
+	// The list filters reach GitLab only through the fallback, but a date
+	// among them that does not parse is refused here, before the latest route
+	// is asked, rather than dropped on the one path that reads it.
+	listOpts, err := latestListOptions(input)
+	if err != nil {
+		return LatestOutput{}, fmt.Errorf("%s: %w", opGetLatest, err)
+	}
 	opts := &gl.GetLatestPipelineOptions{}
 	if input.Ref != "" {
 		opts.Ref = new(input.Ref)
@@ -139,7 +146,7 @@ func GetLatest(ctx context.Context, client *gitlabclient.Client, input GetLatest
 	p, _, err := client.GL().Pipelines.GetLatestPipeline(string(input.ProjectID), opts, gl.WithContext(latestCtx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) && toolutil.IsPermissionRefusal(err) {
-			return getLatestFallback(ctx, client, input)
+			return getLatestFallback(ctx, client, input, listOpts)
 		}
 		return LatestOutput{}, toolutil.WrapErrWithMessage(opGetLatest, err)
 	}
@@ -153,7 +160,7 @@ func GetLatest(ctx context.Context, client *gitlabclient.Client, input GetLatest
 // list alone does not keep the answer on that ref. It then reads the commit
 // at the head of the ref and that pipeline in full, and says beside it that
 // it ran for an earlier commit.
-func getLatestFallback(ctx context.Context, client *gitlabclient.Client, input GetLatestInput) (LatestOutput, error) {
+func getLatestFallback(ctx context.Context, client *gitlabclient.Client, input GetLatestInput, listOpts *gl.ListProjectPipelinesOptions) (LatestOutput, error) {
 	ref := input.Ref
 	if ref == "" {
 		branch, err := defaultBranch(ctx, client, input.ProjectID)
@@ -162,7 +169,7 @@ func getLatestFallback(ctx context.Context, client *gitlabclient.Client, input G
 		}
 		ref = branch
 	}
-	listed, err := firstPipelineOnRef(ctx, client, input, ref)
+	listed, err := firstPipelineOnRef(ctx, client, input, listOpts, ref)
 	if err != nil {
 		return LatestOutput{}, err
 	}
@@ -251,32 +258,8 @@ func refUnknown(ctx context.Context, client *gitlabclient.Client, projectID tool
 //
 // A refusal of the list is the caller's permission, which the latest route's
 // 403 could not say, and is returned with the role that reads pipelines.
-func firstPipelineOnRef(ctx context.Context, client *gitlabclient.Client, input GetLatestInput, ref string) (int64, error) {
-	listOpts := buildListOpts(ListInput{
-		ProjectID:             input.ProjectID,
-		Scope:                 input.Scope,
-		Status:                input.Status,
-		Source:                input.Source,
-		Ref:                   ref,
-		SHA:                   input.SHA,
-		Name:                  input.Name,
-		Username:              input.Username,
-		YamlErrors:            input.YamlErrors,
-		OrderBy:               input.OrderBy,
-		Sort:                  input.Sort,
-		CreatedAfter:          input.CreatedAfter,
-		CreatedBefore:         input.CreatedBefore,
-		UpdatedAfter:          input.UpdatedAfter,
-		UpdatedBefore:         input.UpdatedBefore,
-		PaginationInput:       input.PaginationInput,
-		KeysetPaginationInput: input.KeysetPaginationInput,
-	})
-	if listOpts.OrderBy == nil {
-		listOpts.OrderBy = new("id")
-	}
-	if listOpts.Sort == nil {
-		listOpts.Sort = new("desc")
-	}
+func firstPipelineOnRef(ctx context.Context, client *gitlabclient.Client, input GetLatestInput, listOpts *gl.ListProjectPipelinesOptions, ref string) (int64, error) {
+	listOpts.Ref = new(ref)
 	read := 0
 	rows := gl.Scan2(func(page gl.PaginationOptionFunc) ([]*gl.PipelineInfo, *gl.Response, error) {
 		if read == latestFallbackMaxPages {
@@ -297,6 +280,42 @@ func firstPipelineOnRef(ctx context.Context, client *gitlabclient.Client, input 
 		}
 	}
 	return 0, noPipelineOnRef(input, ref)
+}
+
+// latestListOptions builds the pipeline list options the fallback reads,
+// from the filters of the latest input, newest first unless the caller
+// ordered otherwise. The ref is left for [firstPipelineOnRef] to set, since it
+// may be the default branch the fallback has yet to resolve. A date filter
+// that does not parse is refused.
+func latestListOptions(input GetLatestInput) (*gl.ListProjectPipelinesOptions, error) {
+	listOpts, err := buildListOpts(ListInput{
+		ProjectID:             input.ProjectID,
+		Scope:                 input.Scope,
+		Status:                input.Status,
+		Source:                input.Source,
+		SHA:                   input.SHA,
+		Name:                  input.Name,
+		Username:              input.Username,
+		YamlErrors:            input.YamlErrors,
+		OrderBy:               input.OrderBy,
+		Sort:                  input.Sort,
+		CreatedAfter:          input.CreatedAfter,
+		CreatedBefore:         input.CreatedBefore,
+		UpdatedAfter:          input.UpdatedAfter,
+		UpdatedBefore:         input.UpdatedBefore,
+		PaginationInput:       input.PaginationInput,
+		KeysetPaginationInput: input.KeysetPaginationInput,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if listOpts.OrderBy == nil {
+		listOpts.OrderBy = new("id")
+	}
+	if listOpts.Sort == nil {
+		listOpts.Sort = new("desc")
+	}
+	return listOpts, nil
 }
 
 // listError is the error a refusal or a failure of the pipeline list

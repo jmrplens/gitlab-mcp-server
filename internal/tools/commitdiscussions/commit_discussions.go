@@ -2,6 +2,7 @@ package commitdiscussions
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -166,9 +167,13 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
+	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
+	if err != nil {
+		return Output{}, fmt.Errorf("commit_discussion_create: %w", err)
+	}
 	opts := &gl.CreateCommitDiscussionOptions{
 		Body:      new(toolutil.NormalizeText(input.Body)),
-		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
+		CreatedAt: createdAt,
 	}
 	if input.Position != nil {
 		opts.Position = buildNotePosition(input.Position)
@@ -191,9 +196,13 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 	if err := ctx.Err(); err != nil {
 		return NoteOutput{}, err
 	}
+	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
+	if err != nil {
+		return NoteOutput{}, fmt.Errorf("commit_discussion_add_note: %w", err)
+	}
 	opts := &gl.AddCommitDiscussionNoteOptions{
 		Body:      new(toolutil.NormalizeText(input.Body)),
-		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
+		CreatedAt: createdAt,
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	note, _, err := client.GL().Discussions.AddCommitDiscussionNote(string(input.ProjectID), input.CommitSHA, input.DiscussionID, opts, gl.WithContext(ctx))
@@ -216,9 +225,13 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 	if input.NoteID <= 0 {
 		return NoteOutput{}, toolutil.ErrRequiredInt64("commit_discussion_update_note", "note_id")
 	}
+	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
+	if err != nil {
+		return NoteOutput{}, fmt.Errorf("commit_discussion_update_note: %w", err)
+	}
 	opts := &gl.UpdateCommitDiscussionNoteOptions{
 		Body:      new(toolutil.NormalizeText(input.Body)),
-		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
+		CreatedAt: createdAt,
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	note, _, err := client.GL().Discussions.UpdateCommitDiscussionNote(string(input.ProjectID), input.CommitSHA, input.DiscussionID, input.NoteID, opts, gl.WithContext(ctx))

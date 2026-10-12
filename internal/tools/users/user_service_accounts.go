@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -192,14 +191,11 @@ func CreateCurrentUserPAT(ctx context.Context, client *gitlabclient.Client, inpu
 	if input.Description != "" {
 		opts.Description = new(input.Description)
 	}
-	if input.ExpiresAt != "" {
-		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresAt)
-		if err != nil {
-			return CurrentUserPATOutput{}, fmt.Errorf("invalid expires_at format, expected YYYY-MM-DD: %w", err)
-		}
-		isoT := gl.ISOTime(t)
-		opts.ExpiresAt = &isoT
+	expiresAt, err := toolutil.ParseDateField("expires_at", input.ExpiresAt)
+	if err != nil {
+		return CurrentUserPATOutput{}, fmt.Errorf("create_personal_access_token_for_current_user: %w", err)
 	}
+	opts.ExpiresAt = expiresAt
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().Users.CreatePersonalAccessTokenForCurrentUser(opts, gl.WithContext(ctx))
 	if err != nil {

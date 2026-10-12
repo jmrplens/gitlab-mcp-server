@@ -1015,7 +1015,7 @@ func TestRepositoryAddChangelog_WithOptions(t *testing.T) {
 		"version":     "2.0.0",
 		"branch":      "develop",
 		"config_file": ".changelog.yml",
-		"date":        "2026-03-01",
+		"date":        "2026-03-01T10:00:00Z",
 		"file":        "NOTES.md",
 		"from":        "v1.0.0",
 		"to":          "v1.9.9",
@@ -1083,7 +1083,7 @@ func TestRepositoryGenerateChangelogData_WithOptions(t *testing.T) {
 			assertQueryParams(t, r.URL.Query(), map[string]string{
 				"version":     "2.0.0",
 				"config_file": ".changelog.yml",
-				"date":        "2026-03-01",
+				"date":        "2026-03-01T10:00:00Z",
 				"from":        "v1.0.0",
 				"to":          "v1.9.9",
 				"trailer":     "Changes",
@@ -2352,4 +2352,46 @@ func TestRepositoryTree_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
 		})
 		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Tree)}, err
 	})
+}
+
+// TestChangelog_Date_ServesATimestampFormat verifies both changelog actions
+// publish date as a date-time: GitLab declares it a DateTime and the handlers
+// send the instant they are given, so the schema says a time of day is read.
+func TestChangelog_Date_ServesATimestampFormat(t *testing.T) {
+	byTool := newRepositorySpecsByTool(t)
+	for _, tool := range []string{"gitlab_repository_changelog_add", "gitlab_repository_changelog_generate"} {
+		t.Run(tool, func(t *testing.T) {
+			properties, _ := byTool[tool].Route.InputSchema["properties"].(map[string]any)
+			date, _ := properties["date"].(map[string]any)
+			if format := date["format"]; format != "date-time" {
+				t.Errorf("date format = %v, want date-time", format)
+			}
+		})
+	}
+}
+
+// TestChangelog_DateThatDoesNotParse_IsRefusedBeforeAnyRequest verifies both
+// changelog actions refuse a release date they cannot read, naming the field
+// and quoting the value, before any request (issue 1308).
+func TestChangelog_DateThatDoesNotParse_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	ctx := context.Background()
+	calls := map[string]func() error{
+		"add": func() error {
+			_, err := AddChangelog(ctx, client, AddChangelogInput{ProjectID: "42", Version: "1.0.0", Date: "not-a-date"})
+			return err
+		},
+		"generate": func() error {
+			_, err := GenerateChangelogData(ctx, client, GenerateChangelogInput{ProjectID: "42", Version: "1.0.0", Date: "not-a-date"})
+			return err
+		},
+	}
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			err := call()
+			if err == nil || !strings.Contains(err.Error(), "date must be an ISO 8601 timestamp") || !strings.Contains(err.Error(), `"not-a-date"`) {
+				t.Errorf("%s error = %v, want the date refusal quoting the value", name, err)
+			}
+		})
+	}
 }

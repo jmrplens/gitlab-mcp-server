@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -169,7 +170,7 @@ type ListInput struct {
 	IssueType           string               `json:"issue_type,omitempty"           jsonschema:"Filter by issue type (issue, incident, test_case, task)"`
 	IterationID         *int64               `json:"iteration_id,omitempty"         tier:"premium" jsonschema:"Filter by iteration ID"`
 	Confidential        *bool                `json:"confidential,omitempty"         jsonschema:"Filter by confidential status"`
-	DueDate             string               `json:"due_date,omitempty"             jsonschema:"Filter by due date (0=no due date, overdue, week, month, next_month_and_previous_two_weeks)"`
+	DueDate             string               `json:"due_date,omitempty"             jsonschema:"Filter by due date keyword, not a date: 0 (no due date), any, overdue, today, tomorrow, week, month or next_month_and_previous_two_weeks"`
 	CreatedAfter        string               `json:"created_after,omitempty"        jsonschema:"Return issues created after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)"`
 	CreatedBefore       string               `json:"created_before,omitempty"       jsonschema:"Return issues created before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)"`
 	UpdatedAfter        string               `json:"updated_after,omitempty"        jsonschema:"Return issues updated after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)"`
@@ -243,7 +244,7 @@ type ListGroupInput struct {
 	IssueType           string               `json:"issue_type,omitempty"           jsonschema:"Filter by issue type (issue, incident, test_case, task)"`
 	IterationID         *int64               `json:"iteration_id,omitempty"         tier:"premium" jsonschema:"Filter by iteration ID"`
 	Confidential        *bool                `json:"confidential,omitempty"         jsonschema:"Filter by confidential status"`
-	DueDate             string               `json:"due_date,omitempty"             jsonschema:"Filter by due date (0, overdue, week, month, next_month_and_previous_two_weeks)"`
+	DueDate             string               `json:"due_date,omitempty"             jsonschema:"Filter by due date keyword, not a date: 0 (no due date), any, overdue, today, tomorrow, week, month or next_month_and_previous_two_weeks"`
 	OrderBy             string               `json:"order_by,omitempty"             jsonschema:"Order by field (created_at, updated_at, priority, due_date, relative_position, label_priority, milestone_due, popularity, weight)"`
 	Sort                string               `json:"sort,omitempty"                 jsonschema:"Sort direction (asc, desc)"`
 	CreatedAfter        string               `json:"created_after,omitempty"        jsonschema:"Return issues created after date (ISO 8601)"`
@@ -444,13 +445,11 @@ func buildCreateOpts(input CreateInput) (*gl.CreateIssueOptions, error) {
 		opts.DueDate = d
 	}
 	applyCreateExtraOpts(opts, input)
-	if input.CreatedAt != "" {
-		t, err := time.Parse(time.RFC3339, input.CreatedAt)
-		if err != nil {
-			return nil, fmt.Errorf("issueCreate: invalid created_at format (expected ISO 8601/RFC 3339): %w", err)
-		}
-		opts.CreatedAt = &t
+	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("issueCreate: %w", err)
 	}
+	opts.CreatedAt = createdAt
 	if input.MergeRequestToResolveDiscussionsOf > 0 {
 		opts.MergeRequestToResolveDiscussionsOf = new(input.MergeRequestToResolveDiscussionsOf)
 	}
@@ -579,13 +578,14 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		IssueType:           optStr(input.IssueType),
 		IterationID:         input.IterationID,
 		Confidential:        input.Confidential,
-		DueDate:             optStr(input.DueDate),
 		OrderBy:             optStr(input.OrderBy),
 		Sort:                optStr(input.Sort),
-		CreatedAfter:        toolutil.ParseOptionalTime(input.CreatedAfter),
-		CreatedBefore:       toolutil.ParseOptionalTime(input.CreatedBefore),
-		UpdatedAfter:        toolutil.ParseOptionalTime(input.UpdatedAfter),
-		UpdatedBefore:       toolutil.ParseOptionalTime(input.UpdatedBefore),
+	}
+	if err := applyIssueListFilters(
+		issueListFilterValues{input.CreatedAfter, input.CreatedBefore, input.UpdatedAfter, input.UpdatedBefore, input.DueDate},
+		issueListFilterDests{&opts.CreatedAfter, &opts.CreatedBefore, &opts.UpdatedAfter, &opts.UpdatedBefore, &opts.DueDate},
+	); err != nil {
+		return ListOutput{}, fmt.Errorf("issueList: %w", err)
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
@@ -644,13 +644,11 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateIssueOptions, error) {
 	if input.DiscussionLocked != nil {
 		opts.DiscussionLocked = input.DiscussionLocked
 	}
-	if input.UpdatedAt != "" {
-		t, err := time.Parse(time.RFC3339, input.UpdatedAt)
-		if err != nil {
-			return nil, fmt.Errorf("issueUpdate: invalid updated_at format (expected ISO 8601/RFC 3339): %w", err)
-		}
-		opts.UpdatedAt = &t
+	updatedAt, err := toolutil.ParseTimeField("updated_at", input.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("issueUpdate: %w", err)
 	}
+	opts.UpdatedAt = updatedAt
 	return opts, nil
 }
 
@@ -707,14 +705,64 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	return nil
 }
 
-// parseDueDate converts a YYYY-MM-DD string to *gl.ISOTime.
-func parseDueDate(s string) (*gl.ISOTime, error) {
-	t, err := time.Parse("2006-01-02", s)
-	if err != nil {
-		return nil, fmt.Errorf("invalid due_date format (expected YYYY-MM-DD): %w", err)
+// issueListFilterValues are the filters the three issue lists share, as the
+// caller wrote them.
+type issueListFilterValues struct {
+	createdAfter, createdBefore, updatedAfter, updatedBefore, dueDate string
+}
+
+// issueListFilterDests are where each list's options take those filters.
+type issueListFilterDests struct {
+	createdAfter, createdBefore, updatedAfter, updatedBefore **time.Time
+	dueDate                                                  **string
+}
+
+// applyIssueListFilters parses the created and updated bounds and the due
+// date keyword the three issue lists share into their option fields, refusing
+// the call on the first value that does not parse. Each of them used to reach
+// GitLab as nothing, or as a value GitLab ignores, and the list went out
+// unfiltered (issue 1308).
+func applyIssueListFilters(values issueListFilterValues, dests issueListFilterDests) error {
+	if err := toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "created_after", Value: values.createdAfter, Dest: dests.createdAfter},
+		toolutil.TimeInput{Field: "created_before", Value: values.createdBefore, Dest: dests.createdBefore},
+		toolutil.TimeInput{Field: "updated_after", Value: values.updatedAfter, Dest: dests.updatedAfter},
+		toolutil.TimeInput{Field: "updated_before", Value: values.updatedBefore, Dest: dests.updatedBefore},
+	); err != nil {
+		return err
 	}
-	d := gl.ISOTime(t)
-	return &d, nil
+	dueDate, err := dueDateFilter(values.dueDate)
+	if err != nil {
+		return err
+	}
+	*dests.dueDate = dueDate
+	return nil
+}
+
+// dueDateFilterKeywords are the values the due_date filter of an issue list
+// matches, in the order GitLab's Issue model declares them. GitLab's finder
+// compares the parameter with each name in turn and applies no filter when
+// none matches, so a date, which is what a caller sends to a parameter named
+// due_date, answers with the whole list.
+var dueDateFilterKeywords = []string{"0", "any", "overdue", "today", "tomorrow", "week", "month", "next_month_and_previous_two_weeks"}
+
+// dueDateFilter reads the due_date filter of an issue list, refusing a value
+// that is none of [dueDateFilterKeywords] before any request is made.
+func dueDateFilter(value string) (*string, error) {
+	if value == "" {
+		return nil, nil //nolint:nilnil // an empty value is the filter left out, which the caller sends as nothing
+	}
+	if !slices.Contains(dueDateFilterKeywords, value) {
+		return nil, fmt.Errorf("due_date must be one of 0 (no due date), any, overdue, today, tomorrow, week, month or next_month_and_previous_two_weeks; it filters by keyword and takes no date, got %q", value)
+	}
+	return &value, nil
+}
+
+// parseDueDate reads a due date through the parser every date input shares:
+// YYYY-MM-DD, or an RFC 3339 timestamp read for the day it names, which
+// GitLab's Date parameter coerces the same way.
+func parseDueDate(s string) (*gl.ISOTime, error) {
+	return toolutil.ParseDateField("due_date", s)
 }
 
 // ListGroup retrieves a paginated list of issues across all projects in a group.
@@ -752,13 +800,14 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 		IssueType:           optStr(input.IssueType),
 		IterationID:         input.IterationID,
 		Confidential:        input.Confidential,
-		DueDate:             optStr(input.DueDate),
 		OrderBy:             optStr(input.OrderBy),
 		Sort:                optStr(input.Sort),
-		CreatedAfter:        toolutil.ParseOptionalTime(input.CreatedAfter),
-		CreatedBefore:       toolutil.ParseOptionalTime(input.CreatedBefore),
-		UpdatedAfter:        toolutil.ParseOptionalTime(input.UpdatedAfter),
-		UpdatedBefore:       toolutil.ParseOptionalTime(input.UpdatedBefore),
+	}
+	if err := applyIssueListFilters(
+		issueListFilterValues{input.CreatedAfter, input.CreatedBefore, input.UpdatedAfter, input.UpdatedBefore, input.DueDate},
+		issueListFilterDests{&opts.CreatedAfter, &opts.CreatedBefore, &opts.UpdatedAfter, &opts.UpdatedBefore, &opts.DueDate},
+	); err != nil {
+		return ListGroupOutput{}, fmt.Errorf("issueListGroup: %w", err)
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
@@ -805,7 +854,7 @@ type ListAllInput struct {
 	IssueType           string   `json:"issue_type,omitempty"           jsonschema:"Filter by issue type (issue, incident, test_case, task)"`
 	IterationID         *int64   `json:"iteration_id,omitempty"         tier:"premium" jsonschema:"Filter by iteration ID"`
 	Confidential        *bool    `json:"confidential,omitempty"         jsonschema:"Filter by confidential status"`
-	DueDate             string   `json:"due_date,omitempty"             jsonschema:"Filter by due date (0, overdue, week, month, next_month_and_previous_two_weeks)"`
+	DueDate             string   `json:"due_date,omitempty"             jsonschema:"Filter by due date keyword, not a date: 0 (no due date), any, overdue, today, tomorrow, week, month or next_month_and_previous_two_weeks"`
 	OrderBy             string   `json:"order_by,omitempty"             jsonschema:"Order by field (created_at, updated_at, priority, due_date, relative_position, label_priority, milestone_due, popularity, weight)"`
 	Sort                string   `json:"sort,omitempty"                 jsonschema:"Sort direction (asc, desc)"`
 	CreatedAfter        string   `json:"created_after,omitempty"        jsonschema:"Return issues created after date (ISO 8601)"`
@@ -859,13 +908,14 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInpu
 		IssueType:           optStr(input.IssueType),
 		IterationID:         input.IterationID,
 		Confidential:        input.Confidential,
-		DueDate:             optStr(input.DueDate),
 		OrderBy:             optStr(input.OrderBy),
 		Sort:                optStr(input.Sort),
-		CreatedAfter:        toolutil.ParseOptionalTime(input.CreatedAfter),
-		CreatedBefore:       toolutil.ParseOptionalTime(input.CreatedBefore),
-		UpdatedAfter:        toolutil.ParseOptionalTime(input.UpdatedAfter),
-		UpdatedBefore:       toolutil.ParseOptionalTime(input.UpdatedBefore),
+	}
+	if err := applyIssueListFilters(
+		issueListFilterValues{input.CreatedAfter, input.CreatedBefore, input.UpdatedAfter, input.UpdatedBefore, input.DueDate},
+		issueListFilterDests{&opts.CreatedAfter, &opts.CreatedBefore, &opts.UpdatedAfter, &opts.UpdatedBefore, &opts.DueDate},
+	); err != nil {
+		return ListAllOutput{}, fmt.Errorf("issueListAll: %w", err)
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 

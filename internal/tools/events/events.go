@@ -2,6 +2,7 @@ package events
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -175,7 +176,10 @@ func ListCurrentUserContributionEvents(ctx context.Context, client *gitlabclient
 		return ListContributionEventsOutput{}, toolutil.WrapErrWithMessage("user_contribution_event_list", err)
 	}
 	opts := &gl.ListContributionEventsOptions{}
-	filters := newEventFilters(input.Action, input.TargetType, input.Before, input.After, input.Sort)
+	filters, err := newEventFilters(input.Action, input.TargetType, input.Before, input.After, input.Sort)
+	if err != nil {
+		return ListContributionEventsOutput{}, fmt.Errorf("user_contribution_event_list: %w", err)
+	}
 	opts.Action = filters.Action
 	opts.TargetType = filters.TargetType
 	opts.Before = filters.Before
@@ -439,7 +443,10 @@ func ListProjectEvents(ctx context.Context, client *gitlabclient.Client, input L
 	}
 
 	opts := &gl.ListProjectVisibleEventsOptions{}
-	filters := newEventFilters(input.Action, input.TargetType, input.Before, input.After, input.Sort)
+	filters, err := newEventFilters(input.Action, input.TargetType, input.Before, input.After, input.Sort)
+	if err != nil {
+		return ListProjectEventsOutput{}, fmt.Errorf("project_event_list: %w", err)
+	}
 	opts.Action = filters.Action
 	opts.TargetType = filters.TargetType
 	opts.Before = filters.Before
@@ -544,10 +551,17 @@ type eventFilters struct {
 	Sort       *string
 }
 
-func newEventFilters(action, targetType, before, after, sort string) eventFilters {
-	filters := eventFilters{
-		Before: parseEventDate(before),
-		After:  parseEventDate(after),
+// newEventFilters maps the shared event filters onto client-go's values,
+// refusing a before or after date it cannot read. Both used to be dropped,
+// which answered with the events the range was meant to leave out (issue
+// 1308).
+func newEventFilters(action, targetType, before, after, sort string) (eventFilters, error) {
+	var filters eventFilters
+	if err := toolutil.ParseDateInputs(
+		toolutil.DateInput{Field: "before", Value: before, Dest: &filters.Before},
+		toolutil.DateInput{Field: "after", Value: after, Dest: &filters.After},
+	); err != nil {
+		return eventFilters{}, err
 	}
 	if action != "" {
 		value := gl.EventTypeValue(action)
@@ -560,19 +574,7 @@ func newEventFilters(action, targetType, before, after, sort string) eventFilter
 	if sort != "" {
 		filters.Sort = &sort
 	}
-	return filters
-}
-
-func parseEventDate(value string) *gl.ISOTime {
-	if value == "" {
-		return nil
-	}
-	parsed, err := time.Parse(toolutil.DateFormatISO, value)
-	if err != nil {
-		return nil
-	}
-	date := gl.ISOTime(parsed)
-	return &date
+	return filters, nil
 }
 
 // formatAuthor returns the author username prefixed with @ for Markdown display.

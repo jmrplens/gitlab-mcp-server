@@ -3,6 +3,7 @@ package snippetdiscussions
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -152,9 +153,13 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.SnippetID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("snippet_discussion_create", "snippet_id")
 	}
+	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
+	if err != nil {
+		return Output{}, fmt.Errorf("snippet_discussion_create: %w", err)
+	}
 	opts := &gl.CreateSnippetDiscussionOptions{
 		Body:      new(input.Body),
-		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
+		CreatedAt: createdAt,
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	d, _, err := client.GL().Discussions.CreateSnippetDiscussion(string(input.ProjectID), input.SnippetID, opts, gl.WithContext(ctx))
@@ -179,9 +184,13 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 	if input.DiscussionID == "" {
 		return NoteOutput{}, errors.New("snippet_discussion_add_note: discussion_id is required")
 	}
+	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
+	if err != nil {
+		return NoteOutput{}, fmt.Errorf("snippet_discussion_add_note: %w", err)
+	}
 	opts := &gl.AddSnippetDiscussionNoteOptions{
 		Body:      new(input.Body),
-		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
+		CreatedAt: createdAt,
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	note, _, err := client.GL().Discussions.AddSnippetDiscussionNote(string(input.ProjectID), input.SnippetID, input.DiscussionID, opts, gl.WithContext(ctx))
@@ -209,9 +218,13 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 	if input.NoteID <= 0 {
 		return NoteOutput{}, toolutil.ErrRequiredInt64("snippet_discussion_update_note", "note_id")
 	}
+	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
+	if err != nil {
+		return NoteOutput{}, fmt.Errorf("snippet_discussion_update_note: %w", err)
+	}
 	opts := &gl.UpdateSnippetDiscussionNoteOptions{
 		Body:      new(input.Body),
-		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
+		CreatedAt: createdAt,
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	note, _, err := client.GL().Discussions.UpdateSnippetDiscussionNote(string(input.ProjectID), input.SnippetID, input.DiscussionID, input.NoteID, opts, gl.WithContext(ctx))

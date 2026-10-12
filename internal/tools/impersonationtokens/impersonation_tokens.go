@@ -218,12 +218,12 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		Name:   new(input.Name),
 		Scopes: &input.Scopes,
 	}
-	if input.ExpiresAt != "" {
-		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresAt)
-		if err != nil {
-			return Output{}, fmt.Errorf("invalid expires_at format, expected YYYY-MM-DD: %w", err)
-		}
-		opts.ExpiresAt = &t
+	expiresAt, err := toolutil.ParseDateField("expires_at", input.ExpiresAt)
+	if err != nil {
+		return Output{}, fmt.Errorf("create_impersonation_token: %w", err)
+	}
+	if expiresAt != nil {
+		opts.ExpiresAt = new(time.Time(*expiresAt))
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().Users.CreateImpersonationToken(input.UserID, opts, gl.WithContext(ctx))
@@ -268,14 +268,11 @@ func CreatePAT(ctx context.Context, client *gitlabclient.Client, input CreatePAT
 	if input.Description != "" {
 		opts.Description = new(input.Description)
 	}
-	if input.ExpiresAt != "" {
-		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresAt)
-		if err != nil {
-			return PATOutput{}, fmt.Errorf("invalid expires_at format, expected YYYY-MM-DD: %w", err)
-		}
-		isoT := gl.ISOTime(t)
-		opts.ExpiresAt = &isoT
+	expiresAt, err := toolutil.ParseDateField("expires_at", input.ExpiresAt)
+	if err != nil {
+		return PATOutput{}, fmt.Errorf("create_personal_access_token: %w", err)
 	}
+	opts.ExpiresAt = expiresAt
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().Users.CreatePersonalAccessToken(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {

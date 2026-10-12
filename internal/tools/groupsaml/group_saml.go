@@ -310,8 +310,12 @@ func SAMLUsersList(ctx context.Context, client *gitlabclient.Client, input SAMLU
 	if input.Blocked != nil {
 		opts.Blocked = input.Blocked
 	}
-	opts.CreatedAfter = toolutil.ParseOptionalTime(input.CreatedAfter)
-	opts.CreatedBefore = toolutil.ParseOptionalTime(input.CreatedBefore)
+	if err := toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "created_after", Value: input.CreatedAfter, Dest: &opts.CreatedAfter},
+		toolutil.TimeInput{Field: "created_before", Value: input.CreatedBefore, Dest: &opts.CreatedBefore},
+	); err != nil {
+		return SAMLUsersListOutput{}, err
+	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	users, resp, err := client.GL().Groups.ListSAMLUsers(input.GroupID, opts, gl.WithContext(ctx))
 	if err != nil {

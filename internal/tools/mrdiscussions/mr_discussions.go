@@ -134,14 +134,21 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.MRIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mrDiscussionCreate", "merge_request_iid")
 	}
+	// The timestamp is read before the position is checked against the merge
+	// request's diff, so a value that does not parse is refused before any
+	// request.
+	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
+	if err != nil {
+		return Output{}, fmt.Errorf("mrDiscussionCreate: %w", err)
+	}
 	if input.Position != nil {
-		if err := validatePosition(ctx, client, string(input.ProjectID), input.MRIID, input.Position); err != nil {
+		if err = validatePosition(ctx, client, string(input.ProjectID), input.MRIID, input.Position); err != nil {
 			return Output{}, fmt.Errorf("mrDiscussionCreate: %w", err)
 		}
 	}
 	opts := &gl.CreateMergeRequestDiscussionOptions{
 		Body:      new(toolutil.NormalizeText(input.Body)),
-		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
+		CreatedAt: createdAt,
 	}
 	if input.CommitID != "" {
 		opts.CommitID = new(input.CommitID)
@@ -201,10 +208,14 @@ func Reply(ctx context.Context, client *gitlabclient.Client, input ReplyInput) (
 	if input.MRIID <= 0 {
 		return NoteOutput{}, toolutil.ErrRequiredInt64("mrDiscussionReply", "merge_request_iid")
 	}
+	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
+	if err != nil {
+		return NoteOutput{}, fmt.Errorf("mrDiscussionReply: %w", err)
+	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	n, _, err := client.GL().Discussions.AddMergeRequestDiscussionNote(string(input.ProjectID), input.MRIID, input.DiscussionID, &gl.AddMergeRequestDiscussionNoteOptions{
 		Body:      new(toolutil.NormalizeText(input.Body)),
-		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
+		CreatedAt: createdAt,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("mrDiscussionReply", err, http.StatusNotFound,
@@ -311,8 +322,12 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 	if input.NoteID <= 0 {
 		return NoteOutput{}, toolutil.ErrRequiredInt64("mrDiscussionNoteUpdate", "note_id")
 	}
+	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
+	if err != nil {
+		return NoteOutput{}, fmt.Errorf("mrDiscussionNoteUpdate: %w", err)
+	}
 	opts := &gl.UpdateMergeRequestDiscussionNoteOptions{
-		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
+		CreatedAt: createdAt,
 	}
 	if input.Body != "" {
 		opts.Body = new(toolutil.NormalizeText(input.Body))

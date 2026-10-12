@@ -347,6 +347,39 @@ func TestActionSpecs_ListAll_SaysWhatAnOmittedScopeReturns(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_IssueLists_PublishDueDateAsTheKeywordsGitLabMatches holds
+// the due_date filter of every issue listing to what GitLab's finder matches:
+// one of eight keywords, and no date. The schema used to carry format "date"
+// from the name alone, so a model sent a date, GitLab matched it against no
+// keyword and answered with the list unfiltered (issue 1308).
+func TestActionSpecs_IssueLists_PublishDueDateAsTheKeywordsGitLabMatches(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	specs := map[string]toolutil.ActionSpec{}
+	for _, spec := range append(ActionSpecs(client), GroupActionSpecs(client)...) {
+		specs[spec.Name] = spec
+	}
+	for _, name := range []string{specList, specListAll, specListGroup, specGroupIssues} {
+		t.Run(name, func(t *testing.T) {
+			spec, ok := specs[name]
+			if !ok {
+				t.Fatalf("no spec named %q", name)
+			}
+			dueDate := servedProperty(t, spec, "due_date")
+			if format, has := dueDate["format"]; has {
+				t.Errorf("%s due_date format = %v, want none: it is a keyword filter", name, format)
+			}
+			enum, _ := dueDate["enum"].([]any)
+			got := make([]string, 0, len(enum))
+			for _, value := range enum {
+				got = append(got, value.(string))
+			}
+			if !slices.Equal(got, dueDateFilterKeywords) {
+				t.Errorf("%s due_date enum = %v, want %v", name, got, dueDateFilterKeywords)
+			}
+		})
+	}
+}
+
 // servedProperty returns the schema the served input schema of spec carries
 // for the named parameter, with every override already applied.
 func servedProperty(t *testing.T, spec toolutil.ActionSpec, name string) map[string]any {

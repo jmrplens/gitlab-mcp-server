@@ -56,21 +56,19 @@ func ShareGroupWithGroup(ctx context.Context, client *gitlabclient.Client, input
 	if input.GroupAccess == 0 {
 		return ShareGroupOutput{}, errors.New("groupShareWithGroup: group_access is required. Valid levels: 10 (Guest), 15 (Planner), 20 (Reporter), 25 (Security Manager), 30 (Developer), 40 (Maintainer), 50 (Owner), and 5 (Minimal access) on Premium or Ultimate")
 	}
+	expiresAt, err := toolutil.ParseDateField("expires_at", input.ExpiresAt)
+	if err != nil {
+		return ShareGroupOutput{}, fmt.Errorf("groupShareWithGroup: %w", err)
+	}
 	opts := &gl.ShareGroupWithGroupOptions{
 		GroupID:     new(input.SharedGroupID),
 		GroupAccess: new(gl.AccessLevelValue(input.GroupAccess)),
-	}
-	if input.ExpiresAt != "" {
-		isoTime, perr := gl.ParseISOTime(input.ExpiresAt)
-		if perr != nil {
-			return ShareGroupOutput{}, fmt.Errorf("groupShareWithGroup: expires_at must be YYYY-MM-DD: %w", perr)
-		}
-		opts.ExpiresAt = &isoTime
+		ExpiresAt:   expiresAt,
 	}
 	if input.MemberRoleID != 0 {
 		opts.MemberRoleID = new(input.MemberRoleID)
 	}
-	_, _, err := client.GL().Groups.ShareGroupWithGroup(string(input.GroupID), opts, gl.WithContext(ctx))
+	_, _, err = client.GL().Groups.ShareGroupWithGroup(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ShareGroupOutput{}, shareGroupError(err)
 	}

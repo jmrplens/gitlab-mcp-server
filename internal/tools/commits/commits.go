@@ -389,8 +389,12 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.RefName != "" {
 		opts.RefName = new(input.RefName)
 	}
-	opts.Since = toolutil.ParseOptionalTime(input.Since)
-	opts.Until = toolutil.ParseOptionalTime(input.Until)
+	if err := toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "since", Value: input.Since, Dest: &opts.Since},
+		toolutil.TimeInput{Field: "until", Value: input.Until, Dest: &opts.Until},
+	); err != nil {
+		return ListOutput{}, fmt.Errorf("commitList: %w", err)
+	}
 	if input.Path != "" {
 		opts.Path = new(input.Path)
 	}

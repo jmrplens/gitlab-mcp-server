@@ -3,6 +3,7 @@ package members
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -306,9 +307,11 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 	if input.Username != "" {
 		opts.Username = new(input.Username)
 	}
-	if input.ExpiresAt != "" {
-		opts.ExpiresAt = new(input.ExpiresAt)
+	expiresAt, err := toolutil.ParseDateFieldString("expires_at", input.ExpiresAt)
+	if err != nil {
+		return Output{}, fmt.Errorf("memberAdd: %w", err)
 	}
+	opts.ExpiresAt = expiresAt
 	if input.MemberRoleID != 0 {
 		opts.MemberRoleID = new(input.MemberRoleID)
 	}
@@ -347,11 +350,13 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Ou
 		return Output{}, errors.New("memberEdit: access_level is required")
 	}
 
+	expiresAt, err := toolutil.ParseDateFieldString("expires_at", input.ExpiresAt)
+	if err != nil {
+		return Output{}, fmt.Errorf("memberEdit: %w", err)
+	}
 	opts := &gl.EditProjectMemberOptions{
 		AccessLevel: new(gl.AccessLevelValue(input.AccessLevel)),
-	}
-	if input.ExpiresAt != "" {
-		opts.ExpiresAt = new(input.ExpiresAt)
+		ExpiresAt:   expiresAt,
 	}
 	if input.MemberRoleID != 0 {
 		opts.MemberRoleID = new(input.MemberRoleID)

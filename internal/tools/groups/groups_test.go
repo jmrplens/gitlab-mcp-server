@@ -307,11 +307,14 @@ func TestGroupMembersList_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 // dropped, so the options the builder produces are the only place the
 // difference shows.
 func TestListGroupsOptions_CarriesTheFiltersOnlyWhenGiven(t *testing.T) {
-	filtered := listGroupsOptions(ListInput{
+	filtered, err := listGroupsOptions(ListInput{
 		CustomAttributes: map[string]string{"team": "core"},
 		SkipGroups:       []int64{4, 5},
 		MinAccessLevel:   30,
 	})
+	if err != nil {
+		t.Fatalf("listGroupsOptions() error = %v", err)
+	}
 	if len(filtered.CustomAttributes) == 0 {
 		t.Error("custom attributes filter was dropped")
 	}
@@ -322,7 +325,10 @@ func TestListGroupsOptions_CarriesTheFiltersOnlyWhenGiven(t *testing.T) {
 		t.Errorf("min_access_level = %v, want 30", filtered.MinAccessLevel)
 	}
 
-	bare := listGroupsOptions(ListInput{})
+	bare, err := listGroupsOptions(ListInput{})
+	if err != nil {
+		t.Fatalf("listGroupsOptions() error = %v", err)
+	}
 	if len(bare.CustomAttributes) != 0 || bare.SkipGroups != nil || bare.MinAccessLevel != nil {
 		t.Errorf("options = %+v, want none of the three filters", bare)
 	}
@@ -331,11 +337,18 @@ func TestListGroupsOptions_CarriesTheFiltersOnlyWhenGiven(t *testing.T) {
 // TestSubgroupsListOptions_CarriesTheFiltersOnlyWhenGiven verifies the same
 // three filters on the descendant-group builder, which spells them separately.
 func TestSubgroupsListOptions_CarriesTheFiltersOnlyWhenGiven(t *testing.T) {
-	filtered := subgroupsListOptions(SubgroupsListInput{
-		CustomAttributes: map[string]string{"team": "core"},
-		SkipGroups:       []int64{4, 5},
-		MinAccessLevel:   30,
+	filtered, err := subgroupsListOptions(SubgroupsListInput{
+		CustomAttributes:    map[string]string{"team": "core"},
+		SkipGroups:          []int64{4, 5},
+		MinAccessLevel:      30,
+		MarkedForDeletionOn: "2026-06-01T00:00:00Z",
 	})
+	if err != nil {
+		t.Fatalf("subgroupsListOptions() error = %v", err)
+	}
+	if filtered.MarkedForDeletionOn == nil || filtered.MarkedForDeletionOn.String() != "2026-06-01" {
+		t.Errorf("marked_for_deletion_on = %v, want 2026-06-01 from an RFC 3339 value", filtered.MarkedForDeletionOn)
+	}
 	if len(filtered.CustomAttributes) == 0 {
 		t.Error("custom attributes filter was dropped")
 	}
@@ -346,7 +359,10 @@ func TestSubgroupsListOptions_CarriesTheFiltersOnlyWhenGiven(t *testing.T) {
 		t.Errorf("min_access_level = %v, want 30", filtered.MinAccessLevel)
 	}
 
-	bare := subgroupsListOptions(SubgroupsListInput{})
+	bare, err := subgroupsListOptions(SubgroupsListInput{})
+	if err != nil {
+		t.Fatalf("subgroupsListOptions() error = %v", err)
+	}
 	if len(bare.CustomAttributes) != 0 || bare.SkipGroups != nil || bare.MinAccessLevel != nil {
 		t.Errorf("options = %+v, want none of the three filters", bare)
 	}
@@ -3430,21 +3446,19 @@ func TestList_AuditFiltersAndKeyset(t *testing.T) {
 	}
 }
 
-// TestList_InvalidMarkedForDeletionOn verifies an unparseable date is silently
-// dropped rather than causing an error.
+// TestList_InvalidMarkedForDeletionOn verifies that both group lists refuse a
+// marked_for_deletion_on they cannot read, naming it, before any request. It
+// used to be dropped, and the list answered every group rather than those
+// marked on the day asked for (issue 1308).
 func TestList_InvalidMarkedForDeletionOn(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == pathGroups {
-			if r.URL.Query().Get("marked_for_deletion_on") != "" {
-				t.Error("unparseable marked_for_deletion_on should be dropped")
-			}
-			testutil.RespondJSON(w, http.StatusOK, groupListJSON)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	if _, err := List(context.Background(), client, ListInput{MarkedForDeletionOn: "not-a-date"}); err != nil {
-		t.Fatalf(fmtGroupListErr, err)
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := List(context.Background(), client, ListInput{MarkedForDeletionOn: "not-a-date"})
+	if err == nil || !strings.Contains(err.Error(), "marked_for_deletion_on must be a date") {
+		t.Errorf("List() error = %v, want the refusal of marked_for_deletion_on", err)
+	}
+	_, err = SubgroupsList(context.Background(), client, SubgroupsListInput{GroupID: "7", MarkedForDeletionOn: "2026-02-30"})
+	if err == nil || !strings.Contains(err.Error(), "marked_for_deletion_on must be a date") {
+		t.Errorf("SubgroupsList() error = %v, want the refusal of marked_for_deletion_on", err)
 	}
 }
 
@@ -3498,20 +3512,15 @@ func TestSubgroupsList_AuditFilters(t *testing.T) {
 	}
 }
 
-// TestSubgroupsList_InvalidMarkedForDeletionOn covers the unparseable-date
-// branch in SubgroupsList.
-func TestSubgroupsList_InvalidMarkedForDeletionOn(t *testing.T) {
+// TestSubgroupsList_MarkedForDeletionOn_ReachesTheQuery verifies that a
+// marked_for_deletion_on the subgroup list can read is sent as the date it
+// names, an RFC 3339 value included, which the guard before this dropped.
+func TestSubgroupsList_MarkedForDeletionOn_ReachesTheQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == pathGroupSubgroups {
-			if r.URL.Query().Get("marked_for_deletion_on") != "" {
-				t.Error("unparseable marked_for_deletion_on should be dropped")
-			}
-			testutil.RespondJSON(w, http.StatusOK, subgroupsJSON)
-			return
-		}
-		http.NotFound(w, r)
+		testutil.AssertQueryParam(t, r, "marked_for_deletion_on", "2026-06-01")
+		testutil.RespondJSON(w, http.StatusOK, subgroupsJSON)
 	}))
-	if _, err := SubgroupsList(context.Background(), client, SubgroupsListInput{GroupID: "99", MarkedForDeletionOn: "bad"}); err != nil {
+	if _, err := SubgroupsList(context.Background(), client, SubgroupsListInput{GroupID: "99", MarkedForDeletionOn: "2026-06-01T00:00:00Z"}); err != nil {
 		t.Fatalf(fmtSubgroupsListErr, err)
 	}
 }

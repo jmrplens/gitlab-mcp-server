@@ -556,21 +556,16 @@ func TestList_UsersEachFilterReachesTheQuery(t *testing.T) {
 	}
 }
 
-// TestList_UsersAnUnparsableDateIsNotSent verifies that a created_after GitLab
-// would refuse is dropped rather than sent as the zero instant: the builder
-// parses it with no branch of its own, so a date it could not read would
-// otherwise reach GitLab as the year 1.
-func TestList_UsersAnUnparsableDateIsNotSent(t *testing.T) {
-	var got capturedRequest
-	client := testutil.NewTestClient(t, recordRequest(t, pathListUsers, &got, http.StatusOK, `[]`))
-
-	if _, err := List(context.Background(), client, ListInput{
-		CreatedAfter:  "not-a-date",
-		CreatedBefore: "also-invalid",
-	}); err != nil {
-		t.Fatalf(fmtUnexpErr, err)
+// TestList_UsersAnUnparsableDate_IsRefused verifies that a created_after the
+// handler cannot read refuses the call, naming it, before any request. It
+// used to be dropped and the list answered every user the range was meant to
+// leave out (issue 1308).
+func TestList_UsersAnUnparsableDate_IsRefused(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := List(context.Background(), client, ListInput{CreatedAfter: "not-a-date"})
+	if err == nil || !strings.Contains(err.Error(), "created_after must be") {
+		t.Fatalf("List() error = %v, want the refusal of created_after", err)
 	}
-	assertSent(t, "list query", got.query, url.Values{})
 }
 
 // TestSetUserStatus_EachOptionReachesTheRequest drives one status field at a
@@ -1541,26 +1536,18 @@ func TestListContributionEvents_AllFilters(t *testing.T) {
 	}
 }
 
-// TestListContributionEvents_InvalidDateIgnored verifies that a date GitLab
-// would refuse never reaches the query. Asserting only that the call succeeds
-// would pass just as well with the zero instant sent as before=0001-01-01,
-// which is a filter the caller never asked for.
-func TestListContributionEvents_InvalidDateIgnored(t *testing.T) {
-	var got capturedRequest
-	client := testutil.NewTestClient(t, recordRequest(t, pathContribEvents, &got, http.StatusOK, `[]`))
-
-	out, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{
+// TestListContributionEvents_InvalidDate_IsRefused verifies that a date the
+// handler cannot read refuses the call, naming it, before any request. It
+// used to be dropped, and the events answered unfiltered (issue 1308).
+func TestListContributionEvents_InvalidDate_IsRefused(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{
 		UserID: 42,
-		Before: "not-a-date",
 		After:  "also-invalid",
 	})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
+	if err == nil || !strings.Contains(err.Error(), "after must be a date") {
+		t.Fatalf("ListContributionEvents() error = %v, want the refusal of after", err)
 	}
-	if len(out.Events) != 0 {
-		t.Fatalf("got %d events, want 0", len(out.Events))
-	}
-	assertSent(t, "events query", got.query, url.Values{})
 }
 
 // TestListContributionEvents_EachFilterReachesTheQuery drives one filter at a

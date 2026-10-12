@@ -202,6 +202,7 @@ func issueListEnumOverrides() []toolutil.InputSchemaOverride {
 				"popularity", "priority", "relative_position", "title", "updated_at", "weight",
 			},
 		}),
+		toolutil.SchemaEnumOverride("due_date", dueDateFilterKeywords...),
 	}
 }
 

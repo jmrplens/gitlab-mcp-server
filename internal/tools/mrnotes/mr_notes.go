@@ -3,6 +3,7 @@ package mrnotes
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -92,9 +93,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Internal != nil {
 		opts.Internal = input.Internal
 	}
-	if t := toolutil.ParseOptionalTime(input.CreatedAt); t != nil {
-		opts.CreatedAt = t
+	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
+	if err != nil {
+		return Output{}, fmt.Errorf("mrNoteCreate: %w", err)
 	}
+	opts.CreatedAt = createdAt
 	if input.MergeRequestDiffHeadSHA != "" {
 		opts.MergeRequestDiffHeadSHA = new(input.MergeRequestDiffHeadSHA)
 	}

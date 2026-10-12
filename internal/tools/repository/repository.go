@@ -618,7 +618,7 @@ type AddChangelogInput struct {
 	Version    string               `json:"version"              jsonschema:"Version string for the changelog,required"`
 	Branch     string               `json:"branch,omitempty"     jsonschema:"Branch to commit the changelog to (default: default branch)"`
 	ConfigFile string               `json:"config_file,omitempty" jsonschema:"Path to the changelog config file in the project"`
-	Date       string               `json:"date,omitempty"       jsonschema:"Date and time of the release as an RFC3339 timestamp (default: current time)"`
+	Date       string               `json:"date,omitempty"       jsonschema:"Date and time of the release, an ISO 8601 timestamp such as 2026-03-01T10:00:00Z. A date such as 2026-03-01 is read as midnight UTC (default: the current time)"`
 	File       string               `json:"file,omitempty"       jsonschema:"Path to the changelog file (default: CHANGELOG.md)"`
 	From       string               `json:"from,omitempty"       jsonschema:"Start of the range (commit SHA or tag)"`
 	To         string               `json:"to,omitempty"         jsonschema:"End of the range (commit SHA or tag, default: HEAD)"`
@@ -644,6 +644,14 @@ func AddChangelog(ctx context.Context, client *gitlabclient.Client, input AddCha
 	if input.Version == "" {
 		return AddChangelogOutput{}, errors.New("addChangelog: version is required")
 	}
+	// GitLab takes a timestamp for the release date while client-go carries
+	// it as a date, which would send midnight UTC of the day it names
+	// (register row 126), so the field is left unset and the date written as
+	// the instant given.
+	date, err := toolutil.ParseTimeField("date", input.Date)
+	if err != nil {
+		return AddChangelogOutput{}, fmt.Errorf("addChangelog: %w", err)
+	}
 	opts := &gl.AddChangelogOptions{
 		Version: new(input.Version),
 	}
@@ -652,10 +660,6 @@ func AddChangelog(ctx context.Context, client *gitlabclient.Client, input AddCha
 	}
 	if input.ConfigFile != "" {
 		opts.ConfigFile = new(input.ConfigFile)
-	}
-	if t := toolutil.ParseOptionalTime(input.Date); t != nil {
-		d := gl.ISOTime(*t)
-		opts.Date = &d
 	}
 	if input.File != "" {
 		opts.File = new(input.File)
@@ -672,7 +676,7 @@ func AddChangelog(ctx context.Context, client *gitlabclient.Client, input AddCha
 	if input.Trailer != "" {
 		opts.Trailer = new(input.Trailer)
 	}
-	_, err := client.GL().Repositories.AddChangelog(string(input.ProjectID), opts, gl.WithContext(ctx))
+	_, err = client.GL().Repositories.AddChangelog(string(input.ProjectID), opts, gl.WithContext(ctx), toolutil.TimestampParam("date", date))
 	if err != nil {
 		return AddChangelogOutput{}, toolutil.WrapErrWithStatusHint("addChangelog", err, http.StatusUnprocessableEntity,
 			"verify version follows semver (e.g. 1.0.0) and 'from'/'to' refs exist; the branch must be writable and the changelog file path must be valid; requires Developer role or higher")
@@ -689,7 +693,7 @@ type GenerateChangelogInput struct {
 	ProjectID  toolutil.StringOrInt `json:"project_id"            jsonschema:"Project ID or URL-encoded path,required"`
 	Version    string               `json:"version"               jsonschema:"Version string,required"`
 	ConfigFile string               `json:"config_file,omitempty"  jsonschema:"Path to the changelog config file"`
-	Date       string               `json:"date,omitempty"        jsonschema:"Date and time of the release as an RFC3339 timestamp (default: current time)"`
+	Date       string               `json:"date,omitempty"        jsonschema:"Date and time of the release, an ISO 8601 timestamp such as 2026-03-01T10:00:00Z. A date such as 2026-03-01 is read as midnight UTC (default: the current time)"`
 	From       string               `json:"from,omitempty"        jsonschema:"Start of the range (commit SHA or tag)"`
 	To         string               `json:"to,omitempty"          jsonschema:"End of the range (commit SHA or tag, default: HEAD)"`
 	Trailer    string               `json:"trailer,omitempty"     jsonschema:"Git trailer to use (default: Changelog)"`
@@ -712,15 +716,17 @@ func GenerateChangelogData(ctx context.Context, client *gitlabclient.Client, inp
 	if input.Version == "" {
 		return ChangelogDataOutput{}, errors.New("generateChangelogData: version is required")
 	}
+	// The release date is written as the instant given, for the reason
+	// AddChangelog gives.
+	date, err := toolutil.ParseTimeField("date", input.Date)
+	if err != nil {
+		return ChangelogDataOutput{}, fmt.Errorf("generateChangelogData: %w", err)
+	}
 	opts := gl.GenerateChangelogDataOptions{
 		Version: new(input.Version),
 	}
 	if input.ConfigFile != "" {
 		opts.ConfigFile = new(input.ConfigFile)
-	}
-	if t := toolutil.ParseOptionalTime(input.Date); t != nil {
-		d := gl.ISOTime(*t)
-		opts.Date = &d
 	}
 	if input.From != "" {
 		opts.From = new(input.From)
@@ -731,7 +737,7 @@ func GenerateChangelogData(ctx context.Context, client *gitlabclient.Client, inp
 	if input.Trailer != "" {
 		opts.Trailer = new(input.Trailer)
 	}
-	data, _, err := client.GL().Repositories.GenerateChangelogData(string(input.ProjectID), opts, gl.WithContext(ctx))
+	data, _, err := client.GL().Repositories.GenerateChangelogData(string(input.ProjectID), opts, gl.WithContext(ctx), toolutil.TimestampParam("date", date))
 	if err != nil {
 		return ChangelogDataOutput{}, toolutil.WrapErrWithStatusHint("generateChangelogData", err, http.StatusUnprocessableEntity,
 			"verify version follows semver (e.g. 1.0.0) and 'from'/'to' refs exist; this is a read-only preview. Use repository.changelog_add to commit")

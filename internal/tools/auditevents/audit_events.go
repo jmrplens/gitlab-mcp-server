@@ -15,8 +15,8 @@ import (
 
 // ListInstanceInput defines parameters for listing instance-level audit events.
 type ListInstanceInput struct {
-	CreatedAfter  string `json:"created_after,omitempty"  jsonschema:"Return events created after this date (ISO 8601 YYYY-MM-DD)"`
-	CreatedBefore string `json:"created_before,omitempty" jsonschema:"Return events created before this date (ISO 8601 YYYY-MM-DD)"`
+	CreatedAfter  string `json:"created_after,omitempty"  jsonschema:"Return events created after this time: an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC"`
+	CreatedBefore string `json:"created_before,omitempty" jsonschema:"Return events created before this time: an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
 }
@@ -29,8 +29,8 @@ type GetInstanceInput struct {
 // ListGroupInput defines parameters for listing group-level audit events.
 type ListGroupInput struct {
 	GroupID       toolutil.StringOrInt `json:"group_id"                 jsonschema:"Group ID or URL-encoded path,required"`
-	CreatedAfter  string               `json:"created_after,omitempty"  jsonschema:"Return events created after this date (ISO 8601 YYYY-MM-DD)"`
-	CreatedBefore string               `json:"created_before,omitempty" jsonschema:"Return events created before this date (ISO 8601 YYYY-MM-DD)"`
+	CreatedAfter  string               `json:"created_after,omitempty"  jsonschema:"Return events created after this time: an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC"`
+	CreatedBefore string               `json:"created_before,omitempty" jsonschema:"Return events created before this time: an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
 }
@@ -44,8 +44,8 @@ type GetGroupInput struct {
 // ListProjectInput defines parameters for listing project-level audit events.
 type ListProjectInput struct {
 	ProjectID     toolutil.StringOrInt `json:"project_id"               jsonschema:"Project ID or URL-encoded path,required"`
-	CreatedAfter  string               `json:"created_after,omitempty"  jsonschema:"Return events created after this date (ISO 8601 YYYY-MM-DD)"`
-	CreatedBefore string               `json:"created_before,omitempty" jsonschema:"Return events created before this date (ISO 8601 YYYY-MM-DD)"`
+	CreatedAfter  string               `json:"created_after,omitempty"  jsonschema:"Return events created after this time: an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC"`
+	CreatedBefore string               `json:"created_before,omitempty" jsonschema:"Return events created before this time: an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
 }
@@ -164,20 +164,20 @@ func toOutput(e *gl.AuditEvent) Output {
 // an audit event list onto client-go's options. All three lists page by
 // cursor under pagination=keyset, the continuation of which travels on the
 // call as [toolutil.KeysetContinuation] rather than on these options.
-func buildListOpts(after, before string, pag toolutil.PaginationInput, keyset toolutil.KeysetPaginationInput) *gl.ListAuditEventsOptions {
+//
+// A date filter that does not parse refuses the call. It used to be dropped,
+// and GitLab then answered with every event the caller's range was meant to
+// leave out (issue 1308).
+func buildListOpts(after, before string, pag toolutil.PaginationInput, keyset toolutil.KeysetPaginationInput) (*gl.ListAuditEventsOptions, error) {
 	opts := &gl.ListAuditEventsOptions{}
-	if after != "" {
-		if t, err := time.Parse("2006-01-02", after); err == nil {
-			opts.CreatedAfter = &t
-		}
-	}
-	if before != "" {
-		if t, err := time.Parse("2006-01-02", before); err == nil {
-			opts.CreatedBefore = &t
-		}
+	if err := toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "created_after", Value: after, Dest: &opts.CreatedAfter},
+		toolutil.TimeInput{Field: "created_before", Value: before, Dest: &opts.CreatedBefore},
+	); err != nil {
+		return nil, err
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, pag, keyset)
-	return opts
+	return opts, nil
 }
 
 // listOutput maps one page of audit events, from any of the three scopes, and
@@ -196,11 +196,14 @@ func ListInstance(ctx context.Context, client *gitlabclient.Client, input ListIn
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
 	}
-	opts := buildListOpts(input.CreatedAfter, input.CreatedBefore, input.PaginationInput, input.KeysetPaginationInput)
+	opts, err := buildListOpts(input.CreatedAfter, input.CreatedBefore, input.PaginationInput, input.KeysetPaginationInput)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("auditListInstance: %w", err)
+	}
 	events, resp, err := client.GL().AuditEvents.ListInstanceAuditEvents(opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("auditListInstance", err, http.StatusForbidden,
-			"requires administrator access; self-managed Premium/Ultimate only; created_after/created_before must be ISO 8601 dates; entity_type filters: User, Group, Project")
+			"requires administrator access; self-managed Premium/Ultimate only; entity_type filters: User, Group, Project")
 	}
 	return listOutput(events, resp), nil
 }
@@ -229,11 +232,14 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	if input.GroupID == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
-	opts := buildListOpts(input.CreatedAfter, input.CreatedBefore, input.PaginationInput, input.KeysetPaginationInput)
+	opts, err := buildListOpts(input.CreatedAfter, input.CreatedBefore, input.PaginationInput, input.KeysetPaginationInput)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("auditListGroup: %w", err)
+	}
 	events, resp, err := client.GL().AuditEvents.ListGroupAuditEvents(string(input.GroupID), opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("auditListGroup", err, http.StatusForbidden,
-			"requires Owner role + Premium/Ultimate; verify group_id with group.list; created_after/created_before must be ISO 8601")
+			"requires Owner role + Premium/Ultimate; verify group_id with group.list")
 	}
 	return listOutput(events, resp), nil
 }
@@ -265,11 +271,14 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
-	opts := buildListOpts(input.CreatedAfter, input.CreatedBefore, input.PaginationInput, input.KeysetPaginationInput)
+	opts, err := buildListOpts(input.CreatedAfter, input.CreatedBefore, input.PaginationInput, input.KeysetPaginationInput)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("auditListProject: %w", err)
+	}
 	events, resp, err := client.GL().AuditEvents.ListProjectAuditEvents(string(input.ProjectID), opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("auditListProject", err, http.StatusForbidden,
-			"requires Maintainer role + Premium/Ultimate; verify project_id with project.list; created_after/created_before must be ISO 8601")
+			"requires Maintainer role + Premium/Ultimate; verify project_id with project.list")
 	}
 	return listOutput(events, resp), nil
 }

@@ -1193,7 +1193,7 @@ func TestUpdate_InvalidReleasedAt(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid released_at format")
 	}
-	if !strings.Contains(err.Error(), "invalid released_at") {
+	if !strings.Contains(err.Error(), "released_at must be") {
 		t.Fatalf("error should mention released_at: %v", err)
 	}
 }
@@ -1764,7 +1764,7 @@ func TestReleaseCreate_InvalidReleasedAt_RefusedBeforeGitLab(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error for an unparseable released_at")
 	}
-	if !strings.Contains(err.Error(), "invalid released_at") {
+	if !strings.Contains(err.Error(), "released_at must be") {
 		t.Fatalf("error should name released_at: %v", err)
 	}
 }

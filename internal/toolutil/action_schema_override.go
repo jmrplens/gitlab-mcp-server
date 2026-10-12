@@ -205,7 +205,10 @@ func applyCanonicalParamRanges(schema map[string]any) {
 // applyCanonicalParamFormats injects [canonicalParamFormats] into top-level
 // string properties of schema that do not already declare a `format`. Per-action
 // InputSchemaOverrides win (applied first by [NewActionSpec]); a property that
-// already carries a format is left untouched.
+// already carries a format is left untouched, and so is one carrying an enum:
+// a closed set of keywords is not a date, whatever the parameter is called.
+// The issue lists' due_date is such a set, and a date format on it told a
+// model to send a date that GitLab matches against no keyword.
 func applyCanonicalParamFormats(schema map[string]any) {
 	if schema == nil {
 		return
@@ -220,6 +223,9 @@ func applyCanonicalParamFormats(schema map[string]any) {
 			continue
 		}
 		if _, has := prop["format"]; has {
+			continue
+		}
+		if _, keyword := prop["enum"]; keyword {
 			continue
 		}
 		prop["format"] = format

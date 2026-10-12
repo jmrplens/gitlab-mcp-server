@@ -528,7 +528,7 @@ type CreateInput struct {
 	Color        string  `json:"color,omitempty" jsonschema:"Epic color (hex format, e.g. #FF0000)"`
 	StartDate    string  `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD)"`
 	DueDate      string  `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD)"`
-	CreatedAt    string  `json:"created_at,omitempty" jsonschema:"Creation timestamp to record instead of now (ISO 8601, e.g. 2025-01-01T00:00:00Z). Honored for group owners and administrators only, and ignored when it cannot be parsed"`
+	CreatedAt    string  `json:"created_at,omitempty" jsonschema:"Creation timestamp to record instead of now (ISO 8601, e.g. 2025-01-01T00:00:00Z, or a date read as midnight UTC). Honored for group owners and administrators only. A value that does not parse is refused"`
 	CreateSource string  `json:"create_source,omitempty" jsonschema:"Free-text label recording what triggered the creation. Used by GitLab for tracking only and never shown on the epic"`
 	AssigneeIDs  []int64 `json:"assignee_ids,omitempty" jsonschema:"Global IDs of assignees"`
 	LabelIDs     []int64 `json:"label_ids,omitempty" jsonschema:"Global IDs of labels"`
@@ -933,8 +933,8 @@ func applyOutputDates(out *Output, e *epicAPI) {
 
 // buildEpicListOptions maps a ListInput onto the REST ListGroupEpicsOptions,
 // setting only the filter, ordering, date, and pagination parameters the
-// caller supplied.
-func buildEpicListOptions(input ListInput) *gl.ListGroupEpicsOptions {
+// caller supplied, and refusing a date filter it cannot read.
+func buildEpicListOptions(input ListInput) (*gl.ListGroupEpicsOptions, error) {
 	perPage := int64(20)
 	if input.First != nil && *input.First > 0 && *input.First <= toolutil.GraphQLMaxFirst {
 		perPage = int64(*input.First)
@@ -962,17 +962,13 @@ func buildEpicListOptions(input ListInput) *gl.ListGroupEpicsOptions {
 	if input.Sort != "" {
 		opts.Sort = &input.Sort
 	}
-	if t := toolutil.ParseOptionalTime(input.CreatedAfter); t != nil {
-		opts.CreatedAfter = t
-	}
-	if t := toolutil.ParseOptionalTime(input.CreatedBefore); t != nil {
-		opts.CreatedBefore = t
-	}
-	if t := toolutil.ParseOptionalTime(input.UpdatedAfter); t != nil {
-		opts.UpdatedAfter = t
-	}
-	if t := toolutil.ParseOptionalTime(input.UpdatedBefore); t != nil {
-		opts.UpdatedBefore = t
+	if err := toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "created_after", Value: input.CreatedAfter, Dest: &opts.CreatedAfter},
+		toolutil.TimeInput{Field: "created_before", Value: input.CreatedBefore, Dest: &opts.CreatedBefore},
+		toolutil.TimeInput{Field: "updated_after", Value: input.UpdatedAfter, Dest: &opts.UpdatedAfter},
+		toolutil.TimeInput{Field: "updated_before", Value: input.UpdatedBefore, Dest: &opts.UpdatedBefore},
+	); err != nil {
+		return nil, err
 	}
 	if input.WithLabelsDetails != nil {
 		opts.WithLabelDetails = input.WithLabelsDetails
@@ -984,7 +980,7 @@ func buildEpicListOptions(input ListInput) *gl.ListGroupEpicsOptions {
 		opts.IncludeDescendantGroups = input.IncludeDescendants
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
-	return opts
+	return opts, nil
 }
 
 // List retrieves epics for a group using the Work Items API with type filter.
@@ -1005,7 +1001,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return listWithWorkItems(ctx, client, input)
 	}
 
-	opts := buildEpicListOptions(input)
+	opts, err := buildEpicListOptions(input)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("epicList: %w", err)
+	}
 	items, resp, err := rawListEpics(ctx, client, epicsListPath(input.FullPath), opts)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("epicList", err, http.StatusNotFound,
@@ -1028,9 +1027,11 @@ func listWithWorkItems(ctx context.Context, client *gitlabclient.Client, input L
 		return ListOutput{}, fmt.Errorf("epicList: %w", err)
 	}
 
-	items, resp, err := client.GL().WorkItems.ListWorkItems(
-		input.FullPath, buildWorkItemsListOptions(input, cursor), gl.WithContext(ctx),
-	)
+	opts, err := buildWorkItemsListOptions(input, cursor)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("epicList: %w", err)
+	}
+	items, resp, err := client.GL().WorkItems.ListWorkItems(input.FullPath, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("epicList", err, http.StatusNotFound,
 			errHintEpicListPath)
@@ -1060,8 +1061,8 @@ func cursorPagination(resp *gl.Response) *toolutil.GraphQLPaginationOutput {
 
 // buildWorkItemsListOptions maps a ListInput onto the Work Items query
 // options, splitting the assignment across helpers so no single one carries
-// the whole filter set.
-func buildWorkItemsListOptions(input ListInput, cursor toolutil.GraphQLCursor) *gl.ListWorkItemsOptions {
+// the whole filter set, and refusing a date filter it cannot read.
+func buildWorkItemsListOptions(input ListInput, cursor toolutil.GraphQLCursor) (*gl.ListWorkItemsOptions, error) {
 	opts := &gl.ListWorkItemsOptions{
 		Types: []string{"EPIC"},
 		// As of client-go v2.49.0, ListWorkItems returns only CE fields by
@@ -1079,8 +1080,10 @@ func buildWorkItemsListOptions(input ListInput, cursor toolutil.GraphQLCursor) *
 	applyWorkItemsTextFilters(opts, input)
 	applyWorkItemsIdentityFilters(opts, input)
 	applyWorkItemsAttributeFilters(opts, input)
-	applyWorkItemsTimeFilters(opts, input)
-	return opts
+	if err := applyWorkItemsTimeFilters(opts, input); err != nil {
+		return nil, err
+	}
+	return opts, nil
 }
 
 // applyWorkItemsCursor puts the resolved page request on the options.
@@ -1174,21 +1177,24 @@ func applyWorkItemsAttributeFilters(opts *gl.ListWorkItemsOptions, input ListInp
 	}
 }
 
-// applyWorkItemsTimeFilters copies the four date ranges.
+// applyWorkItemsTimeFilters copies the four date ranges, refusing the call on
+// the first value it cannot read.
 //
 // The created and updated pairs are here rather than only on the REST path
 // because a caller combining one of them with a Work-Items-only filter reaches
 // this query, and until they were wired the date half of such a request was
 // dropped without a word.
-func applyWorkItemsTimeFilters(opts *gl.ListWorkItemsOptions, input ListInput) {
-	opts.CreatedAfter = toolutil.ParseOptionalTime(input.CreatedAfter)
-	opts.CreatedBefore = toolutil.ParseOptionalTime(input.CreatedBefore)
-	opts.UpdatedAfter = toolutil.ParseOptionalTime(input.UpdatedAfter)
-	opts.UpdatedBefore = toolutil.ParseOptionalTime(input.UpdatedBefore)
-	opts.ClosedAfter = toolutil.ParseOptionalTime(input.ClosedAfter)
-	opts.ClosedBefore = toolutil.ParseOptionalTime(input.ClosedBefore)
-	opts.DueAfter = toolutil.ParseOptionalTime(input.DueAfter)
-	opts.DueBefore = toolutil.ParseOptionalTime(input.DueBefore)
+func applyWorkItemsTimeFilters(opts *gl.ListWorkItemsOptions, input ListInput) error {
+	return toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "created_after", Value: input.CreatedAfter, Dest: &opts.CreatedAfter},
+		toolutil.TimeInput{Field: "created_before", Value: input.CreatedBefore, Dest: &opts.CreatedBefore},
+		toolutil.TimeInput{Field: "updated_after", Value: input.UpdatedAfter, Dest: &opts.UpdatedAfter},
+		toolutil.TimeInput{Field: "updated_before", Value: input.UpdatedBefore, Dest: &opts.UpdatedBefore},
+		toolutil.TimeInput{Field: "closed_after", Value: input.ClosedAfter, Dest: &opts.ClosedAfter},
+		toolutil.TimeInput{Field: "closed_before", Value: input.ClosedBefore, Dest: &opts.ClosedBefore},
+		toolutil.TimeInput{Field: "due_after", Value: input.DueAfter, Dest: &opts.DueAfter},
+		toolutil.TimeInput{Field: "due_before", Value: input.DueBefore, Dest: &opts.DueBefore},
+	)
 }
 
 // Get retrieves a single epic by its IID using the Work Items API.
@@ -1246,9 +1252,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Title == "" {
 		return Output{}, errors.New("epicCreate: title is required")
 	}
-	wi, resp, err := client.GL().WorkItems.CreateWorkItem(
-		input.FullPath, gl.WorkItemTypeEpic, buildCreateOptions(input), gl.WithContext(ctx),
-	)
+	opts, err := buildCreateOptions(input)
+	if err != nil {
+		return Output{}, fmt.Errorf("epicCreate: %w", err)
+	}
+	wi, resp, err := client.GL().WorkItems.CreateWorkItem(input.FullPath, gl.WorkItemTypeEpic, opts, gl.WithContext(ctx))
 	if err != nil {
 		// A creation GitLab ran and answered without the epic, null with no
 		// error or nulled by its non-null type, which client-go reports as an
@@ -1263,11 +1271,12 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	return toOutput(wi), nil
 }
 
-// buildCreateOptions maps a CreateInput onto the Work Items create options.
-func buildCreateOptions(input CreateInput) *gl.CreateWorkItemOptions {
-	opts := &gl.CreateWorkItemOptions{
-		Title:     input.Title,
-		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
+// buildCreateOptions maps a CreateInput onto the Work Items create options,
+// refusing a date or a creation time it cannot read.
+func buildCreateOptions(input CreateInput) (*gl.CreateWorkItemOptions, error) {
+	opts := &gl.CreateWorkItemOptions{Title: input.Title}
+	if err := parseCreateDates(input, opts); err != nil {
+		return nil, err
 	}
 	if input.Description != "" {
 		desc := toolutil.NormalizeText(input.Description)
@@ -1306,21 +1315,21 @@ func buildCreateOptions(input CreateInput) *gl.CreateWorkItemOptions {
 	if input.Color != "" {
 		opts.Color = &input.Color
 	}
-	applyCreateDates(opts, input)
-	return opts
+	return opts, nil
 }
 
-// applyCreateDates parses the two YYYY-MM-DD inputs onto the options, leaving
-// a value that does not parse unset rather than failing the call.
-func applyCreateDates(opts *gl.CreateWorkItemOptions, input CreateInput) {
-	if d, err := time.Parse(time.DateOnly, input.StartDate); err == nil {
-		isoDate := gl.ISOTime(d)
-		opts.StartDate = &isoDate
+// parseCreateDates reads the creation time and the two dates of a new epic
+// into opts, refusing the first value that does not parse.
+func parseCreateDates(input CreateInput, opts *gl.CreateWorkItemOptions) error {
+	if err := toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "created_at", Value: input.CreatedAt, Dest: &opts.CreatedAt},
+	); err != nil {
+		return err
 	}
-	if d, err := time.Parse(time.DateOnly, input.DueDate); err == nil {
-		isoDate := gl.ISOTime(d)
-		opts.DueDate = &isoDate
-	}
+	return toolutil.ParseDateInputs(
+		toolutil.DateInput{Field: "start_date", Value: input.StartDate, Dest: &opts.StartDate},
+		toolutil.DateInput{Field: "due_date", Value: input.DueDate, Dest: &opts.DueDate},
+	)
 }
 
 // Update modifies an existing epic using the Work Items API.
@@ -1334,18 +1343,21 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.IID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("epicUpdate", "epic_iid")
 	}
-	wi, _, err := client.GL().WorkItems.UpdateWorkItem(
-		input.FullPath, input.IID, buildUpdateOptions(input), gl.WithContext(ctx),
-	)
+	opts, err := buildUpdateOptions(input)
+	if err != nil {
+		return Output{}, fmt.Errorf("epicUpdate: %w", err)
+	}
+	wi, _, err := client.GL().WorkItems.UpdateWorkItem(input.FullPath, input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("epicUpdate", err, http.StatusBadRequest,
-			"state_event must be 'close' or 'reopen'; dates must be YYYY-MM-DD; verify iid with group.epic_list")
+			"state_event must be 'close' or 'reopen'; verify iid with group.epic_list")
 	}
 	return toOutput(wi), nil
 }
 
-// buildUpdateOptions maps an UpdateInput onto the Work Items update options.
-func buildUpdateOptions(input UpdateInput) *gl.UpdateWorkItemOptions {
+// buildUpdateOptions maps an UpdateInput onto the Work Items update options,
+// refusing a date it cannot read.
+func buildUpdateOptions(input UpdateInput) (*gl.UpdateWorkItemOptions, error) {
 	opts := &gl.UpdateWorkItemOptions{}
 	if input.Title != "" {
 		opts.Title = &input.Title
@@ -1376,26 +1388,28 @@ func buildUpdateOptions(input UpdateInput) *gl.UpdateWorkItemOptions {
 	if input.AssigneeIDs != nil {
 		opts.AssigneeIDs = input.AssigneeIDs
 	}
-	applyUpdateWidgets(opts, input)
-	return opts
+	if err := applyUpdateWidgets(opts, input); err != nil {
+		return nil, err
+	}
+	return opts, nil
 }
 
 // applyUpdateWidgets copies the widget-backed fields onto the update options.
-func applyUpdateWidgets(opts *gl.UpdateWorkItemOptions, input UpdateInput) {
+//
+// A date that does not parse refuses the call. It used to be dropped, and the
+// unchanged epic came back as the answer to an update that had asked to move
+// it (issue 1302).
+func applyUpdateWidgets(opts *gl.UpdateWorkItemOptions, input UpdateInput) error {
 	if input.Weight != nil {
 		opts.Weight = input.Weight
 	}
 	if input.HealthStatus != "" {
 		opts.HealthStatus = &input.HealthStatus
 	}
-	if d, err := time.Parse(time.DateOnly, input.StartDate); err == nil {
-		isoDate := gl.ISOTime(d)
-		opts.StartDate = &isoDate
-	}
-	if d, err := time.Parse(time.DateOnly, input.DueDate); err == nil {
-		isoDate := gl.ISOTime(d)
-		opts.DueDate = &isoDate
-	}
+	return toolutil.ParseDateInputs(
+		toolutil.DateInput{Field: "start_date", Value: input.StartDate, Dest: &opts.StartDate},
+		toolutil.DateInput{Field: "due_date", Value: input.DueDate, Dest: &opts.DueDate},
+	)
 }
 
 // Delete permanently removes an epic using the Work Items API.

@@ -312,25 +312,19 @@ func ListPATs(ctx context.Context, client *gitlabclient.Client, input ListPATInp
 	if input.State != "" {
 		opts.State = &input.State
 	}
-	opts.CreatedAfter = toolutil.ParseOptionalTime(input.CreatedAfter)
-	opts.CreatedBefore = toolutil.ParseOptionalTime(input.CreatedBefore)
-	opts.LastUsedAfter = toolutil.ParseOptionalTime(input.LastUsedAfter)
-	opts.LastUsedBefore = toolutil.ParseOptionalTime(input.LastUsedBefore)
-	if input.ExpiresAfter != "" {
-		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresAfter)
-		if err != nil {
-			return ListPATOutput{}, fmt.Errorf("invalid expires_after format (expected YYYY-MM-DD): %w", err)
-		}
-		iso := gl.ISOTime(t)
-		opts.ExpiresAfter = &iso
+	if err := toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "created_after", Value: input.CreatedAfter, Dest: &opts.CreatedAfter},
+		toolutil.TimeInput{Field: "created_before", Value: input.CreatedBefore, Dest: &opts.CreatedBefore},
+		toolutil.TimeInput{Field: "last_used_after", Value: input.LastUsedAfter, Dest: &opts.LastUsedAfter},
+		toolutil.TimeInput{Field: "last_used_before", Value: input.LastUsedBefore, Dest: &opts.LastUsedBefore},
+	); err != nil {
+		return ListPATOutput{}, err
 	}
-	if input.ExpiresBefore != "" {
-		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresBefore)
-		if err != nil {
-			return ListPATOutput{}, fmt.Errorf("invalid expires_before format (expected YYYY-MM-DD): %w", err)
-		}
-		iso := gl.ISOTime(t)
-		opts.ExpiresBefore = &iso
+	if err := toolutil.ParseDateInputs(
+		toolutil.DateInput{Field: "expires_after", Value: input.ExpiresAfter, Dest: &opts.ExpiresAfter},
+		toolutil.DateInput{Field: "expires_before", Value: input.ExpiresBefore, Dest: &opts.ExpiresBefore},
+	); err != nil {
+		return ListPATOutput{}, err
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	tokens, resp, err := client.GL().Groups.ListServiceAccountPersonalAccessTokens(input.GroupID, input.ServiceAccountID, opts, gl.WithContext(ctx))
@@ -382,14 +376,11 @@ func CreatePAT(ctx context.Context, client *gitlabclient.Client, input CreatePAT
 	if input.Description != "" {
 		opts.Description = &input.Description
 	}
-	if input.ExpiresAt != "" {
-		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresAt)
-		if err != nil {
-			return PATOutput{}, fmt.Errorf("invalid expires_at format (expected YYYY-MM-DD): %w", err)
-		}
-		isoT := gl.ISOTime(t)
-		opts.ExpiresAt = &isoT
+	expiresAt, err := toolutil.ParseDateField("expires_at", input.ExpiresAt)
+	if err != nil {
+		return PATOutput{}, err
 	}
+	opts.ExpiresAt = expiresAt
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	pat, _, err := client.GL().Groups.CreateServiceAccountPersonalAccessToken(input.GroupID, input.ServiceAccountID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -453,15 +444,11 @@ func RotatePAT(ctx context.Context, client *gitlabclient.Client, input RotatePAT
 	if input.TokenID == 0 {
 		return PATOutput{}, toolutil.ErrFieldRequired("token_id")
 	}
-	opts := &gl.RotateServiceAccountPersonalAccessTokenOptions{}
-	if input.ExpiresAt != "" {
-		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresAt)
-		if err != nil {
-			return PATOutput{}, fmt.Errorf("invalid expires_at format (expected YYYY-MM-DD): %w", err)
-		}
-		isoT := gl.ISOTime(t)
-		opts.ExpiresAt = &isoT
+	expiresAt, err := toolutil.ParseDateField("expires_at", input.ExpiresAt)
+	if err != nil {
+		return PATOutput{}, err
 	}
+	opts := &gl.RotateServiceAccountPersonalAccessTokenOptions{ExpiresAt: expiresAt}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	pat, _, err := client.GL().Groups.RotateServiceAccountPersonalAccessToken(input.GroupID, input.ServiceAccountID, input.TokenID, opts, gl.WithContext(ctx))
 	if err != nil {

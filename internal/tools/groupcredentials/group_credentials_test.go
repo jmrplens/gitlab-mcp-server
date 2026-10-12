@@ -672,27 +672,31 @@ func TestListPATs_WithDateAndKeysetFilters(t *testing.T) {
 	}
 }
 
-// TestListPATs_InvalidDateIgnored verifies that an unparseable date filter is
-// dropped (parseISODate returns nil) rather than rejected, so the request still
-// reaches the API without the offending query parameter.
-func TestListPATs_InvalidDateIgnored(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens" {
-			if r.URL.Query().Has("created_after") {
-				t.Errorf("expected created_after to be omitted for invalid date, got %q", r.URL.Query().Get("created_after"))
-			}
-			testutil.RespondJSON(w, http.StatusOK, `[]`)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
+// TestListPATs_InvalidDate_IsRefused verifies that an unparseable date filter
+// refuses the call, naming the filter, before any request. It used to be
+// dropped and the inventory answered as though no range had been asked for
+// (issue 1308).
+func TestListPATs_InvalidDate_IsRefused(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListPATs(context.Background(), client, ListPATsInput{
-		GroupID:      toolutil.StringOrInt("mygroup"),
-		CreatedAfter: "not-a-date",
+		GroupID:       toolutil.StringOrInt("mygroup"),
+		LastUsedAfter: "not-a-date",
 	})
-	if err != nil {
-		t.Fatalf("ListPATs() error: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "last_used_after must be a date") {
+		t.Fatalf("ListPATs() error = %v, want the refusal of last_used_after", err)
+	}
+}
+
+// TestListSSHKeys_InvalidDate_IsRefused verifies the same of the SSH key
+// inventory.
+func TestListSSHKeys_InvalidDate_IsRefused(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := ListSSHKeys(context.Background(), client, ListSSHKeysInput{
+		GroupID:       toolutil.StringOrInt("mygroup"),
+		ExpiresBefore: "2026-02-30",
+	})
+	if err == nil || !strings.Contains(err.Error(), "expires_before must be a date") {
+		t.Fatalf("ListSSHKeys() error = %v, want the refusal of expires_before", err)
 	}
 }
 
@@ -729,24 +733,6 @@ func TestListSSHKeys_WithDateAndKeysetFilters(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("ListSSHKeys() error: %v", err)
-	}
-}
-
-// TestParseISODate verifies parseISODate parses valid YYYY-MM-DD input into a
-// non-nil *gl.ISOTime and returns nil for empty or malformed input.
-func TestParseISODate(t *testing.T) {
-	if got := parseISODate(""); got != nil {
-		t.Errorf("parseISODate(\"\") = %v, want nil", got)
-	}
-	if got := parseISODate("nope"); got != nil {
-		t.Errorf("parseISODate(\"nope\") = %v, want nil", got)
-	}
-	got := parseISODate("2026-01-02")
-	if got == nil {
-		t.Fatal("parseISODate(\"2026-01-02\") = nil, want non-nil")
-	}
-	if s := got.String(); s != "2026-01-02" {
-		t.Errorf("parseISODate(\"2026-01-02\").String() = %q, want %q", s, "2026-01-02")
 	}
 }
 

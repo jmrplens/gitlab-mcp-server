@@ -2,7 +2,6 @@ package projectserviceaccounts
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -370,16 +369,14 @@ func CreatePAT(ctx context.Context, client *gitlabclient.Client, input CreatePAT
 		return PATOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
-	expiresAt, hasExpiresAt, err := parseISODate(input.ExpiresAt, "expires_at")
+	expiresAt, err := toolutil.ParseDateField("expires_at", input.ExpiresAt)
 	if err != nil {
 		return PATOutput{}, err
 	}
 	opts := &gl.CreateProjectServiceAccountPersonalAccessTokenOptions{
-		Name:   &input.Name,
-		Scopes: &input.Scopes,
-	}
-	if hasExpiresAt {
-		opts.ExpiresAt = expiresAt
+		Name:      &input.Name,
+		Scopes:    &input.Scopes,
+		ExpiresAt: expiresAt,
 	}
 	if input.Description != "" {
 		opts.Description = &input.Description
@@ -457,14 +454,11 @@ func RotatePAT(ctx context.Context, client *gitlabclient.Client, input RotatePAT
 		return PATOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
-	expiresAt, hasExpiresAt, err := parseISODate(input.ExpiresAt, "expires_at")
+	expiresAt, err := toolutil.ParseDateField("expires_at", input.ExpiresAt)
 	if err != nil {
 		return PATOutput{}, err
 	}
-	opts := &gl.RotateProjectServiceAccountPersonalAccessTokenOptions{}
-	if hasExpiresAt {
-		opts.ExpiresAt = expiresAt
-	}
+	opts := &gl.RotateProjectServiceAccountPersonalAccessTokenOptions{ExpiresAt: expiresAt}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().Projects.RotateProjectServiceAccountPersonalAccessToken(input.ProjectID.String(), input.ServiceAccountID, input.TokenID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -481,47 +475,19 @@ func listPATOptions(input ListPATInput) (*gl.ListProjectServiceAccountPersonalAc
 		Revoked: input.Revoked,
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
-	createdAfter, hasCreatedAfter, err := parseTimeFilter(input.CreatedAfter, "created_after")
-	if err != nil {
+	if err := toolutil.ParseTimeInputs(
+		toolutil.TimeInput{Field: "created_after", Value: input.CreatedAfter, Dest: &opts.CreatedAfter},
+		toolutil.TimeInput{Field: "created_before", Value: input.CreatedBefore, Dest: &opts.CreatedBefore},
+		toolutil.TimeInput{Field: "last_used_after", Value: input.LastUsedAfter, Dest: &opts.LastUsedAfter},
+		toolutil.TimeInput{Field: "last_used_before", Value: input.LastUsedBefore, Dest: &opts.LastUsedBefore},
+	); err != nil {
 		return nil, err
 	}
-	if hasCreatedAfter {
-		opts.CreatedAfter = createdAfter
-	}
-	createdBefore, hasCreatedBefore, err := parseTimeFilter(input.CreatedBefore, "created_before")
-	if err != nil {
+	if err := toolutil.ParseDateInputs(
+		toolutil.DateInput{Field: "expires_after", Value: input.ExpiresAfter, Dest: &opts.ExpiresAfter},
+		toolutil.DateInput{Field: "expires_before", Value: input.ExpiresBefore, Dest: &opts.ExpiresBefore},
+	); err != nil {
 		return nil, err
-	}
-	if hasCreatedBefore {
-		opts.CreatedBefore = createdBefore
-	}
-	lastUsedAfter, hasLastUsedAfter, err := parseTimeFilter(input.LastUsedAfter, "last_used_after")
-	if err != nil {
-		return nil, err
-	}
-	if hasLastUsedAfter {
-		opts.LastUsedAfter = lastUsedAfter
-	}
-	lastUsedBefore, hasLastUsedBefore, err := parseTimeFilter(input.LastUsedBefore, "last_used_before")
-	if err != nil {
-		return nil, err
-	}
-	if hasLastUsedBefore {
-		opts.LastUsedBefore = lastUsedBefore
-	}
-	expiresAfter, hasExpiresAfter, err := parseISODate(input.ExpiresAfter, "expires_after")
-	if err != nil {
-		return nil, err
-	}
-	if hasExpiresAfter {
-		opts.ExpiresAfter = expiresAfter
-	}
-	expiresBefore, hasExpiresBefore, err := parseISODate(input.ExpiresBefore, "expires_before")
-	if err != nil {
-		return nil, err
-	}
-	if hasExpiresBefore {
-		opts.ExpiresBefore = expiresBefore
 	}
 	if input.UserID != 0 {
 		opts.UserID = &input.UserID
@@ -539,30 +505,4 @@ func listPATOptions(input ListPATInput) (*gl.ListProjectServiceAccountPersonalAc
 		opts.State = &input.State
 	}
 	return opts, nil
-}
-
-func parseISODate(value, field string) (*gl.ISOTime, bool, error) {
-	if value == "" {
-		return nil, false, nil
-	}
-	date, err := time.Parse(toolutil.DateFormatISO, value)
-	if err != nil {
-		return nil, false, fmt.Errorf("invalid %s format (expected YYYY-MM-DD): %w", field, err)
-	}
-	isoDate := gl.ISOTime(date)
-	return &isoDate, true, nil
-}
-
-func parseTimeFilter(value, field string) (*time.Time, bool, error) {
-	if value == "" {
-		return nil, false, nil
-	}
-	if parsed, err := time.Parse(time.RFC3339, value); err == nil {
-		return &parsed, true, nil
-	}
-	parsed, err := time.Parse(toolutil.DateFormatISO, value)
-	if err != nil {
-		return nil, false, fmt.Errorf("invalid %s format (expected RFC3339 or YYYY-MM-DD): %w", field, err)
-	}
-	return &parsed, true, nil
 }

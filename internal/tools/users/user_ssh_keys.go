@@ -3,8 +3,8 @@ package users
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
-	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -118,7 +118,7 @@ func GetSSHKeyForUser(ctx context.Context, client *gitlabclient.Client, input Ge
 type AddSSHKeyInput struct {
 	Title     string `json:"title" jsonschema:"A descriptive title for the SSH key,required"`
 	Key       string `json:"key" jsonschema:"The SSH public key content,required"`
-	ExpiresAt string `json:"expires_at,omitempty" jsonschema:"Expiration date in ISO 8601 format (YYYY-MM-DD)"`
+	ExpiresAt string `json:"expires_at,omitempty" jsonschema:"Expiry time, an ISO 8601 timestamp such as 2026-12-31T23:00:00Z. A date such as 2026-12-31 is read as midnight UTC"`
 	UsageType string `json:"usage_type,omitempty" jsonschema:"Usage type: auth or signing (default: auth)"`
 }
 
@@ -134,13 +134,16 @@ func AddSSHKey(ctx context.Context, client *gitlabclient.Client, input AddSSHKey
 		return SSHKeyOutput{}, err
 	}
 
-	opts := buildAddSSHKeyOptions(input)
+	opts, sendExpiry, err := buildAddSSHKeyOptions(input)
+	if err != nil {
+		return SSHKeyOutput{}, fmt.Errorf("add_ssh_key: %w", err)
+	}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	k, _, err := client.GL().Users.AddSSHKey(opts, gl.WithContext(ctx))
+	k, _, err := client.GL().Users.AddSSHKey(opts, gl.WithContext(ctx), sendExpiry)
 	if err != nil {
 		return SSHKeyOutput{}, toolutil.WrapErrWithStatusHint("add_ssh_key", err, http.StatusBadRequest,
-			"key must be a valid SSH public key (ssh-rsa/ed25519/ecdsa) and not already used by another user; usage_type must be one of {auth, signing, auth_and_signing}; expires_at format YYYY-MM-DD")
+			"key must be a valid SSH public key (ssh-rsa/ed25519/ecdsa) and not already used by another user; usage_type must be one of {auth, signing, auth_and_signing}; expires_at must be in the future")
 	}
 	extra, err := toolutil.CapturedKey(captured)
 	if err != nil {
@@ -154,7 +157,7 @@ type AddSSHKeyForUserInput struct {
 	UserID    int64  `json:"user_id" jsonschema:"The ID of the user,required"`
 	Title     string `json:"title" jsonschema:"A descriptive title for the SSH key,required"`
 	Key       string `json:"key" jsonschema:"The SSH public key content,required"`
-	ExpiresAt string `json:"expires_at,omitempty" jsonschema:"Expiration date in ISO 8601 format (YYYY-MM-DD)"`
+	ExpiresAt string `json:"expires_at,omitempty" jsonschema:"Expiry time, an ISO 8601 timestamp such as 2026-12-31T23:00:00Z. A date such as 2026-12-31 is read as midnight UTC"`
 	UsageType string `json:"usage_type,omitempty" jsonschema:"Usage type: auth or signing (default: auth)"`
 }
 
@@ -173,15 +176,18 @@ func AddSSHKeyForUser(ctx context.Context, client *gitlabclient.Client, input Ad
 		return SSHKeyOutput{}, err
 	}
 
-	opts := buildAddSSHKeyOptions(AddSSHKeyInput{
+	opts, sendExpiry, err := buildAddSSHKeyOptions(AddSSHKeyInput{
 		Title:     input.Title,
 		Key:       input.Key,
 		ExpiresAt: input.ExpiresAt,
 		UsageType: input.UsageType,
 	})
+	if err != nil {
+		return SSHKeyOutput{}, fmt.Errorf("add_ssh_key_for_user: %w", err)
+	}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	k, _, err := client.GL().Users.AddSSHKeyForUser(input.UserID, opts, gl.WithContext(ctx))
+	k, _, err := client.GL().Users.AddSSHKeyForUser(input.UserID, opts, gl.WithContext(ctx), sendExpiry)
 	if err != nil {
 		return SSHKeyOutput{}, toolutil.WrapErrWithStatusHint("add_ssh_key_for_user", err, http.StatusForbidden,
 			"adding SSH keys for other users requires admin token; key must be valid SSH public key and unique; verify user_id with user.get")
@@ -247,20 +253,29 @@ func DeleteSSHKeyForUser(ctx context.Context, client *gitlabclient.Client, input
 	return DeleteSSHKeyOutput{KeyID: input.KeyID, Deleted: true}, nil
 }
 
-// buildAddSSHKeyOptions builds SDK options from AddSSHKeyInput.
-func buildAddSSHKeyOptions(input AddSSHKeyInput) *gl.AddSSHKeyOptions {
+// buildAddSSHKeyOptions builds SDK options from AddSSHKeyInput, and the
+// request option that sends the expiry.
+//
+// An expiry that does not parse refuses the call. The guard this replaced
+// read only YYYY-MM-DD and dropped anything else, an RFC 3339 timestamp
+// included, so a key asked to expire was created with no expiry and reported
+// as a success (issue 1308). GitLab takes a timestamp here, while client-go
+// carries the field as a date, which would reach GitLab as midnight UTC and
+// expire a key asked to last until 23:00 at the start of its day, or refuse
+// one asked to expire later today as already expired (register row 126). The
+// option struct's field is therefore left unset and the expiry is written as
+// the instant given by [toolutil.TimestampParam].
+func buildAddSSHKeyOptions(input AddSSHKeyInput) (*gl.AddSSHKeyOptions, gl.RequestOptionFunc, error) {
+	expiresAt, err := toolutil.ParseTimeField("expires_at", input.ExpiresAt)
+	if err != nil {
+		return nil, nil, err
+	}
 	opts := &gl.AddSSHKeyOptions{
 		Title: new(input.Title),
 		Key:   new(input.Key),
 	}
-	if input.ExpiresAt != "" {
-		if t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresAt); err == nil {
-			isoT := gl.ISOTime(t)
-			opts.ExpiresAt = &isoT
-		}
-	}
 	if input.UsageType != "" {
 		opts.UsageType = new(input.UsageType)
 	}
-	return opts
+	return opts, toolutil.TimestampParam("expires_at", expiresAt), nil
 }

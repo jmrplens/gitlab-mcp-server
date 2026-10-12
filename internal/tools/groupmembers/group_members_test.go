@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -488,17 +487,19 @@ func TestShareGroup_NotFoundHint(t *testing.T) {
 	}
 }
 
-// TestShareGroup_MalformedExpiresAt verifies an expiry that is not a date in
-// the form GitLab takes is refused before the request leaves, naming the form,
-// rather than sent for Grape to refuse: the options this handler sends carry
-// the expiry as a date, so a value that does not parse as one cannot be
-// written into them at all.
+// TestShareGroup_MalformedExpiresAt verifies an expiry that is not a date is
+// refused before the request leaves, naming the form, rather than sent for
+// Grape to refuse: the options this handler sends carry the expiry as a date,
+// so a value that does not parse as one cannot be written into them at all.
+// An RFC 3339 timestamp is a date by the rule every date input shares (issue
+// 1308) and is sent as the day it names, see
+// TestShareGroup_TimestampExpiresAt_IsSentAsItsDate.
 func TestShareGroup_MalformedExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("ShareGroup sent %s %s with an expiry it must refuse locally", r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusTeapot)
 	}))
-	for _, expiresAt := range []string{"31/12/2027", "2027-12-31T00:00:00Z", "tomorrow"} {
+	for _, expiresAt := range []string{"31/12/2027", "2027-12-31 00:00:00", "tomorrow"} {
 		t.Run(expiresAt, func(t *testing.T) {
 			_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 10, GroupAccess: 30, ExpiresAt: expiresAt})
 			if err == nil {
@@ -507,10 +508,25 @@ func TestShareGroup_MalformedExpiresAt(t *testing.T) {
 			if !strings.Contains(err.Error(), "expires_at must be a date in YYYY-MM-DD form") {
 				t.Errorf("the refusal %q does not name the date form", err)
 			}
-			if _, wrapped := errors.AsType[*time.ParseError](err); !wrapped {
-				t.Errorf("the refusal %q does not wrap the parse error", err)
-			}
 		})
+	}
+}
+
+// TestShareGroup_TimestampExpiresAt_IsSentAsItsDate verifies that an RFC 3339
+// expiry reaches the share as the date it names.
+func TestShareGroup_TimestampExpiresAt_IsSentAsItsDate(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read body: %v", err)
+		}
+		if !strings.Contains(string(body), `"expires_at":"2027-12-31"`) {
+			t.Errorf("body = %s, want expires_at 2027-12-31", body)
+		}
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":5,"name":"g","path":"g"}`)
+	}))
+	if _, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 10, GroupAccess: 30, ExpiresAt: "2027-12-31T00:00:00Z"}); err != nil {
+		t.Fatalf("ShareGroup() error = %v", err)
 	}
 }
 
@@ -725,6 +741,34 @@ func TestGetInheritedMember_CancelledContext(t *testing.T) {
 // ---------------------------------------------------------------------------
 // AddMember — API error, missing group_id, canceled, with username, with expires_at
 // ---------------------------------------------------------------------------.
+
+// TestAddAndEdit_ExpiresAtThatIsNotADate_IsRefusedBeforeAnyRequest verifies
+// a membership expiry that is not a date is refused, naming the field and
+// quoting the value, before any request. It used to be forwarded as written,
+// so a value GitLab could not read was sent and refused only by GitLab, if at
+// all (issue 1308).
+func TestAddAndEdit_ExpiresAtThatIsNotADate_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	ctx := context.Background()
+	writes := map[string]func() error{
+		"add": func() error {
+			_, err := AddMember(ctx, client, AddInput{GroupID: "10", UserID: 7, AccessLevel: 30, ExpiresAt: "not-a-date"})
+			return err
+		},
+		"edit": func() error {
+			_, err := EditMember(ctx, client, EditInput{GroupID: "10", UserID: 7, AccessLevel: 30, ExpiresAt: "not-a-date"})
+			return err
+		},
+	}
+	for name, write := range writes {
+		t.Run(name, func(t *testing.T) {
+			err := write()
+			if err == nil || !strings.Contains(err.Error(), "expires_at must be a date") || !strings.Contains(err.Error(), `"not-a-date"`) {
+				t.Errorf("%s error = %v, want the expires_at refusal quoting the value", name, err)
+			}
+		})
+	}
+}
 
 // TestAddMember_APIError verifies that AddMember returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.

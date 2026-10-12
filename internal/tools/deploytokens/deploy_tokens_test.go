@@ -814,8 +814,8 @@ func TestCreateProject_InvalidExpiresAt(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid expires_at, got nil")
 	}
-	if !strings.Contains(err.Error(), "invalid expires_at") {
-		t.Errorf("error message should mention invalid expires_at: %v", err)
+	if !strings.Contains(err.Error(), "expires_at must be") {
+		t.Errorf("error message should name expires_at and what it must be: %v", err)
 	}
 }
 
@@ -924,8 +924,8 @@ func TestCreateGroup_InvalidExpiresAt(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid expires_at, got nil")
 	}
-	if !strings.Contains(err.Error(), "invalid expires_at") {
-		t.Errorf("error message should mention invalid expires_at: %v", err)
+	if !strings.Contains(err.Error(), "expires_at must be") {
+		t.Errorf("error message should name expires_at and what it must be: %v", err)
 	}
 }
 
