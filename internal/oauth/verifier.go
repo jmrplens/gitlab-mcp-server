@@ -3,7 +3,6 @@ package oauth
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"encoding/json/jsontext"
 	jsonv2 "encoding/json/v2"
@@ -355,10 +354,13 @@ const maxVerificationRedirects = 10
 // credential at all. So the only safe answer is not to ask a stranger who the
 // caller is.
 //
-// A hop that stays on the instance, or moves to a subdomain of it — the same
-// relation net/http applies to its own sensitive headers — is followed, so an
-// instance that redirects http to https, or /api/v4/user to a canonical path,
-// keeps working.
+// A hop that stays on the instance's own host is followed, so an instance that
+// redirects http to https, or /api/v4/user to a canonical path, keeps working.
+// A subdomain is not followed. It used to be, by the relation net/http applies
+// to its own sensitive headers, and that relation answers who may read a
+// header rather than who may answer for a caller: a subdomain is another name,
+// which can resolve to the metadata address or to the server's own loopback,
+// and whatever answered there was cached as the caller's identity.
 func verificationRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= maxVerificationRedirects {
 		return fmt.Errorf("token verification: stopped after %d redirects", maxVerificationRedirects)
@@ -376,56 +378,48 @@ func verificationRedirect(req *http.Request, via []*http.Request) error {
 	)
 }
 
-// sameVerificationHost reports whether dest is still the instance origin names,
-// or a subdomain of it, without downgrading https to http.
+// sameVerificationHost reports whether dest is still the exact host origin
+// names, without downgrading https to http.
 //
 // The hosts are compared with ASCII case folded and nothing else
 // ([gitlabclient.FoldHostCase] says why): strings.ToLower folded U+0130 into
 // "i", so a hop to "gİtlab.example.com" was followed as the instance's own
 // while net/http sent it to xn--gitlab-qyd.example.com, and whatever answered
 // there was admitted as the caller's identity.
+//
+// Equality is the whole relation, which also retires the IPv6-zone guard the
+// subdomain relation needed (CVE-2023-45289): "[::1%25.gitlab.example.com]"
+// is no subdomain of anything when only the instance itself counts, and an
+// instance that genuinely is an address literal still matches itself.
+//
+// The consequence here is harsher than in the GitLab clients' redirect policy,
+// which strips the credential and follows the hop: this refuses it. There the
+// credential is the asset and the body is data; here the body is the asset,
+// since a 200 is accepted as the caller's identity and cached under their
+// token, and a loopback service can answer that with no credential at all.
 func sameVerificationHost(origin, dest *url.URL) bool {
 	if strings.EqualFold(origin.Scheme, "https") && !strings.EqualFold(dest.Scheme, "https") {
 		return false
 	}
 	originHost := gitlabclient.FoldHostCase(origin.Hostname())
-	destHost := gitlabclient.FoldHostCase(dest.Hostname())
-	if originHost == "" || destHost == "" {
-		return false
-	}
-	if destHost == originHost {
-		return true
-	}
-	// An address literal is not a subdomain of anything, and one carrying an
-	// IPv6 zone can be spelled to end in any parent: url.Hostname() reduces
-	// "[::1%25.gitlab.example.com]" to "::1%.gitlab.example.com", which clears
-	// both tests below while Go dials ::1. That is CVE-2023-45289, and net/http
-	// grew the same guard in the same place.
-	//
-	// It sits after the equality test, not before it, so an instance that
-	// genuinely is an address literal still matches itself. What it rules out
-	// is only the subdomain relation, which an address literal can never
-	// legitimately stand in.
-	//
-	// The consequence here is harsher than in the GitLab clients' redirect
-	// policy, which strips the credential and follows the hop: this refuses it.
-	// There the credential is the asset and the body is data; here the body is
-	// the asset, since a 200 is accepted as the caller's identity and cached
-	// under their token, and a loopback service can answer that with no
-	// credential at all.
-	if strings.ContainsAny(destHost, ":%") {
-		return false
-	}
-	return len(destHost) > len(originHost) &&
-		destHost[len(destHost)-len(originHost)-1] == '.' &&
-		strings.HasSuffix(destHost, originHost)
+	return originHost != "" && gitlabclient.FoldHostCase(dest.Hostname()) == originHost
 }
 
 // newVerificationClient builds the client one verifier sends every question
-// with: a clone of the default transport so proxy settings carry over,
-// certificate checks off only when the operator asked, a bound on each
-// exchange, and the redirect policy that keeps an identity from coming from
-// anywhere but the instance.
+// with: the GitLab package's own transport, certificate checks off only when
+// the operator asked, a bound on each exchange, and the redirect policy that
+// keeps an identity from coming from anywhere but the instance.
+//
+// The transport is [gitlabclient.HTTPTransport] rather than a clone of
+// net/http's default, because that one dials through the destination guard
+// (ADR-0022) and the default dials anything. A verification carries the
+// caller's bearer token, so it is the last request that should reach the cloud
+// metadata address a name or a redirect pointed at, and until issue 1339 it
+// was the one request this process made with no guard at all. It carries no
+// destination policy, so the dialer applies tier A and nothing else: the only
+// host a verification reaches is the instance the operator published, which
+// tier B exempts anyway. Proxy settings come with it, since the guarded
+// transport is itself built from the default's settings.
 //
 // The bound is the part nothing else supplies. Admission waits on this client,
 // the request context the verifier is handed need not carry a deadline, and
@@ -433,19 +427,8 @@ func sameVerificationHost(origin, dest *url.URL) bool {
 // accepts the connection and never answers would hold open every request
 // bearing a token it has not seen before.
 func newVerificationClient(skipTLS bool) *http.Client {
-	baseTransport, ok := http.DefaultTransport.(*http.Transport)
-	if !ok {
-		baseTransport = &http.Transport{}
-	}
-	transport := baseTransport.Clone()
-	if skipTLS {
-		transport.TLSClientConfig = &tls.Config{
-			MinVersion:         tls.VersionTLS12,
-			InsecureSkipVerify: true, //nolint:gosec // G402: user-configured opt-in for self-signed certificates
-		}
-	}
 	return &http.Client{
-		Transport:     transport,
+		Transport:     gitlabclient.HTTPTransport(skipTLS),
 		Timeout:       10 * time.Second,
 		CheckRedirect: verificationRedirect,
 	}

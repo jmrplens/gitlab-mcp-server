@@ -18,6 +18,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
@@ -1477,14 +1478,14 @@ func TestNewGitLabVerifierFor_UnresolvableInstance_IsNotATokenVerdict(t *testing
 	}
 }
 
-// TestNewGitLabVerifierFor_ForeignDefaultTransport_StillVerifies covers the
-// fallback taken when http.DefaultTransport is not the standard one.
+// TestNewGitLabVerifierFor_ForeignDefaultTransport_StillVerifies covers a
+// process whose http.DefaultTransport is not the standard one.
 //
 // A process that installs its own instrumented or mocked RoundTripper as the
-// default has nothing to clone, and the verifier builds a plain transport
-// rather than dereferencing what it found. Nothing about verification changes,
-// which is what this asserts: the clone exists to inherit proxy and timeout
-// settings, not to make the request work.
+// default has nothing to clone. The verifier no longer clones it at all: it
+// sends through the GitLab package's guarded transport, which falls back to a
+// plain transport of its own in that case. Nothing about verification changes,
+// which is what this asserts.
 func TestNewGitLabVerifierFor_ForeignDefaultTransport_StillVerifies(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/user" {
@@ -1538,6 +1539,95 @@ func TestNewVerificationClient_BoundsEveryExchange(t *testing.T) {
 	if got := newVerificationClient(false).Timeout; got <= 0 {
 		t.Errorf("Timeout = %v, want a positive bound; zero means a verification may wait forever", got)
 	}
+}
+
+// TestNewVerificationClient_DialsThroughTheDestinationGuard verifies that the
+// verifier's own client is refused the cloud metadata address before a packet
+// is sent, as every client of the GitLab package is.
+//
+// It used to clone net/http's default transport, which carries no guard, so a
+// name the instance's DNS or a redirect pointed at 169.254.169.254 was dialed
+// with the caller's bearer token attached. The dial is made with a short
+// deadline so that, without the guard, the test fails on the deadline rather
+// than waiting out the client's own bound.
+func TestNewVerificationClient_DialsThroughTheDestinationGuard(t *testing.T) {
+	t.Parallel()
+
+	for _, skipTLS := range []bool{false, true} {
+		t.Run(fmt.Sprintf("skip_tls=%v", skipTLS), func(t *testing.T) {
+			t.Parallel()
+
+			ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+			defer cancel()
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://169.254.169.254/api/v4/user", http.NoBody)
+			if err != nil {
+				t.Fatalf("http.NewRequestWithContext() unexpected error: %v", err)
+			}
+
+			resp, err := newVerificationClient(skipTLS).Do(req)
+			if resp != nil {
+				_ = resp.Body.Close()
+			}
+
+			if !errors.Is(err, gitlabclient.ErrDestinationRefused) {
+				t.Fatalf("err = %v, want the destination guard's refusal of the metadata address", err)
+			}
+		})
+	}
+}
+
+// TestNewGitLabVerifier_SubdomainRedirect_IsRefusedUnsent verifies that an
+// instance answering /api/v4/user with a redirect to one of its own subdomains
+// cannot have that subdomain answer for the caller.
+//
+// The subdomain never resolves here, which is the point: the refusal is the
+// redirect policy's, made before anything is dialed, and its text says so. A
+// policy that followed the hop would fail on the lookup instead, or, where the
+// name resolves, ask whatever answers there who the caller is.
+func TestNewGitLabVerifier_SubdomainRedirect_IsRefusedUnsent(t *testing.T) {
+	t.Parallel()
+
+	const userPath = "/api/v4/user"
+	var redirects atomic.Int64
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		redirects.Add(1)
+		w.Header().Set("Location", "http://eu.gitlab.invalid"+userPath)
+		w.WriteHeader(http.StatusFound)
+	}))
+	defer origin.Close()
+	instanceURL := strings.Replace(origin.URL, "127.0.0.1", "gitlab.invalid", 1)
+	client := newVerificationClient(false)
+	client.Transport = loopbackFor("gitlab.invalid", origin.Listener.Addr().String(), client.Transport)
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, instanceURL+userPath, http.NoBody)
+	if err != nil {
+		t.Fatalf("http.NewRequestWithContext() unexpected error: %v", err)
+	}
+	resp, err := client.Do(req)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+
+	if err == nil || !strings.Contains(err.Error(), "refusing to follow a redirect from gitlab.invalid to eu.gitlab.invalid") {
+		t.Fatalf("err = %v, want the redirect to the subdomain refused by the verification policy", err)
+	}
+	if n := redirects.Load(); n != 1 {
+		t.Errorf("the instance was asked %d times, want 1", n)
+	}
+}
+
+// loopbackFor is a round tripper that sends a request for host to addr and
+// every other request through next, so a test can give the instance a name
+// without a resolver answering for it.
+func loopbackFor(host, addr string, next http.RoundTripper) http.RoundTripper {
+	return roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		if req.URL.Hostname() != host {
+			return next.RoundTrip(req)
+		}
+		clone := req.Clone(req.Context())
+		clone.URL.Host = addr
+		return http.DefaultTransport.RoundTrip(clone)
+	})
 }
 
 // TestNewGitLabVerifier_IdentityBodyPastTheBound_IsNotAnIdentity verifies that
@@ -1709,9 +1799,9 @@ func TestNewGitLabVerifier_CrossHostRedirect_IsRefused(t *testing.T) {
 }
 
 // TestVerificationRedirect_Policy verifies which hops a verification request
-// may follow: the instance itself and its subdomains, never another host,
-// never an https-to-http downgrade, never an address literal wearing the
-// instance's name, and never more than ten in a row.
+// may follow: the instance's own host and nothing else, never a subdomain of
+// it or another host, never an https-to-http downgrade, never an address
+// literal wearing the instance's name, and never more than ten in a row.
 //
 // The address-literal rows are CVE-2023-45289. url.Hostname reduces
 // "[::1%25.gitlab.example.com]" to "::1%.gitlab.example.com", which clears
@@ -1732,7 +1822,12 @@ func TestVerificationRedirect_Policy(t *testing.T) {
 	}{
 		{name: "same host", origin: "https://gitlab.example.com/api/v4/user", dest: "https://gitlab.example.com/api/v4/user/"},
 		{name: "http upgraded to https", origin: "http://gitlab.example.com/api/v4/user", dest: "https://gitlab.example.com/api/v4/user"},
-		{name: "subdomain of the instance", origin: "https://gitlab.example.com/api/v4/user", dest: "https://eu.gitlab.example.com/api/v4/user"},
+		// Only the instance's own host answers who a caller is. A subdomain is
+		// another name, which can resolve anywhere, the metadata address and
+		// the server's own loopback included, and its answer would be cached
+		// as the caller's identity.
+		{name: "subdomain of the instance", origin: "https://gitlab.example.com/api/v4/user", dest: "https://eu.gitlab.example.com/api/v4/user", wantErr: true},
+		{name: "subdomain of the instance in ascii upper case", origin: "https://gitlab.example.com/api/v4/user", dest: "https://EU.GitLab.example.com/api/v4/user", wantErr: true},
 		{name: "another host", origin: "https://gitlab.example.com/api/v4/user", dest: "https://evil.example.net/api/v4/user", wantErr: true},
 		{name: "parent domain", origin: "https://gitlab.example.com/api/v4/user", dest: "https://example.com/api/v4/user", wantErr: true},
 		{name: "suffix without a dot boundary", origin: "https://gitlab.example.com/api/v4/user", dest: "https://evilgitlab.example.com/x", wantErr: true},
