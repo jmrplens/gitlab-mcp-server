@@ -12,6 +12,12 @@
 // and asks. A target may also be given outright, for a probe run from outside
 // the container or for a deployment whose process list cannot be read.
 //
+// A relative path on a peer's command line, a socket or a certificate, is
+// resolved against the peer's working directory, where the peer resolved it,
+// and never against the probe's. Every HTTP listener discovered is asked
+// before a stdio instance is taken for healthy, since a server reading a pipe
+// has nothing to say about a listener beside it.
+//
 // One listener it cannot discover is one bound to port 0: the command line then
 // says 0 and the port that was actually bound is known only to the kernel and
 // to the server's own log. A deployment that asks the kernel for a port has to
@@ -37,6 +43,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 // probeTimeout bounds one probe attempt. The image's HEALTHCHECK allows five
@@ -347,6 +355,10 @@ type probeDeps struct {
 	// stdinIsNull reports whether a peer's file descriptor 0 is the null
 	// device.
 	stdinIsNull func(pid int32) (bool, error)
+	// workingDir reports a peer's working directory, which a relative path on
+	// its command line was resolved against when it started. It is asked only
+	// for a peer whose command line holds one.
+	workingDir func(pid int32) (string, error)
 	// budget bounds the whole run. Zero, which is what the binary passes,
 	// means probeBudget.
 	budget time.Duration
@@ -390,9 +402,13 @@ func runProbe(ctx context.Context, args []string, certFile string, deps probeDep
 	}
 	slices.SortFunc(peers, func(a, b probePeer) int { return cmp.Compare(a.pid, b.pid) })
 
-	// Every server the loop reaches either answers, which ends the run, or
-	// leaves a failure, so no failure at the end means no server was found.
+	// Every HTTP server the loop reaches either answers, which ends the run, or
+	// leaves a failure. A stdio server has nothing to probe and is only
+	// remembered: it answers for itself when it is all there is, and never for
+	// an HTTP listener beside it, which it used to do whenever its pid was the
+	// lower one, ending the run as healthy before the listener was asked.
 	var failures []string
+	stdioPeer := ""
 	for _, peer := range peers {
 		if len(peer.args) == 0 {
 			continue
@@ -403,10 +419,16 @@ func runProbe(ctx context.Context, args []string, certFile string, deps probeDep
 		}
 		serves, why := peerServesHTTP(flags, func() (bool, error) { return deps.stdinIsNull(peer.pid) })
 		if !serves {
-			fmt.Fprintf(stderr, "probe: pid %d serves stdio (%s) and is running\n", peer.pid, why)
-			return probeHealthy
+			if stdioPeer == "" {
+				stdioPeer = fmt.Sprintf("pid %d serves stdio (%s) and is running", peer.pid, why)
+			}
+			continue
 		}
-		target := probeTargetFor(flags.addr, flags.tlsCert)
+		target, resolveErr := discoveredTarget(peer.pid, flags, deps.workingDir)
+		if resolveErr != nil {
+			failures = append(failures, fmt.Sprintf("pid %d: %v", peer.pid, resolveErr))
+			continue
+		}
 		if probeErr := probe(ctx, target); probeErr != nil {
 			failures = append(failures, fmt.Sprintf("pid %d at %s: %v", peer.pid, target, probeErr))
 			continue
@@ -414,11 +436,15 @@ func runProbe(ctx context.Context, args []string, certFile string, deps probeDep
 		fmt.Fprintf(stderr, "probe: pid %d at %s answered\n", peer.pid, target)
 		return probeHealthy
 	}
-	if len(failures) == 0 {
-		fmt.Fprintf(stderr, "probe: no running instance of %s\n", canonicalBinaryName(filepath.Base(os.Args[0])))
+	if len(failures) > 0 {
+		fmt.Fprintf(stderr, "probe: %s\n", strings.Join(failures, "; "))
 		return probeUnhealthy
 	}
-	fmt.Fprintf(stderr, "probe: %s\n", strings.Join(failures, "; "))
+	if stdioPeer != "" {
+		fmt.Fprintf(stderr, "probe: %s\n", stdioPeer)
+		return probeHealthy
+	}
+	fmt.Fprintf(stderr, "probe: no running instance of %s\n", canonicalBinaryName(filepath.Base(os.Args[0])))
 	return probeUnhealthy
 }
 
@@ -440,6 +466,60 @@ func livePeers() ([]probePeer, error) {
 		peers = append(peers, probePeer{pid: p.Pid, args: args})
 	}
 	return peers, nil
+}
+
+// peerWorkingDir is a running process's working directory, read through the
+// same process library --shutdown lists peers with: the target of
+// /proc/<pid>/cwd on Linux, and what the operating system reports elsewhere.
+// Reading another user's process takes the privilege its operating system
+// asks for, and the error then names what was refused.
+func peerWorkingDir(pid int32) (string, error) {
+	p, err := process.NewProcess(pid)
+	if err != nil {
+		return "", err
+	}
+	return p.Cwd()
+}
+
+// discoveredTarget is where a discovered peer serves /health. A relative
+// socket path in --http-addr, or a relative --tls-cert, was resolved by the
+// peer against its own working directory when it started, so it is resolved
+// there here too; read against the probe's, it named a file or socket that is
+// not there whenever the probe ran from elsewhere, which a health check run by
+// hand, by systemd or by an orchestrator commonly does. A unix listener is
+// probed in plain HTTP, so its --tls-cert is never read.
+//
+// The joined path of a socket can exceed the length the operating system
+// allows a socket address (108 bytes on Linux) where the relative one the peer
+// bound did not; the dial then fails and says so, and --probe takes the target
+// outright for that deployment.
+func discoveredTarget(pid int32, flags listenerFlags, workingDir func(int32) (string, error)) (probeTarget, error) {
+	if isUnixSocketAddr(flags.addr) {
+		socket, err := peerPath(pid, "--http-addr", flags.addr, workingDir)
+		if err != nil {
+			return probeTarget{}, err
+		}
+		return probeTargetFor(socket, ""), nil
+	}
+	cert, err := peerPath(pid, "--tls-cert", flags.tlsCert, workingDir)
+	if err != nil {
+		return probeTarget{}, err
+	}
+	return probeTargetFor(flags.addr, cert), nil
+}
+
+// peerPath resolves a path read off a peer's command line against the peer's
+// working directory. An empty or absolute path is returned as it is, without
+// asking for the directory.
+func peerPath(pid int32, flagName, path string, workingDir func(int32) (string, error)) (string, error) {
+	if path == "" || filepath.IsAbs(path) {
+		return path, nil
+	}
+	dir, err := workingDir(pid)
+	if err != nil {
+		return "", fmt.Errorf("%s %q is relative to the working directory of pid %d, which could not be read (%w); give --probe the target", flagName, path, pid, err)
+	}
+	return filepath.Join(dir, path), nil
 }
 
 // stdinIsNullUnder reports whether the process's file descriptor 0, as

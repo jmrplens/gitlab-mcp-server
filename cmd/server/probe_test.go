@@ -14,6 +14,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"math/big"
 	"net"
 	"net/http"
@@ -480,6 +481,12 @@ func TestRunProbe_Discovery(t *testing.T) {
 		{name: "the lowest pid is tried first and a later one rescues", peers: []probePeer{server(30, "--http", "--http-addr="+healthyAddr), server(20, "--http", "--http-addr="+closedAddr)}, wantCode: probeHealthy, wantSaid: "pid 30"},
 		// Both answer, so only the order decides which one is reported.
 		{name: "the lowest pid answers when both would", peers: []probePeer{server(30, "--http", "--http-addr="+healthyAddr), server(20, "--http", "--http-addr="+healthyAddr)}, wantCode: probeHealthy, wantSaid: "pid 20"},
+		// A stdio instance has nothing to probe, so it says nothing about an
+		// HTTP listener beside it. With the lowest pid it used to end the run as
+		// healthy before the listener was asked at all.
+		{name: "a stdio instance does not stand in for an HTTP one that answers", peers: []probePeer{server(20, "--transport", "stdio"), server(30, "--http", "--http-addr="+healthyAddr)}, wantCode: probeHealthy, wantSaid: "pid 30 at"},
+		{name: "a stdio instance does not vouch for an HTTP one nobody answers for", peers: []probePeer{server(20, "--transport", "stdio"), server(30, "--http", "--http-addr="+closedAddr)}, wantCode: probeUnhealthy, wantSaid: "pid 30 at"},
+		{name: "of several stdio instances the lowest pid is the one reported", peers: []probePeer{server(30, "--transport", "stdio"), server(20, "--transport", "stdio")}, wantCode: probeHealthy, wantSaid: "pid 20 serves stdio"},
 		{name: "other probes and shutdowns are not instances", peers: []probePeer{server(40, "--probe"), server(41, "--shutdown")}, wantCode: probeUnhealthy, wantSaid: "no running instance"},
 		{name: "a peer with an empty command line is skipped", peers: []probePeer{{pid: 50}}, wantCode: probeUnhealthy, wantSaid: "no running instance"},
 	}
@@ -505,6 +512,172 @@ func TestRunProbe_Discovery(t *testing.T) {
 				t.Errorf("runProbe() said %q, want it to mention %q", said.String(), tc.wantSaid)
 			}
 		})
+	}
+}
+
+// probeOnePeer runs a bare --probe against one discovered peer whose working
+// directory the given function reports, and returns the exit code and what
+// the probe said.
+func probeOnePeer(t *testing.T, peer probePeer, workingDir func(int32) (string, error)) (int, string) {
+	t.Helper()
+	deps := probeDeps{
+		peers:       func() ([]probePeer, error) { return []probePeer{peer}, nil },
+		stdinIsNull: func(int32) (bool, error) { return false, errors.New("not in this test") },
+		workingDir:  workingDir,
+	}
+	var said bytes.Buffer
+	code := runProbe(t.Context(), nil, "", deps, &said)
+	return code, said.String()
+}
+
+// peerStartedIn reports dir as the working directory of pid 20, the peer the
+// relative-path tests discover, and refuses any other pid.
+func peerStartedIn(dir string) func(int32) (string, error) {
+	return func(pid int32) (string, error) {
+		if pid != 20 {
+			return "", fmt.Errorf("asked for the working directory of pid %d, want 20", pid)
+		}
+		return dir, nil
+	}
+}
+
+// TestRunProbe_DiscoveredRelativeCertificate_IsReadFromThePeersDirectory
+// covers a relative --tls-cert on a discovered peer's command line. The peer
+// read it from its own working directory when it started, so the probe reads
+// it there too: read against the probe's own, an HTTPS instance started as
+// `--tls-cert c.pem` from /srv/a was reported unhealthy by any probe run from
+// elsewhere, with `open c.pem: no such file or directory`.
+func TestRunProbe_DiscoveredRelativeCertificate_IsReadFromThePeersDirectory(t *testing.T) {
+	t.Parallel()
+	tlsServer := httptest.NewTLSServer(healthMux(http.StatusOK))
+	t.Cleanup(tlsServer.Close)
+	peerDir := filepath.Dir(writeCertPEM(t, tlsServer.Certificate()))
+	addr := strings.TrimPrefix(tlsServer.URL, "https://")
+	peer := probePeer{pid: 20, args: []string{"gitlab-mcp-server", "--http", "--http-addr=" + addr, "--tls-cert=cert.pem", "--tls-key=key.pem"}}
+
+	code, said := probeOnePeer(t, peer, peerStartedIn(peerDir))
+	if code != probeHealthy {
+		t.Errorf("runProbe() = %d, want %d: %s", code, probeHealthy, said)
+	}
+	if !strings.Contains(said, "https://"+addr) {
+		t.Errorf("runProbe() said %q, want it to name https://%s", said, addr)
+	}
+}
+
+// TestRunProbe_DiscoveredRelativeSocket_IsDialedInThePeersDirectory covers a
+// relative unix socket in a discovered peer's --http-addr, which the peer
+// bound in its own working directory.
+func TestRunProbe_DiscoveredRelativeSocket_IsDialedInThePeersDirectory(t *testing.T) {
+	t.Parallel()
+	socket := serveOnUnixSocket(t, healthMux(http.StatusOK))
+	relative := "." + string(filepath.Separator) + filepath.Base(socket)
+	peer := probePeer{pid: 20, args: []string{"gitlab-mcp-server", "--http", "--http-addr", relative}}
+
+	code, said := probeOnePeer(t, peer, peerStartedIn(filepath.Dir(socket)))
+	if code != probeHealthy {
+		t.Errorf("runProbe() = %d, want %d: %s", code, probeHealthy, said)
+	}
+	if !strings.Contains(said, "unix:"+socket) {
+		t.Errorf("runProbe() said %q, want it to name unix:%s", said, socket)
+	}
+}
+
+// TestRunProbe_UnreadablePeerDirectory_IsNamedRatherThanReplaced covers a
+// relative path on a peer whose working directory cannot be read, which is
+// another user's process to a probe without the privilege to look: the probe
+// reports that, naming the flag, the pid and the refusal, rather than reading
+// the path against its own directory and reporting a missing file.
+func TestRunProbe_UnreadablePeerDirectory_IsNamedRatherThanReplaced(t *testing.T) {
+	t.Parallel()
+	unreadable := func(int32) (string, error) {
+		return "", errors.New("readlink /proc/20/cwd: permission denied")
+	}
+	socket := "run" + string(filepath.Separator) + "mcp.sock"
+	cases := []struct {
+		name string
+		args []string
+		flag string
+	}{
+		{name: "a relative certificate", args: []string{"--http-addr=127.0.0.1:1", "--tls-cert=cert.pem"}, flag: `--tls-cert "cert.pem"`},
+		{name: "a relative socket", args: []string{"--http-addr=" + socket}, flag: fmt.Sprintf("--http-addr %q", socket)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			peer := probePeer{pid: 20, args: append([]string{"gitlab-mcp-server", "--http"}, tc.args...)}
+
+			code, said := probeOnePeer(t, peer, unreadable)
+			if code != probeUnhealthy {
+				t.Errorf("runProbe() = %d, want %d: %s", code, probeUnhealthy, said)
+			}
+			for _, want := range []string{tc.flag, "working directory of pid 20", "readlink /proc/20/cwd: permission denied"} {
+				if !strings.Contains(said, want) {
+					t.Errorf("runProbe() said %q, want it to mention %q", said, want)
+				}
+			}
+		})
+	}
+}
+
+// TestRunProbe_AbsolutePeerPaths_NeverAskForTheWorkingDirectory covers the
+// command line every existing deployment writes: with no relative path on it,
+// the peer's working directory is never read, so a probe that could not read
+// it loses nothing it had before.
+func TestRunProbe_AbsolutePeerPaths_NeverAskForTheWorkingDirectory(t *testing.T) {
+	t.Parallel()
+	socket := serveOnUnixSocket(t, healthMux(http.StatusOK))
+	peer := probePeer{pid: 20, args: []string{"gitlab-mcp-server", "--http", "--http-addr=" + socket}}
+	never := func(pid int32) (string, error) {
+		t.Errorf("the working directory of pid %d was read for a command line holding no relative path", pid)
+		return "", errors.New("not wanted")
+	}
+
+	if code, said := probeOnePeer(t, peer, never); code != probeHealthy {
+		t.Errorf("runProbe() = %d, want %d: %s", code, probeHealthy, said)
+	}
+}
+
+// TestPeerWorkingDir_ReadsARunningProcess covers the read behind the
+// resolutions above against real children: one started in a directory of the
+// test's own reports that directory, and one that has exited and been reaped
+// has none to report.
+func TestPeerWorkingDir_ReadsARunningProcess(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("the child is /bin/sleep")
+	}
+
+	dir := t.TempDir()
+	child := exec.CommandContext(t.Context(), "/bin/sleep", "30")
+	child.Dir = dir
+	if err := child.Start(); err != nil {
+		t.Skipf("cannot start a child process: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = child.Process.Kill()
+		_ = child.Wait()
+	})
+
+	got, err := peerWorkingDir(pid32(t, child.Process.Pid))
+	if err != nil {
+		t.Fatalf("peerWorkingDir: %v", err)
+	}
+	// macOS reports the resolved path of a temporary directory reached
+	// through a symbolic link, so both sides are compared resolved.
+	want, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved, resolveErr := filepath.EvalSymlinks(got); resolveErr != nil || resolved != want {
+		t.Errorf("peerWorkingDir = %q, want %q", got, dir)
+	}
+
+	gone := exec.CommandContext(t.Context(), "/bin/sleep", "0")
+	if runErr := gone.Run(); runErr != nil {
+		t.Skipf("cannot run a child process: %v", runErr)
+	}
+	if goneDir, goneErr := peerWorkingDir(pid32(t, gone.Process.Pid)); goneErr == nil {
+		t.Errorf("peerWorkingDir of a reaped process = %q, want an error", goneDir)
 	}
 }
 

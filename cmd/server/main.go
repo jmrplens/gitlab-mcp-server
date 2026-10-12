@@ -381,7 +381,7 @@ func main() {
 	}
 
 	if probeHealth {
-		deps := probeDeps{peers: livePeers, stdinIsNull: peerStdinIsNull}
+		deps := probeDeps{peers: livePeers, stdinIsNull: peerStdinIsNull, workingDir: peerWorkingDir}
 		exitProcess(runProbe(context.Background(), flag.Args(), hcfg.tlsCert, deps, os.Stderr))
 		return
 	}
