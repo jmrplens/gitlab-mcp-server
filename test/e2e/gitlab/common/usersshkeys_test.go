@@ -1,11 +1,11 @@
 //go:build e2e
 
 // usersshkeys_test.go covers SSH keys: the run user's own, from add to
-// delete with the listing read between; the two administrator lookups that
-// resolve a key to its owner, by ID and by fingerprint; and another user's
-// keys, which an administrator adds, reads, lists and removes. Every key is
-// generated fresh, since GitLab refuses a fingerprint any account already
-// holds.
+// delete with the listing read between, and the expiry its add reads; the two
+// administrator lookups that resolve a key to its owner, by ID and by
+// fingerprint; and another user's keys, which an administrator adds, reads,
+// lists and removes. Every key is generated fresh, since GitLab refuses a
+// fingerprint any account already holds.
 
 package common
 
@@ -13,6 +13,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 	"golang.org/x/crypto/ssh"
@@ -82,6 +83,45 @@ func TestUserSSHKeys_Lookups_ByIDAndByFingerprint(t *testing.T) {
 		if byFingerprint.ID != added.ID || byFingerprint.User.Username != rt.Username {
 			e.T.Errorf("key_get_by_fingerprint(%s) answered key %d of %q, want key %d of %q", fingerprint, byFingerprint.ID, byFingerprint.User.Username, added.ID, rt.Username)
 		}
+	})
+}
+
+// TestUserSSHKeys_Expiry_TakesATimestampAndRefusesAMalformedDate adds a key
+// to the run user on every surface with an RFC 3339 expiry carrying a time of
+// day and an offset, and holds the answer to that instant, then asks for a
+// key with a date that does not parse and holds the call to a refusal naming
+// expires_at (issue 1308).
+//
+// Before the fix the timestamp did not parse as a date and was dropped, as
+// was the malformed one, so both keys were created with no expiry at all. The
+// instant rather than its day is what GitLab takes here, and what the server
+// sends past client-go's date-typed field (register row 126); a key that
+// came back expiring at midnight would mean the time of day was lost.
+func TestUserSSHKeys_Expiry_TakesATimestampAndRefusesAMalformedDate(t *testing.T) {
+	e := harness.New(t)
+	asked := time.Date(2027, 1, 15, 11, 45, 0, 0, time.UTC)
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		title := e.Name("expiring")
+		added := harness.Do[users.SSHKeyOutput](s, actionUserAddSSHKey, map[string]any{
+			"title": title, "key": mintSSHPublicKey(e), "expires_at": "2027-01-15T13:45:00+02:00",
+		})
+		e.Defer("ssh key "+title, func(ctx context.Context) error {
+			_, err := e.Client().GL().Users.DeleteSSHKey(added.ID, gl.WithContext(ctx))
+			if err != nil && !fixture.IsStatus(err, http.StatusNotFound) {
+				return err
+			}
+			return nil
+		})
+		if got, err := time.Parse(time.RFC3339, added.ExpiresAt); err != nil || !got.Equal(asked) {
+			e.T.Errorf("add_ssh_key answered the expiry %q, want the instant asked for, %s", added.ExpiresAt, asked.Format(time.RFC3339))
+		}
+
+		refused := harness.ExpectToolError(s, actionUserAddSSHKey, map[string]any{
+			"title": e.Name("malformed"), "key": mintSSHPublicKey(e), "expires_at": "15/01/2027",
+		}, "expires_at")
+		e.T.Logf("the malformed expiry was refused: %s", firstLine(refused))
 	})
 }
 
