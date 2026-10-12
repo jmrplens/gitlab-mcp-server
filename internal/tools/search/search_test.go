@@ -2458,6 +2458,110 @@ func TestSearchIssues_QueryWithUnicode(t *testing.T) {
 	}
 }
 
+// TestSearchProjects_PageTwoOfSeveral_ReportsNoTotal verifies that a search
+// page with a successor and a predecessor publishes no total, and that its
+// Markdown says more results exist rather than counting the page as the
+// whole. GitLab's search API sends neither X-Total nor X-Total-Pages, and it
+// redacts rows the caller may not read after paginating, so nothing on a page
+// that is not the only one measures the result: the page used to report its
+// own row count as total_items and its next page as total_pages, which a
+// model read as "1 of 1, page 2 of 3".
+func TestSearchProjects_PageTwoOfSeveral_ReportsNoTotal(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathSearchGlobal && r.URL.Query().Get("scope") == "projects" {
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
+				{"id":2,"name":"P2","path":"p2","path_with_namespace":"u/p2","visibility":"public","default_branch":"main","web_url":"https://x/p2"}
+			]`, testutil.PaginationHeaders{Page: "2", PerPage: "1", NextPage: "3", PrevPage: "1"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Projects(context.Background(), client, ProjectsInput{Query: "P"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Pagination.TotalItems != 0 || out.Pagination.TotalPages != 0 {
+		t.Errorf("totals = (%d items, %d pages), want (0, 0): GitLab sent none", out.Pagination.TotalItems, out.Pagination.TotalPages)
+	}
+	if out.Pagination.Page != 2 || !out.Pagination.HasMore {
+		t.Errorf("page = %d, has_more = %v, want 2 and true", out.Pagination.Page, out.Pagination.HasMore)
+	}
+
+	md := FormatProjectsMarkdown(out)
+	for _, want := range []string{"## Project Search Results (1 shown, more available)", "Page 2 | 1 per page | more pages available"} {
+		t.Run("says "+want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown lacks %q:\n%s", want, md)
+			}
+		})
+	}
+	for _, unwanted := range []string{"items total", "Showing ", " of 3"} {
+		t.Run("leaves out "+unwanted, func(t *testing.T) {
+			if strings.Contains(md, unwanted) {
+				t.Errorf("markdown states a total GitLab never sent (%q):\n%s", unwanted, md)
+			}
+		})
+	}
+}
+
+// TestSearchProjects_LastPageOfSeveral_HeadingNamesThePage verifies that the
+// last page of a longer search, which has a predecessor and no successor,
+// publishes no total and that its heading does not read as one: a bare
+// "(5)" over the five rows of page 2 says the search found five.
+func TestSearchProjects_LastPageOfSeveral_HeadingNamesThePage(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathSearchGlobal && r.URL.Query().Get("scope") == "projects" {
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
+				{"id":3,"name":"P3","path":"p3","path_with_namespace":"u/p3","visibility":"public","default_branch":"main","web_url":"https://x/p3"}
+			]`, testutil.PaginationHeaders{Page: "2", PerPage: "1", PrevPage: "1"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Projects(context.Background(), client, ProjectsInput{Query: "P"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Pagination.TotalItems != 0 || out.Pagination.TotalPages != 0 || out.Pagination.HasMore {
+		t.Errorf("pagination = %+v, want no totals and no more pages", out.Pagination)
+	}
+
+	md := FormatProjectsMarkdown(out)
+	if !strings.Contains(md, "## Project Search Results (1 on page 2)") {
+		t.Errorf("the last page's heading does not name its page:\n%s", md)
+	}
+	for _, unwanted := range []string{"(1)\n", "items total", "Showing "} {
+		t.Run("leaves out "+unwanted, func(t *testing.T) {
+			if strings.Contains(md, unwanted) {
+				t.Errorf("markdown reads as a total GitLab never sent (%q):\n%s", unwanted, md)
+			}
+		})
+	}
+}
+
+// TestFormatCodeMarkdown_MiddlePageOfSeveral verifies the whole render of a
+// code search page that is neither the first nor the last: the heading counts
+// the rows shown and says more are available, no summary line claims a total,
+// and the footer names the page alone.
+func TestFormatCodeMarkdown_MiddlePageOfSeveral(t *testing.T) {
+	pag := toolutil.PaginationOutput{Page: 3, PerPage: 1, NextPage: 4, PrevPage: 2}
+	toolutil.AdjustPagination(&pag, 1)
+	got := FormatCodeMarkdown(CodeOutput{
+		Blobs:      []BlobOutput{{Filename: "main.go", Path: "cmd/main.go", Ref: "main", Startline: 10}},
+		Pagination: pag,
+	})
+	want := "## Code Search Results (1 shown, more available)\n\n" +
+		"| Project | File | Path | Ref | Line |\n| --- | --- | --- | --- | --- |\n" +
+		"| 0 | main.go | cmd/main.go | main | 10 |\n" +
+		"\nPage 3 | 1 per page | more pages available\n\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.file_get' to read a found file by its path\n"
+	if got != want {
+		t.Errorf("middle code search page:\n got %q\nwant %q", got, want)
+	}
+}
+
 // TestSearchCode_PaginationAdjusted verifies pagination adjustment for code
 // search when the API does not return total headers.
 func TestSearchCode_PaginationAdjusted(t *testing.T) {

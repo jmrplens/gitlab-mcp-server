@@ -923,7 +923,7 @@ func TestFormatListStatusMarkdown_WithPagination(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{Page: 2},
 	}
 
-	assertGeoMarkdown(t, FormatListStatusMarkdown(out), "## Geo Site Statuses (1)\n\n"+
+	assertGeoMarkdown(t, FormatListStatusMarkdown(out), "## Geo Site Statuses (1 on page 2)\n\n"+
 		geoStatusTableHead+
 		"| 1 | ✅ | Healthy | 0 | 0 | 16.5.0 |\n"+
 		"\nPage 2 | no more pages\n"+

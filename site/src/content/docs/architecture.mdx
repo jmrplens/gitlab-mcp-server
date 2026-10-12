@@ -240,7 +240,7 @@ A list action takes `page` (from 1) and `per_page` (20 by default, 100 at most),
 | `prev_page`   | The page before this one, `0` on the first page                                  |
 | `has_more`    | `true` while a next page exists, so a model can decide without comparing numbers |
 
-Search is the exception: GitLab's search API sends no totals, so there they are inferred from the page that arrived and describe what has arrived, not the whole list ([Output Format](/gitlab-mcp-server/reference/output-format/#the-structured-json)). A list read over GraphQL pages by cursor instead, where it pages at all ([Paging a GraphQL list](#paging-a-graphql-list)).
+GitLab's search API sends no totals, so a search reports `total_items` and `total_pages` as `0` except on a lone page, whose rows are the whole result ([Output Format](/gitlab-mcp-server/reference/output-format/#the-structured-json)). A list read over GraphQL pages by cursor instead, where it pages at all ([Paging a GraphQL list](#paging-a-graphql-list)).
 
 Collection resources work differently, because MCP gives `resources/read` no way to ask for more. A collection resource such as `gitlab://groups` returns one page of up to 100 items and says whether that is everything in `_meta`, under the key `io.github.jmrplens/pageInfo`: `returned`, `total` (left out when GitLab did not send it) and `complete`. When `complete` is `false`, use the matching list action, which pages.
 

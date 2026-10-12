@@ -282,6 +282,44 @@ func userFound(out search.UsersOutput, username string) bool {
 	return false
 }
 
+// TestSearchProjects_PageTwoOfThree_ReportsNoTotal makes three projects
+// sharing one name stem, asks the project scope for the stem one project at a
+// time, and reads the second page on every surface: it reports neither a total
+// nor a page count, says more pages follow, and its Markdown says the rows
+// shown are not all of them. GitLab's search API sends no X-Total or
+// X-Total-Pages, and the second page used to publish its own row count as
+// total_items and its next page as total_pages (issue 1288).
+func TestSearchProjects_PageTwoOfThree_ReportsNoTotal(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) string {
+		var stem string
+		for range 3 {
+			project := fixture.NewProject(e, fixture.WithNamePrefix("searchpage"), fixture.WithoutReadme())
+			stem = project.Name[:strings.LastIndex(project.Name, "-")]
+		}
+		return searchTail(stem)
+	}, func(e *harness.Env, surface harness.Surface, stem string) {
+		s := e.On(surface)
+
+		first := harness.Eventually(s, actionSearchProjects, map[string]any{"query": stem, "per_page": 1}, searchInterval, searchWait,
+			func(out search.ProjectsOutput) bool { return out.Pagination.NextPage == 2 })
+		if first.Pagination.TotalItems != 0 || first.Pagination.TotalPages != 0 {
+			e.T.Errorf("page 1 of the search for %q reports %d items in %d pages, a total GitLab never sent", stem, first.Pagination.TotalItems, first.Pagination.TotalPages)
+		}
+		out, said := harness.DoAnswer[search.ProjectsOutput](s, actionSearchProjects, map[string]any{"query": stem, "per_page": 1, "page": 2})
+		if out.Pagination.TotalItems != 0 || out.Pagination.TotalPages != 0 {
+			e.T.Errorf("page 2 of the search for %q reports %d items in %d pages, a total GitLab never sent", stem, out.Pagination.TotalItems, out.Pagination.TotalPages)
+		}
+		if out.Pagination.Page != 2 || !out.Pagination.HasMore {
+			e.T.Errorf("page 2 of three reads page %d with has_more %v, want page 2 with more to come", out.Pagination.Page, out.Pagination.HasMore)
+		}
+		if !strings.Contains(said, "shown, more available") {
+			e.T.Errorf("page 2 of the search does not say more results exist:\n%s", said)
+		}
+	})
+}
+
 // TestSearchType_Basic_IsAcceptedAndAnswers asks the code scope for the
 // fixture file with search_type set to basic on every surface, which every
 // instance serves, and finds the file.

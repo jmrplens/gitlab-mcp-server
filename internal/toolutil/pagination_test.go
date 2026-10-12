@@ -153,12 +153,16 @@ func TestAdjustPagination(t *testing.T) {
 			wantPage:  1,
 			wantMore:  false,
 		},
+		// Only a lone page holds the whole result, so only there is the
+		// row count a total. Anywhere else GitLab's search answers rows it
+		// redacted after paginating, and a total read off the page (its row
+		// count, the next page number) is a figure nothing measured.
 		{
-			name:      "multi-page with next page",
+			name:      "first page of several leaves both totals unknown",
 			input:     PaginationOutput{Page: 1, PerPage: 20, NextPage: 2},
 			itemCount: 20,
-			wantItems: 20,
-			wantPages: 2,
+			wantItems: 0,
+			wantPages: 0,
 			wantPage:  1,
 			wantMore:  true,
 		},
@@ -172,22 +176,31 @@ func TestAdjustPagination(t *testing.T) {
 			wantMore:  false,
 		},
 		{
-			name:      "last page — NextPage 0 infers TotalPages from Page",
-			input:     PaginationOutput{Page: 3, PerPage: 20, NextPage: 0},
-			itemCount: 5,
-			wantItems: 5,
-			wantPages: 3,
+			name:      "middle page leaves both totals unknown",
+			input:     PaginationOutput{Page: 3, PerPage: 20, NextPage: 4, PrevPage: 2},
+			itemCount: 20,
+			wantItems: 0,
+			wantPages: 0,
 			wantPage:  3,
+			wantMore:  true,
+		},
+		{
+			name:      "last page of several leaves both totals unknown",
+			input:     PaginationOutput{Page: 2, PerPage: 20, PrevPage: 1},
+			itemCount: 5,
+			wantItems: 0,
+			wantPages: 0,
+			wantPage:  2,
 			wantMore:  false,
 		},
 		{
-			name:      "middle page — NextPage set infers TotalPages",
-			input:     PaginationOutput{Page: 2, PerPage: 20, NextPage: 3},
-			itemCount: 20,
-			wantItems: 20,
-			wantPages: 3,
-			wantPage:  2,
-			wantMore:  true,
+			name:      "page past the first with no previous link is not a lone page",
+			input:     PaginationOutput{Page: 3, PerPage: 20},
+			itemCount: 5,
+			wantItems: 0,
+			wantPages: 0,
+			wantPage:  3,
+			wantMore:  false,
 		},
 		// A keyset page has no page number and no total to infer, and its
 		// successor is the token: recomputing has_more from next_page alone

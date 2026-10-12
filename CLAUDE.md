@@ -1025,7 +1025,7 @@ curl -X POST http://localhost:8080/mcp -H "Content-Type: application/json" -H "A
 - **Tool not found**: Check the action's `ActionSpec`, catalog aggregation, `action_catalog.go`, and `docs/development/tool-surfaces-and-action-core.md` for surface ownership rules
 - **Meta-tools disabled**: `GITLAB_MCP_TOOL_SURFACE` decides; unset it for the default dynamic surface, set `individual` for one tool per action, or `meta` when meta-tools are what you want. The `META_TOOLS` boolean it replaced was removed in 3.0.0
 - **Dynamic mode shows only two tools**: this is expected by default. Use `gitlab_find_action` and `gitlab_execute_action`; set `GITLAB_MCP_TOOL_SURFACE=meta` to use meta-tools.
-- **Pagination missing**: Ensure the list handler applies `toolutil.ApplyListOptions` to the request and fills its output with `toolutil.PaginationFromResponse` (plus `AdjustPagination` when the page was filtered locally), and that a list GitLab pages by keyset passes `toolutil.KeysetContinuation` on its SDK call, or the `next_page_token` its pages publish cannot be followed
+- **Pagination missing**: Ensure the list handler applies `toolutil.ApplyListOptions` to the request and fills its output with `toolutil.PaginationFromResponse` (plus `AdjustPagination` on a route that sends no totals, which is GitLab's search API: it numbers the page and derives `has_more`, and fills the totals only on a lone page, since nothing on any other page counts the result), and that a list GitLab pages by keyset passes `toolutil.KeysetContinuation` on its SDK call, or the `next_page_token` its pages publish cannot be followed
 - **Test mocking**: All tests use `httptest.NewServer` — check URL routing in mock handler
 
 ### Running specific test domains

@@ -240,7 +240,7 @@ Una acción de listado acepta `page` (desde 1) y `per_page` (20 por defecto, 100
 | `prev_page`   | La página anterior a esta, `0` en la primera                                                |
 | `has_more`    | `true` mientras exista una página siguiente, para que un modelo decida sin comparar números |
 
-La búsqueda es la excepción: la API de búsqueda de GitLab no envía totales, así que allí se deducen de la página que llegó y describen lo que ha llegado, no la lista completa ([Formato de salida](/gitlab-mcp-server/es/reference/output-format/#el-json-estructurado)). Una lista que se lee por GraphQL pagina por cursor, cuando pagina ([Paginar una lista GraphQL](#paginar-una-lista-graphql)).
+La API de búsqueda de GitLab no envía totales, así que una búsqueda indica `total_items` y `total_pages` como `0` salvo en una página única, cuyas filas son el resultado completo ([Formato de salida](/gitlab-mcp-server/es/reference/output-format/#el-json-estructurado)). Una lista que se lee por GraphQL pagina por cursor, cuando pagina ([Paginar una lista GraphQL](#paginar-una-lista-graphql)).
 
 Los recursos de colección funcionan de otra forma, porque MCP no da a `resources/read` ninguna manera de pedir más. Un recurso de colección como `gitlab://groups` devuelve una página de hasta 100 elementos e indica si eso es todo en `_meta`, bajo la clave `io.github.jmrplens/pageInfo`: `returned`, `total` (se omite cuando GitLab no lo envió) y `complete`. Cuando `complete` vale `false`, usa la acción de listado correspondiente, que sí pagina.
 

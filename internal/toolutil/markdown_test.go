@@ -163,7 +163,14 @@ func TestWriteListHeading_Cases_CountsWhatTheResponseVouchesFor(t *testing.T) {
 		{name: "no total and only the flag", shown: 2, p: PaginationOutput{Page: 1, PerPage: 2, HasMore: true}, want: "## Issues (2 shown, more available)\n\n"},
 		{name: "no total and only the next page", shown: 2, p: PaginationOutput{Page: 1, PerPage: 2, NextPage: 2}, want: "## Issues (2 shown, more available)\n\n"},
 		{name: "an empty page with more to come", shown: 0, p: PaginationOutput{Page: 1, PerPage: 2, NextPage: 2, HasMore: true}, want: "## Issues (0)\n\n"},
-		{name: "no total on the last page", shown: 2, p: PaginationOutput{Page: 3, PerPage: 2}, want: "## Issues (2)\n\n"},
+		// The last page of a list GitLab sends no total for (search, or keyset
+		// past its first page) holds the rows of that page only, so a bare
+		// count would read as the size of the whole list.
+		{name: "no total on the last page", shown: 2, p: PaginationOutput{Page: 3, PerPage: 2, PrevPage: 2}, want: "## Issues (2 on page 3)\n\n"},
+		{name: "no total on a numbered page past the first", shown: 5, p: PaginationOutput{Page: 2, PerPage: 20}, want: "## Issues (5 on page 2)\n\n"},
+		{name: "no total on the first and only page", shown: 2, p: PaginationOutput{Page: 1, PerPage: 2}, want: "## Issues (2)\n\n"},
+		{name: "a total outranks the page", shown: 2, p: PaginationOutput{Page: 3, PerPage: 2, PrevPage: 2, TotalItems: 6, TotalPages: 3}, want: "## Issues (6)\n\nShowing 2 of 6 results (page 3 of 3)\n\n"},
+		{name: "an empty page past the first", shown: 0, p: PaginationOutput{Page: 4, PerPage: 2, PrevPage: 3}, want: "## Issues (0)\n\n"},
 		{name: "no pagination at all", shown: 3, p: PaginationOutput{}, want: "## Issues (3)\n\n"},
 		{name: "a page count without a total", shown: 2, p: PaginationOutput{Page: 1, PerPage: 2, TotalPages: 2}, want: "## Issues (2)\n\nShowing 2 results (page 1 of 2)\n\n"},
 		{name: "a hostile title is escaped", shown: 0, p: PaginationOutput{}, want: "## Issues &lt;b> (0)\n\n"},
@@ -531,7 +538,7 @@ func TestFormatStorageMoveListMarkdown(t *testing.T) {
 			EntityColumn: "Snippet",
 			Pagination:   PaginationOutput{Page: 2},
 		})
-		want := "## Snippet Storage Moves (2)\n\n" +
+		want := "## Snippet Storage Moves (2 on page 2)\n\n" +
 			"| ID | State | Source | Destination | Snippet | Created |\n" +
 			"| --- | --- | --- | --- | --- | --- |\n" +
 			"| 1 | finished | default | storage2 | [example](https://gitlab.example.com/snippets/1) | 1 Jun 2026 12:00 UTC |\n" +

@@ -223,12 +223,20 @@ func keysetContinuationLink(token string) (*url.URL, bool) {
 	return next, true
 }
 
-// AdjustPagination corrects pagination metadata when the GitLab API does not
-// return X-Total and X-Total-Pages headers (e.g., the Search API).
-// It infers TotalItems and TotalPages from the actual item count received
-// and the presence of a NextPage indicator. A keyset page is left as
-// [PaginationFromResponse] described it: it has no page number or total to
-// infer from, and its successor is its next_page_token rather than a page.
+// AdjustPagination completes the pagination of a list GitLab answers without
+// the X-Total and X-Total-Pages headers, which is what its search API does. It
+// numbers an unnumbered page 1 and derives HasMore from the next page, and it
+// fills the two totals only on a lone page (no next page, no previous one, page
+// 1 at most), the one page whose rows are the whole result. Anywhere else it
+// leaves them at 0, the value [PaginationOutput] documents for a total GitLab
+// did not send: search redacts the rows a caller may not read after it pages,
+// so neither this page's row count nor the next page number counts the result,
+// and an earlier page need not have been full. The Markdown then says "shown,
+// more available" instead of a count nothing measured.
+//
+// A keyset page is left as [PaginationFromResponse] described it: it has no
+// page number or total to infer from, and its successor is its next_page_token
+// rather than a page.
 func AdjustPagination(p *PaginationOutput, itemCount int) {
 	if itemCount == 0 || p.NextPageToken != "" {
 		return
@@ -236,17 +244,16 @@ func AdjustPagination(p *PaginationOutput, itemCount int) {
 	if p.Page == 0 {
 		p.Page = 1
 	}
+	p.HasMore = p.NextPage > 0
+	if p.NextPage > 0 || p.PrevPage > 0 || p.Page > 1 {
+		return
+	}
 	if p.TotalItems == 0 {
 		p.TotalItems = int64(itemCount)
 	}
 	if p.TotalPages == 0 {
-		if p.NextPage > 0 {
-			p.TotalPages = p.NextPage
-		} else {
-			p.TotalPages = p.Page
-		}
+		p.TotalPages = 1
 	}
-	p.HasMore = p.NextPage > 0
 }
 
 // DeleteOutput is a confirmation message returned by destructive tool handlers

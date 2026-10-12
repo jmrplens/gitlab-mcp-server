@@ -181,14 +181,20 @@ func WriteListSummary(b *strings.Builder, shown int, p PaginationOutput) {
 //
 // N is what the response can vouch for: the total GitLab sent when it sent
 // one, the count shown with "more available" when the page has a successor
-// but no total (keyset pagination sends none), and the count shown otherwise.
-// A heading that printed the page length under a larger total, or a zero
-// total above a table of rows, was the commonest way a list misled its
-// reader.
+// but no total (keyset pagination and search send none), the count shown
+// with its page number on a later page that has no successor and no total,
+// and the count shown otherwise. A heading that printed the page length under
+// a larger total, a zero total above a table of rows, or the rows of a last
+// page as if they were the whole list, was the commonest way a list misled
+// its reader.
 func WriteListHeading(b *strings.Builder, title string, shown int, p PaginationOutput) {
 	count := strconv.Itoa(shown)
+	// Ifs rather than a tagless switch: the mutation tool cannot see a case
+	// expression, so its conditions read as never covered there.
 	if shown > 0 && (p.HasMore || p.NextPage > 0) {
 		count = fmt.Sprintf("%d shown, more available", shown)
+	} else if shown > 0 && p.Page > 1 {
+		count = fmt.Sprintf("%d on page %d", shown, p.Page)
 	}
 	// A total GitLab sent outranks the count shown, so it is written last.
 	if p.TotalItems > 0 {
