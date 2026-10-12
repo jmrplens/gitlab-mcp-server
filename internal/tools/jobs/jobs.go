@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"time"
+	"unicode/utf8"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -406,8 +408,10 @@ func ToOutput(j *gl.Job) Output {
 // TASK-024: additional job handlers
 // ---------------------------------------------------------------------------.
 
-// maxArtifactBytes limits artifact content returned by [readArtifactContent]
-// and [readSingleArtifactContent] to roughly 1 MB to keep responses bounded.
+// maxArtifactBytes is the largest artifact returned in one response, 1 MiB:
+// an archive or report larger than it comes back with its size and no
+// content ([readArtifactContent]), and a single text file with its first
+// MiB ([readSingleArtifactContent]).
 const maxArtifactBytes = 1 << 20
 
 // ListProjectInput defines parameters for listing all jobs in a project.
@@ -574,7 +578,9 @@ func ListBridges(ctx context.Context, client *gitlabclient.Client, input BridgeL
 	return BridgeListOutput{Bridges: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
-// ArtifactsOutput holds artifact content (base64-encoded) and metadata.
+// ArtifactsOutput holds an artifact base64-encoded and its size in bytes.
+// Truncated is set when the artifact was larger than one response carries,
+// and then Content is empty: a prefix of an archive cannot be opened.
 type ArtifactsOutput struct {
 	toolutil.HintableOutput
 	JobID     int64  `json:"job_id,omitempty"`
@@ -592,8 +598,8 @@ type ArtifactsInput struct {
 
 // GetArtifacts downloads one artifact of a specific CI/CD job via the GitLab
 // Jobs artifacts API (GET /projects/:id/jobs/:job_id/artifacts): the archive
-// by default, or the report file_type names. The content is truncated to
-// [maxArtifactBytes] and base64-encoded into the response.
+// by default, or the report file_type names, base64-encoded into the
+// response when it fits [maxArtifactBytes] ([readArtifactContent]).
 //
 // It calls the options variant because the other binding sends no file_type.
 // client-go marks that variant deprecated only because it plans to fold the
@@ -619,10 +625,13 @@ func GetArtifacts(ctx context.Context, client *gitlabclient.Client, input Artifa
 	}
 	reader, _, err := client.GL().Jobs.GetJobArtifactsWithOptions(string(input.ProjectID), input.JobID, opts, gl.WithContext(ctx)) //nolint:staticcheck // SA1019: the only binding that carries file_type until client-go v4 folds it into GetJobArtifacts.
 	if err != nil {
+		if toolutil.IsDownloadTooLarge(err) {
+			return ArtifactsOutput{}, toolutil.WrapErrWithHint("jobGetArtifacts", err, errArtifactTooLarge)
+		}
 		return ArtifactsOutput{}, toolutil.WrapErrWithStatusHint("jobGetArtifacts", err, http.StatusNotFound,
 			"verify job_id and file_type; the job may have no artifact of that type, or its artifacts may have expired (controlled by .gitlab-ci.yml expire_in)")
 	}
-	return readArtifactContent(reader, input.JobID)
+	return readArtifactContent(reader, input.JobID), nil
 }
 
 // DownloadArtifactsInput defines parameters for downloading artifacts by ref and job name.
@@ -656,10 +665,13 @@ func DownloadArtifacts(ctx context.Context, client *gitlabclient.Client, input D
 
 	reader, _, err := client.GL().Jobs.DownloadArtifactsFile(string(input.ProjectID), input.RefName, opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsDownloadTooLarge(err) {
+			return ArtifactsOutput{}, toolutil.WrapErrWithHint("jobDownloadArtifacts", err, errRefArtifactTooLarge)
+		}
 		return ArtifactsOutput{}, toolutil.WrapErrWithStatusHint("jobDownloadArtifacts", err, http.StatusNotFound,
 			"no successful job with the given job_name found on this ref with non-expired artifacts. Verify ref_name exists and the latest successful pipeline produced artifacts")
 	}
-	return readArtifactContent(reader, 0)
+	return readArtifactContent(reader, 0), nil
 }
 
 // SingleArtifactInput defines parameters for downloading a single artifact file by job ID.
@@ -675,15 +687,15 @@ type SingleArtifactOutput struct {
 	JobID        int64  `json:"job_id,omitempty"`
 	ArtifactPath string `json:"artifact_path"`
 	Size         int    `json:"size"`
+	Encoding     string `json:"encoding,omitempty"`
 	Content      string `json:"content"`
 	Truncated    bool   `json:"truncated"`
 }
 
 // DownloadSingleArtifact downloads a single artifact file by job ID
 // and artifact path via the GitLab Jobs artifacts API
-// (GET /projects/:id/jobs/:job_id/artifacts/:artifact_path). The
-// response contains the raw file content (up to [maxArtifactBytes])
-// and a Truncated flag if the file was larger.
+// (GET /projects/:id/jobs/:job_id/artifacts/:artifact_path), as text or
+// base64 by what the file holds ([readSingleArtifactContent]).
 func DownloadSingleArtifact(ctx context.Context, client *gitlabclient.Client, input SingleArtifactInput) (SingleArtifactOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return SingleArtifactOutput{}, err
@@ -700,10 +712,13 @@ func DownloadSingleArtifact(ctx context.Context, client *gitlabclient.Client, in
 
 	reader, _, err := client.GL().Jobs.DownloadSingleArtifactsFile(string(input.ProjectID), input.JobID, input.ArtifactPath, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsDownloadTooLarge(err) {
+			return SingleArtifactOutput{}, toolutil.WrapErrWithHint("jobDownloadSingleArtifact", err, errSingleArtifactTooLarge)
+		}
 		return SingleArtifactOutput{}, toolutil.WrapErrWithStatusHint("jobDownloadSingleArtifact", err, http.StatusNotFound,
-			"artifact_path not found within the job artifact archive, or job artifacts have expired. Use job.artifacts to list available paths")
+			"artifact_path not found within the job artifact archive, or job artifacts have expired. The paths are the job's artifacts:paths in .gitlab-ci.yml")
 	}
-	return readSingleArtifactContent(reader, input.JobID, input.ArtifactPath)
+	return readSingleArtifactContent(reader, input.JobID, input.ArtifactPath), nil
 }
 
 // SingleArtifactRefInput defines parameters for downloading a single artifact file by ref.
@@ -716,8 +731,8 @@ type SingleArtifactRefInput struct {
 
 // DownloadSingleArtifactByRef downloads a single artifact file by ref,
 // job name, and artifact path via the GitLab Jobs artifacts API
-// (GET /projects/:id/jobs/artifacts/:ref_name/raw/:artifact_path).
-// Returns the raw file content (up to [maxArtifactBytes]).
+// (GET /projects/:id/jobs/artifacts/:ref_name/raw/:artifact_path), read as
+// [DownloadSingleArtifact] reads it.
 func DownloadSingleArtifactByRef(ctx context.Context, client *gitlabclient.Client, input SingleArtifactRefInput) (SingleArtifactOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return SingleArtifactOutput{}, err
@@ -741,10 +756,13 @@ func DownloadSingleArtifactByRef(ctx context.Context, client *gitlabclient.Clien
 		gl.WithContext(ctx),
 	)
 	if err != nil {
+		if toolutil.IsDownloadTooLarge(err) {
+			return SingleArtifactOutput{}, toolutil.WrapErrWithHint("jobDownloadSingleArtifactByRef", err, errSingleArtifactTooLarge)
+		}
 		return SingleArtifactOutput{}, toolutil.WrapErrWithStatusHint("jobDownloadSingleArtifactByRef", err, http.StatusNotFound,
 			"no successful job with the given name on this ref produced an artifact at artifact_path, or artifacts expired")
 	}
-	return readSingleArtifactContent(reader, 0, input.ArtifactPath)
+	return readSingleArtifactContent(reader, 0, input.ArtifactPath), nil
 }
 
 // Erase erases a CI/CD job's trace log and artifacts via the GitLab
@@ -925,47 +943,87 @@ func DeleteProjectArtifacts(ctx context.Context, client *gitlabclient.Client, in
 	return nil
 }
 
-// readArtifactContent reads up to [maxArtifactBytes] from a job
-// artifact stream and base64-encodes the bytes. Sets the Truncated
-// flag when the underlying reader had more data than the limit.
-func readArtifactContent(reader io.Reader, jobID int64) (ArtifactsOutput, error) {
-	buf := make([]byte, maxArtifactBytes+1)
-	n, err := io.ReadFull(reader, buf)
-	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
-		return ArtifactsOutput{}, toolutil.WrapErrWithMessage("readArtifact", err)
+// errArtifactTooLarge is the way out for an archive or report the download
+// by job ID will not return, whichever ceiling stopped it: one file of the
+// archive can be read on its own, and its path is one of the job's
+// artifacts:paths, since no action lists the entries of an archive.
+const errArtifactTooLarge = "the artifact is too large to return in one MCP response; read one file of it with job.download_single_artifact, taking its path from the job's artifacts:paths in .gitlab-ci.yml"
+
+// errRefArtifactTooLarge is [errArtifactTooLarge] for the download by ref,
+// whose caller holds a ref and a job name and no job ID: the one-file read
+// that takes the same two.
+const errRefArtifactTooLarge = "the artifact is too large to return in one MCP response; read one file of it with job.download_single_artifact_by_ref for the same ref and job, taking its path from the job's artifacts:paths in .gitlab-ci.yml"
+
+// errSingleArtifactTooLarge is the way out for one file the client-wide
+// response ceiling stopped before any of it was read.
+const errSingleArtifactTooLarge = "the file is larger than this server reads from GitLab in one response; download it from GitLab directly (GET /projects/:id/jobs/:job_id/artifacts/*artifact_path)"
+
+// The encodings a single artifact's content is returned in.
+const (
+	encodingText   = "text"
+	encodingBase64 = "base64"
+)
+
+// readArtifactContent returns a job's archive, or the report file_type
+// named, base64-encoded when it holds at most [maxArtifactBytes], and its
+// real size with Truncated set and no content when it is larger.
+//
+// A prefix is never returned: the zip archive keeps its central directory at
+// the end, so its first MiB cannot be opened at all, and a gzip report's
+// prefix cannot be decompressed whole either. It used to be returned anyway,
+// base64-encoded, as some 350k tokens a model could do nothing with. client-go
+// hands the body back already read, so its size is known without counting.
+func readArtifactContent(reader *bytes.Reader, jobID int64) ArtifactsOutput {
+	size := int(reader.Size())
+	out := ArtifactsOutput{JobID: jobID, Size: size, Truncated: size > maxArtifactBytes}
+	if out.Truncated {
+		return out
 	}
-	truncated := n > maxArtifactBytes
-	if truncated {
-		n = maxArtifactBytes
-	}
-	return ArtifactsOutput{
-		JobID:     jobID,
-		Size:      n,
-		Content:   base64.StdEncoding.EncodeToString(buf[:n]),
-		Truncated: truncated,
-	}, nil
+	data := make([]byte, size)
+	_, _ = reader.Read(data) // a bytes.Reader holding size bytes fills data whole
+	out.Content = base64.StdEncoding.EncodeToString(data)
+	return out
 }
 
-// readSingleArtifactContent reads up to [maxArtifactBytes] from a
-// single artifact file stream and returns the raw bytes (not
-// base64-encoded). Sets the Truncated flag when the file was larger.
-func readSingleArtifactContent(reader io.Reader, jobID int64, path string) (SingleArtifactOutput, error) {
-	buf := make([]byte, maxArtifactBytes+1)
-	n, err := io.ReadFull(reader, buf)
-	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
-		return SingleArtifactOutput{}, toolutil.WrapErrWithMessage("readSingleArtifact", err)
+// readSingleArtifactContent returns one artifact file: as text when its
+// bytes are valid UTF-8, base64-encoded otherwise, the encoding field saying
+// which, so a binary file reaches the caller byte for byte. Its bytes used to
+// be put into a JSON string as they were, and every invalid UTF-8 byte came
+// back as U+FFFD.
+//
+// A file over [maxArtifactBytes] reports its real size with Truncated set.
+// Text keeps its first MiB, cut back to the last whole character so that what
+// it returns is still valid UTF-8, since a prefix of a log or a report is
+// readable; a binary keeps nothing, since a prefix of one is not.
+func readSingleArtifactContent(reader *bytes.Reader, jobID int64, path string) SingleArtifactOutput {
+	size := int(reader.Size())
+	out := SingleArtifactOutput{JobID: jobID, ArtifactPath: path, Size: size, Truncated: size > maxArtifactBytes}
+	data := make([]byte, min(size, maxArtifactBytes))
+	_, _ = reader.Read(data) // a bytes.Reader holding at least len(data) bytes fills it whole
+	if out.Truncated {
+		data = withoutCutRune(data)
 	}
-	truncated := n > maxArtifactBytes
-	if truncated {
-		n = maxArtifactBytes
+	switch {
+	case utf8.Valid(data):
+		out.Encoding, out.Content = encodingText, string(data)
+	case !out.Truncated:
+		out.Encoding, out.Content = encodingBase64, base64.StdEncoding.EncodeToString(data)
 	}
-	return SingleArtifactOutput{
-		JobID:        jobID,
-		ArtifactPath: path,
-		Size:         n,
-		Content:      string(buf[:n]),
-		Truncated:    truncated,
-	}, nil
+	return out
+}
+
+// withoutCutRune drops the bytes of a character a byte limit cut in two
+// from the end of data, at most utf8.UTFMax-1 of them: what is left of a
+// multi-byte character decodes as a one-byte error rune, and a whole one
+// does not.
+func withoutCutRune(data []byte) []byte {
+	for range utf8.UTFMax - 1 {
+		if r, n := utf8.DecodeLastRune(data); r != utf8.RuneError || n != 1 {
+			break
+		}
+		data = data[:len(data)-1]
+	}
+	return data
 }
 
 // ---------------------------------------------------------------------------

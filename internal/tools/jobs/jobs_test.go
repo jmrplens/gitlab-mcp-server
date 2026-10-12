@@ -1028,87 +1028,179 @@ func TestGetArtifacts_NotFound_HintNamesTheFileType(t *testing.T) {
 	}
 }
 
-// oneMiB is the limit the artifact cards' warning names, written as its own
-// number so no test here can follow maxArtifactBytes wherever it goes.
+// oneMiB is the limit the artifact cards name, written as its own number so
+// no test here can follow maxArtifactBytes wherever it goes.
 const oneMiB = 1048576
 
-// artifactLimitCases are the two sides of the artifact limit: exactly the
-// limit is kept whole and unmarked, one byte more is cut to it and marked.
-func artifactLimitCases() []struct {
-	name          string
-	size          int
-	wantTruncated bool
-} {
-	return []struct {
-		name          string
-		size          int
-		wantTruncated bool
-	}{
-		{"exactly the limit is kept whole", oneMiB, false},
-		{"one byte over is cut to the limit", oneMiB + 1, true},
-	}
+// serveArtifact answers path with body and refuses anything else.
+func serveArtifact(t *testing.T, path, body string) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == path {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(body))
+			return
+		}
+		http.NotFound(w, r)
+	}))
 }
 
-// TestGetArtifacts_LimitIsTheMebibyteTheCardPromises holds the archive limit
-// to the figure the card's warning states, from both sides of the boundary.
-// The truncation tests before it measured the limit against the constant that
-// set it, so a constant that shrank passed them.
-func TestGetArtifacts_LimitIsTheMebibyteTheCardPromises(t *testing.T) {
-	for _, tt := range artifactLimitCases() {
-		t.Run(tt.name, func(t *testing.T) {
-			body := strings.Repeat("x", tt.size-1) + "$"
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method == http.MethodGet && r.URL.Path == pathJobArtifacts {
-					w.Header().Set(testHeaderContentType, "application/zip")
-					w.WriteHeader(http.StatusOK)
-					_, _ = w.Write([]byte(body))
-					return
-				}
-				http.NotFound(w, r)
-			}))
-
-			out, err := GetArtifacts(context.Background(), client, ArtifactsInput{ProjectID: "42", JobID: 100})
+// TestGetArtifacts_ArchiveOverTheLimit_ReturnsItsSizeAndNoContent holds
+// the archive limit to the mebibyte the card names, from both sides: an
+// archive that fits comes back whole, and one byte more comes back with its
+// real size, truncated set and no content at all. It used to come back cut
+// to its first MiB, base64-encoded: a zip keeps its central directory at the
+// end, so the prefix could not be opened, and it cost a model some 350k
+// tokens of nothing it could use.
+func TestGetArtifacts_ArchiveOverTheLimit_ReturnsItsSizeAndNoContent(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		size int
+	}{{"exactly the limit is returned whole", oneMiB}, {"one byte over is withheld", oneMiB + 1}} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := strings.Repeat("x", tc.size-1) + "$"
+			out, err := GetArtifacts(t.Context(), serveArtifact(t, pathJobArtifacts, body), ArtifactsInput{ProjectID: "42", JobID: 100})
 			if err != nil {
 				t.Fatalf("GetArtifacts() unexpected error: %v", err)
 			}
-			if out.Truncated != tt.wantTruncated || out.Size != oneMiB {
-				t.Errorf("Truncated/Size = %v/%d, want %v/%d for a %d-byte archive", out.Truncated, out.Size, tt.wantTruncated, oneMiB, tt.size)
+			over := tc.size > oneMiB
+			if out.Truncated != over || out.Size != tc.size {
+				t.Errorf("Truncated/Size = %v/%d, want %v/%d", out.Truncated, out.Size, over, tc.size)
 			}
-			decoded, decodeErr := base64.StdEncoding.DecodeString(out.Content)
-			if decodeErr != nil || string(decoded) != body[:oneMiB] {
-				t.Errorf("Content decodes to %d bytes (err %v), want the first %d bytes of the archive", len(decoded), decodeErr, oneMiB)
+			want := base64.StdEncoding.EncodeToString([]byte(body))
+			if over {
+				want = ""
+			}
+			if out.Content != want {
+				t.Errorf("Content holds %d characters, want %d", len(out.Content), len(want))
 			}
 		})
 	}
 }
 
-// TestDownloadSingleArtifact_LimitIsTheMebibyteTheCardPromises is the same
-// boundary on the single-file path, which reads through its own copy of the
-// truncation.
-func TestDownloadSingleArtifact_LimitIsTheMebibyteTheCardPromises(t *testing.T) {
-	for _, tt := range artifactLimitCases() {
-		t.Run(tt.name, func(t *testing.T) {
-			body := strings.Repeat("x", tt.size-1) + "$"
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/jobs/100/artifacts/big.bin" {
-					w.WriteHeader(http.StatusOK)
-					_, _ = w.Write([]byte(body))
-					return
-				}
-				http.NotFound(w, r)
-			}))
+// TestDownloadArtifacts_ArchiveOverTheLimit_ReturnsItsSizeAndNoContent is
+// the same rule on the by-ref download, which returns through the same read.
+func TestDownloadArtifacts_ArchiveOverTheLimit_ReturnsItsSizeAndNoContent(t *testing.T) {
+	body := strings.Repeat("x", oneMiB+1)
+	client := serveArtifact(t, "/api/v4/projects/42/jobs/artifacts/main/download", body)
+	out, err := DownloadArtifacts(t.Context(), client, DownloadArtifactsInput{ProjectID: "42", RefName: "main", JobName: "build"})
+	if err != nil {
+		t.Fatalf("DownloadArtifacts() unexpected error: %v", err)
+	}
+	if !out.Truncated || out.Size != oneMiB+1 || out.Content != "" {
+		t.Errorf("Truncated/Size/Content = %v/%d/%d characters, want true/%d/none", out.Truncated, out.Size, len(out.Content), oneMiB+1)
+	}
+}
 
-			out, err := DownloadSingleArtifact(context.Background(), client, SingleArtifactInput{ProjectID: "42", JobID: 100, ArtifactPath: "big.bin"})
+// TestArtifacts_ResponseOverTheClientCeiling_NamesTheSingleFileRead verifies
+// that an archive the client-wide response ceiling stops is answered with
+// the way out, a read of one file of it, rather than a bare error, and that
+// the way out takes what the caller has: the read by job ID after the
+// download by job ID, and the read by ref after the download by ref, whose
+// caller holds a ref and a job name and no job ID.
+func TestArtifacts_ResponseOverTheClientCeiling_NamesTheSingleFileRead(t *testing.T) {
+	client := serveArtifact(t, pathJobArtifacts, strings.Repeat("x", 4096))
+	client.SetMaxResponseBytes(1024)
+	_, err := GetArtifacts(t.Context(), client, ArtifactsInput{ProjectID: "42", JobID: 100})
+	if err == nil || !strings.Contains(err.Error(), "job.download_single_artifact") || strings.Contains(err.Error(), "_by_ref") {
+		t.Fatalf("GetArtifacts() error = %v, want it to name job.download_single_artifact", err)
+	}
+	client = serveArtifact(t, "/api/v4/projects/42/jobs/artifacts/main/download", strings.Repeat("x", 4096))
+	client.SetMaxResponseBytes(1024)
+	_, err = DownloadArtifacts(t.Context(), client, DownloadArtifactsInput{ProjectID: "42", RefName: "main", JobName: "build"})
+	if err == nil || !strings.Contains(err.Error(), "job.download_single_artifact_by_ref") {
+		t.Fatalf("DownloadArtifacts() error = %v, want it to name job.download_single_artifact_by_ref", err)
+	}
+}
+
+// TestSingleArtifact_ResponseOverTheClientCeiling_NamesTheWayOut verifies
+// that a file the client-wide response ceiling stops is answered with the
+// route to download it from GitLab directly, by job and by ref.
+func TestSingleArtifact_ResponseOverTheClientCeiling_NamesTheWayOut(t *testing.T) {
+	client := serveArtifact(t, "/api/v4/projects/42/jobs/100/artifacts/out.bin", strings.Repeat("x", 4096))
+	client.SetMaxResponseBytes(1024)
+	_, err := DownloadSingleArtifact(t.Context(), client, SingleArtifactInput{ProjectID: "42", JobID: 100, ArtifactPath: "out.bin"})
+	if err == nil || !strings.Contains(err.Error(), "download it from GitLab directly") {
+		t.Fatalf("DownloadSingleArtifact() error = %v, want the way out", err)
+	}
+	client = serveArtifact(t, "/api/v4/projects/42/jobs/artifacts/main/raw/out.bin", strings.Repeat("x", 4096))
+	client.SetMaxResponseBytes(1024)
+	_, err = DownloadSingleArtifactByRef(t.Context(), client, SingleArtifactRefInput{ProjectID: "42", RefName: "main", ArtifactPath: "out.bin", JobName: "build"})
+	if err == nil || !strings.Contains(err.Error(), "download it from GitLab directly") {
+		t.Fatalf("DownloadSingleArtifactByRef() error = %v, want the way out", err)
+	}
+}
+
+// TestDownloadSingleArtifact_Content_KeepsEveryByte verifies that a single
+// artifact comes back as text when its bytes are valid UTF-8 and base64
+// otherwise, the encoding field saying which, so a binary file survives the
+// JSON result byte for byte. Its bytes used to be put into a JSON string as
+// they were, and every invalid UTF-8 byte of a PNG came back as U+FFFD.
+func TestDownloadSingleArtifact_Content_KeepsEveryByte(t *testing.T) {
+	binary := string([]byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xff, 0xfe, 0x00, 0x80})
+	for _, tc := range []struct {
+		name, body, wantEncoding, wantContent string
+	}{
+		{"text", "ok: 3 passed\nñ done\n", "text", "ok: 3 passed\nñ done\n"},
+		{"binary", binary, "base64", base64.StdEncoding.EncodeToString([]byte(binary))},
+		{"empty", "", "text", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := serveArtifact(t, "/api/v4/projects/42/jobs/100/artifacts/out.bin", tc.body)
+			out, err := DownloadSingleArtifact(t.Context(), client, SingleArtifactInput{ProjectID: "42", JobID: 100, ArtifactPath: "out.bin"})
 			if err != nil {
-				t.Fatalf("DownloadSingleArtifact() unexpected error: %v", err)
+				t.Fatalf("DownloadSingleArtifact() error: %v", err)
 			}
-			if out.Truncated != tt.wantTruncated || out.Size != oneMiB {
-				t.Errorf("Truncated/Size = %v/%d, want %v/%d for a %d-byte file", out.Truncated, out.Size, tt.wantTruncated, oneMiB, tt.size)
-			}
-			if out.Content != body[:oneMiB] {
-				t.Errorf("Content is %d bytes, want the first %d bytes of the file", len(out.Content), oneMiB)
+			if out.Encoding != tc.wantEncoding || out.Content != tc.wantContent || out.Size != len(tc.body) || out.Truncated {
+				t.Errorf("got encoding %q, %d characters, size %d, truncated %v; want %q, %d, %d, false",
+					out.Encoding, len(out.Content), out.Size, out.Truncated, tc.wantEncoding, len(tc.wantContent), len(tc.body))
 			}
 		})
+	}
+}
+
+// TestDownloadSingleArtifact_OverTheLimit_KeepsAReadableTextPrefix verifies
+// the single file over the mebibyte: text keeps its first mebibyte, cut back
+// to the last whole character so the prefix is still valid UTF-8, with the
+// real size and truncated set; a binary over the limit is withheld, since a
+// prefix of it is no more readable than one of an archive.
+func TestDownloadSingleArtifact_OverTheLimit_KeepsAReadableTextPrefix(t *testing.T) {
+	// The two-byte "é" straddles the limit, so a byte cut leaves half of it.
+	text := strings.Repeat("x", oneMiB-1) + "é" + "tail"
+	binary := strings.Repeat("\xff", oneMiB+1)
+	for _, tc := range []struct {
+		name, body, wantEncoding, wantContent string
+	}{
+		{"text", text, "text", strings.Repeat("x", oneMiB-1)},
+		{"binary", binary, "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := serveArtifact(t, "/api/v4/projects/42/jobs/artifacts/main/raw/big.out", tc.body)
+			out, err := DownloadSingleArtifactByRef(t.Context(), client, SingleArtifactRefInput{ProjectID: "42", RefName: "main", ArtifactPath: "big.out", JobName: "build"})
+			if err != nil {
+				t.Fatalf("DownloadSingleArtifactByRef() error: %v", err)
+			}
+			if out.Encoding != tc.wantEncoding || out.Content != tc.wantContent || out.Size != len(tc.body) || !out.Truncated {
+				t.Errorf("got encoding %q, %d characters, size %d, truncated %v; want %q, %d, %d, true",
+					out.Encoding, len(out.Content), out.Size, out.Truncated, tc.wantEncoding, len(tc.wantContent), len(tc.body))
+			}
+		})
+	}
+}
+
+// TestDownloadSingleArtifact_ExactlyTheLimit_IsWhole verifies that a single
+// file exactly a mebibyte long comes back whole and is not marked truncated:
+// only a file over the limit loses anything, and a binary one loses all of it.
+func TestDownloadSingleArtifact_ExactlyTheLimit_IsWhole(t *testing.T) {
+	body := strings.Repeat("\xff", oneMiB)
+	client := serveArtifact(t, "/api/v4/projects/42/jobs/100/artifacts/out.bin", body)
+	out, err := DownloadSingleArtifact(t.Context(), client, SingleArtifactInput{ProjectID: "42", JobID: 100, ArtifactPath: "out.bin"})
+	if err != nil {
+		t.Fatalf("DownloadSingleArtifact() error: %v", err)
+	}
+	if out.Truncated || out.Encoding != "base64" || out.Content != base64.StdEncoding.EncodeToString([]byte(body)) || out.Size != oneMiB {
+		t.Errorf("got encoding %q, %d characters, size %d, truncated %v; want the whole mebibyte base64-encoded",
+			out.Encoding, len(out.Content), out.Size, out.Truncated)
 	}
 }
 
@@ -1528,7 +1620,7 @@ func TestReadHandlers_NotFoundHint_GatedOnTheStatus(t *testing.T) {
 			_, e := DownloadArtifacts(ctx, c, DownloadArtifactsInput{ProjectID: "42", RefName: "main", JobName: "build"})
 			return e
 		}},
-		{"DownloadSingleArtifact", "job.artifacts to list", func(c *gitlabclient.Client) error {
+		{"DownloadSingleArtifact", "artifacts:paths in .gitlab-ci.yml", func(c *gitlabclient.Client) error {
 			_, e := DownloadSingleArtifact(ctx, c, SingleArtifactInput{ProjectID: "42", JobID: 100, ArtifactPath: "a.txt"})
 			return e
 		}},
@@ -2766,41 +2858,67 @@ func TestFormatArtifactsMarkdown_WithJobID(t *testing.T) {
 	}
 }
 
-// artifactsHints is the guidance section an artifacts download closes with.
+// artifactsHints is the guidance section an artifacts download by job ID
+// closes with.
 const artifactsHints = "\n---\n💡 **Next steps:**\n" +
 	"- Use action 'job.download_single_artifact' to fetch one file out of the archive instead\n"
 
+// artifactsByRefHints is the guidance section the by-ref download closes
+// with: the one-file read that takes the same ref and job name, since its
+// caller has no job ID to give the read by job ID.
+const artifactsByRefHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'job.download_single_artifact_by_ref' to fetch one file out of the archive instead, for the same ref and job\n"
+
 // TestFormatArtifactsMarkdown_WithoutJobID checks the card of the by-ref
 // download, which answers for a ref rather than for a job ID and must not
-// print "Job #0", and whose note names no file_type: that route declares
-// none, so the content is always the zip archive.
+// print "Job #0", whose note names no file_type: that route declares none,
+// so the content is always the zip archive, and whose next step is the
+// one-file read by ref.
 func TestFormatArtifactsMarkdown_WithoutJobID(t *testing.T) {
 	md := FormatArtifactsMarkdown(ArtifactsOutput{Size: 512})
 	want := "## Artifacts\n\n" +
 		"- **Size (bytes)**: 512\n" +
 		"\nThe zip archive is base64-encoded. Decode it to extract the files.\n" +
-		artifactsHints
+		artifactsByRefHints
 	if md != want {
 		t.Errorf("FormatArtifactsMarkdown(no job)\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatArtifactsMarkdown_Truncated checks that a cut archive is marked
-// with the warning sign rather than a tick, which on "Truncated" reads as
-// success.
-func TestFormatArtifactsMarkdown_Truncated(t *testing.T) {
+// TestFormatArtifactsMarkdown_ByRefOverTheLimit_NamesTheReadByRef checks the
+// card of a by-ref archive withheld for its size: the note sends the caller
+// to the one-file read by ref, for the same ref and job, rather than to the
+// read by job ID, which wants a job ID this caller does not have.
+func TestFormatArtifactsMarkdown_ByRefOverTheLimit_NamesTheReadByRef(t *testing.T) {
+	md := FormatArtifactsMarkdown(ArtifactsOutput{Size: 3000288, Truncated: true})
+	want := "## Artifacts\n\n" +
+		"- **Size (bytes)**: 3000288\n" +
+		"- ⚠️ **Over the 1 MB one response carries, so no content is returned**\n" +
+		"\nA prefix of an archive cannot be opened, so none is returned. Read one file of it with job.download_single_artifact_by_ref, for the same ref and job: its path is one of the job's artifacts:paths in .gitlab-ci.yml.\n" +
+		artifactsByRefHints
+	if md != want {
+		t.Errorf("FormatArtifactsMarkdown(by ref, over the limit)\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatArtifactsMarkdown_OverTheLimit_SaysWhereToReadInstead checks
+// the card of an archive withheld for its size: a warning, not a tick, that
+// no content came back, and a note naming the one-file read and where its
+// path comes from, instead of telling a model to decode content that is not
+// there.
+func TestFormatArtifactsMarkdown_OverTheLimit_SaysWhereToReadInstead(t *testing.T) {
 	md := FormatArtifactsMarkdown(ArtifactsOutput{
 		JobID:     100,
-		Size:      1048576,
+		Size:      3000288,
 		Truncated: true,
 	})
 	want := "## Job #100 Artifacts\n\n" +
-		"- **Size (bytes)**: 1048576\n" +
-		"- ⚠️ **Truncated at 1 MB**\n" +
-		"\nThe content is base64-encoded as GitLab stores it: the zip archive, or the report file_type named, which may be gzip-compressed. Decode it before reading.\n" +
+		"- **Size (bytes)**: 3000288\n" +
+		"- ⚠️ **Over the 1 MB one response carries, so no content is returned**\n" +
+		"\nA prefix of an archive or a compressed report cannot be opened, so none is returned. Read one file of it with job.download_single_artifact: its path is one of the job's artifacts:paths in .gitlab-ci.yml.\n" +
 		artifactsHints
 	if md != want {
-		t.Errorf("FormatArtifactsMarkdown(truncated)\n got %q\nwant %q", md, want)
+		t.Errorf("FormatArtifactsMarkdown(over the limit)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -2814,10 +2932,12 @@ func TestFormatSingleArtifactMarkdown_WithJobID(t *testing.T) {
 		JobID:        100,
 		ArtifactPath: "report.txt",
 		Size:         256,
+		Encoding:     "text",
 		Content:      "test report content",
 	})
 	want := "## Job #100: report.txt\n\n" +
 		"- **Size (bytes)**: 256\n" +
+		"- **Encoding**: text\n" +
 		"\n```\ntest report content\n```\n" +
 		singleArtifactHints
 	if md != want {
@@ -2835,10 +2955,12 @@ func TestFormatSingleArtifactMarkdown_WithoutJobID(t *testing.T) {
 	md := FormatSingleArtifactMarkdown(SingleArtifactOutput{
 		ArtifactPath: "output.log",
 		Size:         64,
+		Encoding:     "text",
 		Content:      "log data",
 	})
 	want := "## output.log\n\n" +
 		"- **Size (bytes)**: 64\n" +
+		"- **Encoding**: text\n" +
 		"\n```\nlog data\n```\n" +
 		singleArtifactHints
 	if md != want {
@@ -2846,23 +2968,50 @@ func TestFormatSingleArtifactMarkdown_WithoutJobID(t *testing.T) {
 	}
 }
 
-// TestFormatSingleArtifactMarkdown_Truncated checks that a cut file is marked
-// with the warning sign.
+// TestFormatSingleArtifactMarkdown_Truncated checks that a cut text file is
+// marked with the warning sign and shows the prefix it kept.
 func TestFormatSingleArtifactMarkdown_Truncated(t *testing.T) {
 	md := FormatSingleArtifactMarkdown(SingleArtifactOutput{
 		JobID:        100,
-		ArtifactPath: "big.bin",
-		Size:         1048576,
+		ArtifactPath: "big.log",
+		Size:         2097152,
+		Encoding:     "text",
 		Content:      "...",
 		Truncated:    true,
 	})
-	want := "## Job #100: big.bin\n\n" +
-		"- **Size (bytes)**: 1048576\n" +
+	want := "## Job #100: big.log\n\n" +
+		"- **Size (bytes)**: 2097152\n" +
+		"- **Encoding**: text\n" +
 		"- ⚠️ **Truncated at 1 MB**\n" +
 		"\n```\n...\n```\n" +
 		singleArtifactHints
 	if md != want {
 		t.Errorf("FormatSingleArtifactMarkdown(truncated)\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatSingleArtifactMarkdown_Binary checks the two binary cards: one
+// that fits says its content is base64 and fences it, and one over the limit
+// says no content came back and where to get the file instead.
+func TestFormatSingleArtifactMarkdown_Binary(t *testing.T) {
+	fits := FormatSingleArtifactMarkdown(SingleArtifactOutput{JobID: 100, ArtifactPath: "logo.png", Size: 12, Encoding: "base64", Content: "iVBORw0KGgr//gCA"})
+	wantFits := "## Job #100: logo.png\n\n" +
+		"- **Size (bytes)**: 12\n" +
+		"- **Encoding**: base64\n" +
+		"\nThe file is not text, so its bytes are base64-encoded. Decode them before use.\n" +
+		"\n```\niVBORw0KGgr//gCA\n```\n" +
+		singleArtifactHints
+	if fits != wantFits {
+		t.Errorf("FormatSingleArtifactMarkdown(binary)\n got %q\nwant %q", fits, wantFits)
+	}
+	over := FormatSingleArtifactMarkdown(SingleArtifactOutput{JobID: 100, ArtifactPath: "big.bin", Size: 2097152, Truncated: true})
+	wantOver := "## Job #100: big.bin\n\n" +
+		"- **Size (bytes)**: 2097152\n" +
+		"- ⚠️ **Over the 1 MB one response carries, so no content is returned**\n" +
+		"\nA prefix of a binary file cannot be used, so none is returned. Download the file from GitLab directly.\n" +
+		singleArtifactHints
+	if over != wantOver {
+		t.Errorf("FormatSingleArtifactMarkdown(binary over the limit)\n got %q\nwant %q", over, wantOver)
 	}
 }
 

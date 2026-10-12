@@ -10,6 +10,7 @@
 package common
 
 import (
+	"bytes"
 	"encoding/base64"
 	"slices"
 	"strings"
@@ -260,6 +261,73 @@ func TestJob_Lifecycle_ArtifactsManualPlayCancelRetryAndErase(t *testing.T) {
 		erased := harness.Do[jobs.Output](s, actionJobErase, byBuild)
 		if erased.ID != build.ID {
 			e.T.Errorf("erase answered job %d, want %d", erased.ID, build.ID)
+		}
+	})
+}
+
+// The job of jobLargeArtifactsCIYAML, and the binary file it writes beside a
+// blob larger than the one MiB a response carries of an archive.
+const (
+	jobLargeArtifactsJob  = "large-artifacts"
+	jobBinaryArtifactPath = "out/logo.bin"
+)
+
+// jobBinaryArtifactBytes is what the job writes to jobBinaryArtifactPath: a
+// PNG signature and four bytes no UTF-8 decoder keeps, which a JSON string
+// used to turn into U+FFFD.
+var jobBinaryArtifactBytes = []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 0xff, 0xfe, 0x00, 0x80}
+
+// jobLargeArtifactsCIYAML runs one job whose archive holds three million
+// random bytes, which no compression brings under a MiB, and the binary file.
+const jobLargeArtifactsCIYAML = `stages:
+  - test
+
+` + jobLargeArtifactsJob + `:
+  stage: test
+  script:
+    - mkdir -p out
+    - head -c 3000000 /dev/urandom > out/blob.bin
+    - |
+      printf '\211PNG\r\n\032\n\377\376\000\200' > ` + jobBinaryArtifactPath + `
+  artifacts:
+    paths:
+      - out/
+    expire_in: 1 day
+  tags: []
+`
+
+// TestJob_Artifacts_LargeArchiveAndBinaryFile runs a pipeline whose archive
+// is larger than a MiB and reads it on every surface: the archive comes back
+// with its real size and no content, where its first MiB used to come back
+// base64-encoded and unopenable, and the binary file in it comes back
+// base64-encoded and byte for byte, where its invalid UTF-8 bytes used to
+// come back as U+FFFD.
+func TestJob_Artifacts_LargeArchiveAndBinaryFile(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedRunner), harness.Locks(harness.LockRunner))
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		project := fixture.NewProject(e, fixture.WithNamePrefix("bigart"))
+		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, jobLargeArtifactsCIYAML, "ci: write a large archive and a binary file")
+		pipeline := fixture.NewPipeline(e, project, project.DefaultBranch)
+		if pipeline.Status != "success" {
+			e.T.Fatalf("pipeline %d ended as %q, want success", pipeline.ID, pipeline.Status)
+		}
+		return project
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		params := map[string]any{"project_id": project.IDParam()}
+		byRef := withParams(params, map[string]any{"ref_name": project.DefaultBranch, "job": jobLargeArtifactsJob})
+
+		archive := harness.Do[jobs.ArtifactsOutput](s, actionJobDownloadArtifacts, byRef)
+		if !archive.Truncated || archive.Content != "" || archive.Size <= 1<<20 {
+			e.T.Errorf("the large archive answered truncated %v, %d bytes, %d characters of content; want its real size over a MiB and no content",
+				archive.Truncated, archive.Size, len(archive.Content))
+		}
+
+		single := harness.Do[jobs.SingleArtifactOutput](s, actionJobDownloadSingleArtifactByRef, withParams(byRef, map[string]any{"artifact_path": jobBinaryArtifactPath}))
+		decoded, err := base64.StdEncoding.DecodeString(single.Content)
+		if single.Encoding != "base64" || err != nil || !bytes.Equal(decoded, jobBinaryArtifactBytes) {
+			e.T.Errorf("the binary artifact answered encoding %q and %x (%v), want base64 of %x", single.Encoding, decoded, err, jobBinaryArtifactBytes)
 		}
 	})
 }

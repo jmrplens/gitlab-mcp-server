@@ -4,7 +4,6 @@ package jobs
 import (
 	"bytes"
 	"context"
-	"io"
 	"net/http"
 	"slices"
 	"strings"
@@ -288,57 +287,35 @@ func TestTrace_Truncation(t *testing.T) {
 	}
 }
 
-// TestReadArtifactContent_Truncation covers the truncation branch in
-// readArtifactContent when content exceeds maxArtifactBytes (1MB).
-func TestReadArtifactContent_Truncation(t *testing.T) {
-	bigData := bytes.Repeat([]byte("X"), maxArtifactBytes+500)
-	reader := bytes.NewReader(bigData)
-
-	out, err := readArtifactContent(reader, 1)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !out.Truncated {
-		t.Error("expected Truncated=true for oversized artifact")
-	}
-	if out.Size != maxArtifactBytes {
-		t.Errorf("Size = %d, want %d", out.Size, maxArtifactBytes)
+// TestReadArtifactContent_OverTheLimit_WithholdsTheContent covers the read
+// of an archive larger than maxArtifactBytes: its real size, truncated set,
+// and no content.
+func TestReadArtifactContent_OverTheLimit_WithholdsTheContent(t *testing.T) {
+	out := readArtifactContent(bytes.NewReader(bytes.Repeat([]byte("X"), maxArtifactBytes+500)), 1)
+	if !out.Truncated || out.Size != maxArtifactBytes+500 || out.Content != "" {
+		t.Errorf("out = truncated %v, size %d, %d characters; want true, %d, none", out.Truncated, out.Size, len(out.Content), maxArtifactBytes+500)
 	}
 }
 
-// TestReadSingleArtifactContent_Truncation covers the truncation branch in
-// readSingleArtifactContent when content exceeds maxArtifactBytes (1MB).
-func TestReadSingleArtifactContent_Truncation(t *testing.T) {
-	bigData := bytes.Repeat([]byte("Y"), maxArtifactBytes+500)
-	reader := bytes.NewReader(bigData)
-
-	out, err := readSingleArtifactContent(reader, 1, "report.txt")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+// TestWithoutCutRune_DropsOnlyACharacterTheLimitCut verifies that the text
+// prefix loses the bytes of a character the byte limit cut and nothing else:
+// a whole character, an ASCII end and an empty prefix stay as they are, and
+// at most utf8.UTFMax-1 bytes go.
+func TestWithoutCutRune_DropsOnlyACharacterTheLimitCut(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"empty", "", ""},
+		{"ascii end", "abc", "abc"},
+		{"whole two-byte end", "abé", "abé"},
+		{"half of a two-byte character", "ab\xc3", "ab"},
+		{"three bytes of a four-byte character", "ab\xf0\x9f\x98", "ab"},
+		{"never more than three bytes", "ab\xff\xff\xff\xff", "ab\xff"},
 	}
-	if !out.Truncated {
-		t.Error("expected Truncated=true for oversized artifact")
-	}
-	if out.Size != maxArtifactBytes {
-		t.Errorf("Size = %d, want %d", out.Size, maxArtifactBytes)
-	}
-}
-
-// TestReadArtifactContent_ReadError covers the read error branch in
-// readArtifactContent when the reader returns an unexpected error.
-func TestReadArtifactContent_ReadError(t *testing.T) {
-	_, err := readArtifactContent(&errorReader{}, 1)
-	if err == nil {
-		t.Fatal("expected error for failing reader, got nil")
-	}
-}
-
-// TestReadSingleArtifactContent_ReadError covers the read error branch in
-// readSingleArtifactContent when the reader returns an unexpected error.
-func TestReadSingleArtifactContent_ReadError(t *testing.T) {
-	_, err := readSingleArtifactContent(&errorReader{}, 1, "file.txt")
-	if err == nil {
-		t.Fatal("expected error for failing reader, got nil")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := string(withoutCutRune([]byte(c.in))); got != c.want {
+				t.Errorf("withoutCutRune(%q) = %q, want %q", c.in, got, c.want)
+			}
+		})
 	}
 }
 
@@ -378,13 +355,4 @@ func TestFormatOutputMarkdown_OptionalBranches(t *testing.T) {
 	if md := FormatOutputMarkdown(out); md != want {
 		t.Errorf("FormatOutputMarkdown(optional branches)\n got %q\nwant %q", md, want)
 	}
-}
-
-// errorReader is a test helper that always returns an error on Read.
-type errorReader struct{}
-
-// Read implements [io.Reader] by returning a closed-pipe error for artifact
-// content error-path tests.
-func (errorReader) Read([]byte) (int, error) {
-	return 0, io.ErrClosedPipe
 }

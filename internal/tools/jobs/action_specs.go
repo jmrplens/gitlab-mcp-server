@@ -22,8 +22,11 @@ const (
 	actionJobWait           = "job.wait"
 	actionJobDownloadArtfct = "job.download_artifacts"
 	actionJobDownloadSingle = "job.download_single_artifact"
-	actionPipelineGet       = "pipeline.get"
-	actionPipelineList      = "pipeline.list"
+	// actionJobDownloadSingleByRef is the one-file read by ref and job name,
+	// the next step of the by-ref download, whose caller has no job ID.
+	actionJobDownloadSingleByRef = "job.download_single_artifact_by_ref"
+	actionPipelineGet            = "pipeline.get"
+	actionPipelineList           = "pipeline.list"
 	// Commits are routes on the gitlab_repository catalog group, so the ID is
 	// repository.commit_get and never commit.get, which resolves to nothing.
 	actionCommitGet = "repository.commit_get"
@@ -309,7 +312,7 @@ func jobOptionsForAction(individualTool string, extraTags ...string) toolutil.Ac
 		}
 		options.IndividualTool.Description = "Wait for a CI job to finish, polling until terminal state or timeout. Returns: final job snapshot, wait duration, poll count, and timed-out flag. See also: gitlab_job_get, gitlab_job_trace, gitlab_job_retry."
 	case "gitlab_job_artifacts":
-		options.Usage = "Download the full artifact archive for a CI job by project_id and job_id. Use this to retrieve all build outputs as a base64-encoded archive, or one report the job produced (junit, cobertura, sast, dotenv and the rest) by naming it in file_type, which needs GitLab 19.4 or later: an older instance ignores file_type and answers with the archive. Prefer download_single_artifact for one file of the archive."
+		options.Usage = "Download the full artifact archive for a CI job by project_id and job_id. Use this to retrieve all build outputs as a base64-encoded archive, or one report the job produced (junit, cobertura, sast, dotenv and the rest) by naming it in file_type, which needs GitLab 19.4 or later: an older instance ignores file_type and answers with the archive. An artifact over 1 MB comes back with its size and no content, since a prefix of one cannot be opened. Prefer job.download_single_artifact for one file of the archive, taking its path from the job's artifacts:paths."
 		options.Aliases = []string{"download job artifacts", "get artifact archive", "fetch job artifacts", "download job junit report", "get job test report artifact"}
 		options.RelatedActions = []string{actionJobDownloadSingle, actionJobKeepArtifacts, actionJobGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -327,7 +330,7 @@ func jobOptionsForAction(individualTool string, extraTags ...string) toolutil.Ac
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("file_type", artifactFileTypes()...),
 		}
-		options.IndividualTool.Description = "Download the full artifact archive for a CI job, or one report named by file_type (GitLab 19.4 or later), base64-encoded and truncated at 1MB. Returns: size, content, and truncation flag. See also: gitlab_job_download_single_artifact, gitlab_job_keep_artifacts, gitlab_job_get."
+		options.IndividualTool.Description = "Download the full artifact archive for a CI job, or one report named by file_type (GitLab 19.4 or later), base64-encoded when it is 1 MB or less. Returns: size, content, and a truncated flag set when the artifact was larger and no content came back. See also: gitlab_job_download_single_artifact, gitlab_job_keep_artifacts, gitlab_job_get."
 	case "gitlab_job_download_artifacts":
 		options.Usage = "Download the latest successful artifacts for a ref by project_id, ref_name, and job name. Use this to fetch the most recent build output for a branch or tag without knowing the job ID."
 		options.Aliases = []string{"download latest artifacts", "get artifacts for ref", "fetch ref artifacts"}
@@ -340,7 +343,7 @@ func jobOptionsForAction(individualTool string, extraTags ...string) toolutil.Ac
 				ExampleBinding: `params.ref_name:"main"`,
 			},
 		}
-		options.IndividualTool.Description = "Download the latest successful artifacts archive for a ref and job name. Returns: archive size, content, and truncation flag. See also: gitlab_job_artifacts, gitlab_job_download_single_artifact, gitlab_job_get."
+		options.IndividualTool.Description = "Download the latest successful artifacts archive for a ref and job name, base64-encoded when it is 1 MB or less. Returns: archive size, content, and a truncated flag set when the archive was larger and no content came back. See also: gitlab_job_artifacts, gitlab_job_download_single_artifact, gitlab_job_get."
 	case "gitlab_job_download_single_artifact":
 		options.Usage = "Download one artifact file path from a job by job_id and artifact_path. Use when the task requests one artifact file by explicit path. Prefer job.artifacts for full archives."
 		options.Aliases = []string{"download single artifact", "get one artifact file", "fetch artifact by path"}
@@ -349,11 +352,11 @@ func jobOptionsForAction(individualTool string, extraTags ...string) toolutil.Ac
 			"project_id": guidanceProjectID(), "job_id": guidanceJobID(),
 			"artifact_path": {
 				SemanticRole:   "artifact_path",
-				ValueSource:    "Path of the file inside the artifact archive.",
+				ValueSource:    "Path of the file inside the artifact archive: one of the job's artifacts:paths in .gitlab-ci.yml, or a file under one.",
 				ExampleBinding: `params.artifact_path:"coverage/index.html"`,
 			},
 		}
-		options.IndividualTool.Description = "Download one artifact file from a job by job_id and artifact_path. Returns: file size, raw content, and truncation flag. See also: gitlab_job_artifacts, gitlab_job_download_artifacts, gitlab_job_get."
+		options.IndividualTool.Description = "Download one artifact file from a job by job_id and artifact_path. Returns: file size, the encoding (text, or base64 for a file that is not text), the content, and a truncated flag. See also: gitlab_job_artifacts, gitlab_job_download_artifacts, gitlab_job_get."
 	case "gitlab_job_download_single_artifact_by_ref":
 		options.Usage = "Download one artifact file by project_id, ref_name, job name, and artifact_path. Use this to fetch a single file from the latest successful job on a ref without knowing the job ID."
 		options.Aliases = []string{"download single artifact by ref", "get artifact file for ref", "fetch ref artifact path"}
@@ -367,11 +370,11 @@ func jobOptionsForAction(individualTool string, extraTags ...string) toolutil.Ac
 			},
 			"artifact_path": {
 				SemanticRole:   "artifact_path",
-				ValueSource:    "Path of the file inside the artifact archive.",
+				ValueSource:    "Path of the file inside the artifact archive: one of the job's artifacts:paths in .gitlab-ci.yml, or a file under one.",
 				ExampleBinding: `params.artifact_path:"coverage/index.html"`,
 			},
 		}
-		options.IndividualTool.Description = "Download one artifact file from the latest successful job on a ref by name and path. Returns: file size, raw content, and truncation flag. See also: gitlab_job_download_artifacts, gitlab_job_download_single_artifact, gitlab_job_get."
+		options.IndividualTool.Description = "Download one artifact file from the latest successful job on a ref by name and path. Returns: file size, the encoding (text, or base64 for a file that is not text), the content, and a truncated flag. See also: gitlab_job_download_artifacts, gitlab_job_download_single_artifact, gitlab_job_get."
 	case "gitlab_job_delete_artifacts":
 		options.Usage = "Delete the artifacts for one CI job by project_id and job_id. Use this destructive action to free storage for a finished job. Requires Maintainer+ role."
 		options.Aliases = []string{"delete job artifacts", "remove job artifacts", "purge job artifacts"}

@@ -201,11 +201,25 @@ func FormatArtifactsMarkdown(out ArtifactsOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, artifactsHeading(out))
 	c.Int("Size (bytes)", int64(out.Size))
-	c.Warn("Truncated at 1 MB", out.Truncated)
+	c.Warn(withheldWarning, out.Truncated)
 	c.Note(artifactsNote(out))
-	c.End(toolutil.HintAction(actionJobDownloadSingle, "fetch one file out of the archive instead"))
+	c.End(artifactsNextStep(out))
 	return b.String()
 }
+
+// artifactsNextStep is the one-file read that takes what the caller of each
+// download holds: the read by job ID after the download by job ID, and the
+// read by ref, for the same ref and job, after the download by ref, whose
+// caller has no job ID to give the other.
+func artifactsNextStep(out ArtifactsOutput) string {
+	if out.JobID > 0 {
+		return toolutil.HintAction(actionJobDownloadSingle, "fetch one file out of the archive instead")
+	}
+	return toolutil.HintAction(actionJobDownloadSingleByRef, "fetch one file out of the archive instead, for the same ref and job")
+}
+
+// withheldWarning marks an artifact returned with no content for its size.
+const withheldWarning = "Over the 1 MB one response carries, so no content is returned"
 
 // artifactsHeading names the job when the caller asked for one, since the
 // by-ref download answers for a ref rather than for a job ID.
@@ -220,8 +234,18 @@ func artifactsHeading(out ArtifactsOutput) string {
 // Only the download by job ID takes file_type (GitLab 19.4 declares it on
 // that route alone), so the by-ref download, which carries no job ID, is
 // always the zip archive and must not point a model at a parameter its
-// action does not have.
+// action does not have. An artifact withheld for its size has no content to
+// describe, and the note says where to read instead, which is a path no
+// action lists: the archive's entries are the job's artifacts:paths. The
+// by-ref download is sent to the one-file read by ref, since its caller has
+// a ref and a job name and no job ID.
 func artifactsNote(out ArtifactsOutput) string {
+	if out.Truncated && out.JobID > 0 {
+		return "A prefix of an archive or a compressed report cannot be opened, so none is returned. Read one file of it with job.download_single_artifact: its path is one of the job's artifacts:paths in .gitlab-ci.yml."
+	}
+	if out.Truncated {
+		return "A prefix of an archive cannot be opened, so none is returned. Read one file of it with job.download_single_artifact_by_ref, for the same ref and job: its path is one of the job's artifacts:paths in .gitlab-ci.yml."
+	}
 	if out.JobID > 0 {
 		return "The content is base64-encoded as GitLab stores it: the zip archive, or the report file_type named, which may be gzip-compressed. Decode it before reading."
 	}
@@ -236,7 +260,18 @@ func FormatSingleArtifactMarkdown(out SingleArtifactOutput) string {
 	// name in a zip, authored by whoever wrote the CI job.
 	c := toolutil.NewCard(&b, singleArtifactHeading(out))
 	c.Int("Size (bytes)", int64(out.Size))
-	c.Warn("Truncated at 1 MB", out.Truncated)
+	c.Field("Encoding", out.Encoding)
+	switch out.Encoding {
+	case "":
+		// Only a binary file over the limit comes back with no encoding: it
+		// has no content, since a prefix of one is of no use.
+		c.Warn(withheldWarning, out.Truncated)
+		c.Note("A prefix of a binary file cannot be used, so none is returned. Download the file from GitLab directly.")
+	case encodingBase64:
+		c.Note("The file is not text, so its bytes are base64-encoded. Decode them before use.")
+	default:
+		c.Warn("Truncated at 1 MB", out.Truncated)
+	}
 	// The fence is sized to the content: an artifact carrying a fence marker
 	// of its own must not close the block early.
 	c.Fence("", "", out.Content)
