@@ -4,7 +4,9 @@ package users
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -16,7 +18,7 @@ import (
 func TestBlockUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/users/42/block" {
-			w.WriteHeader(http.StatusCreated)
+			testutil.RespondJSON(w, http.StatusCreated, "true")
 			return
 		}
 		http.NotFound(w, r)
@@ -51,7 +53,7 @@ func TestBlockUser_InvalidUserID(t *testing.T) {
 func TestUnblockUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/users/42/unblock" {
-			w.WriteHeader(http.StatusCreated)
+			testutil.RespondJSON(w, http.StatusCreated, "true")
 			return
 		}
 		http.NotFound(w, r)
@@ -111,7 +113,7 @@ func TestActivateUser_Success(t *testing.T) {
 func TestDeactivateUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/users/42/deactivate" {
-			w.WriteHeader(http.StatusCreated)
+			testutil.RespondJSON(w, http.StatusCreated, "true")
 			return
 		}
 		http.NotFound(w, r)
@@ -174,6 +176,83 @@ func TestFormatAdminActionMarkdownString(t *testing.T) {
 			"- **ID**: 42\n"+
 			"- **Action**: block\n"+
 			"- **Success**: ✅\n")
+}
+
+// TestStateChanges_ReportWhatGitLabAnswered verifies block, unblock and
+// deactivate report what GitLab's answer says. GitLab answers all three with
+// 201 whether or not it changed anything, and says which in the body: true
+// when the state changed, false or null when it did not (an unblock of an
+// active user answers false, a block of a blocked user and a second
+// deactivate answer null). client-go reads the status alone (upstream-bugs
+// row 117), so each of those used to read as done.
+func TestStateChanges_ReportWhatGitLabAnswered(t *testing.T) {
+	actions := []stateChangeCase{
+		{"BlockUser", BlockUser, "/api/v4/users/42/block", "already blocked"},
+		{"UnblockUser", UnblockUser, "/api/v4/users/42/unblock", "not blocked"},
+		{"DeactivateUser", DeactivateUser, "/api/v4/users/42/deactivate", "already deactivated"},
+	}
+	for _, action := range actions {
+		for _, answer := range []string{"true", "false", "null"} {
+			t.Run(action.name+"_"+answer, func(t *testing.T) {
+				assertStateChangeAnswer(t, action, answer)
+			})
+		}
+	}
+}
+
+// stateChangeCase is one state change whose answer GitLab writes as a bool,
+// and what a user it changed nothing for usually is.
+type stateChangeCase struct {
+	name      string
+	fn        func(context.Context, *gitlabclient.Client, AdminActionInput) (AdminActionOutput, error)
+	path      string
+	unchanged string
+}
+
+// assertStateChangeAnswer answers the action's route with answer and holds
+// the output and its card to what that answer means.
+func assertStateChangeAnswer(t *testing.T, action stateChangeCase, answer string) {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == action.path {
+			testutil.RespondJSON(w, http.StatusCreated, answer)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := action.fn(context.Background(), client, AdminActionInput{UserID: 42})
+	if err != nil {
+		t.Fatalf("%s() unexpected error: %v", action.name, err)
+	}
+	if answer == "true" {
+		if !out.Success || out.Note != "" {
+			t.Errorf("%s() on true = %+v, want success and no note", action.name, out)
+		}
+		return
+	}
+	if out.Success || !strings.Contains(out.Note, "GitLab answered "+answer) || !strings.Contains(out.Note, action.unchanged) {
+		t.Errorf("%s() on %s = %+v, want no success and a note saying GitLab answered %s for a user who is %s",
+			action.name, answer, out, answer, action.unchanged)
+	}
+	if md := FormatAdminActionMarkdownString(out); !strings.Contains(md, out.Note) {
+		t.Errorf("the card of an unchanged %s does not say so:\n%s", action.name, md)
+	}
+}
+
+// TestStateChangeOutput_UnreadableAnswer_IsAnError verifies the reader of
+// GitLab's answer reports a body it cannot read as a bool, and a request that
+// recorded no answer, rather than calling either a success. The transport
+// hands it a body client-go decoded without complaint, so only a direct call
+// reaches these.
+func TestStateChangeOutput_UnreadableAnswer_IsAnError(t *testing.T) {
+	if _, err := stateChangeOutput(gitlabclient.CapturedBody([]byte(`{"message":"201 Created"}`)), "block_user", 42, "blocked", "already blocked"); err == nil ||
+		!strings.Contains(err.Error(), "block_user") {
+		t.Errorf("stateChangeOutput(object) error = %v, want the operation's refusal to read it", err)
+	}
+	var untouched gitlabclient.ResponseCapture
+	if _, err := stateChangeOutput(&untouched, "block_user", 42, "blocked", "already blocked"); !errors.Is(err, gitlabclient.ErrNoResponseCaptured) {
+		t.Errorf("stateChangeOutput(nothing captured) error = %v, want %v", err, gitlabclient.ErrNoResponseCaptured)
+	}
 }
 
 // TestAdminActions_TableDriven validates all admin state actions (block, unblock,
@@ -248,10 +327,17 @@ func assertAdminActionSuccess(t *testing.T, action struct {
 	}
 }
 
+// adminActionSuccessHandler answers the action's route with status, and with
+// the true GitLab sends for a state change it applied, which block, unblock
+// and deactivate read; a 204 carries no body.
 func adminActionSuccessHandler(method, path string, status int) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == method && r.URL.Path == path {
-			w.WriteHeader(status)
+			if status == http.StatusNoContent {
+				w.WriteHeader(status)
+				return
+			}
+			testutil.RespondJSON(w, status, "true")
 			return
 		}
 		http.NotFound(w, r)

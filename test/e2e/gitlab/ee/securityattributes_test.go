@@ -115,8 +115,10 @@ func TestSecurityAttributes_Lifecycle_AssignsToAProjectAndDeletes(t *testing.T) 
 		bulk := harness.Do[securityattributes.BulkUpdateOutput](s, actionSecurityAttributeBulkUpdate, map[string]any{
 			"project_ids": []int64{f.project.ID}, "attribute_ids": []int64{attribute.ID}, "mode": securityattributes.BulkUpdateModeAdd,
 		})
-		if bulk.Status != "success" {
-			e.T.Errorf("the bulk update answered status %q, want success: %+v", bulk.Status, bulk)
+		// GitLab answers once the update is queued, so the status says that
+		// and nothing more; the removal below is what observes it applied.
+		if bulk.Status != "queued" {
+			e.T.Errorf("the bulk update answered status %q, want queued: %+v", bulk.Status, bulk)
 		}
 
 		// The bulk update is a background job: GitLab's BulkUpdateService

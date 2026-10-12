@@ -601,16 +601,139 @@ func TestGet_Error(t *testing.T) {
 
 // TestDelete verifies Delete.
 func TestDelete(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			http.NotFound(w, r)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}))
+	var deleted atomic.Bool
+	client := testutil.NewTestClient(t, deleteHandler(t, "null", &deleted))
 	err := Delete(t.Context(), client, DeleteInput{ProjectID: "1", Name: "state1"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !deleted.Load() {
+		t.Error("Delete() did not send the delete of an unlocked state")
+	}
+}
+
+// deleteHandler answers what Delete asks of an unlocked or a locked state:
+// project 1 is group/project, the state read answers with lockedAt (a JSON
+// value, null for an unlocked state), and the delete records that it arrived.
+func deleteHandler(t *testing.T, lockedAt string, deleted *atomic.Bool) http.Handler {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"path_with_namespace":"group/project"}`)
+	})
+	mux.HandleFunc("POST /api/graphql", func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil || !strings.Contains(string(raw), `fullPath: \"group/project\"`) || !strings.Contains(string(raw), `name: \"state1\"`) {
+			t.Errorf("the state read asked %s (err %v), want state1 of group/project", raw, err)
+		}
+		testutil.RespondJSON(w, http.StatusOK,
+			`{"data":{"project":{"terraformState":{"name":"state1","createdAt":"2026-01-02T03:04:05Z","updatedAt":"2026-01-02T03:04:05Z","lockedAt":`+lockedAt+`}}}}`)
+	})
+	mux.HandleFunc("DELETE /api/v4/projects/1/terraform/state/state1", func(w http.ResponseWriter, _ *http.Request) {
+		deleted.Store(true)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	return mux
+}
+
+// TestDelete_LockedState_IsRefusedWithTheUnlockHint verifies a locked state
+// is refused before the delete is sent. GitLab answers the REST delete of a
+// locked state with 200 and deletes nothing, so sending it reported a delete
+// that never happened (upstream-bugs row 118); the state is read first and a
+// lock is reported with the action that releases it.
+func TestDelete_LockedState_IsRefusedWithTheUnlockHint(t *testing.T) {
+	var deleted atomic.Bool
+	client := testutil.NewTestClient(t, deleteHandler(t, `"2026-03-04T05:06:07Z"`, &deleted))
+	err := Delete(t.Context(), client, DeleteInput{ProjectID: "1", Name: "state1"})
+	if err == nil {
+		t.Fatal("Delete() of a locked state = nil, want the refusal")
+	}
+	for _, want := range []string{"gitlab_delete_terraform_state: ", "locked", "2026-03-04T05:06:07Z", "admin.terraform_state_unlock"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %q, want it to carry %q", err, want)
+			}
+		})
+	}
+	if deleted.Load() {
+		t.Error("Delete() sent the delete of a locked state, which GitLab answers as done without doing it")
+	}
+}
+
+// TestDelete_ProjectPath_IsReadWithoutAProjectLookup verifies a project_id
+// that is already a path, URL-encoded or not, is the state read's fullPath as
+// it stands: only a numeric ID needs the project's path looked up, since
+// GitLab's GraphQL project field takes no ID.
+func TestDelete_ProjectPath_IsReadWithoutAProjectLookup(t *testing.T) {
+	for _, projectID := range []string{"group/project", "group%2Fproject"} {
+		t.Run(projectID, func(t *testing.T) {
+			var deleted atomic.Bool
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /api/v4/projects/", func(w http.ResponseWriter, r *http.Request) {
+				t.Errorf("Delete() looked the project up at %s, want the path used as it stands", r.URL.Path)
+				http.NotFound(w, r)
+			})
+			mux.HandleFunc("POST /api/graphql", func(w http.ResponseWriter, r *http.Request) {
+				raw, _ := io.ReadAll(r.Body)
+				if !strings.Contains(string(raw), `fullPath: \"group/project\"`) {
+					t.Errorf("the state read asked %s, want group/project", raw)
+				}
+				testutil.RespondJSON(w, http.StatusOK, `{"data":{"project":{"terraformState":{"name":"state1","lockedAt":null}}}}`)
+			})
+			mux.HandleFunc("DELETE /api/v4/projects/", func(w http.ResponseWriter, r *http.Request) {
+				if !strings.HasSuffix(r.URL.Path, "/terraform/state/state1") {
+					t.Errorf("Delete() sent DELETE %s, want the state's route", r.URL.Path)
+				}
+				deleted.Store(true)
+				w.WriteHeader(http.StatusNoContent)
+			})
+			client := testutil.NewTestClient(t, mux)
+			if err := Delete(t.Context(), client, DeleteInput{ProjectID: toolutil.StringOrInt(projectID), Name: "state1"}); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !deleted.Load() {
+				t.Error("Delete() did not send the delete")
+			}
+		})
+	}
+}
+
+// TestDelete_MalformedProjectPath_SendsNothing verifies a project_id that is
+// neither an ID nor a path that unescapes is refused before any request.
+func TestDelete_MalformedProjectPath_SendsNothing(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("Delete() sent %s %s for a project_id it cannot read", r.Method, r.URL.Path)
+		http.NotFound(w, r)
+	}))
+	err := Delete(t.Context(), client, DeleteInput{ProjectID: "group%zzproject", Name: "state1"})
+	if err == nil || !strings.Contains(err.Error(), "gitlab_delete_terraform_state: ") || !strings.Contains(err.Error(), "group%zzproject") {
+		t.Errorf("Delete() error = %v, want the refusal naming the project_id", err)
+	}
+}
+
+// TestDelete_StateNotFound_SendsNoDelete verifies a state the read does not
+// find is reported with the hint that names how to find it, and no delete is
+// sent for it.
+func TestDelete_StateNotFound_SendsNoDelete(t *testing.T) {
+	var deleted atomic.Bool
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"path_with_namespace":"group/project"}`)
+	})
+	mux.HandleFunc("POST /api/graphql", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"project":{"terraformState":null}}}`)
+	})
+	mux.HandleFunc("DELETE /api/v4/projects/1/terraform/state/gone", func(w http.ResponseWriter, _ *http.Request) {
+		deleted.Store(true)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	client := testutil.NewTestClient(t, mux)
+	err := Delete(t.Context(), client, DeleteInput{ProjectID: "1", Name: "gone"})
+	if err == nil || !strings.Contains(err.Error(), "admin.terraform_state_list") {
+		t.Errorf("Delete() of a missing state error = %v, want the hint naming admin.terraform_state_list", err)
+	}
+	if deleted.Load() {
+		t.Error("Delete() sent a delete for a state it could not read")
 	}
 }
 
@@ -636,9 +759,17 @@ func TestDelete_Error(t *testing.T) {
 // returns was held by nothing: a hint that traded places with a sibling's
 // would have shipped.
 func TestDelete_Forbidden_HintsMaintainerRoleAndIrreversibility(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"path_with_namespace":"group/project"}`)
+	})
+	mux.HandleFunc("POST /api/graphql", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"project":{"terraformState":{"name":"x","lockedAt":null}}}}`)
+	})
+	mux.HandleFunc("DELETE /api/v4/projects/1/terraform/state/x", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
-	}))
+	})
+	client := testutil.NewTestClient(t, mux)
 	err := Delete(t.Context(), client, DeleteInput{ProjectID: "1", Name: "x"})
 	if err == nil {
 		t.Fatal(errExpectedErr)
@@ -1117,6 +1248,12 @@ func terraformHandler() http.Handler {
 		} else {
 			testutil.RespondJSON(w, http.StatusOK, graphQLGetResp)
 		}
+	})
+
+	// The project lookup the delete makes for a numeric project_id, before
+	// it reads the state, which the GraphQL route above answers unlocked.
+	mux.HandleFunc("GET /api/v4/projects/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"path_with_namespace":"group/project"}`)
 	})
 
 	// Delete state

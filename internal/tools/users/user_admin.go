@@ -3,6 +3,7 @@ package users
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -17,11 +18,41 @@ type AdminActionInput struct {
 	UserID int64 `json:"user_id" jsonschema:"The ID of the user,required"`
 }
 
-// AdminActionOutput represents the result of an admin state action.
+// AdminActionOutput represents the result of an admin state action. Note says
+// why an action GitLab answered without changing anything did not succeed.
 type AdminActionOutput struct {
 	UserID  int64  `json:"user_id"`
 	Action  string `json:"action"`
 	Success bool   `json:"success"`
+	Note    string `json:"note,omitempty"`
+}
+
+// stateChangeOutput reads what GitLab answered a block, an unblock or a
+// deactivate with. GitLab answers all three with 201 whether or not it changed
+// anything, and says which in the body: true when the user's state changed,
+// false or null when it did not, as for an unblock of a user who is not
+// blocked, a block of a blocked one or a second deactivate. client-go reads
+// the status alone and drops the body (upstream-bugs row 117), so the body is
+// read from the captured response (ADR-0021). unchanged names what a user
+// GitLab answers so for usually is.
+func stateChangeOutput(capture *gitlabclient.ResponseCapture, op string, userID int64, action, unchanged string) (AdminActionOutput, error) {
+	var changed *bool
+	if err := capture.Decode(&changed); err != nil {
+		return AdminActionOutput{}, fmt.Errorf("%s: read GitLab's answer: %w", op, err)
+	}
+	if changed != nil && *changed {
+		return AdminActionOutput{UserID: userID, Action: action, Success: true}, nil
+	}
+	answer := "null"
+	if changed != nil {
+		answer = "false"
+	}
+	return AdminActionOutput{
+		UserID: userID,
+		Action: action,
+		Note: "GitLab answered " + answer + " and changed nothing, which it answers for a user who is " + unchanged +
+			"; read the user with user.get to see the state it is in.",
+	}, nil
 }
 
 // BlockUser blocks a GitLab user (admin only).
@@ -32,12 +63,13 @@ func BlockUser(ctx context.Context, client *gitlabclient.Client, input AdminActi
 	if err := ctx.Err(); err != nil {
 		return AdminActionOutput{}, err
 	}
-	_, err := client.GL().Users.BlockUser(input.UserID, gl.WithContext(ctx))
+	captureCtx, captured := gitlabclient.WithResponseCapture(ctx)
+	_, err := client.GL().Users.BlockUser(input.UserID, gl.WithContext(captureCtx))
 	if err != nil {
 		return AdminActionOutput{}, toolutil.WrapErrWithStatusHint("block_user", err, http.StatusForbidden,
 			"blocking users requires admin token; cannot block already-blocked, ldap-blocked, or admin users; verify user_id with user.get")
 	}
-	return AdminActionOutput{UserID: input.UserID, Action: "blocked", Success: true}, nil
+	return stateChangeOutput(captured, "block_user", input.UserID, "blocked", "already blocked")
 }
 
 // UnblockUser unblocks a previously blocked GitLab user (admin only).
@@ -48,12 +80,13 @@ func UnblockUser(ctx context.Context, client *gitlabclient.Client, input AdminAc
 	if err := ctx.Err(); err != nil {
 		return AdminActionOutput{}, err
 	}
-	_, err := client.GL().Users.UnblockUser(input.UserID, gl.WithContext(ctx))
+	captureCtx, captured := gitlabclient.WithResponseCapture(ctx)
+	_, err := client.GL().Users.UnblockUser(input.UserID, gl.WithContext(captureCtx))
 	if err != nil {
 		return AdminActionOutput{}, toolutil.WrapErrWithStatusHint("unblock_user", err, http.StatusForbidden,
 			"unblocking users requires admin token; cannot unblock ldap-blocked users (use LDAP); user must currently be blocked")
 	}
-	return AdminActionOutput{UserID: input.UserID, Action: "unblocked", Success: true}, nil
+	return stateChangeOutput(captured, "unblock_user", input.UserID, "unblocked", "not blocked")
 }
 
 // BanUser bans a GitLab user (admin only).
@@ -112,12 +145,13 @@ func DeactivateUser(ctx context.Context, client *gitlabclient.Client, input Admi
 	if err := ctx.Err(); err != nil {
 		return AdminActionOutput{}, err
 	}
-	_, err := client.GL().Users.DeactivateUser(input.UserID, gl.WithContext(ctx))
+	captureCtx, captured := gitlabclient.WithResponseCapture(ctx)
+	_, err := client.GL().Users.DeactivateUser(input.UserID, gl.WithContext(captureCtx))
 	if err != nil {
 		return AdminActionOutput{}, toolutil.WrapErrWithStatusHint("deactivate_user", err, http.StatusForbidden,
 			"deactivating users requires admin token; user must have been inactive for >90 days; cannot deactivate admins or already-blocked users")
 	}
-	return AdminActionOutput{UserID: input.UserID, Action: "deactivated", Success: true}, nil
+	return stateChangeOutput(captured, "deactivate_user", input.UserID, "deactivated", "already deactivated")
 }
 
 // ApproveUser approves a pending GitLab user (admin only).
@@ -177,6 +211,7 @@ func FormatAdminActionMarkdownString(o AdminActionOutput) string {
 	card.Int("ID", o.UserID)
 	card.Field("Action", o.Action)
 	card.Bool("Success", o.Success)
+	card.Note(o.Note)
 	card.End()
 	return b.String()
 }

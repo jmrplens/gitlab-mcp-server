@@ -188,7 +188,9 @@ type ProjectUpdateOutput struct {
 	RemovedCount int64 `json:"removed_count"`
 }
 
-// BulkUpdateOutput confirms a bulk security attribute update.
+// BulkUpdateOutput confirms GitLab accepted a bulk security attribute update:
+// Status is "queued", since the update runs in the background after GitLab
+// answers.
 type BulkUpdateOutput struct {
 	toolutil.HintableOutput
 	Status       string         `json:"status"`
@@ -589,9 +591,15 @@ func BulkUpdate(ctx context.Context, client *gitlabclient.Client, input BulkUpda
 	if err := bulkUpdateSecurityAttributes(ctx, client, opts); err != nil {
 		return BulkUpdateOutput{}, toolutil.WrapErrWithHint("bulk update security attributes", err, "verify group_ids, project_ids, attribute_ids, and mode; requires Premium or Ultimate")
 	}
+	// GitLab's BulkUpdateService enqueues a worker and answers before any
+	// attribute is assigned, so what the answer confirms is that the update
+	// was accepted. The worker drops some changes without reporting them (a
+	// second attribute in a single-selection category, a project that does
+	// not exist), and no action here reads a project's attributes, so the
+	// message promises nothing about the outcome.
 	return BulkUpdateOutput{
-		Status:       "success",
-		Message:      "Successfully updated security attributes in bulk.",
+		Status:       "queued",
+		Message:      "GitLab queued the update and runs it in the background. It reports nothing for a change it then drops, such as a second attribute in a single-selection category or a project that does not exist, and no action of this server reads a project's attributes back.",
 		Mode:         input.Mode,
 		GroupIDs:     input.GroupIDs,
 		ProjectIDs:   input.ProjectIDs,

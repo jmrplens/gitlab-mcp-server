@@ -101,8 +101,11 @@ func TestUserAdmin_Lifecycle_CreatesChangesStateAndDeletes(t *testing.T) {
 		}
 
 		assertAdminTransition(e, s, actionUserBlock, created.ID, "blocked", userStateBlocked)
+		assertAdminNoOp(e, s, actionUserBlock, created.ID, "already blocked", userStateBlocked)
 		assertAdminTransition(e, s, actionUserUnblock, created.ID, "unblocked", userStateActive)
+		assertAdminNoOp(e, s, actionUserUnblock, created.ID, "not blocked", userStateActive)
 		assertAdminTransition(e, s, actionUserDeactivate, created.ID, "deactivated", userStateDeactivated)
+		assertAdminNoOp(e, s, actionUserDeactivate, created.ID, "already deactivated", userStateDeactivated)
 		assertAdminTransition(e, s, actionUserActivate, created.ID, "activated", userStateActive)
 		assertAdminTransition(e, s, actionUserBan, created.ID, "banned", userStateBanned)
 		assertAdminTransition(e, s, actionUserUnban, created.ID, "unbanned", userStateActive)
@@ -128,6 +131,22 @@ func assertAdminTransition(e *harness.Env, s *harness.Session, id harness.Action
 	}
 	if state := userState(e, userID); state != wantState {
 		e.T.Errorf("after %s GitLab holds user %d as %q, want %q", id, userID, state, wantState)
+	}
+}
+
+// assertAdminNoOp runs a state change again on a user already in its state.
+// GitLab answers it with 201 and false or null rather than true, and the
+// action has to say nothing changed rather than report success (issue 1327),
+// naming the state the user was in; the state itself is unchanged.
+func assertAdminNoOp(e *harness.Env, s *harness.Session, id harness.ActionID, userID int64, wantNote, wantState string) {
+	e.T.Helper()
+
+	out := harness.Do[users.AdminActionOutput](s, id, map[string]any{"user_id": userID})
+	if out.Success || !strings.Contains(out.Note, wantNote) {
+		e.T.Errorf("%s again answered %+v, want no success and a note saying the user is %s", id, out, wantNote)
+	}
+	if state := userState(e, userID); state != wantState {
+		e.T.Errorf("after %s again GitLab holds user %d as %q, want %q", id, userID, state, wantState)
 	}
 }
 

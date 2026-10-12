@@ -78,12 +78,12 @@ func FormatProjectUpdateMarkdown(out ProjectUpdateOutput) string {
 	return b.String()
 }
 
-// FormatBulkUpdateMarkdown renders what one bulk attribute change did, as the
-// card of one result: the mode it ran in and the identifiers it named, each
+// FormatBulkUpdateMarkdown renders the bulk attribute change GitLab queued, as
+// the card of one result: the mode it runs in and the identifiers it named, each
 // written as the list of numbers it is rather than as Go's container syntax.
 func FormatBulkUpdateMarkdown(out BulkUpdateOutput) string {
 	var b strings.Builder
-	c := toolutil.NewCard(&b, "Security Attributes Updated in Bulk")
+	c := toolutil.NewCard(&b, "Security Attribute Bulk Update")
 	c.Field("Status", out.Status)
 	c.Field("Message", out.Message)
 	c.Field("Mode", string(out.Mode))

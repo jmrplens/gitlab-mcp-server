@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -179,7 +180,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 func listPage(ctx context.Context, client *gitlabclient.Client, document string, input ListInput) (ListOutput, error) {
 	pageVars, err := input.Variables(document)
 	if err != nil {
-		return ListOutput{}, fmt.Errorf("%s: %w", listOperation, err)
+		return ListOutput{}, toolutil.WrapErr(listOperation, err)
 	}
 	var resp listStatesResponse
 	_, err = client.GL().GraphQL.Do(gl.GraphQLQuery{
@@ -242,14 +243,58 @@ type DeleteInput struct {
 	Name      string               `json:"name" jsonschema:"Terraform state name,required"`
 }
 
-// Delete removes a Terraform state.
+// deleteOperation labels every error the delete reports.
+const deleteOperation = "gitlab_delete_terraform_state"
+
+// Delete removes a Terraform state, after reading it to refuse a locked one.
+//
+// GitLab answers the REST delete of a locked state with 200 and deletes
+// nothing (upstream-bugs row 118), so sending it reported a delete that never
+// happened. Only the GraphQL state carries the lock, and its project field
+// takes a full path, so a numeric project_id is looked up first.
 func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) error {
-	_, err := client.GL().TerraformStates.Delete(string(input.ProjectID), input.Name, gl.WithContext(ctx))
+	path, err := stateProjectPath(ctx, client, input.ProjectID)
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("gitlab_delete_terraform_state", err, http.StatusForbidden,
+		return toolutil.WrapErrWithStatusHint(deleteOperation, err, http.StatusNotFound,
+			"verify project_id with project.get")
+	}
+	//gitlab:request mandatory: the state is read before the delete on every call, since only its GraphQL fields say whether it is locked, and GitLab answers the delete of a locked state as done without doing it
+	state, _, err := client.GL().TerraformStates.Get(path, input.Name, gl.WithContext(ctx))
+	if err != nil {
+		return toolutil.WrapErrWithStatusHint(deleteOperation, err, http.StatusNotFound,
+			"verify the state name with admin.terraform_state_list; the state may not exist for this project")
+	}
+	if !state.LockedAt.IsZero() {
+		locked := fmt.Errorf("state %q has been locked since %s, and GitLab answers the delete of a locked state as done without deleting it",
+			input.Name, toolutil.RFC3339(state.LockedAt))
+		return toolutil.WrapErrWithHint(deleteOperation, locked, "release the lock with admin.terraform_state_unlock, then delete the state")
+	}
+	//gitlab:request mandatory: the delete itself, sent once the read found the state unlocked
+	_, err = client.GL().TerraformStates.Delete(string(input.ProjectID), input.Name, gl.WithContext(ctx))
+	if err != nil {
+		return toolutil.WrapErrWithStatusHint(deleteOperation, err, http.StatusForbidden,
 			"deleting Terraform states requires Maintainer role; deletion is irreversible. All versions are removed")
 	}
 	return nil
+}
+
+// stateProjectPath is the full path GitLab's GraphQL project field needs for
+// project_id: the path itself, URL-encoded or not, or for a numeric ID the
+// path GitLab answers the project with.
+func stateProjectPath(ctx context.Context, client *gitlabclient.Client, projectID toolutil.StringOrInt) (string, error) {
+	if _, err := projectID.Int64(); err != nil {
+		path, unescapeErr := url.PathUnescape(string(projectID))
+		if unescapeErr != nil {
+			return "", fmt.Errorf("project_id %q is neither an ID nor a path: %w", projectID, unescapeErr)
+		}
+		return path, nil
+	}
+	//gitlab:request mandatory: a numeric project_id is looked up on every call that names one, since the GraphQL project field takes no ID
+	project, _, err := client.GL().Projects.GetProject(string(projectID), nil, gl.WithContext(ctx))
+	if err != nil {
+		return "", err
+	}
+	return project.PathWithNamespace, nil
 }
 
 // DeleteVersion.

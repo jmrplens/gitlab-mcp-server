@@ -992,7 +992,9 @@ func TestProjectUpdate_ValidatesInputBeforeRequest(t *testing.T) {
 //
 // The mock checks that group and project targets are encoded in order, attribute
 // IDs are encoded as security attribute GIDs, and REPLACE is forwarded as the
-// mutation mode. The output should report success with the same mode.
+// mutation mode. The output reports the update queued with the same mode:
+// GitLab's BulkUpdateService enqueues a worker and answers before anything is
+// assigned, so the answer is that the work was accepted, not that it was done.
 func TestBulkUpdate_Success(t *testing.T) {
 	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
 		"bulkUpdateSecurityAttributes": func(w http.ResponseWriter, r *http.Request) {
@@ -1020,9 +1022,10 @@ func TestBulkUpdate_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BulkUpdate() error = %v", err)
 	}
-	if out.Status != "success" || out.Mode != BulkUpdateModeReplace {
-		t.Fatalf("BulkUpdate() output = %#v", out)
+	if out.Status != "queued" || out.Mode != BulkUpdateModeReplace {
+		t.Fatalf("BulkUpdate() output = %#v, want the update queued in REPLACE mode", out)
 	}
+	assertQueuedMessage(t, out.Message)
 	// The echo is what tells a caller which targets the request reached, and
 	// the two lists are the same shape: without this, groups and projects
 	// could be echoed under each other's name.
@@ -1034,6 +1037,25 @@ func TestBulkUpdate_Success(t *testing.T) {
 	}
 	if len(out.AttributeIDs) != 1 || out.AttributeIDs[0] != 9 {
 		t.Errorf("BulkUpdate() attribute_ids = %#v, want [9]", out.AttributeIDs)
+	}
+}
+
+// assertQueuedMessage holds a bulk update's message to what GitLab's answer
+// confirms: the update was queued and runs in the background, and nothing
+// says it was done or promises it will be. GitLab drops some queued changes
+// without a word (a second attribute in a single-selection category, a
+// project that does not exist), so the message says that too, and says that
+// no action here reads the result back.
+func assertQueuedMessage(t *testing.T, message string) {
+	t.Helper()
+	if !strings.Contains(message, "queued") || !strings.Contains(message, "background") || strings.Contains(message, "Successfully") {
+		t.Errorf("BulkUpdate() message = %q, want it to say GitLab queued the update and runs it in the background", message)
+	}
+	if !strings.Contains(message, "reports nothing") || !strings.Contains(message, "reads a project's attributes back") {
+		t.Errorf("BulkUpdate() message = %q, want it to say GitLab reports nothing for a change it drops and that no action reads the attributes back", message)
+	}
+	if strings.Contains(message, "can take a moment to change") {
+		t.Errorf("BulkUpdate() message = %q promises the attributes will change", message)
 	}
 }
 
@@ -1398,10 +1420,12 @@ func TestFormatProjectUpdateMarkdown_RendersBothCounts(t *testing.T) {
 // TestFormatBulkUpdateMarkdown_RendersIDsAsALists verifies that the bulk
 // update result renders every identifier list as the comma-separated numbers a
 // reader can act on, rather than as Go's "[9 10]" container syntax, and that
-// an empty list writes no row at all.
+// an empty list writes no row at all. The heading names the request rather
+// than claiming the attributes were updated, since GitLab answers once the
+// update is queued.
 func TestFormatBulkUpdateMarkdown_RendersIDsAsALists(t *testing.T) {
-	want := "## Security Attributes Updated in Bulk\n\n" +
-		"- **Status**: success\n" +
+	want := "## Security Attribute Bulk Update\n\n" +
+		"- **Status**: queued\n" +
 		"- **Mode**: REPLACE\n" +
 		"- **Attributes**: 9, 10\n" +
 		"- **Groups**: 5\n" +
@@ -1410,7 +1434,7 @@ func TestFormatBulkUpdateMarkdown_RendersIDsAsALists(t *testing.T) {
 		"- Use action 'security_category.create' to add a category to classify further\n"
 
 	got := FormatBulkUpdateMarkdown(BulkUpdateOutput{
-		Status:       "success",
+		Status:       "queued",
 		Mode:         BulkUpdateModeReplace,
 		GroupIDs:     []int64{5},
 		AttributeIDs: []int64{9, 10},

@@ -84,6 +84,7 @@ for the fork, branch, fix, test and MR workflow.
   - [DependencyListExport carries four of the eight fields GitLab sends](#dependencylistexport-carries-four-of-the-eight-fields-gitlab-sends)
   - [The model package file path segment cannot be omitted](#the-model-package-file-path-segment-cannot-be-omitted)
   - [A measure GitLab sends as null decodes as 0](#a-measure-gitlab-sends-as-null-decodes-as-0)
+  - [Block, unblock and deactivate drop the answer that says whether anything changed](#block-unblock-and-deactivate-drop-the-answer-that-says-whether-anything-changed)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -142,6 +143,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The contributed projects route writes a keyset link its finder never reads](#the-contributed-projects-route-writes-a-keyset-link-its-finder-never-reads)
   - [The ML model package route accepts neither PRIVATE-TOKEN nor a GitLab OAuth access token](#the-ml-model-package-route-accepts-neither-private-token-nor-a-gitlab-oauth-access-token)
   - [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text)
+  - [The REST delete of a locked Terraform state answers 200 and deletes nothing](#the-rest-delete-of-a-locked-terraform-state-answers-200-and-deletes-nothing)
 - [GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)](#gitlab-orbit-gitlab-orgorbitknowledge-graph)
   - [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types)
   - [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both)
@@ -343,6 +345,8 @@ readable without opening the tracker:
 | 114 | gitlab-org/gitlab | [The ML model package route accepts neither PRIVATE-TOKEN nor a GitLab OAuth access token](#the-ml-model-package-route-accepts-neither-private-token-nor-a-gitlab-oauth-access-token) | No | No | No | Yes, for an oauth HTTP mode session holding a GitLab OAuth access token, which cannot download a model file at all | Yes, in part: `model_registry.download` sends the token as Bearer, and a Bearer session's 401 names the limit |
 | 115 | client-go | [The model package file path segment cannot be omitted](#the-model-package-file-path-segment-cannot-be-omitted) | No; for the joint merge request | No | No | No | Yes, `model_registry.download` sends its own request for a file at the package root |
 | 116 | client-go | [A measure GitLab sends as null decodes as 0](#a-measure-gitlab-sends-as-null-decodes-as-0) | No; for the joint merge request | No | No | No | Yes, for every measure but a deployable's, which is still left out at 0 |
+| 117 | client-go | [Block, unblock and deactivate drop the answer that says whether anything changed](#block-unblock-and-deactivate-drop-the-answer-that-says-whether-anything-changed) | No; for the joint merge request | No | No | No | Yes, the three handlers read the answer from the captured response |
+| 118 | gitlab-org/gitlab | [The REST delete of a locked Terraform state answers 200 and deletes nothing](#the-rest-delete-of-a-locked-terraform-state-answers-200-and-deletes-nothing) | No | No | No | No | Yes, `admin.terraform_state_delete` reads the state first and refuses a locked one |
 | 127 | gitlab-org/gitlab | [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text) | No | No | No | No; GitLab's pages leave such a submodule unlinked | Yes, `repository.list_submodules` and `repository.read_submodule_file` resolve a sibling namespace and the other spellings of the instance's clone URLs |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
@@ -6205,6 +6209,41 @@ deployments.
 
 **Effort**: small: pointer fields and their decoding tests, a breaking type
 change that a major release of client-go carries.
+
+### Block, unblock and deactivate drop the answer that says whether anything changed
+
+- **Reported**: no. It goes into the joint merge request,
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  with the other gaps of this register.
+- **In review**: no.
+- **Merged**: no. v3.15.0 decodes none of the three answers.
+- **Blocking**: no.
+- **Workaround**: yes. `user.block`, `user.unblock` and `user.deactivate`
+  call the SDK under `gitlabclient.WithResponseCapture` (ADR-0021) and read
+  the answer as a `*bool` (`stateChangeOutput` in
+  `internal/tools/users/user_admin.go`): `true` is a change, and `false` or
+  `null` is reported as one that did not happen, with the state the user was
+  probably in. It retires when the methods return the answer.
+
+**Where**: at v3.15.0, `UsersService.BlockUser`, `UnblockUser` and
+`DeactivateUser` (`users.go`), each of which decodes into `none` and returns
+only the `*Response` and an error chosen from the status code.
+
+**What**: GitLab answers `POST /users/:id/block`, `/unblock` and
+`/deactivate` with 201 whether or not it changed the user's state, and says
+which in the body: `true` when it did, `false` or `null` when it did not. An
+unblock of a user who is not blocked answers `false`, and a block of a user
+already blocked and a second deactivate answer `null`. The methods return no
+value, so a caller is told 201 and nothing else, and a state change that did
+not happen reads as one that did. The other state changes (`activate`, `ban`,
+`unban`, `approve`, `reject`) refuse a no-op with a 4xx or answer an object,
+so the status already tells their outcome.
+
+**How we found it**: issue 1327, reproduced against GitLab EE in the
+`test/e2e` Docker stack with an administrator token.
+
+**Effort**: small: return the decoded bool, a signature change that a major
+release of client-go carries, with a test per answer.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
@@ -12230,6 +12269,40 @@ only, and says so where it resolves.
 helper and found that a sibling namespace and the ssh:// spelling of the
 instance's own SCP remotes, which the resolver before it read, were no longer
 resolved; read from the source on master, not measured.
+
+### The REST delete of a locked Terraform state answers 200 and deletes nothing
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no. Read in 19.4.1.
+- **Blocking**: no.
+- **Workaround**: yes. `admin.terraform_state_delete` reads the state over
+  GraphQL before it sends the delete, looking a numeric `project_id` up first
+  since GitLab's GraphQL `project` field takes a path, and refuses a state
+  whose `lockedAt` is set, naming `admin.terraform_state_unlock`
+  (`Delete` in `internal/tools/terraformstates/terraform_states.go`). It costs
+  one or two reads per delete, and a lock taken between the read and the
+  delete is still answered 200; a fix upstream retires both.
+
+**Where**: `lib/api/terraform/state.rb`, `DELETE
+/projects/:id/terraform/state/:name`, which calls
+`Terraform::States::TriggerDestroyService` inside
+`remote_state_handler.find_with_lock` and then answers `body false` and
+`status :ok` whatever the service returned.
+
+**What**: a delete of a locked state answers 200 with an empty body (Grape's
+`body false` empties the body, and `status :ok` replaces the 204 it would
+set) and deletes nothing: the state is still there, and still locked, a
+minute later. The route discards
+the service's answer, so a caller cannot tell the refusal from the
+asynchronous delete of an unlocked state, which answers the same 200 and
+does complete.
+
+**What it costs this server**: before the read-first delete, a delete of a
+locked state was reported as done.
+
+**How we found it**: issue 1327, reproduced against GitLab EE in the
+`test/e2e` Docker stack: the state was still listed and locked after the 200.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 

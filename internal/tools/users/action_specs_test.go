@@ -356,9 +356,11 @@ func newUserActionSpecClient(t *testing.T) *gitlabclient.Client {
 	handler.HandleFunc("GET /api/v4/users/42/associations_count", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"groups_count":5,"projects_count":12,"issues_count":45,"merge_requests_count":30}`)
 	})
+	// GitLab answers each state change with the bool block, unblock and
+	// deactivate read, true when it changed the state.
 	for _, action := range []string{"block", "unblock", "ban", "unban", "activate", "deactivate", "approve"} {
 		handler.HandleFunc("POST /api/v4/users/42/"+action, func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusCreated)
+			testutil.RespondJSON(w, http.StatusCreated, "true")
 		})
 	}
 	handler.HandleFunc("POST /api/v4/users/42/reject", func(w http.ResponseWriter, _ *http.Request) {
