@@ -62,7 +62,8 @@ type Config struct {
 	// ServiceVersion is reported as service.version, so a collector can tell
 	// which build produced a span.
 	ServiceVersion string
-	// DropToolNameFromMetrics removes gen_ai.tool.name from metric attributes.
+	// DropToolNameFromMetrics removes gen_ai.tool.name, and gitlab_mcp.action
+	// with it, from metric attributes; gitlab_mcp.domain stays.
 	//
 	// Set by the caller, which knows the registered tool surface; see
 	// [DropToolName] for the decision and for why the individual surface needs
@@ -99,8 +100,8 @@ func (s Signals) none() bool { return !s.Traces && !s.Metrics && !s.Logs }
 // a nil check.
 type Provider struct {
 	enabled bool
-	// dropToolName removes gen_ai.tool.name from metric attributes, which the
-	// individual surface needs and the other two do not.
+	// dropToolName removes gen_ai.tool.name and gitlab_mcp.action from metric
+	// attributes, which the individual surface needs and the other two do not.
 	dropToolName bool
 	// One protocol and one endpoint per signal, because they can differ: the
 	// configuration specification gives each signal its own variables, and

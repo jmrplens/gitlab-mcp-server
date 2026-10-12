@@ -72,9 +72,12 @@ settings matter once the caller population is large:
   enumerate against a known key, which makes the key the "additional
   information" that turns a pseudonym back into a person.
 - **`--telemetry-tool-name`** defaults to `auto`, which keeps
-  `gen_ai.tool.name` as a metric dimension on the dynamic and meta surfaces and
-  drops it on individual, where a thousand tool names would exhaust the SDK's
-  cardinality limit and collapse the long tail into one overflow bucket.
+  `gen_ai.tool.name` and `gitlab_mcp.action` as metric dimensions on the
+  dynamic and meta surfaces and drops both on individual, where a thousand tool
+  names would exhaust the SDK's cardinality limit and collapse the long tail
+  into one overflow bucket. The setting decides the two together, so a
+  dashboard keyed on the action shows one series per `gitlab_mcp.domain`
+  wherever they are dropped; the domain is kept under every value.
 
 See [OpenTelemetry](/gitlab-mcp-server/operations/telemetry/) for the full
 picture.

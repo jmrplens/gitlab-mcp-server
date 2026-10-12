@@ -336,7 +336,8 @@ func boundedShutdown(t *testing.T) context.Context {
 }
 
 // TestDropToolNameFromMetrics_ReadsTheFlagThenTheEnvironmentThenAuto covers the
-// switch that decides whether gen_ai.tool.name is a metric dimension.
+// switch that decides whether gen_ai.tool.name and gitlab_mcp.action are metric
+// dimensions, which it decides for the two together.
 //
 // Auto is the default because the answer differs per surface: the individual
 // surface registers about a thousand tools, and one time series per tool

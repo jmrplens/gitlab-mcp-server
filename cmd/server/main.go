@@ -606,9 +606,10 @@ FLAGS
   -telemetry-identity str   What telemetry records about the caller: none|pseudonymous|full (default none)
   -telemetry-identity-rotation str
                             How long a generated pseudonymisation key lives, e.g. 24h (empty keeps it for the process)
-  -telemetry-tool-name str  Whether the tool name is a metric dimension: auto|on|off (default auto:
-                            on for dynamic and meta, off for individual, where ~1000 tools would
-                            exhaust the cardinality limit and collapse the long tail)
+  -telemetry-tool-name str  Whether the tool name and the action are metric dimensions, the two
+                            together: auto|on|off (default auto: on for dynamic and meta, off for
+                            individual, where ~1000 tools would exhaust the cardinality limit and
+                            collapse the long tail; the domain is kept either way)
 
   Off by default, and it goes to a collector you configure through the
   standard OTEL_EXPORTER_OTLP_* environment; nothing is ever sent anywhere
@@ -670,8 +671,8 @@ ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_MCP_TELEMETRY_IDENTITY_ROTATION
                                     How long a generated pseudonymisation key lives, e.g. 24h
                                     (default: process lifetime)
-  GITLAB_MCP_TELEMETRY_TOOL_NAME    Whether gen_ai.tool.name is a metric dimension: auto|on|off
-                                    (default auto)
+  GITLAB_MCP_TELEMETRY_TOOL_NAME    Whether gen_ai.tool.name and gitlab_mcp.action are metric
+                                    dimensions, the two together: auto|on|off (default auto)
   GITLAB_MCP_LOG_LEVEL              Logging: debug/info/warn/error (default info)
   GITLAB_MCP_PPROF_ADDR             Loopback address for Go's profiling handlers, e.g. 127.0.0.1:6060
                                     (default empty: nothing served). Both transports

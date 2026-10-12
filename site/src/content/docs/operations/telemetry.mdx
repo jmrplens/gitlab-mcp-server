@@ -246,7 +246,7 @@ marks it as an error.
 
 | Instrument                             | Unit         | What it answers                                                                                                     |
 | -------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `mcp.server.operation.duration`        | `s`          | how long requests take, by method and action                                                                        |
+| `mcp.server.operation.duration`        | `s`          | how long requests take, by method, domain and, where the tool name is kept, action                                  |
 | `mcp.client.operation.duration`        | `s`          | how long this server waits on the client for what it initiates (elicitation, sampling, `roots/list`, notifications) |
 | `http.client.request.duration`         | `s`          | how long GitLab takes                                                                                               |
 | `mcp.server.session.duration`          | `s`          | how long a client stays connected (stdio and `--stateless=false`)                                                   |
@@ -255,6 +255,15 @@ marks it as an error.
 | `gitlab_mcp.credential_pool.evictions` | `{eviction}` | entries dropped, split by `gitlab_mcp.credential_pool.eviction.reason`                                              |
 | `http.server.request.duration`         | `s`          | how long an inbound HTTP request takes, the credential check included and refused requests too (HTTP mode)          |
 | `gitlab_mcp.auth.blocks`               | `{request}`  | requests refused before their credential was read, split by `gitlab_mcp.auth.block.reason` (HTTP mode)              |
+
+`GITLAB_MCP_TELEMETRY_TOOL_NAME` (`--telemetry-tool-name`) decides two metric
+dimensions together, `gen_ai.tool.name` and `gitlab_mcp.action`, because on the
+individual surface each tool is one action and keeping either keeps as many
+series as keeping both. `auto` keeps both on the dynamic and meta surfaces and
+drops both on individual, `off` drops both on every surface and `on` keeps both.
+`gitlab_mcp.domain` stays under every value, so a panel built on it survives,
+and a panel built on the action shows one series per domain once the action is
+dropped. Spans always carry both, whatever the setting.
 
 `mcp.server.session.duration` is deliberately not recorded under the default
 stateless HTTP transport, where each POST is its own session: the histogram

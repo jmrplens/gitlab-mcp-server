@@ -75,10 +75,13 @@ Tres ajustes importan cuando la población de clientes es grande:
   enumerarlos contra una clave conocida, y eso convierte la clave en la
   "información adicional" que devuelve un seudónimo a una persona.
 - **`--telemetry-tool-name`** vale `auto` por defecto, lo que mantiene
-  `gen_ai.tool.name` como dimensión de métrica en las superficies dinámica y
-  meta y la descarta en la individual, donde mil nombres de herramienta
-  agotarían el límite de cardinalidad del SDK y colapsarían la cola larga en un
-  único cubo de desbordamiento.
+  `gen_ai.tool.name` y `gitlab_mcp.action` como dimensiones de métrica en las
+  superficies dinámica y meta y descarta ambas en la individual, donde mil
+  nombres de herramienta agotarían el límite de cardinalidad del SDK y
+  colapsarían la cola larga en un único cubo de desbordamiento. El ajuste
+  decide las dos a la vez, así que un panel basado en la acción muestra una
+  serie por `gitlab_mcp.domain` allí donde se descartan; el dominio se mantiene
+  con cualquier valor.
 
 Consulta [OpenTelemetry](/gitlab-mcp-server/es/operations/telemetry/) para el
 panorama completo.

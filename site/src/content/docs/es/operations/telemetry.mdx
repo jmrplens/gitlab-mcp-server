@@ -254,7 +254,7 @@ de servidor, y un `5xx` lo marca como error.
 
 | Instrumento                            | Unidad       | Qué responde                                                                                                                |
 | -------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| `mcp.server.operation.duration`        | `s`          | cuánto tardan las peticiones, por método y acción                                                                           |
+| `mcp.server.operation.duration`        | `s`          | cuánto tardan las peticiones, por método, dominio y, donde se conserva el nombre de la herramienta, acción                  |
 | `mcp.client.operation.duration`        | `s`          | cuánto espera este servidor al cliente en lo que inicia él (elicitación, muestreo, `roots/list`, notificaciones)            |
 | `http.client.request.duration`         | `s`          | cuánto tarda GitLab                                                                                                         |
 | `mcp.server.session.duration`          | `s`          | cuánto sigue conectado un cliente (stdio y `--stateless=false`)                                                             |
@@ -263,6 +263,16 @@ de servidor, y un `5xx` lo marca como error.
 | `gitlab_mcp.credential_pool.evictions` | `{eviction}` | entradas soltadas, separadas por `gitlab_mcp.credential_pool.eviction.reason`                                               |
 | `http.server.request.duration`         | `s`          | cuánto tarda una petición HTTP entrante, con la comprobación de la credencial incluida y también las rechazadas (modo HTTP) |
 | `gitlab_mcp.auth.blocks`               | `{request}`  | peticiones rechazadas antes de leer su credencial, separadas por `gitlab_mcp.auth.block.reason` (modo HTTP)                 |
+
+`GITLAB_MCP_TELEMETRY_TOOL_NAME` (`--telemetry-tool-name`) decide dos
+dimensiones de métrica a la vez, `gen_ai.tool.name` y `gitlab_mcp.action`,
+porque en la superficie individual cada herramienta es una acción y conservar
+cualquiera de las dos conserva tantas series como conservar ambas. `auto`
+conserva ambas en las superficies dinámica y meta y quita ambas en la
+individual, `off` quita ambas en todas las superficies y `on` conserva ambas.
+`gitlab_mcp.domain` se mantiene con cualquier valor, así que un panel basado en
+él sobrevive, y uno basado en la acción muestra una serie por dominio en cuanto
+la acción se quita. Los spans llevan siempre ambas, sea cual sea el ajuste.
 
 `mcp.server.session.duration` no se registra a propósito en el HTTP sin estado
 por defecto, donde cada POST es su propia sesión: el histograma sería una copia
