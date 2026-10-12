@@ -1278,3 +1278,144 @@ func TestList_NullProject(t *testing.T) {
 		t.Errorf("error = %q, want contains project path", err.Error())
 	}
 }
+
+// TestList_FieldNulledByGitLab_IsAnErrorNotAnEmptyPage verifies that a
+// findings connection, or a pipeline, GitLab answered null under a project that
+// resolved is reported as an error, never as a pipeline with no findings
+// (issue 1298).
+//
+// securityReportFindings and pipeline are both nullable in the pinned schema,
+// and GitLab nulls a field whose resolver raised (a KeyError on a filter value
+// it does not know, a timeout) and explains why in errors[] with that field's
+// path. Read as a value, the null connection decoded as an empty page, so a
+// failed security query read as a clean pipeline: the false all-clear the
+// issue names. A null pipeline that carries errors used to be blamed on
+// pipeline_iid, which the caller then rechecked for nothing.
+func TestList_FieldNulledByGitLab_IsAnErrorNotAnEmptyPage(t *testing.T) {
+	cases := []struct {
+		name    string
+		body    string
+		want    []string
+		mustNot []string
+	}{
+		{
+			name: "connection nulled with an error",
+			body: `{"data":{"project":{"pipeline":{"securityReportFindings":null}}},"errors":[{"message":"Internal server error","path":["project","pipeline","securityReportFindings"]}]}`,
+			want: []string{"list_security_findings", "Internal server error"},
+		},
+		{
+			name: "connection nulled without an error",
+			body: `{"data":{"project":{"pipeline":{"securityReportFindings":null}}}}`,
+			want: []string{"list_security_findings", "securityReportFindings", "null"},
+		},
+		{
+			name:    "pipeline nulled with an error",
+			body:    `{"data":{"project":{"pipeline":null}},"errors":[{"message":"Timeout on Project.pipeline","path":["project","pipeline"]}]}`,
+			want:    []string{"list_security_findings", "Timeout on Project.pipeline"},
+			mustNot: []string{"not found", "verify pipeline_iid"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := graphqlMux(map[string]http.HandlerFunc{
+				"securityReportFindings": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusOK, tc.body)
+				},
+			})
+			out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{
+				ProjectPath: "my-group/my-project",
+				PipelineIID: "7",
+			})
+			if err == nil {
+				t.Fatalf("List() = %+v, want an error rather than an empty page", out)
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("List() error = %q, want it to contain %q", err, want)
+				}
+			}
+			for _, unwanted := range tc.mustNot {
+				if strings.Contains(err.Error(), unwanted) {
+					t.Errorf("List() error = %q, want it not to contain %q", err, unwanted)
+				}
+			}
+		})
+	}
+}
+
+// TestList_PageAnsweredInPart_SaysSoAndLeavesNullItemsOut verifies that a
+// page GitLab answered beside errors[] is read as a page answered in part
+// (issue 1298). GitLab nulls a node or a field it could not resolve where it
+// sits and explains it in errors[], so a nulled finding decoded as a row of
+// zero values and the page read as complete. The nulled node is left out,
+// the card says GitLab answered the page in part and names its errors, and a
+// page left with no node at all is reported as the error it is rather than
+// as a pipeline with no findings.
+func TestList_PageAnsweredInPart_SaysSoAndLeavesNullItemsOut(t *testing.T) {
+	const timeout = `[{"message":"Timeout on PipelineSecurityReportFinding.location","path":["project","pipeline","securityReportFindings","nodes",1,"location"]}]`
+	cases := []partialPageCase{
+		{name: "a node nulled with an error", nodes: sampleFindingNode + `, null`, errors: timeout, wantItems: 1, wantHint: "Timeout on PipelineSecurityReportFinding.location"},
+		{name: "a field nulled with an error", nodes: sampleFindingNode, errors: timeout, wantItems: 1, wantHint: "Timeout on PipelineSecurityReportFinding.location"},
+		{name: "a node nulled with no error", nodes: sampleFindingNode + `, null`, wantItems: 1, wantHint: "GitLab answered 1 of the page's items null with no error"},
+		{name: "every node nulled with an error", nodes: `null`, errors: timeout, wantErr: "list_security_findings GraphQL errors: Timeout on PipelineSecurityReportFinding.location"},
+		{name: "every node nulled with no error", nodes: `null, null`, wantErr: "list_security_findings: GitLab answered 2 of the page's items null with no error"},
+		{name: "a page answered whole", nodes: sampleFindingNode, wantItems: 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := `{"data":{"project":{"pipeline":{"securityReportFindings":{"nodes":[` + tc.nodes + `],"pageInfo":{"hasNextPage":false,"hasPreviousPage":false,"endCursor":"","startCursor":""}}}}}` + tc.errorsMember() + `}`
+			handler := graphqlMux(map[string]http.HandlerFunc{
+				"securityReportFindings": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusOK, body)
+				},
+			})
+			out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{ProjectPath: "my-group/my-project", PipelineIID: "7"})
+			assertPartialPage(t, tc, len(out.Findings), func() string { return FormatListMarkdown(out) }, err)
+		})
+	}
+}
+
+// partialPageCase is one way GitLab answers a page of a connection beside
+// errors[] or with nodes nulled: the nodes it sends, its errors member, and
+// either the error List must return or the items it keeps and the account
+// the card names (an empty one for a page answered whole).
+type partialPageCase struct {
+	name      string
+	nodes     string
+	errors    string
+	wantItems int
+	wantErr   string
+	wantHint  string
+}
+
+// errorsMember is the case's errors member of the response, empty for none.
+func (tc partialPageCase) errorsMember() string {
+	if tc.errors == "" {
+		return ""
+	}
+	return `,"errors":` + tc.errors
+}
+
+// assertPartialPage holds what List answered to tc: the error it wants, or
+// the items it keeps and a card that says it was answered in part, naming
+// tc.wantHint, exactly when tc wants a hint.
+func assertPartialPage(t *testing.T, tc partialPageCase, items int, card func() string, err error) {
+	t.Helper()
+	if tc.wantErr != "" {
+		if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+			t.Fatalf("List() answered %d items and the error %v, want the error %q rather than a page", items, err, tc.wantErr)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if items != tc.wantItems {
+		t.Fatalf("List() answered %d items, want %d", items, tc.wantItems)
+	}
+	text := card()
+	partial := strings.Contains(text, "GitLab answered this page in part")
+	if partial != (tc.wantHint != "") || !strings.Contains(text, tc.wantHint) {
+		t.Errorf("the card says it was answered in part: %t, want %t naming %q:\n%s", partial, tc.wantHint != "", tc.wantHint, text)
+	}
+}

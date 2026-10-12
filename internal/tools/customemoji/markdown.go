@@ -45,6 +45,7 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	toolutil.WriteGraphQLPagination(&sb, out.Pagination, len(out.Emoji))
 	toolutil.WriteListFooter(&sb, toolutil.PaginationOutput{}, linked,
+		toolutil.PartialPageHint(out.partial),
 		toolutil.HintAction(actionCreate, "add another emoji to the group"),
 		toolutil.HintAction(actionDelete, "remove one by the ID in the first column"),
 	)

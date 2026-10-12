@@ -59,6 +59,7 @@ func FormatListMarkdown(out ListOutput) string {
 	toolutil.WriteGraphQLPagination(&b, out.Pagination, len(out.Vulnerabilities))
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, linked,
 		toolutil.HintPreserveLinks,
+		toolutil.PartialPageHint(out.partial),
 		toolutil.HintAction(actionVulnGet, "read one vulnerability in full, naming the ID above"),
 		toolutil.HintAction(actionVulnSeverityCount, "see how many vulnerabilities the project has at each severity"),
 		toolutil.HintAction(actionSecurityFindingList, "read the findings one pipeline's scanners reported"),

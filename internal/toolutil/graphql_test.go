@@ -6,6 +6,9 @@
 package toolutil
 
 import (
+	"errors"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -192,6 +195,95 @@ func TestGraphQLTopLevelError(t *testing.T) {
 	err = GraphQLTopLevelError("securityAttributeCreate", []GraphQLError{{Message: " "}})
 	if err == nil || !strings.Contains(err.Error(), "securityAttributeCreate: 1 GraphQL errors with empty messages") {
 		t.Fatalf("GraphQLTopLevelError(blank) = %v, want generic error", err)
+	}
+}
+
+// TestGraphQLPartialPage holds the reading of a page GitLab answered beside
+// errors[] or with nodes nulled (issue 1298): a page answered whole has no
+// account, a page that still holds a node is answered in part with GitLab's
+// errors or the count of nodes it nulled, and a page left with no node is the
+// error, GraphQLTopLevelError's own when errors[] explain it.
+func TestGraphQLPartialPage(t *testing.T) {
+	timeout := []GraphQLError{{Message: "Timeout on Project.vulnerabilities"}}
+	tests := []struct {
+		name        string
+		errors      []GraphQLError
+		kept        int
+		nulled      int
+		wantAccount string
+		wantErr     string
+	}{
+		{name: "a page answered whole", kept: 2},
+		{name: "an empty page answered whole", kept: 0},
+		{name: "errors beside a page that holds a node", errors: timeout, kept: 1, nulled: 1, wantAccount: "opX GraphQL errors: Timeout on Project.vulnerabilities"},
+		{name: "errors beside a page with every node nulled", errors: timeout, nulled: 2, wantErr: "opX GraphQL errors: Timeout on Project.vulnerabilities"},
+		{name: "a node nulled with no error", kept: 3, nulled: 1, wantAccount: "opX: GitLab answered 1 of the page's items null with no error"},
+		{name: "every node nulled with no error", nulled: 2, wantErr: "opX: GitLab answered 2 of the page's items null with no error"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			account, err := GraphQLPartialPage("opX", tt.errors, tt.kept, tt.nulled)
+			if tt.wantErr != "" {
+				if err == nil || err.Error() != tt.wantErr || account != "" {
+					t.Fatalf("GraphQLPartialPage() = %q, %v, want no account and the error %q", account, err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil || account != tt.wantAccount {
+				t.Fatalf("GraphQLPartialPage() = %q, %v, want %q and no error", account, err, tt.wantAccount)
+			}
+		})
+	}
+}
+
+// TestGraphQLPartialPage_ErrorsKeepTheirMessages verifies the error of a page
+// with no node left is GraphQLTopLevelError's, which keeps each message apart:
+// a refusal GitLab answers in errors[] is read as one only from that error.
+func TestGraphQLPartialPage_ErrorsKeepTheirMessages(t *testing.T) {
+	_, err := GraphQLPartialPage("opX", []GraphQLError{{Message: "first"}}, 0, 1)
+	var topLevel *topLevelGraphQLError
+	if !errors.As(err, &topLevel) || len(topLevel.messages) != 1 || topLevel.messages[0] != "first" {
+		t.Fatalf("GraphQLPartialPage() error = %#v, want GraphQLTopLevelError's error with its message", err)
+	}
+}
+
+// TestPartialPageHint holds the next step a card of a page answered in part
+// adds: none for a page answered whole, and one naming the account, escaped
+// as the list value it becomes, otherwise.
+func TestPartialPageHint(t *testing.T) {
+	if got := PartialPageHint(""); got != "" {
+		t.Errorf("PartialPageHint(\"\") = %q, want no hint", got)
+	}
+	want := "GitLab answered this page in part (opX GraphQL errors: a &#124; b), so an item or a field it could not resolve may be missing from it; list again before reading the page as complete"
+	if got := PartialPageHint("opX GraphQL errors: a | b"); got != want {
+		t.Errorf("PartialPageHint() = %q, want %q", got, want)
+	}
+}
+
+// TestNodesAnswered holds the reading of a connection's nodes GitLab may
+// answer null where it could not resolve one (issue 1298): each node it
+// answered is converted in order, each null one is left out and counted, and
+// no node at all is an empty page rather than a nil one.
+func TestNodesAnswered(t *testing.T) {
+	one, two := 1, 2
+	tests := []struct {
+		name       string
+		nodes      []*int
+		wantItems  []string
+		wantNulled int
+	}{
+		{name: "no node", nodes: nil, wantItems: []string{}},
+		{name: "every node answered", nodes: []*int{&one, &two}, wantItems: []string{"1", "2"}},
+		{name: "a node answered null between two", nodes: []*int{&one, nil, &two}, wantItems: []string{"1", "2"}, wantNulled: 1},
+		{name: "every node answered null", nodes: []*int{nil, nil}, wantItems: []string{}, wantNulled: 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			items, nulled := NodesAnswered(tt.nodes, func(n int) string { return strconv.Itoa(n) })
+			if items == nil || !slices.Equal(items, tt.wantItems) || nulled != tt.wantNulled {
+				t.Fatalf("NodesAnswered() = %#v, %d, want %#v, %d", items, nulled, tt.wantItems, tt.wantNulled)
+			}
+		})
 	}
 }
 

@@ -3,6 +3,7 @@ package securityfindings
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -406,14 +407,17 @@ type gqlAsset struct {
 }
 
 // gqlFindingsConnection holds the paginated list of security finding nodes.
+// The nodes are pointers because GitLab answers a node it could not resolve
+// null where it sits, which a value decoded as a row of zero values (issue
+// 1298).
 type gqlFindingsConnection struct {
-	Nodes    []gqlFindingNode            `json:"nodes"`
+	Nodes    []*gqlFindingNode           `json:"nodes"`
 	PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
 }
 
 // gqlPipelineFindings wraps the security report findings inside a pipeline.
 type gqlPipelineFindings struct {
-	SecurityReportFindings gqlFindingsConnection `json:"securityReportFindings"`
+	SecurityReportFindings *gqlFindingsConnection `json:"securityReportFindings"`
 }
 
 // gqlProjectPipeline wraps the pipeline inside a project.
@@ -561,6 +565,11 @@ type ListOutput struct {
 	toolutil.HintableOutput
 	Findings   []FindingItem                    `json:"findings"`
 	Pagination toolutil.GraphQLPaginationOutput `json:"pagination"`
+
+	// partial is GitLab's account of a page it answered in part, empty for
+	// a page answered whole. It is the formatter's to name in a next step and
+	// no part of the published answer.
+	partial string
 }
 
 // List retrieves pipeline security report findings via the GitLab GraphQL API.
@@ -639,7 +648,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		}
 		return ListOutput{}, fmt.Errorf("list_security_findings: project %q not found", input.ProjectPath)
 	}
+	// A pipeline GitLab nulled while saying why is a field that failed, not a
+	// pipeline_iid that names nothing: blaming the iid sends the caller to
+	// recheck a value that was right.
 	if resp.Data.Project.Pipeline == nil {
+		if graphQLErr := toolutil.GraphQLTopLevelError("list_security_findings", resp.Errors); graphQLErr != nil {
+			return ListOutput{}, graphQLErr
+		}
 		return ListOutput{}, fmt.Errorf(
 			"list_security_findings: pipeline_iid %q not found in project %q. Suggestion: verify pipeline_iid with pipeline.list or pipeline.latest; security findings require a pipeline with security scan report artifacts",
 			input.PipelineIID,
@@ -647,14 +662,31 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		)
 	}
 
-	nodes := resp.Data.Project.Pipeline.SecurityReportFindings.Nodes
-	items := make([]FindingItem, 0, len(nodes))
-	for _, n := range nodes {
-		items = append(items, nodeToItem(n))
+	// The findings connection is nullable as well. GitLab nulls a field whose
+	// resolver raised or timed out (the KeyError above is one), keeps the rest
+	// of the answer and explains the null in errors[] under that field's path.
+	// Decoded as a value, the null read as an empty page, and a failed security
+	// query as a pipeline with no findings: a false all-clear on a triage tool
+	// (issue 1298).
+	findings := resp.Data.Project.Pipeline.SecurityReportFindings
+	if findings == nil {
+		if graphQLErr := toolutil.GraphQLTopLevelError("list_security_findings", resp.Errors); graphQLErr != nil {
+			return ListOutput{}, graphQLErr
+		}
+		return ListOutput{}, errors.New("list_security_findings: GitLab answered the pipeline's securityReportFindings as null with no error, so the findings are unknown rather than none")
+	}
+	// GitLab nulls a node or a field it could not resolve where it sits and
+	// says why in errors[], so a page beside them was answered in part, and
+	// one with no node left is no page at all.
+	items, nulled := toolutil.NodesAnswered(findings.Nodes, nodeToItem)
+	partial, err := toolutil.GraphQLPartialPage("list_security_findings", resp.Errors, len(items), nulled)
+	if err != nil {
+		return ListOutput{}, err
 	}
 
 	return ListOutput{
 		Findings:   items,
-		Pagination: toolutil.PageInfoToOutput(resp.Data.Project.Pipeline.SecurityReportFindings.PageInfo),
+		Pagination: toolutil.PageInfoToOutput(findings.PageInfo),
+		partial:    partial,
 	}, nil
 }

@@ -39,6 +39,7 @@ func FormatListMarkdown(out ListOutput) string {
 	// The table carries no link, so the footer carries no instruction to keep
 	// the links of a table that has none.
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.PartialPageHint(out.partial),
 		toolutil.HintAction(actionVulnList, "read the project's vulnerabilities, which is what a confirmed finding becomes"),
 		toolutil.HintAction(actionVulnPipelineSummary, "see how many findings each scanner reported in this pipeline"),
 	)

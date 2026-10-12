@@ -2,6 +2,7 @@ package vulnerabilities
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -368,15 +369,18 @@ type gqlVulnerabilityNode struct {
 	MergeRequest            *gqlReference                             `json:"mergeRequest"`
 }
 
-// gqlVulnerabilitiesConnection holds the paginated list of vulnerability nodes.
+// gqlVulnerabilitiesConnection holds the paginated list of vulnerability
+// nodes. The nodes are pointers because GitLab answers a node it could not
+// resolve null where it sits, which a value decoded as a row of zero values
+// (issue 1298).
 type gqlVulnerabilitiesConnection struct {
-	Nodes    []gqlVulnerabilityNode      `json:"nodes"`
+	Nodes    []*gqlVulnerabilityNode     `json:"nodes"`
 	PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
 }
 
 // gqlProjectVulnerabilities wraps the vulnerabilities connection inside a project.
 type gqlProjectVulnerabilities struct {
-	Vulnerabilities gqlVulnerabilitiesConnection `json:"vulnerabilities"`
+	Vulnerabilities *gqlVulnerabilitiesConnection `json:"vulnerabilities"`
 }
 
 // nodeToItem converts a raw GraphQL vulnerability node into an [Item] output
@@ -517,6 +521,11 @@ type ListOutput struct {
 	toolutil.HintableOutput
 	Vulnerabilities []Item                           `json:"vulnerabilities"`
 	Pagination      toolutil.GraphQLPaginationOutput `json:"pagination"`
+
+	// partial is GitLab's account of a page it answered in part, empty for
+	// a page answered whole. It is the formatter's to name in a next step and
+	// no part of the published answer.
+	partial string
 }
 
 // List retrieves project vulnerabilities via the GitLab GraphQL API.
@@ -585,14 +594,31 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, fmt.Errorf("list_vulnerabilities: project %q not found", input.ProjectPath)
 	}
 
-	items := make([]Item, 0, len(resp.Data.Project.Vulnerabilities.Nodes))
-	for _, n := range resp.Data.Project.Vulnerabilities.Nodes {
-		items = append(items, nodeToItem(n))
+	// The connection is nullable too, and GitLab nulls it when its resolver
+	// raised or timed out, with the reason in errors[] under its path. Read as
+	// a value it decoded as an empty page, which reported a failed query as a
+	// project with nothing to triage (issue 1298).
+	connection := resp.Data.Project.Vulnerabilities
+	if connection == nil {
+		if graphQLErr := toolutil.GraphQLTopLevelError("list_vulnerabilities", resp.Errors); graphQLErr != nil {
+			return ListOutput{}, graphQLErr
+		}
+		return ListOutput{}, errors.New("list_vulnerabilities: GitLab answered the project's vulnerabilities as null with no error, so they are unknown rather than none")
+	}
+
+	// GitLab nulls a node or a field it could not resolve where it sits and
+	// says why in errors[], so a page beside them was answered in part, and
+	// one with no node left is no page at all.
+	items, nulled := toolutil.NodesAnswered(connection.Nodes, nodeToItem)
+	partial, err := toolutil.GraphQLPartialPage("list_vulnerabilities", resp.Errors, len(items), nulled)
+	if err != nil {
+		return ListOutput{}, err
 	}
 
 	return ListOutput{
 		Vulnerabilities: items,
-		Pagination:      toolutil.PageInfoToOutput(resp.Data.Project.Vulnerabilities.PageInfo),
+		Pagination:      toolutil.PageInfoToOutput(connection.PageInfo),
+		partial:         partial,
 	}, nil
 }
 
