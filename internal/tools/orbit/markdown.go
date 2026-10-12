@@ -180,16 +180,23 @@ func replicaCell(replicas *StatusReplicas) string {
 // manifest of the MCP tools Orbit serves (list_commands and invoke_command on
 // GitLab.com, read 2026-10-06) and describes no query: the grammar is what
 // orbit.dsl returns.
+//
+// The edge types and the nodes GitLab answered expanded are written out too
+// (issue 1311). The card used to stop at the counts and the domains, so the
+// relationship names and the properties a query is built from were in the
+// structured output alone, and a client that hands the model the text, as
+// most do on the default surface, left it to guess them while the last step
+// spoke of "the node and edge types listed here". A schema with nodes and
+// none of them expanded therefore adds a step saying how to ask for their
+// properties.
 func FormatSchemaMarkdown(out SchemaOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Orbit Schema")
-	hints := []string{
-		toolutil.HintAction(actionDSL, "read the grammar a query is written in"),
-		toolutil.HintAction(actionQuery, "run a query naming the node and edge types listed here"),
-	}
+	dslHint := toolutil.HintAction(actionDSL, "read the grammar a query is written in")
+	queryHint := toolutil.HintAction(actionQuery, "run a query naming the node and edge types listed here")
 	if out.FormattedText != "" {
 		c.Fence("", "text", out.FormattedText)
-		c.End(hints...)
+		c.End(dslHint, queryHint)
 		return b.String()
 	}
 	c.Field("Schema version", out.SchemaVersion)
@@ -206,8 +213,104 @@ func FormatSchemaMarkdown(out SchemaOutput) string {
 			)
 		}
 	}
-	c.End(hints...)
+	if len(out.Edges) > 0 {
+		table := c.Table("Edge types", "Edge", "Source -> target", "Description")
+		for _, edge := range out.Edges {
+			table.Row(
+				toolutil.EscapeMdTableCell(edge.Name),
+				toolutil.EscapeMdTableCell(edgeVariants(edge.Variants)),
+				toolutil.EscapeMdTableCell(edge.Description),
+			)
+		}
+	}
+	expanded := expandedNodes(out.Nodes)
+	for _, node := range expanded {
+		writeSchemaNode(c, node)
+	}
+	hints := []string{dslHint}
+	if len(out.Nodes) > 0 && len(expanded) == 0 {
+		hints = append(hints, toolutil.HintAction(actionSchema,
+			"read the properties and edges of the node types a query reads: name them in expand, or set format=llm for the whole ontology as compact text"))
+	}
+	c.End(append(hints, queryHint)...)
 	return b.String()
+}
+
+// schemaNode is the part of one ontology node the schema card renders, read
+// from the definition client-go leaves undecoded. The three lists stay nil
+// when GitLab sent no key for them, which is what tells a node answered
+// without expand from an expanded one: the recorded answers carry
+// properties and both edge lists only on the nodes named in expand.
+type schemaNode struct {
+	Name          string           `json:"name"`
+	Domain        string           `json:"domain"`
+	Description   string           `json:"description"`
+	IncomingEdges []string         `json:"incoming_edges"`
+	OutgoingEdges []string         `json:"outgoing_edges"`
+	Properties    []schemaProperty `json:"properties"`
+}
+
+// schemaProperty is one property of an expanded node: the name a query
+// filters or returns, its type, and the values an enum takes.
+type schemaProperty struct {
+	Name       string   `json:"name"`
+	DataType   string   `json:"data_type"`
+	Nullable   bool     `json:"nullable"`
+	EnumValues []string `json:"enum_values"`
+}
+
+// expandedNodes returns the nodes GitLab answered expanded, in the order it
+// sent them. A definition that does not decode into [schemaNode] is left to
+// the structured output, which carries it as it came, rather than rendered
+// from a guess.
+func expandedNodes(nodes []any) []schemaNode {
+	var expanded []schemaNode
+	for _, raw := range nodes {
+		var node schemaNode
+		data, err := json.Marshal(raw)
+		if err == nil {
+			err = json.Unmarshal(data, &node)
+		}
+		if err != nil {
+			continue
+		}
+		if node.Properties != nil || node.IncomingEdges != nil || node.OutgoingEdges != nil {
+			expanded = append(expanded, node)
+		}
+	}
+	return expanded
+}
+
+// writeSchemaNode writes one expanded node as a section of the schema card:
+// its domain, description and edges as rows, and its properties as a nested
+// collection.
+func writeSchemaNode(c *toolutil.Card, node schemaNode) {
+	section := c.Section("Node " + node.Name)
+	section.Field("Domain", node.Domain)
+	section.Field("Description", node.Description)
+	section.Field("Incoming edges", strings.Join(node.IncomingEdges, ", "))
+	section.Field("Outgoing edges", strings.Join(node.OutgoingEdges, ", "))
+	if len(node.Properties) == 0 {
+		return
+	}
+	table := section.Table("Properties", "Property", "Type", "Nullable", "Values")
+	for _, property := range node.Properties {
+		table.Row(
+			toolutil.EscapeMdTableCell(property.Name),
+			toolutil.EscapeMdTableCell(property.DataType),
+			toolutil.BoolEmoji(property.Nullable),
+			toolutil.EscapeMdTableCell(strings.Join(property.EnumValues, ", ")),
+		)
+	}
+}
+
+// edgeVariants renders the source and target pairs an edge type joins.
+func edgeVariants(variants []SchemaEdgeVariant) string {
+	pairs := make([]string, 0, len(variants))
+	for _, variant := range variants {
+		pairs = append(pairs, variant.SourceType+" -> "+variant.TargetType)
+	}
+	return strings.Join(pairs, ", ")
 }
 
 // FormatToolsMarkdown renders the Orbit tool manifest as a table: a collection

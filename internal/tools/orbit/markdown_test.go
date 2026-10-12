@@ -1,6 +1,7 @@
 package orbit
 
 import (
+	"math"
 	"testing"
 )
 
@@ -165,15 +166,23 @@ func TestFormatSchemaMarkdown_RendersTheWholeCard(t *testing.T) {
 		"- **Edges**: 1\n\n" +
 		"### Domains\n\n" +
 		"| Domain | Description | Nodes |\n| --- | --- | --- |\n" +
-		"| core | Core entities | User, Project |\n" +
+		"| core | Core entities | User, Project |\n\n" +
+		"### Edge types\n\n" +
+		"| Edge | Source -> target | Description |\n| --- | --- | --- |\n" +
+		"| AUTHORED |  |  |\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'orbit.dsl' to read the grammar a query is written in\n" +
+		schemaExpandHint +
 		"- Use action 'orbit.query' to run a query naming the node and edge types listed here\n"
 
 	if got := FormatSchemaMarkdown(out); got != want {
 		t.Errorf("FormatSchemaMarkdown() =\n%q\nwant\n%q", got, want)
 	}
 }
+
+// schemaExpandHint is the step a schema answered with nothing expanded ends
+// with: the card lists no property, and orbit.query names them (issue 1311).
+const schemaExpandHint = "- Use action 'orbit.schema' to read the properties and edges of the node types a query reads: name them in expand, or set format=llm for the whole ontology as compact text\n"
 
 // TestFormatSchemaMarkdown_NoDomains_WritesNoTable verifies that an ontology
 // with no domains renders its counts and no Domains section, rather than a
@@ -188,10 +197,145 @@ func TestFormatSchemaMarkdown_NoDomains_WritesNoTable(t *testing.T) {
 		"- **Edges**: 0\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'orbit.dsl' to read the grammar a query is written in\n" +
+		schemaExpandHint +
 		"- Use action 'orbit.query' to run a query naming the node and edge types listed here\n"
 
 	if got := FormatSchemaMarkdown(out); got != want {
 		t.Errorf("FormatSchemaMarkdown() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatSchemaMarkdown_ExpandedNode_ListsItsPropertiesAndEdges verifies
+// that the text answer carries what expand returns and the edge types every
+// answer carries (issue 1311).
+//
+// The card used to write the version, three counts and the domains, and
+// nothing a query is built from: the properties of the nodes the caller asked
+// to expand and every edge type were in the structured output only, so a
+// client that hands the model the text, as most do on the default surface,
+// left it to guess them, while the next step told it to use "the node and
+// edge types listed here". The node that was not expanded gets no section,
+// and with one expanded the step pointing at expand is not offered again.
+// GitLab-authored names are escaped like any other cell.
+func TestFormatSchemaMarkdown_ExpandedNode_ListsItsPropertiesAndEdges(t *testing.T) {
+	out := SchemaOutput{
+		SchemaVersion: "0.1",
+		Nodes: []any{
+			map[string]any{"name": "User", "domain": "core"},
+			map[string]any{
+				"name":           "Project",
+				"domain":         "core",
+				"description":    "A GitLab project",
+				"incoming_edges": []any{"IN_PROJECT"},
+				"outgoing_edges": []any{"IN_GROUP", "OWNED|BY"},
+				"properties": []any{
+					map[string]any{"name": "full_path", "data_type": "String", "nullable": false},
+					map[string]any{"name": "visibility", "data_type": "Enum", "nullable": true, "enum_values": []any{"private", "public"}},
+				},
+			},
+		},
+		Edges: []SchemaEdge{{
+			Name:        "IN_GROUP",
+			Description: "A project or subgroup in its group",
+			Variants:    []SchemaEdgeVariant{{SourceType: "Project", TargetType: "Group"}, {SourceType: "Group", TargetType: "Group"}},
+		}},
+	}
+
+	want := "## Orbit Schema\n\n" +
+		"- **Schema version**: 0.1\n" +
+		"- **Domains**: 0\n" +
+		"- **Nodes**: 2\n" +
+		"- **Edges**: 1\n\n" +
+		"### Edge types\n\n" +
+		"| Edge | Source -> target | Description |\n| --- | --- | --- |\n" +
+		"| IN_GROUP | Project -> Group, Group -> Group | A project or subgroup in its group |\n\n" +
+		"### Node Project\n\n" +
+		"- **Domain**: core\n" +
+		"- **Description**: A GitLab project\n" +
+		"- **Incoming edges**: IN_PROJECT\n" +
+		"- **Outgoing edges**: IN_GROUP, OWNED&#124;BY\n\n" +
+		"#### Properties\n\n" +
+		"| Property | Type | Nullable | Values |\n| --- | --- | --- | --- |\n" +
+		"| full_path | String | ❌ |  |\n" +
+		"| visibility | Enum | ✅ | private, public |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'orbit.dsl' to read the grammar a query is written in\n" +
+		"- Use action 'orbit.query' to run a query naming the node and edge types listed here\n"
+
+	if got := FormatSchemaMarkdown(out); got != want {
+		t.Errorf("FormatSchemaMarkdown() =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// TestFormatSchemaMarkdown_ExpandedNode_IsTheOneCarryingAnyExpandedKey
+// verifies that a node counts as expanded when GitLab sent any one of the
+// three keys only expand adds, each on its own, and that a node carrying no
+// property writes no Properties table under its rows.
+func TestFormatSchemaMarkdown_ExpandedNode_IsTheOneCarryingAnyExpandedKey(t *testing.T) {
+	tests := []struct {
+		name string
+		node map[string]any
+		want string
+	}{
+		{
+			name: "properties alone",
+			node: map[string]any{"name": "Issue", "properties": []any{map[string]any{"name": "iid", "data_type": "Int"}}},
+			want: "### Node Issue\n\n" +
+				"#### Properties\n\n" +
+				"| Property | Type | Nullable | Values |\n| --- | --- | --- | --- |\n" +
+				"| iid | Int | ❌ |  |\n",
+		},
+		{
+			name: "incoming edges alone",
+			node: map[string]any{"name": "Issue", "incoming_edges": []any{"AUTHORED"}},
+			want: "### Node Issue\n\n- **Incoming edges**: AUTHORED\n",
+		},
+		{
+			name: "outgoing edges alone",
+			node: map[string]any{"name": "Issue", "outgoing_edges": []any{"IN_PROJECT"}},
+			want: "### Node Issue\n\n- **Outgoing edges**: IN_PROJECT\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			want := "## Orbit Schema\n\n" +
+				"- **Domains**: 0\n" +
+				"- **Nodes**: 1\n" +
+				"- **Edges**: 0\n\n" +
+				tt.want +
+				"\n---\n💡 **Next steps:**\n" +
+				"- Use action 'orbit.dsl' to read the grammar a query is written in\n" +
+				"- Use action 'orbit.query' to run a query naming the node and edge types listed here\n"
+			if got := FormatSchemaMarkdown(SchemaOutput{Nodes: []any{tt.node}}); got != want {
+				t.Errorf("FormatSchemaMarkdown() =\n%s\nwant\n%s", got, want)
+			}
+		})
+	}
+}
+
+// TestFormatSchemaMarkdown_UndecodableNode_IsLeftToTheStructuredOutput
+// verifies that a node definition that cannot be read as the card's node
+// shape is not rendered from a guess: a value JSON cannot encode and a
+// properties key holding a string both leave the node out of the sections,
+// and with no node read as expanded the card offers the step that asks for
+// properties.
+func TestFormatSchemaMarkdown_UndecodableNode_IsLeftToTheStructuredOutput(t *testing.T) {
+	out := SchemaOutput{Nodes: []any{
+		math.NaN(),
+		map[string]any{"name": "Issue", "properties": "iid"},
+	}}
+
+	want := "## Orbit Schema\n\n" +
+		"- **Domains**: 0\n" +
+		"- **Nodes**: 2\n" +
+		"- **Edges**: 0\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'orbit.dsl' to read the grammar a query is written in\n" +
+		schemaExpandHint +
+		"- Use action 'orbit.query' to run a query naming the node and edge types listed here\n"
+
+	if got := FormatSchemaMarkdown(out); got != want {
+		t.Errorf("FormatSchemaMarkdown() =\n%s\nwant\n%s", got, want)
 	}
 }
 
