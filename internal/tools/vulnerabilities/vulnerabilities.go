@@ -406,7 +406,7 @@ func nodeToItem(n gqlVulnerabilityNode) Item {
 		ConfirmedBy:             n.ConfirmedBy.Output(),
 		Solution:                n.Solution,
 		HasRemediations:         n.HasRemediations,
-		DismissalReason:         n.DismissalReason,
+		DismissalReason:         dismissalReasonWhileDismissed(n.State, n.DismissalReason),
 		FalsePositive:           n.FalsePositive,
 		PresentOnDefaultBranch:  n.PresentOnDefaultBranch,
 		ResolvedOnDefaultBranch: n.ResolvedOnDefaultBranch,
@@ -437,6 +437,25 @@ func nodeToItem(n gqlVulnerabilityNode) Item {
 		item.IssueLinks = issueLinksToItems(n.IssueLinks.Nodes)
 	}
 	return item
+}
+
+// dismissalReasonWhileDismissed is the dismissal reason GitLab answered, kept
+// only while the vulnerability is dismissed (issue 1310).
+//
+// The schema describes the field as null for every state but dismissed, and
+// GitLab 19.4 does not do that: it reads the reason from the vulnerability
+// read with no look at the state, and on a default self-managed instance no
+// later transition clears it (the derisk flag that would is off, and the
+// database trigger updates the state and leaves the reason). A vulnerability
+// confirmed, resolved or redetected after a dismissal therefore kept
+// answering the reason it was dismissed with, which read as a false positive
+// on one that had just been confirmed. Register row 123 records the GitLab
+// half.
+func dismissalReasonWhileDismissed(state, reason string) string {
+	if state != "DISMISSED" {
+		return ""
+	}
+	return reason
 }
 
 // identifierToItem converts a raw GraphQL identifier struct into an

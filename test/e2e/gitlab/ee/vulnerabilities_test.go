@@ -430,26 +430,8 @@ func TestVulnerabilityLifecycle_SASTReport_ReadsAndMovesEveryState(t *testing.T)
 			}
 		}
 
-		summary := harness.Do[vulnerabilities.PipelineSecuritySummaryOutput](s, actionVulnerabilityPipelineSecuritySummary,
-			map[string]any{"project_path": f.project.Path, "pipeline_iid": f.pipelineIID})
-		if summary.Sast == nil {
-			e.T.Errorf("pipeline %s reports no SAST section, and the fixture published a SAST report", f.pipelineIID)
-		} else {
-			if summary.Sast.VulnerabilitiesCount != sastFindingCount {
-				e.T.Errorf("pipeline %s counts %d SAST vulnerabilities, want %d", f.pipelineIID, summary.Sast.VulnerabilitiesCount, sastFindingCount)
-			}
-			// The one job that published the report ran one SAST scan, and the
-			// scan that produced the three counted findings is one GitLab
-			// recorded with a name and an outcome.
-			if len(summary.Sast.Scans) == 0 {
-				e.T.Errorf("pipeline %s lists no SAST scan, and the report its job published was counted", f.pipelineIID)
-			}
-			for _, scan := range summary.Sast.Scans {
-				if scan.Name == "" || scan.Status == "" {
-					e.T.Errorf("pipeline %s lists a SAST scan with no name or status: %+v", f.pipelineIID, scan)
-				}
-			}
-		}
+		assertSASTSummary(e, f.pipelineIID, harness.Do[vulnerabilities.PipelineSecuritySummaryOutput](s, actionVulnerabilityPipelineSecuritySummary,
+			map[string]any{"project_path": f.project.Path, "pipeline_iid": f.pipelineIID}))
 
 		findings := map[string]any{"project_path": f.project.Path, "pipeline_iid": f.pipelineIID}
 		// GitLab leaves a dismissed finding out of a listing that names no
@@ -484,7 +466,46 @@ func TestVulnerabilityLifecycle_SASTReport_ReadsAndMovesEveryState(t *testing.T)
 			e.T.Errorf("the dismissal answered state comment %q and reason %q, want %q and USED_IN_TESTS",
 				dismissed.Vulnerability.StateComment, dismissed.Vulnerability.DismissalReason, e2eDismissalComment)
 		}
+
+		// GitLab 19.4 keeps answering the reason a vulnerability was dismissed
+		// with after it moves on (register row 123), so a confirm after the
+		// dismissal must carry none: the reason belongs to the dismissed state
+		// alone (issue 1310). It is dismissed again afterwards, so the next
+		// surface finds the state this one is meant to leave.
+		reconfirmed := harness.Do[vulnerabilities.MutationOutput](s, actionVulnerabilityConfirm, map[string]any{"id": own.ID})
+		assertVulnerabilityState(e, actionVulnerabilityConfirm, reconfirmed, own.ID, stateConfirmed)
+		if reconfirmed.Vulnerability.DismissalReason != "" {
+			e.T.Errorf("the confirm after a dismissal answered dismissal reason %q, want none outside the dismissed state", reconfirmed.Vulnerability.DismissalReason)
+		}
+		assertVulnerabilityState(e, actionVulnerabilityDismiss, harness.Do[vulnerabilities.MutationOutput](s, actionVulnerabilityDismiss, map[string]any{
+			"id": own.ID, "comment": e2eDismissalComment, "dismissal_reason": "USED_IN_TESTS",
+		}), own.ID, stateDismissed)
 	})
+}
+
+// assertSASTSummary fails unless a pipeline's security summary carries the
+// SAST section the fixture's report fills: its three vulnerabilities counted,
+// and the scan that produced them recorded with a name and an outcome.
+func assertSASTSummary(e *harness.Env, pipelineIID string, summary vulnerabilities.PipelineSecuritySummaryOutput) {
+	e.T.Helper()
+	if summary.Sast == nil {
+		e.T.Errorf("pipeline %s reports no SAST section, and the fixture published a SAST report", pipelineIID)
+		return
+	}
+	if summary.Sast.VulnerabilitiesCount != sastFindingCount {
+		e.T.Errorf("pipeline %s counts %d SAST vulnerabilities, want %d", pipelineIID, summary.Sast.VulnerabilitiesCount, sastFindingCount)
+	}
+	// The one job that published the report ran one SAST scan, and the
+	// scan that produced the three counted findings is one GitLab
+	// recorded with a name and an outcome.
+	if len(summary.Sast.Scans) == 0 {
+		e.T.Errorf("pipeline %s lists no SAST scan, and the report its job published was counted", pipelineIID)
+	}
+	for _, scan := range summary.Sast.Scans {
+		if scan.Name == "" || scan.Status == "" {
+			e.T.Errorf("pipeline %s lists a SAST scan with no name or status: %+v", pipelineIID, scan)
+		}
+	}
 }
 
 // assertReadVulnerability fails unless a vulnerability read back is the one

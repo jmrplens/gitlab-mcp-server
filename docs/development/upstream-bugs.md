@@ -150,6 +150,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The ML model package route accepts neither PRIVATE-TOKEN nor a GitLab OAuth access token](#the-ml-model-package-route-accepts-neither-private-token-nor-a-gitlab-oauth-access-token)
   - [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text)
   - [The REST delete of a locked Terraform state answers 200 and deletes nothing](#the-rest-delete-of-a-locked-terraform-state-answers-200-and-deletes-nothing)
+  - [The vulnerability dismissal reason outlives the dismissal](#the-vulnerability-dismissal-reason-outlives-the-dismissal)
 - [GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)](#gitlab-orbit-gitlab-orgorbitknowledge-graph)
   - [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types)
   - [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both)
@@ -357,6 +358,7 @@ readable without opening the tracker:
 | 120 | client-go | [ListAuditEventsOptions models neither entity filter the instance list takes](#listauditeventsoptions-models-neither-entity-filter-the-instance-list-takes) | No | No | No | No | Yes, `audit_event.list_instance` adds `entity_type` and `entity_id` to the query through a request option |
 | 121 | client-go | [UpdateReleaseOptions sends the title and the notes as null on every partial update](#updatereleaseoptions-sends-the-title-and-the-notes-as-null-on-every-partial-update) | No | No | No | No | Yes, `release.update` takes the two keys out of the body through a request option whenever the caller did not set them |
 | 122 | client-go | [Seven update option structs cannot send the null or the empty list that clears a field](#seven-update-option-structs-cannot-send-the-null-or-the-empty-list-that-clears-a-field) | No | No | No | No | Yes, the seven update actions write the null or the `[]` into the body through a request option, and the group label actions no longer offer the priority |
+| 123 | gitlab-org/gitlab | [The vulnerability dismissal reason outlives the dismissal](#the-vulnerability-dismissal-reason-outlives-the-dismissal) | No | No | No | No; a confirmed, resolved or redetected vulnerability answered the reason it was dismissed with | Yes, `vulnerabilities` publishes the reason only while the state is `DISMISSED` |
 | 125 | client-go | [The issue statistics options type assignee_id as an integer](#the-issue-statistics-options-type-assignee_id-as-an-integer) | No | No | No | No | Yes, the three statistics actions write `None` or `Any` into the query through a request option |
 | 126 | client-go | [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date) | No | No | No | No | Yes, `user.add_ssh_key`, `user.add_ssh_key_for_user`, `snippet.list_all` and the two changelog actions leave the field unset and write the instant given through a request option |
 | 127 | gitlab-org/gitlab | [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text) | No | No | No | No; GitLab's pages leave such a submodule unlinked | Yes, `repository.list_submodules` and `repository.read_submodule_file` resolve a sibling namespace and the other spellings of the instance's clone URLs |
@@ -12586,6 +12588,53 @@ locked state was reported as done.
 
 **How we found it**: issue 1327, reproduced against GitLab EE in the
 `test/e2e` Docker stack: the state was still listed and locked after the 200.
+
+### The vulnerability dismissal reason outlives the dismissal
+
+- **Reported**: no.
+- **In review**: no. The change is one line: answer nil unless the
+  vulnerability is dismissed, which is what the field's own description
+  promises.
+- **Merged**: no. Read in 19.4.1-ee and on master at `f23a2b35383`
+  (2026-09-23), which carry the same lines.
+- **Blocking**: no.
+- **Workaround**: yes. `vulnerabilities` publishes `dismissal_reason` only
+  while the state is `DISMISSED` (`dismissalReasonWhileDismissed` in
+  `internal/tools/vulnerabilities/vulnerabilities.go`), on `vulnerability.get`,
+  `vulnerability.list` and the four state changes, and the card follows the
+  output. A fix upstream retires it.
+
+**Where**: `ee/app/graphql/types/vulnerability_type.rb`, whose
+`dismissal_reason` returns `object.vulnerability_read&.dismissal_reason`
+with no look at the state, while the field's description says "Returns null
+for states other than dismissed";
+`ee/app/services/vulnerabilities/base_state_transition_service.rb`, which
+clears the reason only through `Vulnerabilities::Reads::UpsertService` with
+`dismissal_reason: nil`; that service's `execute`, which keeps only the
+projects with the `turn_off_vulnerability_read_create_db_trigger_function`
+flag enabled, a GitLab.com derisk flag with `default_enabled: false`; and
+the `update_vulnerability_reads_from_vulnerability` trigger in
+`db/structure.sql`, which copies the severity, the state,
+`resolved_on_default_branch` and `auto_resolved` to the read and never the
+dismissal reason.
+
+**What**: a vulnerability dismissed with a reason and then confirmed, resolved
+or reverted to detected keeps answering that reason, with `dismissedAt`
+cleared and the state the new one. On an instance where the flag is off,
+which is every self-managed instance by default, nothing clears the column.
+
+**What it costs this server**: nothing once the workaround is in. Before it,
+the state changes, `vulnerability.get` and `vulnerability.list` all answered
+"Dismissal Reason: FALSE_POSITIVE" beside "State: CONFIRMED", and a model read
+a vulnerability it had just confirmed as a false positive.
+`security_finding.list` is not affected: `PipelineSecurityReportFinding`
+reads the reason from the latest state transition, which a confirm writes
+without one.
+
+**How we found it**:
+[issue 1310](https://github.com/jmrplens/gitlab-mcp-server/issues/1310), a
+dismiss and confirm round trip on the `test/e2e` Docker stack (EE Ultimate),
+then traced in the 19.4.1-ee source.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 

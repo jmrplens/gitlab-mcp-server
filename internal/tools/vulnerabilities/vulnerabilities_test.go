@@ -1172,6 +1172,71 @@ func TestConfirm_Success(t *testing.T) {
 	}
 }
 
+// TestConfirm_AfterADismissal_CarriesNoDismissalReason verifies that a
+// vulnerability confirmed after a dismissal is published with no dismissal
+// reason, whatever GitLab still answers for it (issue 1310).
+//
+// GitLab 19.4 reads Vulnerability.dismissalReason from the vulnerability read
+// with no look at the state, and on a default self-managed instance nothing
+// clears that column on a later transition, so a confirmed or redetected
+// vulnerability keeps answering the reason it was dismissed with. Published
+// as it came, the card said "Dismissal Reason: FALSE_POSITIVE" beside "State:
+// CONFIRMED", and a model read a vulnerability it had just confirmed as a
+// false positive. The schema's own description says the field is null for
+// every state but dismissed, which is what is published now.
+func TestConfirm_AfterADismissal_CarriesNoDismissalReason(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerabilityConfirm": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"vulnerabilityConfirm": {
+					"vulnerability": {
+						"id": "gid://gitlab/Vulnerability/42",
+						"title": "SQL Injection",
+						"state": "CONFIRMED",
+						"dismissedAt": null,
+						"dismissalReason": "FALSE_POSITIVE"
+					},
+					"errors": []
+				}
+			}`)
+		},
+	})
+
+	out, err := Confirm(context.Background(), testutil.NewTestClient(t, handler), ConfirmInput{ID: "gid://gitlab/Vulnerability/42"})
+	if err != nil {
+		t.Fatalf("Confirm() error = %v", err)
+	}
+	if out.Vulnerability.DismissalReason != "" {
+		t.Errorf("DismissalReason = %q on a %s vulnerability, want none", out.Vulnerability.DismissalReason, out.Vulnerability.State)
+	}
+	if card := FormatGetMarkdown(GetOutput{Vulnerability: out.Vulnerability}); strings.Contains(card, "Dismissal Reason") {
+		t.Errorf("the card of a confirmed vulnerability names a dismissal reason:\n%s", card)
+	}
+}
+
+// TestNodeToItem_DismissalReason_PublishedOnlyWhileDismissed holds the rule of
+// issue 1310 for every state GitLab answers: the reason is kept while the
+// vulnerability is dismissed and dropped in any other state.
+func TestNodeToItem_DismissalReason_PublishedOnlyWhileDismissed(t *testing.T) {
+	cases := []struct {
+		state string
+		want  string
+	}{
+		{state: "DISMISSED", want: "FALSE_POSITIVE"},
+		{state: "CONFIRMED"},
+		{state: "DETECTED"},
+		{state: "RESOLVED"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.state, func(t *testing.T) {
+			got := nodeToItem(gqlVulnerabilityNode{State: tc.state, DismissalReason: "FALSE_POSITIVE"}).DismissalReason
+			if got != tc.want {
+				t.Errorf("DismissalReason = %q for state %s, want %q", got, tc.state, tc.want)
+			}
+		})
+	}
+}
+
 // TestConfirm_EmptyID verifies that confirming a vulnerability returns
 // a validation error when the required id parameter is missing.
 func TestConfirm_EmptyID(t *testing.T) {
