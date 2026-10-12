@@ -693,12 +693,13 @@ func TestCompareBranches_PromptSameRef(t *testing.T) {
 // returns a standup report with the username heading, recent events,
 // authored MRs, and assigned issues when all APIs respond successfully.
 func TestDailyStandupPrompt_Success(t *testing.T) {
+	anHourAgo := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v4/user":
 			respondJSON(w, http.StatusOK, `{"id":1,"username":"alice"}`)
 		case "/api/v4/events":
-			respondJSON(w, http.StatusOK, `[{"id":1,"action_name":"pushed to","target_type":"Project","target_title":"my-project"}]`)
+			respondJSON(w, http.StatusOK, `[{"id":1,"action_name":"pushed to","target_type":"Project","target_title":"my-project","created_at":"`+anHourAgo+`"}]`)
 		case pathMRs:
 			// Return same MR for all filter variants
 			respondJSON(w, http.StatusOK, `[{"id":55,"iid":5,"title":"WIP MR","state":"opened","source_branch":"feature","target_branch":"main","author":{"username":"alice"},"detailed_merge_status":"draft"}]`)
@@ -735,12 +736,13 @@ func TestDailyStandupPrompt_Success(t *testing.T) {
 // prompt resolves an explicit username via the users API and includes that
 // user's events in the standup report.
 func TestDailyStandupPrompt_WithExplicitUsername(t *testing.T) {
+	anHourAgo := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case pathUsers:
 			respondJSON(w, http.StatusOK, `[{"id":99,"username":"bob"}]`)
 		case "/api/v4/users/99/events":
-			respondJSON(w, http.StatusOK, `[{"id":2,"action_name":"commented on","target_type":"MergeRequest","target_title":"Fix typos"}]`)
+			respondJSON(w, http.StatusOK, `[{"id":2,"action_name":"commented on","target_type":"MergeRequest","target_title":"Fix typos","created_at":"`+anHourAgo+`"}]`)
 		case pathMRs:
 			respondJSON(w, http.StatusOK, `[]`)
 		case pathIssues:
@@ -3489,9 +3491,13 @@ func TestCountBranchStats_CountsMergedAndStaleBranchesSeparately(t *testing.T) {
 //
 // "the last 24 hours" is the prompt's own description and the only thing that
 // makes the report a standup rather than a history; the window is built by
-// subtracting a day from now and reaches GitLab as a query parameter no
-// assertion has ever read, so its sign and its unit were both free.
+// subtracting a day from now and reaches GitLab as a query parameter, so its
+// sign and its unit were both free. GitLab keeps the events created after the
+// end of the after day, so the date sent is the day before the window's first
+// day: ten minutes past midnight on the 12th, the window opens on the 11th and
+// the request asks for after the 10th.
 func TestDailyStandup_TheContributionWindow_IsTheDayBefore(t *testing.T) {
+	pinClock(t, time.Date(2026, 10, 12, 0, 10, 0, 0, time.UTC))
 	var after atomic.Value
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
@@ -3508,9 +3514,8 @@ func TestDailyStandup_TheContributionWindow_IsTheDayBefore(t *testing.T) {
 	getPromptText(t, mux, "daily_standup", map[string]string{"project_id": "42"})
 
 	raw, _ := after.Load().(string)
-	want := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	if raw != want {
-		t.Errorf("the events request asked for after=%q, want %q (yesterday)", raw, want)
+	if want := "2026-10-10"; raw != want {
+		t.Errorf("the events request asked for after=%q, want %q (the day before the window opens)", raw, want)
 	}
 }
 
@@ -3750,11 +3755,13 @@ func TestUserStats_TheOverallTotals_AreTheSumOfTheRowsAbove(t *testing.T) {
 // TestUserStats_TheLookBackWindow_StartsTheAskedNumberOfDaysAgo pins the date
 // the period the report names is actually asked for.
 //
-// The window is `AddDate(0, 0, -days)` and reaches GitLab only as a query
-// parameter, so its sign was never observed: read without the minus, a report
-// headed "last 5 days" asks for merge requests created after a date five days
-// in the future and reports every count as zero.
+// The window is the asked number of days back and reaches GitLab only as a
+// query parameter, so its sign was never observed: read without the minus, a
+// report headed "last 5 days" asks for merge requests created after a date
+// five days in the future and reports every count as zero. It starts at the
+// UTC midnight of that day, as every other report of this package does.
 func TestUserStats_TheLookBackWindow_StartsTheAskedNumberOfDaysAgo(t *testing.T) {
+	pinClock(t, time.Date(2026, 10, 12, 15, 46, 0, 0, time.UTC))
 	var createdAfter atomic.Value
 	getPromptText(t, userStatsFixture(t, &createdAfter), "user_stats",
 		map[string]string{"project_id": "42", "username": "alice", "days": "5"})
@@ -3767,20 +3774,20 @@ func TestUserStats_TheLookBackWindow_StartsTheAskedNumberOfDaysAgo(t *testing.T)
 	if err != nil {
 		t.Fatalf("created_after %q does not parse: %v", raw, err)
 	}
-	want := time.Now().AddDate(0, 0, -5)
-	if asked.After(want.Add(time.Minute)) || asked.Before(want.Add(-time.Minute)) {
-		t.Errorf("created_after = %s, want about %s (five days ago)", asked.UTC(), want.UTC())
+	if want := time.Date(2026, 10, 7, 0, 0, 0, 0, time.UTC); !asked.Equal(want) {
+		t.Errorf("created_after = %s, want %s (the UTC midnight five days ago)", asked.UTC(), want)
 	}
 }
 
 // TestTeamMemberWorkload_TheLookBackWindow_StartsTheAskedNumberOfDaysAgo pins
 // the period this report says it covers.
 //
-// It is a second `AddDate(0, 0, -days)`, in a second handler, reaching GitLab
-// as a `created_after` nothing read: without its minus the recently-merged
+// It is a second look-back, in a second handler, reaching GitLab as a
+// `created_after` nothing read: without its minus the recently-merged
 // section asks for merge requests created after a date in the future and
 // reports a productive fortnight as an empty one.
 func TestTeamMemberWorkload_TheLookBackWindow_StartsTheAskedNumberOfDaysAgo(t *testing.T) {
+	pinClock(t, time.Date(2026, 10, 12, 15, 46, 0, 0, time.UTC))
 	var createdAfter atomic.Value
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/users", func(w http.ResponseWriter, _ *http.Request) {
@@ -3810,9 +3817,8 @@ func TestTeamMemberWorkload_TheLookBackWindow_StartsTheAskedNumberOfDaysAgo(t *t
 	if err != nil {
 		t.Fatalf("created_after %q does not parse: %v", raw, err)
 	}
-	want := time.Now().AddDate(0, 0, -9)
-	if asked.After(want.Add(time.Minute)) || asked.Before(want.Add(-time.Minute)) {
-		t.Errorf("created_after = %s, want about %s (nine days ago)", asked.UTC(), want.UTC())
+	if want := time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC); !asked.Equal(want) {
+		t.Errorf("created_after = %s, want %s (the UTC midnight nine days ago)", asked.UTC(), want)
 	}
 }
 
@@ -4274,5 +4280,110 @@ func assertDayCountRefused(t *testing.T, session *mcp.ClientSession, p *mcp.Prom
 	}
 	if sent := requests.Load() - before; sent != 0 {
 		t.Errorf("%s=%s sent %d request(s) before it was refused", name, bad, sent)
+	}
+}
+
+// eventsPromptsFixture answers every listing the six event-reading prompts
+// make, and records the after parameter each events request carries. The
+// current user is id 1 and the looked-up user id 7, so both events routes are
+// reached.
+func eventsPromptsFixture(events string) (http.Handler, func() []string) {
+	var mu sync.Mutex
+	var afters []string
+	record := func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		afters = append(afters, r.URL.Query().Get("after"))
+		mu.Unlock()
+		respondJSON(w, http.StatusOK, events)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{"id":1,"username":"me"}`)
+	})
+	mux.HandleFunc("GET /api/v4/users", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[{"id":7,"username":"alice"}]`)
+	})
+	mux.HandleFunc("GET /api/v4/events", record)
+	mux.HandleFunc("GET /api/v4/users/{id}/events", record)
+	mux.HandleFunc("GET /api/v4/projects/{project}/events", record)
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	return mux, func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(afters)
+	}
+}
+
+// TestEventPrompts_AskGitLabForEveryDayOfThePeriod pins the after date the six
+// prompts that read events send, under a pinned clock.
+//
+// GitLab's EventsFinder keeps events created after the end of the after day
+// (created_at > after.end_of_day), so after=D leaves out all of D. Every one
+// of these prompts sent the first day it wanted as after, so a "last 7 days"
+// report covered six days and today, and the standup, which sent yesterday's
+// date, covered only today since midnight. Two of them also computed the
+// period in local time where the rest use UTC. The date sent is now the UTC
+// day before the first day wanted: for a seven-day report rendered on
+// 2026-10-12 that is 2026-10-04, so 5 October is read whole, and for the
+// standup the day before the start of its 24 hours.
+func TestEventPrompts_AskGitLabForEveryDayOfThePeriod(t *testing.T) {
+	pinClock(t, time.Date(2026, 10, 12, 15, 46, 0, 0, time.UTC))
+
+	tests := []struct {
+		prompt string
+		args   map[string]string
+		want   string
+	}{
+		{prompt: "daily_standup", args: map[string]string{"project_id": "42"}, want: "2026-10-10"},
+		{prompt: "user_activity_report", args: map[string]string{"username": "alice", "days": "7"}, want: "2026-10-04"},
+		{prompt: "my_activity_summary", args: map[string]string{"days": "7"}, want: "2026-10-04"},
+		{prompt: "team_member_workload", args: map[string]string{"project_id": "42", "username": "alice", "days": "7"}, want: "2026-10-04"},
+		{prompt: "user_stats", args: map[string]string{"project_id": "42", "days": "7"}, want: "2026-10-04"},
+		{prompt: "project_activity_report", args: map[string]string{"project_id": "42", "days": "7"}, want: "2026-10-04"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.prompt, func(t *testing.T) {
+			handler, afters := eventsPromptsFixture(`[]`)
+			getPromptText(t, handler, tt.prompt, tt.args)
+			got := afters()
+			if len(got) != 1 || got[0] != tt.want {
+				t.Errorf("%s sent after=%v, want exactly one events request with after=%s", tt.prompt, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDailyStandup_KeepsTheLast24Hours verifies the other half of the
+// standup's window: GitLab is asked for whole days, which reach further back
+// than 24 hours, so the events before the start of the window are left out.
+func TestDailyStandup_KeepsTheLast24Hours(t *testing.T) {
+	now := time.Date(2026, 10, 12, 15, 46, 0, 0, time.UTC)
+	pinClock(t, now)
+	stamp := func(d time.Duration) string { return now.Add(-d).Format(time.RFC3339) }
+	events := `[` +
+		`{"action_name":"pushed to","target_type":"Branch","target_title":"inside the window","created_at":"` + stamp(2*time.Hour) + `"},` +
+		`{"action_name":"opened","target_type":"Issue","target_title":"exactly a day ago","created_at":"` + stamp(24*time.Hour) + `"},` +
+		`{"action_name":"commented on","target_type":"Note","target_title":"before the window","created_at":"` + stamp(30*time.Hour) + `"},` +
+		`{"action_name":"closed","target_type":"Issue","target_title":"undated"}` +
+		`]`
+	handler, _ := eventsPromptsFixture(events)
+
+	text := getPromptText(t, handler, "daily_standup", map[string]string{"project_id": "42"})
+
+	for _, want := range []string{"inside the window", "exactly a day ago"} {
+		t.Run("keeps "+want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("the standup left out an event of the last 24 hours, %q:\n%s", want, text)
+			}
+		})
+	}
+	for _, unwanted := range []string{"before the window", "undated"} {
+		t.Run("leaves out "+unwanted, func(t *testing.T) {
+			if strings.Contains(text, unwanted) {
+				t.Errorf("the standup listed an event from outside its 24 hours, %q:\n%s", unwanted, text)
+			}
+		})
 	}
 }

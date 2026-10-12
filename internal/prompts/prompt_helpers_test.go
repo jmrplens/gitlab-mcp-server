@@ -1793,6 +1793,34 @@ func pinClock(t *testing.T, at time.Time) {
 	t.Cleanup(func() { timeNow = previous })
 }
 
+// TestEventsAfter_SendsTheUTCDayBeforeTheFirstDayWanted pins the one date
+// rule every events request of this package follows.
+//
+// GitLab keeps the events created after the end of the after day, so the date
+// to send is the day before the first one wanted, and the day is the UTC one:
+// an instant late on 4 October in UTC that a local clock already calls
+// 5 October still wants 4 October read whole.
+func TestEventsAfter_SendsTheUTCDayBeforeTheFirstDayWanted(t *testing.T) {
+	madrid := time.FixedZone("CEST", 2*60*60)
+	tests := []struct {
+		name  string
+		first time.Time
+		want  string
+	}{
+		{name: "midnight UTC", first: time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC), want: "2026-10-04"},
+		{name: "the last instant of a UTC day", first: time.Date(2026, 10, 5, 23, 59, 59, 0, time.UTC), want: "2026-10-04"},
+		{name: "a local instant whose UTC day is the day before", first: time.Date(2026, 10, 5, 1, 0, 0, 0, madrid), want: "2026-10-03"},
+		{name: "the first of a month", first: time.Date(2026, 11, 1, 8, 0, 0, 0, time.UTC), want: "2026-10-31"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := eventsAfter(tt.first).String(); got != tt.want {
+				t.Errorf("eventsAfter(%s) = %s, want %s", tt.first, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestThreadState_ReadsADiscussionAsGitLabResolvesIt pins the one rule both
 // discussion-counting prompts share: a thread is a discussion, not a note.
 //

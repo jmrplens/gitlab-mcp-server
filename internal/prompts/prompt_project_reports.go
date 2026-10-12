@@ -128,11 +128,10 @@ func handleProjectActivityReport(ctx context.Context, client *gitlabclient.Clien
 		return nil, err
 	}
 	since := sinceDate(days)
-	sinceISO := gl.ISOTime(since)
 
 	// Project events
 	events, _, err := client.GL().Events.ListProjectVisibleEvents(projectID, &gl.ListProjectVisibleEventsOptions{
-		After:   &sinceISO,
+		After:   eventsAfter(since),
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {

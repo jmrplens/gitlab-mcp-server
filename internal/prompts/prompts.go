@@ -274,12 +274,14 @@ func warnFetch(ctx context.Context, what string, err error) {
 	}
 }
 
-// fetchContributionEvents returns the user's contribution events since the
-// given time, using the current-user endpoint when possible. Failures are
-// logged and yield an empty slice so the prompt can still render.
+// fetchContributionEvents returns the user's contribution events from since's
+// UTC day onward, using the current-user endpoint when possible. since is a
+// UTC midnight ([sinceDate]), so the day boundary GitLab filters on is the
+// period's own. Failures are logged and yield an empty slice so the prompt can
+// still render.
 func fetchContributionEvents(ctx context.Context, client *gitlabclient.Client, userID int64, isCurrentUser bool, since time.Time) []*gl.ContributionEvent {
 	eventOpts := &gl.ListContributionEventsOptions{
-		After:   new(gl.ISOTime(since)),
+		After:   eventsAfter(since),
 		PerPage: maxListItems,
 	}
 	var events []*gl.ContributionEvent
@@ -982,9 +984,12 @@ func handleDailyStandup(ctx context.Context, client *gitlabclient.Client, req *m
 		return nil, err
 	}
 
-	// Recent contribution events (last 24h)
+	// Recent contribution events (last 24h). GitLab answers in whole days, so
+	// the listing reaches back to the start of the window's first day and the
+	// events before the window itself are dropped here.
+	windowStart := timeNow().Add(-24 * time.Hour)
 	eventOpts := &gl.ListContributionEventsOptions{
-		After:   new(gl.ISOTime(time.Now().AddDate(0, 0, -1))),
+		After:   eventsAfter(windowStart),
 		PerPage: maxListItems,
 	}
 	var events []*gl.ContributionEvent
@@ -996,6 +1001,7 @@ func handleDailyStandup(ctx context.Context, client *gitlabclient.Client, req *m
 	if err != nil {
 		return nil, fmt.Errorf("failed to list events: %w", err)
 	}
+	events = eventsFrom(events, windowStart)
 
 	// Open MRs authored by user
 	authoredMRs, _, mrAuthorErr := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
@@ -1161,7 +1167,7 @@ func handleTeamMemberWorkload(ctx context.Context, client *gitlabclient.Client, 
 		return nil, err
 	}
 
-	since := time.Now().AddDate(0, 0, -days)
+	since := sinceDate(days)
 
 	// Contribution events over the period
 	events := fetchContributionEvents(ctx, client, userID, isCurrentUser, since)
@@ -1304,7 +1310,7 @@ func handleUserStats(ctx context.Context, client *gitlabclient.Client, req *mcp.
 		return nil, err
 	}
 
-	since := time.Now().AddDate(0, 0, -days)
+	since := sinceDate(days)
 
 	// Contribution events
 	events := fetchContributionEvents(ctx, client, userID, isCurrentUser, since)

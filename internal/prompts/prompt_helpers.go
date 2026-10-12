@@ -218,6 +218,31 @@ func threadState(d *gl.Discussion) (resolvable, unresolved bool) {
 // prompt sends and the releases it counts as made depend on it.
 var timeNow = time.Now
 
+// eventsAfter is the after date an events listing is sent so that GitLab
+// returns the events of first's UTC day onward. GitLab's EventsFinder keeps
+// the events created after the end of the after day (created_at >
+// after.end_of_day), so sending the first day wanted would leave that whole
+// day out; the date sent is the UTC day before it.
+func eventsAfter(first time.Time) *gl.ISOTime {
+	day := first.UTC()
+	before := time.Date(day.Year(), day.Month(), day.Day()-1, 0, 0, 0, 0, time.UTC)
+	return new(gl.ISOTime(before))
+}
+
+// eventsFrom keeps the events created at or after start, for a window that
+// does not begin at midnight: GitLab answers in whole days, so a listing asked
+// for with [eventsAfter] reaches back to the start of start's day. An event
+// with no creation time cannot be placed in the window and is left out.
+func eventsFrom(events []*gl.ContributionEvent, start time.Time) []*gl.ContributionEvent {
+	kept := make([]*gl.ContributionEvent, 0, len(events))
+	for _, e := range events {
+		if e.CreatedAt != nil && !e.CreatedAt.Before(start) {
+			kept = append(kept, e)
+		}
+	}
+	return kept
+}
+
 // sinceDate returns a time.Time that is the given number of days in the past,
 // truncated to the start of that day in UTC.
 func sinceDate(days int) time.Time {
