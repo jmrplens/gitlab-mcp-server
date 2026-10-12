@@ -125,6 +125,38 @@ func TestClassifyDocument_OperationTypes(t *testing.T) {
 			doc:  "{entry}",
 			want: notADocument,
 		},
+		// Issue 1321: a mutation that does not open its line. The first is the
+		// issue's own reproduction, which the gate used to classify as a read.
+		{
+			name: "a query and a mutation on one line",
+			doc:  `query Q { currentUser { id } } mutation Probe { vulnerabilityDismiss(input: {id: "gid://gitlab/Vulnerability/1"}) { errors } }`,
+			want: writeDocument,
+		},
+		{
+			name: "a fragment and a mutation on one line",
+			doc:  `fragment F on Vulnerability { id } mutation Probe { vulnerabilityDismiss(input: {id: "gid://gitlab/Vulnerability/1"}) { errors } }`,
+			want: writeDocument,
+		},
+		{
+			name: "a mutation behind a leading comma",
+			doc:  `,mutation Probe { vulnerabilityDismiss(input: {id: "gid://gitlab/Vulnerability/1"}) { errors } }`,
+			want: writeDocument,
+		},
+		{
+			name: "a mutation behind a byte order mark",
+			doc:  "\xef\xbb\xbfmutation Probe { vulnerabilityDismiss(input: {id: \"gid://gitlab/Vulnerability/1\"}) { errors } }",
+			want: writeDocument,
+		},
+		{
+			name: "a mutation behind a hole",
+			doc:  `%s mutation Probe($id: VulnerabilityID!) { vulnerabilityDismiss(input: {id: $id}) { errors } }`,
+			want: writeDocument,
+		},
+		{
+			name: "a query and a fragment on one line stay a read",
+			doc:  `query Q { currentUser { ...F } } fragment F on User { id }`,
+			want: readDocument,
+		},
 		{
 			name: "a fragment spliced into a mutation is still a mutation",
 			doc:  "\nmutation($id: VulnerabilityID!) {\n  vulnerabilityConfirm(input: {id: $id}) {\n    vulnerability {\n      id\n      title\n    }\n    errors\n  }\n}\n",

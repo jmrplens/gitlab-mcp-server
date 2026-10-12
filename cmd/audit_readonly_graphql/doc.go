@@ -69,6 +69,14 @@
 // two shapes above are the ones the convergence had to keep: both have a test
 // in this package that drives the real loader over a fixture written that way.
 //
+// Neither rule depends on where a keyword sits on its line any longer (issue
+// 1321). A document that parses is classified by gqlparser, so a query and a
+// mutation written on one line is a mutation; a shell that does not parse is
+// read by the line rule, which accepts the keyword behind a comma, a byte
+// order mark, a closing brace or a hole as well as at the start of a line, and
+// the inventory admits both. A test drives the real loader over a fixture
+// written in each of those shapes.
+//
 // One narrowness is left, on purpose and in one place: a bare selection set of
 // a single field with no spaces, `{id}`, is a unit annotation as far as any
 // text rule can tell, and is refused. That costs nothing this gate is about.

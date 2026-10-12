@@ -710,6 +710,138 @@ func TestAudit_TheShapesTheTwoRulesDisagreedAbout_AreClassified(t *testing.T) {
 	}
 }
 
+// spellingsFixture writes, one read-only action each, the mutations issue
+// 1321 found the gate blind to: a mutation on the same line as a query or a
+// fragment before it, and a lone mutation behind a comma, a byte order mark or
+// a hole. honestRead is the control, a query and a fragment on one line, which
+// is a read however it is laid out.
+const spellingsFixture = `package spellings
+
+import (
+	"context"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+const queryThenMutation = "query Q { currentUser { id } } mutation Probe { thingTouch(input: {id: \"1\"}) { errors } }"
+
+const fragmentThenMutation = "fragment F on Thing { id } mutation Probe { thingTouch(input: {id: \"1\"}) { errors } }"
+
+const commaMutation = ",mutation Probe { thingTouch(input: {id: \"1\"}) { errors } }"
+
+const bomMutation = "\xef\xbb\xbfmutation Probe { thingTouch(input: {id: \"1\"}) { errors } }"
+
+const holeMutation = "%s mutation Probe { thingTouch(input: {id: \"1\"}) { errors } }"
+
+const honestRead = "query Q { currentUser { ...F } } fragment F on User { id }"
+
+// Input is the fixture handler input.
+type Input struct {
+	ID string ` + "`json:\"id\"`" + `
+}
+
+// Output is the fixture handler output.
+type Output struct {
+	OK bool ` + "`json:\"ok\"`" + `
+}
+
+// QueryThenMutation sends the mutation written after a query on its line.
+func QueryThenMutation(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	return send(ctx, client, queryThenMutation, input)
+}
+
+// FragmentThenMutation sends the mutation written after a fragment on its line.
+func FragmentThenMutation(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	return send(ctx, client, fragmentThenMutation, input)
+}
+
+// CommaMutation sends the mutation behind a comma.
+func CommaMutation(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	return send(ctx, client, commaMutation, input)
+}
+
+// BOMMutation sends the mutation behind a byte order mark.
+func BOMMutation(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	return send(ctx, client, bomMutation, input)
+}
+
+// HoleMutation sends the mutation behind a hole.
+func HoleMutation(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	return send(ctx, client, holeMutation, input)
+}
+
+// HonestRead sends the query.
+func HonestRead(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	return send(ctx, client, honestRead, input)
+}
+
+func send(ctx context.Context, client *gitlabclient.Client, query string, input Input) (Output, error) {
+	var response struct {
+		Data map[string]any ` + "`json:\"data\"`" + `
+	}
+	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
+		Query:     query,
+		Variables: map[string]any{"id": input.ID},
+	}, &response, gl.WithContext(ctx))
+	return Output{OK: err == nil}, err
+}
+
+// ActionSpecs declares every handler read-only, which is honest for the last.
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		readSpec("query_then_mutation", toolutil.RouteAction(client, QueryThenMutation)),
+		readSpec("fragment_then_mutation", toolutil.RouteAction(client, FragmentThenMutation)),
+		readSpec("comma_mutation", toolutil.RouteAction(client, CommaMutation)),
+		readSpec("bom_mutation", toolutil.RouteAction(client, BOMMutation)),
+		readSpec("hole_mutation", toolutil.RouteAction(client, HoleMutation)),
+		readSpec("honest_read", toolutil.RouteAction(client, HonestRead)),
+	}
+}
+
+func readSpec(name string, route toolutil.ActionRoute) toolutil.ActionSpec {
+	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{Usage: "fixture"})
+}
+`
+
+// spellingsActions is the catalog for [spellingsFixture], every action read-only.
+func spellingsActions() []action {
+	names := []string{"query_then_mutation", "fragment_then_mutation", "comma_mutation", "bom_mutation", "hole_mutation", "honest_read"}
+	actions := make([]action, 0, len(names))
+	for _, name := range names {
+		actions = append(actions, action{ID: "spellings." + name, Name: name, Owner: "spellings", ReadOnly: true})
+	}
+	return actions
+}
+
+// TestAudit_MutationThatDoesNotOpenItsLine_IsReported holds issue 1321 end to
+// end on the real loader: a read-only action whose document carries a mutation
+// after another definition on the same line, or behind a comma, a byte order
+// mark or a hole, is a finding, and the action whose one-line document only
+// reads is not. The gate used to classify the first two as reads and to drop
+// the other three from the inventory, and printed a clean run either way.
+func TestAudit_MutationThatDoesNotOpenItsLine_IsReported(t *testing.T) {
+	prog := loadFixture(t, map[string]string{"spellings": spellingsFixture})
+
+	result := audit(prog, spellingsActions(), repoRoot(t))
+
+	want := []string{
+		"spellings.bom_mutation",
+		"spellings.comma_mutation",
+		"spellings.fragment_then_mutation",
+		"spellings.hole_mutation",
+		"spellings.query_then_mutation",
+	}
+	if got := findingActions(result); !equalStrings(got, want) {
+		t.Errorf("findings for %v, want %v", got, want)
+	}
+	if !strings.Contains(messageFor(result, "spellings.hole_mutation"), "holeMutation") {
+		t.Errorf("the finding does not name the document:\n%s", messageFor(result, "spellings.hole_mutation"))
+	}
+}
+
 // TestParseException_DirectiveForms verifies what counts as a declared
 // exception: the directive, an action name, and a reason. A directive without
 // a reason is not an exception, because an exception with no stated reason is

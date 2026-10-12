@@ -108,6 +108,35 @@ func TestLooksLikeDocument_TellsGraphQLFromEverythingElse(t *testing.T) {
 		{name: "a comment above a JSON object is still not a document", value: "# not graphql\n{\"id\": 1}", want: false},
 		{name: "nothing but a comment", value: "# just a note", want: false},
 		{name: "comments and nothing else", value: "# one\n# two\n", want: false},
+
+		// The keyword does not have to open its line either (issue 1321).
+		// GraphQL reads a comma and a byte order mark as Ignored, a second
+		// definition may follow the brace that closes the first on the same
+		// line, and a shell carries its hole in front of the keyword. A
+		// mutation written any of these ways used to leave the inventory, and
+		// every gate that reads it, in silence.
+		{name: "a mutation behind a leading comma", value: ",mutation Probe { thing(input: {id: \"1\"}) { errors } }", want: true},
+		{name: "a mutation behind a byte order mark", value: "\xef\xbb\xbfmutation Probe { thing(input: {id: \"1\"}) { errors } }", want: true},
+		{name: "a mutation behind a format verb on its line", value: "%s mutation Probe($id: ID!) { thing(input: {id: $id}) { errors } }", want: true},
+		{name: "a mutation behind a template action on its line", value: "{{template \"head\"}} mutation Probe { thing { errors } }", want: true},
+		{name: "a query behind a format verb on its line", value: "%[1]s query Things { things { id } }", want: true},
+		{name: "a fragment behind a template action on its line", value: "{{/* shared */}} fragment Bits on Thing { id }", want: true},
+		{name: "a mutation behind the brace and comma of a query", value: "{ a } , mutation Probe { thing { errors } }", want: true},
+		// gqlparser reads a comma as Ignored inside a definition too, so a
+		// document the line rule cannot read is admitted when it parses and
+		// opens with a definition's keyword.
+		{name: "a mutation whose name is followed by a comma", value: "mutation Probe, { thing { errors } }", want: true},
+		{name: "a fragment whose name is followed by a comma", value: "fragment Bits, on Thing { id }", want: true},
+		{name: "a parsed document behind a comment", value: "# probe\nmutation Probe, { thing { errors } }", want: true},
+		// What the wider rules still refuse: prose whose comma stands before
+		// the keyword in the middle of a line, a keyword glued to a word, and
+		// text that parses only as a bare selection set, which the unit rule
+		// above decides.
+		{name: "prose with a comma before a keyword mid-line", value: "see the docs, query parameters {page} apply", want: false},
+		{name: "a hole glued to a longer word", value: "%subquery Things { things { id } }", want: false},
+		{name: "a spaceless selection set that also parses", value: "{entry}", want: false},
+		{name: "a parsed document opening with a selection set and nothing else", value: "{id}", want: false},
+		{name: "prose that does not parse", value: "mutation Probe, then { the rest }", want: false},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -150,7 +179,31 @@ func TestDefinesMutation_SeparatesWritesFromReads(t *testing.T) {
 		{name: "a named mutation followed by a directive", value: "mutation Touch @skip(if: false) { thing { errors } }", want: true},
 		{name: "a mutation whose name carries underscores and digits", value: "mutation _touch_v2($id: ID!) { touch(id: $id) { errors } }", want: true},
 
+		// The shapes issue 1321 found the line rule blind to. The first two
+		// are the issue's own reproduction and its fragment twin: one line,
+		// two definitions, the mutation second. A document that parses is
+		// read by gqlparser, so where on its line the keyword sits no longer
+		// matters, and one that does not parse, a shell, is read by the line
+		// rule widened to the keyword after a brace, a comma, a byte order
+		// mark or a hole.
+		{name: "a query and a mutation on one line", value: "query Q { currentUser { id } } mutation Probe { vulnerabilityDismiss(input: {id: \"gid://gitlab/Vulnerability/1\"}) { errors } }", want: true},
+		{name: "a fragment and a mutation on one line", value: "fragment F on Vulnerability { id } mutation Probe { vulnerabilityDismiss(input: {id: \"gid://gitlab/Vulnerability/1\"}) { errors } }", want: true},
+		{name: "a selection set and a mutation on one line", value: "{ a } , mutation Probe { thing { errors } }", want: true},
+		{name: "a mutation behind a leading comma", value: ",mutation Probe { thing(input: {id: \"1\"}) { errors } }", want: true},
+		{name: "a mutation behind a byte order mark", value: "\xef\xbb\xbfmutation Probe { thing(input: {id: \"1\"}) { errors } }", want: true},
+		{name: "a mutation whose name is followed by a comma", value: "mutation Probe, { thing { errors } }", want: true},
+		{name: "a shell holding a mutation behind a format verb", value: "%s mutation Probe($id: ID!) { thing(input: {id: $id}) { errors } }", want: true},
+		{name: "a shell holding a mutation behind a template action", value: "{{template \"head\"}} mutation Probe { thing { errors } }", want: true},
+		{name: "a shell holding a mutation behind a comma after a hole", value: "%v, mutation Probe { thing { errors } }", want: true},
+		{name: "a shell holding a mutation after a query on its line", value: "query { a } mutation Probe { thing(id: %d) { errors } }", want: true},
+
 		{name: "a query", value: "query($id: ID!) {\n  node(id: $id) { id }\n}", want: false},
+		// A document that parses is answered by what it holds, so a line that
+		// opens with the keyword inside a block string is not a mutation, and
+		// neither is a query and a fragment written on one line.
+		{name: "a mutation written inside a block string argument", value: "query {\n  echo(text: \"\"\"\nmutation Touch { touch { errors } }\n\"\"\") { id }\n}", want: false},
+		{name: "a query and a fragment on one line", value: "query { a { ...F } } fragment F on Thing { id }", want: false},
+		{name: "a shell holding a query behind a hole", value: "%s query Things { things(id: %d) { id } }", want: false},
 		{name: "a subscription", value: "subscription {\n  tick\n}", want: false},
 		{name: "a fragment", value: "fragment Bits on Thing { id }", want: false},
 		{name: "a bare selection set", value: "{ currentUser { id } }", want: false},
@@ -162,6 +215,11 @@ func TestDefinesMutation_SeparatesWritesFromReads(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			if got := DefinesMutation(testCase.value); got != testCase.want {
 				t.Errorf("DefinesMutation(%q) = %v, want %v", testCase.value, got, testCase.want)
+			}
+			// A mutation the inventory does not admit is one no gate reads,
+			// so every document answered as a mutation is a document.
+			if testCase.want && !LooksLikeDocument(testCase.value) {
+				t.Errorf("LooksLikeDocument(%q) = false for a document DefinesMutation answers as a mutation", testCase.value)
 			}
 		})
 	}

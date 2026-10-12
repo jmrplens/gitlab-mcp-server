@@ -78,7 +78,11 @@
 // re-read the text with a rule of its own as well, which disagreed with
 // [LooksLikeDocument] about two shapes and so judged a narrower set than the one
 // it printed; it asks [DefinesMutation] now, so the rule that says what a
-// document is and the rule that says whether it writes are one rule. What it
+// document is and the rule that says whether it writes are one rule. Both read
+// a document that parses through gqlparser and only a shell through the line
+// rule, so a mutation after another definition on the same line, or behind a
+// comma, a byte order mark or a hole, is in the inventory and answered as the
+// mutation it is (issue 1321). What it
 // cannot resolve, a document with no [Document.Object] that its own body walk
 // did not record either, it reports rather than skips.
 //
