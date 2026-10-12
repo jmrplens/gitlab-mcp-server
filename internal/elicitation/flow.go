@@ -94,8 +94,13 @@ func FlowFromRequest(req *mcp.CallToolRequest) (*Flow, error) {
 	// Read the revision from the request rather than the session. From
 	// 2026-07-28 a client states it per request and may arrive without ever
 	// having handshaken, so the session-level value is whatever the first
-	// request on that session happened to say. The accessor still falls back to
-	// InitializeParams, which is where an older client's value lives.
+	// request on that session happened to say. Without a per-request value the
+	// accessor falls back to InitializeParams, which holds the version the
+	// client asked for in initialize and not the one negotiated: a client that
+	// asked for 2026-07-28 is negotiated down to 2025-11-25 and still served the
+	// multi round-trip flow. The SDK's own check reads the same value, and
+	// agreeing with it is deliberate (row 11 of docs/development/upstream-bugs.md,
+	// go-sdk#1258); test/e2e/stdio/elicitation_declared_version_test.go pins it.
 	if req.ProtocolVersion() < minMRTRProtocolVersion {
 		return f, nil
 	}

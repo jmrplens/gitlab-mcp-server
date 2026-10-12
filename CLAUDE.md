@@ -340,8 +340,9 @@ found by hand against a binary, which is what these modules automate.
 
 The two modules also hold a second kind of case: pins of what the go-sdk the
 module is built against does with this server's answers today, where that is a
-defect recorded in `docs/development/upstream-bugs.md` (rows 10 and 68 are held
-by `test/e2e/stdio/listen_end_test.go` and
+defect recorded in `docs/development/upstream-bugs.md` (rows 10, 11 and 68 are
+held by `test/e2e/stdio/listen_end_test.go`,
+`test/e2e/stdio/elicitation_declared_version_test.go` and
 `test/e2e/http/session_not_found_test.go`). They fail on a dependency bump
 rather than on a change of ours, with a message naming the entry and every page
 that has to change with it, and a new pin of that kind belongs in one of these

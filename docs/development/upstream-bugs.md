@@ -6489,6 +6489,17 @@ the server's output.
 - **Workaround**: none taken, deliberately. Disagreeing with the SDK here would
   be worse than matching it: our gate and `clientSupportsMultiRoundTrip` would
   choose differently for the same session, and the SDK labels the result.
+- **Pinned by**:
+  `TestElicitation_InitializeAskingForNewRevision_IsServedTheMultiRoundTripShape`
+  in `test/e2e/stdio/elicitation_declared_version_test.go`, against the real
+  binary on stdio: `initialize` asking for `2026-07-28` is answered
+  `2025-11-25`, and `gitlab_interactive_issue_create` called on that session
+  with no per-request protocol `_meta` answers `resultType: input_required`
+  asking for the title and sends no `elicitation/create`. It fails on the
+  go-sdk release that carries
+  [modelcontextprotocol/go-sdk#1266](https://github.com/modelcontextprotocol/go-sdk/pull/1266),
+  naming this row, the comment in `internal/elicitation/flow.go` and the
+  elicitation page as what that bump updates (issue 1319).
 
 **What**: `initialize` is deprecated in 2026-07-28, so `negotiatedVersion`
 (`mcp/shared.go`) caps that handshake at `2025-11-25`, while
