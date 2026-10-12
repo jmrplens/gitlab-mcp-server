@@ -20,12 +20,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
@@ -4875,4 +4877,160 @@ func TestRegisterAll_PanicsWhenTheCatalogCannotBeBuilt(t *testing.T) {
 		}
 	}()
 	RegisterAll(mcp.NewServer(&mcp.Implementation{Name: "failing", Version: "0"}, nil), nil, edition.Free)
+}
+
+// TestCatalog_EveryActionsZeroOutput_ValidatesAgainstItsOwnOutputSchema
+// marshals the zero value of every catalog action's output type and validates
+// it against the output schema that action publishes, the way the SDK
+// validates a tool's structured result on the individual surface. A field the
+// schema types as an object or a number and the zero value writes as null (a
+// map or a pointer without omitempty) is a result GitLab can provoke by
+// sending nothing for it, and the individual surface then answers with a
+// JSON-RPC error and no result at all: an empty service ping did exactly that
+// (issue 1292). Both Ultimate builds are read, so the actions only GitLab.com
+// serves are held too.
+//
+// The zero value builds no list element and follows no pointer, so a map
+// without omitempty inside a row of a list, or under an object GitLab sent,
+// would escape it. Each output is therefore also held populated: every slice
+// given one element and every pointer followed, recursively, with its maps
+// left out to be written as null, and again with each map given one entry,
+// so a map inside a map's value is reached as well.
+func TestCatalog_EveryActionsZeroOutput_ValidatesAgainstItsOwnOutputSchema(t *testing.T) {
+	builds := []struct {
+		name   string
+		client *gitlabclient.Client
+	}{
+		{name: "self-managed", client: nil},
+		{name: "gitlab.com", client: newGitLabDotComClient(t)},
+	}
+	for _, build := range builds {
+		t.Run(build.name, func(t *testing.T) {
+			catalog := mustBuildActionCatalog(t, build.client, ActionCatalogOptions{Enterprise: true})
+			checked := 0
+			for _, action := range catalog.Actions() {
+				route := action.Route
+				if route.OutputType == nil || route.OutputSchema == nil {
+					continue
+				}
+				checked++
+				for _, shape := range []outputShape{zeroOutput, populatedOutput, populatedMapsOutput} {
+					if err := validateOutputInstance(route.OutputType, shape, route.OutputSchema); err != nil {
+						t.Errorf("%s: the %s %s does not validate against the published output schema: %v", action.ID, shape, route.OutputType, err)
+					}
+				}
+			}
+			if checked == 0 {
+				t.Fatal("no catalog action carries an output type and schema, so nothing was held")
+			}
+		})
+	}
+}
+
+// outputShape is which instance of an output type the zero-output gate builds.
+type outputShape int
+
+const (
+	// zeroOutput is the zero value: no list element, no pointer followed.
+	zeroOutput outputShape = iota
+	// populatedOutput gives every slice one element and follows every
+	// pointer, leaving each map nil.
+	populatedOutput
+	// populatedMapsOutput does the same and gives each map one entry.
+	populatedMapsOutput
+)
+
+// String names the shape in a failure.
+func (s outputShape) String() string {
+	switch s {
+	case populatedOutput:
+		return "populated"
+	case populatedMapsOutput:
+		return "populated-with-maps"
+	default:
+		return "zero"
+	}
+}
+
+// rawJSONType is a value populate leaves empty, since one zero byte is not
+// JSON and would fail the marshal rather than the schema.
+var rawJSONType = reflect.TypeFor[json.RawMessage]()
+
+// populate fills v in place for the populated shapes: one element in every
+// slice, every pointer followed and, when fillMaps is set, one entry in every
+// map with string keys. A type already open twice on the way down is left at
+// its zero, which ends a recursive type without leaving it unvisited.
+func populate(v reflect.Value, fillMaps bool, open map[reflect.Type]int) {
+	t := v.Type()
+	if open[t] >= 2 || t == rawJSONType {
+		return
+	}
+	open[t]++
+	defer func() { open[t]-- }()
+	switch v.Kind() {
+	case reflect.Struct:
+		for _, field := range v.Fields() {
+			if field.CanSet() {
+				populate(field, fillMaps, open)
+			}
+		}
+	case reflect.Pointer:
+		elem := reflect.New(t.Elem())
+		populate(elem.Elem(), fillMaps, open)
+		v.Set(elem)
+	case reflect.Slice:
+		s := reflect.MakeSlice(t, 1, 1)
+		populate(s.Index(0), fillMaps, open)
+		v.Set(s)
+	case reflect.Map:
+		if !fillMaps || t.Key().Kind() != reflect.String {
+			return
+		}
+		m := reflect.MakeMapWithSize(t, 1)
+		value := reflect.New(t.Elem()).Elem()
+		populate(value, fillMaps, open)
+		m.SetMapIndex(reflect.ValueOf("key").Convert(t.Key()), value)
+		v.Set(m)
+	}
+}
+
+// validateOutputInstance builds the instance of typ the shape names,
+// dereferenced when typ is a pointer as the SDK does for a typed nil result,
+// marshals it and validates the JSON against schema after applying its
+// defaults, which is what the SDK's applySchema does to a tool's structured
+// output.
+func validateOutputInstance(typ reflect.Type, shape outputShape, schema map[string]any) error {
+	if typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	value := reflect.New(typ).Elem()
+	if shape != zeroOutput {
+		populate(value, shape == populatedMapsOutput, map[reflect.Type]int{})
+	}
+	data, err := json.Marshal(value.Interface())
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+	var instance any
+	if err = json.Unmarshal(data, &instance); err != nil {
+		return fmt.Errorf("unmarshal: %w", err)
+	}
+	raw, err := json.Marshal(schema)
+	if err != nil {
+		return fmt.Errorf("marshal schema: %w", err)
+	}
+	var parsed jsonschema.Schema
+	if err = json.Unmarshal(raw, &parsed); err != nil {
+		return fmt.Errorf("parse schema: %w", err)
+	}
+	resolved, err := parsed.Resolve(nil)
+	if err != nil {
+		return fmt.Errorf("resolve schema: %w", err)
+	}
+	if _, isObject := instance.(map[string]any); isObject {
+		if err = resolved.ApplyDefaults(&instance); err != nil {
+			return fmt.Errorf("apply defaults: %w", err)
+		}
+	}
+	return resolved.Validate(&instance)
 }

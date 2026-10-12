@@ -448,6 +448,52 @@ func TestUpdate_UnmarshalResponseError(t *testing.T) {
 	}
 }
 
+// errUnreadableSettings stands in for a captured answer the settings map
+// could not hold.
+var errUnreadableSettings = errors.New("the captured answer is not a settings object")
+
+// failCapturedRead makes the handlers' captured read fail for the rest of the
+// test, which no answer through the transport can do: client-go refuses every
+// body the settings map refuses, one decode earlier.
+func failCapturedRead(t *testing.T) {
+	t.Helper()
+	original := readCapturedSettings
+	readCapturedSettings = func(*gitlabclient.ResponseCapture) (map[string]any, error) {
+		return nil, errUnreadableSettings
+	}
+	t.Cleanup(func() { readCapturedSettings = original })
+}
+
+// settingsAnswer answers every request with a settings object client-go
+// accepts, so the only thing that can fail is the captured read.
+func settingsAnswer(w http.ResponseWriter, _ *http.Request) {
+	testutil.RespondJSON(w, http.StatusOK, `{"signup_enabled":true}`)
+}
+
+// TestGet_CapturedReadFails_IsAnError verifies that a settings object the
+// handler cannot read back is reported, named for the operation, rather than
+// answered as an instance with no settings.
+func TestGet_CapturedReadFails_IsAnError(t *testing.T) {
+	failCapturedRead(t)
+	client := testutil.NewTestClient(t, http.HandlerFunc(settingsAnswer))
+	out, err := Get(t.Context(), client, GetInput{})
+	if !errors.Is(err, errUnreadableSettings) || !strings.Contains(err.Error(), "settings_get") {
+		t.Fatalf("Get() = %+v, %v; want the read's error, named settings_get", out, err)
+	}
+}
+
+// TestUpdate_CapturedReadFails_IsAnError verifies the same for Update: an
+// update whose answer cannot be read back is not reported as applied with no
+// settings.
+func TestUpdate_CapturedReadFails_IsAnError(t *testing.T) {
+	failCapturedRead(t)
+	client := testutil.NewTestClient(t, http.HandlerFunc(settingsAnswer))
+	out, err := Update(t.Context(), client, UpdateInput{Settings: map[string]any{"signup_enabled": false}})
+	if !errors.Is(err, errUnreadableSettings) || !strings.Contains(err.Error(), "settings_update") {
+		t.Fatalf("Update() = %+v, %v; want the read's error, named settings_update", out, err)
+	}
+}
+
 // TestUpdate_Request_CarriesTheCallersSettingsAsTheBody verifies that the map a
 // caller passes is what GitLab receives, key for key and value for value.
 //

@@ -22,12 +22,16 @@ import (
 // GetServicePingInput is the input (no params).
 type GetServicePingInput struct{}
 
-// GetServicePingOutput is the output for getting service ping data.
+// GetServicePingOutput is the output for getting service ping data. Its maps
+// are left out when GitLab sends none, which an instance with service ping
+// disabled does (it answers {}): written as null they failed the output
+// schema, which types them as objects, and the individual surface answered
+// the call with a protocol error instead of a result.
 type GetServicePingOutput struct {
 	toolutil.HintableOutput
 	RecordedAt string            `json:"recorded_at"`
-	License    map[string]string `json:"license"`
-	Counts     map[string]int64  `json:"counts"`
+	License    map[string]string `json:"license,omitempty"`
+	Counts     map[string]int64  `json:"counts,omitempty"`
 }
 
 // GetServicePing retrieves service ping data (admin-only).
@@ -69,16 +73,16 @@ type NonSQLMetricsOutput struct {
 	LicenseSHA256         string            `json:"license_sha256"`
 	LicenseID             string            `json:"license_id"`
 	HistoricalMaxUsers    int64             `json:"historical_max_users"`
-	Licensee              map[string]string `json:"licensee"`
+	Licensee              map[string]string `json:"licensee,omitempty"`
 	LicenseUserCount      int64             `json:"license_user_count"`
 	LicenseStartsAt       string            `json:"license_starts_at"`
 	LicenseExpiresAt      string            `json:"license_expires_at"`
 	LicensePlan           string            `json:"license_plan"`
-	LicenseAddOns         map[string]int64  `json:"license_add_ons"`
+	LicenseAddOns         map[string]int64  `json:"license_add_ons,omitempty"`
 	LicenseTrial          string            `json:"license_trial"`
 	LicenseSubscriptionID string            `json:"license_subscription_id"`
-	License               map[string]string `json:"license"`
-	Settings              map[string]string `json:"settings"`
+	License               map[string]string `json:"license,omitempty"`
+	Settings              map[string]string `json:"settings,omitempty"`
 }
 
 // GetNonSQLMetrics retrieves non-SQL service ping metrics (admin-only).
@@ -140,17 +144,17 @@ type QueriesOutput struct {
 	LicenseSHA256         string            `json:"license_sha256"`
 	LicenseID             string            `json:"license_id"`
 	HistoricalMaxUsers    int64             `json:"historical_max_users"`
-	Licensee              map[string]string `json:"licensee"`
+	Licensee              map[string]string `json:"licensee,omitempty"`
 	LicenseUserCount      int64             `json:"license_user_count"`
 	LicenseStartsAt       string            `json:"license_starts_at"`
 	LicenseExpiresAt      string            `json:"license_expires_at"`
 	LicensePlan           string            `json:"license_plan"`
-	LicenseAddOns         map[string]int64  `json:"license_add_ons"`
+	LicenseAddOns         map[string]int64  `json:"license_add_ons,omitempty"`
 	LicenseTrial          string            `json:"license_trial"`
 	LicenseSubscriptionID string            `json:"license_subscription_id"`
-	License               map[string]string `json:"license"`
-	Settings              map[string]string `json:"settings"`
-	Counts                map[string]string `json:"counts"`
+	License               map[string]string `json:"license,omitempty"`
+	Settings              map[string]string `json:"settings,omitempty"`
+	Counts                map[string]string `json:"counts,omitempty"`
 }
 
 // GetQueries retrieves service ping SQL queries (admin-only).

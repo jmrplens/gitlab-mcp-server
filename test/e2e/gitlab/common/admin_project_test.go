@@ -241,6 +241,21 @@ func TestAdmin_UsageData(t *testing.T) {
 	}
 }
 
+// TestAdmin_UsageDataServicePing_AnswersOnEverySurface reads the service ping
+// on every surface. A Docker CE instance answers it with {}, which left the
+// maps of the output nil, and the individual surface, the one that validates
+// a structured result against its output schema, answered the call with a
+// protocol error and no result, while the dispatchers rendered an empty card
+// (issue 1292). harness.Do fails the test on the error.
+func TestAdmin_UsageDataServicePing_AnswersOnEverySurface(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin))
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		ping := harness.Do[usagedata.GetServicePingOutput](e.On(surface), actionAdminUsageDataServicePing, nil)
+		e.T.Logf("service ping on %s: recorded_at=%q license=%d counts=%d", surface, ping.RecordedAt, len(ping.License), len(ping.Counts))
+	})
+}
+
 // assertUsageDataQueries reads the usage-data queries endpoint, which GitLab
 // serves only while the usage_data_queries_api feature flag is on, and puts
 // the flag back where it found it.

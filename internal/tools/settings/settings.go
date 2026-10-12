@@ -22,10 +22,12 @@ import (
 type GetInput struct{}
 
 // GetOutput contains the application settings object GitLab answered with, as
-// a JSON map keyed the way the instance spells it.
+// a JSON map keyed the way the instance spells it. The map is left out rather
+// than written as null when there is none, since the output schema types it
+// as an object and null fails it.
 type GetOutput struct {
 	toolutil.HintableOutput
-	Settings map[string]any `json:"settings"`
+	Settings map[string]any `json:"settings,omitempty"`
 }
 
 // Get retrieves the current application settings (admin-only).
@@ -52,7 +54,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (output G
 			"requires administrator access; this is an instance-wide endpoint. Not available on GitLab.com SaaS")
 	}
 
-	values, err := capturedSettings(captured)
+	values, err := readCapturedSettings(captured)
 	if err != nil {
 		return output, toolutil.WrapErr("settings_get", err)
 	}
@@ -74,7 +76,7 @@ type UpdateInput struct {
 // update with, keyed the way the instance spells it.
 type UpdateOutput struct {
 	toolutil.HintableOutput
-	Settings map[string]any `json:"settings"`
+	Settings map[string]any `json:"settings,omitempty"`
 }
 
 // Update modifies application settings (admin-only).
@@ -112,7 +114,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 			"settings keys must use snake_case matching the GitLab API (e.g. signup_enabled, default_project_visibility); use admin.settings_get first to inspect valid keys; requires administrator access")
 	}
 
-	values, err := capturedSettings(captured)
+	values, err := readCapturedSettings(captured)
 	if err != nil {
 		return output, toolutil.WrapErrWithMessage("settings_update", err)
 	}
@@ -120,6 +122,12 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	output.Settings = values
 	return output, nil
 }
+
+// readCapturedSettings is the reader Get and Update call. It is a test seam:
+// since no answer through the transport can make [capturedSettings] fail (see
+// below), the handlers' branch for a read that failed is driven by a test
+// standing in for one here.
+var readCapturedSettings = capturedSettings // test seam
 
 // capturedSettings reads the settings object out of the answer GitLab sent,
 // which is the whole published surface of both handlers and not a field beside
