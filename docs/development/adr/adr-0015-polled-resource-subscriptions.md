@@ -185,7 +185,23 @@ make the worst case something an operator can predict.
 
 4. **Change detection means what a subscriber can verify.** Watchers read
    through the very handler `resources/read` dispatches to, so "the content
-   changed" is exactly "what you would read changed".
+   changed" is "what you would read changed".
+
+   **With one exception, made once it was measured.** As first written the
+   comparison hashed the whole content, and a job's `duration` and
+   `queued_duration` are not content in that sense: GitLab recomputes both
+   from the clock on every read while the job runs. A running job is polled at
+   the 5s floor, so every poll of every running job notified (issue 1343): a
+   job watched through about half a minute and two status changes sent five
+   notifications instead of two, and a twenty-minute job would send about two
+   hundred and forty, each inviting a re-read that spends the subscriber's
+   rate budget. The digest of a job, and of each job of a pipeline's job list,
+   is therefore taken without those two fields (`Kind.changeDigest`), while
+   the read still returns them. Every other field, the status and the failure
+   reason among them, still notifies when it moves. Reporting the duration as
+   null while a job runs was the alternative, and was rejected because it
+   would take a figure GitLab sends away from every reader to fix what only a
+   watcher compares.
 
 ## Consequences
 

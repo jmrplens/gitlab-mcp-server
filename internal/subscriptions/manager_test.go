@@ -888,6 +888,135 @@ func TestWatcher_DemotedResource_StillNotifies(t *testing.T) {
 	})
 }
 
+// runningJobReader serves a job, or a pipeline's job list holding one, whose
+// duration and queued duration grow on every read, as GitLab recomputes them
+// on every read while a job runs, and whose status a test sets.
+type runningJobReader struct {
+	mu     sync.Mutex
+	list   bool
+	status string
+	reads  int
+}
+
+func (r *runningJobReader) Read(_ context.Context, _ string) ([]byte, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.reads++
+	job := fmt.Sprintf(`{"id":7,"name":"build","status":%q,"duration":%d.5,"queued_duration":%d,"web_url":"https://gitlab.example.com/j/7"}`,
+		r.status, r.reads, r.reads*2)
+	if r.list {
+		return []byte(`[{"id":6,"status":"success","duration":3},` + job + `]`), nil
+	}
+	return []byte(job), nil
+}
+
+func (r *runningJobReader) setStatus(status string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.status = status
+}
+
+// TestWatcher_RunningJobDurationGrows_NotifiesOnlyOnAStatusChange holds the
+// change a watched job is notified for to what a subscriber acts on (issue
+// 1343). GitLab recomputes a running job's duration on every read, and a job
+// that is running is polled at the floor, so hashing the whole content
+// notified on every poll of every running job; a status change still has to
+// notify, once.
+func TestWatcher_RunningJobDurationGrows_NotifiesOnlyOnAStatusChange(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		uri  string
+		list bool
+	}{
+		{name: "job", uri: "gitlab://project/42/job/7"},
+		{name: "pipeline_jobs", uri: "gitlab://project/42/pipeline/99/jobs", list: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				reader := &runningJobReader{list: tc.list, status: "running"}
+				n := &fakeNotifier{}
+				m := New[string](reader, n, quietOptions(Options{}))
+				closeOnCleanup(t, m)
+				if err := m.Subscribe(context.Background(), subA, tc.uri); err != nil {
+					t.Fatalf("Subscribe: %v", err)
+				}
+
+				time.Sleep(DefaultMinInterval * 6)
+				synctest.Wait()
+				if got := n.count(); got != 0 {
+					t.Fatalf("notifications = %d while only the duration grew, want 0", got)
+				}
+
+				reader.setStatus("success")
+				time.Sleep(DefaultMinInterval * 2)
+				synctest.Wait()
+				if got := n.count(); got != 1 {
+					t.Errorf("notifications = %d after the job finished, want 1", got)
+				}
+			})
+		})
+	}
+}
+
+// TestChangeDigest_LeavesOutOnlyAJobsLiveDurations holds the digest a
+// watcher compares to the projection it is meant to be: a job, and each job
+// of a pipeline's job list, without duration and queued_duration, and every
+// other kind, and any content that is not the kind's shape, as it was read.
+func TestChangeDigest_LeavesOutOnlyAJobsLiveDurations(t *testing.T) {
+	same := func(t *testing.T, kind Kind, a, b string) {
+		t.Helper()
+		if kind.changeDigest([]byte(a)) != kind.changeDigest([]byte(b)) {
+			t.Errorf("%s digests of\n  %s\n  %s\ndiffer, want them equal", kind, a, b)
+		}
+	}
+	differ := func(t *testing.T, kind Kind, a, b string) {
+		t.Helper()
+		if kind.changeDigest([]byte(a)) == kind.changeDigest([]byte(b)) {
+			t.Errorf("%s digests of\n  %s\n  %s\nare equal, want them to differ", kind, a, b)
+		}
+	}
+	t.Run("job durations", func(t *testing.T) {
+		same(t, KindJob, `{"id":7,"status":"running","duration":1.5,"queued_duration":2}`,
+			`{"id":7,"status":"running","duration":9.5,"queued_duration":4}`)
+		same(t, KindJob, `{"id":7,"status":"running","duration":1.5}`, `{"id":7,"status":"running"}`)
+	})
+	t.Run("job key order", func(t *testing.T) {
+		same(t, KindJob, `{"id":7,"status":"running"}`, `{"status":"running","id":7}`)
+	})
+	t.Run("job status and failure reason", func(t *testing.T) {
+		differ(t, KindJob, `{"id":7,"status":"running","duration":1}`, `{"id":7,"status":"failed","duration":1}`)
+		differ(t, KindJob, `{"id":7,"status":"failed"}`, `{"id":7,"status":"failed","failure_reason":"script_failure"}`)
+	})
+	t.Run("job that is not an object", func(t *testing.T) {
+		content := `[{"duration":1}]`
+		if got, want := KindJob.changeDigest([]byte(content)), sha256.Sum256([]byte(content)); got != want {
+			t.Errorf("KindJob digest of %s = %x, want the content's own %x", content, got, want)
+		}
+	})
+	t.Run("job list durations", func(t *testing.T) {
+		same(t, KindPipelineJobs, `[{"id":6,"duration":3},{"id":7,"status":"running","duration":1,"queued_duration":1}]`,
+			`[{"id":6,"duration":4},{"id":7,"status":"running","duration":8,"queued_duration":5}]`)
+	})
+	t.Run("job list order and status", func(t *testing.T) {
+		differ(t, KindPipelineJobs, `[{"id":6},{"id":7}]`, `[{"id":7},{"id":6}]`)
+		differ(t, KindPipelineJobs, `[{"id":6},{"id":7}]`, `[{"id":6,"id2":7}]`)
+		differ(t, KindPipelineJobs, `[{"id":7,"status":"running"}]`, `[{"id":7,"status":"success"}]`)
+	})
+	t.Run("job list that is not a list of objects", func(t *testing.T) {
+		content := `{"duration":1}`
+		if got, want := KindPipelineJobs.changeDigest([]byte(content)), sha256.Sum256([]byte(content)); got != want {
+			t.Errorf("KindPipelineJobs digest of %s = %x, want the content's own %x", content, got, want)
+		}
+	})
+	t.Run("other kinds keep a duration", func(t *testing.T) {
+		differ(t, KindPipeline, `{"id":99,"status":"running","duration":1}`, `{"id":99,"status":"running","duration":2}`)
+		content := `{"id":99,"duration":1}`
+		if got, want := KindPipeline.changeDigest([]byte(content)), sha256.Sum256([]byte(content)); got != want {
+			t.Errorf("KindPipeline digest of %s = %x, want the content's own %x", content, got, want)
+		}
+	})
+}
+
 // stopRecord collects the stop reasons a manager reports.
 type stopRecord struct {
 	mu      sync.Mutex

@@ -17,7 +17,7 @@ import FAQ from "../../../components/FAQ.astro";
 
 Resource subscriptions let a client say **"tell me when this changes"** instead of re-reading a resource on a hunch. The client subscribes to a URI such as `gitlab://project/42/pipelines/latest`, and GitLab MCP Server sends `notifications/resources/updated` whenever that resource's content changes.
 
-The server honors subscriptions by **polling**: a watcher re-reads the subscribed URI through the very handler `resources/read` dispatches to, compares a SHA-256 of the content, and notifies only on a real change. "The content changed" therefore means exactly "what you would read changed" — never a guess. The decision and its bounds are recorded in [ADR-0015](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0015-polled-resource-subscriptions.md).
+The server honors subscriptions by **polling**: a watcher re-reads the subscribed URI through the very handler `resources/read` dispatches to, compares a SHA-256 of the content, and notifies only on a real change. "The content changed" therefore means "what you would read changed", never a guess, with one exception: a job's `duration` and `queued_duration`, which GitLab recomputes on every read while the job runs, are left out of the comparison. The decision and its bounds are recorded in [ADR-0015](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0015-polled-resource-subscriptions.md).
 
 Subscriptions are advertised on `GITLAB_MCP_CAPABILITY_SURFACE=full` (the default). The `minimal` surface does not register the GitLab data resources a subscription applies to, so it does not advertise the capability either.
 
@@ -102,7 +102,7 @@ A refused subscription starts no watcher. One refused for its kind, like a top-l
 
 ## How is a change detected?
 
-A watcher re-reads the resource through the same handler `resources/read` uses and compares a SHA-256 of what it returns. The first read happens synchronously when the subscription is accepted, before the client is told it is subscribed, so a subscriber is never notified about a change that predates it.
+A watcher re-reads the resource through the same handler `resources/read` uses and compares a SHA-256 of what it returns. For a job, and for each job of a pipeline's job list, the hash leaves out `duration` and `queued_duration`: GitLab recomputes both from the clock on every read while a job runs, and a running job is polled every five seconds, so hashing them notified on every poll while nothing had moved. A change of status, failure reason or any other field still notifies, and a read still returns both durations. The first read happens synchronously when the subscription is accepted, before the client is told it is subscribed, so a subscriber is never notified about a change that predates it.
 
 That first read is also the **authorization check**: it runs with the subscriber's own token, so a URI the token cannot read is refused up front rather than accepted and then silently never firing. A watcher is per URI and per credential, so a second session watching the same URI with the same token joins the existing watcher, waits for that same first read, and costs nothing more. The check has a far side too: a token that loses access keeps being used until the next poll answers 401, 403 or 404, which is at most one interval, and up to ten minutes for a slowed watch; that answer is what stops the watch.
 

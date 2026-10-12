@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"math/rand/v2"
+	"slices"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -545,7 +549,7 @@ func (m *Manager[S]) start(ctx context.Context, w *watcher[S]) error {
 	}
 
 	first := m.kindInterval(w.kind, content)
-	w.digest = sha256.Sum256(content)
+	w.digest = w.kind.changeDigest(content)
 	w.cancel = cancel
 	w.leaseAt = time.Now().Add(m.opts.Lease)
 	w.interval = first
@@ -1049,7 +1053,7 @@ func (m *Manager[S]) poll(ctx context.Context, w *watcher[S]) (next time.Duratio
 		return m.opts.BaseInterval, nil
 	}
 
-	digest := sha256.Sum256(content)
+	digest := w.kind.changeDigest(content)
 	if m.updateDigest(w, digest) {
 		if notifyErr := m.notifier.ResourceUpdated(ctx, m.snapshot(w)); notifyErr != nil {
 			// Best-effort by design: the baseline still advances, so a
@@ -1086,6 +1090,57 @@ func (m *Manager[S]) updateDigest(w *watcher[S], digest [sha256.Size]byte) bool 
 	}
 	w.digest = digest
 	return true
+}
+
+// liveJobFields are the fields of a job GitLab recomputes from the clock on
+// every read while the job runs.
+var liveJobFields = map[string]bool{"duration": true, "queued_duration": true}
+
+// changeDigest hashes what a watcher compares between two reads: the content
+// as it was read, except that a job, and each job of a pipeline's job list,
+// is hashed without [liveJobFields].
+//
+// GitLab recomputes a running job's duration on every read, and a running job
+// is polled at the floor, so hashing it notified every subscriber of a running
+// job every five seconds while nothing they act on had changed (issue 1343).
+// Every other field, the status and the failure reason among them, still
+// changes the digest, and a read still returns the durations. Content that is
+// not the kind's shape is hashed as it was read.
+func (k Kind) changeDigest(content []byte) [sha256.Size]byte {
+	switch k {
+	case KindJob:
+		var job map[string]json.RawMessage
+		if json.Unmarshal(content, &job) == nil {
+			return digestWithoutLiveFields(job)
+		}
+	case KindPipelineJobs:
+		var jobs []map[string]json.RawMessage
+		if json.Unmarshal(content, &jobs) == nil {
+			return digestWithoutLiveFields(jobs...)
+		}
+	}
+	return sha256.Sum256(content)
+}
+
+// digestWithoutLiveFields hashes the objects in order, each with its keys
+// sorted and [liveJobFields] left out, written back as JSON objects so that
+// neither a key nor an object boundary can be read two ways.
+func digestWithoutLiveFields(objects ...map[string]json.RawMessage) [sha256.Size]byte {
+	var buf []byte
+	for _, object := range objects {
+		buf = append(buf, '{')
+		for _, key := range slices.Sorted(maps.Keys(object)) {
+			if liveJobFields[key] {
+				continue
+			}
+			buf = strconv.AppendQuote(buf, key)
+			buf = append(buf, ':')
+			buf = append(buf, object[key]...)
+			buf = append(buf, ',')
+		}
+		buf = append(buf, '}')
+	}
+	return sha256.Sum256(buf)
 }
 
 // kindInterval returns the cadence for a resource given the content its
