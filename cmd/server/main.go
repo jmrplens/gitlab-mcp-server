@@ -2130,20 +2130,6 @@ func newServerShell(
 		server.AddReceivingMiddleware(clientcompat.Middleware())
 	}
 
-	// Operator-defined catalog text substitutions, for MCP gateways whose
-	// validators reject characters this server's descriptions carry
-	// (GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS). In stdio mode this runs before
-	// the transport is connected, so a parse error here is still a startup
-	// failure; in HTTP mode runHTTP already validated the value before the
-	// listener came up.
-	gatewaySubs, substErr := gatewaycompat.FromEnv()
-	if substErr != nil {
-		return nil, substErr
-	}
-	if rewrite := catalogTextRewriter(gatewaySubs); rewrite != nil {
-		server.AddReceivingMiddleware(rewrite)
-	}
-
 	// Capability/method consistency: the SDK dispatches logging/setLevel
 	// unconditionally although this server never declares the logging
 	// capability, and on the minimal capability surface prompts/list would
@@ -2168,9 +2154,31 @@ func newServerShell(
 
 	// Inject JSON Schema numeric bounds on the standard pagination
 	// parameters so LLM clients see `page >= 1` and `1 <= per_page <= 100`
-	// directly in tools/list. Installed after the lockdown so it sits inside
-	// it in the chain and operates on the same finalized schema set.
+	// directly in tools/list. Installed after the lockdown, so it wraps it:
+	// the lockdown sees the first listing first and this pass then rewrites
+	// the same registered tools.
 	toolutil.EnrichPaginationConstraints(server)
+
+	// Operator-defined catalog text substitutions, for MCP gateways whose
+	// validators reject characters this server's descriptions carry
+	// (GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS). In stdio mode this runs before
+	// the transport is connected, so a parse error here is still a startup
+	// failure; in HTTP mode runHTTP already validated the value before the
+	// listener came up.
+	//
+	// Installed after both one-time schema passes, so it wraps them and sees a
+	// listing only once they have finalized the registered tools. The rewriter
+	// answers with copies, and installed inside them it handed the passes its
+	// copies instead: the registered tools were never finalized, and setting any
+	// substitution changed the schemas every tool served (issue 1330). A pass of
+	// that kind added later belongs above this line for the same reason.
+	gatewaySubs, substErr := gatewaycompat.FromEnv()
+	if substErr != nil {
+		return nil, substErr
+	}
+	if rewrite := catalogTextRewriter(gatewaySubs); rewrite != nil {
+		server.AddReceivingMiddleware(rewrite)
+	}
 
 	// Ceiling on concurrent open subscriptions/listen streams. Installed for
 	// every server rather than beside the subscription runtime, because that

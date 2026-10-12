@@ -11752,6 +11752,77 @@ func TestCreateServer_GatewayCompatWiring(t *testing.T) {
 	t.Fatalf("resource %s missing from the substituted server's listing", uri)
 }
 
+// listedToolSchemas lists a fresh server's tools twice and returns, per
+// listing and tool, the input and output schemas as JSON. The first listing
+// is the one the one-time schema passes finalize the registered tools on, and
+// the second is what every later client is served, so both are kept.
+func listedToolSchemas(t *testing.T, server *mcp.Server) [2]map[string]string {
+	t.Helper()
+	session := connectSessionAs(t, server, &mcp.Implementation{Name: "test-client", Version: "1.0.0"})
+	var listings [2]map[string]string
+	for i := range listings {
+		res, err := session.ListTools(t.Context(), nil)
+		if err != nil {
+			t.Fatalf("ListTools (listing %d): %v", i+1, err)
+		}
+		listings[i] = make(map[string]string, len(res.Tools))
+		for _, tool := range res.Tools {
+			schemas, marshalErr := json.Marshal([]any{tool.InputSchema, tool.OutputSchema})
+			if marshalErr != nil {
+				t.Fatalf("marshaling the schemas of %s: %v", tool.Name, marshalErr)
+			}
+			listings[i][tool.Name] = string(schemas)
+		}
+	}
+	return listings
+}
+
+// TestCreateServer_GatewaySubstitutionMatchingNothing_ServesTheSameSchemas
+// holds GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS to what it is documented to
+// change, text, by serving a substitution that matches nothing and comparing
+// every tool schema with a server built without one.
+//
+// The rewriter used to be installed inside the lockdown and pagination passes,
+// so they ran on the copies it handed back rather than on the registered tools:
+// the first listing came back finalized and every later one did not, and all 29
+// meta tools and the dynamic surface's execute tool served a different
+// contract (a meta `params` envelope lost its `additionalProperties: true`)
+// the moment any substitution was set.
+func TestCreateServer_GatewaySubstitutionMatchingNothing_ServesTheSameSchemas(t *testing.T) {
+	cases := []struct {
+		name       string
+		surface    string
+		metaSchema string
+	}{
+		{name: "meta, opaque parameters", surface: config.ToolSurfaceMeta, metaSchema: config.MetaParamSchemaOpaque},
+		{name: "meta, full parameters", surface: config.ToolSurfaceMeta, metaSchema: config.MetaParamSchemaFull},
+		{name: "dynamic", surface: config.ToolSurfaceDynamic, metaSchema: config.MetaParamSchemaOpaque},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Cleanup(tools.SetMetaParamSchemaScoped(tools.MetaParamSchema()))
+			cfg := &config.ServerConfig{ToolSurface: tc.surface, MetaParamSchema: tc.metaSchema}
+
+			t.Setenv(gatewaycompat.EnvVar, "")
+			want := listedToolSchemas(t, createServerWithin(t, newMockGitLabClient(t), cfg))
+			t.Setenv(gatewaycompat.EnvVar, "zz no served text says this zz=Bar")
+			got := listedToolSchemas(t, createServerWithin(t, newMockGitLabClient(t), cfg))
+
+			for i := range got {
+				if len(got[i]) != len(want[i]) {
+					t.Errorf("listing %d serves %d tools with the substitution, %d without", i+1, len(got[i]), len(want[i]))
+				}
+				for name, schemas := range want[i] {
+					if got[i][name] != schemas {
+						t.Errorf("listing %d: %s serves different schemas once a substitution that matches nothing is set:\nwithout: %.400s\nwith:    %.400s",
+							i+1, name, schemas, got[i][name])
+					}
+				}
+			}
+		})
+	}
+}
+
 // TestCreateServer_GatewayCompatInvalidValue verifies that a malformed
 // substitution value fails the server build with an error naming the
 // variable, rather than installing a half-parsed rewrite.
