@@ -130,13 +130,15 @@ func WrapErr(operation string, err error) error {
 //
 // The cause is kept, unlike [wrapUnattributed]: it names the address that was
 // refused and which of the two rules refused it, which is the whole of the
-// diagnosis. What it does not carry is the flag that changes the outcome, and
-// that is what the hint adds.
+// diagnosis. What it does not carry is the next step, and that is what the
+// hint adds: the flag that changes a tier B outcome, or, for a cloud metadata
+// address, where to look instead, since no flag changes that one
+// ([gitlabclient.DestinationRefusedHintFor]).
 func wrapDestinationRefused(operation string, err error) error {
 	if !errors.Is(err, gitlabclient.ErrDestinationRefused) {
 		return nil
 	}
-	return hintedError(operation, err, gitlabclient.DestinationRefusedHint)
+	return hintedError(operation, err, gitlabclient.DestinationRefusedHintFor(err))
 }
 
 // wrapUnattributed returns the whole message for a request that never reached

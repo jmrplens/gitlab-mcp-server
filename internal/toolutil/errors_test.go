@@ -2185,6 +2185,34 @@ func TestWrapErr_DestinationRefused_NamesTheFlagThatPermitsIt(t *testing.T) {
 	}
 }
 
+// TestWrapErr_MetadataRefusal_NamesNoFlag verifies that a tier A refusal is
+// not told to pass --allow-private-instances, which permits nothing tier A
+// refuses, and is pointed at where the address came from instead.
+func TestWrapErr_MetadataRefusal_NamesNoFlag(t *testing.T) {
+	cause := &url.Error{
+		Op:  "Get",
+		URL: "https://gitlab.example.com/api/v4/jobs/1/trace",
+		Err: fmt.Errorf("%w: 169.254.169.254 is the cloud instance metadata address, which never serves a GitLab API or object storage",
+			gitlabclient.ErrMetadataDestinationRefused),
+	}
+
+	got := WrapErrWithHint("jobTrace", cause, "check the job id")
+	text := got.Error()
+
+	if strings.Contains(text, "--allow-private-instances") {
+		t.Errorf("a metadata refusal names the flag that cannot permit it:\n%s", text)
+	}
+	if !strings.Contains(text, gitlabclient.MetadataRefusedHint) {
+		t.Errorf("the composed message does not carry the tier A hint:\n%s", text)
+	}
+	if !strings.Contains(text, DestinationRefusedMessage) {
+		t.Errorf("the composed message does not say the request never left the process:\n%s", text)
+	}
+	if !errors.Is(got, gitlabclient.ErrMetadataDestinationRefused) {
+		t.Error("the wrapping lost the cause")
+	}
+}
+
 // TestClassifyError_DestinationRefused_IsNotAnUnreachableHost pins the
 // classification apart from the network branches below it.
 //

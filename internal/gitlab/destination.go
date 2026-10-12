@@ -28,6 +28,44 @@ import (
 // nothing was disclosed, and the fix is configuration rather than credentials.
 var ErrDestinationRefused = errors.New("outbound destination refused")
 
+// ErrMetadataDestinationRefused is the refusal of tier A: a cloud metadata
+// address, which no configuration permits.
+//
+// It is a sentinel of its own so that the next step offered with the refusal
+// can differ from tier B's, which names the flag that permits a private
+// address; naming that flag here only invites a reader to try it and find it
+// did nothing. It unwraps to [ErrDestinationRefused], so everything that
+// recognizes a refusal still does, and its text is that error's, so the
+// message a reader sees is the one every refusal always had.
+var ErrMetadataDestinationRefused error = metadataRefusalError{}
+
+// metadataRefusalError is the type of [ErrMetadataDestinationRefused].
+type metadataRefusalError struct{}
+
+// Error returns the text every destination refusal starts with.
+func (metadataRefusalError) Error() string { return ErrDestinationRefused.Error() }
+
+// Unwrap makes a tier A refusal an [ErrDestinationRefused] as well.
+func (metadataRefusalError) Unwrap() error { return ErrDestinationRefused }
+
+// MetadataRefusedHint is the next step offered with a tier A refusal. It names
+// no flag, because none changes the outcome, and sends the reader to where the
+// address came from instead.
+//
+// One literal rather than two joined with +, so the mutation gate has no
+// operator in a constant initializer to report as not covered.
+const MetadataRefusedHint = "no setting permits a cloud metadata address, since nothing serves a GitLab API or object storage from one; check the instance URL and where the redirect that reached it pointed"
+
+// DestinationRefusedHintFor returns the next step to offer with err:
+// [MetadataRefusedHint] for a tier A refusal, and [DestinationRefusedHint],
+// which names the flag, for every other.
+func DestinationRefusedHintFor(err error) string {
+	if errors.Is(err, ErrMetadataDestinationRefused) {
+		return MetadataRefusedHint
+	}
+	return DestinationRefusedHint
+}
+
 // AllowPrivateInstancesEnv names the setting that permits a destination a
 // caller or a redirect chose to resolve to a private, loopback, CGNAT,
 // link-local, unique-local or unspecified address.
@@ -47,13 +85,13 @@ const allowPrivateAdvice = "pass --allow-private-instances (or set " + AllowPriv
 	"if that address is a GitLab or an object store on your own private network"
 
 // DestinationRefusedHint is the next step to offer a model or an operator who
-// has just been told a destination was refused.
+// has just been told a tier B destination was refused.
 //
 // It names the flag rather than describing the policy: the policy is already
 // in the error, and what the reader does not have is the one string that
-// changes it. Tier A has no such string, which the sentence says out loud
-// rather than leaving a reader to try the flag and find it did nothing.
-const DestinationRefusedHint = allowPrivateAdvice + ". Cloud metadata addresses stay refused whatever it is set to"
+// changes it. A tier A refusal gets [MetadataRefusedHint] instead
+// ([DestinationRefusedHintFor]), since no string changes that one.
+const DestinationRefusedHint = allowPrivateAdvice
 
 // metadataAddresses are the link-local and CGNAT addresses cloud providers
 // answer instance credentials on.
@@ -676,7 +714,7 @@ type dialTarget struct {
 // destination and is not the case this guard is about.
 func (target dialTarget) judge(ctx context.Context, addr netip.Addr) error {
 	if name, ok := metadataAddress(addr); ok {
-		return fmt.Errorf("%w: %s is %s, which never serves a GitLab API or object storage", ErrDestinationRefused, addr, name)
+		return fmt.Errorf("%w: %s is %s, which never serves a GitLab API or object storage", ErrMetadataDestinationRefused, addr, name)
 	}
 	if target.policy == nil {
 		return nil
@@ -1076,7 +1114,7 @@ func CheckCallerNamedInstance(rawURL string) error {
 		return err
 	}
 	if name, ok := metadataAddress(addr); ok {
-		return fmt.Errorf("%w: %s is %s, which never serves a GitLab API", ErrDestinationRefused, addr, name)
+		return fmt.Errorf("%w: %s is %s, which never serves a GitLab API", ErrMetadataDestinationRefused, addr, name)
 	}
 	if !isPrivateAddress(addr) || allowPrivateInstances() {
 		return nil

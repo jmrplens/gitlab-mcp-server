@@ -6,6 +6,7 @@ package gitlab
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -291,6 +292,89 @@ func TestGuardDestination_TierAAppliesWithNoPolicy(t *testing.T) {
 				t.Fatalf("refused = %v, want %v (err = %v)", got, tt.wantRefused, err)
 			}
 		})
+	}
+}
+
+// TestDestinationRefusal_TierAIsItsOwnSentinel holds the two tiers apart in the
+// error a refusal carries, so the hint can tell a reader the one thing that
+// differs between them: tier B has a flag that permits the address, and tier A
+// has none.
+//
+// The tier A sentinel unwraps to [ErrDestinationRefused], so everything that
+// recognizes a refusal still does, the failure table of the tenant policy
+// register included, and the refusal's text is the same as before.
+func TestDestinationRefusal_TierAIsItsOwnSentinel(t *testing.T) {
+	callerNamed := withDialTarget(t.Context(), *callerChosenTarget())
+	tests := []struct {
+		name         string
+		refuse       func() error
+		wantMetadata bool
+		wantText     string
+	}{
+		{
+			name:         "the metadata address at the dialer",
+			refuse:       func() error { return guardDestination(t.Context(), "tcp", "169.254.169.254:80", nil) },
+			wantMetadata: true,
+			wantText:     "outbound destination refused: 169.254.169.254 is the cloud instance metadata address",
+		},
+		{
+			name:         "the metadata address behind a NAT64 prefix",
+			refuse:       func() error { return guardDestination(t.Context(), "tcp", "[64:ff9b::a9fe:a9fe]:80", nil) },
+			wantMetadata: true,
+			wantText:     "behind a NAT64 prefix",
+		},
+		{
+			name:         "the metadata address named at the door",
+			refuse:       func() error { return CheckCallerNamedInstance("http://169.254.169.254") },
+			wantMetadata: true,
+			wantText:     "outbound destination refused: 169.254.169.254 is the cloud instance metadata address",
+		},
+		{
+			name:     "a private address tier B refuses",
+			refuse:   func() error { return guardDestination(callerNamed, "tcp", "10.0.0.1:443", nil) },
+			wantText: "the GITLAB-URL header named an instance on the private address 10.0.0.1",
+		},
+		{
+			name:     "a private address named at the door",
+			refuse:   func() error { return CheckCallerNamedInstance("http://10.0.0.1") },
+			wantText: "--allow-private-instances",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.refuse()
+
+			if !errors.Is(err, ErrDestinationRefused) {
+				t.Fatalf("err = %v, want a destination refusal", err)
+			}
+			if got := errors.Is(err, ErrMetadataDestinationRefused); got != tt.wantMetadata {
+				t.Errorf("tier A sentinel = %v, want %v (err = %v)", got, tt.wantMetadata, err)
+			}
+			if !strings.Contains(err.Error(), tt.wantText) {
+				t.Errorf("refusal = %q, want it to contain %q", err, tt.wantText)
+			}
+		})
+	}
+}
+
+// TestDestinationRefusedHintFor_NamesTheFlagOnlyWhereItHelps holds the hint
+// to the tier that refused: the flag for tier B, and for tier A a sentence
+// that sends the reader to the instance or the redirect, since no setting
+// changes that outcome and naming the flag there only invites a reader to
+// try it and find it did nothing.
+func TestDestinationRefusedHintFor_NamesTheFlagOnlyWhereItHelps(t *testing.T) {
+	metadata := fmt.Errorf("%w: 169.254.169.254 is the cloud instance metadata address", ErrMetadataDestinationRefused)
+	private := fmt.Errorf("%w: a redirect away from gitlab.example.com reached the private address 10.0.0.1", ErrDestinationRefused)
+
+	if got := DestinationRefusedHintFor(metadata); strings.Contains(got, "--allow-private-instances") || !strings.Contains(got, "metadata") {
+		t.Errorf("tier A hint = %q, want one about the metadata address that names no flag", got)
+	}
+	if got := DestinationRefusedHintFor(private); got != DestinationRefusedHint || !strings.Contains(got, "--allow-private-instances") {
+		t.Errorf("tier B hint = %q, want %q, which names the flag", got, DestinationRefusedHint)
+	}
+	if got := DestinationRefusedHintFor(errors.New("unrelated")); got != DestinationRefusedHint {
+		t.Errorf("hint for an unrelated error = %q, want the general one", got)
 	}
 }
 
