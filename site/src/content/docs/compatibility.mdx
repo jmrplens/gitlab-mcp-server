@@ -138,7 +138,7 @@ All N tools failed validation ... Description contains unsafe characters
 
 The server answers on two fronts. Its own text is kept clean: everything served by `tools/list` (on any surface), `prompts/list`, `resources/list` and `resources/templates/list` is pure ASCII prose with no semicolons, schema-embedded descriptions included, because a validator that refuses "unsafe characters" usually matches a character class, and a class holds against the next rule better than a list of codepoints. `make check-gateway-chars` gates this in CI, and from a checkout of the repository `go run ./cmd/audit_gateway_chars/` prints every offender with its context. The rule covers that listed catalog only: prompt bodies and tool results are not held to it, and result Markdown carries emoji and semicolons. The next rule is yours to meet without waiting for a release: `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` (flag `--description-substitutions`, both transports) rewrites the listed text on the way out.
 
-It takes comma-separated `old=new` pairs, applied in order. A backslash escapes a literal comma, equals sign or backslash inside either half, and any other escape refuses the value. Whitespace is significant:
+It takes comma-separated `old=new` pairs, applied in order. The first unescaped equals sign of a pair separates the two halves, and every equals sign after it belongs to the replacement, so `a=b=c` replaces `a` with `b=c`. A backslash escapes a literal comma, equals sign or backslash; it is needed for an equals sign in the pattern, for a comma anywhere and for a backslash anywhere, and any other escape refuses the value. Whitespace is significant:
 
 ```bash
 # Replace every semicolon with a period

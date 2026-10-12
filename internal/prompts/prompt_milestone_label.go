@@ -36,17 +36,26 @@ func countIssueStates(issues []*gl.Issue) (closed, open int) {
 	return closed, open
 }
 
-// countMRStates counts merged and open merge requests from a slice.
-func countMRStates(mrs []*gl.BasicMergeRequest) (merged, open int) {
+// closedNotMergedRow is the line both milestone reports give the merge
+// requests closed without merging, which their progress leaves out.
+const closedNotMergedRow = "| Closed (not merged) MRs | %d |\n"
+
+// countMRStates counts merged, open and closed merge requests from a slice. A
+// closed merge request was closed without merging, so it will never count as
+// done and is counted apart. A locked one is being merged, and GitLab takes
+// it on to merged or back to opened, so until then it is open.
+func countMRStates(mrs []*gl.BasicMergeRequest) (merged, open, closed int) {
 	for _, m := range mrs {
 		switch m.State {
 		case "merged":
 			merged++
-		case "opened":
+		case "opened", "locked":
 			open++
+		case "closed":
+			closed++
 		}
 	}
-	return merged, open
+	return merged, open, closed
 }
 
 // writeDueDateSection appends the due date with remaining/overdue days to the
@@ -128,9 +137,11 @@ func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, r
 		warnFetch(ctx, "milestone merge requests", mrsErr)
 
 		closedIssues, openIssues := countIssueStates(issues)
-		mergedMRs, openMRs := countMRStates(mrs)
+		mergedMRs, openMRs, closedMRs := countMRStates(mrs)
 
-		totalItems := len(issues) + len(mrs)
+		// A merge request closed without merging will never be done, so
+		// progress is measured over the rest.
+		totalItems := len(issues) + len(mrs) - closedMRs
 		completedItems := closedIssues + mergedMRs
 
 		fmt.Fprintf(&b, "%s\n\n", progressBar(completedItems, totalItems))
@@ -142,6 +153,7 @@ func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, r
 		fmt.Fprintf(&b, "| Total MRs | %d |\n", len(mrs))
 		fmt.Fprintf(&b, "| Merged MRs | %d |\n", mergedMRs)
 		fmt.Fprintf(&b, "| Open MRs | %d |\n", openMRs)
+		fmt.Fprintf(&b, closedNotMergedRow, closedMRs)
 
 		writeDueDateSection(&b, ms.DueDate)
 		b.WriteString("\n")
@@ -303,16 +315,20 @@ func handleGroupMilestoneProgress(ctx context.Context, client *gitlabclient.Clie
 		warnFetch(ctx, "group milestone merge requests", mrsErr)
 
 		closedIssues, _ := countIssueStates(issues)
-		mergedMRs, _ := countMRStates(mrs)
+		mergedMRs, _, closedMRs := countMRStates(mrs)
 
-		totalItems := len(issues) + len(mrs)
+		// As in milestone_progress, a merge request closed without merging
+		// leaves the denominator and is reported on its own line.
+		countedMRs := len(mrs) - closedMRs
+		totalItems := len(issues) + countedMRs
 		completedItems := closedIssues + mergedMRs
 
 		fmt.Fprintf(&b, "%s\n\n", progressBar(completedItems, totalItems))
 
 		b.WriteString("| Category | Count |\n|----------|-------|\n")
 		fmt.Fprintf(&b, "| Issues (closed/total) | %d/%d |\n", closedIssues, len(issues))
-		fmt.Fprintf(&b, "| MRs (merged/total) | %d/%d |\n", mergedMRs, len(mrs))
+		fmt.Fprintf(&b, "| MRs (merged/total) | %d/%d |\n", mergedMRs, countedMRs)
+		fmt.Fprintf(&b, closedNotMergedRow, closedMRs)
 
 		writeDueDateSection(&b, ms.DueDate)
 		b.WriteString("\n")

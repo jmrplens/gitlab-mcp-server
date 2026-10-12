@@ -639,7 +639,9 @@ func TestMilestoneProgress_DueDate_RendersInTheServerDisplayForm(t *testing.T) {
 // milestone one item of each kind, where an increment and a decrement differ
 // only in sign and a row is present either way. A closed merge request is
 // neither merged nor open and is the case that separates the switch from an
-// else.
+// else. A locked merge request is one GitLab is merging: its state machine
+// takes it on to merged or back to opened, so it is still open. A state GitLab
+// does not have counts as none of the three.
 func TestCountIssueStatesAndCountMRStates_CountEachStateSeparately(t *testing.T) {
 	t.Run("issues", func(t *testing.T) {
 		closed, open := countIssueStates([]*gl.Issue{
@@ -656,19 +658,85 @@ func TestCountIssueStatesAndCountMRStates_CountEachStateSeparately(t *testing.T)
 	})
 
 	t.Run("merge requests", func(t *testing.T) {
-		merged, open := countMRStates([]*gl.BasicMergeRequest{
+		merged, open, closed := countMRStates([]*gl.BasicMergeRequest{
 			{IID: 1, State: "merged"},
 			{IID: 2, State: "opened"},
 			{IID: 3, State: "opened"},
 			{IID: 4, State: "closed"},
+			{IID: 5, State: "closed"},
+			{IID: 6, State: "locked"},
+			{IID: 7, State: "not_a_state"},
 		})
 		if merged != 1 {
 			t.Errorf("merged = %d, want 1", merged)
 		}
-		if open != 2 {
-			t.Errorf("open = %d, want 2 (a closed MR is neither merged nor open)", open)
+		if open != 3 {
+			t.Errorf("open = %d, want 3 (a locked MR is open, a closed one is neither merged nor open)", open)
+		}
+		if closed != 2 {
+			t.Errorf("closed = %d, want 2", closed)
 		}
 	})
+}
+
+// milestoneWithMergeRequests answers a project and a group milestone listing
+// with one milestone holding no issues and the merge requests given.
+func milestoneWithMergeRequests(mrs string) http.Handler {
+	mux := http.NewServeMux()
+	for _, scope := range []string{"projects/{project}", "groups/{group}"} {
+		mux.HandleFunc("GET /api/v4/"+scope+"/milestones", func(w http.ResponseWriter, _ *http.Request) {
+			respondJSON(w, http.StatusOK, `[{"id":7,"iid":1,"title":"v1.0","state":"active"}]`)
+		})
+		mux.HandleFunc("GET /api/v4/"+scope+"/milestones/{milestone}/issues", func(w http.ResponseWriter, _ *http.Request) {
+			respondJSON(w, http.StatusOK, `[]`)
+		})
+		mux.HandleFunc("GET /api/v4/"+scope+"/milestones/{milestone}/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+			respondJSON(w, http.StatusOK, mrs)
+		})
+	}
+	return mux
+}
+
+// TestMilestoneProgress_AClosedUnmergedMR_LeavesTheDenominator verifies that
+// both milestone reports measure progress over the work that can still be
+// done.
+//
+// A merge request closed without merging will never be merged, yet it stayed
+// in the total, so a milestone with three merged, one open and one abandoned
+// merge request read 60% and could never reach 100% however much was merged.
+// It is left out of the denominator and reported on a line of its own.
+func TestMilestoneProgress_AClosedUnmergedMR_LeavesTheDenominator(t *testing.T) {
+	mrs := `[{"iid":1,"state":"merged"},{"iid":2,"state":"merged"},{"iid":3,"state":"merged"},` +
+		`{"iid":4,"state":"opened"},{"iid":5,"state":"closed"}]`
+
+	tests := []struct {
+		prompt string
+		args   map[string]string
+		want   []string
+	}{
+		{
+			prompt: "milestone_progress",
+			args:   map[string]string{"project_id": "42"},
+			want:   []string{"] 75%", "| Total MRs | 5 |", "| Merged MRs | 3 |", "| Open MRs | 1 |", "| Closed (not merged) MRs | 1 |"},
+		},
+		{
+			prompt: "group_milestone_progress",
+			args:   map[string]string{"group_id": "mygroup"},
+			want:   []string{"] 75%", "| MRs (merged/total) | 3/4 |", "| Closed (not merged) MRs | 1 |"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.prompt, func(t *testing.T) {
+			text := getPromptText(t, milestoneWithMergeRequests(mrs), tt.prompt, tt.args)
+			for _, want := range tt.want {
+				t.Run(want, func(t *testing.T) {
+					if !strings.Contains(text, want) {
+						t.Errorf("expected %q in:\n%s", want, text)
+					}
+				})
+			}
+		})
+	}
 }
 
 // TestWriteDueDateSection_CountsTheDaysLeftAndTheDaysOverdue pins the three

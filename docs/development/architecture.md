@@ -496,7 +496,12 @@ embeds, an `always` policy with no template, a template that is not a
 `EmbedCanonicalResource`: it expands the template from the call's parameters
 with the documented aliases resolved, the way the handler read them, and embeds
 nothing when a variable is missing or embedding is off
-(`GITLAB_MCP_EMBEDDED_RESOURCES`, `--embedded-resources` in HTTP mode). `TestEmbeddedResource_EveryGetThatHasAResourceDeclaresIt` in
+(`GITLAB_MCP_EMBEDDED_RESOURCES`, `--embedded-resources` in HTTP mode). An
+output that implements `toolutil.ResourceURIParamsProvider` names its own
+identity, and its values are laid over the call's in a copy:
+`commits.DetailOutput` names the SHA GitLab answered, so `repository.commit_get`
+asked for a branch or a tag embeds the commit under that SHA, a URI that keeps
+reading the commit it was embedded with. `TestEmbeddedResource_EveryGetThatHasAResourceDeclaresIt` in
 `internal/tools/individual_catalog_test.go` pins the list, 22 actions today, so
 a new get action with a resource cannot ship without declaring it.
 

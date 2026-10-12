@@ -138,11 +138,11 @@ func TestIssue_Get_EmbedsTheCanonicalResource(t *testing.T) {
 				e.T.Fatalf("%s: %v", issueGetTool, err)
 			}
 			if result.IsError {
-				e.T.Fatalf("%s answered an error: %s", issueGetTool, firstLine(issueResultText(result)))
+				e.T.Fatalf("%s answered an error: %s", issueGetTool, firstLine(rawText(result)))
 			}
 
 			wantURI := fmt.Sprintf("gitlab://project/%d/issue/%d", project.ID, issue.IID)
-			embedded := issueEmbeddedResource(result)
+			embedded := embeddedResource(result)
 			switch {
 			case embedded == nil || embedded.Resource == nil:
 				e.T.Errorf("%s carries no embedded resource block among %d content block(s)", issueGetTool, len(result.Content))
@@ -154,25 +154,4 @@ func TestIssue_Get_EmbedsTheCanonicalResource(t *testing.T) {
 				e.T.Errorf("the embedded resource %s carries no body", embedded.Resource.URI)
 			}
 		})
-}
-
-// issueEmbeddedResource returns the first embedded resource block of a
-// result, or nil.
-func issueEmbeddedResource(result *mcp.CallToolResult) *mcp.EmbeddedResource {
-	for _, content := range result.Content {
-		if block, ok := content.(*mcp.EmbeddedResource); ok {
-			return block
-		}
-	}
-	return nil
-}
-
-// issueResultText returns the first text block of a result, for a message.
-func issueResultText(result *mcp.CallToolResult) string {
-	for _, content := range result.Content {
-		if text, ok := content.(*mcp.TextContent); ok {
-			return text.Text
-		}
-	}
-	return ""
 }

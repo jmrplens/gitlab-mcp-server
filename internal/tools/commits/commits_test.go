@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -400,6 +401,67 @@ func TestCommitGet_Success(t *testing.T) {
 	}
 	if out.Stats.Total != 12 {
 		t.Errorf("out.Stats.Total = %d, want 12", out.Stats.Total)
+	}
+}
+
+// TestCommitGet_AskedByARef_EmbedsTheCommitUnderItsSHA verifies that the
+// canonical resource commit_get embeds names the commit it returned.
+//
+// The URI was expanded from the call's own sha parameter, which takes a
+// branch or a tag as well as a SHA, so a commit asked for as "main" was
+// embedded as gitlab://project/42/commit/main: a snapshot of one commit filed
+// under a URI that reads whatever the branch points at next.
+func TestCommitGet_AskedByARef_EmbedsTheCommitUnderItsSHA(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/main" {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":"abc123def456789","short_id":"abc123de","title":"t"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	var spec toolutil.ActionSpec
+	for _, candidate := range ActionSpecs(client) {
+		if candidate.Name == "commit_get" {
+			spec = candidate
+		}
+	}
+	if spec.Route.Handler == nil {
+		t.Fatal("ActionSpecs() has no commit_get")
+	}
+
+	// The catalog copies the spec's template onto the route it dispatches
+	// through; this does the same.
+	route := spec.Route
+	route.EmbeddedResource = spec.EmbeddedResource
+
+	params := map[string]any{"project_id": "42", "sha": "main"}
+	out, err := route.Handler(t.Context(), params)
+	if err != nil {
+		t.Fatalf("commit_get: %v", err)
+	}
+	result, _ := toolutil.FinishToolResult(nil, out, route, params)
+
+	var uris []string
+	for _, block := range result.Content {
+		if embedded, ok := block.(*mcp.EmbeddedResource); ok {
+			uris = append(uris, embedded.Resource.URI)
+		}
+	}
+	if want := "gitlab://project/42/commit/abc123def456789"; len(uris) != 1 || uris[0] != want {
+		t.Errorf("embedded resources = %v, want exactly %s", uris, want)
+	}
+}
+
+// TestDetailOutput_ResourceURIParams_NamesTheCommitBySHAOrNotAtAll pins the
+// two answers the commit_get output gives the embed: its SHA, and nothing when
+// it has none, so the call's own parameter is used rather than an empty
+// segment.
+func TestDetailOutput_ResourceURIParams_NamesTheCommitBySHAOrNotAtAll(t *testing.T) {
+	if got := (DetailOutput{ID: "abc123def456789"}).ResourceURIParams(); !reflect.DeepEqual(got, map[string]any{"sha": "abc123def456789"}) {
+		t.Errorf("ResourceURIParams() = %v, want the SHA", got)
+	}
+	if got := (DetailOutput{}).ResourceURIParams(); got != nil {
+		t.Errorf("ResourceURIParams() of an output with no SHA = %v, want nil", got)
 	}
 }
 

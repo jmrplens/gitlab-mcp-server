@@ -3,6 +3,7 @@ package toolutil
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -177,6 +178,72 @@ func TestEmbedCanonicalResource_AppendsOnlyWhenEverythingLinesUp(t *testing.T) {
 			t.Errorf("content blocks = %d, want 1 with embedding disabled", len(result.Content))
 		}
 	})
+}
+
+// selfNamedCommit is an output that names its own canonical resource, the way
+// a commit fetched by a ref names itself by the SHA it resolved to.
+type selfNamedCommit struct {
+	SHA string `json:"id"`
+}
+
+// ResourceURIParams names the commit by its SHA, or nothing when it has none.
+func (c selfNamedCommit) ResourceURIParams() map[string]any {
+	if c.SHA == "" {
+		return nil
+	}
+	return map[string]any{"sha": c.SHA}
+}
+
+// TestEmbedCanonicalResource_AnOutputThatNamesItself_WinsOverTheCallsParameters
+// verifies that the URI of the embedded resource names the object returned
+// when the output can say what it is.
+//
+// A commit asked for by a branch name was embedded under that name, so the
+// snapshot of one commit was filed under a URI that reads another commit as
+// soon as the branch moves. The output's own values are laid over the call's,
+// and the caller's map is left as it was.
+func TestEmbedCanonicalResource_AnOutputThatNamesItself_WinsOverTheCallsParameters(t *testing.T) {
+	const template = "gitlab://project/{project_id}/commit/{sha}"
+	tests := []struct {
+		name    string
+		value   any
+		wantURI string
+	}{
+		{name: "a value that names itself", value: selfNamedCommit{SHA: "0123abcd"}, wantURI: "gitlab://project/group%2Fproject/commit/0123abcd"},
+		{name: "a pointer that names itself", value: &selfNamedCommit{SHA: "0123abcd"}, wantURI: "gitlab://project/group%2Fproject/commit/0123abcd"},
+		{name: "an output with nothing to say keeps the call's parameters", value: selfNamedCommit{}, wantURI: "gitlab://project/group%2Fproject/commit/main"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params := map[string]any{"project_id": "group/project", "sha": "main"}
+			result := &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "commit"}}}
+			EmbedCanonicalResource(result, template, params, tt.value)
+			if len(result.Content) != 2 {
+				t.Fatalf("content blocks = %d, want 2", len(result.Content))
+			}
+			embedded, ok := result.Content[1].(*mcp.EmbeddedResource)
+			if !ok {
+				t.Fatalf("second block = %T, want *mcp.EmbeddedResource", result.Content[1])
+			}
+			if embedded.Resource.URI != tt.wantURI {
+				t.Errorf("uri = %q, want %q", embedded.Resource.URI, tt.wantURI)
+			}
+			if params["sha"] != "main" {
+				t.Errorf("the caller's parameters were changed: sha = %v", params["sha"])
+			}
+		})
+	}
+}
+
+// TestOverlayURIParams_ACallWithoutParameters_TakesTheOutputsOwn verifies the
+// overlay when the call carried no parameters at all and the output names
+// more variables than the call did: the result is the output's values alone.
+func TestOverlayURIParams_ACallWithoutParameters_TakesTheOutputsOwn(t *testing.T) {
+	got := overlayURIParams(nil, map[string]any{"project_id": "group/project", "sha": "0123abcd"})
+	want := map[string]any{"project_id": "group/project", "sha": "0123abcd"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("overlayURIParams(nil, own) = %v, want %v", got, want)
+	}
 }
 
 // TestValidateEmbeddedResource_RefusesDeclarationsThatCannotWork verifies the

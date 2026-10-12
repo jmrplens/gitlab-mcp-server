@@ -214,20 +214,6 @@ func assertInteractivePreviewed(e *harness.Env, s *harness.Session, f modeFixtur
 	}
 }
 
-// rawText concatenates the text blocks of a raw result.
-func rawText(result *mcp.CallToolResult) string {
-	if result == nil {
-		return ""
-	}
-	var b strings.Builder
-	for _, content := range result.Content {
-		if text, isText := content.(*mcp.TextContent); isText {
-			b.WriteString(text.Text)
-		}
-	}
-	return b.String()
-}
-
 // assertIssueCount reads the project's issues through client-go, beside the
 // server under test, and holds the count to what the fixture created: a write
 // the mode let through would show here whatever the session answered.

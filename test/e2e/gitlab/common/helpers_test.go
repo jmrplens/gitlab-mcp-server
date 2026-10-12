@@ -2,8 +2,10 @@
 
 // helpers_test.go holds the two things every file here says about a
 // refusal: that it names what a caller needs to act on it, and how it is
-// quoted in a log line; the one question every listing here is asked; and
-// what paging through a list one item at a time must answer.
+// quoted in a log line; the one question every listing here is asked; what
+// paging through a list one item at a time must answer; and the two reads of
+// a raw result more than one domain makes, its text and its embedded
+// resource.
 
 package common
 
@@ -12,6 +14,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
@@ -96,4 +100,29 @@ func assertMentions(e *harness.Env, what, text string, substrings ...string) {
 func firstLine(text string) string {
 	line, _, _ := strings.Cut(strings.TrimSpace(text), "\n")
 	return line
+}
+
+// rawText concatenates the text blocks of a raw result.
+func rawText(result *mcp.CallToolResult) string {
+	if result == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, content := range result.Content {
+		if text, isText := content.(*mcp.TextContent); isText {
+			b.WriteString(text.Text)
+		}
+	}
+	return b.String()
+}
+
+// embeddedResource returns the first embedded resource block of a raw
+// result, or nil: the canonical resource a get embeds after its answer.
+func embeddedResource(result *mcp.CallToolResult) *mcp.EmbeddedResource {
+	for _, content := range result.Content {
+		if block, ok := content.(*mcp.EmbeddedResource); ok {
+			return block
+		}
+	}
+	return nil
 }

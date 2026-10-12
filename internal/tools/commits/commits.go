@@ -462,6 +462,19 @@ type DetailOutput struct {
 	Stats            *CommitStatsOutput  `json:"stats,omitempty"`
 }
 
+// ResourceURIParams names the canonical resource commit_get embeds by the SHA
+// GitLab returned ([toolutil.ResourceURIParamsProvider]). The call's sha
+// parameter takes a branch or a tag as well, and a commit embedded under
+// commit/main is a snapshot filed under a URI that reads another commit once
+// the branch moves. An output with no SHA names nothing, so the call's own
+// parameter is used.
+func (o DetailOutput) ResourceURIParams() map[string]any {
+	if o.ID == "" {
+		return nil
+	}
+	return map[string]any{"sha": o.ID}
+}
+
 // Get retrieves a single commit by SHA from a GitLab project.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (DetailOutput, error) {
 	if err := ctx.Err(); err != nil {

@@ -10,10 +10,13 @@
 package common
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/files"
@@ -107,6 +110,53 @@ func TestCommit_Inspect_ListGetDiffRefsCommentsStatusesAndSignature(t *testing.T
 		refused := harness.Refused(s, actionRepositoryCommitSignature, bySHA, harness.FailureNotFound)
 		assertMentions(e, "the signature read of an unsigned commit", refused, "unsigned")
 	})
+}
+
+// commitGetTool is the individual tool of repository.commit_get, named for
+// the one raw call below: the embedded resource is a content block the
+// projected verbs decode past.
+const commitGetTool = "gitlab_commit_get"
+
+// TestCommit_GetByBranch_EmbedsTheCommitUnderItsSHA asks for a commit by the
+// name of its branch and holds the canonical resource embedded in the answer
+// to the SHA the branch pointed at.
+//
+// The URI was expanded from the call's own sha parameter, so a commit asked
+// for as "main" was embedded as gitlab://project/<id>/commit/main: a snapshot
+// of one commit filed under a URI that reads whatever the branch points at by
+// the time anyone reads it back.
+func TestCommit_GetByBranch_EmbedsTheCommitUnderItsSHA(t *testing.T) {
+	e := harness.New(t)
+
+	harness.OnSurfaces(e, "the embedded block is written by the result tail every surface shares, and only the individual "+
+		"tool's envelope can be read raw without re-spelling the dispatchers' call shapes",
+		[]harness.Surface{harness.SurfaceIndividual}, func(e *harness.Env, surface harness.Surface) {
+			s := e.On(surface)
+			if !slices.Contains(s.Tools(), commitGetTool) {
+				e.T.Fatalf("the %s session does not serve %s, so the raw read below would be refused as an unknown tool", surface, commitGetTool)
+			}
+			project := fixture.NewProject(e, fixture.WithNamePrefix("commitembed"))
+			commit := fixture.CommitFile(e, project, project.DefaultBranch, "EMBED.md", "embed\n", "docs: add the embed fixture")
+
+			result, err := s.Raw(&mcp.CallToolParams{Name: commitGetTool, Arguments: map[string]any{
+				"project_id": project.IDParam(), "sha": project.DefaultBranch,
+			}})
+			if err != nil {
+				e.T.Fatalf("%s: %v", commitGetTool, err)
+			}
+			if result.IsError {
+				e.T.Fatalf("%s answered an error: %s", commitGetTool, firstLine(rawText(result)))
+			}
+
+			wantURI := fmt.Sprintf("gitlab://project/%d/commit/%s", project.ID, commit.SHA)
+			embedded := embeddedResource(result)
+			switch {
+			case embedded == nil || embedded.Resource == nil:
+				e.T.Errorf("%s carries no embedded resource block among %d content block(s)", commitGetTool, len(result.Content))
+			case embedded.Resource.URI != wantURI:
+				e.T.Errorf("the embedded resource is %q, want %q, the commit %s pointed at", embedded.Resource.URI, wantURI, project.DefaultBranch)
+			}
+		})
 }
 
 // TestCommit_Trailers_ListWithTrailersReadsEveryValueOfEachTrailer makes one

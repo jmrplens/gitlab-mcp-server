@@ -2,6 +2,7 @@ package toolutil
 
 import (
 	"fmt"
+	"maps"
 	"net/url"
 	"strconv"
 	"strings"
@@ -172,15 +173,47 @@ func resourceParamValue(value any) (string, bool) {
 // output, so the JSON the block carries and the structured output of the
 // same result are one serialization: an embed run before the hints carried
 // a body that lacked the next_steps the structured output had.
+//
+// An output that implements [ResourceURIParamsProvider] names its own
+// identity: its values are laid over the call's, in a copy, so the URI names
+// the object returned rather than the reference the call resolved.
 func EmbedCanonicalResource(result *mcp.CallToolResult, template string, params map[string]any, value any) {
 	if result == nil || result.IsError || template == "" {
 		return
+	}
+	if provider, ok := value.(ResourceURIParamsProvider); ok {
+		params = overlayURIParams(params, provider.ResourceURIParams())
 	}
 	uri, ok := ExpandResourceURI(template, params)
 	if !ok {
 		return
 	}
 	EmbedResourceJSON(result, uri, value)
+}
+
+// ResourceURIParamsProvider is an action output that names the canonical
+// resource it is a snapshot of more exactly than the call that produced it
+// can. A get that takes a reference resolving to an object (a commit asked for
+// by a branch name) is the case: the call names the reference, the output
+// names the object, and only the object's URI keeps reading the snapshot it
+// was embedded with.
+type ResourceURIParamsProvider interface {
+	// ResourceURIParams returns the template variables the output fills,
+	// or nil when it has none to offer.
+	ResourceURIParams() map[string]any
+}
+
+// overlayURIParams returns params with the output's values laid over them,
+// leaving the caller's map as it was. With nothing to lay over it returns
+// params itself.
+func overlayURIParams(params, own map[string]any) map[string]any {
+	if len(own) == 0 {
+		return params
+	}
+	merged := make(map[string]any)
+	maps.Copy(merged, params)
+	maps.Copy(merged, own)
+	return merged
 }
 
 // WithEmbeddedResource returns the spec with its canonical resource declared:
