@@ -332,6 +332,94 @@ func TestJob_Artifacts_LargeArchiveAndBinaryFile(t *testing.T) {
 	})
 }
 
+// The job of jobLongLogCIYAML and the line its log ends with.
+const (
+	jobLongLogJob   = "long-log"
+	jobLongLogFatal = "FATAL unit test TestCheckout failed expected 200 got 500"
+)
+
+// jobLongLogCIYAML runs one job that prints three thousand lines, some 160
+// KB with the runner's own output, and then fails with jobLongLogFatal.
+const jobLongLogCIYAML = `stages:
+  - test
+
+` + jobLongLogJob + `:
+  stage: test
+  script:
+    - 'for i in $(seq 1 3000); do echo "installing dependency number $i of the build ......"; done'
+    - 'echo "` + jobLongLogFatal + `"'
+    - exit 1
+  tags: []
+`
+
+// TestJob_Trace_LongLogKeepsItsFailure runs a job whose log is longer than
+// the 100 KB one trace read returns and ends in a failure, and reads it on
+// every surface: the log keeps its end, the failure included, says how much
+// of its beginning it left out, and carries none of the runner's color codes
+// or section markers; tail_lines returns exactly the last lines of that end,
+// and reaches the failure once it asks for as many lines as the failure is
+// from the end. The read used to keep the first 100 KB, so the failure was
+// exactly what it dropped.
+func TestJob_Trace_LongLogKeepsItsFailure(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedRunner), harness.Locks(harness.LockRunner))
+
+	type run struct {
+		project  fixture.Project
+		pipeline fixture.Pipeline
+	}
+	harness.SurfacesWith(e, func(e *harness.Env) run {
+		project := fixture.NewProject(e, fixture.WithNamePrefix("longlog"))
+		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, jobLongLogCIYAML, "ci: print a long log and fail")
+		pipeline := fixture.NewPipeline(e, project, project.DefaultBranch)
+		if pipeline.Status != "failed" {
+			e.T.Fatalf("pipeline %d ended as %q, want failed", pipeline.ID, pipeline.Status)
+		}
+		return run{project: project, pipeline: pipeline}
+	}, func(e *harness.Env, surface harness.Surface, r run) {
+		s := e.On(surface)
+		listed := harness.Do[jobs.ListOutput](s, actionJobList, map[string]any{"project_id": r.project.IDParam(), "pipeline_id": r.pipeline.ID})
+		job := jobNamed(e, listed, jobLongLogJob)
+		byJob := map[string]any{"project_id": r.project.IDParam(), "job_id": job.ID}
+
+		trace := harness.Do[jobs.TraceOutput](s, actionJobTrace, byJob)
+		if !trace.Truncated || trace.OmittedBytes <= 0 || len(trace.Trace) > 100<<10 {
+			e.T.Errorf("the long log answered truncated %v, %d bytes, %d omitted; want its last 100 KB at most and the rest counted", trace.Truncated, len(trace.Trace), trace.OmittedBytes)
+		}
+		if !strings.Contains(trace.Trace, jobLongLogFatal) {
+			e.T.Errorf("the long log does not carry its failing line %q", jobLongLogFatal)
+		}
+		if strings.Contains(trace.Trace, "\x1b[") || strings.Contains(trace.Trace, "section_start:") {
+			e.T.Errorf("the log still carries terminal markup: %q", firstLine(trace.Trace))
+		}
+
+		// The runner writes lines of its own after the script's last output,
+		// the cleanup section and "ERROR: Job failed" among them, and how many
+		// is the runner's to decide, so the tails are held to the end of the
+		// log read whole: five lines are its last five, and as many lines as
+		// the failure is from the end start at the failure.
+		lines := traceLines(trace.Trace)
+		failure := slices.IndexFunc(lines, func(line string) bool { return strings.Contains(line, jobLongLogFatal) })
+		if failure < 0 || len(lines) < 5 {
+			e.T.Fatalf("the long log read whole has %d lines and its failure at %d, want five or more and the failure", len(lines), failure)
+		}
+		last := harness.Do[jobs.TraceOutput](s, actionJobTrace, withParams(byJob, map[string]any{"tail_lines": 5}))
+		if got := traceLines(last.Trace); !slices.Equal(got, lines[len(lines)-5:]) {
+			e.T.Errorf("tail_lines 5 answered %q, want the last five lines of the log %q", got, lines[len(lines)-5:])
+		}
+		fromFailure := len(lines) - failure
+		reaching := harness.Do[jobs.TraceOutput](s, actionJobTrace, withParams(byJob, map[string]any{"tail_lines": fromFailure}))
+		if got := traceLines(reaching.Trace); len(got) != fromFailure || !strings.Contains(got[0], jobLongLogFatal) {
+			e.T.Errorf("tail_lines %d answered %q, want %d lines starting at the failure", fromFailure, got, fromFailure)
+		}
+	})
+}
+
+// traceLines splits a job log into its lines, the newline that ends the last
+// one dropped.
+func traceLines(trace string) []string {
+	return strings.Split(strings.TrimSuffix(trace, "\n"), "\n")
+}
+
 // TestJob_ProjectWide_ListsAndDeletesArtifacts lists the jobs of a shared
 // project on every surface and deletes the project's artifacts, which a
 // project that never ran a pipeline has none of and accepts anyway.

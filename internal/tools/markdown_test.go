@@ -1316,11 +1316,12 @@ func TestFormatJob_TraceMarkdown(t *testing.T) {
 	})
 
 	t.Run("truncated trace", func(t *testing.T) {
-		tr := jobs.TraceOutput{JobID: 99, Trace: "big output", Truncated: true}
+		tr := jobs.TraceOutput{JobID: 99, Trace: "big output", Truncated: true, OmittedBytes: 4096}
 		md := jobs.FormatTraceMarkdown(tr)
-		// The note names the end that is missing: the log is cut at the first
-		// 100 KB and a failure is almost always at the end of it.
-		if !strings.Contains(md, "Showing the first 100 KB of the log.") {
+		// The note names the part that is shown and the part left out: the
+		// log keeps its end, where a failure almost always is, and says how
+		// much of its beginning is missing.
+		if !strings.Contains(md, "Showing the end of the log, at most its last 100 KB. The first 4096 bytes are left out.") {
 			t.Error("missing truncation warning")
 		}
 	})

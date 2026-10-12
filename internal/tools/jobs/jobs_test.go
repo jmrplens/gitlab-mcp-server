@@ -4,17 +4,20 @@
 package jobs
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"reflect"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"unicode/utf8"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -48,28 +51,190 @@ func TestRawHelpers_UnescapablePath_FailBeforeTheRequest(t *testing.T) {
 	})
 }
 
-// TestJobTrace_ReadFailure_IsReported verifies a trace body that fails
-// mid-read with something other than an end of file is reported as an error
-// rather than returned as a shorter log. client-go hands Trace an in-memory
-// reader that cannot fail that way, so the failure comes through the seam.
-func TestJobTrace_ReadFailure_IsReported(t *testing.T) {
-	original := readFull
-	t.Cleanup(func() { readFull = original })
-	readFull = func(io.Reader, []byte) (int, error) { return 3, errors.New("stream reset") }
-
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != pathJobTrace {
+// serveTrace answers the trace route with log and refuses anything else.
+func serveTrace(t *testing.T, log string) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != pathJobTrace {
 			http.NotFound(w, r)
 			return
 		}
 		w.Header().Set(testHeaderContentType, "text/plain")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("partial log"))
+		_, _ = w.Write([]byte(log))
 	}))
+}
 
+// failingLog is a log over the trace limit whose last line is the failure,
+// as the issue's reproduction was: thousands of install lines, then FATAL.
+func failingLog(lines int) string {
+	var b strings.Builder
+	for i := 1; i <= lines; i++ {
+		fmt.Fprintf(&b, "installing dependency number %d of the build ......\n", i)
+	}
+	b.WriteString("FATAL unit test TestCheckout failed expected 200 got 500\n")
+	return b.String()
+}
+
+// TestJobTrace_LongLog_KeepsItsEnd verifies that a log over the limit keeps
+// its last 100 KiB, from the start of a line, and says how much of its
+// beginning was left out. It used to keep the first 100 KiB, so the failure,
+// which is almost always at the end of a log, was exactly what was dropped.
+func TestJobTrace_LongLog_KeepsItsEnd(t *testing.T) {
+	log := failingLog(3000)
+	out, err := Trace(t.Context(), serveTrace(t, log), TraceInput{ProjectID: "42", JobID: 100})
+	if err != nil {
+		t.Fatalf("Trace() error: %v", err)
+	}
+	if !out.Truncated || len(out.Trace) > hundredKiB || out.OmittedBytes != len(log)-len(out.Trace) {
+		t.Errorf("Truncated/len/OmittedBytes = %v/%d/%d, want true, at most %d, and %d", out.Truncated, len(out.Trace), out.OmittedBytes, hundredKiB, len(log)-len(out.Trace))
+	}
+	if !strings.HasSuffix(out.Trace, "FATAL unit test TestCheckout failed expected 200 got 500\n") {
+		t.Errorf("the kept log ends %q, want the FATAL line", out.Trace[max(0, len(out.Trace)-80):])
+	}
+	if !strings.HasPrefix(out.Trace, "installing dependency number ") {
+		t.Errorf("the kept log starts %q, want the start of a line", out.Trace[:min(40, len(out.Trace))])
+	}
+}
+
+// TestJobTrace_OneLongLine_IsCutOnACharacter verifies that a log with no
+// line break in its last 100 KiB is cut at a character boundary, so what is
+// kept is still valid UTF-8.
+func TestJobTrace_OneLongLine_IsCutOnACharacter(t *testing.T) {
+	log := strings.Repeat("é", hundredKiB) // two bytes each, so the byte cut lands mid-character half the time
+	out, err := Trace(t.Context(), serveTrace(t, log+"x"), TraceInput{ProjectID: "42", JobID: 100})
+	if err != nil {
+		t.Fatalf("Trace() error: %v", err)
+	}
+	if !utf8.ValidString(out.Trace) || !strings.HasSuffix(out.Trace, "éx") || len(out.Trace) > hundredKiB {
+		t.Errorf("kept %d bytes, valid UTF-8 %v, ending %q; want at most %d valid bytes ending in éx", len(out.Trace), utf8.ValidString(out.Trace), out.Trace[max(0, len(out.Trace)-4):], hundredKiB)
+	}
+}
+
+// TestJobTrace_TailLines_ReturnsTheLastLines verifies the tail_lines input:
+// the last N lines, the whole log when it has fewer, and a refusal for a
+// count outside 1 to 10000, where 0 means the input was not given.
+func TestJobTrace_TailLines_ReturnsTheLastLines(t *testing.T) {
+	const log = "one\ntwo\nthree\nfour\n"
+	for _, tc := range []struct {
+		name  string
+		lines int
+		want  string
+	}{
+		{"not given", 0, log},
+		{"the last two", 2, "three\nfour\n"},
+		{"the last one", 1, "four\n"},
+		{"more than the log has", 9, log},
+		{"the ceiling", 10000, log},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := Trace(t.Context(), serveTrace(t, log), TraceInput{ProjectID: "42", JobID: 100, TailLines: tc.lines})
+			if err != nil {
+				t.Fatalf("Trace() error: %v", err)
+			}
+			if out.Trace != tc.want || out.Truncated != (tc.want != log) {
+				t.Errorf("Trace = %q, truncated %v; want %q", out.Trace, out.Truncated, tc.want)
+			}
+		})
+	}
+	t.Run("a log with no final newline", func(t *testing.T) {
+		out, err := Trace(t.Context(), serveTrace(t, "one\ntwo"), TraceInput{ProjectID: "42", JobID: 100, TailLines: 1})
+		if err != nil || out.Trace != "two" {
+			t.Errorf("Trace = %q, %v; want the last line", out.Trace, err)
+		}
+	})
+	for _, bad := range []int{-1, 10001} {
+		t.Run(fmt.Sprint("refuses ", bad), func(t *testing.T) {
+			_, err := Trace(t.Context(), testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), TraceInput{ProjectID: "42", JobID: 100, TailLines: bad})
+			if err == nil || !strings.Contains(err.Error(), "tail_lines") {
+				t.Errorf("Trace(tail_lines %d) error = %v, want a refusal naming tail_lines", bad, err)
+			}
+		})
+	}
+}
+
+// TestJobTrace_Markup_IsStrippedFromTheLog verifies that the structured log
+// carries the text without the runner's ANSI sequences and section markers,
+// which used to reach the structured channel raw and the text channel as
+// "[36;1m" and "section_start:" once the escape byte was dropped.
+func TestJobTrace_Markup_IsStrippedFromTheLog(t *testing.T) {
+	log := "section_start:1791747389:prepare_executor\r\x1b[0K\x1b[0K\x1b[36;1mPreparing the executor\x1b[0;m\nsection_end:1791747390:prepare_executor\r\x1b[0K\n"
+	out, err := Trace(t.Context(), serveTrace(t, log), TraceInput{ProjectID: "42", JobID: 100})
+	if err != nil {
+		t.Fatalf("Trace() error: %v", err)
+	}
+	if out.Trace != "Preparing the executor\n\n" {
+		t.Errorf("Trace = %q, want the text alone", out.Trace)
+	}
+}
+
+// TestJobTrace_ResponseOverTheClientCeiling_NamesTheWayOut verifies that a
+// log the client-wide response ceiling stops is answered with the route to
+// read it from GitLab directly, rather than a bare "unexpected error".
+func TestJobTrace_ResponseOverTheClientCeiling_NamesTheWayOut(t *testing.T) {
+	client := serveTrace(t, strings.Repeat("x", 4096))
+	client.SetMaxResponseBytes(1024)
 	_, err := Trace(t.Context(), client, TraceInput{ProjectID: "42", JobID: 100})
-	if err == nil || !strings.Contains(err.Error(), "stream reset") {
-		t.Fatalf("Trace() error = %v, want the read failure", err)
+	if err == nil || !strings.Contains(err.Error(), "GET /projects/:id/jobs/:job_id/trace") {
+		t.Fatalf("Trace() error = %v, want the way out", err)
+	}
+}
+
+// markupLog is a runner log of at least size bytes, as a runner writes one:
+// every line colored, a collapsible section every hundred lines, and the
+// failure on the last line.
+func markupLog(size int) string {
+	var b strings.Builder
+	b.Grow(size + 128)
+	for i := 1; b.Len() < size; i++ {
+		if i%100 == 1 {
+			fmt.Fprintf(&b, "section_start:1791747389:step_%d\r\x1b[0K\x1b[36;1mStep %d\x1b[0;m\n", i, i)
+		}
+		fmt.Fprintf(&b, "\x1b[0;32m[ok]\x1b[0m installing dependency number %d of the build\n", i)
+	}
+	b.WriteString("\x1b[31;1mFATAL unit test TestCheckout failed expected 200 got 500\x1b[0;m\n")
+	return b.String()
+}
+
+// allocatedBy returns how many bytes f allocated on the heap.
+func allocatedBy(f func()) uint64 {
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	f()
+	runtime.ReadMemStats(&after)
+	return after.TotalAlloc - before.TotalAlloc
+}
+
+// TestJobTrace_LongLog_ReadsOnlyItsEnd verifies what Trace costs on top of
+// the read client-go makes of the body anyway, for a 64 MiB log, the size of
+// the client's response ceiling: a bounded number of the windows it reads
+// from the end of the log, whatever the log's size, since only that end is
+// copied and stripped of markup. Trace used to copy the whole log and strip
+// all of it before keeping 100 KB: more than 1 GiB allocated for this log,
+// with several copies of it held at once, for every call of the 192 the
+// process holds open at most.
+func TestJobTrace_LongLog_ReadsOnlyItsEnd(t *testing.T) {
+	log := markupLog(64 << 20)
+	client := serveTrace(t, log)
+	client.SetMaxResponseBytes(int64(len(log)) + 1)
+	read := allocatedBy(func() {
+		if _, _, err := client.GL().Jobs.GetTraceFile("42", 100, gl.WithContext(t.Context())); err != nil {
+			t.Fatalf("GetTraceFile() error: %v", err)
+		}
+	})
+	var out TraceOutput
+	traced := allocatedBy(func() {
+		var err error
+		if out, err = Trace(t.Context(), client, TraceInput{ProjectID: "42", JobID: 100}); err != nil {
+			t.Fatalf("Trace() error: %v", err)
+		}
+	})
+	t.Logf("Trace allocated %d bytes, client-go's read alone %d", traced, read)
+	if traced > read+20*traceWindowBytes {
+		t.Errorf("Trace allocated %d bytes and client-go's read alone %d, want at most twenty windows of %d between them", traced, read, traceWindowBytes)
+	}
+	if !strings.HasSuffix(out.Trace, "FATAL unit test TestCheckout failed expected 200 got 500\n") || !out.Truncated {
+		t.Errorf("Trace ends %q, truncated %v; want the failure line, truncated", out.Trace[max(0, len(out.Trace)-80):], out.Truncated)
 	}
 }
 
@@ -615,36 +780,6 @@ func TestJobTrace_Success(t *testing.T) {
 	}
 }
 
-// TestJobTrace_Truncated verifies Trace caps large job logs at maxTraceBytes and
-// marks the output as truncated.
-//
-// The mock returns a trace slightly larger than the configured limit. The test
-// expects the trace length to equal maxTraceBytes and Truncated to be true,
-// protecting clients from unbounded job-log responses.
-func TestJobTrace_Truncated(t *testing.T) {
-	traceContent := strings.Repeat("x", maxTraceBytes+10)
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == pathJobTrace {
-			w.Header().Set(testHeaderContentType, "text/plain")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(traceContent))
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	out, err := Trace(context.Background(), client, TraceInput{ProjectID: "42", JobID: 100})
-	if err != nil {
-		t.Fatalf("Trace() unexpected error: %v", err)
-	}
-	if !out.Truncated {
-		t.Fatal("out.Truncated = false, want true")
-	}
-	if len(out.Trace) != maxTraceBytes {
-		t.Fatalf("len(out.Trace) = %d, want %d", len(out.Trace), maxTraceBytes)
-	}
-}
-
 // hundredKiB is the limit the trace card's note promises a reader, written as
 // its own number so no test here can follow maxTraceBytes wherever it goes.
 const hundredKiB = 102400
@@ -652,9 +787,9 @@ const hundredKiB = 102400
 // TestJobTrace_LimitIsTheHundredKiBTheNotePromises holds the trace limit to
 // the figure the truncation note states, from both sides of the boundary: a
 // log of exactly that size is returned whole and unmarked, and one byte more
-// is cut to it and marked. The truncation tests before this one measured the
-// limit against the constant that set it, so a constant that shrank to a
-// kilobyte passed them all.
+// is cut to it, from the end, and marked. The truncation tests before this
+// one measured the limit against the constant that set it, so a constant
+// that shrank to a kilobyte passed them all.
 func TestJobTrace_LimitIsTheHundredKiBTheNotePromises(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -663,7 +798,7 @@ func TestJobTrace_LimitIsTheHundredKiBTheNotePromises(t *testing.T) {
 		wantTruncated bool
 	}{
 		{"exactly the limit is kept whole", hundredKiB, hundredKiB, false},
-		{"one byte over is cut to the limit", hundredKiB + 1, hundredKiB, true},
+		{"one byte over keeps the last limit of it", hundredKiB + 1, hundredKiB, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -685,8 +820,8 @@ func TestJobTrace_LimitIsTheHundredKiBTheNotePromises(t *testing.T) {
 			if out.Truncated != tt.wantTruncated {
 				t.Errorf("Truncated = %v, want %v for a %d-byte log", out.Truncated, tt.wantTruncated, tt.size)
 			}
-			if out.Trace != body[:tt.wantLen] {
-				t.Errorf("Trace is %d bytes and ends %q, want the first %d bytes of the log", len(out.Trace), out.Trace[max(0, len(out.Trace)-3):], tt.wantLen)
+			if out.Trace != body[len(body)-tt.wantLen:] {
+				t.Errorf("Trace is %d bytes and ends %q, want the last %d bytes of the log", len(out.Trace), out.Trace[max(0, len(out.Trace)-3):], tt.wantLen)
 			}
 		})
 	}
@@ -2752,22 +2887,197 @@ func TestFormatTraceMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatTraceMarkdown_Truncated checks that the note names the end that is
-// missing. The log is cut at the first 100 KB and a failure is almost always
-// at the end of it, so a reader told only "truncated" would look for the error
-// in what is shown.
+// TestFormatTraceMarkdown_Truncated checks that the note says the end of the
+// log is what is shown and how much of its beginning is not, and that the
+// next steps offer tail_lines. The note used to say the first 100 KB were
+// shown and the end, where the failure is, was not, which is what the read
+// did and no longer does.
 func TestFormatTraceMarkdown_Truncated(t *testing.T) {
 	md := FormatTraceMarkdown(TraceOutput{
-		JobID:     100,
-		Trace:     "partial log...",
-		Truncated: true,
+		JobID:        100,
+		Trace:        "...end of log",
+		Truncated:    true,
+		OmittedBytes: 58550,
 	})
 	want := "## Job #100 Trace\n\n" +
-		"⚠️ Showing the first 100 KB of the log. The end, where a failure usually appears, is not included.\n" +
-		"\n```\npartial log...\n```\n" +
-		traceHints
+		"⚠️ Showing the end of the log, at most its last 100 KB. The first 58550 bytes are left out.\n" +
+		"\n```\n...end of log\n```\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'job.trace' to read only the last lines of the log with tail_lines\n" +
+		"- Use action 'job.get' to see this job's details\n" +
+		"- Use action 'job.retry' to re-run it\n"
 	if md != want {
 		t.Errorf("FormatTraceMarkdown(truncated)\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestLogTail_InvalidUTF8_KeepsTheLastByte verifies that a log whose last
+// bytes are not UTF-8 still keeps at least its last byte, rather than walking
+// past the end looking for a character to start at.
+func TestLogTail_InvalidUTF8_KeepsTheLastByte(t *testing.T) {
+	if got := logTail(strings.Repeat("\x80", 10), 4); got != "\x80" {
+		t.Errorf("logTail(continuation bytes) = %q, want the last byte", got)
+	}
+	if got := logTail("ab\ncd\x80\x80", 4); got != "cd\x80\x80" {
+		t.Errorf("logTail(line then invalid bytes) = %q, want the last line", got)
+	}
+}
+
+// TestLogTail_AtTheEdges verifies logTail where its comparisons turn: a log
+// exactly the limit long comes back whole, its first line included; a line
+// break on the first of the last limit bytes is dropped, so the kept part
+// starts at the line after it rather than with an empty line; and a line that
+// begins exactly where the last limit bytes do is kept whole, since it fits.
+// That last one used to be dropped too, the search for a line start running
+// on past a line that already began there.
+func TestLogTail_AtTheEdges(t *testing.T) {
+	cases := []struct {
+		name, log string
+		limit     int
+		want      string
+	}{
+		{name: "exactly the limit", log: "a\nb", limit: 3, want: "a\nb"},
+		{name: "line break on the first kept byte", log: "abc\ndef", limit: 4, want: "def"},
+		{name: "line break just before the kept bytes", log: "abc\ndef\nghi", limit: 7, want: "def\nghi"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := logTail(tc.log, tc.limit); got != tc.want {
+				t.Errorf("logTail(%q, %d) = %q, want %q", tc.log, tc.limit, got, tc.want)
+			}
+		})
+	}
+}
+
+// traceTailOf runs traceTail over log with the window given, as Trace runs it
+// over the body client-go read.
+func traceTailOf(log string, tailLines, window int) (string, int) {
+	return traceTail(bytes.NewReader([]byte(log)), tailLines, window)
+}
+
+// assertTailOfLog holds what traceTail returned for log to what it promises:
+// the log from omitted on, as GitLab stores it, strips to exactly the text
+// returned, and that text starts a line whenever the stripped log has a line
+// break before it.
+func assertTailOfLog(t *testing.T, log, kept string, omitted int) {
+	t.Helper()
+	if omitted < 0 || omitted > len(log) {
+		t.Fatalf("omitted = %d, outside a log of %d bytes", omitted, len(log))
+	}
+	if got := toolutil.StripLogMarkup(log[omitted:]); got != kept {
+		t.Errorf("the log from byte %d strips to %d bytes, not the %d returned", omitted, len(got), len(kept))
+	}
+	if omitted > 0 && strings.Contains(toolutil.StripLogMarkup(log[:omitted]), "\n") && log[omitted-1] != '\n' {
+		t.Errorf("the text returned starts inside a line, at byte %d", omitted)
+	}
+}
+
+// TestTraceTail_EndOfALongLog_IsWhatTheWholeLogGives verifies that reading
+// only the end of a log returns what stripping and cutting the whole log
+// returns, with and without tail_lines, when the end read holds more text
+// than one response carries: the part read starts at a line, where the
+// markup strips as it does in the whole log.
+func TestTraceTail_EndOfALongLog_IsWhatTheWholeLogGives(t *testing.T) {
+	log := markupLog(600 << 10)
+	text := toolutil.StripLogMarkup(log)
+	for _, tc := range []struct {
+		name      string
+		tailLines int
+		window    int
+	}{
+		{"the end of the log", 0, 300 << 10},
+		{"the last five lines", 5, 300 << 10},
+		{"more lines than the part read holds", 10000, 300 << 10},
+		{"a window over the whole log", 0, 1 << 20},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			want := text
+			if tc.tailLines > 0 {
+				want = lastLines(want, tc.tailLines)
+			}
+			want = logTail(want, maxTraceBytes)
+			kept, omitted := traceTailOf(log, tc.tailLines, tc.window)
+			if kept != want {
+				t.Errorf("kept %d bytes ending %q, want the %d the whole log gives", len(kept), kept[max(0, len(kept)-40):], len(want))
+			}
+			assertTailOfLog(t, log, kept, omitted)
+		})
+	}
+}
+
+// TestTraceTail_TheEdgesOfThePartRead verifies the part read where it has no
+// line to start at: a long line cut on a character rather than inside one, a
+// line break only as the last byte, which leaves the part read whole rather
+// than empty, a part holding no character start at all, which keeps the last
+// byte, and a part that is nearly all markup, returned whole with what comes
+// before it counted as left out.
+func TestTraceTail_TheEdgesOfThePartRead(t *testing.T) {
+	t.Run("one long line", func(t *testing.T) {
+		log := strings.Repeat("é", 200<<10) + "x" // an odd length, so the part read starts on the second byte of a character
+		kept, omitted := traceTailOf(log, 0, 150<<10)
+		if !utf8.ValidString(kept) || !strings.HasSuffix(kept, "éx") || len(kept) > maxTraceBytes {
+			t.Errorf("kept %d bytes, valid UTF-8 %v; want at most %d valid bytes ending in éx", len(kept), utf8.ValidString(kept), maxTraceBytes)
+		}
+		assertTailOfLog(t, log, kept, omitted)
+	})
+	t.Run("a short part starting inside a character", func(t *testing.T) {
+		log := strings.Repeat("é", 10) // the last 5 bytes start on the second byte of a character
+		kept, omitted := traceTailOf(log, 0, 5)
+		if kept != "éé" || omitted != 16 {
+			t.Errorf("kept %q, %d omitted; want the two whole characters read and the 16 bytes before them omitted", kept, omitted)
+		}
+		assertTailOfLog(t, log, kept, omitted)
+	})
+	t.Run("a line break only as the last byte", func(t *testing.T) {
+		log := strings.Repeat("a", 300<<10) + "\n"
+		kept, omitted := traceTailOf(log, 0, 200<<10)
+		if len(kept) != maxTraceBytes || omitted != len(log)-maxTraceBytes {
+			t.Errorf("kept %d bytes, %d omitted; want the last %d and the rest omitted", len(kept), omitted, maxTraceBytes)
+		}
+	})
+	t.Run("no character start", func(t *testing.T) {
+		log := strings.Repeat("\x80", 300<<10)
+		kept, omitted := traceTailOf(log, 0, 200<<10)
+		if kept != "\x80" || omitted != len(log)-1 {
+			t.Errorf("kept %q, %d omitted; want the last byte and the rest omitted", kept, omitted)
+		}
+	})
+	t.Run("a part that is nearly all markup", func(t *testing.T) {
+		line := strings.Repeat("\x1b[0K", 1000) + "x\n"
+		log := strings.Repeat(line, 100)
+		kept, omitted := traceTailOf(log, 0, 200<<10)
+		if kept == "" || strings.Trim(kept, "x\n") != "" || len(kept) >= 100*2 || omitted == 0 {
+			t.Errorf("kept %q, %d omitted; want the text of the lines read and the rest omitted", kept, omitted)
+		}
+		assertTailOfLog(t, log, kept, omitted)
+	})
+}
+
+// TestRawOffset_FindsWhereTheStrippedTextBegins verifies rawOffset at a line
+// start, which it reaches by counting line breaks, inside a line, which it
+// maps through the markup of that line alone, and at the end of the text.
+func TestRawOffset_FindsWhereTheStrippedTextBegins(t *testing.T) {
+	const raw = "a\x1b[0Kb\nc\x1b[31md\x1b[0me\n"
+	text := toolutil.StripLogMarkup(raw)
+	for _, tc := range []struct {
+		n, want int
+	}{
+		{0, 0}, {1, 5}, {3, 7}, {4, 13}, {5, 18}, {7, len(raw)},
+	} {
+		t.Run(strconv.Itoa(tc.n), func(t *testing.T) {
+			if got := rawOffset(raw, text, tc.n); got != tc.want {
+				t.Errorf("rawOffset(%q, %q, %d) = %d, want %d", raw, text, tc.n, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestLastLines_ALeadingLineBreak_StaysOutOfTheLastLines verifies that a log
+// starting with a line break has an empty first line, so asking for every
+// line after it returns them without the break rather than the log whole.
+func TestLastLines_ALeadingLineBreak_StaysOutOfTheLastLines(t *testing.T) {
+	if got := lastLines("\na\nb\n", 2); got != "a\nb\n" {
+		t.Errorf("lastLines(leading line break, 2) = %q, want %q", got, "a\nb\n")
 	}
 }
 

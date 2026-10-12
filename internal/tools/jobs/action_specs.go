@@ -244,13 +244,21 @@ func jobOptionsForAction(individualTool string, extraTags ...string) toolutil.Ac
 		}
 		options.IndividualTool.Description = "List CI bridge (trigger) jobs for one pipeline with keyset pagination. Returns: bridge summaries with status and downstream pipeline references. See also: gitlab_job_list, gitlab_pipeline_get, gitlab_job_get."
 	case "gitlab_job_trace":
-		options.Usage = "Get job log output (trace) for troubleshooting and diagnostics. Use with a known job_id after selecting a relevant job from list/get calls."
+		options.Usage = "Get job log output (trace) for troubleshooting and diagnostics, without the runner's color codes and section markers. Use with a known job_id after selecting a relevant job from list/get calls. A log over 100 KB keeps its end, where a failure usually is, and tail_lines narrows it to its last lines."
 		options.Aliases = []string{"get job log", "job trace", "show job output"}
 		options.RelatedActions = []string{actionJobGet, actionJobListProject, actionJobRetry, actionJobCancel}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"project_id": guidanceProjectID(), "job_id": guidanceJobID(),
+			"tail_lines": {
+				SemanticRole:   "line_count",
+				ValueSource:    "How many lines from the end of the log to return, 1 to 10000. Leave it out for the whole log, cut to its last 100 KB.",
+				ExampleBinding: "params.tail_lines:200",
+			},
 		}
-		options.IndividualTool.Description = "Get CI job trace output. Returns: text log with truncation metadata when logs exceed limits. See also: gitlab_job_get, gitlab_job_retry, gitlab_job_cancel."
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("tail_lines", map[string]any{"minimum": 1, "maximum": maxTraceTailLines}),
+		}
+		options.IndividualTool.Description = "Get CI job trace output, the end of it when it is over 100 KB. Returns: the log text, a truncated flag and the bytes left out of its beginning. See also: gitlab_job_get, gitlab_job_retry, gitlab_job_cancel."
 	case "gitlab_job_retry":
 		options.Usage = "Retry a failed or canceled CI job by project_id and job_id. Use this to re-run a job that ended in failure. Running or successful jobs cannot be retried."
 		options.Aliases = []string{"retry job", "rerun job", "re-run failed job"}

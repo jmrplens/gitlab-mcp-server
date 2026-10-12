@@ -29,6 +29,54 @@ func NormalizeText(s string) string {
 	return s
 }
 
+// ansiControlSequence matches an ANSI control sequence (CSI) whole: ESC and
+// "[", then the parameter bytes, the intermediate bytes and one final byte,
+// which is what a terminal reads as color, erase or cursor movement.
+var ansiControlSequence = regexp.MustCompile(`\x1b\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]`)
+
+// logSectionMarker matches the marker GitLab Runner writes at the start and
+// the end of each collapsible section of a job log,
+// "section_start:<unix time>:<name>[<options>]" and its carriage return,
+// which GitLab's log viewer folds on and every other reader sees as noise.
+var logSectionMarker = regexp.MustCompile(`section_(?:start|end):[0-9]+:[A-Za-z0-9_.-]+(?:\[[^\]\r\n]*\])?\r?`)
+
+// StripLogMarkup removes the terminal markup GitLab Runner writes into a CI
+// job log, the ANSI control sequences and the section markers, and leaves
+// the text a person reads. [StripControlBytes] drops only the ESC byte of a
+// sequence, so a log went out as "[0K[36;1mPreparing" beside
+// "section_start:1791747389:prepare_executor", and the structured channel
+// carried the raw bytes. A lone ESC that starts no sequence is left for
+// [StripControlBytes] to drop where text becomes Markdown.
+func StripLogMarkup(s string) string {
+	return ansiControlSequence.ReplaceAllString(logSectionMarker.ReplaceAllString(s, ""), "")
+}
+
+// LogMarkupRawOffset returns where, in the log s as written, the byte that
+// [StripLogMarkup] keeps at offset n stands, n running from 0 to the length
+// of the stripped text, whose end is the end of s: s from that offset strips
+// to the stripped text from n. It maps n back through the two passes
+// StripLogMarkup makes, the escape sequences of the text the section markers
+// were removed from and then the markers of s, since a marker inside a
+// sequence leaves a sequence only the second pass sees.
+func LogMarkupRawOffset(s string, n int) int {
+	withoutMarkers := logSectionMarker.ReplaceAllString(s, "")
+	n = offsetWithSpans(ansiControlSequence.FindAllStringIndex(withoutMarkers, -1), n)
+	return offsetWithSpans(logSectionMarker.FindAllStringIndex(s, -1), n)
+}
+
+// offsetWithSpans maps an offset in a text the spans were removed from to
+// the same byte in the text that still holds them: every span starting at or
+// before it pushes it on by the span's length.
+func offsetWithSpans(spans [][]int, n int) int {
+	for _, span := range spans {
+		if span[0] > n {
+			break
+		}
+		n += span[1] - span[0]
+	}
+	return n
+}
+
 // StripControlBytes removes the C0 and C1 control ranges and DEL from s,
 // keeping the three controls Markdown actually uses: tab, newline and carriage
 // return.

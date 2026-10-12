@@ -147,17 +147,19 @@ func jobNameCell(j Output) string {
 func FormatTraceMarkdown(t TraceOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, fmt.Sprintf("Job #%d Trace", t.JobID))
-	if t.Truncated {
-		// Naming the end that is missing matters: the log is cut at the front
-		// 100 KB, and a failure is almost always at the end of it, so a reader
-		// told only "truncated" would look for the error in what is shown.
-		c.Note(toolutil.EmojiWarning + " Showing the first 100 KB of the log. The end, where a failure usually appears, is not included.")
-	}
-	c.Fence("", "", t.Trace)
-	c.End(
+	hints := []string{
 		toolutil.HintAction(actionJobGet, "see this job's details"),
 		toolutil.HintAction(actionJobRetry, "re-run it"),
-	)
+	}
+	if t.Truncated {
+		// Saying which part is shown matters: a failure is almost always at
+		// the end of a log, and the end is what is kept, so a reader told
+		// only "truncated" might look for the error in what is missing.
+		c.Note(fmt.Sprintf("%s Showing the end of the log, at most its last 100 KB. The first %d bytes are left out.", toolutil.EmojiWarning, t.OmittedBytes))
+		hints = append([]string{toolutil.HintAction(actionJobTrace, "read only the last lines of the log with tail_lines")}, hints...)
+	}
+	c.Fence("", "", t.Trace)
+	c.End(hints...)
 	return b.String()
 }
 
@@ -326,21 +328,24 @@ func jobOutcomeEmoji(finalStatus string) string {
 
 // jobWaitHints names what a caller can do with the outcome the wait reached,
 // and nothing when the job simply succeeded.
+//
+// The outcomes are if statements rather than the cases of a tagless switch,
+// because a mutation run cannot credit a test with the expression of such a
+// case and reports it as never reached.
 func jobWaitHints(out WaitOutput) []string {
-	switch {
-	case out.TimedOut:
+	if out.TimedOut {
 		return []string{
 			toolutil.HintAction(actionJobWait, "keep waiting for this job"),
 			toolutil.HintAction(actionJobCancel, "abort it instead"),
 		}
-	case out.FinalStatus == "failed":
+	}
+	if out.FinalStatus == "failed" {
 		return []string{
 			toolutil.HintAction(actionJobTrace, "read the log for the failure"),
 			toolutil.HintAction(actionJobRetry, "retry the job"),
 		}
-	default:
-		return nil
 	}
+	return nil
 }
 
 // formatWaitResult wraps the Markdown output of [FormatWaitMarkdown] in

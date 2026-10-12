@@ -6,8 +6,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -21,14 +21,19 @@ import (
 const hintVerifyJobID = "verify job_id with job.list"
 
 // maxTraceBytes limits the trace log returned by [Trace] so a single
-// response cannot exceed roughly 100 KB.
+// response cannot exceed roughly 100 KB: a longer log keeps its end.
 const maxTraceBytes = 100 << 10
 
-// readFull is the trace body reader, a variable so a test can reach the read
-// failure branch: client-go hands [Trace] an in-memory *bytes.Reader, which
-// never fails with anything but an end of file, and the check is kept for
-// the day the wrapper streams the body instead.
-var readFull = io.ReadFull
+// traceWindowBytes is how much of the end of a log [Trace] reads and strips
+// of the runner's markup, 1000 KB, ten times the [maxTraceBytes] it returns:
+// markup is a fraction of a colored line, so the last 1000 KB of any log a
+// runner writes hold more than 100 KB of text.
+const traceWindowBytes = 1000 << 10
+
+// maxTraceTailLines bounds the tail_lines a caller may ask [Trace] for. A
+// line count is the caller's to choose, and nothing else bounds the walk
+// back through the log that counting them is.
+const maxTraceTailLines = 10000
 
 // Operation and formatter constants shared by the jobs package.
 const (
@@ -223,20 +228,28 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 type TraceInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	JobID     int64                `json:"job_id"     jsonschema:"Job ID to get trace log for,required"`
+	TailLines int                  `json:"tail_lines,omitempty" jsonschema:"Return only the last N lines of the log, 1 to 10000. Either way at most the last 100 KB of the log is returned"`
 }
 
-// TraceOutput holds the raw trace (log) output of a CI/CD job.
+// TraceOutput holds the trace (log) of a CI/CD job, the end of it when it
+// is longer than one response carries. Truncated is set when anything was
+// left out, and OmittedBytes counts the bytes of the log, as GitLab stores
+// it with the runner's markup, that come before the part returned.
 type TraceOutput struct {
 	toolutil.HintableOutput
-	JobID     int64  `json:"job_id"`
-	Trace     string `json:"trace"`
-	Truncated bool   `json:"truncated"`
+	JobID        int64  `json:"job_id"`
+	Trace        string `json:"trace"`
+	Truncated    bool   `json:"truncated"`
+	OmittedBytes int    `json:"omitted_bytes,omitempty"`
 }
 
-// Trace retrieves the raw log output of a CI/CD job via the GitLab
-// Jobs trace API (GET /projects/:id/jobs/:job_id/trace). The trace is
-// truncated to [maxTraceBytes] and the Truncated flag is set when the
-// log was longer than that.
+// Trace retrieves the log of a CI/CD job via the GitLab Jobs trace API
+// (GET /projects/:id/jobs/:job_id/trace), without the runner's terminal
+// markup ([toolutil.StripLogMarkup]), the last tail_lines of it when the
+// caller asked for them, and its last [maxTraceBytes] at most
+// ([logTail]), reading only the end of the log ([traceTail]). It used to
+// return the first [maxTraceBytes], and a job's failure is almost always at
+// the end of its log.
 func Trace(ctx context.Context, client *gitlabclient.Client, input TraceInput) (TraceOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return TraceOutput{}, err
@@ -248,29 +261,124 @@ func Trace(ctx context.Context, client *gitlabclient.Client, input TraceInput) (
 	if input.JobID <= 0 {
 		return TraceOutput{}, toolutil.ErrRequiredInt64(toolJobTrace, "job_id")
 	}
+	if input.TailLines < 0 || input.TailLines > maxTraceTailLines {
+		return TraceOutput{}, fmt.Errorf("%s: tail_lines must be between 1 and %d, or left out for the whole log", toolJobTrace, maxTraceTailLines)
+	}
 
 	reader, _, err := client.GL().Jobs.GetTraceFile(string(input.ProjectID), input.JobID, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsDownloadTooLarge(err) {
+			return TraceOutput{}, toolutil.WrapErrWithHint(toolJobTrace, err,
+				"the log is larger than this server reads from GitLab in one response; read it from GitLab directly (GET /projects/:id/jobs/:job_id/trace)")
+		}
 		return TraceOutput{}, toolutil.WrapErrWithStatusHint(toolJobTrace, err, http.StatusNotFound,
 			"verify job_id; trace logs are unavailable if the job has not started yet or its logs have been erased/expired")
 	}
 
-	buf := make([]byte, maxTraceBytes+1)
-	n, err := readFull(reader, buf)
-	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
-		return TraceOutput{}, toolutil.WrapErrWithMessage(toolJobTrace, err)
-	}
-
-	truncated := n > maxTraceBytes
-	if truncated {
-		n = maxTraceBytes
-	}
-
+	log, omitted := traceTail(reader, input.TailLines, traceWindowBytes)
 	return TraceOutput{
-		JobID:     input.JobID,
-		Trace:     string(buf[:n]),
-		Truncated: truncated,
+		JobID:        input.JobID,
+		Trace:        log,
+		Truncated:    omitted > 0,
+		OmittedBytes: omitted,
 	}, nil
+}
+
+// traceTail returns the end of the log r holds as [Trace] returns it, and
+// how many bytes of the log, as GitLab stores it, come before that end, or
+// 0 when nothing was left out.
+//
+// It reads only the last window bytes of the log and strips the markup of
+// those alone, so a call costs a few windows whatever the log's size, up to
+// the client's response ceiling; it used to copy the whole log and strip all
+// of it to keep 100 KB. The part read starts at the first line that begins
+// inside it, where the markup strips as it would in the whole log, since no
+// sequence or marker spans a line break, or at a character when it holds no
+// line break before its last byte. The end of the log is then exactly what
+// stripping the whole log gives whenever the part read holds more text than
+// [maxTraceBytes]; a part that holds less, all markup but a little text, is
+// returned whole and what comes before it is counted as left out.
+//
+// client-go hands the body back already read, so its size is known and the
+// read cannot fail.
+func traceTail(r *bytes.Reader, tailLines, window int) (log string, omitted int) {
+	size := int(r.Size())
+	start := max(size-window, 0)
+	buf := make([]byte, size-start)
+	_, _ = r.ReadAt(buf, int64(start)) // a bytes.Reader holding size bytes fills buf whole
+	skip := 0
+	if start > 0 {
+		skip = bytes.IndexByte(buf[:len(buf)-1], '\n') + 1
+		for skip < len(buf)-1 && !utf8.RuneStart(buf[skip]) {
+			skip++
+		}
+	}
+	raw := string(buf[skip:])
+	text := toolutil.StripLogMarkup(raw)
+	log = text
+	if tailLines > 0 {
+		log = lastLines(log, tailLines)
+	}
+	log = logTail(log, maxTraceBytes)
+	if start == 0 && len(log) == len(text) {
+		return log, 0
+	}
+	return log, start + skip + rawOffset(raw, text, len(text)-len(log))
+}
+
+// rawOffset returns where, in raw, the log as written, the part of text, its
+// stripped form, from n on begins: past as many line breaks as text[:n]
+// holds, since stripping keeps every one of them, and then, when n falls
+// inside a line, as far into that line as [toolutil.LogMarkupRawOffset]
+// maps it. raw from there strips to text from n. Counting line breaks reads
+// the part once and allocates nothing, where mapping the whole part through
+// the markup would cost another pass of the regular expressions over it.
+func rawOffset(raw, text string, n int) int {
+	lineStart := strings.LastIndexByte(text[:n], '\n') + 1
+	offset := 0
+	for range strings.Count(text[:lineStart], "\n") {
+		offset += strings.IndexByte(raw[offset:], '\n') + 1
+	}
+	if lineStart == n {
+		return offset
+	}
+	line, _, _ := strings.Cut(raw[offset:], "\n")
+	return offset + toolutil.LogMarkupRawOffset(line, n-lineStart)
+}
+
+// lastLines returns the last n lines of s, keeping a final line break, and
+// s whole when it has no more than n lines.
+func lastLines(s string, n int) string {
+	cut := len(strings.TrimSuffix(s, "\n"))
+	for range n {
+		cut = strings.LastIndexByte(s[:cut], '\n')
+		if cut < 0 {
+			return s
+		}
+	}
+	return s[cut+1:]
+}
+
+// logTail returns the last limit bytes of s at most. The kept part starts at
+// a line, the first one that begins inside the last limit bytes, which is the
+// first of them when the byte before them ends a line, so no line is shown
+// cut at its start; a log with no line break there is cut at a character
+// instead, so what is kept of valid UTF-8 stays valid. The last byte is
+// always kept, whatever bytes come before it.
+func logTail(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+	start := len(s) - limit
+	if s[start-1] != '\n' {
+		if i := strings.IndexByte(s[start:len(s)-1], '\n'); i >= 0 {
+			start += i + 1
+		}
+	}
+	for start < len(s)-1 && !utf8.RuneStart(s[start]) {
+		start++
+	}
+	return s[start:]
 }
 
 // ActionInput defines parameters for job cancel/retry actions.

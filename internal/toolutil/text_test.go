@@ -540,6 +540,97 @@ func TestEscapeConsentValue_ADataValueCannotImpersonateTheServer(t *testing.T) {
 	}
 }
 
+// TestStripLogMarkup_LeavesTheTextOfAJobLog verifies that the ANSI control
+// sequences and the collapsible section markers GitLab Runner writes into a
+// job log are removed whole, leaving the text a person reads, where
+// StripControlBytes alone used to drop only the ESC byte and leave
+// "[0K[36;1m" and "section_start:1791747389:prepare_executor" in place.
+func TestStripLogMarkup_LeavesTheTextOfAJobLog(t *testing.T) {
+	tests := []struct{ name, in, want string }{
+		{"plain text", "plain line\n", "plain line\n"},
+		{"color and erase", "\x1b[0K\x1b[36;1mPreparing the \"docker\" executor\x1b[0;m\n", "Preparing the \"docker\" executor\n"},
+		{"section start with its header", "section_start:1791747389:prepare_executor\r\x1b[0K\x1b[0K\x1b[36;1mPreparing\x1b[0;m\n", "Preparing\n"},
+		{"section end", "section_end:1791747390:prepare_executor\r\x1b[0K\n", "\n"},
+		{"collapsed section", "section_start:1791747389:step_script[collapsed=true]\r\x1b[0KRunning\n", "Running\n"},
+		{"cursor movement", "a\x1b[2Jb\x1b[1;1Hc", "abc"},
+		{"text that only looks like a marker", "the section_start: of the log", "the section_start: of the log"},
+		{"a lone escape is left to StripControlBytes", "a\x1bb", "a\x1bb"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := StripLogMarkup(tt.in); got != tt.want {
+				t.Errorf("StripLogMarkup(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestLogMarkupRawOffset_FindsTheByteTheStrippedTextKeeps verifies that the
+// offset LogMarkupRawOffset gives for each byte of a stripped log is where
+// that byte stands in the log as written, so the log from there strips to the
+// stripped text from there, and that the end of the stripped text is the end
+// of the log, whatever markup trails it. The cases hold markup before, after
+// and between kept text, a section marker inside an escape sequence, which
+// only the second pass removes, and a log that is nothing but markup.
+func TestLogMarkupRawOffset_FindsTheByteTheStrippedTextKeeps(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want []int // the offset for every n from 0 to the stripped length
+	}{
+		{"plain text", "ab", []int{0, 1, 2}},
+		{"markup before", "\x1b[0Kab", []int{4, 5, 6}},
+		{"markup between", "a\x1b[31mb", []int{0, 6, 7}},
+		{"markup after", "ab\x1b[0;m", []int{0, 1, 7}},
+		{"a section marker and its header", "section_start:1:x\r\x1b[0Kab\n", []int{22, 23, 24, 25}},
+		{"a marker inside an escape sequence", "a\x1b[section_start:1:x\r0Kb", []int{0, 23, 24}},
+		{"nothing but markup", "\x1b[0K\x1b[0K", []int{8}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stripped := StripLogMarkup(tt.in)
+			if len(tt.want) != len(stripped)+1 {
+				t.Fatalf("the case lists %d offsets for %q, which strips to %d bytes", len(tt.want), tt.in, len(stripped))
+			}
+			for n, want := range tt.want {
+				if got := LogMarkupRawOffset(tt.in, n); got != want {
+					t.Errorf("LogMarkupRawOffset(%q, %d) = %d, want %d", tt.in, n, got, want)
+				}
+			}
+		})
+	}
+}
+
+// FuzzLogMarkupRawOffset holds LogMarkupRawOffset to what a caller relies on
+// for any text and any offset into its stripped form: the log from the offset
+// it gives strips to the stripped text from that offset, and the offsets
+// never decrease as the stripped offset grows.
+func FuzzLogMarkupRawOffset(f *testing.F) {
+	for _, seed := range []string{
+		"plain line\n",
+		"section_start:1791747389:prepare_executor\r\x1b[0K\x1b[0K\x1b[36;1mPreparing\x1b[0;m\n",
+		"a\x1b[section_start:1:x\r0Kb",
+		"section_start:1:step[collapsed=true]\r\x1b[0KRunning\nsection_end:2:step\r\x1b[0K\n",
+		"\x1b[0K\x1b[0K",
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		stripped := StripLogMarkup(s)
+		previous := 0
+		for n := 0; n <= len(stripped); n++ {
+			offset := LogMarkupRawOffset(s, n)
+			if offset < previous || offset > len(s) {
+				t.Fatalf("LogMarkupRawOffset(%q, %d) = %d, after %d for %d", s, n, offset, previous, n-1)
+			}
+			if got := StripLogMarkup(s[offset:]); got != stripped[n:] {
+				t.Fatalf("StripLogMarkup(%q[%d:]) = %q, want %q", s, offset, got, stripped[n:])
+			}
+			previous = offset
+		}
+	})
+}
+
 // TestStripControlBytes verifies that the C0 and C1 control ranges and DEL are
 // removed from GitLab-authored text while tab, newline and carriage return —
 // the three controls Markdown actually uses — survive unchanged.

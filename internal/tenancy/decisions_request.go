@@ -73,6 +73,8 @@ func requestDecisions() []Decision {
 			enforce("internal/tools/usagedata", "maxRenderedYAMLBytes"),
 			enforce("internal/tools/projects", "maxAvatarBytes"),
 			enforce("internal/tools/jobs", "maxTraceBytes"),
+			// The lines of a log one trace read counts back from its end.
+			enforce("internal/tools/jobs", "maxTraceTailLines"),
 			enforce("internal/tools/jobs", "maxArtifactBytes"),
 			enforce("internal/tools/modelregistry", "maxModelFileBytes"),
 			enforce("internal/tools/settings", "maxNamedUnmodeledKeys"),
