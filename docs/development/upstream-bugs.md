@@ -325,9 +325,9 @@ readable without opening the tracker:
 | 101 | client-go | [The board structs miss keys GitLab sends on a board and its lists](#the-board-structs-miss-keys-gitlab-sends-on-a-board-and-its-lists) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), open, commit 6, beside rows 96 and 98 | No | No; the keys are read around the SDK | Yes; four requests of our own on the group board routes, and the captured response everywhere else; [issue 1283](https://github.com/jmrplens/gitlab-mcp-server/issues/1283) moves three of the four to client-go |
 | 102 | gitlab-org/orbit/knowledge-graph | [The pinned version check stops with "no merge base" on forks and long branches](#the-pinned-version-check-stops-with-no-merge-base-on-forks-and-long-branches) | Yes, by the merge request | Yes, [gitlab-org/orbit/knowledge-graph!2746](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2746), merged | **Yes**, on `main` on 2026-10-09; CI only, so no release carries it | No | Not needed |
 | 103 | client-go | [The target branch rule methods discard GraphQL errors](#the-target-branch-rule-methods-discard-graphql-errors) | No | No | No | No | Yes, the three handlers read the refusal from the captured answer |
-| 104 | client-go | [The Terraform state documents select neither a state's versions nor when it will be deleted](#the-terraform-state-documents-select-neither-a-states-versions-nor-when-it-will-be-deleted) | No; a commit for [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) is prepared and waits on a second review | No | No | No | None possible |
-| 105 | client-go | [The scan profile status document selects the profile's id, name and type and nothing else](#the-scan-profile-status-document-selects-the-profiles-id-name-and-type-and-nothing-else) | No; a commit for [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) is prepared and waits on a second review | No | No | No | None possible |
-| 106 | client-go | [The work item documents select neither the decision log nor the development widget](#the-work-item-documents-select-neither-the-decision-log-nor-the-development-widget) | No; a commit for [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) is prepared and waits on a second review | No | No | No | None possible |
+| 104 | client-go | [The Terraform state documents select neither a state's versions nor when it will be deleted](#the-terraform-state-documents-select-neither-a-states-versions-nor-when-it-will-be-deleted) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None possible |
+| 105 | client-go | [The scan profile status document selects the profile's id, name and type and nothing else](#the-scan-profile-status-document-selects-the-profiles-id-name-and-type-and-nothing-else) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None possible |
+| 106 | client-go | [The work item documents select neither the decision log nor the development widget](#the-work-item-documents-select-neither-the-decision-log-nor-the-development-widget) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None possible |
 | 107 | client-go | [The work item documents leave out fields GitLab sends on a work item](#the-work-item-documents-leave-out-fields-gitlab-sends-on-a-work-item) | No; not yet decided | No | No | No | None possible |
 | 108 | client-go | [The saved view documents leave out who made a view, when it changed and how to share it](#the-saved-view-documents-leave-out-who-made-a-view-when-it-changed-and-how-to-share-it) | No; not yet decided | No | No | No | None possible |
 | 109 | gitlab-org/gitlab | [The releases list caches one rendering for both values of `include_html_description`](#the-releases-list-caches-one-rendering-for-both-values-of-include_html_description) | Yes, by another user, [gitlab-org/gitlab#588980](https://gitlab.com/gitlab-org/gitlab/-/issues/588980), which the merge request closes | Yes, [gitlab-org/gitlab!261176](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261176), open, in milestone 19.5, the backend review pending | No | No; `release.list` can answer the other variant for five minutes | None taken |
@@ -5800,13 +5800,12 @@ without its object from one it refused, for each of the 20 writes of row 88.
 
 ### The Terraform state documents select neither a state's versions nor when it will be deleted
 
-- **Reported**: no. A commit is prepared for
+- **Reported**: yes, as commit 36 of
   [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
-  on a local branch of the merge request's source branch, and waits on this
-  project's second review of it and its text before it is pushed.
-- **In review**: no.
-- **Merged**: no. v3.17.0 and the merge request's branch at `cc6c70bf` send
-  the same two documents as v3.15.0.
+  (`39a394ce`), pushed on 2026-10-12.
+- **In review**: yes, in that merge request, open.
+- **Merged**: no. v3.17.0 and the merge request's branch before the push
+  (`cc6c70bf`) send the same two documents as v3.15.0.
 - **Blocking**: no.
 - **Workaround**: none possible. Both documents are format strings inside
   `terraform_states.go`, and a caller cannot add a field to either.
@@ -5864,13 +5863,12 @@ decided.
 
 ### The scan profile status document selects the profile's id, name and type and nothing else
 
-- **Reported**: no. A commit is prepared for
+- **Reported**: yes, as commit 37 of
   [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
-  on a local branch of the merge request's source branch, and waits on this
-  project's second review of it and its text before it is pushed.
-- **In review**: no.
-- **Merged**: no. v3.17.0 and the merge request's branch at `cc6c70bf` send
-  the same document as v3.15.0.
+  (`182c1a25`), pushed on 2026-10-12.
+- **In review**: yes, in that merge request, open.
+- **Merged**: no. v3.17.0 and the merge request's branch before the push
+  (`cc6c70bf`) send the same document as v3.15.0.
 - **Blocking**: no.
 - **Workaround**: none possible; `scanProfileStatusesQuery` is a private
   constant.
@@ -5915,12 +5913,11 @@ default document if they are decided.
 
 ### The work item documents select neither the decision log nor the development widget
 
-- **Reported**: no. A commit is prepared for
-  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
-  on top of its commit 8, which built the get, create and update documents
-  from the `ReturnedFields` registry, and waits on this project's second
-  review of it and its text before it is pushed.
-- **In review**: no.
+- **Reported**: yes, as commit 38 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
+  (`cb2727af`), pushed on 2026-10-12, on top of its commit 8, which built the
+  get, create and update documents from the `ReturnedFields` registry.
+- **In review**: yes, in that merge request, open.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: none possible.
