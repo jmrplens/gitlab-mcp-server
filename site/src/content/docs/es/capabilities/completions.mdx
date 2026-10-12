@@ -72,17 +72,17 @@ Cada petición se responde en cinco pasos:
 
 GitLab MCP Server completa **18 nombres de argumento**, organizados en completadores globales y por proyecto. Los completadores globales resuelven valores que existen a nivel de toda la instancia, mientras que los completadores por proyecto toman el `project_id` que el cliente envía en `context.arguments` y buscan solo dentro de ese proyecto. Los argumentos de prompt (`ref/prompt`) reciben el conjunto completo; las plantillas de URI de recurso (`ref/resource`) completan `project_id`, `group_id`, `merge_request_iid` e `issue_iid`.
 
-Se usan dos formas de coincidencia. Los argumentos respaldados por una búsqueda de GitLab (proyectos, grupos, usuarios, ramas, tags, etiquetas y milestones) pasan lo que escribiste al propio filtro `search` de GitLab para ese listado, que decide qué coincide y no se limita al principio de un nombre. Los argumentos que son números o hashes (IIDs de merge requests e issues, IDs de pipelines y jobs, SHAs de commits) leen una página de 20 elementos recientes y se quedan con aquellos cuyo identificador empieza por lo que escribiste.
+Se usan dos formas de coincidencia. Los argumentos respaldados por una búsqueda de GitLab (proyectos, grupos, usuarios, ramas, tags, etiquetas y milestones) pasan lo que escribiste al propio filtro `search` de GitLab para ese listado, que decide qué coincide y no se limita al principio de un nombre. En `project_id` la búsqueda alcanza también el espacio de nombres (`search_namespaces`) siempre que lo que escribiste contenga una palabra de tres caracteres o más, así que la ruta completa que ofrece se puede volver a escribir, entera o en parte. GitLab compara una consulta sin ninguna palabra así con cada nombre entero, y ninguna ruta completa es igual a un nombre suelto, así que esa consulta se envía sin la opción y un proyecto llamado `p1` se sigue encontrando al escribir `p1`. Los argumentos que son números o hashes (IIDs de merge requests e issues, IDs de pipelines y jobs, SHAs de commits) leen una página de 20 elementos recientes y se quedan con aquellos cuyo identificador empieza por lo que escribiste.
 
 ### Completadores globales
 
 Funcionan sin contexto de proyecto:
 
-| Argumento    | Completa                             | Cómo se busca                                               | Ejemplo               |
-| ------------ | ------------------------------------ | ----------------------------------------------------------- | --------------------- |
-| `project_id` | Rutas de proyecto, por ruta o nombre | Búsqueda de GitLab en los proyectos de los que eres miembro | `my-group/my-project` |
-| `group_id`   | Rutas de grupo, por nombre           | Búsqueda de grupos de GitLab                                | `engineering`         |
-| `username`   | Nombres de usuario de GitLab         | Búsqueda de usuarios de GitLab, solo usuarios activos       | `john.doe`            |
+| Argumento    | Completa                                      | Cómo se busca                                                                                   | Ejemplo               |
+| ------------ | --------------------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------- |
+| `project_id` | Rutas de proyecto, por ruta completa o nombre | Búsqueda de GitLab sobre la ruta completa y el nombre, en los proyectos de los que eres miembro | `my-group/my-project` |
+| `group_id`   | Rutas de grupo, por nombre                    | Búsqueda de grupos de GitLab                                                                    | `engineering`         |
+| `username`   | Nombres de usuario de GitLab                  | Búsqueda de usuarios de GitLab, solo usuarios activos                                           | `john.doe`            |
 
 ### Completadores por proyecto
 

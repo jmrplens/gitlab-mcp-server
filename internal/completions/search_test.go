@@ -7,6 +7,7 @@ package completions
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -68,6 +69,174 @@ func TestSearchProjects_EmptyQuery(t *testing.T) {
 	}
 	if len(values) != 1 {
 		t.Fatalf(fmtExpected1Value, len(values))
+	}
+}
+
+// gitlabSearchMatches answers for one column as GitLab's fuzzy search does
+// (Gitlab::SQL::Pattern): every word of three characters or more has to occur
+// in it, ignoring case, and a query with no such word has to equal it whole.
+// It reads words only; the quoted phrases GitLab also takes as terms are held
+// by TestSearchTerms_SplitsAsGitLabDoes.
+func gitlabSearchMatches(column, query string) bool {
+	column = strings.ToLower(column)
+	words := strings.Fields(strings.ToLower(query))
+	var long []string
+	for _, word := range words {
+		if len([]rune(word)) >= 3 {
+			long = append(long, word)
+		}
+	}
+	if len(long) == 0 {
+		return column == strings.Join(words, " ")
+	}
+	for _, word := range long {
+		if !strings.Contains(column, word) {
+			return false
+		}
+	}
+	return true
+}
+
+// TestSearchProjects_AFullPathOrAShortName_CompletesAsGitLabMatches verifies
+// that what a caller types is matched against the full path the completion
+// offers, and that a project's own short name typed whole still completes.
+//
+// GitLab's Project.search matches the path, the name and the description of a
+// project, and matches the route (the full path and full name) instead when
+// the request carries search_namespaces. Either way a term of three
+// characters or more is matched anywhere in a column, and a query with no
+// such term is compared with the column whole. The completion offers
+// path_with_namespace, so without the flag typing that value back, or any
+// part of it reaching into the namespace, matched nothing; with it a name of
+// one or two characters typed whole matches nothing, since no full path or
+// full name equals it. The mock answers by those rules.
+func TestSearchProjects_AFullPathOrAShortName_CompletesAsGitLabMatches(t *testing.T) {
+	const (
+		fullPath = "rev-prompts/p1"
+		fullName = "Rev Prompts / p1"
+	)
+	var flagged bool
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects" {
+			http.NotFound(w, r)
+			return
+		}
+		query := r.URL.Query()
+		search := query.Get("search")
+		flagged = query.Get("search_namespaces") == "true"
+		columns := []string{"p1", "p1"}
+		if flagged {
+			columns = []string{fullPath, fullName}
+		}
+		if !slices.ContainsFunc(columns, func(column string) bool { return gitlabSearchMatches(column, search) }) {
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"path_with_namespace":"`+fullPath+`"}]`)
+	}))
+
+	cases := []struct {
+		name     string
+		typed    string
+		found    bool
+		flagSent bool
+	}{
+		{name: "the full path", typed: fullPath, found: true, flagSent: true},
+		{name: "a part reaching into the namespace", typed: "rev-pr", found: true, flagSent: true},
+		{name: "a long word beside a short one", typed: "rev p1", found: true, flagSent: true},
+		{name: "a short name typed whole", typed: "p1", found: true, flagSent: false},
+		{name: "a short name in capitals", typed: "P1", found: true, flagSent: false},
+		{name: "a short part of nothing whole", typed: "ev", found: false, flagSent: false},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			values, _, err := searchProjects(context.Background(), client, testCase.typed)
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			if flagged != testCase.flagSent {
+				t.Errorf("searchProjects(%q) sent search_namespaces = %t, want %t", testCase.typed, flagged, testCase.flagSent)
+			}
+			want := []string{}
+			if testCase.found {
+				want = []string{fullPath}
+			}
+			if !slices.Equal(values, want) {
+				t.Errorf("searchProjects(%q) = %v, want %v", testCase.typed, values, want)
+			}
+		})
+	}
+
+	t.Run("nothing typed asks for no namespace matching", func(t *testing.T) {
+		var sent bool
+		empty := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			sent = r.URL.Query().Has("search_namespaces")
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+		}))
+		if _, _, err := searchProjects(context.Background(), empty, ""); err != nil {
+			t.Fatalf(fmtUnexpectedErr, err)
+		}
+		if sent {
+			t.Error("search_namespaces was sent although nothing was typed to match")
+		}
+	})
+}
+
+// TestSearchTerms_SplitsAsGitLabDoes holds [searchTerms] to
+// Gitlab::SQL::Pattern.split_query_to_search_terms on a squished query: the
+// words, then the double-quoted phrases that stand on their own, without their
+// quotes, and nothing else read as a phrase.
+func TestSearchTerms_SplitsAsGitLabDoes(t *testing.T) {
+	cases := []struct {
+		name  string
+		query string
+		want  []string
+	}{
+		{name: "nothing", query: "", want: nil},
+		{name: "words, whitespace collapsed", query: "  rev \t p1 ", want: []string{"rev", "p1"}},
+		{name: "a phrase that is the whole query", query: `"rev p1"`, want: []string{"rev p1"}},
+		{name: "a phrase between words", query: `x "a b" y`, want: []string{"x", "y", "a b"}},
+		{name: "a phrase of one character", query: `"a" b`, want: []string{"b", "a"}},
+		{name: "two phrases a space apart", query: `"a" "b"`, want: []string{"a", "b"}},
+		{name: "empty quotes are a word", query: `"" ab`, want: []string{`""`, "ab"}},
+		{name: "a quote inside a word opens nothing", query: `a"bc d"`, want: []string{`a"bc`, `d"`}},
+		{name: "a closing quote inside a word closes nothing", query: `"ab"cd`, want: []string{`"ab"cd`}},
+		{name: "a quote never closed", query: `"open`, want: []string{`"open`}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := searchTerms(testCase.query); !slices.Equal(got, testCase.want) {
+				t.Errorf("searchTerms(%q) = %q, want %q", testCase.query, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestMatchesInPart_NeedsATermOfThreeCharacters holds the line GitLab draws
+// between a term it matches in part and a query it compares whole: three
+// characters, counted as characters rather than bytes, in a word or a quoted
+// phrase.
+func TestMatchesInPart_NeedsATermOfThreeCharacters(t *testing.T) {
+	cases := []struct {
+		name  string
+		query string
+		want  bool
+	}{
+		{name: "two characters", query: "p1", want: false},
+		{name: "three characters", query: "rev", want: true},
+		{name: "short words only", query: "ab cd", want: false},
+		{name: "one long word among short ones", query: "ab cde", want: true},
+		{name: "two characters of two bytes each", query: "éé", want: false},
+		{name: "three characters of two bytes each", query: "ééé", want: true},
+		{name: "a quoted phrase of three characters", query: `"a b"`, want: true},
+		{name: "a quoted phrase of two characters", query: `"ab"`, want: false},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := matchesInPart(testCase.query); got != testCase.want {
+				t.Errorf("matchesInPart(%q) = %t, want %t", testCase.query, got, testCase.want)
+			}
+		})
 	}
 }
 

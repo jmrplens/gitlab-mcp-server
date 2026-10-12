@@ -27,8 +27,25 @@ func totalFromResponse(resp *gl.Response) int {
 	return int(resp.TotalItems)
 }
 
+// partialMatchLength is the fewest characters a search term needs for GitLab
+// to match it in part (MIN_CHARS_FOR_PARTIAL_MATCHING in
+// Gitlab::SQL::Pattern). A query with no term this long is compared with each
+// column whole.
+const partialMatchLength = 3
+
 // searchProjects returns project entries matching the query plus the total
 // match count from the GitLab pagination header (X-Total) when available.
+//
+// What is typed is matched with search_namespaces set whenever GitLab matches
+// some term of it in part. Without the flag GitLab's Project.search matches a
+// project's path, name and description, and the value this completion offers
+// is the full path, so typing it back, or any part reaching into the
+// namespace, matched nothing. With it GitLab matches the route's full path and
+// full name instead, which hold the project's own path and name, so a term
+// matched in part still finds a bare project name. A query with no term of
+// partialMatchLength characters is compared whole, and no full path or full
+// name equals a bare name, so that query goes without the flag and a project
+// named p1 is still found by typing p1.
 func searchProjects(ctx context.Context, client *gitlabclient.Client, query string) (values []string, total int, err error) {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return nil, 0, ctxErr
@@ -39,6 +56,9 @@ func searchProjects(ctx context.Context, client *gitlabclient.Client, query stri
 	opts.PerPage = searchPerPage
 	if query != "" {
 		opts.Search = new(query)
+		if matchesInPart(query) {
+			opts.SearchNamespaces = new(true)
+		}
 	}
 	projects, resp, err := client.GL().Projects.ListProjects(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -49,6 +69,53 @@ func searchProjects(ctx context.Context, client *gitlabclient.Client, query stri
 		values = append(values, formatProjectEntry(p.ID, p.PathWithNamespace))
 	}
 	return values, totalFromResponse(resp), nil
+}
+
+// matchesInPart reports whether GitLab matches some term of query in part,
+// which is the only case in which search_namespaces widens what it finds.
+func matchesInPart(query string) bool {
+	for _, term := range searchTerms(query) {
+		if len([]rune(term)) >= partialMatchLength {
+			return true
+		}
+	}
+	return false
+}
+
+// searchTerms splits query into the terms GitLab's fuzzy search matches,
+// after collapsing its whitespace as String#squish does
+// (Gitlab::SQL::Pattern.split_query_to_search_terms): a double-quoted phrase
+// standing on its own is one term without its quotes, and every other word is
+// a term.
+func searchTerms(query string) []string {
+	query = strings.Join(strings.Fields(query), " ")
+	var phrases []string
+	var rest strings.Builder
+	for i := 0; i < len(query); i++ {
+		if phrase, end, ok := quotedPhrase(query, i); ok {
+			phrases = append(phrases, phrase)
+			i = end
+			continue
+		}
+		rest.WriteByte(query[i])
+	}
+	return append(strings.Fields(rest.String()), phrases...)
+}
+
+// quotedPhrase reports the phrase a double quote at i opens, as GitLab reads
+// one: the quote starts the query or follows a space, at least one character
+// stands before the next quote, and that closing quote ends the query or
+// precedes a space. end is the index of the closing quote.
+func quotedPhrase(query string, i int) (phrase string, end int, ok bool) {
+	if query[i] != '"' || (i > 0 && query[i-1] != ' ') {
+		return "", 0, false
+	}
+	length := strings.IndexByte(query[i+1:], '"')
+	end = i + 1 + length
+	if length < 1 || (end+1 < len(query) && query[end+1] != ' ') {
+		return "", 0, false
+	}
+	return query[i+1 : end], end, true
 }
 
 // searchGroups returns group entries matching the query plus the total

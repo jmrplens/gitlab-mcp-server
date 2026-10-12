@@ -72,17 +72,17 @@ Each request is answered in five steps:
 
 GitLab MCP Server completes **18 argument names**, organized into global and per-project completers. Global completers resolve values that exist instance-wide, while per-project completers take the `project_id` the client sends in `context.arguments` and search only within that project. Prompt arguments (`ref/prompt`) get the full set; resource URI templates (`ref/resource`) complete `project_id`, `group_id`, `merge_request_iid` and `issue_iid`.
 
-Two ways of matching are used. Arguments backed by a GitLab search (projects, groups, users, branches, tags, labels and milestones) pass what you typed to GitLab's own `search` filter for that list, which decides what matches and is not limited to the start of a name. Arguments that are numbers or hashes (merge request and issue IIDs, pipeline and job IDs, commit SHAs) read one page of 20 recent items and keep those whose identifier starts with what you typed.
+Two ways of matching are used. Arguments backed by a GitLab search (projects, groups, users, branches, tags, labels and milestones) pass what you typed to GitLab's own `search` filter for that list, which decides what matches and is not limited to the start of a name. For `project_id` the search also reaches the namespace (`search_namespaces`) whenever what you typed holds a word of three characters or more, so the full path it offers can be typed back, whole or in part. GitLab compares a query with no such word with each name whole, and no full path equals a bare name, so that query goes without the flag and a project named `p1` is still found by typing `p1`. Arguments that are numbers or hashes (merge request and issue IIDs, pipeline and job IDs, commit SHAs) read one page of 20 recent items and keep those whose identifier starts with what you typed.
 
 ### Global completers
 
 These work without a project context:
 
-| Argument     | Completes                      | How it is matched                                         | Example               |
-| ------------ | ------------------------------ | --------------------------------------------------------- | --------------------- |
-| `project_id` | Project paths, by path or name | GitLab project search, among projects you are a member of | `my-group/my-project` |
-| `group_id`   | Group paths, by name           | GitLab group search                                       | `engineering`         |
-| `username`   | GitLab usernames               | GitLab user search, active users only                     | `john.doe`            |
+| Argument     | Completes                           | How it is matched                                                                     | Example               |
+| ------------ | ----------------------------------- | ------------------------------------------------------------------------------------- | --------------------- |
+| `project_id` | Project paths, by full path or name | GitLab project search over the full path and name, among projects you are a member of | `my-group/my-project` |
+| `group_id`   | Group paths, by name                | GitLab group search                                                                   | `engineering`         |
+| `username`   | GitLab usernames                    | GitLab user search, active users only                                                 | `john.doe`            |
 
 ### Per-project completers
 
