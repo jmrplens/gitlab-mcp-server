@@ -5,8 +5,10 @@
 package epicissues
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
@@ -219,8 +221,13 @@ const gqlMutationErrors = `{
 }`
 
 // graphqlMux creates an http.Handler that routes GraphQL requests by query content.
+//
+// It answers the remove and reorder guards' parent read as parentMux does with
+// no parents named: every item is a child of the epic gid://gitlab/WorkItem/1,
+// which is the epic resolveHandler resolves, so a test about something else
+// passes the guard the way a caller naming the right epic does.
 func graphqlMux(handlers map[string]http.HandlerFunc) http.Handler {
-	return testutil.GraphQLHandler(handlers)
+	return parentMux(nil, handlers)
 }
 
 // resolveHandler returns an http.HandlerFunc that resolves work item GIDs.
@@ -859,7 +866,7 @@ func TestRemove(t *testing.T) {
 		input   RemoveInput
 		handler http.Handler
 		wantErr string
-		check   func(t *testing.T, out AssignOutput)
+		check   func(t *testing.T, out RemoveOutput)
 	}{
 		{
 			name:  "removes issue from epic successfully",
@@ -870,7 +877,7 @@ func TestRemove(t *testing.T) {
 					testutil.RespondGraphQL(w, http.StatusOK, gqlRemoveParentData)
 				},
 			}),
-			check: func(t *testing.T, out AssignOutput) {
+			check: func(t *testing.T, out RemoveOutput) {
 				t.Helper()
 				if out.EpicGID != "gid://gitlab/WorkItem/1" {
 					t.Errorf("EpicGID = %q, want gid://gitlab/WorkItem/1", out.EpicGID)
@@ -1452,6 +1459,160 @@ func TestEpicIssueHandlers_ZeroEpicIID_RefusedWithoutReachingGitLab(t *testing.T
 // normalizeState
 // --------------------------------------------------------------------------
 
+// parentMux answers the parent read the remove and reorder guards send, from
+// parents (a work item's global ID to its parent's, "" for none) or, for an
+// item parents does not name, with the epic gid://gitlab/WorkItem/1, and hands
+// every other request to testutil.GraphQLHandler(handlers).
+//
+// It reads the request itself rather than adding a key, because the guard's
+// document selects the hierarchy widget and the listing's key in these tests
+// is that widget's name, so a key would route one to the other.
+func parentMux(parents map[string]string, handlers map[string]http.HandlerFunc) http.Handler {
+	rest := testutil.GraphQLHandler(handlers)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		var req struct {
+			Query     string         `json:"query"`
+			Variables map[string]any `json:"variables"`
+		}
+		if json.Unmarshal(body, &req) != nil || !strings.Contains(req.Query, "workItem(id:") {
+			rest.ServeHTTP(w, r)
+			return
+		}
+		id, _ := req.Variables["id"].(string)
+		parent, named := parents[id]
+		if !named {
+			parent = "gid://gitlab/WorkItem/1"
+		}
+		parentJSON := "null"
+		if parent != "" {
+			parentJSON = `{"id": "` + parent + `", "reference": "my-group#` + strings.TrimPrefix(parent, "gid://gitlab/WorkItem/") + `"}`
+		}
+		testutil.RespondGraphQL(w, http.StatusOK, `{"workItem": {"id": "`+id+`", "reference": "my-group/my-project#`+
+			strings.TrimPrefix(id, "gid://gitlab/WorkItem/")+`", "widgets": [{}, {"parent": `+parentJSON+`}]}}`)
+	})
+}
+
+// TestRemoveAndReorder_ChildOfAnotherEpic_IsRefusedBeforeAnyWrite verifies
+// that removal and reordering act only on children of the epic the caller
+// named (issue 1301).
+//
+// Remove resolved the epic and then cleared the child's parent, whichever
+// epic that was, and reorder sent the child with the named epic as its
+// parent, which GitLab reads as a move into it. A caller naming the wrong or
+// a stale epic therefore unlinked or moved an issue it never asked about,
+// and was told the operation succeeded. Each now reads the child's parent,
+// and the reorder the adjacent item's too, and refuses unless it is the epic
+// named, saying where the item belongs; the mutation is never sent.
+func TestRemoveAndReorder_ChildOfAnotherEpic_IsRefusedBeforeAnyWrite(t *testing.T) {
+	remove := RemoveInput{FullPath: testFullPath, IID: 1, ChildProjectPath: testChildProject, ChildIID: 10}
+	reorder := UpdateInput{FullPath: testFullPath, IID: 1, ChildID: "gid://gitlab/WorkItem/10", AdjacentID: "gid://gitlab/WorkItem/20", RelativePosition: "BEFORE"}
+	tests := []struct {
+		name    string
+		parents map[string]string
+		reorder bool
+		wantErr string
+	}{
+		{name: "remove a child of another epic", parents: map[string]string{"gid://gitlab/WorkItem/10": "gid://gitlab/WorkItem/2"}, wantErr: "my-group#2"},
+		{name: "remove an item in no epic", parents: map[string]string{"gid://gitlab/WorkItem/10": ""}, wantErr: "no parent"},
+		{name: "reorder a child of another epic", parents: map[string]string{"gid://gitlab/WorkItem/10": "gid://gitlab/WorkItem/2"}, reorder: true, wantErr: "my-group#2"},
+		{name: "reorder beside an item of another epic", parents: map[string]string{"gid://gitlab/WorkItem/20": "gid://gitlab/WorkItem/3"}, reorder: true, wantErr: "my-group#3"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var writes atomic.Int32
+			client := testutil.NewTestClient(t, parentMux(tt.parents, map[string]http.HandlerFunc{
+				"workItem(iid": resolveHandler(testChildProject),
+				"workItemUpdate(": func(w http.ResponseWriter, _ *http.Request) {
+					writes.Add(1)
+					testutil.RespondGraphQL(w, http.StatusOK, gqlRemoveParentData)
+				},
+			}))
+			var err error
+			if tt.reorder {
+				_, err = UpdateOrder(context.Background(), client, reorder)
+			} else {
+				_, err = Remove(context.Background(), client, remove)
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error = %v, want a refusal naming %q", err, tt.wantErr)
+			}
+			if writes.Load() != 0 {
+				t.Errorf("the mutation was sent %d time(s) for an item the epic does not hold", writes.Load())
+			}
+		})
+	}
+}
+
+// TestRemove_ItemTheGuardCannotRead_IsRefusedBeforeAnyWrite holds the parent
+// read to the same rule as the ownership it checks: an item GitLab will not
+// describe (the read refused, answered null with a reason, or answered null
+// with none) is not shown to belong to the epic, so the removal is refused
+// and the mutation never sent.
+func TestRemove_ItemTheGuardCannotRead_IsRefusedBeforeAnyWrite(t *testing.T) {
+	tests := []struct {
+		name    string
+		guard   http.HandlerFunc
+		wantErr string
+	}{
+		{
+			name:    "the read is refused",
+			guard:   func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "boom", http.StatusInternalServerError) },
+			wantErr: "verify the item with group.epic_issue_list",
+		},
+		{
+			name: "null with a reason",
+			guard: func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, `{"data": {"workItem": null}, "errors": [{"message": "The resource that you are attempting to access does not exist"}]}`)
+			},
+			wantErr: "does not exist",
+		},
+		{
+			name: "null with no reason",
+			guard: func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, `{"workItem": null}`)
+			},
+			wantErr: "the issue gid://gitlab/WorkItem/10 not found, or not one this token can read",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var writes atomic.Int32
+			client := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{
+				"workItem(iid": resolveHandler(testChildProject),
+				"workItem(id:": tt.guard,
+				"workItemUpdate(": func(w http.ResponseWriter, _ *http.Request) {
+					writes.Add(1)
+					testutil.RespondGraphQL(w, http.StatusOK, gqlRemoveParentData)
+				},
+			}))
+			_, err := Remove(context.Background(), client, RemoveInput{FullPath: testFullPath, IID: 1, ChildProjectPath: testChildProject, ChildIID: 10})
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("Remove() error = %v, want containing %q", err, tt.wantErr)
+			}
+			if writes.Load() != 0 {
+				t.Errorf("the mutation was sent %d time(s) for an item the guard could not read", writes.Load())
+			}
+		})
+	}
+}
+
+// TestQueryItemParent_Complexity_IsUnderGitLabsLimit holds the removal and
+// reorder guard's read under the complexity GitLab refuses a query above. The
+// figure is the estimate testutil computes from the pinned schema; no GitLab
+// has reported one for this document, so it is held under the limit rather
+// than pinned.
+func TestQueryItemParent_Complexity_IsUnderGitLabsLimit(t *testing.T) {
+	got, err := testutil.GitLabQueryComplexity(queryItemParent, map[string]any{"id": "gid://gitlab/WorkItem/10"})
+	if err != nil {
+		t.Fatalf("GitLabQueryComplexity() error = %v", err)
+	}
+	if got > testutil.GitLabAuthenticatedMaxComplexity {
+		t.Errorf("queryItemParent costs %d, over the %d GitLab refuses a query above", got, testutil.GitLabAuthenticatedMaxComplexity)
+	}
+}
+
 // TestNormalizeState uses table-driven subtests to verify that normalizeState maps GraphQL state strings to canonical lowercase forms and passes unknown values through unchanged.
 func TestNormalizeState(t *testing.T) {
 	tests := []struct {
@@ -1561,24 +1722,14 @@ func TestFormatAssignMarkdown(t *testing.T) {
 		"- Use action 'group.epic_issue_list' to view all issues in the epic\n" +
 		"- Use action 'group.epic_issue_remove' to unlink an issue from the epic\n"
 	tests := []struct {
-		name   string
-		out    AssignOutput
-		action string
-		want   string
+		name string
+		out  AssignOutput
+		want string
 	}{
 		{
-			name:   "renders assigned action",
-			out:    AssignOutput{EpicGID: "gid://gitlab/WorkItem/1", ChildGID: "gid://gitlab/WorkItem/10"},
-			action: "assigned",
+			name: "renders assigned action",
+			out:  AssignOutput{EpicGID: "gid://gitlab/WorkItem/1", ChildGID: "gid://gitlab/WorkItem/10"},
 			want: "## Epic Issue assigned\n\n" +
-				"- **Epic**: `gid://gitlab/WorkItem/1`\n" +
-				"- **Issue**: `gid://gitlab/WorkItem/10`\n" + hints,
-		},
-		{
-			name:   "renders removed action",
-			out:    AssignOutput{EpicGID: "gid://gitlab/WorkItem/1", ChildGID: "gid://gitlab/WorkItem/10"},
-			action: "removed",
-			want: "## Epic Issue removed\n\n" +
 				"- **Epic**: `gid://gitlab/WorkItem/1`\n" +
 				"- **Issue**: `gid://gitlab/WorkItem/10`\n" + hints,
 		},
@@ -1586,18 +1737,37 @@ func TestFormatAssignMarkdown(t *testing.T) {
 			// An absent value writes nothing: the heading and the guidance
 			// section stand alone rather than showing a label with an empty
 			// code span after it.
-			name:   "handles empty GIDs",
-			out:    AssignOutput{},
-			action: "assigned",
-			want:   "## Epic Issue assigned\n" + hints,
+			name: "handles empty GIDs",
+			out:  AssignOutput{},
+			want: "## Epic Issue assigned\n" + hints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := FormatAssignMarkdown(tt.out, tt.action); got != tt.want {
+			if got := FormatAssignMarkdown(tt.out); got != tt.want {
 				t.Errorf("FormatAssignMarkdown()\n got %q\nwant %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestFormatRemoveMarkdown_IsTheRemovalCard holds the removal to a card of its
+// own: it used to be answered with the assignment's type, so every removal
+// read "Epic Issue assigned" and offered to remove the issue it had just
+// removed.
+func TestFormatRemoveMarkdown_IsTheRemovalCard(t *testing.T) {
+	want := "## Epic Issue removed\n\n" +
+		"- **Epic**: `gid://gitlab/WorkItem/1`\n" +
+		"- **Issue**: `gid://gitlab/WorkItem/10`\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'group.epic_issue_list' to view the issues left in the epic\n" +
+		"- Use action 'group.epic_issue_assign' to assign the issue to an epic again\n"
+	got := FormatRemoveMarkdown(RemoveOutput{EpicGID: "gid://gitlab/WorkItem/1", ChildGID: "gid://gitlab/WorkItem/10"})
+	if got != want {
+		t.Errorf("FormatRemoveMarkdown()\n got %q\nwant %q", got, want)
+	}
+	if name := toolutil.RegisteredMarkdownFormatterName(reflect.TypeFor[RemoveOutput]()); !strings.HasSuffix(name, ".FormatRemoveMarkdown") {
+		t.Errorf("formatter registered for RemoveOutput = %q, want FormatRemoveMarkdown", name)
 	}
 }

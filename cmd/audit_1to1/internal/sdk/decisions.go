@@ -127,10 +127,11 @@ var graphqlDecisions = map[string]decision{
 	// KEEP — the wrapper exists but wraps an API upstream has deprecated in
 	// favor of the very GraphQL these handlers call, so migrating would move
 	// us onto the path GitLab is removing.
-	"epicissues.List":        {decisionKeep, "EpicIssues is documented upstream as 'Will be removed in v5 of the API, use Work Items API instead'; the handler reads the work-item hierarchy widget, which is that replacement"},
-	"epicissues.Assign":      {decisionKeep, "EpicIssues.AssignEpicIssue drives the epic REST API being removed; the handler uses the workItemUpdate hierarchy mutation instead"},
-	"epicissues.Remove":      {decisionKeep, "EpicIssues.RemoveEpicIssue drives the epic REST API being removed; the handler uses the workItemUpdate hierarchy mutation instead"},
-	"epicissues.UpdateOrder": {decisionKeep, "EpicIssues.UpdateEpicIssueAssignment drives the epic REST API being removed; child ordering is a work-item hierarchy mutation"},
+	"epicissues.List":             {decisionKeep, "EpicIssues is documented upstream as 'Will be removed in v5 of the API, use Work Items API instead'; the handler reads the work-item hierarchy widget, which is that replacement"},
+	"epicissues.Assign":           {decisionKeep, "EpicIssues.AssignEpicIssue drives the epic REST API being removed; the handler uses the workItemUpdate hierarchy mutation instead"},
+	"epicissues.Remove":           {decisionKeep, "EpicIssues.RemoveEpicIssue drives the epic REST API being removed; the handler uses the workItemUpdate hierarchy mutation instead"},
+	"epicissues.UpdateOrder":      {decisionKeep, "EpicIssues.UpdateEpicIssueAssignment drives the epic REST API being removed; child ordering is a work-item hierarchy mutation"},
+	"epicissues.checkChildOfEpic": {decisionKeep, "the guard Remove and UpdateOrder run before they write reads the item's parent from the work-item hierarchy widget; EpicIssues has no read of the epic one issue sits in, and its list is the REST API being removed"},
 
 	"vulnerabilities.List":                     {decisionKeep, "ProjectVulnerabilities is documented upstream as 'Deprecated: use GraphQL Query.vulnerabilities instead', which is precisely what this handler does"},
 	"vulnerabilities.Get":                      {decisionKeep, "same deprecation; the wrapper has no single-vulnerability read at all, only ListProjectVulnerabilities and CreateVulnerability"},

@@ -28,14 +28,18 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	}
 }
 
-// DeleteOutput deletes an epic note and returns the canonical success message shape.
+// DeleteOutput deletes an epic note and returns the canonical success message
+// shape. The message names the address GitLab served the note at, which the
+// note was held to before the delete, so "from epic" is a statement about the
+// note rather than an echo of the caller's input.
 func DeleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
-	if err := Delete(ctx, client, input); err != nil {
+	address, err := deleteChecked(ctx, client, input)
+	if err != nil {
 		return toolutil.DeleteOutput{}, err
 	}
 	return toolutil.DeleteOutput{
 		Status:  "success",
-		Message: fmt.Sprintf("Successfully deleted note %d from epic &%d in group %s.", input.NoteID, input.IID, input.FullPath),
+		Message: fmt.Sprintf("Successfully deleted note %d from epic &%d in group %s (it was at %s).", input.NoteID, input.IID, input.FullPath, address),
 	}, nil
 }
 

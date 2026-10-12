@@ -64,12 +64,12 @@ func issueStateCell(state string) string {
 	return toolutil.IssueStateEmoji(state) + " " + toolutil.EscapeMdTableCell(state)
 }
 
-// FormatAssignMarkdown renders an epic-issue assignment or removal as the card
-// of the link it changed: the two global ids the mutation echoed, which are
-// what every later call on this pair takes.
-func FormatAssignMarkdown(out AssignOutput, action string) string {
+// FormatAssignMarkdown renders an epic-issue assignment as the card of the
+// link it made: the two global ids the mutation echoed, which are what every
+// later call on this pair takes.
+func FormatAssignMarkdown(out AssignOutput) string {
 	var b strings.Builder
-	c := toolutil.NewCard(&b, "Epic Issue "+action)
+	c := toolutil.NewCard(&b, "Epic Issue assigned")
 	c.Code("Epic", out.EpicGID)
 	c.Code("Issue", out.ChildGID)
 	c.End(
@@ -79,7 +79,24 @@ func FormatAssignMarkdown(out AssignOutput, action string) string {
 	return b.String()
 }
 
+// FormatRemoveMarkdown renders an epic-issue removal as the card of the link
+// it removed: the epic the issue was checked to belong to and the issue now
+// outside it. Its next steps are the epic's list and assigning the issue
+// back, since removing it again has nothing left to remove.
+func FormatRemoveMarkdown(out RemoveOutput) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Epic Issue removed")
+	c.Code("Epic", out.EpicGID)
+	c.Code("Issue", out.ChildGID)
+	c.End(
+		toolutil.HintAction(actionEpicIssueList, "view the issues left in the epic"),
+		toolutil.HintAction(actionEpicIssueAssign, "assign the issue to an epic again"),
+	)
+	return b.String()
+}
+
 func init() {
 	toolutil.RegisterMarkdown(FormatListMarkdown)
-	toolutil.RegisterMarkdown(func(v AssignOutput) string { return FormatAssignMarkdown(v, "assigned") })
+	toolutil.RegisterMarkdown(FormatAssignMarkdown)
+	toolutil.RegisterMarkdown(FormatRemoveMarkdown)
 }

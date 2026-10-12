@@ -120,6 +120,101 @@ mutation($id: WorkItemID!, $parentId: WorkItemID!, $adjacentWorkItemId: WorkItem
 }
 `
 
+// queryItemParent reads the work item a child sits under, with the full
+// references both are named by in a refusal. The child's parent is one read
+// away as a WorkItem global ID, comparable with the epic's (measured on GitLab
+// 19.4.2 EE), which is what removal and reordering check before they write.
+const queryItemParent = `
+query($id: WorkItemID!) {
+  workItem(id: $id) {
+    id
+    reference(full: true)
+    widgets {
+      ... on WorkItemWidgetHierarchy {
+        parent {
+          id
+          reference(full: true)
+        }
+      }
+    }
+  }
+}
+`
+
+// gqlItemRef is a work item as [queryItemParent] names it.
+type gqlItemRef struct {
+	ID        string `json:"id"`
+	Reference string `json:"reference"`
+}
+
+// gqlItemParent is a work item with the hierarchy widget [queryItemParent]
+// selects; every other widget decodes to an empty value.
+type gqlItemParent struct {
+	gqlItemRef
+	Widgets []struct {
+		Parent *gqlItemRef `json:"parent"`
+	} `json:"widgets"`
+}
+
+// parent is the item's parent, or nil when it has none.
+func (w gqlItemParent) parent() *gqlItemRef {
+	for _, widget := range w.Widgets {
+		if widget.Parent != nil {
+			return widget.Parent
+		}
+	}
+	return nil
+}
+
+// checkChildOfEpic returns nil when the work item itemGID sits under the epic
+// whose work item is epicGID, and otherwise an error naming where it sits,
+// which the caller returns before writing anything.
+//
+// Removal clears a child's parent and reordering sends the child with the
+// epic as its parent, which GitLab reads as a move into it, so before this a
+// caller naming the wrong or a stale epic unlinked an issue from another epic
+// or moved it into the one named, and was told it had removed or reordered
+// (issue 1301). role says which of the caller's items this is.
+func checkChildOfEpic(ctx context.Context, client *gitlabclient.Client, op, role, itemGID, epicGID string, input epicRef) error {
+	var resp struct {
+		Data struct {
+			WorkItem *gqlItemParent `json:"workItem"`
+		} `json:"data"`
+		Errors []toolutil.GraphQLError `json:"errors"`
+	}
+	//gitlab:request mandatory: removal and reordering read where each item they move sits before they write, on every call
+	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
+		Query:     queryItemParent,
+		Variables: map[string]any{"id": itemGID},
+	}, &resp, gl.WithContext(ctx))
+	if err != nil {
+		return toolutil.WrapErrWithHint(op, err, "verify the item with group.epic_issue_list")
+	}
+	item := resp.Data.WorkItem
+	if item == nil {
+		if graphQLErr := toolutil.GraphQLTopLevelError(op, resp.Errors); graphQLErr != nil {
+			return graphQLErr
+		}
+		return fmt.Errorf("%s: %s %s not found, or not one this token can read", op, role, itemGID)
+	}
+	parent := item.parent()
+	if parent == nil {
+		return fmt.Errorf("%s: %s %s (%s) has no parent, so it is not in epic &%d of group %q and nothing was changed; the epic's children are listed by group.epic_issue_list",
+			op, role, item.Reference, item.ID, input.iid, input.fullPath)
+	}
+	if parent.ID != epicGID {
+		return fmt.Errorf("%s: %s %s (%s) is a child of %s (%s), not of epic &%d in group %q, so nothing was changed; the epic's children are listed by group.epic_issue_list",
+			op, role, item.Reference, item.ID, parent.Reference, parent.ID, input.iid, input.fullPath)
+	}
+	return nil
+}
+
+// epicRef is the epic a caller named, for the refusals that name it back.
+type epicRef struct {
+	fullPath string
+	iid      int64
+}
+
 // gqlChildNode represents a child work item from the GraphQL hierarchy widget.
 type gqlChildNode struct {
 	ID                      string           `json:"id"`
@@ -406,8 +501,19 @@ type ListOutput struct {
 	Pagination toolutil.GraphQLPaginationOutput `json:"pagination"`
 }
 
-// AssignOutput represents the result of assigning or removing an issue from an epic.
+// AssignOutput represents the result of assigning an issue to an epic.
 type AssignOutput struct {
+	toolutil.HintableOutput
+	EpicGID  string `json:"epic_gid"`
+	ChildGID string `json:"child_gid"`
+}
+
+// RemoveOutput represents the result of removing an issue from an epic: the
+// epic it was checked to be a child of, and the issue now in none. It is a
+// type of its own so its card says the link was removed; the removal used to
+// answer with the assignment's type, and every removal read "Epic Issue
+// assigned".
+type RemoveOutput struct {
 	toolutil.HintableOutput
 	EpicGID  string `json:"epic_gid"`
 	ChildGID string `json:"child_gid"`
@@ -520,34 +626,38 @@ func Assign(ctx context.Context, client *gitlabclient.Client, input AssignInput)
 	return AssignOutput{EpicGID: epicGID, ChildGID: childGID}, nil
 }
 
-// Remove unlinks an issue from an epic by clearing the child's parent reference.
-func Remove(ctx context.Context, client *gitlabclient.Client, input RemoveInput) (AssignOutput, error) {
+// Remove unlinks an issue from an epic by clearing the child's parent
+// reference, once the child is known to sit under the epic named.
+func Remove(ctx context.Context, client *gitlabclient.Client, input RemoveInput) (RemoveOutput, error) {
 	if err := ctx.Err(); err != nil {
-		return AssignOutput{}, err
+		return RemoveOutput{}, err
 	}
 	if input.FullPath == "" {
-		return AssignOutput{}, errors.New("epicIssueRemove: full_path is required")
+		return RemoveOutput{}, errors.New("epicIssueRemove: full_path is required")
 	}
 	if input.IID <= 0 {
-		return AssignOutput{}, toolutil.ErrRequiredInt64("epicIssueRemove", "epic_iid")
+		return RemoveOutput{}, toolutil.ErrRequiredInt64("epicIssueRemove", "epic_iid")
 	}
 	if input.ChildProjectPath == "" {
-		return AssignOutput{}, errors.New("epicIssueRemove: child_project_path is required")
+		return RemoveOutput{}, errors.New("epicIssueRemove: child_project_path is required")
 	}
 	if input.ChildIID <= 0 {
-		return AssignOutput{}, toolutil.ErrRequiredInt64("epicIssueRemove", "child_iid")
+		return RemoveOutput{}, toolutil.ErrRequiredInt64("epicIssueRemove", "child_iid")
 	}
 
 	epicGID, err := resolveWorkItemGID(ctx, client, input.FullPath, input.IID)
 	if err != nil {
-		return AssignOutput{}, toolutil.WrapErrWithHint("epicIssueRemove", err,
+		return RemoveOutput{}, toolutil.WrapErrWithHint("epicIssueRemove", err,
 			hintEpicGIDResolution)
 	}
 
 	childGID, err := resolveWorkItemGID(ctx, client, input.ChildProjectPath, input.ChildIID)
 	if err != nil {
-		return AssignOutput{}, toolutil.WrapErrWithHint("epicIssueRemove", err,
+		return RemoveOutput{}, toolutil.WrapErrWithHint("epicIssueRemove", err,
 			"could not resolve child issue GID; verify child_project_path with project.get and child_iid with issue.list")
+	}
+	if notChild := checkChildOfEpic(ctx, client, "epicIssueRemove", "the issue", childGID, epicGID, epicRef{input.FullPath, input.IID}); notChild != nil {
+		return RemoveOutput{}, notChild
 	}
 
 	var resp gqlMutationResponse
@@ -558,15 +668,15 @@ func Remove(ctx context.Context, client *gitlabclient.Client, input RemoveInput)
 		},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return AssignOutput{}, toolutil.WrapErrWithHint("epicIssueRemove", err,
-			"the issue may not be linked to this epic; verify with group.epic_issue_list; removing requires Reporter role")
+		return RemoveOutput{}, toolutil.WrapErrWithHint("epicIssueRemove", err,
+			"removing requires the Reporter role on the issue's project and the epic's group; verify the link with group.epic_issue_list")
 	}
 
 	if refused := workItemUpdateError("epicIssueRemove", resp); refused != nil {
-		return AssignOutput{}, refused
+		return RemoveOutput{}, refused
 	}
 
-	return AssignOutput{EpicGID: epicGID, ChildGID: childGID}, nil
+	return RemoveOutput{EpicGID: epicGID, ChildGID: childGID}, nil
 }
 
 // UpdateOrder reorders an issue within an epic by moving it relative to another issue.
@@ -599,6 +709,16 @@ func UpdateOrder(ctx context.Context, client *gitlabclient.Client, input UpdateI
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithHint("epicIssueUpdate", err,
 			hintEpicGIDResolution)
+	}
+	// Both items must already be the epic's: GitLab reads the mutation below
+	// as "put child_id under parentId", so a child of another epic would be
+	// moved into this one and reported as reordered.
+	named := epicRef{input.FullPath, input.IID}
+	if notChild := checkChildOfEpic(ctx, client, "epicIssueUpdate", "child_id", input.ChildID, epicGID, named); notChild != nil {
+		return ListOutput{}, notChild
+	}
+	if notChild := checkChildOfEpic(ctx, client, "epicIssueUpdate", "adjacent_id", input.AdjacentID, epicGID, named); notChild != nil {
+		return ListOutput{}, notChild
 	}
 
 	// The child is the item updated and the epic is its parentId; see the

@@ -2,6 +2,7 @@ package epicdiscussions
 
 import (
 	"context"
+	"fmt"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -34,12 +35,18 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	}
 }
 
-// DeleteNoteOutput deletes an epic discussion note and returns the canonical success message shape.
+// DeleteNoteOutput deletes an epic discussion note and returns the canonical
+// success message shape, naming the note and the address GitLab served it at,
+// which the note was held to before the delete.
 func DeleteNoteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteNoteInput) (toolutil.DeleteOutput, error) {
-	if err := DeleteNote(ctx, client, input); err != nil {
+	address, err := deleteNoteChecked(ctx, client, input)
+	if err != nil {
 		return toolutil.DeleteOutput{}, err
 	}
-	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted epic discussion note."}, nil
+	return toolutil.DeleteOutput{
+		Status:  "success",
+		Message: fmt.Sprintf("Successfully deleted note %d from epic &%d in group %s (it was at %s).", input.NoteID, input.IID, input.FullPath, address),
+	}, nil
 }
 
 func epicDiscussionReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

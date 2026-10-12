@@ -222,15 +222,30 @@ type gqlDiscussionsResponse struct {
 	Errors []toolutil.GraphQLError `json:"errors"`
 }
 
-// topLevelError reports what GitLab refused, or nil when it refused nothing.
-//
-// GitLab answers a rejected document with HTTP 200 and a top-level errors
-// array, which client-go does not turn into an error, so a query the instance
-// refused reaches a handler looking exactly like an epic that is not there.
-// Both handlers that run this document need the same answer, which is why it
-// lives on the envelope rather than at one call site.
-func (r gqlDiscussionsResponse) topLevelError(operation string) error {
-	return toolutil.GraphQLTopLevelError(operation, r.Errors)
+// discussionsRead is how a read of the epic's notes widget reports a failure:
+// under op, a request that failed with hint naming what to verify, and an
+// answer carrying no work item with the epic the caller named by fullPath and
+// iid.
+type discussionsRead struct {
+	op, hint string
+	fullPath string
+	iid      int64
+}
+
+// queryDiscussions sends query, a document reading the epic's notes widget,
+// with vars and answers with the epic's work item, reporting a failure as
+// read says and an answer carrying no work item as
+// [epicworkitems.EpicNotAnswered] words it. The list and the read both run
+// the discussions document through it.
+func queryDiscussions(ctx context.Context, client *gitlabclient.Client, query string, vars map[string]any, read discussionsRead) (*gqlDiscWorkItem, error) {
+	var resp gqlDiscussionsResponse
+	if _, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: query, Variables: vars}, &resp, gl.WithContext(ctx)); err != nil {
+		return nil, toolutil.WrapErrWithHint(read.op, err, read.hint)
+	}
+	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
+		return nil, epicworkitems.EpicNotAnswered(read.op, resp.Errors, read.fullPath, read.iid)
+	}
+	return resp.Data.Namespace.WorkItem, nil
 }
 
 // extractDiscussionHex extracts the hex ID from a Discussion GID.
@@ -475,27 +490,19 @@ func listWith(ctx context.Context, client *gitlabclient.Client, query string, in
 	}
 	vars["fullPath"] = input.FullPath
 	vars["iid"] = strconv.FormatInt(input.IID, 10)
-
-	var resp gqlDiscussionsResponse
-	_, err = client.GL().GraphQL.Do(gl.GraphQLQuery{
-		Query:     query,
-		Variables: vars,
-	}, &resp, gl.WithContext(ctx))
+	workItem, err := queryDiscussions(ctx, client, query, vars, discussionsRead{
+		op:       "epicDiscussionList",
+		hint:     "verify full_path (group path) and iid (project-scoped epic IID) with group.epic_list; epics are migrated to Work Items. Premium/Ultimate license required",
+		fullPath: input.FullPath,
+		iid:      input.IID,
+	})
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithHint("epicDiscussionList", err,
-			"verify full_path (group path) and iid (project-scoped epic IID) with group.epic_list; epics are migrated to Work Items. Premium/Ultimate license required")
-	}
-
-	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
-		if graphQLErr := resp.topLevelError("epicDiscussionList"); graphQLErr != nil {
-			return ListOutput{}, graphQLErr
-		}
-		return ListOutput{}, fmt.Errorf("epicDiscussionList: epic not found in group %q with IID %d", input.FullPath, input.IID)
+		return ListOutput{}, err
 	}
 
 	var discussions []Output
 	var pageInfo toolutil.GraphQLRawForwardPageInfo
-	for _, w := range resp.Data.Namespace.WorkItem.Widgets {
+	for _, w := range workItem.Widgets {
 		if w.Discussions == nil {
 			continue
 		}
@@ -514,43 +521,29 @@ func listWith(ctx context.Context, client *gitlabclient.Client, query string, in
 // Get retrieves a single discussion thread by querying the notes widget
 // and matching by discussion ID.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
-	if err := ctx.Err(); err != nil {
+	if err := epicworkitems.RequireEpic(ctx, "epicDiscussionGet", input.FullPath, input.IID); err != nil {
 		return Output{}, err
-	}
-	if input.FullPath == "" {
-		return Output{}, errors.New("epicDiscussionGet: full_path is required")
-	}
-	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("epicDiscussionGet", "epic_iid")
 	}
 	if input.DiscussionID == "" {
 		return Output{}, errors.New("epicDiscussionGet: discussion_id is required")
 	}
 
 	targetGID := formatDiscussionGID(input.DiscussionID)
-
-	var resp gqlDiscussionsResponse
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
-		Query: queryListDiscussions,
-		Variables: map[string]any{
-			"fullPath": input.FullPath,
-			"iid":      strconv.FormatInt(input.IID, 10),
-			"first":    toolutil.GraphQLMaxFirst,
-		},
-	}, &resp, gl.WithContext(ctx))
+	workItem, err := queryDiscussions(ctx, client, queryListDiscussions, map[string]any{
+		"fullPath": input.FullPath,
+		"iid":      strconv.FormatInt(input.IID, 10),
+		"first":    toolutil.GraphQLMaxFirst,
+	}, discussionsRead{
+		op:       "epicDiscussionGet",
+		hint:     "verify full_path + iid with group.epic_list; discussion_id may be hex (e.g. abc123) or full GID; use group.epic_discussion_list to enumerate existing discussions",
+		fullPath: input.FullPath,
+		iid:      input.IID,
+	})
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithHint("epicDiscussionGet", err,
-			"verify full_path + iid with group.epic_list; discussion_id may be hex (e.g. abc123) or full GID; use group.epic_discussion_list to enumerate existing discussions")
+		return Output{}, err
 	}
 
-	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
-		if graphQLErr := resp.topLevelError("epicDiscussionGet"); graphQLErr != nil {
-			return Output{}, graphQLErr
-		}
-		return Output{}, fmt.Errorf("epicDiscussionGet: epic not found in group %q with IID %d", input.FullPath, input.IID)
-	}
-
-	for _, w := range resp.Data.Namespace.WorkItem.Widgets {
+	for _, w := range workItem.Widgets {
 		if w.Discussions == nil {
 			continue
 		}
@@ -567,23 +560,10 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 // Create starts a new discussion thread on an epic via the createNote
 // GraphQL mutation.
 func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
-	if err := ctx.Err(); err != nil {
-		return Output{}, err
-	}
-	if input.FullPath == "" {
-		return Output{}, errors.New("epicDiscussionCreate: full_path is required")
-	}
-	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("epicDiscussionCreate", "epic_iid")
-	}
-	if input.Body == "" {
-		return Output{}, errors.New("epicDiscussionCreate: body is required")
-	}
-
-	workItemGID, err := resolveWorkItemGID(ctx, client, input.FullPath, input.IID)
+	workItemGID, err := epicworkitems.ResolveEpicForNote(ctx, client, "epicDiscussionCreate", input.FullPath, input.IID, input.Body,
+		"failed to resolve epic GID; verify full_path + iid with group.epic_list; requires Reporter role on the group")
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithHint("epicDiscussionCreate", err,
-			"failed to resolve epic GID; verify full_path + iid with group.epic_list; requires Reporter role on the group")
+		return Output{}, err
 	}
 
 	created, err := toolutil.ExecGraphQLNoteMutation[gqlCreatedNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
@@ -623,14 +603,8 @@ func createdToDiscussionOutput(created toolutil.GraphQLNoteMutationResult[gqlCre
 // AddNote adds a reply note to an existing discussion thread via the
 // createNote GraphQL mutation with a discussionId.
 func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInput) (NoteOutput, error) {
-	if err := ctx.Err(); err != nil {
+	if err := epicworkitems.RequireEpic(ctx, "epicDiscussionAddNote", input.FullPath, input.IID); err != nil {
 		return NoteOutput{}, err
-	}
-	if input.FullPath == "" {
-		return NoteOutput{}, errors.New("epicDiscussionAddNote: full_path is required")
-	}
-	if input.IID <= 0 {
-		return NoteOutput{}, toolutil.ErrRequiredInt64("epicDiscussionAddNote", "epic_iid")
 	}
 	if input.DiscussionID == "" {
 		return NoteOutput{}, errors.New("epicDiscussionAddNote: discussion_id is required")
@@ -666,20 +640,17 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 // UpdateNote updates an existing epic discussion note via the updateNote
 // GraphQL mutation.
 func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNoteInput) (NoteOutput, error) {
-	if err := ctx.Err(); err != nil {
+	if err := epicworkitems.RequireEpic(ctx, "epicDiscussionUpdateNote", input.FullPath, input.IID); err != nil {
 		return NoteOutput{}, err
-	}
-	if input.FullPath == "" {
-		return NoteOutput{}, errors.New("epicDiscussionUpdateNote: full_path is required")
-	}
-	if input.IID <= 0 {
-		return NoteOutput{}, toolutil.ErrRequiredInt64("epicDiscussionUpdateNote", "epic_iid")
 	}
 	if input.NoteID <= 0 {
 		return NoteOutput{}, toolutil.ErrRequiredInt64("epicDiscussionUpdateNote", "note_id")
 	}
 	if input.Body == "" {
 		return NoteOutput{}, errors.New("epicDiscussionUpdateNote: body is required")
+	}
+	if _, err := epicworkitems.CheckNoteOnEpic(ctx, client, "epicDiscussionUpdateNote", input.FullPath, input.IID, input.NoteID); err != nil {
+		return NoteOutput{}, err
 	}
 
 	result, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
@@ -700,22 +671,22 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 	return mutationToNoteOutput(result), nil
 }
 
-// DeleteNote deletes an epic discussion note via the destroyNote GraphQL mutation.
+// DeleteNote deletes an epic discussion note via the destroyNote GraphQL
+// mutation, once the note is known to be one of the epic's.
 func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNoteInput) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if input.FullPath == "" {
-		return errors.New("epicDiscussionDeleteNote: full_path is required")
-	}
-	if input.IID <= 0 {
-		return toolutil.ErrRequiredInt64("epicDiscussionDeleteNote", "epic_iid")
-	}
-	if input.NoteID <= 0 {
-		return toolutil.ErrRequiredInt64("epicDiscussionDeleteNote", "note_id")
+	_, err := deleteNoteChecked(ctx, client, input)
+	return err
+}
+
+// deleteNoteChecked is [DeleteNote], answering with the address GitLab served
+// the note at, which the note was held to and the confirmation names.
+func deleteNoteChecked(ctx context.Context, client *gitlabclient.Client, input DeleteNoteInput) (string, error) {
+	address, err := epicworkitems.RequireNoteOnEpic(ctx, client, "epicDiscussionDeleteNote", input.FullPath, input.IID, input.NoteID)
+	if err != nil {
+		return "", err
 	}
 
-	return toolutil.ExecGraphQLDestroyNote(ctx, client.GL().GraphQL, "epicDiscussionDeleteNote",
+	return address, toolutil.ExecGraphQLDestroyNote(ctx, client.GL().GraphQL, "epicDiscussionDeleteNote",
 		"only the note author or a Maintainer/Owner can delete; verify note_id with group.epic_discussion_list; deletion is irreversible. System-generated notes cannot be removed",
 		mutationDestroyNote, toolutil.FormatGID("Note", input.NoteID))
 }

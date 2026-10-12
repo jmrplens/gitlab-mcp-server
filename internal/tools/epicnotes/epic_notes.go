@@ -202,15 +202,29 @@ type gqlNotesResponse struct {
 	Errors []toolutil.GraphQLError `json:"errors"`
 }
 
-// topLevelError reports what GitLab refused, or nil when it refused nothing.
-//
-// GitLab answers a rejected document with HTTP 200 and a top-level errors
-// array, which client-go does not turn into an error, so a query the instance
-// refused reaches a handler looking exactly like an epic that is not there.
-// Both handlers that run this document need the same answer, which is why it
-// lives on the envelope rather than at one call site.
-func (r gqlNotesResponse) topLevelError(operation string) error {
-	return toolutil.GraphQLTopLevelError(operation, r.Errors)
+// notesRead is how a read of the epic's notes widget reports a failure: under
+// op, a request that failed with hint naming what to verify, and an answer
+// carrying no work item with the epic the caller named by fullPath and iid.
+type notesRead struct {
+	op, hint string
+	fullPath string
+	iid      int64
+}
+
+// queryNotes sends query, a document reading the epic's notes widget, with
+// vars and answers with the epic's work item, reporting a failure as read
+// says and an answer carrying no work item as
+// [epicworkitems.EpicNotAnswered] words it. The list and the read both run
+// the notes document through it.
+func queryNotes(ctx context.Context, client *gitlabclient.Client, query string, vars map[string]any, read notesRead) (*gqlNotesWorkItem, error) {
+	var resp gqlNotesResponse
+	if _, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: query, Variables: vars}, &resp, gl.WithContext(ctx)); err != nil {
+		return nil, toolutil.WrapErrWithHint(read.op, err, read.hint)
+	}
+	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
+		return nil, epicworkitems.EpicNotAnswered(read.op, resp.Errors, read.fullPath, read.iid)
+	}
+	return resp.Data.Namespace.WorkItem, nil
 }
 
 // nodeToOutput converts a GraphQL note node to the MCP output format. Per the
@@ -256,11 +270,6 @@ func mutationToOutput(result toolutil.GraphQLNoteMutationResult[gqlNoteNode]) Ou
 	}
 	out.QuickActionsStatus = result.QuickActions
 	return out
-}
-
-// resolveWorkItemGID resolves the GraphQL GID for a work item by namespace path and IID.
-func resolveWorkItemGID(ctx context.Context, client *gitlabclient.Client, fullPath string, iid int64) (string, error) {
-	return epicworkitems.ResolveEpicGID(ctx, client, fullPath, iid)
 }
 
 // ListInput defines parameters for listing epic notes.
@@ -387,27 +396,19 @@ func listWith(ctx context.Context, client *gitlabclient.Client, query string, in
 	}
 	vars["fullPath"] = input.FullPath
 	vars["iid"] = strconv.FormatInt(input.IID, 10)
-
-	var resp gqlNotesResponse
-	_, err = client.GL().GraphQL.Do(gl.GraphQLQuery{
-		Query:     query,
-		Variables: vars,
-	}, &resp, gl.WithContext(ctx))
+	workItem, err := queryNotes(ctx, client, query, vars, notesRead{
+		op:       "epicNoteList",
+		hint:     "verify full_path (group path) and iid (epic IID) with group.epic_list; epics are migrated to Work Items. Premium/Ultimate license required",
+		fullPath: input.FullPath,
+		iid:      input.IID,
+	})
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithHint("epicNoteList", err,
-			"verify full_path (group path) and iid (epic IID) with group.epic_list; epics are migrated to Work Items. Premium/Ultimate license required")
-	}
-
-	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
-		if graphQLErr := resp.topLevelError("epicNoteList"); graphQLErr != nil {
-			return ListOutput{}, graphQLErr
-		}
-		return ListOutput{}, fmt.Errorf("epicNoteList: epic not found in group %q with IID %d", input.FullPath, input.IID)
+		return ListOutput{}, err
 	}
 
 	var notes []Output
 	var pageInfo toolutil.GraphQLRawForwardPageInfo
-	for _, w := range resp.Data.Namespace.WorkItem.Widgets {
+	for _, w := range workItem.Widgets {
 		if w.Discussions == nil {
 			continue
 		}
@@ -428,43 +429,29 @@ func listWith(ctx context.Context, client *gitlabclient.Client, query string, in
 // Get retrieves a single note on an epic by querying the notes widget
 // and matching by note ID.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
-	if err := ctx.Err(); err != nil {
+	if err := epicworkitems.RequireEpic(ctx, "epicNoteGet", input.FullPath, input.IID); err != nil {
 		return Output{}, err
-	}
-	if input.FullPath == "" {
-		return Output{}, errors.New("epicNoteGet: full_path is required")
-	}
-	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("epicNoteGet", "epic_iid")
 	}
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("epicNoteGet", "note_id")
 	}
 
 	targetGID := toolutil.FormatGID("Note", input.NoteID)
-
-	var resp gqlNotesResponse
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
-		Query: queryListWorkItemNotes,
-		Variables: map[string]any{
-			"fullPath": input.FullPath,
-			"iid":      strconv.FormatInt(input.IID, 10),
-			"first":    toolutil.GraphQLMaxFirst,
-		},
-	}, &resp, gl.WithContext(ctx))
+	workItem, err := queryNotes(ctx, client, queryListWorkItemNotes, map[string]any{
+		"fullPath": input.FullPath,
+		"iid":      strconv.FormatInt(input.IID, 10),
+		"first":    toolutil.GraphQLMaxFirst,
+	}, notesRead{
+		op:       "epicNoteGet",
+		hint:     "verify full_path + iid with group.epic_list; verify note_id (numeric) with group.epic_note_list; system-generated notes may have restricted access",
+		fullPath: input.FullPath,
+		iid:      input.IID,
+	})
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithHint("epicNoteGet", err,
-			"verify full_path + iid with group.epic_list; verify note_id (numeric) with group.epic_note_list; system-generated notes may have restricted access")
+		return Output{}, err
 	}
 
-	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
-		if graphQLErr := resp.topLevelError("epicNoteGet"); graphQLErr != nil {
-			return Output{}, graphQLErr
-		}
-		return Output{}, fmt.Errorf("epicNoteGet: epic not found in group %q with IID %d", input.FullPath, input.IID)
-	}
-
-	for _, w := range resp.Data.Namespace.WorkItem.Widgets {
+	for _, w := range workItem.Widgets {
 		if w.Discussions == nil {
 			continue
 		}
@@ -482,23 +469,10 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 
 // Create adds a new note to an epic via the createNote GraphQL mutation.
 func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
-	if err := ctx.Err(); err != nil {
-		return Output{}, err
-	}
-	if input.FullPath == "" {
-		return Output{}, errors.New("epicNoteCreate: full_path is required")
-	}
-	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("epicNoteCreate", "epic_iid")
-	}
-	if input.Body == "" {
-		return Output{}, errors.New("epicNoteCreate: body is required")
-	}
-
-	workItemGID, err := resolveWorkItemGID(ctx, client, input.FullPath, input.IID)
+	workItemGID, err := epicworkitems.ResolveEpicForNote(ctx, client, "epicNoteCreate", input.FullPath, input.IID, input.Body,
+		"failed to resolve epic GID; verify full_path + iid with group.epic_list; requires Reporter role on the group")
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithHint("epicNoteCreate", err,
-			"failed to resolve epic GID; verify full_path + iid with group.epic_list; requires Reporter role on the group")
+		return Output{}, err
 	}
 
 	result, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
@@ -521,20 +495,17 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 // Update modifies the body of an existing epic note via the updateNote
 // GraphQL mutation.
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (Output, error) {
-	if err := ctx.Err(); err != nil {
+	if err := epicworkitems.RequireEpic(ctx, "epicNoteUpdate", input.FullPath, input.IID); err != nil {
 		return Output{}, err
-	}
-	if input.FullPath == "" {
-		return Output{}, errors.New("epicNoteUpdate: full_path is required")
-	}
-	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("epicNoteUpdate", "epic_iid")
 	}
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("epicNoteUpdate", "note_id")
 	}
 	if input.Body == "" {
 		return Output{}, errors.New("epicNoteUpdate: body is required")
+	}
+	if _, err := epicworkitems.CheckNoteOnEpic(ctx, client, "epicNoteUpdate", input.FullPath, input.IID, input.NoteID); err != nil {
+		return Output{}, err
 	}
 
 	result, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
@@ -555,22 +526,22 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	return mutationToOutput(result), nil
 }
 
-// Delete removes a note from an epic via the destroyNote GraphQL mutation.
+// Delete removes a note from an epic via the destroyNote GraphQL mutation,
+// once the note is known to be one of the epic's.
 func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if input.FullPath == "" {
-		return errors.New("epicNoteDelete: full_path is required")
-	}
-	if input.IID <= 0 {
-		return toolutil.ErrRequiredInt64("epicNoteDelete", "epic_iid")
-	}
-	if input.NoteID <= 0 {
-		return toolutil.ErrRequiredInt64("epicNoteDelete", "note_id")
+	_, err := deleteChecked(ctx, client, input)
+	return err
+}
+
+// deleteChecked is [Delete], answering with the address GitLab served the
+// note at, which the note was held to and the confirmation names.
+func deleteChecked(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (string, error) {
+	address, err := epicworkitems.RequireNoteOnEpic(ctx, client, "epicNoteDelete", input.FullPath, input.IID, input.NoteID)
+	if err != nil {
+		return "", err
 	}
 
-	return toolutil.ExecGraphQLDestroyNote(ctx, client.GL().GraphQL, "epicNoteDelete",
+	return address, toolutil.ExecGraphQLDestroyNote(ctx, client.GL().GraphQL, "epicNoteDelete",
 		"only the note author or a Maintainer/Owner can delete; verify note_id with group.epic_note_list; deletion is irreversible. System-generated notes cannot be removed",
 		mutationDestroyNote, toolutil.FormatGID("Note", input.NoteID))
 }

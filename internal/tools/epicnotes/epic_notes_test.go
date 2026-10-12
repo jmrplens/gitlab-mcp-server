@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
@@ -173,9 +175,32 @@ const (
 )
 
 // graphqlMux creates a handler that routes GraphQL requests by query content.
+//
+// The update and delete guards read the note before they write it, so a test
+// routing a note mutation and not the note read is answered as a caller
+// naming the note's own epic is: the note is one on epic &1 of my-group, at
+// that epic's address. A test about something else passes the guard that
+// way, and a test routing the read itself keeps its own.
 func graphqlMux(handlers map[string]http.HandlerFunc) http.Handler {
-	return testutil.GraphQLHandler(handlers)
+	_, update := handlers["updateNote"]
+	_, destroy := handlers["destroyNote"]
+	if !update && !destroy {
+		return testutil.GraphQLHandler(handlers)
+	}
+	withGuard := map[string]http.HandlerFunc{
+		"note(id": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, gqlOwnedNoteData)
+		},
+	}
+	maps.Copy(withGuard, handlers)
+	return testutil.GraphQLHandler(withGuard)
 }
+
+// gqlOwnedNoteAddress is where GitLab serves note 100 of epic &1 of my-group.
+const gqlOwnedNoteAddress = "https://gitlab.example.com/groups/my-group/-/work_items/1#note_100"
+
+// gqlOwnedNoteData is the guard's read of a note on the epic's work item.
+const gqlOwnedNoteData = `{"note": {"noteableId": 1, "noteableType": "Issue", "url": "` + gqlOwnedNoteAddress + `"}}`
 
 // assertGraphQLVariables holds the variables of the request the mock received to
 // the whole map the handler should have sent, label naming the call that sent
@@ -227,10 +252,12 @@ func assertSelectsQuickActionsStatus(t *testing.T, r *http.Request) {
 	}
 }
 
-// TestResolveWorkItemGID_ErrorPaths verifies that ResolveWorkItemGIDPaths returns a wrapped error when the GitLab API responds with an error status.
-// Epics are work items, so the lookup is a GraphQL POST rather than a REST GET.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestResolveWorkItemGID_ErrorPaths(t *testing.T) {
+// TestCreate_EpicNotResolved_ReturnsTheReasonWithTheHint verifies that a
+// note whose epic cannot be resolved is refused under the create operation
+// with the resolution hint, both when GitLab refuses the lookup and when it
+// answers with no epic. Epics are work items, so the lookup is a GraphQL POST
+// rather than a REST GET, and nothing is created when it fails.
+func TestCreate_EpicNotResolved_ReturnsTheReasonWithTheHint(t *testing.T) {
 	tests := []struct {
 		name    string
 		handler http.Handler
@@ -241,26 +268,28 @@ func TestResolveWorkItemGID_ErrorPaths(t *testing.T) {
 			handler: graphqlMux(map[string]http.HandlerFunc{"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
 				http.Error(w, "forbidden", http.StatusForbidden)
 			}}),
-			wantErr: "forbidden",
+			wantErr: "epicNoteCreate",
 		},
 		{
 			name: "missing epic",
 			handler: graphqlMux(map[string]http.HandlerFunc{"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondGraphQL(w, http.StatusOK, gqlNamespaceNull)
 			}}),
-			wantErr: "epic not found",
+			wantErr: `epic not found in group "my-group" with IID 1`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := testutil.NewTestClient(t, tt.handler)
-			_, err := resolveWorkItemGID(t.Context(), client, testFullPath, 1)
+			_, err := Create(t.Context(), client, CreateInput{FullPath: testFullPath, IID: 1, Body: "note"})
 			if err == nil {
-				t.Fatalf("expected error containing %q", tt.wantErr)
+				t.Fatalf("Create() error = nil, want one containing %q", tt.wantErr)
 			}
-			if !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
+			for _, want := range []string{tt.wantErr, "failed to resolve epic GID; verify full_path + iid with group.epic_list"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("Create() error = %q, want it to contain %q", err.Error(), want)
+				}
 			}
 		})
 	}
@@ -1148,7 +1177,7 @@ func TestUpdate_SendsTheNoteTheCallerNamed(t *testing.T) {
 	}})
 
 	_, err := Update(context.Background(), testutil.NewTestClient(t, handler),
-		UpdateInput{FullPath: testFullPath, IID: 5, NoteID: 100, Body: "Updated"})
+		UpdateInput{FullPath: testFullPath, IID: 1, NoteID: 100, Body: "Updated"})
 	if err != nil {
 		t.Fatalf("Update() error = %v, want nil", err)
 	}
@@ -1164,7 +1193,7 @@ func TestUpdate_NoteAnsweredNull_FineGrainedSessionIsToldTheEditProbablyCommitte
 	handler := graphqlMux(map[string]http.HandlerFunc{"updateNote": func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondGraphQL(w, http.StatusOK, gqlUpdateNoteDeletedData)
 	}})
-	input := UpdateInput{FullPath: testFullPath, IID: 5, NoteID: 100, Body: "Updated"}
+	input := UpdateInput{FullPath: testFullPath, IID: 1, NoteID: 100, Body: "Updated"}
 
 	fineClient := testutil.NewTestClient(t, handler)
 	fineClient.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, ""))
@@ -1361,7 +1390,7 @@ func TestDelete_SendsTheNoteTheCallerNamed(t *testing.T) {
 	}})
 
 	if err := Delete(context.Background(), testutil.NewTestClient(t, handler),
-		DeleteInput{FullPath: testFullPath, IID: 5, NoteID: 100}); err != nil {
+		DeleteInput{FullPath: testFullPath, IID: 1, NoteID: 100}); err != nil {
 		t.Fatalf("Delete() error = %v, want nil", err)
 	}
 }
@@ -1761,5 +1790,115 @@ func TestQueryListWorkItemNotes_Complexity_IsTheMeasuredFigureUnderGitLabsLimit(
 	if got > testutil.GitLabAuthenticatedMaxComplexity {
 		t.Errorf("queryListWorkItemNotes costs %d at first=%d, over the %d GitLab refuses a query above",
 			got, toolutil.GraphQLMaxFirst, testutil.GitLabAuthenticatedMaxComplexity)
+	}
+}
+
+// noteOwnerCase is one answer GitLab can give to what a note is on and where
+// it serves the note, and whether epic &1 of my-group, the epic the writes
+// name, owns the note by it.
+type noteOwnerCase struct {
+	name    string
+	note    string
+	owned   bool
+	wantErr string
+}
+
+// noteOwnerCases are the shapes GitLab 19.4 answers an epic note with, and
+// the ones that belong to something else. A note this server creates on the
+// epic's work item reads as an Issue, one created through the legacy epic
+// route as an Epic, both at the epic's address; a note on a project issue
+// reads as an Issue at the project's address, and a note on another epic as
+// that epic at its own.
+var noteOwnerCases = []noteOwnerCase{
+	{
+		name:  "a note on the epic's work item",
+		note:  `{"note": {"noteableId": 1, "noteableType": "Issue", "url": "https://gitlab.example.com/groups/my-group/-/work_items/1#note_100"}}`,
+		owned: true,
+	},
+	{
+		name:  "a note made through the legacy epic route",
+		note:  `{"note": {"noteableId": 7, "noteableType": "Epic", "url": "https://gitlab.example.com/groups/my-group/-/work_items/1#note_100"}}`,
+		owned: true,
+	},
+	{
+		name:    "a note on a project issue",
+		note:    `{"note": {"noteableId": 45, "noteableType": "Issue", "url": "https://gitlab.example.com/e2e-tester/probe1/-/work_items/1#note_100"}}`,
+		wantErr: "e2e-tester/probe1/-/work_items/1#note_100",
+	},
+	{
+		name:    "a note on another epic",
+		note:    `{"note": {"noteableId": 8, "noteableType": "Epic", "url": "https://gitlab.example.com/groups/other/-/work_items/3#note_100"}}`,
+		wantErr: "groups/other/-/work_items/3#note_100",
+	},
+	{
+		name:    "a note on a merge request",
+		note:    `{"note": {"noteableId": 1, "noteableType": "MergeRequest", "url": "https://gitlab.example.com/g/p/-/merge_requests/1#note_100"}}`,
+		wantErr: "MergeRequest 1",
+	},
+	{
+		name:    "no note GitLab will show",
+		note:    `{"note": null}`,
+		wantErr: "note 100 not found",
+	},
+}
+
+// noteOwnerMux answers the note read with note and mutation with answer,
+// counting every mutation it is sent in writes.
+func noteOwnerMux(note, mutation, answer string, writes *atomic.Int32) http.Handler {
+	return graphqlMux(map[string]http.HandlerFunc{
+		"note(id": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, note)
+		},
+		mutation: func(w http.ResponseWriter, _ *http.Request) {
+			writes.Add(1)
+			testutil.RespondGraphQL(w, http.StatusOK, answer)
+		},
+	})
+}
+
+// TestUpdateAndDelete_NoteOfAnotherObject_IsRefusedBeforeAnyWrite verifies
+// that the two note writes act only on a note of the epic the caller named
+// (issue 1301).
+//
+// Both handlers checked that full_path and epic_iid were set and then sent
+// the note's global ID alone, so a note on a project issue, a merge request
+// or another epic was edited or irreversibly deleted through an epic action,
+// and the delete reported it removed from the epic named. Each now reads the
+// note's noteable first and refuses unless it is the epic, naming where the
+// note belongs, and the mutation is never sent; a note that belongs is
+// written as before.
+func TestUpdateAndDelete_NoteOfAnotherObject_IsRefusedBeforeAnyWrite(t *testing.T) {
+	for _, tt := range noteOwnerCases {
+		t.Run("update/"+tt.name, func(t *testing.T) {
+			var writes atomic.Int32
+			client := testutil.NewTestClient(t, noteOwnerMux(tt.note, "updateNote", gqlUpdateNoteData, &writes))
+			_, err := Update(context.Background(), client, UpdateInput{FullPath: testFullPath, IID: 1, NoteID: 100, Body: "Updated"})
+			assertNoteOwnerOutcome(t, "Update()", tt, err, writes.Load())
+		})
+		t.Run("delete/"+tt.name, func(t *testing.T) {
+			var writes atomic.Int32
+			client := testutil.NewTestClient(t, noteOwnerMux(tt.note, "destroyNote", gqlDestroyNoteData, &writes))
+			err := Delete(context.Background(), client, DeleteInput{FullPath: testFullPath, IID: 1, NoteID: 100})
+			assertNoteOwnerOutcome(t, "Delete()", tt, err, writes.Load())
+		})
+	}
+}
+
+// assertNoteOwnerOutcome holds one write to its case: a note the epic owns
+// is written once, and any other is refused with the case's text and never
+// written.
+func assertNoteOwnerOutcome(t *testing.T, label string, tt noteOwnerCase, err error, writes int32) {
+	t.Helper()
+	if tt.owned {
+		if err != nil || writes != 1 {
+			t.Errorf("%s error = %v after %d write(s), want the note written once", label, err, writes)
+		}
+		return
+	}
+	if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+		t.Errorf("%s error = %v, want a refusal naming %q", label, err, tt.wantErr)
+	}
+	if writes != 0 {
+		t.Errorf("%s sent the mutation %d time(s) for a note the epic does not own", label, writes)
 	}
 }

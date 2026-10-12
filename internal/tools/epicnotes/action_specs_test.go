@@ -29,7 +29,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		{"get", "gitlab_epic_note_get", map[string]any{"full_path": testFullPath, "epic_iid": float64(1), "note_id": float64(100)}, ""},
 		{"create", "gitlab_epic_note_create", map[string]any{"full_path": testFullPath, "epic_iid": float64(1), "body": "comment"}, ""},
 		{"update", "gitlab_epic_note_update", map[string]any{"full_path": testFullPath, "epic_iid": float64(1), "note_id": float64(100), "body": "updated"}, ""},
-		{"delete", "gitlab_epic_note_delete", map[string]any{"full_path": testFullPath, "epic_iid": float64(1), "note_id": float64(100)}, "Successfully deleted note 100 from epic &1 in group my-group."},
+		{"delete", "gitlab_epic_note_delete", map[string]any{"full_path": testFullPath, "epic_iid": float64(1), "note_id": float64(100)}, "Successfully deleted note 100 from epic &1 in group my-group (it was at " + gqlOwnedNoteAddress + ")."},
 	}
 
 	for _, tt := range tests {

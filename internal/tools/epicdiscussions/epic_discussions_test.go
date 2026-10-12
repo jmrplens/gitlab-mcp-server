@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"reflect"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -197,9 +199,32 @@ func jsonText(t *testing.T, value any) string {
 }
 
 // graphqlMux creates an http.Handler that routes GraphQL requests by query content.
+//
+// The note update and delete guards read the note before they write it, so a
+// test routing a note mutation and not the note read is answered as a caller
+// naming the note's own epic is: the note is one on epic &5 of my-group, at
+// that epic's address. A test about something else passes the guard that
+// way, and a test routing the read itself keeps its own.
 func graphqlMux(handlers map[string]http.HandlerFunc) http.Handler {
-	return testutil.GraphQLHandler(handlers)
+	_, update := handlers["updateNote"]
+	_, destroy := handlers["destroyNote"]
+	if !update && !destroy {
+		return testutil.GraphQLHandler(handlers)
+	}
+	withGuard := map[string]http.HandlerFunc{
+		"note(id": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, gqlOwnedNoteData)
+		},
+	}
+	maps.Copy(withGuard, handlers)
+	return testutil.GraphQLHandler(withGuard)
 }
+
+// gqlOwnedNoteAddress is where GitLab serves note 100 of epic &5 of my-group.
+const gqlOwnedNoteAddress = "https://gitlab.example.com/groups/my-group/-/work_items/5#note_100"
+
+// gqlOwnedNoteData is the guard's read of a note on the epic's work item.
+const gqlOwnedNoteData = `{"note": {"noteableId": 1, "noteableType": "Issue", "url": "` + gqlOwnedNoteAddress + `"}}`
 
 // TestDiscussionIDHelpers verifies the DiscussionIDHelpers handler.
 // The test exercises the GET path of the underlying GitLab API call.
@@ -2045,7 +2070,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		{"create", "gitlab_create_epic_discussion", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "body": "new thread"}, ""},
 		{"add_note", "gitlab_add_epic_discussion_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "discussion_id": "d1hex", "body": "reply"}, ""},
 		{"update_note", "gitlab_update_epic_discussion_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "note_id": float64(100), "body": "updated"}, ""},
-		{"delete_note", "gitlab_delete_epic_discussion_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "note_id": float64(100)}, "Successfully deleted epic discussion note."},
+		{"delete_note", "gitlab_delete_epic_discussion_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "note_id": float64(100)}, "Successfully deleted note 100 from epic &5 in group my-group (it was at " + gqlOwnedNoteAddress + ")."},
 	}
 
 	for _, tt := range tools {
@@ -2126,5 +2151,76 @@ func TestQueryListDiscussions_Complexity_IsTheMeasuredFigureUnderGitLabsLimit(t 
 	if got > testutil.GitLabAuthenticatedMaxComplexity {
 		t.Errorf("queryListDiscussions costs %d at first=%d, over the %d GitLab refuses a query above",
 			got, toolutil.GraphQLMaxFirst, testutil.GitLabAuthenticatedMaxComplexity)
+	}
+}
+
+// discussionNoteOwners are answers GitLab gives to what a note is on and where
+// it serves the note, against epic &5 of my-group, the epic the writes name:
+// the two shapes a note of the epic takes on GitLab 19.4, and two notes of
+// other objects.
+var discussionNoteOwners = []struct {
+	name    string
+	note    string
+	wantErr string
+}{
+	{name: "a note on the epic's work item", note: `{"note": {"noteableId": 1, "noteableType": "Issue", "url": "https://gitlab.example.com/groups/my-group/-/work_items/5#note_100"}}`},
+	{name: "a note made through the legacy epic route", note: `{"note": {"noteableId": 7, "noteableType": "Epic", "url": "https://gitlab.example.com/groups/my-group/-/work_items/5#note_100"}}`},
+	{name: "a note on a project issue", note: `{"note": {"noteableId": 45, "noteableType": "Issue", "url": "https://gitlab.example.com/e2e-tester/probe1/-/work_items/1#note_100"}}`, wantErr: "e2e-tester/probe1/-/work_items/1#note_100"},
+	{name: "a note on another epic", note: `{"note": {"noteableId": 8, "noteableType": "Epic", "url": "https://gitlab.example.com/groups/other/-/work_items/3#note_100"}}`, wantErr: "groups/other/-/work_items/3#note_100"},
+}
+
+// TestUpdateAndDeleteNote_NoteOfAnotherObject_IsRefusedBeforeAnyWrite
+// verifies that the two discussion note writes act only on a note of the epic
+// the caller named (issue 1301): each sent the note's global ID alone, so a
+// note on a project issue or another epic was edited or deleted through an
+// epic action. Each now reads the note's noteable first, refuses unless it is
+// the epic, and never sends the mutation for a note it refused.
+func TestUpdateAndDeleteNote_NoteOfAnotherObject_IsRefusedBeforeAnyWrite(t *testing.T) {
+	for _, tt := range discussionNoteOwners {
+		for _, write := range []string{"updateNote", "destroyNote"} {
+			t.Run(write+"/"+tt.name, func(t *testing.T) {
+				var writes atomic.Int32
+				answer := map[string]string{"updateNote": gqlUpdateNoteData, "destroyNote": gqlDestroyNoteData}[write]
+				client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{
+					"note(id": func(w http.ResponseWriter, _ *http.Request) {
+						testutil.RespondGraphQL(w, http.StatusOK, tt.note)
+					},
+					write: func(w http.ResponseWriter, _ *http.Request) {
+						writes.Add(1)
+						testutil.RespondGraphQL(w, http.StatusOK, answer)
+					},
+				}))
+				assertDiscussionNoteOwnerOutcome(t, write, tt.wantErr, writeDiscussionNote(client, write), writes.Load())
+			})
+		}
+	}
+}
+
+// writeDiscussionNote sends the discussion note write the mutation name
+// write stands for, on note 100 of epic &5.
+func writeDiscussionNote(client *gitlabclient.Client, write string) error {
+	if write == "updateNote" {
+		_, err := UpdateNote(context.Background(), client, UpdateNoteInput{FullPath: testFullPath, IID: 5, NoteID: 100, Body: "updated"})
+		return err
+	}
+	return DeleteNote(context.Background(), client, DeleteNoteInput{FullPath: testFullPath, IID: 5, NoteID: 100})
+}
+
+// assertDiscussionNoteOwnerOutcome holds one write to its case: with no
+// wantErr the note is the epic's and is written once, and otherwise the write
+// is refused naming wantErr and the mutation is never sent.
+func assertDiscussionNoteOwnerOutcome(t *testing.T, write, wantErr string, err error, writes int32) {
+	t.Helper()
+	if wantErr == "" {
+		if err != nil || writes != 1 {
+			t.Errorf("error = %v after %d write(s), want the note written once", err, writes)
+		}
+		return
+	}
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Errorf("error = %v, want a refusal naming %q", err, wantErr)
+	}
+	if writes != 0 {
+		t.Errorf("%s was sent %d time(s) for a note the epic does not own", write, writes)
 	}
 }

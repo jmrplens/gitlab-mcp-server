@@ -80,7 +80,7 @@ func epicIssueAssignSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 // epicIssueRemoveSpec builds the destructive spec for unlinking an issue from an epic.
 func epicIssueRemoveSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := epicIssueBaseOptions("gitlab_epic_issue_remove")
-	options.Usage = "Use to unlink a child issue from an epic. Send full_path for the epic group. Copy epic_iid from the epic_create or epic_get result and child_iid from the child issue result. Removal is destructive and requires confirmation."
+	options.Usage = "Use to unlink a child issue from an epic. Send full_path for the epic group. Copy epic_iid from the epic_create or epic_get result and child_iid from the child issue result. An issue that is not a child of that epic is refused, naming the epic it belongs to, and nothing is changed. Removal is destructive and requires confirmation."
 	options.Aliases = []string{"remove issue from epic", "unlink issue from epic", "detach issue from epic"}
 	options.RelatedActions = []string{actionEpicIssueList, actionEpicIssueAssign, actionEpicGet, actionIssueGet}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -100,7 +100,7 @@ func epicIssueRemoveSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 			CommonConfusions: []string{"Do not use epic_iid as child_iid."},
 		},
 	}
-	options.IndividualTool.Description = "Unlink a child issue from a group epic (destructive. Requires confirmation). Returns: the resolved epic and issue work item GIDs confirming the removal. See also: gitlab_epic_issue_list, gitlab_epic_issue_assign, gitlab_epic_get."
+	options.IndividualTool.Description = "Unlink a child issue from a group epic (destructive. Requires confirmation). An issue that is not a child of that epic is refused and left where it is. Returns: the resolved epic and issue work item GIDs confirming the removal. See also: gitlab_epic_issue_list, gitlab_epic_issue_assign, gitlab_epic_get."
 	return toolutil.NewDeleteActionSpec("epic_issue_remove", toolutil.DestructiveAction(client, Remove), options)
 }
 
@@ -137,7 +137,7 @@ func epicIssueUpdateSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 		toolutil.SchemaEnumOverride("relative_position", "BEFORE", "AFTER"),
 	}
-	options.IndividualTool.Description = "Reorder an issue within a group epic by moving it before or after another linked issue. Returns: the epic's child issues in their updated order. See also: gitlab_epic_issue_list, gitlab_epic_issue_assign, gitlab_epic_issue_remove."
+	options.IndividualTool.Description = "Reorder an issue within a group epic by moving it before or after another linked issue. Both issues must already be children of that epic: one in another epic is refused, never moved. Returns: the epic's child issues in their updated order. See also: gitlab_epic_issue_list, gitlab_epic_issue_assign, gitlab_epic_issue_remove."
 	return toolutil.NewUpdateActionSpec("epic_issue_update", toolutil.RouteAction(client, UpdateOrder), options)
 }
 

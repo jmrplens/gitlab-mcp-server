@@ -387,6 +387,17 @@ func epicSentDeclarations() []sentDeclaration {
 				"held to this same question on their own documents.",
 		},
 		{
+			Package:    toolsDir + "/epicworkitems",
+			SchemaType: "Note",
+			Field:      declaredSegment,
+			Category:   categoryLookup,
+			Reason: "queryNoteOwner reads a note only to learn what it is on before an epic note or discussion " +
+				"write changes it: its noteable type and id, and the URL GitLab serves it at, which names the " +
+				"group and the epic and is what the note is held to. What leaves the guard is a refusal, or the " +
+				"URL a delete names; the note itself is surfaced by epicnotes and epicdiscussions, which are held " +
+				"to this same question on their own documents (issue 1301).",
+		},
+		{
 			Package:    epicDiscussionsPkg,
 			SchemaType: "UserCore",
 			Field:      declaredSegment,
