@@ -235,7 +235,7 @@ func TestDoraMetricReadSpec_ScopeDecidesTheProseAndNothingElse(t *testing.T) {
 // checking that something came back, is what holds that closure to the generic
 // title the output alone can justify.
 func TestMarkdownHints_Output(t *testing.T) {
-	out := Output{Metrics: []MetricOutput{{Date: "2026-01-01", Value: 42.5}}}
+	out := Output{Metrics: []MetricOutput{{Date: "2026-01-01", Value: new(42.5)}}}
 
 	result := toolutil.MarkdownForResult(out)
 	if result == nil {

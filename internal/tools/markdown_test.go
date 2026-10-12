@@ -873,7 +873,7 @@ func TestFormatPipeline_ListMarkdown(t *testing.T) {
 func TestFormatPipeline_DetailMarkdown(t *testing.T) {
 	p := pipelines.DetailOutput{
 		ID: 100, IID: 10, Status: "success", Source: "push", Ref: "main",
-		SHA: "abc123", Duration: 120, QueuedDuration: 5, Coverage: "85.5",
+		SHA: "abc123", Duration: new(int64(120)), QueuedDuration: new(int64(5)), Coverage: "85.5",
 		YamlErrors: "", User: &toolutil.BasicUserOutput{Username: "admin"}, WebURL: "https://gl.example.com/p/100",
 	}
 	md := pipelines.FormatDetailMarkdown(p)
@@ -1261,7 +1261,7 @@ func TestFormatRepository_CompareMarkdown(t *testing.T) {
 func TestFormatJob_Markdown(t *testing.T) {
 	j := jobs.Output{
 		ID: 200, Name: "build", Stage: "build", Status: "failed",
-		Ref: "main", Duration: 45.5, FailureReason: "script_failure",
+		Ref: "main", Duration: new(45.5), FailureReason: "script_failure",
 		WebURL: "https://gl.example.com/j/200", User: &jobs.UserObject{Username: "ci-bot"},
 	}
 	md := jobs.FormatOutputMarkdown(j)
@@ -1281,7 +1281,7 @@ func TestFormatJob_ListMarkdown(t *testing.T) {
 		out := jobs.ListOutput{
 			Jobs: []jobs.Output{{
 				ID: 1, Name: "test", Stage: "test", Status: "success",
-				Duration: 10.0, WebURL: "https://gl.example.com/j/1",
+				Duration: new(10.0), WebURL: "https://gl.example.com/j/1",
 			}},
 			Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 		}

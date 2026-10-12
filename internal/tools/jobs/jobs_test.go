@@ -371,8 +371,143 @@ func TestJobGet_Success(t *testing.T) {
 	if out.Name != "build" {
 		t.Errorf("out.Name = %q, want %q", out.Name, "build")
 	}
-	if out.Duration != 45.5 {
-		t.Errorf("out.Duration = %f, want 45.5", out.Duration)
+	if out.Duration == nil || *out.Duration != 45.5 {
+		t.Errorf("out.Duration = %v, want 45.5", out.Duration)
+	}
+}
+
+// jobKeys marshals v and returns its top-level object, for a test about which
+// keys a job is published with and what each carries.
+func jobKeys(t *testing.T, v any) map[string]any {
+	t.Helper()
+	data, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var keys map[string]any
+	if err = json.Unmarshal(data, &keys); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	return keys
+}
+
+// neverRanJob is a manual job that never started, which GitLab answers with
+// a null duration, queued duration and coverage.
+const neverRanJob = `{"id":100,"name":"deploy","stage":"deploy","status":"manual","duration":null,"queued_duration":null,"coverage":null}`
+
+// measuredZeroJob is a job GitLab measured at zero: a real 0 for each, which
+// must survive as a 0 rather than vanish with the nulls.
+const measuredZeroJob = `{"id":100,"name":"deploy","stage":"deploy","status":"success","duration":0,"queued_duration":0,"coverage":0}`
+
+// assertJobMeasures holds a job's published measures to what GitLab sent:
+// absent for a null, present as the number for a measured value.
+func assertJobMeasures(t *testing.T, label string, keys map[string]any, measured bool) {
+	t.Helper()
+	for _, key := range []string{"duration", "queued_duration", "coverage"} {
+		got, present := keys[key]
+		if !measured && present {
+			t.Errorf("%s: %s = %v, want it left out for a job that never ran", label, key, got)
+		}
+		if measured && (!present || got != float64(0)) {
+			t.Errorf("%s: %s = %v (present %v), want the measured 0", label, key, got, present)
+		}
+	}
+}
+
+// TestJobHandlers_Measures_AreWhatGitLabMeasured verifies that every handler
+// presenting a job, through the raw decode or through client-go, publishes a
+// null duration, queued duration or coverage as absent and a measured zero as
+// zero. client-go decodes all three as float64, so a manual job that never
+// started read as one that ran for 0.0s, and a real 0% coverage vanished with
+// omitempty.
+func TestJobHandlers_Measures_AreWhatGitLabMeasured(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		body     string
+		measured bool
+	}{{"never ran", neverRanJob, false}, {"measured at zero", measuredZeroJob, true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/jobs") {
+					testutil.RespondJSON(w, http.StatusOK, "["+tc.body+"]")
+					return
+				}
+				testutil.RespondJSON(w, http.StatusOK, tc.body)
+			}))
+			ctx := context.Background()
+			got, err := Get(ctx, client, GetInput{ProjectID: "42", JobID: 100})
+			if err != nil {
+				t.Fatalf("Get() error: %v", err)
+			}
+			assertJobMeasures(t, "get", jobKeys(t, got), tc.measured)
+			list, err := List(ctx, client, ListInput{ProjectID: "42", PipelineID: 10})
+			if err != nil || len(list.Jobs) != 1 {
+				t.Fatalf("List() = %+v, %v", list, err)
+			}
+			assertJobMeasures(t, "list", jobKeys(t, list.Jobs[0]), tc.measured)
+			cancelled, err := Cancel(ctx, client, CancelInput{ProjectID: "42", JobID: 100})
+			if err != nil {
+				t.Fatalf("Cancel() error: %v", err)
+			}
+			assertJobMeasures(t, "cancel", jobKeys(t, cancelled), tc.measured)
+			for name, call := range map[string]func() (Output, error){
+				"retry": func() (Output, error) { return Retry(ctx, client, ActionInput{ProjectID: "42", JobID: 100}) },
+				"erase": func() (Output, error) { return Erase(ctx, client, ActionInput{ProjectID: "42", JobID: 100}) },
+				"keep":  func() (Output, error) { return KeepArtifacts(ctx, client, ActionInput{ProjectID: "42", JobID: 100}) },
+				"play":  func() (Output, error) { return Play(ctx, client, PlayInput{ProjectID: "42", JobID: 100}) },
+			} {
+				out, callErr := call()
+				if callErr != nil {
+					t.Fatalf("%s error: %v", name, callErr)
+				}
+				assertJobMeasures(t, name, jobKeys(t, out), tc.measured)
+			}
+		})
+	}
+}
+
+// TestJobMarkdown_UnmeasuredDuration_IsADash verifies the list and the card
+// do not print a duration GitLab did not measure: the list wrote "0.0s" in
+// the Duration column for a job that never started.
+func TestJobMarkdown_UnmeasuredDuration_IsADash(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, "["+neverRanJob+"]")
+	}))
+	list, err := List(context.Background(), client, ListInput{ProjectID: "42", PipelineID: 10})
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	md := FormatListMarkdown(list)
+	if strings.Contains(md, "0.0s") || !strings.Contains(md, "| - |") {
+		t.Errorf("the list states a duration for a job that never ran:\n%s", md)
+	}
+}
+
+// TestListBridges_Measures_AreWhatGitLabMeasured verifies the same of a
+// bridge job, whose durations client-go decodes as float64 too.
+func TestListBridges_Measures_AreWhatGitLabMeasured(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":5,"name":"trigger","stage":"deploy","status":"manual","duration":null,"queued_duration":null,"coverage":null}]`)
+	}))
+	out, err := ListBridges(context.Background(), client, BridgeListInput{ProjectID: "42", PipelineID: 10})
+	if err != nil || len(out.Bridges) != 1 {
+		t.Fatalf("ListBridges() = %+v, %v", out, err)
+	}
+	assertJobMeasures(t, "bridge", jobKeys(t, out.Bridges[0]), false)
+	if md := FormatBridgeListMarkdown(out); strings.Contains(md, "0.0s") {
+		t.Errorf("the bridge list states a duration for a bridge that never ran:\n%s", md)
+	}
+}
+
+// TestCapturedJob_AnAnswerTheReaderCannotHold_IsReported verifies the
+// converter the job writes share reports a captured answer it cannot read
+// rather than publishing the job without its measures. It is not reachable
+// through the transport, since the SDK decodes the same bytes into fields of
+// the same kinds, so the converter is driven directly.
+func TestCapturedJob_AnAnswerTheReaderCannotHold_IsReported(t *testing.T) {
+	_, untouched := gitlabclient.WithResponseCapture(t.Context())
+	if _, err := capturedJob(&gl.Job{ID: 1}, untouched); err == nil || !strings.Contains(err.Error(), "jobMeasures") {
+		t.Errorf("capturedJob() with no captured response = %v, want an error naming the operation", err)
 	}
 }
 
@@ -460,14 +595,14 @@ func jobDistinctOutput() Output {
 	return Output{
 		ID: 7001, Name: "compile", Stage: "assemble", Status: "failed", Ref: "feature/x",
 		Tag: true, AllowFailure: false,
-		Duration: 12.5, QueuedDuration: 3.25,
+		Duration: new(12.5), QueuedDuration: new(3.25),
 		FailureReason:     "script_failure",
 		WebURL:            "https://gitlab.example.com/g/p/-/jobs/7001",
 		CreatedAt:         "2026-03-01T10:00:00Z",
 		StartedAt:         "2026-03-01T10:01:00Z",
 		FinishedAt:        "2026-03-01T10:02:00Z",
 		ArtifactsExpireAt: "2026-04-01T00:00:00Z",
-		Coverage:          81.5,
+		Coverage:          new(81.5),
 		TagList:           []string{"docker", "linux"},
 		ErasedAt:          "2026-03-05T09:00:00Z",
 		Archived:          true,
@@ -1027,7 +1162,7 @@ func TestListBridges_MapsEveryDocumentedField(t *testing.T) {
 	want := BridgeOutput{
 		ID: 8002, Name: "trigger-child", Stage: "fan-out", Status: "success", Ref: "topic",
 		Tag: false, AllowFailure: true,
-		Duration: 4.5, QueuedDuration: 1.25, Coverage: 55.5,
+		Duration: new(4.5), QueuedDuration: new(1.25), Coverage: new(55.5),
 		WebURL:     "https://gitlab.example.com/g/p/-/jobs/8002",
 		CreatedAt:  "2026-03-02T10:00:00Z",
 		StartedAt:  "2026-03-02T10:01:00Z",
@@ -2644,10 +2779,10 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		Ref:            "main",
 		Commit:         &CommitObject{ID: "abcdef1234567890"},
 		AllowFailure:   true,
-		Duration:       45.5,
-		QueuedDuration: 2.1,
+		Duration:       new(45.5),
+		QueuedDuration: new(2.1),
 		FailureReason:  "script_failure",
-		Coverage:       85.5,
+		Coverage:       new(85.5),
 		User:           &UserObject{Username: "testuser"},
 		CreatedAt:      "2026-03-01T10:00:00Z",
 		WebURL:         "https://gitlab.example.com/-/jobs/100",
@@ -2803,8 +2938,8 @@ func TestFormatListMarkdown_WithJobs(t *testing.T) {
 			// A name that is not its stage in both rows: with the two equal,
 			// the Name and Stage columns could trade places and the table
 			// still read correctly.
-			{ID: 100, Name: "compile", Stage: "build", Status: "success", Duration: 45.5},
-			{ID: 101, Name: "unit", Stage: "test", Status: "failed", Duration: 12.3},
+			{ID: 100, Name: "compile", Stage: "build", Status: "success", Duration: new(45.5)},
+			{ID: 101, Name: "unit", Stage: "test", Status: "failed", Duration: new(12.3)},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -2845,7 +2980,7 @@ func TestFormatListMarkdown_KeysetPageLinksAndMarksArchived(t *testing.T) {
 	out := ListOutput{
 		Jobs: []Output{
 			{
-				ID: 200, Name: "ship", Stage: "deploy", Status: "success", Duration: 10.0,
+				ID: 200, Name: "ship", Stage: "deploy", Status: "success", Duration: new(10.0),
 				Archived: true,
 				WebURL:   "https://gitlab.example.com/-/jobs/200",
 			},
@@ -3099,8 +3234,8 @@ func TestFormatTraceMarkdown_Empty(t *testing.T) {
 func TestFormatBridgeListMarkdown_WithData(t *testing.T) {
 	out := BridgeListOutput{
 		Bridges: []BridgeOutput{
-			{ID: 200, Name: "trigger-downstream", Stage: "deploy", Status: "success", Duration: 10.0, DownstreamPipeline: &PipelineInfoObject{ID: 50}},
-			{ID: 201, Name: "trigger-other", Stage: "deploy", Status: "failed", Duration: 5.0},
+			{ID: 200, Name: "trigger-downstream", Stage: "deploy", Status: "success", Duration: new(10.0), DownstreamPipeline: &PipelineInfoObject{ID: 50}},
+			{ID: 201, Name: "trigger-other", Stage: "deploy", Status: "failed", Duration: new(5.0)},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -3125,7 +3260,7 @@ func TestFormatBridgeListMarkdown_WithData(t *testing.T) {
 func TestFormatBridgeListMarkdown_LinksTheDownstreamPipeline(t *testing.T) {
 	out := BridgeListOutput{
 		Bridges: []BridgeOutput{{
-			ID: 300, Name: "trigger", Stage: "deploy", Status: "success", Duration: 1.0,
+			ID: 300, Name: "trigger", Stage: "deploy", Status: "success", Duration: new(1.0),
 			WebURL: "https://gitlab.example.com/-/jobs/300",
 			DownstreamPipeline: &PipelineInfoObject{
 				ID: 77, WebURL: "https://gitlab.example.com/downstream/-/pipelines/77",

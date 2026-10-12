@@ -101,6 +101,44 @@ func TestListGroupBoards_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestGetGroupBoard_Weight_IsWhatGitLabScopedItTo verifies a board's weight
+// scope keeps its two meanings: a board with no weight scope (GitLab sends
+// null) publishes none, and a board scoped to weight 0 publishes 0 and says
+// so on its card. An int64 with omitempty dropped the second as if it were
+// the first.
+func TestGetGroupBoard_Weight_IsWhatGitLabScopedItTo(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		weight  string
+		present bool
+	}{{"no weight scope", "null", false}, {"scoped to weight 0", "0", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"Dev","weight":`+tc.weight+`,"lists":[]}`)
+			}))
+			out, err := GetGroupBoard(context.Background(), client, GetGroupBoardInput{GroupID: "42", BoardID: 1})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			data, err := json.Marshal(out)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			var keys map[string]any
+			if err = json.Unmarshal(data, &keys); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			got, present := keys["weight"]
+			if present != tc.present || (tc.present && got != float64(0)) {
+				t.Errorf("weight = %v (present %v), want present %v", got, present, tc.present)
+			}
+			if md := FormatGroupBoardMarkdown(out); strings.Contains(md, "Weight") != tc.present {
+				t.Errorf("the card's weight row does not match the scope:\n%s", md)
+			}
+		})
+	}
+}
+
 // TestGetGroupBoard_Success verifies that GetGroupBoard succeeds when the GitLab API returns a valid response.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -547,7 +585,7 @@ func TestFormatGroupBoardMarkdown_AllFields(t *testing.T) {
 		Group:           &GroupRefOutput{ID: 42, Name: "mygroup", WebURL: "https://gitlab.example.com/groups/mygroup"},
 		Milestone:       &MilestoneOutput{ID: 5, Title: "v1.0", WebURL: "https://gitlab.example.com/groups/mygroup/-/milestones/1"},
 		Assignee:        &BasicUserOutput{ID: 3, Username: "alice", WebURL: "https://gitlab.example.com/alice"},
-		Weight:          4,
+		Weight:          new(int64(4)),
 		Labels:          []*LabelDetailsOutput{{ID: 1, Name: "bug"}, nil, {ID: 3}, {ID: 2, Name: "feature"}},
 		HideBacklogList: true,
 		HideClosedList:  false,
@@ -1424,8 +1462,8 @@ func TestGetGroupBoard_SurfacesDocumentedPremiumFields(t *testing.T) {
 	if !out.HideBacklogList || !out.HideClosedList {
 		t.Errorf("hide flags = (%v, %v), want (true, true)", out.HideBacklogList, out.HideClosedList)
 	}
-	if out.Weight != 4 {
-		t.Errorf("weight = %d, want 4", out.Weight)
+	if out.Weight == nil || *out.Weight != 4 {
+		t.Errorf("weight = %v, want 4", out.Weight)
 	}
 	if out.Assignee == nil || out.Assignee.Username != "root" || out.Assignee.State != "active" {
 		t.Errorf("assignee = %+v, want username root state active", out.Assignee)
@@ -1454,8 +1492,8 @@ func TestGetGroupBoard_VersionTolerantWhenPremiumFieldsAbsent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("tool must not fail when documented premium fields are absent: %v", err)
 	}
-	if out.HideBacklogList || out.HideClosedList || out.Weight != 0 || out.Assignee != nil {
-		t.Errorf("absent fields should be zero/nil, got hide=(%v,%v) weight=%d assignee=%+v",
+	if out.HideBacklogList || out.HideClosedList || out.Weight != nil || out.Assignee != nil {
+		t.Errorf("absent fields should be zero/nil, got hide=(%v,%v) weight=%v assignee=%+v",
 			out.HideBacklogList, out.HideClosedList, out.Weight, out.Assignee)
 	}
 
@@ -1484,7 +1522,7 @@ func TestListGroupBoards_SurfacesDocumentedPremiumFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if len(out.Boards) != 1 || out.Boards[0].Weight != 4 || !out.Boards[0].HideBacklogList {
+	if len(out.Boards) != 1 || out.Boards[0].Weight == nil || *out.Boards[0].Weight != 4 || !out.Boards[0].HideBacklogList {
 		t.Errorf("board[0] = %+v, want weight 4 and hide_backlog_list true", out.Boards)
 	}
 }
@@ -1558,7 +1596,7 @@ func wholeGroupBoardOutput() GroupBoardOutput {
 			ID: 11, Username: "ada", Name: "Ada", State: "active",
 			AvatarURL: "https://gitlab.example.com/avatar/ada", WebURL: "https://gitlab.example.com/ada",
 		},
-		Weight:          3,
+		Weight:          new(int64(3)),
 		Labels:          []*LabelDetailsOutput{{ID: 21, Name: "bug", Color: "#d9534f", Description: "a defect"}},
 		HideBacklogList: true,
 		HideClosedList:  false,

@@ -2,6 +2,7 @@ package resourceevents
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -703,7 +704,7 @@ type WeightEventOutput struct {
 	ID        int64            `json:"id"`
 	CreatedAt string           `json:"created_at"`
 	IssueID   int64            `json:"issue_id"`
-	Weight    int64            `json:"weight"`
+	Weight    *int64           `json:"weight"`
 	User      *EventUserOutput `json:"user,omitempty"`
 }
 
@@ -769,12 +770,13 @@ func ListIssueWeightEvents(ctx context.Context, client *gitlabclient.Client, inp
 	}
 	opts := &gl.ListWeightEventsOptions{}
 	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	events, resp, err := client.GL().ResourceWeightEvents.ListIssueWeightEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListWeightEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_weight_event_list", err, http.StatusNotFound,
 			"weight events require GitLab Premium/Ultimate. Verify the project tier and that issue_iid exists")
 	}
-	return toWeightEventsOutput(events, resp), nil
+	return toWeightEventsOutput("gitlab_issue_weight_event_list", events, resp, captured)
 }
 
 // ---------------------------------------------------------------------------
@@ -812,29 +814,58 @@ func toIterationEventsOutput(events []*gl.IterationEvent, resp *gl.Response) Lis
 // Converters — Weight Events
 // ---------------------------------------------------------------------------.
 
-func toWeightEventOutput(e *gl.WeightEvent) WeightEventOutput {
+// capturedWeight is the weight a weight event carries, as GitLab sends it:
+// null for an event that took the issue's weight away, which client-go's
+// WeightEvent decodes as int64 and so reads as a weight of 0. Read from the
+// captured response (ADR-0021); recorded as register row 116 of
+// docs/development/upstream-bugs.md.
+type capturedWeight struct {
+	Weight *int64 `json:"weight"`
+}
+
+// capturedWeights reads each event's weight off the captured list answer, in
+// order, the count held to what the SDK decoded.
+func capturedWeights(captured *gitlabclient.ResponseCapture, decoded int) ([]capturedWeight, error) {
+	var weights []capturedWeight
+	if err := captured.Decode(&weights); err != nil {
+		return nil, err
+	}
+	if len(weights) != decoded {
+		return nil, fmt.Errorf("the captured answer holds %d weight events and the SDK decoded %d", len(weights), decoded)
+	}
+	return weights, nil
+}
+
+func toWeightEventOutput(e *gl.WeightEvent, weight capturedWeight) WeightEventOutput {
 	if e == nil {
 		return WeightEventOutput{}
 	}
 	out := WeightEventOutput{
 		ID:      e.ID,
 		IssueID: e.IssueID,
-		Weight:  e.Weight,
+		Weight:  weight.Weight,
 		User:    eventUserOutput(e.User),
 	}
 	out.CreatedAt = toolutil.RFC3339Ptr(e.CreatedAt)
 	return out
 }
 
-func toWeightEventsOutput(events []*gl.WeightEvent, resp *gl.Response) ListWeightEventsOutput {
+// toWeightEventsOutput converts a page of weight events, each with the weight
+// its captured answer carried, or reports under op an answer the reader
+// cannot hold.
+func toWeightEventsOutput(op string, events []*gl.WeightEvent, resp *gl.Response, captured *gitlabclient.ResponseCapture) (ListWeightEventsOutput, error) {
+	weights, err := capturedWeights(captured, len(events))
+	if err != nil {
+		return ListWeightEventsOutput{}, toolutil.WrapErr(op, err)
+	}
 	out := ListWeightEventsOutput{
 		Events:     make([]WeightEventOutput, 0, len(events)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
-	for _, e := range events {
-		out.Events = append(out.Events, toWeightEventOutput(e))
+	for i, e := range events {
+		out.Events = append(out.Events, toWeightEventOutput(e, weights[i]))
 	}
-	return out
+	return out, nil
 }
 
 // ---------------------------------------------------------------------------

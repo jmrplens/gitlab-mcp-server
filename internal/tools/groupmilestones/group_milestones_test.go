@@ -519,11 +519,51 @@ func TestGetBurndownChartEvents_Success(t *testing.T) {
 	if len(out.Events) != 1 {
 		t.Fatalf("len(Events) = %d, want 1", len(out.Events))
 	}
-	if out.Events[0].Weight != 3 {
-		t.Errorf("Weight = %d, want 3", out.Events[0].Weight)
+	if out.Events[0].Weight == nil || *out.Events[0].Weight != 3 {
+		t.Errorf("Weight = %v, want 3", out.Events[0].Weight)
 	}
 	if out.Events[0].Action != testActionAdd {
 		t.Errorf("Action = %q, want %q", out.Events[0].Action, testActionAdd)
+	}
+}
+
+// TestGetBurndownChartEvents_Weight_IsWhatGitLabSent verifies an event whose
+// issue carries no weight (GitLab sends null) is published without one and
+// drawn as a dash, while an event of weight 0 keeps its 0 in both channels.
+// The converter turned the SDK's nil pointer into 0 and the table drew 0 as
+// a dash, so the two were the same in each channel.
+func TestGetBurndownChartEvents_Weight_IsWhatGitLabSent(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("iids[]") != "" {
+			testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{"created_at":"2026-01-05T00:00:00Z","weight":null,"action":"created"},
+			{"created_at":"2026-01-06T00:00:00Z","weight":0,"action":"weight"}
+		]`)
+	}))
+	out, err := GetBurndownChartEvents(context.Background(), client, GetBurndownChartEventsInput{GroupID: testGroupID, MilestoneIID: 1})
+	if err != nil || len(out.Events) != 2 {
+		t.Fatalf("GetBurndownChartEvents() = %+v, %v", out, err)
+	}
+	data, err := json.Marshal(out.Events)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var events []map[string]any
+	if err = json.Unmarshal(data, &events); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got, present := events[0]["weight"]; present {
+		t.Errorf("an unweighted event publishes weight %v", got)
+	}
+	if got := events[1]["weight"]; got != float64(0) {
+		t.Errorf("weight 0 = %v, want 0", got)
+	}
+	md := FormatBurndownChartEventsMarkdownString(out)
+	if !strings.Contains(md, "| - | created |") || !strings.Contains(md, "| 0 | weight |") {
+		t.Errorf("the table does not tell an unweighted event from weight 0:\n%s", md)
 	}
 }
 
@@ -606,7 +646,7 @@ func TestFormatMergeRequestsMarkdown(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBurndownChartEventsMarkdown(t *testing.T) {
 	out := BurndownChartEventsOutput{
-		Events:     []BurndownChartEventItem{{CreatedAt: "2026-01-05T00:00:00Z", Weight: 3, Action: testActionAdd}},
+		Events:     []BurndownChartEventItem{{CreatedAt: "2026-01-05T00:00:00Z", Weight: new(int64(3)), Action: testActionAdd}},
 		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 20, TotalItems: 1, TotalPages: 1},
 	}
 	result := FormatBurndownChartEventsMarkdown(out)
@@ -1307,8 +1347,8 @@ func TestGetBurndownChartEvents_WithPagination(t *testing.T) {
 	if out.Events[0].Action != "add" {
 		t.Errorf("Action = %q, want %q", out.Events[0].Action, "add")
 	}
-	if out.Events[1].Weight != 2 {
-		t.Errorf("Weight = %d, want 2", out.Events[1].Weight)
+	if out.Events[1].Weight == nil || *out.Events[1].Weight != 2 {
+		t.Errorf("Weight = %v, want 2", out.Events[1].Weight)
 	}
 }
 
@@ -1524,7 +1564,7 @@ func TestFormatMergeRequestsMarkdown_Empty(t *testing.T) {
 func TestFormatBurndownChartEventsMarkdown_WithData(t *testing.T) {
 	out := BurndownChartEventsOutput{
 		Events: []BurndownChartEventItem{
-			{CreatedAt: "2026-01-05T00:00:00Z", Weight: 3, Action: "add"},
+			{CreatedAt: "2026-01-05T00:00:00Z", Weight: new(int64(3)), Action: "add"},
 			{CreatedAt: "2026-01-06T00:00:00Z", Action: "remove"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
@@ -2354,6 +2394,15 @@ func TestGetMergeRequests_OptionalFields_ArePublishedOrLeftEmpty(t *testing.T) {
 	}
 }
 
+// sameWeight reports whether two event weights are the same: both absent, or
+// both present and equal.
+func sameWeight(a, b *int64) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
 // TestGetBurndownChartEvents_NullableFields_ArePublishedOrLeftZero asserts that
 // a burndown event's created_at, weight and action are copied when GitLab sends
 // them and left at zero when it does not. All three are pointers in the SDK
@@ -2369,7 +2418,7 @@ func TestGetBurndownChartEvents_NullableFields_ArePublishedOrLeftZero(t *testing
 		{
 			name: "sent",
 			body: `[{"created_at":"2026-01-05T00:00:00Z","weight":3,"action":"add"}]`,
-			want: BurndownChartEventItem{CreatedAt: "2026-01-05T00:00:00Z", Weight: 3, Action: testActionAdd},
+			want: BurndownChartEventItem{CreatedAt: "2026-01-05T00:00:00Z", Weight: new(int64(3)), Action: testActionAdd},
 		},
 		{
 			name: "all three null",
@@ -2387,8 +2436,9 @@ func TestGetBurndownChartEvents_NullableFields_ArePublishedOrLeftZero(t *testing
 			if len(out.Events) != 1 {
 				t.Fatalf("len(Events) = %d, want 1", len(out.Events))
 			}
-			if out.Events[0] != tc.want {
-				t.Errorf("event = %+v, want %+v", out.Events[0], tc.want)
+			if got := out.Events[0]; got.CreatedAt != tc.want.CreatedAt || got.Action != tc.want.Action ||
+				!sameWeight(got.Weight, tc.want.Weight) {
+				t.Errorf("event = %+v (weight %v), want %+v (weight %v)", got, got.Weight, tc.want, tc.want.Weight)
 			}
 		})
 	}

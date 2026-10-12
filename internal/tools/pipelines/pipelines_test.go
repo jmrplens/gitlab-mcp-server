@@ -14,6 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -74,6 +75,94 @@ func TestPipelineGet_ReadsArchived(t *testing.T) {
 	}
 	if !out.Archived {
 		t.Errorf("Get() = %+v, want archived read off the captured answer", out)
+	}
+}
+
+// publishedKeys marshals v and returns its top-level object, for a test about
+// which keys a pipeline is published with and what each carries.
+func publishedKeys(t *testing.T, v any) map[string]any {
+	t.Helper()
+	data, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var keys map[string]any
+	if err = json.Unmarshal(data, &keys); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	return keys
+}
+
+// TestPipelineGet_Durations_AreWhatGitLabMeasured verifies a pipeline that
+// never ran (skipped, or still created) is published with no duration and no
+// queued duration, where it used to read as one that ran for zero seconds,
+// and that a pipeline GitLab measured at zero keeps its zero. client-go
+// decodes both durations as int64, which reads null as 0, so each is read
+// from the captured answer instead.
+func TestPipelineGet_Durations_AreWhatGitLabMeasured(t *testing.T) {
+	tests := []struct {
+		name      string
+		durations string
+		want      any
+		card      string
+	}{
+		{name: "never ran", durations: `"duration":null,"queued_duration":null`, want: nil, card: ""},
+		{name: "measured at zero", durations: `"duration":0,"queued_duration":0`, want: float64(0), card: "0s"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, `{"id":10,"iid":10,"project_id":42,"status":"skipped","ref":"main","sha":"abc",`+tt.durations+`}`)
+			}))
+			out, err := Get(context.Background(), client, GetInput{ProjectID: "42", PipelineID: 10})
+			if err != nil {
+				t.Fatalf("Get() unexpected error: %v", err)
+			}
+			keys := publishedKeys(t, out)
+			for _, key := range []string{"duration", "queued_duration"} {
+				got, present := keys[key]
+				if tt.want == nil && present {
+					t.Errorf("%s = %v, want it left out for a pipeline that never ran", key, got)
+				}
+				if tt.want != nil && got != tt.want {
+					t.Errorf("%s = %v (present %v), want %v", key, got, present, tt.want)
+				}
+			}
+			md := FormatDetailMarkdown(out)
+			if tt.card == "" && strings.Contains(md, "Duration") {
+				t.Errorf("the card of a pipeline that never ran states a duration:\n%s", md)
+			}
+			if tt.card != "" && !strings.Contains(md, tt.card) {
+				t.Errorf("the card lacks the measured %q:\n%s", tt.card, md)
+			}
+		})
+	}
+}
+
+// TestCapturedOutput_Durations_AreWhatGitLabMeasured verifies the same of the
+// pipeline a merge request route creates, whose durations are read off the
+// captured answer beside client-go's PipelineInfo, which models neither.
+func TestCapturedOutput_Durations_AreWhatGitLabMeasured(t *testing.T) {
+	never := gitlabclient.CapturedBody([]byte(`{"duration":null,"queued_duration":null}`))
+	out, err := CapturedOutput("op", &gl.PipelineInfo{ID: 1}, never)
+	if err != nil {
+		t.Fatalf("CapturedOutput() unexpected error: %v", err)
+	}
+	if keys := publishedKeys(t, out); keys["duration"] != nil || keys["queued_duration"] != nil {
+		t.Errorf("a pipeline that never ran publishes durations: %v", keys)
+	}
+	zero := gitlabclient.CapturedBody([]byte(`{"duration":0,"queued_duration":0}`))
+	out, err = CapturedOutput("op", &gl.PipelineInfo{ID: 1}, zero)
+	if err != nil {
+		t.Fatalf("CapturedOutput() unexpected error: %v", err)
+	}
+	keys := publishedKeys(t, out)
+	for _, key := range []string{"duration", "queued_duration"} {
+		t.Run(key, func(t *testing.T) {
+			if got, present := keys[key]; !present || got != float64(0) {
+				t.Errorf("%s = %v (present %v), want the measured 0", key, got, present)
+			}
+		})
 	}
 }
 
@@ -297,8 +386,8 @@ func TestPipelineGet_Success(t *testing.T) {
 	if out.Status != statusSuccess {
 		t.Errorf(fmtOutStatusWant, out.Status, statusSuccess)
 	}
-	if out.Duration != 120 {
-		t.Errorf("out.Duration = %d, want 120", out.Duration)
+	if out.Duration == nil || *out.Duration != 120 {
+		t.Errorf("out.Duration = %v, want 120", out.Duration)
 	}
 	if out.Coverage != "85.5" {
 		t.Errorf("out.Coverage = %q, want %q", out.Coverage, "85.5")
@@ -949,8 +1038,8 @@ func TestDetailToOutput_AllOptionalFields(t *testing.T) {
 	if out.Coverage != "92.5" {
 		t.Errorf("Coverage = %q, want %q", out.Coverage, "92.5")
 	}
-	if out.QueuedDuration != 15 {
-		t.Errorf("QueuedDuration = %d, want 15", out.QueuedDuration)
+	if out.QueuedDuration == nil || *out.QueuedDuration != 15 {
+		t.Errorf("QueuedDuration = %v, want 15", out.QueuedDuration)
 	}
 	if out.DetailedStatus == nil {
 		t.Fatal("DetailedStatus should not be nil")
@@ -1482,8 +1571,8 @@ func TestFormatDetailMarkdown_Full(t *testing.T) {
 		Name:           "Full Pipeline",
 		Tag:            true,
 		YamlErrors:     "some error",
-		Duration:       300,
-		QueuedDuration: 15,
+		Duration:       new(int64(300)),
+		QueuedDuration: new(int64(15)),
 		Coverage:       "92.5",
 		DetailedStatus: &StatusOutput{
 			Icon: "status_success", Text: "passed", Label: "passed",

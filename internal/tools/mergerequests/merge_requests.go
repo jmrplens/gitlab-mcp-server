@@ -450,7 +450,7 @@ func ToOutput(m *gl.MergeRequest, extra toolutil.MergeRequestExtra) Output {
 		}
 	}
 	out.Pipeline = toolutil.NewPipelineInfoOutput(m.Pipeline)
-	out.HeadPipeline = toolutil.NewPipelineOutput(m.HeadPipeline)
+	out.HeadPipeline = toolutil.NewPipelineOutput(m.HeadPipeline, extra.HeadPipeline)
 	out.LatestBuildStartedAt = toolutil.FormatTimePtr(m.LatestBuildStartedAt)
 	out.LatestBuildFinishedAt = toolutil.FormatTimePtr(m.LatestBuildFinishedAt)
 	out.FirstDeployedToProductionAt = toolutil.FormatTimePtr(m.FirstDeployedToProductionAt)

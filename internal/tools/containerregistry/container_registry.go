@@ -54,10 +54,20 @@ type TagOutput struct {
 	TotalSize     int64  `json:"total_size"`
 }
 
+// TagListItem is one tag of a list, the three keys GitLab's tag list sends
+// (API::Entities::ContainerRegistry::Tag). The detail route alone presents
+// TagDetails, with the revision, digest, creation time and size, so a list
+// row published the detail type's total_size as 0 for every tag.
+type TagListItem struct {
+	Name     string `json:"name"`
+	Path     string `json:"path"`
+	Location string `json:"location"`
+}
+
 // TagListOutput represents a paginated list of registry tags.
 type TagListOutput struct {
 	toolutil.HintableOutput
-	Tags       []TagOutput               `json:"tags"`
+	Tags       []TagListItem             `json:"tags"`
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
@@ -315,7 +325,7 @@ func ListTags(ctx context.Context, client *gitlabclient.Client, input ListTagsIn
 	}
 	out := TagListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, t := range tags {
-		out.Tags = append(out.Tags, convertTag(t))
+		out.Tags = append(out.Tags, TagListItem{Name: t.Name, Path: t.Path, Location: t.Location})
 	}
 	return out, nil
 }

@@ -136,8 +136,17 @@ type Output struct {
 	UpdateSecurityScanProfiles  *bool `json:"update_security_scan_profiles,omitempty"`
 }
 
-// ListOutput holds the list response.
+// ListOutput holds the list response of a group's roles.
 type ListOutput struct {
+	toolutil.HintableOutput
+	Roles []Output `json:"roles"`
+}
+
+// InstanceListOutput holds the list response of the instance's roles. It is a
+// type of its own so its Markdown can suggest the create its scope serves:
+// instance-level roles exist only on self-managed, where a group-level create
+// is refused as deprecated.
+type InstanceListOutput struct {
 	toolutil.HintableOutput
 	Roles []Output `json:"roles"`
 }
@@ -317,17 +326,18 @@ func applyManageReadRemovePermissionOpts(opts *gl.CreateMemberRoleOptions, p Per
 // instance level via the GitLab Member Roles API
 // (GET /member_roles). Requires administrator access and is only
 // available on self-managed Ultimate installations.
-func ListInstance(ctx context.Context, client *gitlabclient.Client, _ ListInstanceInput) (ListOutput, error) {
+func ListInstance(ctx context.Context, client *gitlabclient.Client, _ ListInstanceInput) (InstanceListOutput, error) {
 	if err := ctx.Err(); err != nil {
-		return ListOutput{}, err
+		return InstanceListOutput{}, err
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	roles, _, err := client.GL().MemberRolesService.ListInstanceMemberRoles(gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list instance member roles", err, http.StatusForbidden,
+		return InstanceListOutput{}, toolutil.WrapErrWithStatusHint("list instance member roles", err, http.StatusForbidden,
 			"requires administrator access; self-managed Ultimate only. Instance-level custom roles are not available on GitLab.com")
 	}
-	return capturedRoleList("list instance member roles", roles, captured)
+	out, err := capturedRoleList("list instance member roles", roles, captured)
+	return InstanceListOutput{Roles: out.Roles}, err
 }
 
 // capturedRoleList assembles a role list with the permissions the capture read

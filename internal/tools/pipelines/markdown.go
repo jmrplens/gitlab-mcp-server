@@ -141,11 +141,13 @@ func writePipelineDetail(c *toolutil.Card, p DetailOutput, headSHA string) {
 	c.Field("Name", p.Name)
 	c.Field("Detailed Status", detailedStatusLabel(p))
 	c.Flag(toolutil.EmojiArchived, "Archived", p.Archived)
-	if p.Duration > 0 {
-		c.Field("Duration", fmt.Sprintf("%ds", p.Duration))
+	// A pipeline that has not run has no duration and no queue time: GitLab
+	// sends null for both, and the rows are left out rather than read as 0s.
+	if p.Duration != nil {
+		c.Field("Duration", fmt.Sprintf("%ds", *p.Duration))
 	}
-	if p.QueuedDuration > 0 {
-		c.Field("Queued", fmt.Sprintf("%ds", p.QueuedDuration))
+	if p.QueuedDuration != nil {
+		c.Field("Queued", fmt.Sprintf("%ds", *p.QueuedDuration))
 	}
 	if p.Coverage != "" {
 		c.Field("Coverage", p.Coverage+"%")

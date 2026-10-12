@@ -77,6 +77,29 @@ func TestCapturedReaders_ReadWhatTheSDKDoesNotModel(t *testing.T) {
 	}
 }
 
+// TestCapturedMeasureReaders_KeepNullApartFromZero verifies the readers of a
+// pipeline's and a job's measures keep the null GitLab sends for something it
+// did not measure apart from a measured 0, which client-go's numbers cannot,
+// and report a capture nothing ran under.
+func TestCapturedMeasureReaders_KeepNullApartFromZero(t *testing.T) {
+	const body = `{"id":1,"duration":null,"queued_duration":0,"coverage":12.5}`
+	pipeline, err := CapturedPipeline(gitlabclient.CapturedBody([]byte(body)))
+	if err != nil || pipeline.Duration != nil || pipeline.QueuedDuration == nil || *pipeline.QueuedDuration != 0 {
+		t.Errorf("CapturedPipeline() = %+v, %v; want no duration and a queued duration of 0", pipeline.PipelineMeasures, err)
+	}
+	job, err := CapturedJob(gitlabclient.CapturedBody([]byte(body)))
+	if err != nil || job.Duration != nil || job.QueuedDuration == nil || *job.QueuedDuration != 0 {
+		t.Errorf("CapturedJob() = %+v, %v; want no duration and a queued duration of 0", job, err)
+	}
+	if job.Coverage == nil || *job.Coverage != 12.5 {
+		t.Errorf("CapturedJob() coverage = %v, want 12.5", job.Coverage)
+	}
+	_, untouched := gitlabclient.WithResponseCapture(t.Context())
+	if _, err = CapturedJob(untouched); !errors.Is(err, gitlabclient.ErrNoResponseCaptured) {
+		t.Errorf("CapturedJob() on a capture nothing ran under = %v, want ErrNoResponseCaptured", err)
+	}
+}
+
 // TestCapturedTokenReaders_ReadEachTokenEntity verifies the three token
 // readers: the fields every personal access token entity sends, the
 // impersonation token's own three, and the resource token's two, each read
@@ -157,6 +180,14 @@ func TestCapturedTokenListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 				return len(got), err
 			},
 			want: "holds 2 resource access tokens and the SDK decoded 1",
+		},
+		{
+			name: "jobs",
+			read: func(c *gitlabclient.ResponseCapture, n int) (int, error) {
+				got, err := CapturedJobs(c, n)
+				return len(got), err
+			},
+			want: "holds 2 jobs and the SDK decoded 1",
 		},
 	}
 	body := []byte(`[{"id":1,"granular":true},{"id":2}]`)

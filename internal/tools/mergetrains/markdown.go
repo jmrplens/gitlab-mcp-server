@@ -60,9 +60,13 @@ func pipelineCell(p *toolutil.PipelineOutput) string {
 }
 
 // durationCell renders a car's queue time in seconds, the unit GitLab counts
-// it in.
-func durationCell(seconds int64) string {
-	return strconv.FormatInt(seconds, 10) + "s"
+// it in, and a dash for a car whose train has not run, which GitLab measures
+// as nothing rather than as zero seconds.
+func durationCell(seconds *int64) string {
+	if seconds == nil {
+		return "-"
+	}
+	return strconv.FormatInt(*seconds, 10) + "s"
 }
 
 // FormatListMarkdown renders a page of merge train cars as a Markdown table: a
@@ -110,7 +114,9 @@ func FormatOutputMarkdown(out Output) string {
 	c.Markdown("Merge Request", mergeRequestCell(out.MergeRequest))
 	c.Markdown("User", toolutil.MdUserHandle(userName(out.User)))
 	c.Markdown("Pipeline", pipelineCell(out.Pipeline))
-	c.Field("Duration", durationCell(out.Duration))
+	if out.Duration != nil {
+		c.Field("Duration", durationCell(out.Duration))
+	}
 	c.Time("Created", out.CreatedAt)
 	c.Time("Updated", out.UpdatedAt)
 	c.Time("Merged", out.MergedAt)

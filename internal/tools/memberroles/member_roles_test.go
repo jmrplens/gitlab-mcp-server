@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -47,6 +49,45 @@ func TestListInstance_Success(t *testing.T) {
 	}
 }
 
+// TestListFormatters_SuggestOnlyTheCreateTheirScopeServes verifies each list
+// of roles ends on the one create action its own scope serves. Instance-level
+// roles exist only on self-managed, where a group-level create is refused as
+// deprecated, and group-level roles only on GitLab.com, where instance-level
+// roles are not available, so the one footer both lists shared offered each a
+// create the instance it ran on refuses.
+func TestListFormatters_SuggestOnlyTheCreateTheirScopeServes(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[`+memberRoleJSON+`]`)
+	}))
+	instance, err := ListInstance(context.Background(), client, ListInstanceInput{})
+	if err != nil {
+		t.Fatalf("ListInstance() error: %v", err)
+	}
+	group, err := ListGroup(context.Background(), client, ListGroupInput{GroupID: "9"})
+	if err != nil {
+		t.Fatalf("ListGroup() error: %v", err)
+	}
+	for _, tc := range []struct {
+		name           string
+		out            any
+		want, unwanted string
+	}{
+		{"instance", instance, "member_role.create_instance", "member_role.create_group"},
+		{"group", group, "member_role.create_group", "member_role.create_instance"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result := toolutil.MarkdownForResult(tc.out)
+			if result == nil || len(result.Content) == 0 {
+				t.Fatalf("no formatter answered the %s list", tc.name)
+			}
+			md := result.Content[0].(*mcp.TextContent).Text
+			if !strings.Contains(md, tc.want) || strings.Contains(md, tc.unwanted) {
+				t.Errorf("the %s list should suggest %s and not %s:\n%s", tc.name, tc.want, tc.unwanted, md)
+			}
+		})
+	}
+}
+
 // TestMemberRoleHandlers_PublishTheCapturedPermissions verifies that the
 // twenty-five permissions API::Entities::MemberRole sends and client-go's
 // MemberRole does not model reach the caller through each of the four routes
@@ -68,7 +109,7 @@ func TestMemberRoleHandlers_PublishTheCapturedPermissions(t *testing.T) {
 			name: "list instance", path: "/api/v4/member_roles", method: http.MethodGet, list: true,
 			call: func(ctx context.Context, c *gitlabclient.Client) (Output, error) {
 				out, err := ListInstance(ctx, c, ListInstanceInput{})
-				return firstRole(out), err
+				return firstRole(ListOutput{Roles: out.Roles}), err
 			},
 		},
 		{

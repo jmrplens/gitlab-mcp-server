@@ -5,6 +5,7 @@ package resourceevents
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"reflect"
 	"strings"
@@ -1345,6 +1346,68 @@ func TestGetIssueIterationEvent_MissingIssueIID(t *testing.T) {
 	}
 }
 
+// TestListIssueWeightEvents_RemovedWeight_IsNull verifies an event that took
+// an issue's weight away is published with the null GitLab sent, and an event
+// that set it to 0 with the 0. client-go decodes the weight as int64, so a
+// removal read as a weight of 0, a value with a meaning of its own.
+func TestListIssueWeightEvents_RemovedWeight_IsNull(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{"id":1,"issue_id":77,"weight":null,"created_at":"2026-10-01T10:00:00Z"},
+			{"id":2,"issue_id":77,"weight":0,"created_at":"2026-10-02T10:00:00Z"}
+		]`)
+	}))
+	out, err := ListIssueWeightEvents(context.Background(), client, ListIssueWeightEventsInput{ProjectID: "42", IssueIID: 1})
+	if err != nil || len(out.Events) != 2 {
+		t.Fatalf("ListIssueWeightEvents() = %+v, %v", out, err)
+	}
+	data, err := json.Marshal(out.Events)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var events []map[string]any
+	if err = json.Unmarshal(data, &events); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got, present := events[0]["weight"]; !present || got != nil {
+		t.Errorf("removed weight = %v (present %v), want null", got, present)
+	}
+	if got := events[1]["weight"]; got != float64(0) {
+		t.Errorf("weight set to 0 = %v, want 0", got)
+	}
+	md := FormatWeightEventsMarkdown(out)
+	if !strings.Contains(md, "| 1 | - |") || !strings.Contains(md, "| 2 | 0 |") {
+		t.Errorf("the table does not tell a removed weight from a weight of 0:\n%s", md)
+	}
+}
+
+// TestToWeightEventsOutput_AnAnswerTheReaderCannotHold_IsReported verifies the
+// converter reports, under the operation it names, a captured answer it
+// cannot pair with the events client-go decoded: a capture no response
+// reached, a body that is not a list, and a list whose length is not what the
+// SDK decoded. None is reachable through the transport, since the SDK decodes
+// the same bytes, so the converter is driven directly.
+func TestToWeightEventsOutput_AnAnswerTheReaderCannotHold_IsReported(t *testing.T) {
+	_, untouched := gitlabclient.WithResponseCapture(t.Context())
+	one := []*gl.WeightEvent{{ID: 1}}
+	for _, tc := range []struct {
+		name     string
+		captured *gitlabclient.ResponseCapture
+		want     string
+	}{
+		{"no response", untouched, "no response was captured"},
+		{"not a list", gitlabclient.CapturedBody([]byte(`{"id":1}`)), "decode the captured response"},
+		{"one short", gitlabclient.CapturedBody([]byte(`[]`)), "holds 0 weight events and the SDK decoded 1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := toWeightEventsOutput("gitlab_issue_weight_event_list", one, nil, tc.captured)
+			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "gitlab_issue_weight_event_list") {
+				t.Errorf("toWeightEventsOutput() error = %v, want one naming the operation and %q", err, tc.want)
+			}
+		})
+	}
+}
+
 // TestListIssueWeightEvents_MissingIssueIID verifies error when IssueIID is 0.
 func TestListIssueWeightEvents_MissingIssueIID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
@@ -1423,7 +1486,7 @@ func TestListIssueWeightEvents_Success(t *testing.T) {
 		t.Fatalf("got %d events, want 1", len(out.Events))
 	}
 	got := out.Events[0]
-	if got.ID != 7 || got.IssueID != 3 || got.Weight != 5 {
+	if got.ID != 7 || got.IssueID != 3 || got.Weight == nil || *got.Weight != 5 {
 		t.Errorf("event = %+v, want id 7, issue_id 3 and weight 5", got)
 	}
 	if got.CreatedAt != "2026-01-15T10:00:00Z" {
@@ -1518,7 +1581,7 @@ func TestToIterationEventOutput_Nil(t *testing.T) {
 // TestToWeightEventOutput_Nil verifies that a nil WeightEvent input
 // returns a zero-value WeightEventOutput without panicking.
 func TestToWeightEventOutput_Nil(t *testing.T) {
-	out := toWeightEventOutput(nil)
+	out := toWeightEventOutput(nil, capturedWeight{})
 	if out.ID != 0 {
 		t.Errorf("expected zero ID, got %d", out.ID)
 	}

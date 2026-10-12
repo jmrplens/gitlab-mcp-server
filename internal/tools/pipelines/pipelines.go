@@ -68,8 +68,8 @@ type Output struct {
 	StartedAt      string                    `json:"started_at,omitempty"`
 	FinishedAt     string                    `json:"finished_at,omitempty"`
 	CommittedAt    string                    `json:"committed_at,omitempty"`
-	Duration       int64                     `json:"duration,omitempty"`
-	QueuedDuration int64                     `json:"queued_duration,omitempty"`
+	Duration       *int64                    `json:"duration,omitempty"`
+	QueuedDuration *int64                    `json:"queued_duration,omitempty"`
 	Coverage       string                    `json:"coverage,omitempty"`
 	DetailedStatus *StatusOutput             `json:"detailed_status,omitempty"`
 	Archived       bool                      `json:"archived,omitempty"`
@@ -230,8 +230,8 @@ type DetailOutput struct {
 	Tag            bool                      `json:"tag"`
 	Archived       bool                      `json:"archived"`
 	YamlErrors     string                    `json:"yaml_errors,omitempty"`
-	Duration       int64                     `json:"duration"`
-	QueuedDuration int64                     `json:"queued_duration"`
+	Duration       *int64                    `json:"duration,omitempty"`
+	QueuedDuration *int64                    `json:"queued_duration,omitempty"`
 	Coverage       string                    `json:"coverage,omitempty"`
 	User           *toolutil.BasicUserOutput `json:"user,omitempty"`
 	DetailedStatus *StatusOutput             `json:"detailed_status,omitempty"`
@@ -290,8 +290,8 @@ func DetailToOutput(p *gl.Pipeline, extra toolutil.PipelineExtra) DetailOutput {
 		Tag:            p.Tag,
 		Archived:       extra.Archived,
 		YamlErrors:     p.YamlErrors,
-		Duration:       p.Duration,
-		QueuedDuration: p.QueuedDuration,
+		Duration:       extra.Duration,
+		QueuedDuration: extra.QueuedDuration,
 		Coverage:       p.Coverage,
 		WebURL:         p.WebURL,
 	}

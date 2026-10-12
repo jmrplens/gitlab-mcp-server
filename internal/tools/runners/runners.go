@@ -572,15 +572,25 @@ func ListJobs(ctx context.Context, client *gitlabclient.Client, input ListJobsIn
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	jobList, resp, err := client.GL().Runners.ListRunnerJobs(int(input.RunnerID), opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return JobListOutput{}, toolutil.WrapErrWithStatusHint("list runner jobs", err, http.StatusNotFound,
 			"runner not found. Verify runner_id with runner.get or runner.list")
 	}
+	return toJobListOutput(jobList, resp, captured)
+}
 
+// toJobListOutput converts a page of a runner's jobs, each with the measures
+// its captured answer carried, or reports an answer the reader cannot hold.
+func toJobListOutput(jobList []*gl.Job, resp *gl.Response, captured *gitlabclient.ResponseCapture) (JobListOutput, error) {
+	measures, err := toolutil.CapturedJobs(captured, len(jobList))
+	if err != nil {
+		return JobListOutput{}, toolutil.WrapErr("list runner jobs", err)
+	}
 	items := make([]jobs.Output, len(jobList))
 	for i, j := range jobList {
-		items[i] = jobs.ToOutput(j)
+		items[i] = jobs.ToOutput(j, measures[i])
 	}
 	return JobListOutput{Jobs: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }

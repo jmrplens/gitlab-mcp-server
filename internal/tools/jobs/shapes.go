@@ -1,8 +1,11 @@
 package jobs
 
 import (
+	"fmt"
+
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -309,11 +312,17 @@ func projectObject(p *gl.Project) *ProjectObject {
 // fields the SDK already models and adds the exposed fields gl.Job omits:
 // top-level archived, the runner_manager object, and the full runner object
 // (which shadows the embedded gl.Job.Runner during JSON decoding).
+//
+// The three measures shadow gl.Job's float64 fields of the same keys, which
+// read null as 0, so the decode keeps what GitLab sent.
 type jobAPI struct {
 	gl.Job
-	Archived      bool              `json:"archived"`
-	Runner        *runnerAPI        `json:"runner"`
-	RunnerManager *runnerManagerAPI `json:"runner_manager"`
+	Archived       bool              `json:"archived"`
+	Runner         *runnerAPI        `json:"runner"`
+	RunnerManager  *runnerManagerAPI `json:"runner_manager"`
+	Duration       *float64          `json:"duration"`
+	QueuedDuration *float64          `json:"queued_duration"`
+	Coverage       *float64          `json:"coverage"`
 }
 
 // runnerAPI mirrors the documented `runner` object including the fields
@@ -389,9 +398,29 @@ func runnerManagerObject(r *runnerManagerAPI) *RunnerManagerObject {
 // [ToOutput] for the SDK-modeled fields, then overlays the fields only the raw
 // response carries (archived, runner_manager, and the runner extras).
 func toOutputAPI(j *jobAPI) Output {
-	out := ToOutput(&j.Job)
+	out := ToOutput(&j.Job, toolutil.JobMeasures{Duration: j.Duration, QueuedDuration: j.QueuedDuration, Coverage: j.Coverage})
 	out.Archived = j.Archived
 	out.Runner = runnerAPIObject(j.Runner)
 	out.RunnerManager = runnerManagerObject(j.RunnerManager)
 	return out
+}
+
+// capturedJob converts a job client-go decoded with the measures its captured
+// answer carried, or reports the answer the reader cannot hold.
+func capturedJob(j *gl.Job, captured *gitlabclient.ResponseCapture) (Output, error) {
+	measures, err := toolutil.CapturedJob(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("jobMeasures", err)
+	}
+	return ToOutput(j, measures), nil
+}
+
+// FormatDuration renders a job's duration as GitLab measured it, to a tenth of
+// a second, and a dash for a job that never started, which GitLab measures as
+// nothing rather than as zero seconds.
+func FormatDuration(seconds *float64) string {
+	if seconds == nil {
+		return "-"
+	}
+	return fmt.Sprintf("%.1fs", *seconds)
 }

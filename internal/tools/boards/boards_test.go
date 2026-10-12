@@ -163,6 +163,44 @@ func TestGetBoard_Success(t *testing.T) {
 	}
 }
 
+// TestGetBoard_Weight_IsWhatGitLabScopedItTo verifies a project board's
+// weight scope keeps its two meanings: a board with no weight scope (GitLab
+// sends null) publishes none and its card has no weight row, and a board
+// scoped to weight 0 publishes 0 and says so. client-go decodes the null as
+// 0, and an int64 with omitempty then dropped the 0 as if it were the null.
+func TestGetBoard_Weight_IsWhatGitLabScopedItTo(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		weight  string
+		present bool
+	}{{"no weight scope", "null", false}, {"scoped to weight 0", "0", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"Dev","weight":`+tc.weight+`,"lists":[]}`)
+			}))
+			out, err := GetBoard(context.Background(), client, GetBoardInput{ProjectID: toolutil.StringOrInt("10"), BoardID: 1})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			data, err := json.Marshal(out)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			var keys map[string]any
+			if err = json.Unmarshal(data, &keys); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			got, present := keys["weight"]
+			if present != tc.present || (tc.present && got != float64(0)) {
+				t.Errorf("weight = %v (present %v), want present %v", got, present, tc.present)
+			}
+			if md := FormatBoardMarkdown(out); strings.Contains(md, "**Weight**") != tc.present {
+				t.Errorf("the card's weight row does not match the scope:\n%s", md)
+			}
+		})
+	}
+}
+
 // TestGetBoard_MissingParams verifies that GetBoard_MissingParams returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
@@ -814,7 +852,7 @@ func TestFormatBoardMarkdown_AllFields(t *testing.T) {
 		Project:         &ProjectOutput{ID: 10, Name: "P", PathWithNamespace: "group/p", WebURL: "https://gitlab.example.com/group/p"},
 		Milestone:       &MilestoneOutput{ID: 5, Title: "v1", WebURL: "https://gitlab.example.com/group/p/-/milestones/1"},
 		Assignee:        &BasicUserOutput{ID: 3, Username: "alice", WebURL: "https://gitlab.example.com/alice"},
-		Weight:          5,
+		Weight:          new(int64(5)),
 		Labels:          []*LabelDetailsOutput{{ID: 1, Name: "bug"}, nil, {ID: 2, Name: "ux"}},
 		HideBacklogList: false, HideClosedList: true,
 		Lists: []BoardListOutput{

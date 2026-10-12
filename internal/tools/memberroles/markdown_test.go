@@ -16,10 +16,10 @@ const roleCardHints = "\n---\n💡 **Next steps:**\n" +
 	"- Use action 'member_role.list_group' to view every custom role of a group\n" +
 	"- Use action 'member_role.list_instance' to view every custom role of the instance\n"
 
-// roleListHints is the guidance section a list of member roles ends with.
+// roleListHints is the guidance section a group's list of member roles ends
+// with: the one create its scope serves.
 const roleListHints = "\n---\n💡 **Next steps:**\n" +
-	"- Use action 'member_role.create_group' to define a new custom role in a group\n" +
-	"- Use action 'member_role.create_instance' to define a new custom role on the instance\n"
+	"- Use action 'member_role.create_group' to define a new custom role in a group\n"
 
 // TestFormatOutputMarkdown validates the whole card FormatOutputMarkdown
 // renders for a member role: the base access level named as well as numbered,

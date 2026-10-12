@@ -169,6 +169,20 @@ func stopRetriedJob(e *harness.Env, s *harness.Session, byJob map[string]any) {
 	e.T.Logf("the retried job %d settled as %q", last.ID, last.Status)
 }
 
+// assertMeasuredOnlyWhenRun holds the listed jobs to what GitLab measured:
+// the build job ran, so it carries a duration; the manual job has not been
+// played, GitLab sends its durations as null, and the listing used to
+// publish them as zero seconds.
+func assertMeasuredOnlyWhenRun(e *harness.Env, ran, unplayed jobs.Output) {
+	e.T.Helper()
+	if ran.Duration == nil {
+		e.T.Errorf("the job %d ran and was listed with no duration", ran.ID)
+	}
+	if unplayed.Duration != nil || unplayed.QueuedDuration != nil {
+		e.T.Errorf("the manual job %d was listed with duration %v and queued duration %v before anyone played it, want neither", unplayed.ID, unplayed.Duration, unplayed.QueuedDuration)
+	}
+}
+
 // TestJob_Lifecycle_ArtifactsManualPlayCancelRetryAndErase runs one
 // pipeline per surface from a configuration with an artifact job, a manual
 // job and a bridge, then drives the job actions against it: the bridge
@@ -201,6 +215,7 @@ func TestJob_Lifecycle_ArtifactsManualPlayCancelRetryAndErase(t *testing.T) {
 		listed := harness.Do[jobs.ListOutput](s, actionJobList, byPipeline)
 		build := jobNamed(e, listed, jobLifecycleBuildJob)
 		manual := jobNamed(e, listed, jobLifecycleManualJob)
+		assertMeasuredOnlyWhenRun(e, build, manual)
 		byBuild := withParams(params, map[string]any{"job_id": build.ID})
 		byManual := withParams(params, map[string]any{"job_id": manual.ID})
 

@@ -45,17 +45,19 @@ func writeJobDetail(c *toolutil.Card, j Output) {
 	if j.Commit != nil && j.Commit.ID != "" {
 		c.Code("Commit", j.Commit.ID[:min(len(j.Commit.ID), 12)])
 	}
-	if j.Duration > 0 {
-		c.Field("Duration", fmt.Sprintf("%.1fs", j.Duration))
+	// A job that never started has no duration and no queue time: GitLab
+	// sends null for both, and the rows are left out rather than read as 0s.
+	if j.Duration != nil {
+		c.Field("Duration", FormatDuration(j.Duration))
 	}
-	if j.QueuedDuration > 0 {
-		c.Field("Queued", fmt.Sprintf("%.1fs", j.QueuedDuration))
+	if j.QueuedDuration != nil {
+		c.Field("Queued", FormatDuration(j.QueuedDuration))
 	}
 	// GitLab stores the failure reason as an integer column behind a fixed
 	// enum map and serializes the key, such as script_failure.
 	c.Field("Failure Reason", j.FailureReason)
-	if j.Coverage > 0 {
-		c.Field("Coverage", fmt.Sprintf("%.1f%%", j.Coverage))
+	if j.Coverage != nil {
+		c.Field("Coverage", fmt.Sprintf("%.1f%%", *j.Coverage))
 	}
 	if j.User != nil {
 		c.Markdown("User", toolutil.MdUserLink(j.User.Username, j.User.WebURL))
@@ -122,7 +124,7 @@ func FormatListMarkdown(out ListOutput) string {
 			jobNameCell(j),
 			toolutil.EscapeMdTableCell(j.Stage),
 			jobStatusCell(j.Status),
-			fmt.Sprintf("%.1fs", j.Duration),
+			FormatDuration(j.Duration),
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,
@@ -178,7 +180,7 @@ func FormatBridgeListMarkdown(out BridgeListOutput) string {
 			toolutil.EscapeMdTableCell(br.Name),
 			toolutil.EscapeMdTableCell(br.Stage),
 			jobStatusCell(br.Status),
-			fmt.Sprintf("%.1fs", br.Duration),
+			FormatDuration(br.Duration),
 			downstreamCell(br),
 		))
 	}

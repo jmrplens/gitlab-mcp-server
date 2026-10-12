@@ -94,7 +94,7 @@ func TestNewPipelineDetailedStatusOutput(t *testing.T) {
 // TestNewPipelineOutput pins the pipeline conversion (nil-on-nil + full field
 // coverage when populated, including the typed PipelineSource).
 func TestNewPipelineOutput(t *testing.T) {
-	if got := NewPipelineOutput(nil); got != nil {
+	if got := NewPipelineOutput(nil, nil); got != nil {
 		t.Errorf("nil pipeline must return nil, got %+v", got)
 	}
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -110,7 +110,7 @@ func TestNewPipelineOutput(t *testing.T) {
 		UpdatedAt: &now, CreatedAt: &now, StartedAt: &now, FinishedAt: &now, CommittedAt: &now,
 		Duration: 60, QueuedDuration: 5, Coverage: "90", WebURL: "https://gl/pipe/200",
 		DetailedStatus: &gl.DetailedStatus{Label: "passed", Illustration: gl.DetailedStatusIllustration{Image: "img.png"}},
-	})
+	}, &PipelineMeasures{Duration: new(int64(60)), QueuedDuration: new(int64(5))})
 	if got == nil {
 		t.Fatal("populated pipeline returned nil")
 	}
@@ -133,12 +133,28 @@ func TestNewPipelineOutput(t *testing.T) {
 	}
 }
 
+// TestNewPipelineOutput_Durations_AreTheMeasuresNotTheSDKs verifies the
+// durations come from the measures the captured answer carried, and that a
+// pipeline the capture held no object for publishes none rather than the
+// zeros client-go decoded.
+func TestNewPipelineOutput_Durations_AreTheMeasuresNotTheSDKs(t *testing.T) {
+	sdk := &gl.Pipeline{ID: 201, Duration: 99, QueuedDuration: 98}
+	got := NewPipelineOutput(sdk, &PipelineMeasures{Duration: new(int64(60)), QueuedDuration: new(int64(5))})
+	if got.Duration == nil || *got.Duration != 60 || got.QueuedDuration == nil || *got.QueuedDuration != 5 {
+		t.Errorf("pipeline measures: duration %v, queued %v, want 60 and 5", got.Duration, got.QueuedDuration)
+	}
+	unmeasured := NewPipelineOutput(sdk, nil)
+	if unmeasured == nil || unmeasured.Duration != nil || unmeasured.QueuedDuration != nil {
+		t.Errorf("pipeline with no measures = %+v, want no durations", unmeasured)
+	}
+}
+
 // TestPipelineOutputJSONTags pins the on-wire JSON keys. Any change to the
 // tag set is a breaking change for MCP consumers. PipelineOutput uses
 // `omitempty` only on pointer / time fields; scalar fields (id, iid, status,
-// source, ref, name, sha, before_sha, duration, queued_duration, coverage,
-// tag, yaml_errors, web_url) are always serialized. Pointer fields
-// (User, DetailedStatus) and string-form timestamps use omitempty.
+// source, ref, name, sha, before_sha, coverage, tag, yaml_errors, web_url)
+// are always serialized. Pointer fields (User, DetailedStatus, Duration,
+// QueuedDuration) and string-form timestamps use omitempty.
 func TestPipelineOutputJSONTags(t *testing.T) {
 	raw, err := json.Marshal(&PipelineOutput{
 		ID: 1, IID: 1, ProjectID: 1, Status: "success",
@@ -152,7 +168,7 @@ func TestPipelineOutputJSONTags(t *testing.T) {
 		`"id":1`, `"iid":1`, `"project_id":1`, `"status":"success"`,
 		`"source":"push"`, `"ref":"main"`, `"web_url":"w"`,
 		`"name":"Build"`, `"sha":"x"`, `"before_sha":"y"`,
-		`"tag":false`, `"duration":0`, `"queued_duration":0`,
+		`"tag":false`,
 		`"coverage":""`, `"yaml_errors":""`,
 	} {
 		t.Run(key, func(t *testing.T) {
@@ -161,8 +177,10 @@ func TestPipelineOutputJSONTags(t *testing.T) {
 			}
 		})
 	}
-	// Pointer + time fields use omitempty and must NOT appear when empty.
-	for _, key := range []string{`"user"`, `"updated_at"`, `"created_at"`, `"started_at"`, `"finished_at"`, `"committed_at"`, `"detailed_status"`} {
+	// Pointer + time fields use omitempty and must NOT appear when empty. The
+	// two durations are pointers since GitLab measures a pipeline that never
+	// ran as null rather than as zero seconds (register row 116).
+	for _, key := range []string{`"user"`, `"updated_at"`, `"created_at"`, `"started_at"`, `"finished_at"`, `"committed_at"`, `"detailed_status"`, `"duration"`, `"queued_duration"`} {
 		t.Run(key, func(t *testing.T) {
 			if strings.Contains(string(raw), key) {
 				t.Errorf("PipelineOutput JSON should omit empty %q: %s", key, raw)

@@ -32,8 +32,8 @@ type infoExtra struct {
 	StartedAt      *time.Time                `json:"started_at"`
 	FinishedAt     *time.Time                `json:"finished_at"`
 	CommittedAt    *time.Time                `json:"committed_at"`
-	Duration       int64                     `json:"duration"`
-	QueuedDuration int64                     `json:"queued_duration"`
+	Duration       *int64                    `json:"duration"`
+	QueuedDuration *int64                    `json:"queued_duration"`
 	Coverage       string                    `json:"coverage"`
 	DetailedStatus *StatusOutput             `json:"detailed_status"`
 	Archived       bool                      `json:"archived"`

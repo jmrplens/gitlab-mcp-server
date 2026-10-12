@@ -49,7 +49,10 @@ type ListOutput struct {
 // 1:1 audit policy every Pipeline field is surfaced, with the user and
 // detailed_status sub-objects preserved as full nested objects, plus whether
 // the pipeline is archived, which lib/api/entities/ci/pipeline.rb sends and
-// the SDK does not carry, read from the captured response (ADR-0021).
+// the SDK does not carry, read from the captured response (ADR-0021). The two
+// durations are read from the same capture: GitLab sends null for a pipeline
+// that has not run, which a just-triggered one has not, and client-go decodes
+// that null as 0, so they are left out then and a measured 0 is kept.
 type RunOutput struct {
 	toolutil.HintableOutput
 	ID             int64                 `json:"id"`
@@ -65,8 +68,8 @@ type RunOutput struct {
 	Archived       bool                  `json:"archived"`
 	YamlErrors     string                `json:"yaml_errors,omitempty"`
 	User           *BasicUserOutput      `json:"user,omitempty"`
-	Duration       int64                 `json:"duration,omitempty"`
-	QueuedDuration int64                 `json:"queued_duration,omitempty"`
+	Duration       *int64                `json:"duration,omitempty"`
+	QueuedDuration *int64                `json:"queued_duration,omitempty"`
 	Coverage       string                `json:"coverage,omitempty"`
 	WebURL         string                `json:"web_url"`
 	DetailedStatus *DetailedStatusOutput `json:"detailed_status,omitempty"`
@@ -344,7 +347,8 @@ func convertTrigger(t *gl.PipelineTrigger, extra toolutil.PipelineTriggerExtra) 
 
 // convertPipeline maps a triggered GitLab pipeline into the run output shape,
 // surfacing every gl.Pipeline field plus the nested user and detailed_status
-// sub-objects, and takes the field the capture read beside the SDK.
+// sub-objects, and takes the fields the capture read beside the SDK: whether
+// the pipeline is archived and the two durations as GitLab sent them.
 func convertPipeline(p *gl.Pipeline, extra toolutil.PipelineExtra) RunOutput {
 	return RunOutput{
 		ID:             p.ID,
@@ -360,8 +364,8 @@ func convertPipeline(p *gl.Pipeline, extra toolutil.PipelineExtra) RunOutput {
 		Archived:       extra.Archived,
 		YamlErrors:     p.YamlErrors,
 		User:           basicUserOutput(p.User),
-		Duration:       p.Duration,
-		QueuedDuration: p.QueuedDuration,
+		Duration:       extra.Duration,
+		QueuedDuration: extra.QueuedDuration,
 		Coverage:       p.Coverage,
 		WebURL:         p.WebURL,
 		DetailedStatus: detailedStatusOutput(p.DetailedStatus),

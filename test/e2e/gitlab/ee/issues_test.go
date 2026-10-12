@@ -77,7 +77,7 @@ func TestIssueWeightEvents_TwoChanges_ListTheFinalWeight(t *testing.T) {
 			map[string]any{"project_id": f.project.IDParam(), "issue_iid": f.issue.IID}, resourceEventInterval, resourceEventWait,
 			func(out resourceevents.ListWeightEventsOutput) bool {
 				for _, event := range out.Events {
-					if event.Weight == finalWeight {
+					if event.Weight != nil && *event.Weight == finalWeight {
 						return true
 					}
 				}

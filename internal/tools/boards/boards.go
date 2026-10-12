@@ -24,7 +24,7 @@ type BoardOutput struct {
 	Project         *ProjectOutput        `json:"project,omitempty"`
 	Milestone       *MilestoneOutput      `json:"milestone,omitempty" tier:"premium"`
 	Assignee        *BasicUserOutput      `json:"assignee,omitempty" tier:"premium"`
-	Weight          int64                 `json:"weight,omitempty" tier:"premium"`
+	Weight          *int64                `json:"weight,omitempty" tier:"premium"`
 	Labels          []*LabelDetailsOutput `json:"labels,omitempty"`
 	HideBacklogList bool                  `json:"hide_backlog_list"`
 	HideClosedList  bool                  `json:"hide_closed_list"`
@@ -80,8 +80,10 @@ type ListBoardListsOutput struct {
 
 // convertBoard maps a GitLab project issue board into the MCP output shape,
 // surfacing the full project/milestone/assignee/label sub-objects, and the
-// group reference and each list's limit_metric read off the captured answer
-// beside the SDK's decode. The lists are joined to what was read beside them
+// group reference, the weight scope and each list's limit_metric read off the
+// captured answer beside the SDK's decode. The weight is read there because
+// client-go decodes the null of a board with no weight scope as 0, which is a
+// scope of its own. The lists are joined to what was read beside them
 // by position, since both decode the same bytes; a list the captured board
 // holds nothing for is published without a metric rather than with another
 // list's.
@@ -92,7 +94,7 @@ func convertBoard(b *gl.IssueBoard, extra toolutil.BoardExtra) BoardOutput {
 		Project:         projectOutput(b.Project),
 		Milestone:       milestoneOutput(b.Milestone),
 		Assignee:        basicUserOutput(b.Assignee),
-		Weight:          b.Weight,
+		Weight:          extra.Weight,
 		Labels:          labelDetailsOutputs(b.Labels),
 		HideBacklogList: b.HideBacklogList,
 		HideClosedList:  b.HideClosedList,

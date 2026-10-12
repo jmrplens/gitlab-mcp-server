@@ -31,7 +31,7 @@ func FormatMarkdown(out Output, metric string) string {
 	b.WriteString(toolutil.MarkdownTableHeader("Date", "Value"))
 	for _, m := range out.Metrics {
 		b.WriteString(toolutil.MarkdownTableRow(
-			toolutil.FormatTime(m.Date),
+			metricDate(m.Date),
 			metricValue(m.Value),
 		))
 	}
@@ -41,11 +41,25 @@ func FormatMarkdown(out Output, metric string) string {
 	return b.String()
 }
 
-// metricValue renders one data point. The four DORA metrics are counted in
-// different units — deployments, seconds, a ratio — so a fixed four decimals
-// stamped false precision on a count and on a duration alike.
-func metricValue(v float64) string {
-	return strconv.FormatFloat(v, 'f', -1, 64)
+// metricDate renders a data point's date, and the one bucket interval=all
+// answers with, which GitLab sends undated, as the whole period it covers.
+func metricDate(date string) string {
+	if date == "" {
+		return "whole period"
+	}
+	return toolutil.FormatTime(date)
+}
+
+// metricValue renders one data point, and a period GitLab had nothing to
+// measure in, which it sends as null, as no data rather than as 0. The four
+// DORA metrics are counted in different units, deployments, seconds and a
+// ratio, so a fixed four decimals stamped false precision on a count and on a
+// duration alike.
+func metricValue(v *float64) string {
+	if v == nil {
+		return "no data"
+	}
+	return strconv.FormatFloat(*v, 'f', -1, 64)
 }
 
 func init() {

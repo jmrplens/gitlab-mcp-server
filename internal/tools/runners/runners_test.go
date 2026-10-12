@@ -425,6 +425,47 @@ func TestRemove_MissingID(t *testing.T) {
 // ListJobs
 // ---------------------------------------------------------------------------.
 
+// TestListJobs_Measures_AreWhatGitLabMeasured verifies a runner's job that
+// never started is published with no duration, queued duration or coverage,
+// as the job package's own handlers publish it: this list converts its jobs
+// with the same converter and used to hand it client-go's zeros.
+func TestListJobs_Measures_AreWhatGitLabMeasured(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":100,"name":"deploy","status":"manual","duration":null,"queued_duration":null,"coverage":null}]`)
+	}))
+	out, err := ListJobs(context.Background(), client, ListJobsInput{RunnerID: 10})
+	if err != nil || len(out.Jobs) != 1 {
+		t.Fatalf("ListJobs() = %+v, %v", out, err)
+	}
+	data, err := json.Marshal(out.Jobs[0])
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var keys map[string]any
+	if err = json.Unmarshal(data, &keys); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	for _, key := range []string{"duration", "queued_duration", "coverage"} {
+		t.Run(key, func(t *testing.T) {
+			if got, present := keys[key]; present {
+				t.Errorf("%s = %v, want it left out for a job that never ran", key, got)
+			}
+		})
+	}
+}
+
+// TestToJobListOutput_AnAnswerTheReaderCannotHold_IsReported verifies the
+// converter reports a captured answer it cannot pair with the jobs client-go
+// decoded rather than listing them without their measures. It is not
+// reachable through the transport, since the SDK decodes the same bytes into
+// fields of the same kinds, so the converter is driven directly.
+func TestToJobListOutput_AnAnswerTheReaderCannotHold_IsReported(t *testing.T) {
+	_, untouched := gitlabclient.WithResponseCapture(t.Context())
+	if _, err := toJobListOutput([]*gl.Job{{ID: 1}}, nil, untouched); err == nil || !strings.Contains(err.Error(), "list runner jobs") {
+		t.Errorf("toJobListOutput() with no captured response = %v, want an error naming the operation", err)
+	}
+}
+
 // TestListJobs_Success verifies ListJobs when success.
 func TestListJobs_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2262,8 +2303,8 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatJobListMarkdown_WithData(t *testing.T) {
 	got := FormatJobListMarkdown(JobListOutput{
 		Jobs: []jobs.Output{
-			{ID: 100, Name: "build", Status: "success", Stage: "build", Ref: "main", Duration: 12.5, WebURL: "https://gitlab.example.com/acme/web/-/jobs/100"},
-			{ID: 101, Name: "test", Status: "running", Stage: "test", Ref: "develop", Duration: 0.0},
+			{ID: 100, Name: "build", Status: "success", Stage: "build", Ref: "main", Duration: new(12.5), WebURL: "https://gitlab.example.com/acme/web/-/jobs/100"},
+			{ID: 101, Name: "test", Status: "running", Stage: "test", Ref: "develop", Duration: new(0.0)},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	})
@@ -2286,7 +2327,7 @@ func TestFormatJobListMarkdown_WithData(t *testing.T) {
 // nothing had ever driven the formatter with a blank status.
 func TestFormatJobListMarkdown_JobWithNoStatus_LeavesTheStatusCellEmpty(t *testing.T) {
 	got := FormatJobListMarkdown(JobListOutput{
-		Jobs: []jobs.Output{{ID: 100, Name: "build", Stage: "build", Ref: "main", Duration: 1.0}},
+		Jobs: []jobs.Output{{ID: 100, Name: "build", Stage: "build", Ref: "main", Duration: new(1.0)}},
 	})
 
 	want := "## Runner Jobs (1)\n\n" +

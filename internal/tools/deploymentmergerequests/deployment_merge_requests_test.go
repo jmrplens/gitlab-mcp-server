@@ -1380,3 +1380,31 @@ func TestFormatListMarkdown_NoAuthor_LeavesTheColumnEmpty(t *testing.T) {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
+
+// TestList_HeadPipelineThatNeverRan_PublishesNoDuration verifies a deployed
+// merge request's head pipeline is published without the durations GitLab
+// did not measure, read off the captured answer beside client-go's int64s.
+func TestList_HeadPipelineThatNeverRan_PublishesNoDuration(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"iid":10,"head_pipeline":{"id":9,"status":"created","duration":null,"queued_duration":null}}]`)
+	}))
+	out, err := List(context.Background(), client, ListInput{ProjectID: "42", DeploymentID: 7})
+	if err != nil || len(out.MergeRequests) != 1 {
+		t.Fatalf("List() = %+v, %v", out, err)
+	}
+	data, err := json.Marshal(out.MergeRequests[0].HeadPipeline)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var keys map[string]any
+	if err = json.Unmarshal(data, &keys); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	for _, key := range []string{"duration", "queued_duration"} {
+		t.Run(key, func(t *testing.T) {
+			if got, present := keys[key]; present {
+				t.Errorf("head_pipeline %s = %v, want it left out for a pipeline that never ran", key, got)
+			}
+		})
+	}
+}

@@ -135,6 +135,92 @@ const populatedTrainJSON = `{"id":1,` +
 	`"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-16T10:00:00Z",` +
 	`"merged_at":"2026-01-17T10:00:00Z"}`
 
+// TestMergeTrainHandlers_Durations_AreWhatGitLabMeasured verifies a car
+// whose train has not run, and whose pipeline has not either, is published
+// with no duration on the car or on its pipeline and drawn with a dash, on
+// every route that answers with cars. client-go decodes each duration as
+// int64, so a queued car read as one that took 0s.
+func TestMergeTrainHandlers_Durations_AreWhatGitLabMeasured(t *testing.T) {
+	const car = `{"id":1,"merge_request":{"iid":5},"pipeline":{"id":200,"duration":null,"queued_duration":null},` +
+		`"target_branch":"main","status":"idle","duration":null}`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/merge_requests/5") && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, car)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, "["+car+"]")
+	}))
+	ctx := context.Background()
+	assertUnmeasured := func(t *testing.T, label string, out Output) {
+		t.Helper()
+		data, err := json.Marshal(out)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		var keys map[string]any
+		if err = json.Unmarshal(data, &keys); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if got, present := keys["duration"]; present {
+			t.Errorf("%s: car duration = %v, want it left out", label, got)
+		}
+		pipeline, _ := keys["pipeline"].(map[string]any)
+		for _, key := range []string{"duration", "queued_duration"} {
+			t.Run(label+" pipeline "+key, func(t *testing.T) {
+				if got, present := pipeline[key]; present {
+					t.Errorf("%s: pipeline %s = %v, want it left out", label, key, got)
+				}
+			})
+		}
+	}
+	project, err := ListProjectMergeTrains(ctx, client, ListProjectInput{ProjectID: "42"})
+	if err != nil || len(project.Trains) != 1 {
+		t.Fatalf("ListProjectMergeTrains() = %+v, %v", project, err)
+	}
+	assertUnmeasured(t, "project list", project.Trains[0])
+	if md := FormatListMarkdown(project); strings.Contains(md, "| 0s |") || !strings.Contains(md, "| - |\n") {
+		t.Errorf("the list draws a duration for a car that has not run:\n%s", md)
+	}
+	branch, err := ListMergeRequestInMergeTrain(ctx, client, ListBranchInput{ProjectID: "42", TargetBranch: "main"})
+	if err != nil || len(branch.Trains) != 1 {
+		t.Fatalf("ListMergeRequestInMergeTrain() = %+v, %v", branch, err)
+	}
+	assertUnmeasured(t, "branch list", branch.Trains[0])
+	one, err := GetMergeRequestOnMergeTrain(ctx, client, GetInput{ProjectID: "42", MergeRequestID: 5})
+	if err != nil {
+		t.Fatalf("GetMergeRequestOnMergeTrain() error: %v", err)
+	}
+	assertUnmeasured(t, "get", one)
+	if md := FormatOutputMarkdown(one); strings.Contains(md, "0s") {
+		t.Errorf("the card states a duration for a car that has not run:\n%s", md)
+	}
+	added, err := AddMergeRequestToMergeTrain(ctx, client, AddInput{ProjectID: "42", MergeRequestID: 5})
+	if err != nil || len(added.Trains) != 1 {
+		t.Fatalf("AddMergeRequestToMergeTrain() = %+v, %v", added, err)
+	}
+	assertUnmeasured(t, "add", added.Trains[0])
+}
+
+// TestCapturedMeasures_AnAnswerTheReaderCannotHold_IsReported verifies the
+// readers of a car's measures report an answer they cannot hold rather than
+// publishing a car without them: a capture no response reached, a list body
+// that is not a list, and a list whose length is not what the SDK decoded.
+// No handler reaches these through the transport, since the SDK decodes the
+// same bytes into fields of the same kinds, so the readers are driven
+// directly.
+func TestCapturedMeasures_AnAnswerTheReaderCannotHold_IsReported(t *testing.T) {
+	_, untouched := gitlabclient.WithResponseCapture(t.Context())
+	if _, err := capturedOutput("op", &gl.MergeTrain{ID: 1}, untouched); err == nil {
+		t.Error("capturedOutput() with no captured response: nil error")
+	}
+	if _, err := toListOutput("op", []*gl.MergeTrain{{ID: 1}}, nil, gitlabclient.CapturedBody([]byte(`{"id":1}`))); err == nil {
+		t.Error("toListOutput() over a body that is not a list: nil error")
+	}
+	if _, err := capturedTrains("op", gitlabclient.CapturedBody([]byte(`[]`)), 1); err == nil || !strings.Contains(err.Error(), "holds 0 merge train cars and the SDK decoded 1") {
+		t.Errorf("capturedTrains() over a list one short = %v, want the count mismatch", err)
+	}
+}
+
 // wantPopulatedMergeTrain is the whole [Output] populatedTrainJSON converts to.
 func wantPopulatedMergeTrain() Output {
 	return Output{
@@ -154,7 +240,7 @@ func wantPopulatedMergeTrain() Output {
 		Pipeline:     &toolutil.PipelineOutput{ID: 200},
 		TargetBranch: "main",
 		Status:       "merged",
-		Duration:     120,
+		Duration:     new(int64(120)),
 		CreatedAt:    "2026-01-15T10:00:00Z",
 		UpdatedAt:    "2026-01-16T10:00:00Z",
 		MergedAt:     "2026-01-17T10:00:00Z",
@@ -308,8 +394,8 @@ func TestGetMergeRequestOnMergeTrain(t *testing.T) {
 				if out.Status != "merged" {
 					t.Errorf("got status %q, want %q", out.Status, "merged")
 				}
-				if out.Duration != 60 {
-					t.Errorf("got duration %d, want 60", out.Duration)
+				if out.Duration == nil || *out.Duration != 60 {
+					t.Errorf("got duration %v, want 60", out.Duration)
 				}
 				if out.MergeRequest.IID != 5 {
 					t.Errorf("got MR IID %d, want 5", out.MergeRequest.IID)
@@ -895,7 +981,7 @@ func TestToOutput_FullPipeline(t *testing.T) {
 			},
 		},
 	}
-	out := toOutput(mt)
+	out := toOutput(mt, trainMeasures{})
 	if out.User == nil || out.User.AvatarURL != "a" || out.User.CreatedAt == "" {
 		t.Fatalf("user = %+v, want full BasicUser", out.User)
 	}
@@ -939,8 +1025,8 @@ func mustParseTime(t *testing.T, s string) time.Time {
 // TestPipelineHelpers_NilBranches verifies the shape converters return nil for
 // nil inputs and omit the illustration when its image is empty.
 func TestPipelineHelpers_NilBranches(t *testing.T) {
-	if toolutil.NewPipelineOutput(nil) != nil {
-		t.Error("toolutil.NewPipelineOutput(nil) should be nil")
+	if toolutil.NewPipelineOutput(nil, nil) != nil {
+		t.Error("toolutil.NewPipelineOutput(nil, nil) should be nil")
 	}
 	if toolutil.NewBasicUserOutput(nil) != nil {
 		t.Error("toolutil.NewBasicUserOutput(nil) should be nil")
@@ -969,7 +1055,7 @@ func TestDecorateMergeTrainMeta_UnknownTool(t *testing.T) {
 
 // TestToOutput_NilInput verifies toOutput handles a nil MergeTrain gracefully.
 func TestToOutput_NilInput(t *testing.T) {
-	out := toOutput(nil)
+	out := toOutput(nil, trainMeasures{})
 	if out.ID != 0 {
 		t.Errorf("got ID %d, want 0 for nil input", out.ID)
 	}
@@ -984,7 +1070,7 @@ func TestToOutput_MinimalFields(t *testing.T) {
 		Status:       "idle",
 		Duration:     0,
 	}
-	out := toOutput(mt)
+	out := toOutput(mt, trainMeasures{})
 	if out.ID != 10 {
 		t.Errorf("got ID %d, want 10", out.ID)
 	}
@@ -1044,7 +1130,7 @@ func TestFormatListMarkdown(t *testing.T) {
 						Status:       "merged",
 						User:         &toolutil.BasicUserOutput{ID: 1, Username: "admin"},
 						Pipeline:     &toolutil.PipelineOutput{ID: 200, Status: "success", WebURL: "https://gitlab.example.com/-/pipelines/200"},
-						Duration:     120,
+						Duration:     new(int64(120)),
 						MergeRequest: MergeRequestOutput{IID: 5, Title: "Fix bug", WebURL: "https://gitlab.example.com/-/merge_requests/5"},
 					},
 				},
@@ -1062,7 +1148,7 @@ func TestFormatListMarkdown(t *testing.T) {
 						TargetBranch: "develop",
 						Status:       "idle",
 						User:         &toolutil.BasicUserOutput{ID: 2, Username: "dev"},
-						Duration:     0,
+						Duration:     new(int64(0)),
 						MergeRequest: MergeRequestOutput{IID: 10, Title: "Add feature"},
 					},
 				},
@@ -1108,7 +1194,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				Status:       "merged",
 				User:         &toolutil.BasicUserOutput{ID: 1, Username: "admin"},
 				Pipeline:     &toolutil.PipelineOutput{ID: 200, Status: "success", WebURL: "https://gitlab.example.com/-/pipelines/200"},
-				Duration:     120,
+				Duration:     new(int64(120)),
 				CreatedAt:    "2026-01-15T10:00:00Z",
 				UpdatedAt:    "2026-01-16T10:00:00Z",
 				MergedAt:     "2026-01-17T10:00:00Z",
@@ -1132,7 +1218,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				ID:           2,
 				TargetBranch: "develop",
 				Status:       "idle",
-				Duration:     0,
+				Duration:     new(int64(0)),
 				MergeRequest: MergeRequestOutput{IID: 10, Title: "Add feature"},
 			},
 			want: "## Merge Train #2\n\n" +
@@ -1154,8 +1240,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"- **ID**: 3\n" +
 				"- **Status**: active\n" +
 				"- **Target Branch**: main\n" +
-				"- **Merge Request**: !7 - Update docs\n" +
-				"- **Duration**: 0s\n" + cardHints,
+				"- **Merge Request**: !7 - Update docs\n" + cardHints,
 		},
 		{
 			// A car GitLab sent no merge request for has neither an IID nor a
@@ -1171,8 +1256,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			want: "## Merge Train #4\n\n" +
 				"- **ID**: 4\n" +
 				"- **Status**: idle\n" +
-				"- **Target Branch**: main\n" +
-				"- **Duration**: 0s\n" + cardHints,
+				"- **Target Branch**: main\n" + cardHints,
 		},
 		{
 			// An IID with no title is a merge request, so the row stays and
@@ -1190,8 +1274,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"- **ID**: 5\n" +
 				"- **Status**: idle\n" +
 				"- **Target Branch**: main\n" +
-				"- **Merge Request**: [!7](https://gitlab.example.com/-/merge_requests/7)\n" +
-				"- **Duration**: 0s\n" + cardHints,
+				"- **Merge Request**: [!7](https://gitlab.example.com/-/merge_requests/7)\n" + cardHints,
 		},
 		{
 			// The row is dropped only when there is nothing at all to show,
@@ -1209,8 +1292,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"- **ID**: 6\n" +
 				"- **Status**: idle\n" +
 				"- **Target Branch**: main\n" +
-				"- **Merge Request**: Untracked change\n" +
-				"- **Duration**: 0s\n" + cardHints,
+				"- **Merge Request**: Untracked change\n" + cardHints,
 		},
 		{
 			// A pipeline object carrying no id is no pipeline: the row would
@@ -1228,8 +1310,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"- **ID**: 7\n" +
 				"- **Status**: idle\n" +
 				"- **Target Branch**: main\n" +
-				"- **Merge Request**: !8 - Retry\n" +
-				"- **Duration**: 0s\n" + cardHints,
+				"- **Merge Request**: !8 - Retry\n" + cardHints,
 		},
 		{
 			// A pipeline whose status GitLab omitted renders as the link alone,
@@ -1248,8 +1329,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"- **Status**: idle\n" +
 				"- **Target Branch**: main\n" +
 				"- **Merge Request**: !9 - Ship\n" +
-				"- **Pipeline**: [#300](https://gitlab.example.com/-/pipelines/300)\n" +
-				"- **Duration**: 0s\n" + cardHints,
+				"- **Pipeline**: [#300](https://gitlab.example.com/-/pipelines/300)\n" + cardHints,
 		},
 	}
 	for _, tt := range tests {

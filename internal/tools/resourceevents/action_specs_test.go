@@ -233,7 +233,7 @@ func TestFormatIterationEventMarkdown_DeletedIteration(t *testing.T) {
 func TestFormatWeightEventsMarkdown_NonEmpty(t *testing.T) {
 	got := FormatWeightEventsMarkdown(ListWeightEventsOutput{
 		Events: []WeightEventOutput{
-			{ID: 2, Weight: 5, User: &EventUserOutput{Username: "user"}, IssueID: 10, CreatedAt: "2026-01-01T00:00:00Z"},
+			{ID: 2, Weight: new(int64(5)), User: &EventUserOutput{Username: "user"}, IssueID: 10, CreatedAt: "2026-01-01T00:00:00Z"},
 		},
 	})
 

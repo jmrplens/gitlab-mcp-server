@@ -63,7 +63,7 @@ func packageNames(listed []packages.ListItem) []string {
 }
 
 // registryTagNames returns the names of a registry tag listing.
-func registryTagNames(listed []containerregistry.TagOutput) []string {
+func registryTagNames(listed []containerregistry.TagListItem) []string {
 	names := make([]string, 0, len(listed))
 	for _, tag := range listed {
 		names = append(names, tag.Name)

@@ -207,11 +207,48 @@ func CapturedResourceTokens(capture *gitlabclient.ResponseCapture, decoded int) 
 	return capturedList[ResourceTokenExtra](capture, decoded, "resource access tokens")
 }
 
+// PipelineMeasures is how long a pipeline ran and queued, as GitLab sends
+// them: null for a pipeline that has not run (created, skipped, waiting on a
+// manual job), which client-go's Pipeline and PipelineInfo decode as int64
+// and so read as 0, a pipeline that ran for no time at all. Read from the
+// captured response (ADR-0021); recorded as register row 116 of
+// docs/development/upstream-bugs.md.
+type PipelineMeasures struct {
+	Duration       *int64 `json:"duration"`
+	QueuedDuration *int64 `json:"queued_duration"`
+}
+
 // PipelineExtra is what lib/api/entities/ci/pipeline.rb sends on a pipeline
 // that client-go's Pipeline does not carry: whether it is archived, sent on
-// every pipeline rendered whole.
+// every pipeline rendered whole, and the two durations as GitLab measured
+// them.
 type PipelineExtra struct {
+	PipelineMeasures
 	Archived bool `json:"archived"`
+}
+
+// JobMeasures is how long a job ran and queued and the coverage it reported,
+// as GitLab sends them: null for a job that never started, or that reported
+// no coverage, which client-go's Job and Bridge decode as float64 and so read
+// as 0. A pointer keeps both meanings, so a job measured at 0 seconds or at
+// 0% coverage keeps its 0. Read from the captured response (ADR-0021);
+// recorded as register row 116 of docs/development/upstream-bugs.md.
+type JobMeasures struct {
+	Duration       *float64 `json:"duration"`
+	QueuedDuration *float64 `json:"queued_duration"`
+	Coverage       *float64 `json:"coverage"`
+}
+
+// CapturedJob reads a job's measures off the captured answer to a request
+// that returned one job.
+func CapturedJob(capture *gitlabclient.ResponseCapture) (JobMeasures, error) {
+	return capturedOne[JobMeasures](capture)
+}
+
+// CapturedJobs reads the same off a list answer, one per job in order, the
+// count held to what the SDK decoded.
+func CapturedJobs(capture *gitlabclient.ResponseCapture, decoded int) ([]JobMeasures, error) {
+	return capturedList[JobMeasures](capture, decoded, "jobs")
 }
 
 // CapturedPipeline reads, off the captured answer to a request for one
@@ -539,12 +576,16 @@ type BasicGroupDetailsOutput struct {
 }
 
 // BoardExtra is that reference on the board, which GitLab exposes under no
-// condition and leaves null on a board that belongs to a project, and what
-// each of the board's lists carries beside client-go's BoardList, in the
-// order GitLab sent the lists.
+// condition and leaves null on a board that belongs to a project, what each
+// of the board's lists carries beside client-go's BoardList, in the order
+// GitLab sent the lists, and the weight the board is scoped to as GitLab sent
+// it: null for a board with no weight scope, which client-go's IssueBoard
+// decodes as int64 and so reads as a board scoped to weight 0 (register row
+// 116 of docs/development/upstream-bugs.md).
 type BoardExtra struct {
-	Group *BasicGroupDetailsOutput `json:"group"`
-	Lists []BoardListExtra         `json:"lists"`
+	Group  *BasicGroupDetailsOutput `json:"group"`
+	Lists  []BoardListExtra         `json:"lists"`
+	Weight *int64                   `json:"weight"`
 }
 
 // CapturedBoard reads it off the captured answer to a request for one board.
@@ -564,8 +605,10 @@ type BridgeProjectOutput struct {
 	CIJobTokenScopeEnabled bool `json:"ci_job_token_scope_enabled"`
 }
 
-// BridgeExtra is that object on a bridge job, exposed under no condition.
+// BridgeExtra is that object on a bridge job, exposed under no condition, and
+// the bridge's measures as GitLab sent them.
 type BridgeExtra struct {
+	JobMeasures
 	Project *BridgeProjectOutput `json:"project"`
 }
 
@@ -1040,13 +1083,18 @@ func CapturedPendingInvites(capture *gitlabclient.ResponseCapture, decoded int) 
 // approvals_before_merge is a pointer because GitLab sends null where no
 // approval count applies, which a bare int64 would flatten into zero, a number
 // that means something else.
+//
+// head_pipeline is read for its durations alone, which client-go decodes as
+// int64 and so reads null as 0 ([PipelineMeasures]); it is nil when GitLab
+// sent no head pipeline.
 type MergeRequestExtra struct {
-	ApprovalsBeforeMerge *int64 `json:"approvals_before_merge"`
-	MergeStatus          string `json:"merge_status"`
-	Reference            string `json:"reference"`
-	WorkInProgress       bool   `json:"work_in_progress"`
-	TitleHTML            string `json:"title_html"`
-	DescriptionHTML      string `json:"description_html"`
+	ApprovalsBeforeMerge *int64            `json:"approvals_before_merge"`
+	MergeStatus          string            `json:"merge_status"`
+	Reference            string            `json:"reference"`
+	WorkInProgress       bool              `json:"work_in_progress"`
+	TitleHTML            string            `json:"title_html"`
+	DescriptionHTML      string            `json:"description_html"`
+	HeadPipeline         *PipelineMeasures `json:"head_pipeline"`
 }
 
 // CapturedMergeRequest reads them off the captured answer to a request that

@@ -214,6 +214,37 @@ func TestDeleteRepository_MissingRepoID(t *testing.T) {
 // ListTags
 // ---------------------------------------------------------------------------.
 
+// TestListTags_RowsCarryOnlyWhatTheListSends verifies a tag of the list is
+// published with the three keys GitLab's tag list sends (API::Entities::
+// ContainerRegistry::Tag: name, path, location) and no total_size. The list
+// row used the detail type, whose total_size is a plain integer, so every tag
+// of every list read "Total Size (bytes): 0" while the same tag's detail
+// reported its real size.
+func TestListTags_RowsCarryOnlyWhatTheListSends(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"name":"latest","path":"g/p/img:latest","location":"registry.example.com/g/p/img:latest"}]`)
+	}))
+	out, err := ListTags(context.Background(), client, ListTagsInput{ProjectID: "10", RepositoryID: 1})
+	if err != nil || len(out.Tags) != 1 {
+		t.Fatalf("ListTags() = %+v, %v", out, err)
+	}
+	data, err := json.Marshal(out.Tags[0])
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var keys map[string]any
+	if err = json.Unmarshal(data, &keys); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	want := map[string]any{"name": "latest", "path": "g/p/img:latest", "location": "registry.example.com/g/p/img:latest"}
+	if !reflect.DeepEqual(keys, want) {
+		t.Errorf("tag row = %v, want %v", keys, want)
+	}
+	if md := FormatTagListMarkdown(out); strings.Contains(md, "Size") {
+		t.Errorf("the tag list states a size the list route never sends:\n%s", md)
+	}
+}
+
 // TestListTags_Success verifies that ListTags succeeds when the GitLab API returns a valid response.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -243,9 +274,6 @@ func TestListTags_Success(t *testing.T) {
 	}
 	if out.Tags[0].Location != "registry.example.com/group/project/my-image:latest" {
 		t.Errorf("Location = %q, want %q", out.Tags[0].Location, "registry.example.com/group/project/my-image:latest")
-	}
-	if out.Tags[0].TotalSize != 1024 {
-		t.Errorf("TotalSize = %d, want 1024", out.Tags[0].TotalSize)
 	}
 }
 
@@ -738,21 +766,21 @@ func TestFormatTagMarkdown_NoName_HeadsWithTheResourceAlone(t *testing.T) {
 // FormatTagListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatTagListMarkdown_WithItems verifies the whole table, whose size
-// column names its unit in the header rather than showing a bare number.
+// TestFormatTagListMarkdown_WithItems verifies the whole table, which carries
+// no size column because the list route sends no size.
 func TestFormatTagListMarkdown_WithItems(t *testing.T) {
 	out := TagListOutput{
-		Tags: []TagOutput{
-			{Name: "v1", Path: "p", TotalSize: 100},
-			{Name: "v2", Path: "p", TotalSize: 200},
+		Tags: []TagListItem{
+			{Name: "v1", Path: "p"},
+			{Name: "v2", Path: "p"},
 		},
 	}
 	got := FormatTagListMarkdown(out)
 	want := "## Registry Tags (2)\n\n" +
-		"| Name | Path | Total Size (bytes) |\n" +
-		"| --- | --- | --- |\n" +
-		"| v1 | p | 100 |\n" +
-		"| v2 | p | 200 |\n" +
+		"| Name | Path |\n" +
+		"| --- | --- |\n" +
+		"| v1 | p |\n" +
+		"| v2 | p |\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'registry_tag_get' with tag name for full details\n" +
 		"- Use action 'registry_tag_delete_bulk' to clean up old tags\n"

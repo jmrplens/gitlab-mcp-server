@@ -66,12 +66,13 @@ func Wait(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Cl
 			return fmt.Sprintf("Polling job #%d (attempt %d, status check)...", input.JobID, attempt)
 		},
 		Poll: func(pollCtx context.Context) (Output, error) {
+			pollCtx, captured := gitlabclient.WithResponseCapture(pollCtx)
 			j, _, err := client.GL().Jobs.GetJob(string(input.ProjectID), input.JobID, gl.WithContext(pollCtx))
 			if err != nil {
 				return Output{}, toolutil.WrapErrWithStatusHint("jobWait", err, http.StatusNotFound,
 					"verify project_id and job_id with job.list; the job may have been deleted or expired during polling")
 			}
-			return ToOutput(j), nil
+			return capturedJob(j, captured)
 		},
 		Status: func(out Output) string { return out.Status },
 		FailureError: func(out Output) error {

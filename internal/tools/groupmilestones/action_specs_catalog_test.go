@@ -61,7 +61,7 @@ func TestMarkdownHints_NameActionsTheCatalogHolds(t *testing.T) {
 			MergeRequests: []groupmilestones.MergeRequestItem{{IID: 1, Title: "an MR"}},
 		}),
 		"burndown": groupmilestones.FormatBurndownChartEventsMarkdownString(groupmilestones.BurndownChartEventsOutput{
-			Events: []groupmilestones.BurndownChartEventItem{{Action: "created", Weight: 1}},
+			Events: []groupmilestones.BurndownChartEventItem{{Action: "created", Weight: new(int64(1))}},
 		}),
 	}
 

@@ -1673,6 +1673,71 @@ func TestEnvironmentResource_Success(t *testing.T) {
 	}
 }
 
+// TestJobResources_Duration_IsWhatGitLabMeasured verifies that the job and
+// pipeline jobs resources publish a job that never started (GitLab sends its
+// duration as null) without a duration, and a job GitLab measured at 0
+// seconds with its 0. client-go decodes the duration as float64, which reads
+// the null as 0, so a manual job read as one that ran for no time at all.
+func TestJobResources_Duration_IsWhatGitLabMeasured(t *testing.T) {
+	const manual = `{"id":555,"name":"deploy","stage":"deploy","status":"manual","ref":"main","duration":null,"web_url":"https://gitlab.example.com/p/-/jobs/555"}`
+	const instant = `{"id":556,"name":"noop","stage":"test","status":"success","ref":"main","duration":0,"web_url":"https://gitlab.example.com/p/-/jobs/556"}`
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/projects/42/jobs/555":
+			respondJSON(w, http.StatusOK, manual)
+		case "/api/v4/projects/42/pipelines/100/jobs":
+			respondJSON(w, http.StatusOK, "["+manual+","+instant+"]")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	read := func(t *testing.T, uri string) string {
+		t.Helper()
+		result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: uri})
+		if err != nil {
+			t.Fatalf(fmtUnexpectedErr, err)
+		}
+		return result.Contents[0].Text
+	}
+
+	var one map[string]any
+	if err := json.Unmarshal([]byte(read(t, "gitlab://project/42/job/555")), &one); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if got, present := one["duration"]; present {
+		t.Errorf("job resource: duration = %v, want it left out for a job that never started", got)
+	}
+
+	var list []map[string]any
+	if err := json.Unmarshal([]byte(read(t, "gitlab://project/42/pipeline/100/jobs")), &list); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("pipeline jobs resource: %d jobs, want 2", len(list))
+	}
+	if got, present := list[0]["duration"]; present {
+		t.Errorf("pipeline jobs resource: manual job duration = %v, want it left out", got)
+	}
+	if got, present := list[1]["duration"]; !present || got != float64(0) {
+		t.Errorf("pipeline jobs resource: instant job duration = %v (present %v), want the measured 0", got, present)
+	}
+}
+
+// TestJobResourceReaders_AnAnswerTheReaderCannotHold_IsReported verifies the
+// two job resource converters report a captured answer they cannot read
+// rather than publishing jobs without their duration. Neither is reachable
+// through the transport, since the SDK decodes the same bytes into a field
+// of the same kind, so the converters are driven directly.
+func TestJobResourceReaders_AnAnswerTheReaderCannotHold_IsReported(t *testing.T) {
+	_, untouched := gitlabclient.WithResponseCapture(t.Context())
+	if _, err := capturedJobResource(&gl.Job{ID: 1}, untouched); !errors.Is(err, gitlabclient.ErrNoResponseCaptured) {
+		t.Errorf("capturedJobResource() with no captured response = %v, want ErrNoResponseCaptured", err)
+	}
+	if _, err := marshalJobResources([]*gl.Job{{ID: 1}}, nil, gitlabclient.CapturedBody([]byte(`[]`))); err == nil || !strings.Contains(err.Error(), "holds 0 jobs and the SDK decoded 1") {
+		t.Errorf("marshalJobResources() over a list one short = %v, want the count mismatch", err)
+	}
+}
+
 // TestJobResource_Success verifies the singleton job resource returns CI
 // job metadata.
 func TestJobResource_Success(t *testing.T) {

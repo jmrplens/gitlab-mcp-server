@@ -47,6 +47,16 @@ const pipelineCaptureBody = `{
 	"archived": true
 }`
 
+// measured is a measure GitLab sent, or nil for one it sent as null, so a
+// comparison against the number it should be reads the value and not the
+// pointer holding it.
+func measured(seconds *int64) any {
+	if seconds == nil {
+		return nil
+	}
+	return *seconds
+}
+
 // TestCapturedInfo_ReadsEveryKeyTheFullEntityAdds drives the reader over that
 // body and checks each of the twelve keys arrives, including the two objects
 // whose shapes are the ones GitLab's own entities render rather than the SDK's.
@@ -60,8 +70,8 @@ func TestCapturedInfo_ReadsEveryKeyTheFullEntityAdds(t *testing.T) {
 		"before_sha":      {extra.BeforeSHA, "0000000000000000000000000000000000000000"},
 		"tag":             {extra.Tag, true},
 		"yaml_errors":     {extra.YamlErrors, "widgets:build: needs 'widgets:test'"},
-		"duration":        {extra.Duration, int64(127)},
-		"queued_duration": {extra.QueuedDuration, int64(63)},
+		"duration":        {measured(extra.Duration), int64(127)},
+		"queued_duration": {measured(extra.QueuedDuration), int64(63)},
 		"coverage":        {extra.Coverage, "98.29"},
 		"archived":        {extra.Archived, true},
 	}
@@ -104,7 +114,7 @@ func TestCapturedInfo_AbsentKeysStayEmpty(t *testing.T) {
 		t.Errorf("capturedInfo() invented an object or a timestamp: %+v", extra)
 	}
 	if extra.BeforeSHA != "" || extra.Tag || extra.YamlErrors != "" || extra.Coverage != "" ||
-		extra.Duration != 0 || extra.QueuedDuration != 0 || extra.Archived {
+		extra.Duration != nil || extra.QueuedDuration != nil || extra.Archived {
 		t.Errorf("capturedInfo() invented a scalar: %+v", extra)
 	}
 }
@@ -148,7 +158,8 @@ func TestCapturedOutput_PlacesTheCapturedKeysOnTheListShape(t *testing.T) {
 		out.CommittedAt != "2026-09-04T19:19:00Z" {
 		t.Errorf("timestamps = %q/%q/%q, want RFC 3339", out.StartedAt, out.FinishedAt, out.CommittedAt)
 	}
-	if !out.Archived || !out.Tag || out.Duration != 127 || out.QueuedDuration != 63 || out.Coverage != "98.29" {
+	if !out.Archived || !out.Tag || out.Duration == nil || *out.Duration != 127 ||
+		out.QueuedDuration == nil || *out.QueuedDuration != 63 || out.Coverage != "98.29" {
 		t.Errorf("CapturedOutput() = %+v, want the captured scalars", out)
 	}
 	if out.User == nil || out.User.Username != "user1" || out.DetailedStatus == nil {

@@ -128,8 +128,8 @@ type PipelineOutput struct {
 	StartedAt      string                        `json:"started_at,omitempty"`
 	FinishedAt     string                        `json:"finished_at,omitempty"`
 	CommittedAt    string                        `json:"committed_at,omitempty"`
-	Duration       int64                         `json:"duration"`
-	QueuedDuration int64                         `json:"queued_duration"`
+	Duration       *int64                        `json:"duration,omitempty"`
+	QueuedDuration *int64                        `json:"queued_duration,omitempty"`
 	Coverage       string                        `json:"coverage"`
 	WebURL         string                        `json:"web_url"`
 	DetailedStatus *PipelineDetailedStatusOutput `json:"detailed_status,omitempty"`
@@ -138,9 +138,18 @@ type PipelineOutput struct {
 // NewPipelineOutput converts a *gl.Pipeline into the canonical-key
 // pipeline object, returning nil when the SDK value is nil. Timestamps
 // are surfaced as RFC 3339 strings via toolutil.FormatTimePtr.
-func NewPipelineOutput(p *gl.Pipeline) *PipelineOutput {
+//
+// The durations come from measures, what the captured answer carried for
+// this pipeline, because client-go decodes them as int64 and reads the null
+// of a pipeline that has not run as 0. A nil measures, a pipeline the capture
+// held no object for, leaves both out rather than publishing the SDK's
+// zeros.
+func NewPipelineOutput(p *gl.Pipeline, measures *PipelineMeasures) *PipelineOutput {
 	if p == nil {
 		return nil
+	}
+	if measures == nil {
+		measures = &PipelineMeasures{}
 	}
 	return &PipelineOutput{
 		ID:             p.ID,
@@ -160,8 +169,8 @@ func NewPipelineOutput(p *gl.Pipeline) *PipelineOutput {
 		StartedAt:      FormatTimePtr(p.StartedAt),
 		FinishedAt:     FormatTimePtr(p.FinishedAt),
 		CommittedAt:    FormatTimePtr(p.CommittedAt),
-		Duration:       p.Duration,
-		QueuedDuration: p.QueuedDuration,
+		Duration:       measures.Duration,
+		QueuedDuration: measures.QueuedDuration,
 		Coverage:       p.Coverage,
 		WebURL:         p.WebURL,
 		DetailedStatus: NewPipelineDetailedStatusOutput(p.DetailedStatus),

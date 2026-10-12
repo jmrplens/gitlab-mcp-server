@@ -118,12 +118,12 @@ func FormatTagListMarkdown(out TagListOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Registry Tags", len(out.Tags), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("Name", "Path", "Total Size (bytes)"))
+	// The list route sends no size: registry_tag_get reads one tag's.
+	b.WriteString(toolutil.MarkdownTableHeader("Name", "Path"))
 	for _, t := range out.Tags {
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(t.Name),
 			toolutil.EscapeMdTableCell(t.Path),
-			strconv.FormatInt(t.TotalSize, 10),
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,

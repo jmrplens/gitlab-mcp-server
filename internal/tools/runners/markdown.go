@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -188,7 +189,7 @@ func FormatJobListMarkdown(out JobListOutput) string {
 			// The stage name is written in .gitlab-ci.yml.
 			toolutil.EscapeMdTableCell(j.Stage),
 			toolutil.EscapeMdTableCell(j.Ref),
-			fmt.Sprintf("%.1fs", j.Duration),
+			jobs.FormatDuration(j.Duration),
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,

@@ -129,15 +129,15 @@ type Output struct {
 	Ref               string               `json:"ref"`
 	Tag               bool                 `json:"tag"`
 	AllowFailure      bool                 `json:"allow_failure"`
-	Duration          float64              `json:"duration"`
-	QueuedDuration    float64              `json:"queued_duration"`
+	Duration          *float64             `json:"duration,omitempty"`
+	QueuedDuration    *float64             `json:"queued_duration,omitempty"`
 	FailureReason     string               `json:"failure_reason,omitempty"`
 	WebURL            string               `json:"web_url"`
 	CreatedAt         string               `json:"created_at"`
 	StartedAt         string               `json:"started_at,omitempty"`
 	FinishedAt        string               `json:"finished_at,omitempty"`
 	ArtifactsExpireAt string               `json:"artifacts_expire_at,omitempty"`
-	Coverage          float64              `json:"coverage,omitempty"`
+	Coverage          *float64             `json:"coverage,omitempty"`
 	TagList           []string             `json:"tag_list,omitempty"`
 	ErasedAt          string               `json:"erased_at,omitempty"`
 	Archived          bool                 `json:"archived,omitempty"`
@@ -422,6 +422,7 @@ func Cancel(ctx context.Context, client *gitlabclient.Client, input CancelInput)
 	if input.Force {
 		opts.Force = new(true)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	j, _, err := client.GL().Jobs.CancelJobWithOptions(string(input.ProjectID), input.JobID, opts, gl.WithContext(ctx)) //nolint:staticcheck // SA1019: the only binding that carries force until client-go v4 folds it into CancelJob, and a non-nil value keeps a call without force from sending null (entry 51 of docs/development/upstream-bugs.md).
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -431,7 +432,7 @@ func Cancel(ctx context.Context, client *gitlabclient.Client, input CancelInput)
 		return Output{}, toolutil.WrapErrWithStatusHint("jobCancel", err, http.StatusNotFound,
 			"verify job_id with job.list. Only running/pending jobs can be cancelled; use force:true for non-cancellable states")
 	}
-	return ToOutput(j), nil
+	return capturedJob(j, captured)
 }
 
 // Retry retries a failed or canceled CI/CD job via the GitLab Jobs
@@ -450,6 +451,7 @@ func Retry(ctx context.Context, client *gitlabclient.Client, input ActionInput) 
 		return Output{}, toolutil.ErrRequiredInt64("jobRetry", "job_id")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	j, _, err := client.GL().Jobs.RetryJob(string(input.ProjectID), input.JobID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -459,7 +461,7 @@ func Retry(ctx context.Context, client *gitlabclient.Client, input ActionInput) 
 		return Output{}, toolutil.WrapErrWithStatusHint("jobRetry", err, http.StatusNotFound,
 			hintVerifyJobID)
 	}
-	return ToOutput(j), nil
+	return capturedJob(j, captured)
 }
 
 // ToOutput converts a GitLab API [gl.Job] into the package's [Output],
@@ -467,7 +469,11 @@ func Retry(ctx context.Context, client *gitlabclient.Client, input ActionInput) 
 // commit, pipeline, project, runner, user, and artifact sub-objects on
 // their canonical keys (nested objects trimmed to the documented Jobs API
 // field set per doc/api/jobs.md).
-func ToOutput(j *gl.Job) Output {
+//
+// The duration, queued duration and coverage come from measures, what GitLab
+// sent for them, because client-go decodes all three as float64 and reads
+// the null of a job that never started as 0.
+func ToOutput(j *gl.Job, measures toolutil.JobMeasures) Output {
 	out := Output{
 		ID:             j.ID,
 		Name:           j.Name,
@@ -476,11 +482,11 @@ func ToOutput(j *gl.Job) Output {
 		Ref:            j.Ref,
 		Tag:            j.Tag,
 		AllowFailure:   j.AllowFailure,
-		Duration:       j.Duration,
-		QueuedDuration: j.QueuedDuration,
+		Duration:       measures.Duration,
+		QueuedDuration: measures.QueuedDuration,
 		FailureReason:  j.FailureReason,
 		WebURL:         j.WebURL,
-		Coverage:       j.Coverage,
+		Coverage:       measures.Coverage,
 		TagList:        j.TagList,
 		Commit:         commitObject(j.Commit),
 		Pipeline:       pipelineObject(j.Pipeline),
@@ -583,11 +589,11 @@ type BridgeOutput struct {
 	Ref                string              `json:"ref"`
 	Tag                bool                `json:"tag"`
 	AllowFailure       bool                `json:"allow_failure"`
-	Duration           float64             `json:"duration"`
-	QueuedDuration     float64             `json:"queued_duration"`
+	Duration           *float64            `json:"duration,omitempty"`
+	QueuedDuration     *float64            `json:"queued_duration,omitempty"`
 	FailureReason      string              `json:"failure_reason,omitempty"`
 	WebURL             string              `json:"web_url"`
-	Coverage           float64             `json:"coverage,omitempty"`
+	Coverage           *float64            `json:"coverage,omitempty"`
 	CreatedAt          string              `json:"created_at"`
 	StartedAt          string              `json:"started_at,omitempty"`
 	FinishedAt         string              `json:"finished_at,omitempty"`
@@ -622,11 +628,11 @@ func BridgeToOutput(b *gl.Bridge, extra toolutil.BridgeExtra) BridgeOutput {
 		Ref:                b.Ref,
 		Tag:                b.Tag,
 		AllowFailure:       b.AllowFailure,
-		Duration:           b.Duration,
-		QueuedDuration:     b.QueuedDuration,
+		Duration:           extra.Duration,
+		QueuedDuration:     extra.QueuedDuration,
 		FailureReason:      b.FailureReason,
 		WebURL:             b.WebURL,
-		Coverage:           b.Coverage,
+		Coverage:           extra.Coverage,
 		Commit:             commitObject(b.Commit),
 		Pipeline:           pipelineInfoValueObject(b.Pipeline),
 		User:               userObject(b.User),
@@ -889,6 +895,7 @@ func Erase(ctx context.Context, client *gitlabclient.Client, input ActionInput) 
 		return Output{}, toolutil.ErrRequiredInt64("jobErase", "job_id")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	j, _, err := client.GL().Jobs.EraseJob(string(input.ProjectID), input.JobID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -898,7 +905,7 @@ func Erase(ctx context.Context, client *gitlabclient.Client, input ActionInput) 
 		return Output{}, toolutil.WrapErrWithStatusHint("jobErase", err, http.StatusNotFound,
 			hintVerifyJobID)
 	}
-	return ToOutput(j), nil
+	return capturedJob(j, captured)
 }
 
 // KeepArtifacts prevents a CI/CD job's artifacts from being deleted
@@ -917,6 +924,7 @@ func KeepArtifacts(ctx context.Context, client *gitlabclient.Client, input Actio
 		return Output{}, toolutil.ErrRequiredInt64("jobKeepArtifacts", "job_id")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	j, _, err := client.GL().Jobs.KeepArtifacts(string(input.ProjectID), input.JobID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -926,7 +934,7 @@ func KeepArtifacts(ctx context.Context, client *gitlabclient.Client, input Actio
 		return Output{}, toolutil.WrapErrWithStatusHint("jobKeepArtifacts", err, http.StatusNotFound,
 			"verify job_id; the job must have artifacts that have not yet been expired/erased")
 	}
-	return ToOutput(j), nil
+	return capturedJob(j, captured)
 }
 
 // PlayInput defines parameters for running a manual job with optional variables.
@@ -983,6 +991,7 @@ func Play(ctx context.Context, client *gitlabclient.Client, input PlayInput) (Ou
 		opts.JobVariablesAttributes = &vars
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	j, _, err := client.GL().Jobs.PlayJob(string(input.ProjectID), input.JobID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
@@ -996,7 +1005,7 @@ func Play(ctx context.Context, client *gitlabclient.Client, input PlayInput) (Ou
 		return Output{}, toolutil.WrapErrWithStatusHint("jobPlay", err, http.StatusNotFound,
 			hintVerifyJobID)
 	}
-	return ToOutput(j), nil
+	return capturedJob(j, captured)
 }
 
 // DeleteArtifactsInput defines parameters for deleting artifacts from a single job.

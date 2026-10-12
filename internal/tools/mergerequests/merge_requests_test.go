@@ -1446,6 +1446,16 @@ const mrPipelineCaptureBody = `{"id":500,"iid":10,"project_id":42,"status":"pend
 	`"tooltip":"pending","has_details":true,"details_path":"/p/pipelines/500","favicon":"/f.png"},` +
 	`"archived":true}`
 
+// measuredSeconds is a measure GitLab sent, or nil for one it sent as null, so
+// a comparison against the number it should be reads the value and not the
+// pointer holding it.
+func measuredSeconds(seconds *int64) any {
+	if seconds == nil {
+		return nil
+	}
+	return *seconds
+}
+
 // TestMRCreatePipeline_PublishesTheCapturedKeys verifies that the twelve keys
 // the full pipeline entity adds reach the caller through this handler.
 //
@@ -1474,8 +1484,8 @@ func TestMRCreatePipeline_PublishesTheCapturedKeys(t *testing.T) {
 		"started_at":      {out.StartedAt, "2026-04-01T00:01:00Z"},
 		"finished_at":     {out.FinishedAt, "2026-04-01T00:03:07Z"},
 		"committed_at":    {out.CommittedAt, "2026-04-01T00:00:30Z"},
-		"duration":        {out.Duration, int64(127)},
-		"queued_duration": {out.QueuedDuration, int64(63)},
+		"duration":        {measuredSeconds(out.Duration), int64(127)},
+		"queued_duration": {measuredSeconds(out.QueuedDuration), int64(63)},
 		"coverage":        {out.Coverage, "98.29"},
 		"archived":        {out.Archived, true},
 	}
@@ -7990,6 +8000,43 @@ func TestToOutput_EachScalarReadsItsOwnKey(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			if !reflect.DeepEqual(c.got, c.want) {
 				t.Errorf("%s = %#v, want %#v", c.name, c.got, c.want)
+			}
+		})
+	}
+}
+
+// TestGet_HeadPipelineThatNeverRan_PublishesNoDuration verifies a merge
+// request's head pipeline is published with the durations GitLab measured:
+// none for a pipeline that has not run, where client-go's int64 used to make
+// it one that ran for 0 seconds, and 0 for one GitLab measured at 0.
+func TestGet_HeadPipelineThatNeverRan_PublishesNoDuration(t *testing.T) {
+	for _, tc := range []struct {
+		name, durations string
+		want            any
+	}{
+		{"never ran", `"duration":null,"queued_duration":null`, nil},
+		{"measured at zero", `"duration":0,"queued_duration":0`, float64(0)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"project_id":42,"head_pipeline":{"id":9,"status":"created",`+tc.durations+`}}`)
+			}))
+			out, err := Get(context.Background(), client, GetInput{ProjectID: "42", MRIID: 1})
+			if err != nil {
+				t.Fatalf("Get() error: %v", err)
+			}
+			data, err := json.Marshal(out.HeadPipeline)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			var keys map[string]any
+			if err = json.Unmarshal(data, &keys); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			for _, key := range []string{"duration", "queued_duration"} {
+				if got, present := keys[key]; got != tc.want || present != (tc.want != nil) {
+					t.Errorf("head_pipeline %s = %v (present %v), want %v", key, got, present, tc.want)
+				}
 			}
 		})
 	}

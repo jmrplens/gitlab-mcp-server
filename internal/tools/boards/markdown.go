@@ -148,7 +148,11 @@ func FormatBoardMarkdown(out BoardOutput) string {
 	if out.Assignee != nil {
 		c.Markdown("Assignee", toolutil.MdUserLink(out.Assignee.Username, out.Assignee.WebURL))
 	}
-	c.Count("Weight", out.Weight)
+	// A board scoped to weight 0 says so; a board with no weight scope, which
+	// GitLab sends as null, has no row.
+	if out.Weight != nil {
+		c.Int("Weight", *out.Weight)
+	}
 	c.Field("Labels", strings.Join(boardLabelNames(out.Labels), ", "))
 	c.Bool("Hide Backlog", out.HideBacklogList)
 	c.Bool("Hide Closed", out.HideClosedList)

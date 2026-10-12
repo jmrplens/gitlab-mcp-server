@@ -200,7 +200,7 @@ type MergeRequestsOutput struct {
 // BurndownChartEventItem represents a single burndown chart event.
 type BurndownChartEventItem struct {
 	CreatedAt string `json:"created_at"`
-	Weight    int64  `json:"weight"`
+	Weight    *int64 `json:"weight,omitempty"`
 	Action    string `json:"action"`
 }
 
@@ -662,9 +662,9 @@ func GetBurndownChartEvents(ctx context.Context, client *gitlabclient.Client, in
 		if e.CreatedAt != nil {
 			items[i].CreatedAt = e.CreatedAt.Format(time.RFC3339)
 		}
-		if e.Weight != nil {
-			items[i].Weight = *e.Weight
-		}
+		// client-go models this weight as a pointer, so the null of an
+		// event whose issue carries no weight arrives as nil and stays so.
+		items[i].Weight = e.Weight
 		if e.Action != nil {
 			items[i].Action = *e.Action
 		}

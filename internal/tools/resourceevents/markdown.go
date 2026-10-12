@@ -157,6 +157,16 @@ func FormatIterationEventMarkdown(out IterationEventOutput) string {
 	return b.String()
 }
 
+// weightCell renders the weight an event set, and a dash for an event that
+// took the weight away, which GitLab sends as null rather than as a weight of
+// 0, a value with a meaning of its own.
+func weightCell(weight *int64) string {
+	if weight == nil {
+		return "-"
+	}
+	return strconv.FormatInt(*weight, 10)
+}
+
 // FormatWeightEventsMarkdown formats a list of weight events.
 func FormatWeightEventsMarkdown(out ListWeightEventsOutput) string {
 	if len(out.Events) == 0 {
@@ -173,7 +183,7 @@ func FormatWeightEventsMarkdown(out ListWeightEventsOutput) string {
 	for _, e := range out.Events {
 		b.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(e.ID, 10),
-			strconv.FormatInt(e.Weight, 10),
+			weightCell(e.Weight),
 			eventUsername(e.User),
 			strconv.FormatInt(e.IssueID, 10),
 			toolutil.FormatTime(e.CreatedAt),

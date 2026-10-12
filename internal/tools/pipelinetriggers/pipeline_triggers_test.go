@@ -504,8 +504,11 @@ func TestRunTrigger_FullPipeline(t *testing.T) {
 	if out.IID != 5 || out.ProjectID != 1 || out.Source != "trigger" || out.Name != "deploy" {
 		t.Errorf("scalar fields not mapped: %+v", out)
 	}
-	if out.BeforeSHA != "def" || !out.Tag || out.Duration != 42 || out.QueuedDuration != 3 || out.Coverage != "88.5" {
+	if out.BeforeSHA != "def" || !out.Tag || out.Coverage != "88.5" {
 		t.Errorf("additive fields not mapped: %+v", out)
+	}
+	if out.Duration == nil || *out.Duration != 42 || out.QueuedDuration == nil || *out.QueuedDuration != 3 {
+		t.Errorf("durations = %v, %v, want 42 and 3", out.Duration, out.QueuedDuration)
 	}
 	wantUser := &BasicUserOutput{
 		ID: 7, Username: "bot", Name: "Bot", State: "active",
@@ -516,6 +519,50 @@ func TestRunTrigger_FullPipeline(t *testing.T) {
 	}
 	assertDetailedStatusRunning(t, out.DetailedStatus)
 	assertPipelineTimestamps(t, out)
+}
+
+// TestRunTrigger_Durations_AreWhatGitLabMeasured verifies the triggered
+// pipeline's two durations are read from the captured answer: a pipeline that
+// has not run is sent null for both and publishes neither, and one measured
+// at 0 seconds publishes its 0. client-go decodes null as 0, and omitempty
+// then dropped a measured 0 along with it.
+func TestRunTrigger_Durations_AreWhatGitLabMeasured(t *testing.T) {
+	cases := []struct {
+		name        string
+		body        string
+		wantPresent bool
+	}{
+		{name: "not run", body: `{"id":99,"status":"created","ref":"main","sha":"abc","web_url":"https://gl/p","duration":null,"queued_duration":null}`},
+		{name: "measured at zero", body: `{"id":99,"status":"success","ref":"main","sha":"abc","web_url":"https://gl/p","duration":0,"queued_duration":0}`, wantPresent: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusCreated, tc.body)
+			}))
+			out, err := RunTrigger(context.Background(), client, RunInput{ProjectID: "1", Ref: "main", Token: "tok"})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			data, err := json.Marshal(out)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			var published map[string]any
+			if err = json.Unmarshal(data, &published); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			for _, key := range []string{"duration", "queued_duration"} {
+				got, present := published[key]
+				if present != tc.wantPresent {
+					t.Errorf("%s present = %v (value %v), want %v", key, present, got, tc.wantPresent)
+				}
+				if tc.wantPresent && got != float64(0) {
+					t.Errorf("%s = %v, want 0", key, got)
+				}
+			}
+		})
+	}
 }
 
 // assertDetailedStatusRunning verifies the triggered-pipeline detailed_status

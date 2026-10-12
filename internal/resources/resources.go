@@ -115,15 +115,45 @@ type LatestPipelineResourceOutput struct {
 // "gitlab://project/{id}/job/{job_id}" resources. It contains the
 // job's ID, name, stage, status, ref, duration in seconds,
 // failure reason (omitted when empty), and web URL.
+//
+// Duration is left out for a job that never started, which GitLab measures
+// as null rather than as zero seconds; it is read from the captured answer
+// because client-go decodes it as float64 (register row 116).
 type JobResourceOutput struct {
-	ID            int64   `json:"id"`
-	Name          string  `json:"name"`
-	Stage         string  `json:"stage"`
-	Status        string  `json:"status"`
-	Ref           string  `json:"ref"`
-	Duration      float64 `json:"duration"`
-	FailureReason string  `json:"failure_reason,omitempty"`
-	WebURL        string  `json:"web_url"`
+	ID            int64    `json:"id"`
+	Name          string   `json:"name"`
+	Stage         string   `json:"stage"`
+	Status        string   `json:"status"`
+	Ref           string   `json:"ref"`
+	Duration      *float64 `json:"duration,omitempty"`
+	FailureReason string   `json:"failure_reason,omitempty"`
+	WebURL        string   `json:"web_url"`
+}
+
+// capturedJobResource converts a job client-go decoded with the duration the
+// captured answer to its request carried, or reports an answer the reader
+// cannot hold.
+func capturedJobResource(j *gl.Job, captured *gitlabclient.ResponseCapture) (JobResourceOutput, error) {
+	measures, err := toolutil.CapturedJob(captured)
+	if err != nil {
+		return JobResourceOutput{}, err
+	}
+	return jobResourceOutput(j, measures), nil
+}
+
+// jobResourceOutput converts a job client-go decoded with the duration its
+// captured answer carried.
+func jobResourceOutput(j *gl.Job, measures toolutil.JobMeasures) JobResourceOutput {
+	return JobResourceOutput{
+		ID:            j.ID,
+		Name:          j.Name,
+		Stage:         j.Stage,
+		Status:        j.Status,
+		Ref:           j.Ref,
+		Duration:      measures.Duration,
+		FailureReason: j.FailureReason,
+		WebURL:        j.WebURL,
+	}
 }
 
 // LabelResourceOutput is the JSON payload for a single project or
@@ -798,25 +828,28 @@ func registerPipelineJobsResource(server registrar, base *gitlabclient.Client) {
 		if err != nil {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
-		jobs, resp, err := client.GL().Jobs.ListPipelineJobs(projectID, pipelineID, &gl.ListJobsOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
+		listCtx, captured := gitlabclient.WithResponseCapture(ctx)
+		jobs, resp, err := client.GL().Jobs.ListPipelineJobs(projectID, pipelineID, &gl.ListJobsOptions{PerPage: resourcePerPage}, gl.WithContext(listCtx))
 		if err != nil {
 			return nil, wrapErr("failed to list pipeline jobs", err)
 		}
-		out := make([]JobResourceOutput, len(jobs))
-		for i, j := range jobs {
-			out[i] = JobResourceOutput{
-				ID:            j.ID,
-				Name:          j.Name,
-				Stage:         j.Stage,
-				Status:        j.Status,
-				Ref:           j.Ref,
-				Duration:      j.Duration,
-				FailureReason: j.FailureReason,
-				WebURL:        j.WebURL,
-			}
-		}
-		return marshalResourceList(out, pageOf(len(out), resp))
+		return marshalJobResources(jobs, resp, captured)
 	})
+}
+
+// marshalJobResources renders a page of a pipeline's jobs, each with the
+// duration its captured answer carried, or reports an answer the reader
+// cannot hold.
+func marshalJobResources(jobs []*gl.Job, resp *gl.Response, captured *gitlabclient.ResponseCapture) (*mcp.ReadResourceResult, error) {
+	measures, err := toolutil.CapturedJobs(captured, len(jobs))
+	if err != nil {
+		return nil, wrapErr("failed to list pipeline jobs", err)
+	}
+	out := make([]JobResourceOutput, len(jobs))
+	for i, j := range jobs {
+		out[i] = jobResourceOutput(j, measures[i])
+	}
+	return marshalResourceList(out, pageOf(len(out), resp))
 }
 
 // registerProjectLabelsResource registers the
@@ -2099,20 +2132,12 @@ func registerJobResource(server registrar, base *gitlabclient.Client) {
 		client := base.For(ctx)
 		return readProjectIntResource(ctx, req, "/job/", "failed to get job",
 			func(projectID string, id int64) (JobResourceOutput, error) {
-				j, _, err := client.GL().Jobs.GetJob(projectID, id, gl.WithContext(ctx))
+				jobCtx, captured := gitlabclient.WithResponseCapture(ctx)
+				j, _, err := client.GL().Jobs.GetJob(projectID, id, gl.WithContext(jobCtx))
 				if err != nil {
 					return JobResourceOutput{}, err
 				}
-				return JobResourceOutput{
-					ID:            j.ID,
-					Name:          j.Name,
-					Stage:         j.Stage,
-					Status:        j.Status,
-					Ref:           j.Ref,
-					Duration:      j.Duration,
-					FailureReason: j.FailureReason,
-					WebURL:        j.WebURL,
-				}, nil
+				return capturedJobResource(j, captured)
 			})
 	})
 }

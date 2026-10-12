@@ -4,10 +4,14 @@ package dorametrics
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -58,6 +62,87 @@ func metricsStatusHandler(status int, body string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, status, body)
 	})
+}
+
+// nullMetricsBody is a DORA answer holding the three shapes a data point can
+// take: a period with nothing to measure, which GitLab answers with a null
+// value (a median over no rows), a real zero, and the one bucket of
+// interval=all, which carries no date.
+const nullMetricsBody = `[
+	{"date":"2026-10-11","value":null},
+	{"date":"2026-10-12","value":0},
+	{"date":null,"value":3.5}
+]`
+
+// nullMetricsJSON is how those three points are published: the null value as
+// null, the zero as zero, and the undated bucket without a date.
+const nullMetricsJSON = `[{"date":"2026-10-11","value":null},{"date":"2026-10-12","value":0},{"value":3.5}]`
+
+// assertNullMetrics holds a handler's output for nullMetricsBody to what
+// GitLab sent: a null value used to arrive as 0, which for lead time and time
+// to restore is the best value there is, so a project with nothing to measure
+// read as an elite performer, and the undated bucket rendered an empty cell.
+func assertNullMetrics(t *testing.T, out Output) {
+	t.Helper()
+	got, err := json.Marshal(out.Metrics)
+	if err != nil {
+		t.Fatalf("marshal metrics: %v", err)
+	}
+	if string(got) != nullMetricsJSON {
+		t.Errorf("metrics = %s, want %s", got, nullMetricsJSON)
+	}
+	md := FormatMarkdown(out, "lead_time_for_changes")
+	for _, row := range []string{"| 11 Oct 2026 | no data |", "| 12 Oct 2026 | 0 |", "| whole period | 3.5 |"} {
+		if !strings.Contains(md, row) {
+			t.Errorf("markdown lacks %q:\n%s", row, md)
+		}
+	}
+}
+
+// TestGetProjectMetrics_NullValue_IsPublishedAsNoData verifies the project
+// handler reads each value from the captured answer, so a null stays null
+// and a sent zero stays zero.
+func TestGetProjectMetrics_NullValue_IsPublishedAsNoData(t *testing.T) {
+	client := testutil.NewTestClient(t, metricsHandler(t, metricsRequest{
+		Path:   "/api/v4/projects/42/dora/metrics",
+		Metric: "lead_time_for_changes",
+	}, nullMetricsBody))
+	out, err := GetProjectMetrics(context.Background(), client, ProjectInput{ProjectID: "42", Metric: "lead_time_for_changes"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	assertNullMetrics(t, out)
+}
+
+// TestGetGroupMetrics_NullValue_IsPublishedAsNoData verifies the same of the
+// group handler.
+func TestGetGroupMetrics_NullValue_IsPublishedAsNoData(t *testing.T) {
+	client := testutil.NewTestClient(t, metricsHandler(t, metricsRequest{
+		Path:   "/api/v4/groups/7/dora/metrics",
+		Metric: "time_to_restore_service",
+	}, nullMetricsBody))
+	out, err := GetGroupMetrics(context.Background(), client, GroupInput{GroupID: "7", Metric: "time_to_restore_service"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	assertNullMetrics(t, out)
+}
+
+// TestToOutput_AnAnswerTheReaderCannotHold_IsReported verifies the converter
+// reports, under the operation it names, a captured answer it cannot pair
+// with the points client-go decoded: a capture no response reached, and a
+// list whose length is not what the SDK decoded. Neither is reachable through
+// the transport, since the SDK decodes the same bytes, so the converter is
+// driven directly.
+func TestToOutput_AnAnswerTheReaderCannotHold_IsReported(t *testing.T) {
+	_, untouched := gitlabclient.WithResponseCapture(t.Context())
+	if _, err := toOutput("doraProjectMetrics", []gl.DORAMetric{{Date: "2026-10-11"}}, untouched); err == nil || !strings.Contains(err.Error(), "doraProjectMetrics") {
+		t.Errorf("toOutput() with no captured response = %v, want an error naming the operation", err)
+	}
+	short := gitlabclient.CapturedBody([]byte(`[]`))
+	if _, err := toOutput("doraGroupMetrics", []gl.DORAMetric{{Date: "2026-10-11"}}, short); err == nil || !strings.Contains(err.Error(), "captured 0 DORA data points, client-go decoded 1") {
+		t.Errorf("toOutput() over a list one short = %v, want the count mismatch", err)
+	}
 }
 
 type projectMetricsCase struct {
@@ -212,8 +297,8 @@ func assertSingleProjectMetricValue(want float64) func(*testing.T, Output) {
 		if len(out.Metrics) != 1 {
 			t.Fatalf("got %d metrics, want 1", len(out.Metrics))
 		}
-		if out.Metrics[0].Value != want {
-			t.Errorf("value = %f, want %v", out.Metrics[0].Value, want)
+		if out.Metrics[0].Value == nil || *out.Metrics[0].Value != want {
+			t.Errorf("value = %v, want %v", out.Metrics[0].Value, want)
 		}
 	}
 }
@@ -223,8 +308,8 @@ func assertMetric(t *testing.T, got MetricOutput, wantDate string, wantValue flo
 	if got.Date != wantDate {
 		t.Errorf("date[%d] = %q, want %q", index, got.Date, wantDate)
 	}
-	if got.Value != wantValue {
-		t.Errorf("value[%d] = %f, want %v", index, got.Value, wantValue)
+	if got.Value == nil || *got.Value != wantValue {
+		t.Errorf("value[%d] = %v, want %v", index, got.Value, wantValue)
 	}
 }
 
@@ -329,8 +414,8 @@ func TestGetGroupMetrics(t *testing.T) {
 				if out.Metrics[0].Date != "2026-02-01" {
 					t.Errorf("date = %q, want %q", out.Metrics[0].Date, "2026-02-01")
 				}
-				if out.Metrics[0].Value != 3.0 {
-					t.Errorf("value = %f, want 3.0", out.Metrics[0].Value)
+				if out.Metrics[0].Value == nil || *out.Metrics[0].Value != 3.0 {
+					t.Errorf("value = %v, want 3.0", out.Metrics[0].Value)
 				}
 			},
 		},
@@ -552,8 +637,8 @@ func TestFormatMarkdown(t *testing.T) {
 			name: "renders metrics table with data points",
 			output: Output{
 				Metrics: []MetricOutput{
-					{Date: "2026-01-15", Value: 1.5},
-					{Date: "2026-01-16", Value: 2.0},
+					{Date: "2026-01-15", Value: new(1.5)},
+					{Date: "2026-01-16", Value: new(2.0)},
 				},
 			},
 			metric: "lead_time_for_changes",
@@ -566,7 +651,7 @@ func TestFormatMarkdown(t *testing.T) {
 		{
 			name: "renders generic title when metric is empty",
 			output: Output{
-				Metrics: []MetricOutput{{Date: "2026-03-01", Value: 0.0}},
+				Metrics: []MetricOutput{{Date: "2026-03-01", Value: new(0.0)}},
 			},
 			metric: "",
 			want: "## DORA Metrics (1)\n\n" +
@@ -581,7 +666,7 @@ func TestFormatMarkdown(t *testing.T) {
 			// structure there.
 			name: "a metric name carrying a pipe adds no structure",
 			output: Output{
-				Metrics: []MetricOutput{{Date: "2026-01-01", Value: 1.0}},
+				Metrics: []MetricOutput{{Date: "2026-01-01", Value: new(1.0)}},
 			},
 			metric: "metric|with|pipes",
 			want: "## DORA Metrics: metric|with|pipes (1)\n\n" +

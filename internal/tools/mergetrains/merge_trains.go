@@ -2,6 +2,7 @@ package mergetrains
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -79,7 +80,7 @@ type Output struct {
 	Pipeline     *toolutil.PipelineOutput  `json:"pipeline,omitempty"`
 	TargetBranch string                    `json:"target_branch"`
 	Status       string                    `json:"status"`
-	Duration     int64                     `json:"duration"`
+	Duration     *int64                    `json:"duration,omitempty"`
 	CreatedAt    string                    `json:"created_at,omitempty"`
 	UpdatedAt    string                    `json:"updated_at,omitempty"`
 	MergedAt     string                    `json:"merged_at,omitempty"`
@@ -92,20 +93,55 @@ type ListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
+// trainMeasures is how long a car and its pipeline took, as GitLab sends
+// them: null for a car whose train has not run, which client-go's MergeTrain
+// and Pipeline decode as int64 and so read as 0. Read from the captured
+// response (ADR-0021); recorded as register row 116 of
+// docs/development/upstream-bugs.md.
+type trainMeasures struct {
+	Duration *int64                     `json:"duration"`
+	Pipeline *toolutil.PipelineMeasures `json:"pipeline"`
+}
+
+// capturedOutput converts one car client-go decoded with the measures the
+// captured answer to its request carried, or reports under op an answer the
+// reader cannot hold.
+func capturedOutput(op string, mt *gl.MergeTrain, captured *gitlabclient.ResponseCapture) (Output, error) {
+	var measures trainMeasures
+	if err := captured.Decode(&measures); err != nil {
+		return Output{}, toolutil.WrapErr(op, err)
+	}
+	return toOutput(mt, measures), nil
+}
+
+// capturedTrains reads the same off a list answer, one per car in order, the
+// count held to what the SDK decoded.
+func capturedTrains(op string, captured *gitlabclient.ResponseCapture, decoded int) ([]trainMeasures, error) {
+	var measures []trainMeasures
+	if err := captured.Decode(&measures); err != nil {
+		return nil, toolutil.WrapErr(op, err)
+	}
+	if len(measures) != decoded {
+		return nil, toolutil.WrapErr(op, fmt.Errorf("the captured answer holds %d merge train cars and the SDK decoded %d", len(measures), decoded))
+	}
+	return measures, nil
+}
+
 // toOutput converts a [gl.MergeTrain] into the package's [Output], mirroring
 // the embedded merge request, user, and pipeline sub-objects as full nested
 // shapes and writing every timestamp in the wire form via [toolutil.RFC3339Ptr].
-func toOutput(mt *gl.MergeTrain) Output {
+// The car's duration and its pipeline's come from measures, what GitLab sent.
+func toOutput(mt *gl.MergeTrain, measures trainMeasures) Output {
 	if mt == nil {
 		return Output{}
 	}
 	out := Output{
 		ID:           mt.ID,
 		User:         toolutil.NewBasicUserOutput(mt.User),
-		Pipeline:     toolutil.NewPipelineOutput(mt.Pipeline),
+		Pipeline:     toolutil.NewPipelineOutput(mt.Pipeline, measures.Pipeline),
 		TargetBranch: mt.TargetBranch,
 		Status:       mt.Status,
-		Duration:     mt.Duration,
+		Duration:     measures.Duration,
 	}
 	if mt.MergeRequest != nil {
 		out.MergeRequest = MergeRequestOutput{
@@ -144,11 +180,12 @@ func ListProjectMergeTrains(ctx context.Context, client *gitlabclient.Client, in
 	if input.Sort != "" {
 		opts.Sort = new(input.Sort)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	trains, resp, err := client.GL().MergeTrains.ListProjectMergeTrains(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_project_merge_trains", err, http.StatusNotFound, "verify project_id with project.get. Merge trains require Premium license")
 	}
-	return toListOutput(trains, resp), nil
+	return toListOutput("gitlab_list_project_merge_trains", trains, resp, captured)
 }
 
 // ListMergeRequestInMergeTrain lists the merge requests currently
@@ -172,11 +209,12 @@ func ListMergeRequestInMergeTrain(ctx context.Context, client *gitlabclient.Clie
 	if input.Sort != "" {
 		opts.Sort = new(input.Sort)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	trains, resp, err := client.GL().MergeTrains.ListMergeRequestInMergeTrain(string(input.ProjectID), input.TargetBranch, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_merge_request_in_merge_train", err, http.StatusNotFound, "verify project_id and target_branch. Merge trains require Premium license")
 	}
-	return toListOutput(trains, resp), nil
+	return toListOutput("gitlab_list_merge_request_in_merge_train", trains, resp, captured)
 }
 
 // GetMergeRequestOnMergeTrain retrieves the merge train status for a
@@ -191,11 +229,12 @@ func GetMergeRequestOnMergeTrain(ctx context.Context, client *gitlabclient.Clien
 	if input.MergeRequestID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("gitlab_get_merge_request_on_merge_train", "merge_request_iid")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	train, _, err := client.GL().MergeTrains.GetMergeRequestOnAMergeTrain(string(input.ProjectID), input.MergeRequestID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("gitlab_get_merge_request_on_merge_train", err, http.StatusNotFound, "verify project_id and merge_request_iid. The MR must be on a merge train")
 	}
-	return toOutput(train), nil
+	return capturedOutput("gitlab_get_merge_request_on_merge_train", train, captured)
 }
 
 // AddMergeRequestToMergeTrain adds a merge request to a project's
@@ -224,6 +263,7 @@ func AddMergeRequestToMergeTrain(ctx context.Context, client *gitlabclient.Clien
 	if input.WhenPipelineSucceeds {
 		opts.WhenPipelineSucceeds = new(true) //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use auto_merge.
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	trains, resp, err := client.GL().MergeTrains.AddMergeRequestToMergeTrain(string(input.ProjectID), input.MergeRequestID, opts, gl.WithContext(ctx))
 	if err != nil {
 		// GitLab answers a caller who may not merge the request with 401
@@ -236,19 +276,24 @@ func AddMergeRequestToMergeTrain(ctx context.Context, client *gitlabclient.Clien
 		}
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_add_merge_request_to_merge_train", err, http.StatusBadRequest, "verify the MR is approved and pipeline passed. Merge trains require Premium license")
 	}
-	return toListOutput(trains, resp), nil
+	return toListOutput("gitlab_add_merge_request_to_merge_train", trains, resp, captured)
 }
 
 // toListOutput converts a slice of [gl.MergeTrain] entries into a
 // paginated [ListOutput] using the supplied GitLab [gl.Response] for
-// pagination metadata.
-func toListOutput(trains []*gl.MergeTrain, resp *gl.Response) ListOutput {
+// pagination metadata, each car with the measures its captured answer
+// carried, or reports the answer the reader cannot hold.
+func toListOutput(op string, trains []*gl.MergeTrain, resp *gl.Response, captured *gitlabclient.ResponseCapture) (ListOutput, error) {
+	measures, err := capturedTrains(op, captured, len(trains))
+	if err != nil {
+		return ListOutput{}, err
+	}
 	out := ListOutput{
 		Trains:     make([]Output, 0, len(trains)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
-	for _, t := range trains {
-		out.Trains = append(out.Trains, toOutput(t))
+	for i, t := range trains {
+		out.Trains = append(out.Trains, toOutput(t, measures[i]))
 	}
-	return out
+	return out, nil
 }

@@ -302,7 +302,7 @@ func toOutput(m *gl.MergeRequest, extra toolutil.MergeRequestExtra) Output {
 		FirstContribution:           m.FirstContribution,
 		User:                        mergeRequestUserOutputPtr(m.User),
 		Pipeline:                    toolutil.NewPipelineInfoOutput(m.Pipeline),
-		HeadPipeline:                toolutil.NewPipelineOutput(m.HeadPipeline),
+		HeadPipeline:                toolutil.NewPipelineOutput(m.HeadPipeline, extra.HeadPipeline),
 		MergeAfter:                  toolutil.FormatTimePtr(m.MergeAfter),
 		LatestBuildStartedAt:        toolutil.FormatTimePtr(m.LatestBuildStartedAt),
 		LatestBuildFinishedAt:       toolutil.FormatTimePtr(m.LatestBuildFinishedAt),

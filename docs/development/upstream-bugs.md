@@ -83,6 +83,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The saved view documents leave out who made a view, when it changed and how to share it](#the-saved-view-documents-leave-out-who-made-a-view-when-it-changed-and-how-to-share-it)
   - [DependencyListExport carries four of the eight fields GitLab sends](#dependencylistexport-carries-four-of-the-eight-fields-gitlab-sends)
   - [The model package file path segment cannot be omitted](#the-model-package-file-path-segment-cannot-be-omitted)
+  - [A measure GitLab sends as null decodes as 0](#a-measure-gitlab-sends-as-null-decodes-as-0)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -341,6 +342,7 @@ readable without opening the tracker:
 | 113 | client-go | [`DependencyListExport` carries four of the eight fields GitLab sends](#dependencylistexport-carries-four-of-the-eight-fields-gitlab-sends) | No; for the joint merge request | No | No | No | Yes, the export create and status read take the four from the captured response |
 | 114 | gitlab-org/gitlab | [The ML model package route accepts neither PRIVATE-TOKEN nor a GitLab OAuth access token](#the-ml-model-package-route-accepts-neither-private-token-nor-a-gitlab-oauth-access-token) | No | No | No | Yes, for an oauth HTTP mode session holding a GitLab OAuth access token, which cannot download a model file at all | Yes, in part: `model_registry.download` sends the token as Bearer, and a Bearer session's 401 names the limit |
 | 115 | client-go | [The model package file path segment cannot be omitted](#the-model-package-file-path-segment-cannot-be-omitted) | No; for the joint merge request | No | No | No | Yes, `model_registry.download` sends its own request for a file at the package root |
+| 116 | client-go | [A measure GitLab sends as null decodes as 0](#a-measure-gitlab-sends-as-null-decodes-as-0) | No; for the joint merge request | No | No | No | Yes, for every measure but a deployable's, which is still left out at 0 |
 | 127 | gitlab-org/gitlab | [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text) | No | No | No | No; GitLab's pages leave such a submodule unlinked | Yes, `repository.list_submodules` and `repository.read_submodule_file` resolve a sibling namespace and the other spellings of the instance's clone URLs |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
@@ -6131,6 +6133,59 @@ in every spelling.
 
 **Effort**: small: an option that drops the segment, or a path argument the
 method leaves out when it is empty, and a routing test.
+
+### A measure GitLab sends as null decodes as 0
+
+- **Reported**: no. It goes into the joint merge request,
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  with the other struct gaps of this register.
+- **In review**: no.
+- **Merged**: no. v3.15.0 decodes every one of them as a number.
+- **Blocking**: no.
+- **Workaround**: yes, for every one of these but a deployable's. Each
+  handler that presents one of them calls the SDK under
+  `gitlabclient.WithResponseCapture` (ADR-0021) and reads the value from the
+  captured answer as a pointer: `toolutil.PipelineMeasures` (through
+  `toolutil.PipelineExtra` for a pipeline read or triggered),
+  `toolutil.JobMeasures` and `toolutil.CapturedJob`/`CapturedJobs` for the
+  pipeline, trigger, job and bridge handlers and the job resources, the
+  measures of a merge request's head pipeline through
+  `toolutil.MergeRequestExtra`, a project board's weight scope through
+  `toolutil.BoardExtra`, and a reader of its own in `dorametrics`,
+  `mergetrains`, `resourceevents` and `groupboards`. A deployable's coverage
+  and duration, on a deployment and on an environment's last deployment, are
+  still read from client-go and left out at 0, so they show no false 0 and
+  drop a measured one. It retires when the structs carry pointers. A
+  milestone's burndown events need none of this: client-go already decodes
+  their weight as a pointer.
+
+**Where**: at v3.15.0, `DORAMetric.Value` (`float64`, `dora_metrics.go`),
+`Pipeline.Duration` and `Pipeline.QueuedDuration` (`int64`, `pipelines.go`),
+`Job` and `Bridge` `Duration`, `QueuedDuration` and `Coverage` (`float64`,
+`jobs.go`), `DeploymentDeployable.Duration` and `Coverage` (`float64`,
+`deployments.go`), `MergeTrain.Duration` (`int64`, `merge_trains.go`),
+`IssueBoard.Weight` (`int64`, `boards.go`) and `WeightEvent.Weight` (`int64`,
+`resource_weight_events.go`).
+
+**What**: GitLab sends each of these as `null` when there is nothing to
+measure: a DORA period with no deployments to take a median over (the lead
+time and time to restore are a `PERCENTILE_CONT` over no rows), a pipeline or
+job that never ran (created, skipped, or a manual job nobody played), a job
+that reported no coverage, a merge train car whose train has not run, a
+weight event that took the weight away, and a board with no weight scope.
+The structs decode that `null` as the
+type's zero, so a project with no measurable incidents reads as restoring
+service in zero seconds, the best value there is, and a manual job reads as
+one that ran for no time at all. A real 0 is also sent (a deployment
+frequency of 0, a job measured at 0% coverage, a weight set to 0), so neither
+the zero nor `omitempty` can tell the two apart; only a pointer can.
+
+**How we found it**: issue 1309, reproduced against GitLab EE with a skipped
+pipeline, a manual job and the DORA endpoints of a project with no
+deployments.
+
+**Effort**: small: pointer fields and their decoding tests, a breaking type
+change that a major release of client-go carries.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

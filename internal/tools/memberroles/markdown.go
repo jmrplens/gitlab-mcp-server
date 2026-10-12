@@ -120,15 +120,34 @@ func permissionRows(o Output) []permissionRow {
 	}
 }
 
-// FormatListMarkdown renders a list of member roles as Markdown.
+// FormatListMarkdown renders a group's member roles as Markdown. GitLab
+// serves the group routes, this list among them, only on GitLab.com: a
+// self-managed instance answers each of them 400 as deprecated, and GitLab.com
+// refuses the instance routes, so a group list reaches this formatter only
+// where the group create works, and that is its one next step.
 func FormatListMarkdown(out ListOutput) string {
-	if len(out.Roles) == 0 {
+	return formatRoleList(out.Roles,
+		toolutil.HintAction("member_role.create_group", "define a new custom role in a group"))
+}
+
+// FormatInstanceListMarkdown renders the instance's member roles as Markdown.
+// Instance-level roles exist only on self-managed, where a group-level create
+// is refused as deprecated, so its one next step is the instance create.
+func FormatInstanceListMarkdown(out InstanceListOutput) string {
+	return formatRoleList(out.Roles,
+		toolutil.HintAction("member_role.create_instance", "define a new custom role on the instance"))
+}
+
+// formatRoleList renders a list of member roles with the next step its scope
+// serves.
+func formatRoleList(roles []Output, next string) string {
+	if len(roles) == 0 {
 		return toolutil.EmptyMessage("member roles")
 	}
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "Member Roles", len(out.Roles), toolutil.PaginationOutput{})
+	toolutil.WriteListHeading(&b, "Member Roles", len(roles), toolutil.PaginationOutput{})
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Base Level", "Group ID"))
-	for _, r := range out.Roles {
+	for _, r := range roles {
 		gid := "-"
 		if r.GroupID != 0 {
 			gid = strconv.FormatInt(r.GroupID, 10)
@@ -140,14 +159,12 @@ func FormatListMarkdown(out ListOutput) string {
 			gid,
 		))
 	}
-	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
-		toolutil.HintAction("member_role.create_group", "define a new custom role in a group"),
-		toolutil.HintAction("member_role.create_instance", "define a new custom role on the instance"),
-	)
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false, next)
 	return b.String()
 }
 
 func init() {
 	toolutil.RegisterMarkdown(FormatOutputMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
+	toolutil.RegisterMarkdown(FormatInstanceListMarkdown)
 }

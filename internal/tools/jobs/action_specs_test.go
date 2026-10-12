@@ -195,7 +195,7 @@ func TestToOutput_OptionalFields(t *testing.T) {
 			ID: "abc123def456",
 		},
 	}
-	out := ToOutput(job)
+	out := ToOutput(job, toolutil.JobMeasures{})
 
 	if out.ArtifactsExpireAt == "" {
 		t.Error("expected ArtifactsExpireAt to be set")
@@ -329,10 +329,10 @@ func TestFormatOutputMarkdown_OptionalBranches(t *testing.T) {
 		Status:         "failed",
 		Ref:            "main",
 		Commit:         &CommitObject{ID: "abc123def456789"},
-		Duration:       45.5,
-		QueuedDuration: 2.5,
+		Duration:       new(45.5),
+		QueuedDuration: new(2.5),
 		FailureReason:  "script_failure",
-		Coverage:       85.5,
+		Coverage:       new(85.5),
 		User:           &UserObject{Username: "admin"},
 		CreatedAt:      "2024-01-01T00:00:00Z",
 		WebURL:         "https://gitlab.com/job/1",

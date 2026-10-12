@@ -31,7 +31,7 @@ type GroupBoardOutput struct {
 	Group           *GroupRefOutput       `json:"group,omitempty"`
 	Milestone       *MilestoneOutput      `json:"milestone,omitempty" tier:"premium"`
 	Assignee        *BasicUserOutput      `json:"assignee,omitempty" tier:"premium"`
-	Weight          int64                 `json:"weight,omitempty" tier:"premium"`
+	Weight          *int64                `json:"weight,omitempty" tier:"premium"`
 	Labels          []*LabelDetailsOutput `json:"labels,omitempty"`
 	HideBacklogList bool                  `json:"hide_backlog_list"`
 	HideClosedList  bool                  `json:"hide_closed_list"`
@@ -89,7 +89,7 @@ type groupIssueBoardAPI struct {
 	HideBacklogList bool            `json:"hide_backlog_list"`
 	HideClosedList  bool            `json:"hide_closed_list"`
 	Assignee        *gl.BasicUser   `json:"assignee"`
-	Weight          int64           `json:"weight"`
+	Weight          *int64          `json:"weight"`
 	Lists           []*boardListAPI `json:"lists"`
 }
 

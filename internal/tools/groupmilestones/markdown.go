@@ -199,14 +199,14 @@ func FormatBurndownChartEventsMarkdownString(out BurndownChartEventsOutput) stri
 	return b.String()
 }
 
-// weightCell renders a burndown event's weight, and a dash for zero: a weight
-// of nothing is GitLab saying the issue carried none, and printing 0 read as a
-// weight the team had set.
-func weightCell(weight int64) string {
-	if weight == 0 {
+// weightCell renders a burndown event's weight, and a dash for an event whose
+// issue carries no weight, which GitLab sends as null. A weight of 0 is a
+// weight the team set, and is printed as 0.
+func weightCell(weight *int64) string {
+	if weight == nil {
 		return "-"
 	}
-	return strconv.FormatInt(weight, 10)
+	return strconv.FormatInt(*weight, 10)
 }
 
 // FormatBurndownChartEventsMarkdown renders burndown chart events as an MCP Markdown result.
