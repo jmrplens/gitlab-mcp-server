@@ -64,6 +64,37 @@ func TestFormatListMarkdown(t *testing.T) {
 	})
 }
 
+// TestFormatListMarkdown_SubgroupListedWithoutAncestors_PointsAtTheirEmoji
+// verifies that a subgroup listed without its ancestor groups, GitLab's default,
+// says that the emoji it can also use are left out and how to list them, empty
+// or not (issue 1342).
+//
+// An empty answer there read as "this group has no custom emoji", and a model
+// following it created a duplicate of an emoji the parent already had. A
+// non-empty one leaves out the same ancestors, so it carries the same step.
+func TestFormatListMarkdown_SubgroupListedWithoutAncestors_PointsAtTheirEmoji(t *testing.T) {
+	const ancestorsHint = "- Use action 'custom_emoji.list' to list again with include_ancestor_groups=true: this subgroup can also use the custom emoji of its ancestor groups, which this list leaves out\n"
+	t.Run("empty", func(t *testing.T) {
+		assertRendered(t, FormatListMarkdown(ListOutput{ancestorsLeftOut: true}),
+			"No custom emoji found.\n"+
+				"\n---\n💡 **Next steps:**\n"+
+				ancestorsHint)
+	})
+	t.Run("with emoji", func(t *testing.T) {
+		assertRendered(t, FormatListMarkdown(ListOutput{Emoji: []Item{shipIt}, ancestorsLeftOut: true}),
+			"## Custom Emoji (1)\n\n"+
+				"| ID | Name | External | Created |\n"+
+				"| --- | --- | --- | --- |\n"+
+				"| `gid://gitlab/CustomEmoji/2` | [:shipit:](https://example.com/shipit.png) | ✅ | 15 Jun 2026 14:30 UTC |\n"+
+				"\nShowing 1 items | no more pages\n"+
+				"\n---\n💡 **Next steps:**\n"+
+				"- "+toolutil.HintPreserveLinks+"\n"+
+				ancestorsHint+
+				"- Use action 'custom_emoji.create' to add another emoji to the group\n"+
+				"- Use action 'custom_emoji.delete' to remove one by the ID in the first column\n")
+	})
+}
+
 // TestFormatListMarkdown_EmojiWithoutURL_RendersTheBareNameAndDropsTheLinkHint
 // verifies that an emoji whose URL this server never received renders as the
 // bare ":name:" form and that the table then claims no links at all.

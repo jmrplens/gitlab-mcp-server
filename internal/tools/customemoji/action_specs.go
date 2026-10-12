@@ -36,7 +36,7 @@ func customEmojiOptions(actionName, individualTool string) toolutil.ActionSpecOp
 	switch actionName {
 	case "list":
 		aliases = []string{"list custom emoji", "group emoji list", "emoji management"}
-		usage = "List group-level custom emoji using GraphQL-backed routes."
+		usage = "List group-level custom emoji using GraphQL-backed routes. A subgroup is listed with its own emoji only, as GitLab defaults. Set include_ancestor_groups to true to add the emoji of its ancestor groups, which it can use as well."
 	case "create":
 		aliases = []string{"create custom emoji", "add group emoji", "custom emoji create"}
 		usage = "Create group-level custom emoji using GraphQL-backed routes."

@@ -60,3 +60,38 @@ func TestCustomEmoji_Lifecycle_CreateListDelete(t *testing.T) {
 		}
 	})
 }
+
+// TestCustomEmoji_Subgroup_ListsTheAncestorsEmojiWhenAskedTo creates an emoji
+// in a parent group and lists an empty subgroup of it twice: as GitLab
+// defaults, which leaves the parent's emoji out and has to say so and name
+// include_ancestor_groups, and with include_ancestor_groups, which lists it
+// (issue 1342). The empty answer used to read as "this group has no custom
+// emoji", and a model following it created a duplicate the parent already had.
+func TestCustomEmoji_Subgroup_ListsTheAncestorsEmojiWhenAskedTo(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedFixtureService))
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		parent := fixture.NewGroup(e, fixture.WithGroupNamePrefix("emoji-parent"))
+		subgroup := fixture.NewSubgroup(e, parent, fixture.WithGroupNamePrefix("emoji-sub"))
+		image := fixture.ServiceURL(e, "/emoji.png")
+
+		created := harness.Do[customemoji.CreateOutput](s, actionCustomEmojiCreate, map[string]any{"group_path": parent.Path, "name": customEmojiName, "url": image})
+		if created.Emoji.ID == "" {
+			e.T.Fatalf("create answered %+v, want an emoji with a global id", created.Emoji)
+		}
+
+		own, said := harness.DoAnswer[customemoji.ListOutput](s, actionCustomEmojiList, map[string]any{"group_path": subgroup.Path})
+		if containsKey(customEmojiIDs(own.Emoji), created.Emoji.ID) {
+			e.T.Errorf("the subgroup lists the parent's emoji %s without include_ancestor_groups, want its own only", created.Emoji.ID)
+		}
+		assertMentions(e, "the subgroup listed without its ancestors", said, "include_ancestor_groups=true")
+
+		inherited := harness.Do[customemoji.ListOutput](s, actionCustomEmojiList, map[string]any{"group_path": subgroup.Path, "include_ancestor_groups": true})
+		if !containsKey(customEmojiIDs(inherited.Emoji), created.Emoji.ID) {
+			e.T.Errorf("the subgroup lists %v with include_ancestor_groups, want the parent's emoji %s among them", customEmojiIDs(inherited.Emoji), created.Emoji.ID)
+		}
+
+		harness.DoVoid(s, actionCustomEmojiDelete, map[string]any{"id": created.Emoji.ID})
+	})
+}

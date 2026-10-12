@@ -22,13 +22,27 @@ func emojiCell(name string) string {
 	return ":" + toolutil.EscapeMdTableCell(name) + ":"
 }
 
+// ancestorsHint is the step a subgroup listed without its ancestor groups
+// carries: the emoji those groups define can be used there too, and leaving
+// them out read as "this group has none", which led a model to create a
+// duplicate (issue 1342).
+var ancestorsHint = toolutil.HintAction(actionList,
+	"list again with include_ancestor_groups=true: this subgroup can also use the custom emoji of its ancestor groups, which this list leaves out")
+
 // FormatListMarkdown renders a paginated list of custom emoji as Markdown.
 //
 // The ID column carries the global ID the delete action takes: without it the
 // list named every emoji and gave a reader no value to act on.
 func FormatListMarkdown(out ListOutput) string {
+	var ancestors string
+	if out.ancestorsLeftOut {
+		ancestors = ancestorsHint
+	}
 	if len(out.Emoji) == 0 {
-		return toolutil.EmptyMessage("custom emoji")
+		var sb strings.Builder
+		sb.WriteString(toolutil.EmptyMessage("custom emoji"))
+		toolutil.WriteHints(&sb, ancestors)
+		return sb.String()
 	}
 	var sb strings.Builder
 	toolutil.WriteListHeading(&sb, "Custom Emoji", len(out.Emoji), toolutil.PaginationOutput{})
@@ -45,6 +59,7 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	toolutil.WriteGraphQLPagination(&sb, out.Pagination, len(out.Emoji))
 	toolutil.WriteListFooter(&sb, toolutil.PaginationOutput{}, linked,
+		ancestors,
 		toolutil.PartialPageHint(out.partial),
 		toolutil.HintAction(actionCreate, "add another emoji to the group"),
 		toolutil.HintAction(actionDelete, "remove one by the ID in the first column"),

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -24,9 +25,9 @@ type Item struct {
 // GraphQL queries and mutations.
 
 const queryListCustomEmoji = `
-query($groupPath: ID!, $first: Int, $after: String, $last: Int, $before: String) {
+query($groupPath: ID!, $includeAncestorGroups: Boolean, $first: Int, $after: String, $last: Int, $before: String) {
   group(fullPath: $groupPath) {
-    customEmoji(first: $first, after: $after, last: $last, before: $before) {
+    customEmoji(includeAncestorGroups: $includeAncestorGroups, first: $first, after: $after, last: $last, before: $before) {
       nodes {
         id
         name
@@ -147,7 +148,8 @@ func mutationRefusal(operation, payloadKey string, responseErrors []toolutil.Gra
 
 // ListInput is the input for listing custom emoji.
 type ListInput struct {
-	GroupPath string `json:"group_path" jsonschema:"required,Group full path (e.g. my-group)"`
+	GroupPath             string `json:"group_path" jsonschema:"required,Group full path (e.g. my-group)"`
+	IncludeAncestorGroups bool   `json:"include_ancestor_groups,omitempty" jsonschema:"Also list the custom emoji of every ancestor group, which a subgroup can use as well. Default false, as GitLab defaults: a subgroup is then listed with its own emoji only"`
 	toolutil.GraphQLCursorPaginationInput
 }
 
@@ -157,9 +159,13 @@ type ListOutput struct {
 	Emoji      []Item                           `json:"emoji"`
 	Pagination toolutil.GraphQLPaginationOutput `json:"pagination"`
 
+	// ancestorsLeftOut is true when a subgroup was listed without its ancestor
+	// groups, so the list leaves out emoji the group can use. It is the
+	// formatter's to read and no part of the published answer.
+	ancestorsLeftOut bool
+
 	// partial is GitLab's account of a page it answered in part, empty for
-	// a page answered whole. It is the formatter's to name in a next step and
-	// no part of the published answer.
+	// a page answered whole, and the formatter's to name in the same way.
 	partial string
 }
 
@@ -174,6 +180,12 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, fmt.Errorf("list_custom_emoji: %w", err)
 	}
 	vars["groupPath"] = input.GroupPath
+	// GitLab lists a group's own emoji unless asked for its ancestors' too, and
+	// the argument is left off rather than sent as false so that GitLab's own
+	// default decides, as it does for every other client (issue 1342).
+	if input.IncludeAncestorGroups {
+		vars["includeAncestorGroups"] = true
+	}
 
 	var resp struct {
 		Data struct {
@@ -225,6 +237,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		Emoji:      items,
 		Pagination: toolutil.PageInfoToOutput(connection.PageInfo),
 		partial:    partial,
+		// A full path with a slash in it names a subgroup, which can use the
+		// emoji of every ancestor group as well; listed without them, the page
+		// leaves those out, and an empty one read as "this group has none".
+		ancestorsLeftOut: !input.IncludeAncestorGroups && strings.Contains(input.GroupPath, "/"),
 	}, nil
 }
 

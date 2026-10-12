@@ -117,6 +117,56 @@ func TestList_EmptyGroup(t *testing.T) {
 	}
 }
 
+// TestList_IncludeAncestorGroups_SentOnlyWhenAskedFor verifies that
+// include_ancestor_groups reaches GitLab as includeAncestorGroups when the
+// caller sets it, and that the argument is left off otherwise, so GitLab's own
+// default, false, decides as it does for every other client (issue 1342).
+//
+// It also holds the note the formatter reads: a subgroup listed without its
+// ancestors is marked as such, and neither a top-level group nor a subgroup
+// listed with them is, since only the first leaves out emoji the group can
+// use.
+func TestList_IncludeAncestorGroups_SentOnlyWhenAskedFor(t *testing.T) {
+	cases := []struct {
+		name        string
+		input       ListInput
+		wantSent    bool
+		wantLeftOut bool
+	}{
+		{name: "subgroup, default", input: ListInput{GroupPath: "parent/sub"}, wantLeftOut: true},
+		{name: "subgroup, ancestors asked for", input: ListInput{GroupPath: "parent/sub", IncludeAncestorGroups: true}, wantSent: true},
+		{name: "top-level group, default", input: ListInput{GroupPath: "parent"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := graphqlMux(map[string]http.HandlerFunc{
+				"customEmoji": func(w http.ResponseWriter, r *http.Request) {
+					vars, err := testutil.ParseGraphQLVariables(r)
+					if err != nil {
+						t.Errorf("ParseGraphQLVariables error: %v", err)
+						return
+					}
+					value, sent := vars["includeAncestorGroups"]
+					if sent != tc.wantSent {
+						t.Errorf("includeAncestorGroups sent = %v (%v), want sent = %v", sent, value, tc.wantSent)
+					}
+					if sent && value != true {
+						t.Errorf("includeAncestorGroups = %v, want true", value)
+					}
+					testutil.RespondGraphQL(w, http.StatusOK, `{"group": {"customEmoji": {"nodes": [], "pageInfo": {"hasNextPage": false, "hasPreviousPage": false}}}}`)
+				},
+			})
+			out, err := List(context.Background(), testutil.NewTestClient(t, handler), tc.input)
+			if err != nil {
+				t.Fatalf("List() error = %v", err)
+			}
+			if out.ancestorsLeftOut != tc.wantLeftOut {
+				t.Errorf("ancestorsLeftOut = %v, want %v", out.ancestorsLeftOut, tc.wantLeftOut)
+			}
+		})
+	}
+}
+
 // TestList_GroupNotFound verifies that List_GroupNotFound returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
