@@ -12,10 +12,12 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
+	"os"
 	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -102,6 +104,74 @@ func TestDestinationGuard_OperatorNamedInstance_IsExempt(t *testing.T) {
 	})
 }
 
+// socketNeverCreated reports whether err says the operating system refused to
+// create the socket at all, which is the one dial failure that happens before
+// [guardDestination] can run.
+//
+// The standard library calls a ControlContext hook from inside the dial,
+// after socket(2) has succeeded, so a host that refuses the address family
+// (a kernel booted with ipv6.disable=1, or a sandbox whose seccomp policy
+// answers socket(AF_INET6) with EAFNOSUPPORT) fails the dial before the
+// guard is asked. Every other failure, a refused connect included, comes
+// after the guard and says nothing about it either way. A container that
+// merely has no IPv6 address still creates the socket, so the guard runs
+// there and the row is held.
+//
+// The syscall name is what the standard library wraps that failure in on
+// every platform it builds a socket on; the errno is checked as well for a
+// path that reports it bare.
+func socketNeverCreated(err error) bool {
+	var sysErr *os.SyscallError
+	if errors.As(err, &sysErr) && sysErr.Syscall == "socket" {
+		return true
+	}
+	return errors.Is(err, syscall.EAFNOSUPPORT)
+}
+
+// TestSocketNeverCreated_TellsTheSocketFailureFromTheGuard holds the skip
+// below to the one failure it is for. A skip that also matched the guard's
+// own refusal would turn every row of the transport test into a skip on the
+// host where it matters most, and one that matched a connect failure would
+// skip a row whose guard did run.
+func TestSocketNeverCreated_TellsTheSocketFailureFromTheGuard(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "the address family refused when the socket is created",
+			err:  &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("socket", syscall.EAFNOSUPPORT)},
+			want: true,
+		},
+		{
+			name: "any refusal of socket(2), whatever its errno",
+			err:  &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("socket", syscall.EPERM)},
+			want: true,
+		},
+		{name: "the errno reported bare", err: syscall.EAFNOSUPPORT, want: true},
+		{
+			name: "the guard's refusal",
+			err:  &net.OpError{Op: "dial", Net: "tcp", Err: ErrDestinationRefused},
+			want: false,
+		},
+		{
+			name: "a refused connect, which comes after the guard",
+			err:  &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)},
+			want: false,
+		},
+		{name: "no error", err: nil, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := socketNeverCreated(tt.err); got != tt.want {
+				t.Errorf("socketNeverCreated(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestBaseTransport_RefusesPrivateDestinations checks each address class tier B
 // covers, through the transport every client dials with.
 //
@@ -110,6 +180,10 @@ func TestDestinationGuard_OperatorNamedInstance_IsExempt(t *testing.T) {
 // that inspects the URL can refuse it. Only a check made after resolution can,
 // which is the whole reason the guard is a ControlContext hook rather than a
 // round tripper.
+//
+// A row is skipped only where the host refused to create its socket, since the
+// guard is never asked there; [TestGuardDestination_CallerNamedStamp_JudgesWithoutASocket]
+// holds the classification on such a host.
 func TestBaseTransport_RefusesPrivateDestinations(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -128,6 +202,43 @@ func TestBaseTransport_RefusesPrivateDestinations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := dialThroughBaseTransport(t, callerChosenTarget(), tt.address)
+			if socketNeverCreated(err) {
+				t.Skipf("this host refused to create the socket, so the guard was never asked: %v", err)
+			}
+
+			if got := errors.Is(err, ErrDestinationRefused); got != tt.wantRefused {
+				t.Fatalf("refused = %v, want %v (err = %v)", got, tt.wantRefused, err)
+			}
+		})
+	}
+}
+
+// TestGuardDestination_CallerNamedStamp_JudgesWithoutASocket asks the guard
+// directly about the addresses the transport test dials, under the stamp a
+// caller-named instance carries.
+//
+// It opens no socket, so it holds the classification on a host whose kernel
+// or sandbox refuses an address family, where the transport row is skipped:
+// ::1 is refused there exactly as everywhere else, and a public address is
+// still let through, which is what tells a refusal from a guard that refuses
+// everything.
+func TestGuardDestination_CallerNamedStamp_JudgesWithoutASocket(t *testing.T) {
+	tests := []struct {
+		name        string
+		address     string
+		wantRefused bool
+	}{
+		{name: "loopback ipv6", address: "[::1]:9", wantRefused: true},
+		{name: "loopback ipv4", address: "127.0.0.1:9", wantRefused: true},
+		{name: "unique local ipv6", address: "[fd00::1]:9", wantRefused: true},
+		{name: "public ipv6", address: "[2001:db8::1]:9", wantRefused: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := withDialTarget(t.Context(), *callerChosenTarget())
+
+			err := guardDestination(ctx, "tcp", tt.address, nil)
 
 			if got := errors.Is(err, ErrDestinationRefused); got != tt.wantRefused {
 				t.Fatalf("refused = %v, want %v (err = %v)", got, tt.wantRefused, err)
