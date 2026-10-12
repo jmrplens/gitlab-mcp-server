@@ -137,6 +137,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The API pages list access levels the API refuses](#the-api-pages-list-access-levels-the-api-refuses)
   - [The forks list returns statistics when asked not to](#the-forks-list-returns-statistics-when-asked-not-to)
   - [The contributed projects route writes a keyset link its finder never reads](#the-contributed-projects-route-writes-a-keyset-link-its-finder-never-reads)
+  - [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text)
 - [GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)](#gitlab-orbit-gitlab-orgorbitknowledge-graph)
   - [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types)
   - [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both)
@@ -334,6 +335,7 @@ readable without opening the tracker:
 | 110 | gitlab-org/gitlab | [The API pages list access levels the API refuses](#the-api-pages-list-access-levels-the-api-refuses) | Yes, by the merge request | Yes, [gitlab-org/gitlab!261285](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261285), open, the documentation review pending | No | No; a refused value is answered 400, except that `access.approve_project` and `access.approve_group` grant Developer for `0` and report as approved a request that `5` leaves pending where GitLab does not accept it | None yet; this server's own schemas offer refused values: eleven filters `5` (six of them `60` too), six writes `0`, five project writes `5` and the group member update `60`; #1280 tracks it |
 | 111 | gitlab-org/gitlab | [The forks list returns statistics when asked not to](#the-forks-list-returns-statistics-when-asked-not-to) | Yes, [gitlab-org/gitlab#633318](https://gitlab.com/gitlab-org/gitlab/-/issues/633318) | No | No | No; `project.list_forks` with `statistics: false` answers every fork's statistics, and an administrator's `project.list_user_starred` with `with_custom_attributes: false` the custom attributes | None taken |
 | 112 | gitlab-org/gitlab | [The contributed projects route writes a keyset link its finder never reads](#the-contributed-projects-route-writes-a-keyset-link-its-finder-never-reads) | No | No | No | No | Yes, `project.list_user_contributed` refuses keyset pagination and pages by offset only |
+| 127 | gitlab-org/gitlab | [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text) | No | No | No | No; GitLab's pages leave such a submodule unlinked | Yes, `repository.list_submodules` and `repository.read_submodule_file` resolve a sibling namespace and the other spellings of the instance's clone URLs |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -11973,6 +11975,59 @@ first page twice as two pages and was then told the listing was complete.
 mocked each project list the way GitLab answers it and found that the
 contributed route's link does not advance; read from the 19.4.1 source and
 from master.
+
+### SubmoduleHelper compares submodule URLs as text
+
+- **Reported**: no. An issue on gitlab-org/gitlab is the next step.
+- **In review**: no.
+- **Merged**: no. Read on master at `851b3d564ad` (2026-10-13), where the
+  helper last changed on 2026-06-26.
+- **Blocking**: no. GitLab's own pages leave such a submodule as plain text
+  or link it to the URL as written, where a project link was due.
+- **Workaround**: yes. `repository.list_submodules` and
+  `repository.read_submodule_file` resolve a submodule by what its remote
+  names rather than by the text GitLab compares
+  (`internal/tools/repositorysubmodules/list.go`, `submoduleResolver`): a
+  relative URL's containment is judged by path segment, a web clone URL is
+  compared by scheme, host and port, and an SSH one by account, host and
+  port. A fix upstream makes the two agree again.
+
+**Where**: `app/helpers/submodule_helper.rb`, `relative_self_links` and
+`extract_namespace_project` with `self_url?`, which decide what a submodule
+links to in GitLab's pages, the repository tree among them.
+
+**What**: two comparisons made on the URL's text where git, which fetches the
+submodule, reads an address.
+
+- `relative_self_links` refuses a relative URL whose target namespace
+  `start_with?` the superproject's own path, to keep a URL inside the
+  superproject from linking anywhere, since no project can live below another
+  one. A string prefix also matches a sibling namespace whose name only begins
+  with the superproject's: from `group/app`, `../app-tools/lib.git` lands in
+  `group/app-tools`, which `"/group/app-tools".start_with?("/group/app")`
+  takes for a path inside `group/app`, and the submodule is not linked. git
+  fetches it from `group/app-tools/lib` on the same instance.
+- `extract_namespace_project` strips `Gitlab.config.gitlab.url` or the SSH
+  path prefix of the shell configuration (`ssh_path_prefix`) only when the
+  URL `start_with?` it, and
+  `self_url?` then compares the URL with those two strings joined to the
+  project's path. A remote that names this instance in any other spelling is
+  not linked: the ssh:// form of an SCP clone URL
+  (`ssh://git@gitlab.example.com/group/lib.git` beside the prefix
+  `git@gitlab.example.com:`), a host written in capitals, the default port
+  written out (`https://gitlab.example.com:443/...`), or credentials in the
+  URL. git reaches the same project through each of them.
+
+**What it costs this server**: nothing at run time. This server used to follow
+the helper rule for rule, which listed such a submodule as naming no project
+and refused to read it, where the remote names a project on the instance that
+git reads it from. It now departs from the helper on these two comparisons
+only, and says so where it resolves.
+
+**How we found it**: the review of issue 1317's resolver, which followed the
+helper and found that a sibling namespace and the ssh:// spelling of the
+instance's own SCP remotes, which the resolver before it read, were no longer
+resolved; read from the source on master, not measured.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 

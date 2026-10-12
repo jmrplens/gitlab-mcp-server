@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -39,7 +40,9 @@ type ReadOutput struct {
 // from the submodule's target project at the pinned commit SHA.
 //
 // Steps:
-//  1. Get .gitmodules from parent to resolve submodule URL → project path
+//  1. Get .gitmodules from parent, and the parent project itself, to resolve
+//     the submodule URL to the project on this instance it names
+//     ([submoduleResolver]); a submodule naming none is refused here
 //  2. Get tree entry for the submodule path to obtain the pinned commit SHA
 //  3. Fetch the file from the resolved project at that commit SHA
 func Read(ctx context.Context, client *gitlabclient.Client, input ReadInput) (ReadOutput, error) {
@@ -137,16 +140,29 @@ func resolveSubmoduleProject(ctx context.Context, client *gitlabclient.Client, p
 	}
 
 	entries := parseGitmodules(content)
-	for _, e := range entries {
-		if e.Path == submodulePath {
-			if e.ResolvedProject == "" {
-				return "", fmt.Errorf("readRepositorySubmodule: could not resolve project path from submodule URL %q", e.URL)
-			}
-			return e.ResolvedProject, nil
-		}
+	i := slices.IndexFunc(entries, func(e SubmoduleEntry) bool { return e.Path == submodulePath })
+	if i < 0 {
+		return "", fmt.Errorf("readRepositorySubmodule: submodule %q not found in .gitmodules. Available submodules: %s",
+			submodulePath, listSubmodulePaths(entries))
 	}
-	return "", fmt.Errorf("readRepositorySubmodule: submodule %q not found in .gitmodules. Available submodules: %s",
-		submodulePath, listSubmodulePaths(entries))
+	resolver, err := newSubmoduleResolver(ctx, client, projectID, "readRepositorySubmodule")
+	if err != nil {
+		return "", err
+	}
+	entry := entries[i : i+1]
+	resolver.resolveAll(entry)
+	// A submodule naming no project here is not read at all: reading the
+	// local project that happens to share part of the remote's path would
+	// serve another repository's content as this submodule's.
+	if entry[0].External {
+		return "", fmt.Errorf("readRepositorySubmodule: submodule %q is declared with the remote %q, on another host than this GitLab instance, so it cannot be read through this server; read the file from that remote instead",
+			submodulePath, entry[0].URL)
+	}
+	if entry[0].Unresolved {
+		return "", fmt.Errorf("readRepositorySubmodule: submodule %q is declared with the remote %q, which names no project on this GitLab instance, so it is not read: a relative url resolves against the parent project's path and has to land in a group outside it, and an absolute one has to be the web or SSH clone URL of a project on this instance",
+			submodulePath, entry[0].URL)
+	}
+	return entry[0].ResolvedProject, nil
 }
 
 // getSubmoduleCommitSHA retrieves the commit SHA that the submodule pointer

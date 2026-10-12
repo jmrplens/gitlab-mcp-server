@@ -2,6 +2,7 @@ package repositorysubmodules
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -9,6 +10,8 @@ import (
 	"iter"
 	"net/http"
 	"net/url"
+	"path"
+	"regexp"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -25,14 +28,26 @@ type ListInput struct {
 
 // SubmoduleEntry represents a single submodule with its configuration and
 // current commit pointer. URL is the remote as .gitmodules writes it with any
-// credentials removed ([redactRemote]); ResolvedProject is the project path it
-// names, and carries no credentials either ([resolveProjectPath]).
+// credentials removed ([redactRemote]); ResolvedProject is the project on this
+// instance it names ([submoduleResolver]), and carries no credentials either.
+// A submodule naming no project here is marked one of two ways, and cannot be
+// read through this server: External when its remote names another host,
+// where it can be read instead, and Unresolved otherwise, a relative URL that
+// lands inside the superproject or at the root, a remote on this instance's
+// host that is not a project's clone URL, or one that names no host at all.
 type SubmoduleEntry struct {
 	Name            string `json:"name"`
 	Path            string `json:"path"`
 	URL             string `json:"url"`
 	ResolvedProject string `json:"resolved_project,omitempty"`
+	External        bool   `json:"external,omitempty"`
+	Unresolved      bool   `json:"unresolved,omitempty"`
 	CommitSHA       string `json:"commit_sha"`
+
+	// remote is the url as .gitmodules writes it, credentials included. It is
+	// what the resolver reads, and it is cleared once the entry is resolved,
+	// so it never outlives the call that parsed it.
+	remote string
 }
 
 // ListOutput holds the list of submodules found in the repository.
@@ -81,14 +96,225 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{Submodules: []SubmoduleEntry{}, Count: 0}, nil
 	}
 
+	resolver, err := newSubmoduleResolver(ctx, client, string(input.ProjectID), "listRepositorySubmodules")
+	if err != nil {
+		return ListOutput{}, err
+	}
+	resolver.resolveAll(entries)
+
 	enrichSubmoduleCommitSHAs(ctx, client, string(input.ProjectID), ref, entries)
 
 	return ListOutput{Submodules: entries, Count: len(entries)}, nil
 }
 
+// submoduleResolver decides which project on this instance a .gitmodules
+// remote names. It follows the rule GitLab's own SubmoduleHelper links a
+// submodule with (app/helpers/submodule_helper.rb) except where that helper
+// compares text and git, which is what fetches a submodule, compares
+// addresses. A URL of "." or "./" is the superproject itself. A relative URL
+// resolves against the superproject's path, as File.absolute_path does, and
+// names nothing when the namespace it lands in is the root, the
+// superproject's own path or a path below it, compared by path segment where
+// GitLab compares strings, so a sibling namespace whose name begins with the
+// superproject's ("../app-tools/lib" from group/app) is not taken for one
+// inside it. An absolute URL names a project when it is an http or https URL
+// on the instance's web URL, relative root included
+// ([toolutil.PathBelowInstanceWeb]), or an SSH remote, in the SCP or the
+// ssh:// form, on the account, host and port of the instance's SSH clone
+// URLs ([parseSSHRemote]); a host in capitals, the default port written out
+// and the ssh:// spelling of an SCP clone URL name the same instance, which
+// GitLab's text comparison leaves unlinked (see "SubmoduleHelper compares
+// submodule URLs as text" in docs/development/upstream-bugs.md).
+//
+// The host used to be discarded and the path kept, so a submodule on any
+// other server was read from whichever local project happened to share its
+// path, and a relative URL was looked up as its literal "../lib".
+type submoduleResolver struct {
+	apiBase      *url.URL  // the client's REST API base, from which the web URL comes
+	superproject string    // the superproject's path_with_namespace
+	ssh          sshRemote // the account, host, port and path prefix of this instance's SSH clone URLs; zero when not known
+}
+
+// newSubmoduleResolver reads the superproject, whose path a relative
+// submodule URL is resolved against and whose SSH clone URL shows the
+// prefix the instance writes before a project path.
+func newSubmoduleResolver(ctx context.Context, client *gitlabclient.Client, projectID, operation string) (submoduleResolver, error) {
+	//gitlab:request mandatory: a submodule URL resolves against the superproject's path and its SSH clone URL, so the superproject is read on every call that finds a submodule
+	project, _, err := client.GL().Projects.GetProject(projectID, nil, gl.WithContext(ctx))
+	if err != nil {
+		return submoduleResolver{}, toolutil.WrapErrWithStatusHint(operation,
+			fmt.Errorf("could not read project %s: %w", projectID, err),
+			http.StatusNotFound, "verify project_id with project.get")
+	}
+	return newResolver(client.GL().BaseURL(), project.PathWithNamespace,
+		sshPathPrefix(project.SSHURLToRepo, project.PathWithNamespace)), nil
+}
+
+// newResolver builds the resolver for the superproject at superproject on
+// the instance whose REST API is at apiBase and whose SSH clone URLs start
+// with sshPrefix, "" when that is not known.
+func newResolver(apiBase *url.URL, superproject, sshPrefix string) submoduleResolver {
+	ssh, _ := parseSSHRemote(sshPrefix)
+	return submoduleResolver{apiBase: apiBase, superproject: superproject, ssh: ssh}
+}
+
+// sshRemote is an SSH remote as git reads it: the account it logs in as, the
+// host and the port it connects to, and the path it asks the server for.
+type sshRemote struct {
+	user, host, port, path string
+}
+
+// parseSSHRemote reads an SSH remote in either form git takes, a URL of the
+// ssh scheme (git+ssh and ssh+git included) and the SCP form
+// [user@]host:path, whose port is always 22, and reports false for anything
+// else. The host is lowercased, as DNS compares it. The SCP form's account is
+// everything before the last "@" ahead of the first "/", the way
+// [withoutSCPUserinfo] reads it, so the host a remote is filed under is the
+// one its published URL shows.
+func parseSSHRemote(remote string) (sshRemote, bool) {
+	if scheme, rest, isURL := strings.Cut(remote, "://"); isURL {
+		if scheme != "ssh" && scheme != "git+ssh" && scheme != "ssh+git" {
+			return sshRemote{}, false
+		}
+		u, err := url.Parse("ssh://" + rest)
+		if err != nil {
+			return sshRemote{}, false
+		}
+		return sshRemote{user: u.User.Username(), host: strings.ToLower(u.Hostname()), port: cmp.Or(u.Port(), "22"), path: strings.TrimPrefix(u.Path, "/")}, true
+	}
+	authority, _, _ := strings.Cut(remote, "/")
+	at := strings.LastIndex(authority, "@")
+	host, asked, isSCP := strings.Cut(remote[at+1:], ":")
+	if !isSCP || host == "" || strings.Contains(host, "/") {
+		return sshRemote{}, false
+	}
+	return sshRemote{user: remote[:max(at, 0)], host: strings.ToLower(host), port: "22", path: asked}, true
+}
+
+// remoteHost returns the host a remote names, lowercased, and "" for one
+// that names none: a relative URL, a local path, a file URL, or a URL that
+// does not parse.
+func remoteHost(remote string) string {
+	if strings.Contains(remote, "://") {
+		u, err := url.Parse(remote)
+		if err != nil {
+			return ""
+		}
+		return strings.ToLower(u.Hostname())
+	}
+	ssh, _ := parseSSHRemote(remote)
+	return ssh.host
+}
+
+// sshPathPrefix returns what an SSH clone URL writes before the project's
+// path, which is GitLab's gitlab_shell.ssh_path_prefix ("git@host:" or
+// "ssh://git@host:2222/"), and "" when the clone URL does not end in the
+// path it is the clone URL of.
+func sshPathPrefix(sshURLToRepo, pathWithNamespace string) string {
+	prefix, _ := strings.CutSuffix(sshURLToRepo, pathWithNamespace+".git")
+	if prefix == sshURLToRepo {
+		return ""
+	}
+	return prefix
+}
+
+// submoduleURLShape is the shape GitLab requires of a submodule URL before it
+// links it at all: it ends in a segment holding neither "/" nor ":", a "/",
+// and a last segment holding no "/".
+var submoduleURLShape = regexp.MustCompile(`[^/:]+/[^/]+\z`)
+
+// resolveAll resolves every entry, marks one that names no project here as
+// external or unresolved, and clears the remote each was resolved from.
+func (r submoduleResolver) resolveAll(entries []SubmoduleEntry) {
+	for i := range entries {
+		e := &entries[i]
+		e.ResolvedProject = r.resolve(e.remote)
+		if e.ResolvedProject == "" {
+			e.External = r.onAnotherHost(e.remote)
+			e.Unresolved = !e.External
+		}
+		e.remote = ""
+	}
+}
+
+// onAnotherHost reports whether a remote names a host that is neither this
+// instance's web host nor the host of its SSH clone URLs. A remote naming no
+// host at all is not on another host: nothing says where it is.
+func (r submoduleResolver) onAnotherHost(remote string) bool {
+	host := remoteHost(remote)
+	return host != "" && host != strings.ToLower(r.apiBase.Hostname()) && host != r.ssh.host
+}
+
+// resolve returns the path of the project on this instance the submodule
+// remote names, and "" when it names none.
+func (r submoduleResolver) resolve(remote string) string {
+	if remote == "." || remote == "./" {
+		return r.superproject
+	}
+	if !submoduleURLShape.MatchString(remote) {
+		return ""
+	}
+	if strings.HasPrefix(remote, "../") || strings.HasPrefix(remote, "./") {
+		return r.resolveRelative(remote)
+	}
+	if below, ok := toolutil.PathBelowInstanceWeb(r.apiBase, remote); ok {
+		return projectPathIn(below)
+	}
+	if below, ok := r.pathBelowSSH(remote); ok {
+		return projectPathIn(below)
+	}
+	return ""
+}
+
+// pathBelowSSH reports the path an SSH remote asks this instance's SSH
+// server for, below the path prefix of its clone URLs, when the remote logs
+// in as the account those clone URLs name, on their host and port; ok is
+// false for any other remote, and for every remote when the instance's SSH
+// clone URLs are not known: the zero sshRemote that stands for them then has
+// no port, and every remote that parses has one.
+func (r submoduleResolver) pathBelowSSH(remote string) (string, bool) {
+	rem, ok := parseSSHRemote(remote)
+	if !ok || rem.user != r.ssh.user || rem.host != r.ssh.host || rem.port != r.ssh.port {
+		return "", false
+	}
+	return strings.CutPrefix(rem.path, r.ssh.path)
+}
+
+// resolveRelative resolves a relative submodule URL against the
+// superproject's path the way GitLab's relative_self_links does:
+// "../lib.git" from group/app is group/lib, "../../other/lib" is other/lib,
+// and a URL landing in the root namespace, or in the superproject's own path
+// or a path below it ("./x" from group/app is group/app/x), names nothing.
+// The containment is judged by path segment: GitLab's own check is a string
+// prefix, which also refuses a sibling namespace whose name begins with the
+// superproject's ("../app-tools/lib" from group/app). path.Join clamps a
+// climb above the root at the root, as File.absolute_path does.
+func (r submoduleResolver) resolveRelative(remote string) string {
+	superproject := "/" + r.superproject
+	target := path.Join(superproject, remote)
+	namespace := path.Dir(target)
+	if namespace == "/" || namespace == superproject || strings.HasPrefix(namespace, superproject+"/") {
+		return ""
+	}
+	return strings.TrimPrefix(namespace, "/") + "/" + strings.TrimSuffix(path.Base(target), ".git")
+}
+
+// projectPathIn returns the project path a remote names below the instance's
+// prefix, without the ".git" GitLab drops, and "" when it is not a namespace
+// and a project.
+func projectPathIn(below string) string {
+	project := strings.TrimSuffix(below, ".git")
+	if !strings.Contains(project, "/") || strings.HasPrefix(project, "/") {
+		return ""
+	}
+	return project
+}
+
 // parseGitmodules parses .gitmodules INI-like content into SubmoduleEntry
 // slices. Each [submodule "name"] section contributes one entry with path
-// and url fields.
+// and url fields; the entries are resolved afterwards
+// ([submoduleResolver.resolveAll]), since that takes a read of the
+// superproject a .gitmodules with no submodule does not need.
 func parseGitmodules(content string) []SubmoduleEntry {
 	var entries []SubmoduleEntry
 	var current *SubmoduleEntry
@@ -112,7 +338,7 @@ func parseGitmodules(content string) []SubmoduleEntry {
 				current.Path = val
 			case "url":
 				current.URL = redactRemote(val)
-				current.ResolvedProject = resolveProjectPath(val)
+				current.remote = val
 			}
 		}
 	}
@@ -126,41 +352,6 @@ func parseKeyValue(line string) (key, value string, ok bool) {
 		return "", "", false
 	}
 	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), true
-}
-
-// resolveProjectPath converts a GitLab remote URL (SSH or HTTPS) to the
-// project path used by the API (e.g. "group/subgroup/project").
-//
-// Supported formats:
-//   - git@host:group/project.git
-//   - https://host/group/project.git
-//   - ssh://git@host/group/project.git
-//
-// The SCP branch is taken on the absence of a scheme and not on the presence
-// of an "@" and a ":", which every credentialed https remote also has. Read
-// the old way, "https://user:password@host/group/project.git" split on its
-// first colon and resolved to "/user:password@host/group/project", so the
-// password was rendered into the submodule table as the project name. What a
-// scheme introduces is parsed with net/url, whose User is dropped and never
-// read.
-func resolveProjectPath(rawURL string) string {
-	if !strings.Contains(rawURL, "://") {
-		// SCP-style: [user@]host:path.git, and the userinfo goes first so that
-		// a password written where ssh would never accept one cannot survive
-		// the colon split either.
-		remote := withoutSCPUserinfo(rawURL)
-		if _, path, found := strings.Cut(remote, ":"); found {
-			return strings.TrimSuffix(strings.TrimPrefix(path, "/"), ".git")
-		}
-		return strings.TrimSuffix(strings.TrimPrefix(remote, "/"), ".git")
-	}
-
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return ""
-	}
-	path := strings.TrimPrefix(u.Path, "/")
-	return strings.TrimSuffix(path, ".git")
 }
 
 // withoutSCPUserinfo removes the credentials from an SCP-style remote,
@@ -227,8 +418,8 @@ func buildSubmoduleIndex(entries []SubmoduleEntry) (pathIndex map[string]*Submod
 		pathIndex[entries[i].Path] = &entries[i]
 	}
 	dirCounts = make(map[string]int)
-	for path := range pathIndex {
-		dirCounts[parentDir(path)]++
+	for p := range pathIndex {
+		dirCounts[parentDir(p)]++
 	}
 	return pathIndex, dirCounts
 }
@@ -281,11 +472,11 @@ func treeNodes(ctx context.Context, client *gitlabclient.Client, projectID, ref,
 	})
 }
 
-// parentDir returns the parent directory of path, or "" for root-level paths.
+// parentDir returns the parent directory of p, or "" for root-level paths.
 // A path with no separator and one whose only separator leads it both have
 // the root as their parent, so the index is floored at zero rather than
 // compared, which would give the same answer for the two on either side of
 // the comparison and leave nothing a test could hold it to.
-func parentDir(path string) string {
-	return path[:max(strings.LastIndex(path, "/"), 0)]
+func parentDir(p string) string {
+	return p[:max(strings.LastIndex(p, "/"), 0)]
 }

@@ -30,12 +30,23 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 		// The name, the path and the resolved project all come out of the
 		// repository's own .gitmodules, so all three are text somebody typed;
 		// the path and the SHA are code spans a reader copies, and a code span
-		// sized by the helper cannot be closed from inside the value.
+		// sized by the helper cannot be closed from inside the value. A
+		// submodule naming no project here says which of the two it is, where
+		// an empty cell would read as one nobody had resolved: on another
+		// host, or naming nothing this server can resolve, which is not
+		// called elsewhere since it may be on this very instance.
+		project := toolutil.EscapeMdTableCell(s.ResolvedProject)
+		if s.External {
+			project = "external, on another host"
+		}
+		if s.Unresolved {
+			project = "unresolved, names no project here"
+		}
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(s.Name),
 			toolutil.MdCodeSpanCell(s.Path),
 			toolutil.MdCodeSpanCell(shortSHA(s.CommitSHA)),
-			toolutil.EscapeMdTableCell(s.ResolvedProject),
+			project,
 		))
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,

@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -22,6 +23,92 @@ const submoduleGitmodules = `[submodule "libs/core-module"]
 	path = libs/core-module
 	url = git@gitlab.example.com:org/project.git
 `
+
+// TestRead_SubmoduleOnAnotherHost_IsRefusedNamingTheRemote verifies that a
+// submodule whose remote is on another host is refused, naming the remote,
+// and that nothing is read from the local project sharing its path. It used
+// to be read from that project, so content of a different repository was
+// served as the submodule's.
+func TestRead_SubmoduleOnAnotherHost_IsRefusedNamingTheRemote(t *testing.T) {
+	var readLocal atomic.Bool
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/repository/files/.gitmodules"):
+			testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf(`{"file_name":".gitmodules","encoding":"text","content":%q}`,
+				"[submodule \"lib\"]\n\tpath = lib\n\turl = https://github.com/rev-misc/lib.git\n"))
+		case strings.Contains(r.URL.Path, "/repository/tree"):
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":"abc123","name":"lib","type":"commit","path":"lib","mode":"160000"}]`)
+		case strings.Contains(r.URL.EscapedPath(), "rev-misc%2Flib"):
+			readLocal.Store(true)
+			testutil.RespondJSON(w, http.StatusOK, `{"file_name":"README","file_path":"README","encoding":"text","content":"local"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	client := newSubmoduleClient(t, handler)
+	_, err := Read(t.Context(), client, ReadInput{ProjectID: "42", SubmodulePath: "lib", FilePath: "README"})
+	if err == nil {
+		t.Fatal("Read of a submodule on another host succeeded, want a refusal")
+	}
+	if !strings.Contains(err.Error(), "https://github.com/rev-misc/lib.git") || !strings.Contains(err.Error(), "on another host") {
+		t.Errorf("refusal %q does not name the declared remote and say it is on another host", err)
+	}
+	if readLocal.Load() {
+		t.Error("Read fetched the local project rev-misc/lib for a submodule on github.com")
+	}
+}
+
+// TestRead_SubmoduleNamingNoProjectHere_IsRefusedWithoutSendingItElsewhere
+// verifies that a submodule whose remote names no project on this instance
+// and no other host, a relative URL inside the superproject's own path, is
+// refused with what a resolvable remote looks like, and is not told to read
+// the file from that remote, which would be this instance. The refusal used to
+// call every such remote another host's.
+func TestRead_SubmoduleNamingNoProjectHere_IsRefusedWithoutSendingItElsewhere(t *testing.T) {
+	client := newSubmoduleClient(t, gitmodulesHandler("[submodule \"inner\"]\n\tpath = inner\n\turl = ./inner\n"))
+	_, err := Read(t.Context(), client, ReadInput{ProjectID: "42", SubmodulePath: "inner", FilePath: "README"})
+	if err == nil {
+		t.Fatal("Read of a submodule naming no project succeeded, want a refusal")
+	}
+	for _, want := range []string{`"./inner"`, "names no project on this GitLab instance", "relative url"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("refusal %q does not say %q", err, want)
+			}
+		})
+	}
+	if strings.Contains(err.Error(), "another host") || strings.Contains(err.Error(), "from that remote") {
+		t.Errorf("refusal %q sends the caller to another host", err)
+	}
+}
+
+// TestRead_RelativeSubmoduleURL_ReadsTheProjectItResolvesTo verifies that a
+// relative submodule URL is resolved against the superproject's path, as
+// GitLab resolves it: "../lib.git" from group/app is group/lib. It used to be
+// looked up as the literal "../lib", which GitLab refuses.
+func TestRead_RelativeSubmoduleURL_ReadsTheProjectItResolvesTo(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/repository/files/.gitmodules"):
+			testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf(`{"file_name":".gitmodules","encoding":"text","content":%q}`,
+				"[submodule \"lib\"]\n\tpath = lib\n\turl = ../lib.git\n"))
+		case strings.Contains(r.URL.Path, "/repository/tree"):
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":"abc123","name":"lib","type":"commit","path":"lib","mode":"160000"}]`)
+		case strings.HasPrefix(r.URL.EscapedPath(), "/api/v4/projects/group%2Flib/repository/files/README"):
+			testutil.RespondJSON(w, http.StatusOK, `{"file_name":"README","file_path":"README","encoding":"text","content":"sibling"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	client := newSubmoduleClient(t, handler)
+	out, err := Read(t.Context(), client, ReadInput{ProjectID: "42", SubmodulePath: "lib", FilePath: "README"})
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if out.ResolvedProject != "group/lib" || out.Content != "sibling" {
+		t.Errorf("Read answered project %q with %q, want group/lib with its README", out.ResolvedProject, out.Content)
+	}
+}
 
 // TestRead_Success verifies Read when success.
 func TestRead_Success(t *testing.T) {
@@ -74,7 +161,7 @@ func TestRead_Success(t *testing.T) {
 		http.NotFound(w, r)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	out, err := Read(t.Context(), client, ReadInput{
 		ProjectID:     "42",
 		SubmodulePath: "libs/core-module",
@@ -131,7 +218,7 @@ func TestRead_Output_CarriesEveryFieldOfTheFileGitLabSent(t *testing.T) {
 		}
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	got, err := Read(t.Context(), client, ReadInput{
 		ProjectID:     "42",
 		SubmodulePath: "libs/core-module",
@@ -184,7 +271,7 @@ func TestRead_TreeListing_AsksTheParentDirectoryAtTheRequestedRef(t *testing.T) 
 		}
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	if _, err := Read(t.Context(), client, ReadInput{
 		ProjectID:     "42",
 		SubmodulePath: "libs/core-module",
@@ -228,7 +315,7 @@ func TestRead_TreeCarriesAnotherSubmodulesCommit_PinsOnlyItsOwn(t *testing.T) {
 		}
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	out, err := Read(t.Context(), client, ReadInput{
 		ProjectID:     "42",
 		SubmodulePath: "libs/core-module",
@@ -265,7 +352,7 @@ func TestRead_TreeNodeAtTheSubmodulePathIsNotACommit_IsRefused(t *testing.T) {
 		}`, submoduleGitmodules))
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	_, err := Read(t.Context(), client, ReadInput{
 		ProjectID:     "42",
 		SubmodulePath: "libs/core-module",
@@ -295,14 +382,14 @@ func TestRead_SubmoduleNotFound(t *testing.T) {
 				"ref": "main"
 			}`, `[submodule "lib"]
 	path = lib
-	url = git@host:group/lib.git
+	url = git@gitlab.example.com:group/lib.git
 `))
 			return
 		}
 		http.NotFound(w, r)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	_, err := Read(t.Context(), client, ReadInput{
 		ProjectID:     "42",
 		SubmodulePath: "nonexistent",
@@ -377,7 +464,7 @@ func TestRead_Base64Content(t *testing.T) {
 				"ref": "main"
 			}`, `[submodule "lib"]
 	path = lib
-	url = git@host:group/lib.git
+	url = git@gitlab.example.com:group/lib.git
 `))
 			return
 		}
@@ -402,7 +489,7 @@ func TestRead_Base64Content(t *testing.T) {
 		http.NotFound(w, r)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	out, err := Read(t.Context(), client, ReadInput{
 		ProjectID:     "42",
 		SubmodulePath: "lib",
@@ -468,7 +555,7 @@ func TestList_SubmodulePaths(t *testing.T) {
 func TestRead_Base64Gitmodules(t *testing.T) {
 	gitmodulesContent := `[submodule "lib"]
 	path = lib
-	url = git@host:group/lib.git
+	url = git@gitlab.example.com:group/lib.git
 `
 	encoded := base64.StdEncoding.EncodeToString([]byte(gitmodulesContent))
 
@@ -504,7 +591,7 @@ func TestRead_Base64Gitmodules(t *testing.T) {
 		http.NotFound(w, r)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	out, err := Read(t.Context(), client, ReadInput{
 		ProjectID:     "42",
 		SubmodulePath: "lib",
@@ -540,7 +627,7 @@ func TestRead_UnresolvableSubmoduleURL(t *testing.T) {
 		http.NotFound(w, r)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	_, err := Read(t.Context(), client, ReadInput{
 		ProjectID:     "42",
 		SubmodulePath: "bad",
@@ -549,7 +636,7 @@ func TestRead_UnresolvableSubmoduleURL(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unresolvable URL")
 	}
-	if !strings.Contains(err.Error(), "could not resolve project path") {
+	if !strings.Contains(err.Error(), "names no project on this GitLab instance") {
 		t.Errorf("expected resolve error, got: %v", err)
 	}
 }
@@ -568,7 +655,7 @@ func TestRead_TreeEntryNotFound(t *testing.T) {
 				"ref": "main"
 			}`, `[submodule "lib"]
 	path = lib
-	url = git@host:group/lib.git
+	url = git@gitlab.example.com:group/lib.git
 `))
 			return
 		}
@@ -581,7 +668,7 @@ func TestRead_TreeEntryNotFound(t *testing.T) {
 		http.NotFound(w, r)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	_, err := Read(t.Context(), client, ReadInput{
 		ProjectID:     "42",
 		SubmodulePath: "lib",
@@ -620,7 +707,7 @@ func TestRead_TreeListing_FollowsEveryPageOfTheDirectory(t *testing.T) {
 		mu    sync.Mutex
 		pages []string
 	)
-	client := testutil.NewTestClient(t, readPagedTreeHandler(func(w http.ResponseWriter, page string) {
+	client := newSubmoduleClient(t, readPagedTreeHandler(func(w http.ResponseWriter, page string) {
 		mu.Lock()
 		pages = append(pages, page)
 		mu.Unlock()
@@ -658,7 +745,7 @@ func TestRead_GitmodulesGetFileError(t *testing.T) {
 		http.NotFound(w, r)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	_, err := Read(t.Context(), client, ReadInput{
 		ProjectID:     "42",
 		SubmodulePath: "lib",
@@ -686,7 +773,7 @@ func TestRead_TreeListError(t *testing.T) {
 				"ref": "main"
 			}`, `[submodule "lib"]
 	path = lib
-	url = git@host:group/lib.git
+	url = git@gitlab.example.com:group/lib.git
 `))
 			return
 		}
@@ -697,7 +784,7 @@ func TestRead_TreeListError(t *testing.T) {
 		http.NotFound(w, r)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	_, err := Read(t.Context(), client, ReadInput{
 		ProjectID:     "42",
 		SubmodulePath: "lib",
@@ -726,7 +813,7 @@ func TestActionSpecs_ListRoute(t *testing.T) {
 				"ref": "main"
 			}`, `[submodule "lib"]
 	path = lib
-	url = git@host:group/lib.git
+	url = git@gitlab.example.com:group/lib.git
 `))
 			return
 		}
@@ -739,7 +826,7 @@ func TestActionSpecs_ListRoute(t *testing.T) {
 		http.NotFound(w, r)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	byTool := repositorySubmoduleSpecsByTool(t, ActionSpecs(client))
 
 	result, err := byTool["gitlab_list_repository_submodules"].Route.Handler(t.Context(), map[string]any{"project_id": "42"})
@@ -765,7 +852,7 @@ func TestRead_GetFileError(t *testing.T) {
 				"ref": "main"
 			}`, `[submodule "lib"]
 	path = lib
-	url = git@host:group/lib.git
+	url = git@gitlab.example.com:group/lib.git
 `))
 			return
 		}
@@ -779,7 +866,7 @@ func TestRead_GetFileError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 File Not Found"}`)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	_, err := Read(t.Context(), client, ReadInput{
 		ProjectID:     "42",
 		SubmodulePath: "lib",
@@ -807,7 +894,7 @@ func TestRead_InvalidBase64FileContent(t *testing.T) {
 				"ref": "main"
 			}`, `[submodule "lib"]
 	path = lib
-	url = git@host:group/lib.git
+	url = git@gitlab.example.com:group/lib.git
 `))
 			return
 		}
@@ -828,7 +915,7 @@ func TestRead_InvalidBase64FileContent(t *testing.T) {
 		}`)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	_, err := Read(t.Context(), client, ReadInput{
 		ProjectID:     "42",
 		SubmodulePath: "lib",
@@ -860,7 +947,7 @@ func TestRead_InvalidBase64Gitmodules(t *testing.T) {
 		http.NotFound(w, r)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	_, err := Read(t.Context(), client, ReadInput{
 		ProjectID:     "42",
 		SubmodulePath: "lib",
@@ -887,7 +974,7 @@ func TestActionSpecs_ReadRoute(t *testing.T) {
 				"ref": "main"
 			}`, `[submodule "lib"]
 	path = lib
-	url = git@host:group/lib.git
+	url = git@gitlab.example.com:group/lib.git
 `))
 			return
 		}
@@ -911,7 +998,7 @@ func TestActionSpecs_ReadRoute(t *testing.T) {
 		http.NotFound(w, r)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	byTool := repositorySubmoduleSpecsByTool(t, ActionSpecs(client))
 
 	result, err := byTool["gitlab_read_repository_submodule_file"].Route.Handler(t.Context(), map[string]any{
@@ -938,7 +1025,7 @@ func TestRead_DefaultsRefToHEAD(t *testing.T) {
 		http.NotFound(w, r)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	if _, err := Read(t.Context(), client, ReadInput{ProjectID: "42", SubmodulePath: "libs/dep", FilePath: "main.c"}); err == nil {
 		t.Fatal("expected error from missing .gitmodules")
 	}

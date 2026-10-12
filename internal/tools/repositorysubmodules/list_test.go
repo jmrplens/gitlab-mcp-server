@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -34,9 +36,256 @@ const sampleGitmodules = `[submodule "dsp_up_spi_common_module"]
 
 // parseGitmodules unit tests.
 
+// testResolver resolves as an instance at https://gitlab.example.com whose
+// SSH clone URLs start with git@gitlab.example.com:, for the superproject
+// group/app.
+func testResolver(t *testing.T) submoduleResolver {
+	t.Helper()
+	base, err := url.Parse("https://gitlab.example.com/api/v4/")
+	if err != nil {
+		t.Fatalf("url.Parse: %v", err)
+	}
+	return newResolver(base, "group/app", "git@gitlab.example.com:")
+}
+
+// parseAndResolve parses content and resolves it with testResolver, as List
+// does once it has read the superproject.
+func parseAndResolve(t *testing.T, content string) []SubmoduleEntry {
+	t.Helper()
+	entries := parseGitmodules(content)
+	testResolver(t).resolveAll(entries)
+	return entries
+}
+
+// TestSubmoduleResolver_ResolvesTheProjectTheRemoteNames holds the resolver
+// to the project a remote names on this instance, case by case: the
+// superproject itself, relative URLs and where they may land, the instance's
+// web URL with its relative root, its SSH clone URL in both of the forms git
+// reads, and every remote that names no project here.
+//
+// It follows GitLab's SubmoduleHelper except where that helper compares text
+// and git does not: a namespace whose name only begins with the
+// superproject's ("../appx/lib" from group/app) is a sibling, not a path
+// inside the superproject, and the ssh:// spelling of an SCP clone URL, a
+// host written in capitals or the default port written out all name the same
+// instance (see "SubmoduleHelper compares submodule URLs as text" in
+// docs/development/upstream-bugs.md).
+func TestSubmoduleResolver_ResolvesTheProjectTheRemoteNames(t *testing.T) {
+	base, err := url.Parse("https://example.com/gitlab/api/v4/")
+	if err != nil {
+		t.Fatalf("url.Parse: %v", err)
+	}
+	r := newResolver(base, "group/app", "git@example.com:")
+	cases := []struct{ remote, want string }{
+		{".", "group/app"},
+		{"./", "group/app"},
+		{"../lib", "group/lib"},
+		{"../lib.git", "group/lib"},
+		{"../sub/lib.git", "group/sub/lib"},
+		{"../../other/lib.git", "other/lib"},
+		{"../app-tools", "group/app-tools"},
+		{"../app-tools/lib.git", "group/app-tools/lib"},
+		{"../appx/lib", "group/appx/lib"},
+		{"./nested", ""},
+		{"./nested/lib", ""},
+		{"../app/nested", ""},
+		{"../app/sub/lib.git", ""},
+		{"../../lib", ""},
+		{"../../../../lib", ""},
+		{"../lib/", ""},
+		{"https://example.com/gitlab/team/lib.git", "team/lib"},
+		{"https://EXAMPLE.com:443/gitlab/team/lib.git", "team/lib"},
+		{"https://example.com/gitlab/a/b/lib", "a/b/lib"},
+		{"https://example.com/gitlab/lib.git", ""},
+		{"https://example.com/gitlab/team/lib.git/", ""},
+		{"https://example.com/team/lib.git", ""},
+		{"git@example.com:team/lib.git", "team/lib"},
+		{"git@EXAMPLE.com:team/lib.git", "team/lib"},
+		{"git@example.com:/team/lib.git", ""},
+		{"git@example.com:lib.git", ""},
+		{"ssh://git@example.com/team/lib.git", "team/lib"},
+		{"ssh://git@Example.com:22/team/lib.git", "team/lib"},
+		{"git+ssh://git@example.com/team/lib.git", "team/lib"},
+		{"ssh://git@example.com//team/lib.git", ""},
+		{"ssh://git@example.com:2222/team/lib.git", ""},
+		{"ssh://deploy@example.com/team/lib.git", ""},
+		{"deploy@example.com:team/lib.git", ""},
+		{"https://github.com/rev-misc/lib.git", ""},
+		{"git@github.com:rev-misc/lib.git", ""},
+		{"lib", ""},
+		{"", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.remote, func(t *testing.T) {
+			if got := r.resolve(c.remote); got != c.want {
+				t.Errorf("resolve(%q) = %q, want %q", c.remote, got, c.want)
+			}
+		})
+	}
+	t.Run("no ssh prefix known", func(t *testing.T) {
+		unknown := newResolver(base, "group/app", "")
+		if got := unknown.resolve("git@example.com:team/lib.git"); got != "" {
+			t.Errorf("resolve with no SSH prefix = %q, want nothing", got)
+		}
+		for _, remote := range []string{"git@example.com:team/lib.git", "ssh://example.com/team/lib.git", "lib", ""} {
+			t.Run(remote, func(t *testing.T) {
+				if below, ok := unknown.pathBelowSSH(remote); ok || below != "" {
+					t.Errorf("pathBelowSSH(%q) with no SSH prefix = %q, %v; want nothing, false", remote, below, ok)
+				}
+			})
+		}
+	})
+	t.Run("an instance serving SSH on its own port", func(t *testing.T) {
+		port := newResolver(base, "group/app", "ssh://git@example.com:2222/scm/")
+		for remote, want := range map[string]string{
+			"ssh://git@example.com:2222/scm/team/lib.git": "team/lib",
+			"ssh://git@example.com:2222/team/lib.git":     "",
+			"git@example.com:team/lib.git":                "",
+			"ssh://git@example.com/scm/team/lib.git":      "",
+		} {
+			t.Run(remote, func(t *testing.T) {
+				if got := port.resolve(remote); got != want {
+					t.Errorf("resolve(%q) = %q, want %q", remote, got, want)
+				}
+			})
+		}
+	})
+}
+
+// TestParseSSHRemote_ReadsBothFormsGitTakes verifies the reading of an SSH
+// remote the resolver compares with the instance's SSH clone URLs: the SCP
+// form with its implicit port, the URL form under each scheme git accepts for
+// it with its port written or not, and every remote that is not an SSH one,
+// including a URL that does not parse.
+func TestParseSSHRemote_ReadsBothFormsGitTakes(t *testing.T) {
+	cases := []struct {
+		remote string
+		want   sshRemote
+		ok     bool
+	}{
+		{"git@Example.com:team/lib.git", sshRemote{"git", "example.com", "22", "team/lib.git"}, true},
+		{"example.com:team/lib.git", sshRemote{"", "example.com", "22", "team/lib.git"}, true},
+		{"git@example.com:", sshRemote{"git", "example.com", "22", ""}, true},
+		{"ssh://git@example.com:2222/team/lib.git", sshRemote{"git", "example.com", "2222", "team/lib.git"}, true},
+		{"ssh://git@example.com:2222/", sshRemote{"git", "example.com", "2222", ""}, true},
+		{"git+ssh://git@example.com/team/lib.git", sshRemote{"git", "example.com", "22", "team/lib.git"}, true},
+		{"ssh+git://ciuser:pw@example.com/team/lib.git", sshRemote{"ciuser", "example.com", "22", "team/lib.git"}, true},
+		{"ssh://git@exa mple.com/team/lib.git", sshRemote{}, false},
+		{"https://example.com/team/lib.git", sshRemote{}, false},
+		{"lib", sshRemote{}, false},
+		{":team/lib.git", sshRemote{}, false},
+		{"dir/sub:lib", sshRemote{}, false},
+		{"", sshRemote{}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.remote, func(t *testing.T) {
+			got, ok := parseSSHRemote(c.remote)
+			if got != c.want || ok != c.ok {
+				t.Errorf("parseSSHRemote(%q) = %+v, %v; want %+v, %v", c.remote, got, ok, c.want, c.ok)
+			}
+		})
+	}
+}
+
+// TestSubmoduleResolver_ResolveAll_TellsAnotherHostFromARemoteThatNamesNothing
+// verifies that resolveAll marks a remote that names no project on this
+// instance one of two ways, and clears the remote each was read from, which
+// may carry credentials: external when the remote names another host, where
+// the submodule can be read from that host, and unresolved otherwise, a
+// relative URL landing inside the superproject or at the root, a remote on
+// this instance's host in a form that is not a project's clone URL, or one
+// naming no host at all. Every one of them used to be called "external, not
+// on this instance", which three of them are not.
+func TestSubmoduleResolver_ResolveAll_TellsAnotherHostFromARemoteThatNamesNothing(t *testing.T) {
+	cases := []struct {
+		remote               string
+		external, unresolved bool
+	}{
+		{"https://u:pw@github.com/x/y.git", true, false},
+		{"git@github.com:x/y.git", true, false},
+		{"ssh://git@github.com/x/y.git", true, false},
+		{"../lib", false, false},
+		{"./nested", false, true},
+		{"../../lib", false, true},
+		{"ssh://git@gitlab.example.com:2222/team/lib.git", false, true},
+		{"https://GitLab.example.com:8443/team/lib.git", false, true},
+		{"ciuser:s3cretpw@gitlab.example.com:group/project.git", false, true},
+		{"lib", false, true},
+		{"file:///srv/git/lib.git", false, true},
+		{"://invalid", false, true},
+	}
+	for _, c := range cases {
+		t.Run(c.remote, func(t *testing.T) {
+			entries := []SubmoduleEntry{{Path: "a", remote: c.remote}}
+			testResolver(t).resolveAll(entries)
+			e := entries[0]
+			if e.External != c.external || e.Unresolved != c.unresolved {
+				t.Errorf("entry = %+v, want external %v and unresolved %v", e, c.external, c.unresolved)
+			}
+			if (e.ResolvedProject != "") == (c.external || c.unresolved) {
+				t.Errorf("entry = %+v, want a resolved project exactly when neither mark is set", e)
+			}
+			if e.remote != "" {
+				t.Errorf("entry kept its remote %q", e.remote)
+			}
+		})
+	}
+	t.Run("the host of the instance's SSH clone URLs", func(t *testing.T) {
+		base, err := url.Parse("https://gitlab.example.com/api/v4/")
+		if err != nil {
+			t.Fatalf("url.Parse: %v", err)
+		}
+		entries := []SubmoduleEntry{{Path: "a", remote: "ssh://git@ssh.example.com:2222/team/lib.git"}}
+		newResolver(base, "group/app", "git@ssh.example.com:").resolveAll(entries)
+		if entries[0].External || !entries[0].Unresolved {
+			t.Errorf("entry = %+v, want unresolved on the instance's SSH host", entries[0])
+		}
+	})
+}
+
+// TestSSHPathPrefix_IsWhatPrecedesTheProjectPath verifies the SSH prefix is
+// read off the superproject's own clone URL, in either of the forms GitLab
+// writes, and that nothing is read off a clone URL that does not end in the
+// project's path.
+func TestSSHPathPrefix_IsWhatPrecedesTheProjectPath(t *testing.T) {
+	cases := []struct{ clone, project, want string }{
+		{"git@example.com:group/app.git", "group/app", "git@example.com:"},
+		{"ssh://git@example.com:2222/group/app.git", "group/app", "ssh://git@example.com:2222/"},
+		{"git@example.com:other/app.git", "group/app", ""},
+		{"", "group/app", ""},
+		{"group/app.git", "group/app", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.clone, func(t *testing.T) {
+			if got := sshPathPrefix(c.clone, c.project); got != c.want {
+				t.Errorf("sshPathPrefix(%q, %q) = %q, want %q", c.clone, c.project, got, c.want)
+			}
+		})
+	}
+}
+
+// TestList_SuperprojectReadFails_IsAnError verifies that List reports the
+// superproject read GitLab refused, rather than resolving nothing.
+func TestList_SuperprojectReadFails_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, gitmodulesHandler(sampleGitmodules))
+	_, err := List(t.Context(), client, ListInput{ProjectID: "42"})
+	if err == nil || !strings.Contains(err.Error(), "could not read project 42") {
+		t.Fatalf("List error = %v, want the superproject read refused", err)
+	}
+}
+
+// TestRead_SuperprojectReadFails_IsAnError verifies the same of Read.
+func TestRead_SuperprojectReadFails_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, gitmodulesHandler(sampleGitmodules))
+	_, err := Read(t.Context(), client, ReadInput{ProjectID: "42", SubmodulePath: "bootloader", FilePath: "f"})
+	if err == nil || !strings.Contains(err.Error(), "could not read project 42") {
+		t.Fatalf("Read error = %v, want the superproject read refused", err)
+	}
+}
+
 // TestParseGitmodules_Success covers ParseGitmodules with table-driven subtests for success.
 func TestParseGitmodules_Success(t *testing.T) {
-	entries := parseGitmodules(sampleGitmodules)
+	entries := parseAndResolve(t, sampleGitmodules)
 	if len(entries) != 4 {
 		t.Fatalf("expected 4 entries, got %d", len(entries))
 	}
@@ -80,60 +329,42 @@ func TestParseGitmodules_Empty(t *testing.T) {
 	}
 }
 
-// TestParseGitmodules_HTTPSUrl verifies ParseGitmodules when HTTPS URL.
+// TestParseGitmodules_HTTPSUrl verifies that an https remote on the
+// instance's web URL resolves to the project below it.
 func TestParseGitmodules_HTTPSUrl(t *testing.T) {
 	content := `[submodule "lib"]
 	path = lib
-	url = https://gitlab.com/group/project.git
+	url = https://gitlab.example.com/group/project.git
 `
-	entries := parseGitmodules(content)
+	entries := parseAndResolve(t, content)
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
-	if entries[0].ResolvedProject != "group/project" {
-		t.Errorf("expected resolved project 'group/project', got %q", entries[0].ResolvedProject)
+	if entries[0].ResolvedProject != "group/project" || entries[0].External {
+		t.Errorf("entry = %+v, want group/project on this instance", entries[0])
 	}
 }
 
-// TestParseGitmodules_SSHUrl verifies ParseGitmodules when SSH URL.
+// TestParseGitmodules_SSHUrl verifies that an SSH remote on this instance's
+// SSH account, host and port resolves in either form git reads: the SCP form
+// the superproject's clone URL shows, and the ssh:// spelling of it, which
+// GitLab's own helper leaves unlinked because it compares the text.
 func TestParseGitmodules_SSHUrl(t *testing.T) {
-	content := `[submodule "lib"]
-	path = lib
-	url = ssh://git@gitlab.com/group/subgroup/project.git
+	content := `[submodule "scp"]
+	path = scp
+	url = git@gitlab.example.com:group/subgroup/project.git
+[submodule "scheme"]
+	path = scheme
+	url = ssh://git@gitlab.example.com/group/subgroup/project.git
 `
-	entries := parseGitmodules(content)
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 entry, got %d", len(entries))
+	entries := parseAndResolve(t, content)
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
 	}
-	if entries[0].ResolvedProject != "group/subgroup/project" {
-		t.Errorf("expected resolved project 'group/subgroup/project', got %q", entries[0].ResolvedProject)
-	}
-}
-
-// resolveProjectPath unit tests.
-
-// TestResolveProjectPath covers ResolveProjectPath with table-driven subtests.
-func TestResolveProjectPath(t *testing.T) {
-	tests := []struct {
-		name string
-		url  string
-		want string
-	}{
-		{"SCP-style", "git@gitlab.example.com:group/project.git", "group/project"},
-		{"SCP nested", "git@gitlab.example.com:a/b/c/project.git", "a/b/c/project"},
-		{"HTTPS", "https://gitlab.com/group/project.git", "group/project"},
-		{"HTTPS no .git", "https://gitlab.com/group/project", "group/project"},
-		{"SSH scheme", "ssh://git@gitlab.com/group/project.git", "group/project"},
-		{"URL parse error", "://bad\x7f", ""},
-		{"Empty", "", ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := resolveProjectPath(tt.url)
-			if got != tt.want {
-				t.Errorf("resolveProjectPath(%q) = %q, want %q", tt.url, got, tt.want)
-			}
-		})
+	for _, e := range entries {
+		if e.ResolvedProject != "group/subgroup/project" || e.External || e.Unresolved {
+			t.Errorf("%s entry = %+v, want group/subgroup/project on this instance", e.Path, e)
+		}
 	}
 }
 
@@ -167,15 +398,17 @@ func TestParseGitmodules_RemoteWithCredentials_PublishesNeither(t *testing.T) {
 			wantURL:      "https://gitlab.example.com/group/project.git",
 		},
 		{
+			// Neither of these is the SSH account the instance's clone URLs
+			// name, so neither reaches GitLab's shell and nothing resolves.
 			name:         "ssh scheme with password",
 			remote:       "ssh://ciuser:s3cretpw@gitlab.example.com/group/project.git",
-			wantResolved: "group/project",
+			wantResolved: "",
 			wantURL:      "ssh://gitlab.example.com/group/project.git",
 		},
 		{
 			name:         "scp style with password",
 			remote:       "ciuser:s3cretpw@gitlab.example.com:group/project.git",
-			wantResolved: "group/project",
+			wantResolved: "",
 			wantURL:      "gitlab.example.com:group/project.git",
 		},
 		{
@@ -187,7 +420,7 @@ func TestParseGitmodules_RemoteWithCredentials_PublishesNeither(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			entries := parseGitmodules("[submodule \"lib\"]\n\tpath = lib\n\turl = " + tc.remote + "\n")
+			entries := parseAndResolve(t, "[submodule \"lib\"]\n\tpath = lib\n\turl = "+tc.remote+"\n")
 			if len(entries) != 1 {
 				t.Fatalf("expected 1 entry, got %d", len(entries))
 			}
@@ -219,7 +452,7 @@ func TestParseGitmodules_RemoteWithCredentials_PublishesNeither(t *testing.T) {
 // checks, because an absence assertion passes just as happily over a table
 // that stopped rendering: this one fails if any byte of the row moves.
 func TestFormatListMarkdown_RemoteWithCredentials_RendersNoPassword(t *testing.T) {
-	entries := parseGitmodules("[submodule \"lib\"]\n\tpath = lib\n\turl = https://ciuser:s3cretpw@gitlab.example.com/group/project.git\n")
+	entries := parseAndResolve(t, "[submodule \"lib\"]\n\tpath = lib\n\turl = https://ciuser:s3cretpw@gitlab.example.com/group/project.git\n")
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
@@ -269,6 +502,107 @@ func TestParentDir(t *testing.T) {
 
 // List integration tests.
 
+// superprojectJSON is the superproject every submodule test's mock answers
+// GET /projects/42 with: group/app, whose SSH clone URL shows the prefix
+// this instance writes before a project path.
+const superprojectJSON = `{"id":42,"path_with_namespace":"group/app","ssh_url_to_repo":"git@gitlab.example.com:group/app.git","http_url_to_repo":"https://gitlab.example.com/group/app.git"}`
+
+// withSuperproject answers GET /api/v4/projects/42, the superproject the
+// submodule resolver reads, and hands every other request to next.
+func withSuperproject(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42" {
+			testutil.RespondJSON(w, http.StatusOK, superprojectJSON)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// newSubmoduleClient is testutil.NewTestClient with the superproject read
+// answered, which every List and Read that finds a submodule makes.
+func newSubmoduleClient(t *testing.T, handler http.Handler) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, withSuperproject(handler))
+}
+
+// gitmodulesHandler answers the .gitmodules read with content and every tree
+// listing with no entry.
+func gitmodulesHandler(content string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/repository/files/.gitmodules"):
+			testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf(`{"file_name":".gitmodules","file_path":".gitmodules","encoding":"text","content":%q,"ref":"main"}`, content))
+		case strings.Contains(r.URL.Path, "/repository/tree"):
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+		default:
+			http.NotFound(w, r)
+		}
+	}
+}
+
+// TestList_SubmoduleURLs_ResolveToTheProjectTheyName verifies that List names
+// a project on this instance only for a submodule whose remote names one: a
+// relative URL resolves against the superproject group/app, a sibling
+// namespace whose name only begins with "app" included, and an SCP or ssh://
+// remote on this instance keeps its path, while a remote on another host is
+// marked external and a relative URL inside the superproject unresolved. The
+// resolver used to discard the host and keep the path, so github.com's
+// rev-misc/lib was published as the local project rev-misc/lib, and "../lib"
+// as itself.
+func TestList_SubmoduleURLs_ResolveToTheProjectTheyName(t *testing.T) {
+	const content = `[submodule "github"]
+	path = github
+	url = https://github.com/rev-misc/lib.git
+[submodule "github-scp"]
+	path = github-scp
+	url = git@github.com:rev-misc/lib.git
+[submodule "sibling"]
+	path = sibling
+	url = ../lib.git
+[submodule "sibling-namespace"]
+	path = sibling-namespace
+	url = ../app-tools/lib.git
+[submodule "cousin"]
+	path = cousin
+	url = ../../other/tools
+[submodule "inside"]
+	path = inside
+	url = ./nested
+[submodule "local"]
+	path = local
+	url = git@gitlab.example.com:team/lib.git
+[submodule "local-ssh"]
+	path = local-ssh
+	url = ssh://git@gitlab.example.com/team/tools.git
+`
+	client := newSubmoduleClient(t, gitmodulesHandler(content))
+	out, err := List(t.Context(), client, ListInput{ProjectID: "42"})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	type want struct {
+		project              string
+		external, unresolved bool
+	}
+	wants := map[string]want{
+		"github": {external: true}, "github-scp": {external: true},
+		"sibling": {project: "group/lib"}, "sibling-namespace": {project: "group/app-tools/lib"},
+		"cousin": {project: "other/tools"}, "inside": {unresolved: true},
+		"local": {project: "team/lib"}, "local-ssh": {project: "team/tools"},
+	}
+	if len(out.Submodules) != len(wants) {
+		t.Fatalf("listed %d submodules, want %d", len(out.Submodules), len(wants))
+	}
+	for _, s := range out.Submodules {
+		t.Run(s.Path, func(t *testing.T) {
+			if got := (want{s.ResolvedProject, s.External, s.Unresolved}); got != wants[s.Path] {
+				t.Errorf("resolved %+v, want %+v", got, wants[s.Path])
+			}
+		})
+	}
+}
+
 // TestList_Success verifies List when success.
 func TestList_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -313,7 +647,7 @@ func TestList_Success(t *testing.T) {
 		http.NotFound(w, r)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	out, err := List(t.Context(), client, ListInput{ProjectID: "42"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -348,7 +682,7 @@ func TestList_NoGitmodules(t *testing.T) {
 		fmt.Fprint(w, `{"message":"404 File Not Found"}`)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	_, err := List(t.Context(), client, ListInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal("expected error for missing .gitmodules, got nil")
@@ -379,6 +713,27 @@ func TestList_CancelledContext(t *testing.T) {
 }
 
 // FormatListMarkdown tests.
+
+// TestFormatListMarkdown_SubmoduleNamingNoProject_SaysWhy pins the rows of
+// the submodules whose remote names no project on this instance: the project
+// cell says which of the two it is instead of standing empty, which read the
+// same as a project nobody had resolved yet. A submodule on another host is
+// external; one whose remote is on this instance, or names no host, and
+// still names no project is unresolved, and is not said to be elsewhere.
+func TestFormatListMarkdown_SubmoduleNamingNoProject_SaysWhy(t *testing.T) {
+	entries := parseAndResolve(t, "[submodule \"lib\"]\n\tpath = lib\n\turl = https://github.com/rev-misc/lib.git\n"+
+		"[submodule \"inner\"]\n\tpath = inner\n\turl = ./inner\n")
+	got := renderedText(t, FormatListMarkdown(ListOutput{Submodules: entries, Count: len(entries)}))
+	want := "## Repository Submodules (2)\n\n" +
+		"| Name | Path | Commit SHA | Resolved Project |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| lib | `lib` |  | external, on another host |\n" +
+		"| inner | `inner` |  | unresolved, names no project here |\n" +
+		submoduleListHints
+	if got != want {
+		t.Errorf("table mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
 
 // TestFormatListMarkdown_WithEntries pins the whole submodule table: the path
 // and the abbreviated commit are code spans a reader copies, and a pipe typed
@@ -464,7 +819,7 @@ func TestList_Base64EncodedWithRef(t *testing.T) {
 		http.NotFound(w, r)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	out, err := List(t.Context(), client, ListInput{ProjectID: "42", Ref: "develop"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -491,7 +846,7 @@ func TestList_EmptyGitmodulesAfterBase64(t *testing.T) {
 		http.NotFound(w, r)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	out, err := List(t.Context(), client, ListInput{ProjectID: "42"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -517,7 +872,7 @@ func TestList_Base64DecodeError(t *testing.T) {
 		http.NotFound(w, r)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	_, err := List(t.Context(), client, ListInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal("expected error for invalid base64 content")
@@ -547,7 +902,7 @@ func TestList_TreeRequestError(t *testing.T) {
 		http.NotFound(w, r)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	out, err := List(t.Context(), client, ListInput{ProjectID: "42"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -587,7 +942,7 @@ func TestList_TreeListing_AsksEachParentDirectoryAtTheRequestedRef(t *testing.T)
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	if _, err := List(t.Context(), client, ListInput{ProjectID: "42", Ref: "release-3-1"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -630,7 +985,7 @@ func TestList_TreeNodeThatIsNotACommit_LeavesTheSubmoduleUnpinned(t *testing.T) 
 		]`)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	out, err := List(t.Context(), client, ListInput{ProjectID: "42"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -645,7 +1000,7 @@ func TestList_TreeNodeThatIsNotACommit_LeavesTheSubmoduleUnpinned(t *testing.T) 
 
 // oneSubmoduleGitmodules is a .gitmodules naming one submodule at lib.
 const oneSubmoduleGitmodules = `{"file_name": ".gitmodules", "encoding": "text",
-	"content": "[submodule \"lib\"]\n\tpath = lib\n\turl = git@host:group/lib.git\n", "ref": "main"}`
+	"content": "[submodule \"lib\"]\n\tpath = lib\n\turl = git@gitlab.example.com:group/lib.git\n", "ref": "main"}`
 
 // TestList_TreeListing_FollowsEveryPageOfTheDirectory verifies that a submodule
 // GitLab lists on the second page of its directory is still found, and that
@@ -679,7 +1034,7 @@ func TestList_TreeListing_FollowsEveryPageOfTheDirectory(t *testing.T) {
 			testutil.PaginationHeaders{Page: "2"})
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	out, err := List(t.Context(), client, ListInput{ProjectID: "42"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -738,7 +1093,7 @@ func TestList_TreeListing_StopsAtThePageHoldingTheLastSubmodule(t *testing.T) {
 				mu    sync.Mutex
 				pages []string
 			)
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			client := newSubmoduleClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if strings.Contains(r.URL.Path, "/repository/files/") {
 					testutil.RespondJSON(w, http.StatusOK, tc.gitmodules)
 					return
@@ -783,7 +1138,7 @@ func TestList_TreeListing_StopsAtThePageHoldingTheLastSubmodule(t *testing.T) {
 // them through the same switch and the same ok test that the fixtures above
 // only ever drive down the path and url arms.
 func TestParseGitmodules_ExtraKeysAndMalformedLines_AreIgnored(t *testing.T) {
-	entries := parseGitmodules(`[submodule "lib"]
+	entries := parseAndResolve(t, `[submodule "lib"]
 	path = lib
 	url = git@gitlab.example.com:group/lib.git
 	branch = main
@@ -863,7 +1218,7 @@ func TestList_DefaultsRefToHEAD(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	})
 
-	client := testutil.NewTestClient(t, handler)
+	client := newSubmoduleClient(t, handler)
 	if _, err := List(t.Context(), client, ListInput{ProjectID: "42"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

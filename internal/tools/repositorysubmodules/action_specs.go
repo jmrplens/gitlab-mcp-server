@@ -90,13 +90,13 @@ type submoduleActionMetaEntry struct {
 // with generic repository or file tools.
 var submoduleActionMeta = map[string]submoduleActionMetaEntry{
 	"gitlab_list_repository_submodules": {
-		usage:       "List the Git submodules declared in a repository's .gitmodules, each with its path, remote URL, resolved GitLab project, and the commit SHA the parent currently pins. Use when the prompt asks which submodules a project has or where a submodule points.",
+		usage:       "List the Git submodules declared in a repository's .gitmodules, each with its path, remote URL, the project on this GitLab instance it resolves to, and the commit SHA the parent currently pins. A relative URL resolves against the parent project's path, an absolute one when it is this instance's web or SSH clone URL of a project. A remote on another host is marked external, and any other remote naming no project here unresolved. Use when the prompt asks which submodules a project has or where a submodule points.",
 		aliases:     []string{"list git submodules", "show repository submodules", "list .gitmodules entries", "show submodule pointers"},
 		related:     []string{actionReadSubmoduleFile, actionUpdateSubmodule, "repository.tree"},
-		description: "List the Git submodules defined in a repository's .gitmodules. Returns: each submodule's name, path, remote url, resolved_project, and pinned commit_sha, plus a count. See also: gitlab_read_repository_submodule_file, gitlab_update_repository_submodule, gitlab_repository_tree.",
+		description: "List the Git submodules defined in a repository's .gitmodules. Returns: each submodule's name, path, remote url, resolved_project on this instance, or external for a remote on another host and unresolved for one naming no project here, and pinned commit_sha, plus a count. See also: gitlab_read_repository_submodule_file, gitlab_update_repository_submodule, gitlab_repository_tree.",
 	},
 	"gitlab_read_repository_submodule_file": {
-		usage:       "Read a file from inside a submodule at the exact commit the parent repository pins. Resolves the submodule project via .gitmodules, finds the pinned commit SHA from the parent tree, then fetches the file from the submodule's project. Use when the prompt asks for content that lives inside a submodule rather than the parent repo.",
+		usage:       "Read a file from inside a submodule at the exact commit the parent repository pins. Resolves the submodule project from its .gitmodules remote, finds the pinned commit SHA from the parent tree, then fetches the file from the submodule's project. A submodule whose remote names no project on this instance is refused, naming its remote, and one on another host is pointed at that host. Use when the prompt asks for content that lives inside a submodule rather than the parent repo.",
 		aliases:     []string{"read submodule file", "view file inside submodule", "get submodule contents at pinned commit", "open file from a git submodule"},
 		related:     []string{actionListSubmodules, actionUpdateSubmodule, "repository.file_get"},
 		description: "Read a file from inside a submodule at the parent-pinned commit. Returns: file_name, file_path, submodule_path, resolved_project, commit_sha, size, decoded content, and encoding. See also: gitlab_list_repository_submodules, gitlab_file_get, gitlab_update_repository_submodule.",

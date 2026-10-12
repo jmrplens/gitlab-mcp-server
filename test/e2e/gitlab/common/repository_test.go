@@ -146,27 +146,47 @@ func TestRepository_Changelog_GeneratesNotesAndCommitsThem(t *testing.T) {
 	})
 }
 
-// gitmodulesContent declares one submodule, which the listing parses. The
-// REST surface creates blobs and never a gitlink (tree entry mode 160000),
-// so the submodule's pinned commit cannot exist here, and the two actions
-// that need one are asserted on the refusal they give without it.
+// gitmodulesContent declares three submodules, which the listing parses: one
+// by a relative URL, which resolves against the superproject's path to a
+// sibling project in the same namespace, one on another host, and one by a
+// relative URL inside the superproject's own path, which names no project
+// anywhere. The REST surface creates blobs and never a gitlink (tree entry
+// mode 160000), so the relative submodule's pinned commit cannot exist here,
+// and the two actions that need one are asserted on the refusal they give
+// without it.
 const gitmodulesContent = `[submodule "libs/dep"]
 	path = libs/dep
-	url = https://gitlab.example.com/e2e/dep.git
+	url = ../dep.git
+[submodule "libs/ext"]
+	path = libs/ext
+	url = https://github.com/rev-misc/lib.git
+[submodule "libs/inner"]
+	path = libs/inner
+	url = ./inner
 `
 
-// submodulePath is the path gitmodulesContent declares.
-const submodulePath = "libs/dep"
+// submodulePath, externalSubmodulePath and unresolvedSubmodulePath are the
+// paths gitmodulesContent declares.
+const (
+	submodulePath           = "libs/dep"
+	externalSubmodulePath   = "libs/ext"
+	unresolvedSubmodulePath = "libs/inner"
+)
 
 // zeroSHA is a commit no repository has, for the submodule update a fresh
 // project refuses.
 const zeroSHA = "0000000000000000000000000000000000000000"
 
 // TestRepository_Submodules_ListsAndRefusesWithoutAGitlink commits a
-// .gitmodules on a shared project, lists the submodule it declares on every
-// surface, and asserts the two refusals a repository without a gitlink
-// gives: a file read that finds no tree entry of type commit, and an update
-// of a submodule that does not exist.
+// .gitmodules on a shared project, lists the submodules it declares on every
+// surface, and asserts how each resolves: the relative one to the sibling
+// project it names, the one on another host to no project, marked external,
+// and the one inside the superproject to no project, marked unresolved and not
+// external. It then asserts the refusals a repository without a gitlink
+// gives: a file read that finds no tree entry of type commit, a file read of
+// the external submodule refused before anything is read, naming its remote
+// and its other host, a file read of the unresolved one refused without being
+// sent elsewhere, and an update of a submodule that does not exist.
 //
 // Replaces: TestIndividual_RepositorySubmodules, TestMeta_SubmoduleUpdate
 func TestRepository_Submodules_ListsAndRefusesWithoutAGitlink(t *testing.T) {
@@ -179,13 +199,36 @@ func TestRepository_Submodules_ListsAndRefusesWithoutAGitlink(t *testing.T) {
 	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
 		s := e.On(surface)
 		params := map[string]any{"project_id": project.IDParam()}
+		namespace, _, _ := strings.Cut(project.Path, "/")
 
 		listed := harness.Do[repositorysubmodules.ListOutput](s, actionRepositoryListSubmodules, params)
-		if listed.Count != 1 || len(listed.Submodules) != 1 || listed.Submodules[0].Path != submodulePath {
-			e.T.Errorf("submodule list answered %+v, want the one submodule at %s", listed, submodulePath)
-		} else if listed.Submodules[0].CommitSHA != "" {
-			e.T.Errorf("the submodule lists commit %q, and no gitlink exists to pin one", listed.Submodules[0].CommitSHA)
+		byPath := map[string]repositorysubmodules.SubmoduleEntry{}
+		for _, sub := range listed.Submodules {
+			byPath[sub.Path] = sub
 		}
+		relative, external, unresolved := byPath[submodulePath], byPath[externalSubmodulePath], byPath[unresolvedSubmodulePath]
+		switch {
+		case listed.Count != 3 || len(byPath) != 3:
+			e.T.Errorf("submodule list answered %+v, want the three submodules at %s, %s and %s", listed, submodulePath, externalSubmodulePath, unresolvedSubmodulePath)
+		case relative.ResolvedProject != namespace+"/dep" || relative.External || relative.Unresolved:
+			e.T.Errorf("the relative submodule resolved to %+v, want %s/dep on this instance", relative, namespace)
+		case external.ResolvedProject != "" || !external.External || external.Unresolved:
+			e.T.Errorf("the submodule on another host resolved to %+v, want external with no project", external)
+		case unresolved.ResolvedProject != "" || unresolved.External || !unresolved.Unresolved:
+			e.T.Errorf("the submodule inside the superproject resolved to %+v, want unresolved with no project", unresolved)
+		case relative.CommitSHA != "":
+			e.T.Errorf("the submodule lists commit %q, and no gitlink exists to pin one", relative.CommitSHA)
+		}
+
+		externalRefused := harness.ExpectToolError(s, actionRepositoryReadSubmoduleFile, withParams(params, map[string]any{
+			"submodule_path": externalSubmodulePath, "file_path": "README.md",
+		}), "github.com/rev-misc/lib.git")
+		assertMentions(e, "the external submodule file read", externalRefused, "another host")
+
+		unresolvedRefused := harness.ExpectToolError(s, actionRepositoryReadSubmoduleFile, withParams(params, map[string]any{
+			"submodule_path": unresolvedSubmodulePath, "file_path": "README.md",
+		}), "./inner")
+		assertMentions(e, "the unresolved submodule file read", unresolvedRefused, "names no project on this GitLab instance")
 
 		refused := harness.Refused(s, actionRepositoryReadSubmoduleFile, withParams(params, map[string]any{
 			"submodule_path": submodulePath, "file_path": "README.md",
