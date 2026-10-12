@@ -1103,6 +1103,12 @@ jobs:
       # site, holding them to the published release in server.json rather
       # than VERSION, and to refusing the token in frontmatter or in the built
       # site and a release written by hand where the token belongs.
+      # scripts/release_order_sh_test.py holds the release's preflight
+      # decision, scripts/release-order.sh, to refusing a prerelease tag and
+      # to telling the newest release from a backport by version order, and
+      # scripts/publish_npm_sh_test.py holds scripts/publish-npm.sh, run
+      # against a stand-in npm, to publishing every package under the
+      # dist-tag that decision hands it (issue 1323).
       # shellcheck, bash, git, jq, zip, unzip and wget come from the runner
       # image.
       # Off CI a test skips when one is missing; here, where GitHub sets CI,

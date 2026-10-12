@@ -275,6 +275,44 @@ downloads after it. A digest that does not match is reported at once,
 whatever is left to wait, and `--retry-budget 0`, the out-of-band run days
 later, waits for nothing.
 
+### Which release moves "latest"
+
+Only a plain `vX.Y.Z` tag is released, and only the newest of them moves a
+pointer to the newest release (issue 1323). The release workflow's preflight
+asks `scripts/release-order.sh`, which reads the tags the repository holds
+(`git ls-remote --tags`), compares them with `sort -V` and answers three
+outputs before anything publishes:
+
+- **`stable`**: a prerelease or a build suffix (`v3.3.0-rc.1`,
+  `v3.3.0+build.5`) is refused there, so preflight fails and no job runs. A
+  prerelease tag used to push the image as `:latest` and publish the GitHub
+  release, and only then did the npm job refuse it, which left the release
+  half published.
+- **`newest`**: false for a backport, a stable tag lower than one already
+  released. A backport publishes under its own version on every channel and
+  leaves every pointer where it is: the image's `:latest` on `ghcr.io` and
+  Docker Hub is pushed only for the newest release, and only the newest
+  release updates the Docker Hub repository description, which would
+  otherwise show the backport's text and tool counts; the GitHub release is
+  published with `--latest=false` (the installers download
+  `/releases/latest`), and the Homebrew tap, the MCP Registry publish and the
+  manifest commit to `main` (which the site's `%%VERSION%%` reads through
+  `server.json`) are skipped. `scripts/update-homebrew-tap.sh` also refuses on
+  its own to write a version older than the one the tap holds.
+- **`npm_dist_tag`**: `latest` for the newest release and `release-X.Y` for a
+  backport, which `scripts/publish-npm.sh --tag` publishes every package
+  under, so `npm install` keeps resolving the newest release.
+
+PyPI and NuGet need nothing of this: both resolve the highest version, not the
+one published last. A rehearsal computes the three outputs from the version
+`VERSION` carries, the same way, so a rehearsal of an older line skips the
+same jobs a release of it would. `scripts/release_order_sh_test.py`,
+`scripts/publish_npm_sh_test.py` and `scripts/update_homebrew_tap_sh_test.py`
+hold the three scripts to it, and
+`TestLoadWorkflows_ReleaseWorkflow_OnlyTheNewestReleaseMovesAPointer` in
+`cmd/audit_supply_chain` holds `release.yml` to reading the answer at every
+step and job listed above.
+
 Two details that the per-channel pages on the site do not carry:
 
 - **The PyPI distribution name is a constant.** The unprefixed

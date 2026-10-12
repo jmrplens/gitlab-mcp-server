@@ -105,6 +105,41 @@ class UpdateHomebrewTapTest(unittest.TestCase):
             with self.subTest(fragment.splitlines()[0]):
                 self.assertIn(fragment, formula)
 
+    def seed_formula(self, version):
+        """Commits a formula at version to the stand-in tap, as an earlier release left it."""
+        seed = dict(self.env, GIT_AUTHOR_NAME="fixture", GIT_AUTHOR_EMAIL="fixture@example.com",
+                    GIT_COMMITTER_NAME="fixture", GIT_COMMITTER_EMAIL="fixture@example.com")
+        os.makedirs(os.path.join(self.tap, "Formula"), exist_ok=True)
+        path = os.path.join(self.tap, "Formula", "gitlab-mcp-server.rb")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write('class GitlabMcpServer < Formula\n  version "' + version + '"\nend\n')
+        subprocess.run(["git", "-C", self.tap, "add", "Formula"], env=seed, check=True)
+        subprocess.run(["git", "-C", self.tap, "commit", "-q", "-m", "seed " + version], env=seed, check=True)
+        return path
+
+    # Issue 1323: a backport tagged after a newer release wrote its older
+    # version into the formula, so `brew upgrade` downgraded. The workflow runs
+    # this script only for the newest release now, and the script refuses on
+    # its own as well, since the tap is the one place that says which version
+    # it holds.
+    def test_refuses_to_move_the_formula_back_to_an_older_version(self):
+        for newer in ("9.8.8", "9.9.0", "10.0.0", "9.10.0"):
+            with self.subTest(newer):
+                path = self.seed_formula(newer)
+                result = self.run_script(ASSETS)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("the tap already holds " + newer + ", newer than " + VERSION, result.stderr)
+                with open(path, encoding="utf-8") as fh:
+                    self.assertIn('version "' + newer + '"', fh.read())
+
+    def test_moves_the_formula_forward_and_rewrites_the_same_version(self):
+        for earlier in ("9.8.6", "9.7.10", "8.99.99", VERSION):
+            with self.subTest(earlier):
+                self.seed_formula(earlier)
+                result = self.run_script(ASSETS)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn('version "' + VERSION + '"', self.formula())
+
     def test_refuses_a_release_whose_checksums_name_no_notices(self):
         assets = {name: sha for name, sha in ASSETS.items() if name != "THIRD_PARTY_NOTICES"}
         result = self.run_script(assets)

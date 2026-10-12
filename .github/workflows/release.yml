@@ -47,6 +47,12 @@
 #     names them;
 #   * the MCP Registry publish runs after npm, PyPI, NuGet and the image push,
 #     because it validates every one of those entries by fetching them;
+#   * only a plain vX.Y.Z is released, and only the newest one moves a pointer
+#     to the newest release: the image's :latest, the Docker Hub repository
+#     description, the GitHub release marked Latest, npm's latest dist-tag,
+#     the Homebrew formula, the MCP Registry entry and main's manifests.
+#     Preflight decides both through scripts/release-order.sh before
+#     anything publishes (issue 1323);
 #   * nothing that signs or attests the image lives in the job that builds it.
 #     The build is not byte-reproducible, so a re-run of that job pushes a new
 #     index under the same tags; keeping the fourteen signing and attestation
@@ -117,6 +123,20 @@ jobs:
       # names it; a dispatch reads it from VERSION unless the input names it,
       # and either way the file and the name have to agree.
       release_tag: ${{ steps.tag.outputs.release_tag }}
+      # Where the release stands among the ones already out, decided by
+      # scripts/release-order.sh (issue 1323). stable is true or the run has
+      # already failed: a prerelease or malformed tag is refused here, before
+      # anything publishes. newest is false for a backport, a stable tag lower
+      # than one already released, and every pointer to the newest release
+      # (the image's :latest, the Docker Hub repository description, the
+      # GitHub release marked Latest, npm's latest dist-tag, the Homebrew
+      # formula, the MCP Registry entry and main's manifests) is then left
+      # where it is; npm_dist_tag is the dist-tag the npm job publishes
+      # under. A rehearsal computes the three from the version VERSION
+      # carries, the same way.
+      stable: ${{ steps.order.outputs.stable }}
+      newest: ${{ steps.order.outputs.newest }}
+      npm_dist_tag: ${{ steps.order.outputs.npm_dist_tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -143,6 +163,18 @@ jobs:
           fi
           echo "release_tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "release tag ${TAG}, VERSION ${FILE_V}, rehearsal=${REHEARSAL}"
+
+      # The repository is public, so the tags are listed without a credential,
+      # and the list is read from the remote rather than from the checkout,
+      # which a tag push fetches shallow and without the other tags.
+      - name: Decide whether this release is stable and the newest
+        id: order
+        env:
+          RELEASE_TAG: ${{ steps.tag.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          git ls-remote --tags --refs "https://github.com/${GITHUB_REPOSITORY}.git" 'v*' > "${RUNNER_TEMP}/tags.txt"
+          bash scripts/release-order.sh "${RELEASE_TAG}" < "${RUNNER_TEMP}/tags.txt" | tee -a "$GITHUB_OUTPUT"
 
   # The same workflow a maintainer runs by hand, called rather than copied.
   # This job used to be e2e.yml pasted in line for line, so a fix to the
@@ -393,11 +425,14 @@ jobs:
             VERSION=${{ steps.version.outputs.version }}
             COMMIT=${{ github.sha }}
             BUILD_DATE=${{ steps.build-date.outputs.date }}
+          # :latest only for the newest release (preflight's newest output):
+          # a backport is pushed under its own version and leaves :latest on
+          # the newest one, which is what the install pages promise.
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ needs.preflight.outputs.newest == 'true' && format('{0}/{1}:latest', env.REGISTRY, env.IMAGE_NAME) || '' }}
             ${{ steps.dockerhub-login.outputs.skip == 'false' && format('docker.io/{0}:{1}', env.DOCKERHUB_IMAGE, steps.version.outputs.version) || '' }}
-            ${{ steps.dockerhub-login.outputs.skip == 'false' && format('docker.io/{0}:latest', env.DOCKERHUB_IMAGE) || '' }}
+            ${{ steps.dockerhub-login.outputs.skip == 'false' && needs.preflight.outputs.newest == 'true' && format('docker.io/{0}:latest', env.DOCKERHUB_IMAGE) || '' }}
 
       # Rehearsal only: the action reports the exported index's digest the same
       # way it reports a pushed one, and the OCI layout's own index.json is
@@ -560,9 +595,12 @@ jobs:
       # character limit, so .github/dockerhub-description.md carries the
       # Docker-relevant sections verbatim. DOCKERHUB_TOKEN must be a Docker
       # Hub PAT with read/write/delete scope — the descriptions API rejects
-      # narrower ones.
+      # narrower ones. The repository page has one description, the newest
+      # release's: a backport pushing its own tree's text and tool counts
+      # would roll the page back to it (issue 1323), so only the newest
+      # release updates it.
       - name: Update Docker Hub description
-        if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
+        if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false' && needs.preflight.outputs.newest == 'true'
         # Pinned to a commit SHA (like every other action here) because
         # this is an individually-maintained action that receives
         # DOCKERHUB_TOKEN — a mutable tag would let a compromised release
@@ -1185,12 +1223,17 @@ jobs:
       # never sees a partial release, and this is the draft-then-publish flow
       # immutable releases require. GoReleaser creates the release as a draft
       # (.goreleaser.yml: draft: true). Everything downstream of this job reads
-      # the published assets, so this step is also the handoff.
+      # the published assets, so this step is also the handoff. GitHub marks
+      # a release it publishes Latest unless told otherwise, and the
+      # installers download /releases/latest, so --latest states it: true for
+      # the newest release, false for a backport, which would otherwise send
+      # every new install to the older line.
       - name: Publish release
         if: env.REHEARSAL != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "v${RELEASE_TAG#v}" --draft=false
+          NEWEST: ${{ needs.preflight.outputs.newest }}
+        run: gh release edit "v${RELEASE_TAG#v}" --draft=false "--latest=${NEWEST}"
 
   npm:
     name: "📮 Publish to npm"
@@ -1253,8 +1296,12 @@ jobs:
       # same cosign-signed checksums.txt, so the old arrangement was not unsafe,
       # but it did mean the bytes on the registry were never the bytes the
       # validator opened. The script refuses a missing or wrong-version tree, so
-      # the flag cannot turn a skipped build into a stale publish.
+      # the flag cannot turn a skipped build into a stale publish. The
+      # dist-tag is preflight's: latest for the newest release, release-X.Y
+      # for a backport, so npm's latest keeps resolving the newest release.
       - name: Publish to npm
+        env:
+          NPM_DIST_TAG: ${{ needs.preflight.outputs.npm_dist_tag }}
         run: |
           set -euo pipefail
           npm install -g npm@11.19.1
@@ -1262,9 +1309,9 @@ jobs:
             # npm publish --dry-run packs every tarball and validates it
             # against the registry without uploading, so the rehearsal runs
             # the publish script's own path up to the last call.
-            bash scripts/publish-npm.sh dist "${RELEASE_TAG#v}" --no-assemble --dry-run
+            bash scripts/publish-npm.sh dist "${RELEASE_TAG#v}" --no-assemble --dry-run --tag "${NPM_DIST_TAG}"
           else
-            bash scripts/publish-npm.sh dist "${RELEASE_TAG#v}" --no-assemble
+            bash scripts/publish-npm.sh dist "${RELEASE_TAG#v}" --no-assemble --tag "${NPM_DIST_TAG}"
           fi
 
   pypi:
@@ -1466,6 +1513,9 @@ jobs:
     # now leaves the tap on the previous version, which is the correct outcome
     # for a release that is not fully out.
     needs: [preflight, release, verify-published]
+    # The formula names one version, the newest: a backport would downgrade
+    # every `brew upgrade` (issue 1323), and the script refuses that too.
+    if: needs.preflight.outputs.newest == 'true'
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     environment: release
@@ -1535,6 +1585,9 @@ jobs:
     # PyPI and NuGet packages: the listing must not advertise bytes nobody
     # compared with the signed checksums.
     needs: [preflight, release, npm, pypi, nuget, docker, sign-attest, verify-published]
+    # The registry entry is the one server.json main carries, which names the
+    # newest release; a backport publishes nothing here (issue 1323).
+    if: needs.preflight.outputs.newest == 'true'
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     environment: release
@@ -1751,6 +1804,10 @@ jobs:
     # mcp-registry: if what the registries serve does not match the signed
     # checksums, main must not gain a manifest advertising it.
     needs: [preflight, release, docker, sign-attest, npm, pypi, nuget, homebrew, mcp-registry, verify-published]
+    # main's manifests, and the version the site renders from server.json,
+    # name the newest release: a backport stamping them would point every
+    # install snippet and the MCP Registry back at it (issue 1323).
+    if: needs.preflight.outputs.newest == 'true'
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     environment: release

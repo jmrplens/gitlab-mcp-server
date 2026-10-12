@@ -6,7 +6,13 @@
 # not on the registry yet.
 #
 # Usage:
-#   scripts/publish-npm.sh <binaries-dir> <version> [--dry-run] [--no-assemble]
+#   scripts/publish-npm.sh <binaries-dir> <version> [--dry-run] [--no-assemble] [--tag <dist-tag>]
+#
+# --tag publishes every package under that dist-tag instead of npm's default,
+# which is `latest`. The release workflow passes the one
+# scripts/release-order.sh decides: latest for the newest release, and
+# release-X.Y for a backport, so `npm install` keeps resolving the newest
+# release when an older line ships a fix (issue 1323).
 #
 # <binaries-dir> holds the release assets under their published names. Auth is
 # whatever `npm` already has: an NPM_TOKEN in CI (with an .npmrc that reads it)
@@ -26,17 +32,28 @@
 # rather than letting the flag turn a skipped build into a stale publish.
 set -euo pipefail
 
-BINARIES_DIR="${1:?Usage: $0 <binaries-dir> <version> [--dry-run] [--no-assemble]}"
-VERSION="${2:?Usage: $0 <binaries-dir> <version> [--dry-run] [--no-assemble]}"
+USAGE="Usage: $0 <binaries-dir> <version> [--dry-run] [--no-assemble] [--tag <dist-tag>]"
+BINARIES_DIR="${1:?$USAGE}"
+VERSION="${2:?$USAGE}"
 shift 2
 DRY_RUN=""
 ASSEMBLE=1
-for arg in "$@"; do
-  case "$arg" in
+DIST_TAG=()
+while [ $# -gt 0 ]; do
+  case "$1" in
     --dry-run) DRY_RUN="--dry-run" ;;
     --no-assemble) ASSEMBLE=0 ;;
-    *) echo "unknown option: $arg" >&2; exit 2 ;;
+    --tag)
+      if [ $# -lt 2 ] || [ -z "$2" ] || [[ "$2" == --* ]]; then
+        echo "--tag needs the name of a dist-tag" >&2
+        exit 2
+      fi
+      DIST_TAG=(--tag "$2")
+      shift
+      ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
+  shift
 done
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -107,8 +124,12 @@ publish() {
   # this script never sees a credential.
   # $DRY_RUN is empty or "--dry-run" and must word-split, not stay one argument.
   # shellcheck disable=SC2086
-  npm publish "$dir" --access public $DRY_RUN
+  npm publish "$dir" --access public $DRY_RUN ${DIST_TAG[@]+"${DIST_TAG[@]}"}
 }
+
+if [ "${#DIST_TAG[@]}" -gt 0 ]; then
+  echo "Publishing under the dist-tag ${DIST_TAG[1]}, not npm's default"
+fi
 
 for key in "${PLATFORM_KEYS[@]}"; do
   publish "$OUT/$key"

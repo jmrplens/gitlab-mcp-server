@@ -3550,6 +3550,202 @@ func TestAudit_Repository_IsClean(t *testing.T) {
 	}
 }
 
+// TestLoadWorkflows_ReleaseWorkflow_OnlyTheNewestReleaseMovesAPointer verifies
+// that the release workflow, as loadWorkflows reads it, hands preflight's
+// answer from scripts/release-order.sh to everything that points at the newest
+// release (issue 1323): the image's :latest on both registries, the Docker Hub
+// repository description, the GitHub release marked Latest, npm's dist-tag,
+// the Homebrew tap, the MCP Registry entry and main's manifests.
+//
+// scripts/release_order_sh_test.py holds what the script answers; this holds
+// the workflow to reading the answer, which no script test can see. Without
+// it, a step that moves a pointer could drop its condition and a backport
+// would roll that pointer back to itself with nothing failing. A pointer added
+// to the workflow later is not found by this test and has to be added to it.
+func TestLoadWorkflows_ReleaseWorkflow_OnlyTheNewestReleaseMovesAPointer(t *testing.T) {
+	t.Parallel()
+
+	const newest = "needs.preflight.outputs.newest == 'true'"
+	release := releaseWorkflow(t, repositoryRoot(t))
+
+	t.Run("preflight answers from release-order.sh", func(t *testing.T) {
+		t.Parallel()
+
+		assertPreflightAnswersFromReleaseOrder(t, release)
+	})
+
+	t.Run("only the newest release is pushed as latest", func(t *testing.T) {
+		t.Parallel()
+
+		assertLatestTagsFollow(t, release, newest)
+	})
+
+	t.Run("only the newest release replaces the Docker Hub description", func(t *testing.T) {
+		t.Parallel()
+
+		description := releaseStep(t, releaseJob(t, release, "docker"), stepNamed("Update Docker Hub description"))
+		if condition := pythonStr(description["if"]); !strings.Contains(condition, newest) {
+			t.Errorf("the Docker Hub description step runs if %q, want it behind %s", condition, newest)
+		}
+	})
+
+	t.Run("the GitHub release says whether it is the latest", func(t *testing.T) {
+		t.Parallel()
+
+		assertGitHubReleaseLatestFollowsNewest(t, release)
+	})
+
+	t.Run("npm publishes under preflight's dist-tag", func(t *testing.T) {
+		t.Parallel()
+
+		assertNpmPublishesUnderTheDistTag(t, release)
+	})
+
+	for _, id := range []string{"homebrew", "mcp-registry", "commit-manifests"} {
+		t.Run(id+" runs only for the newest release", func(t *testing.T) {
+			t.Parallel()
+
+			if got := pythonStr(releaseJob(t, release, id)["if"]); got != newest {
+				t.Errorf("job %s runs if %q, want %q", id, got, newest)
+			}
+		})
+	}
+}
+
+// releaseWorkflow returns the release workflow under root as loadWorkflows,
+// the reader every rule of this command uses, decodes it.
+func releaseWorkflow(t *testing.T, root string) map[string]any {
+	t.Helper()
+
+	workflows, err := loadWorkflows(root)
+	if err != nil {
+		t.Fatalf("loadWorkflows: %v", err)
+	}
+	for _, loaded := range workflows {
+		if loaded.path == workflowDir+"/release.yml" && loaded.doc != nil {
+			return loaded.doc
+		}
+	}
+	t.Fatalf("%s/release.yml is not among the workflows under %s", workflowDir, root)
+	return nil
+}
+
+// releaseJob returns one job of a decoded workflow, failing the test when the
+// workflow has no job by that id.
+func releaseJob(t *testing.T, doc map[string]any, id string) map[string]any {
+	t.Helper()
+
+	jobs, _ := doc["jobs"].(map[string]any)
+	job, ok := jobs[id].(map[string]any)
+	if !ok {
+		t.Fatalf("the workflow has no job %q", id)
+	}
+	return job
+}
+
+// releaseStep returns the one step of job that match selects, failing the
+// test when none or more than one does.
+func releaseStep(t *testing.T, job map[string]any, match func(map[string]any) bool) map[string]any {
+	t.Helper()
+
+	steps, _ := job["steps"].([]any)
+	var found []map[string]any
+	for _, raw := range steps {
+		if step, ok := raw.(map[string]any); ok && match(step) {
+			found = append(found, step)
+		}
+	}
+	if len(found) != 1 {
+		t.Fatalf("%d steps of the job match, want exactly 1", len(found))
+	}
+	return found[0]
+}
+
+// stepNamed selects a step by its name.
+func stepNamed(name string) func(map[string]any) bool {
+	return func(step map[string]any) bool { return step["name"] == name }
+}
+
+// assertPreflightAnswersFromReleaseOrder holds the release workflow's
+// preflight job to exporting the three answers of scripts/release-order.sh,
+// each read from the step that runs it.
+func assertPreflightAnswersFromReleaseOrder(t *testing.T, release map[string]any) {
+	t.Helper()
+
+	preflight := releaseJob(t, release, "preflight")
+	outputs, _ := preflight["outputs"].(map[string]any)
+	for _, name := range []string{"stable", "newest", "npm_dist_tag"} {
+		if got, want := pythonStr(outputs[name]), "${{ steps.order.outputs."+name+" }}"; got != want {
+			t.Errorf("preflight output %s = %q, want %q", name, got, want)
+		}
+	}
+	order := releaseStep(t, preflight, func(step map[string]any) bool { return step["id"] == "order" })
+	if run := pythonStr(order["run"]); !strings.Contains(run, "bash scripts/release-order.sh") {
+		t.Errorf("preflight's order step runs %q, want it to ask scripts/release-order.sh", run)
+	}
+}
+
+// assertLatestTagsFollow holds both :latest tags of the publishing image
+// build, ghcr.io's and Docker Hub's, behind condition.
+func assertLatestTagsFollow(t *testing.T, release map[string]any, condition string) {
+	t.Helper()
+
+	// The publishing build is the one whose digest server.json pins; the two
+	// smoke builds before it tag a local image and push nothing.
+	build := releaseStep(t, releaseJob(t, release, "docker"), func(step map[string]any) bool {
+		return step["id"] == "docker-push"
+	})
+	with, _ := build["with"].(map[string]any)
+	var latest []string
+	for line := range strings.SplitSeq(pythonStr(with["tags"]), "\n") {
+		if strings.Contains(line, ":latest") {
+			latest = append(latest, line)
+		}
+	}
+	if len(latest) != 2 {
+		t.Fatalf("the image build names %d :latest tags, want 2 (ghcr.io and Docker Hub):\n%s",
+			len(latest), strings.Join(latest, "\n"))
+	}
+	for _, line := range latest {
+		if !strings.Contains(line, condition) {
+			t.Errorf("the :latest tag %q is pushed whatever preflight answers, want it behind %s", line, condition)
+		}
+	}
+}
+
+// assertGitHubReleaseLatestFollowsNewest holds the step that publishes the
+// GitHub release to passing preflight's newest answer as --latest.
+func assertGitHubReleaseLatestFollowsNewest(t *testing.T, release map[string]any) {
+	t.Helper()
+
+	publish := releaseStep(t, releaseJob(t, release, "release"), stepNamed("Publish release"))
+	env, _ := publish["env"].(map[string]any)
+	if got, want := pythonStr(env["NEWEST"]), "${{ needs.preflight.outputs.newest }}"; got != want {
+		t.Errorf("Publish release sets NEWEST to %q, want %q", got, want)
+	}
+	if run := pythonStr(publish["run"]); !strings.Contains(run, `"--latest=${NEWEST}"`) {
+		t.Errorf("Publish release runs %q, want it to pass --latest=${NEWEST}", run)
+	}
+}
+
+// assertNpmPublishesUnderTheDistTag holds every call of
+// scripts/publish-npm.sh in the npm job to passing preflight's dist-tag.
+func assertNpmPublishesUnderTheDistTag(t *testing.T, release map[string]any) {
+	t.Helper()
+
+	publish := releaseStep(t, releaseJob(t, release, "npm"), stepNamed("Publish to npm"))
+	env, _ := publish["env"].(map[string]any)
+	if got, want := pythonStr(env["NPM_DIST_TAG"]), "${{ needs.preflight.outputs.npm_dist_tag }}"; got != want {
+		t.Errorf("Publish to npm sets NPM_DIST_TAG to %q, want %q", got, want)
+	}
+	run := pythonStr(publish["run"])
+	calls, tagged := strings.Count(run, "scripts/publish-npm.sh"), strings.Count(run, `--tag "${NPM_DIST_TAG}"`)
+	if calls == 0 || calls != tagged {
+		t.Errorf("Publish to npm calls publish-npm.sh %d times and passes the dist-tag %d times, want every call to pass it:\n%s",
+			calls, tagged, run)
+	}
+}
+
 // noSignatureFinding renders the finding an installer that checks no signature
 // carries, for the installer named.
 func noSignatureFinding(installer string) string {

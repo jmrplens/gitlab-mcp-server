@@ -66,6 +66,21 @@ if [[ ! -d "$TAP_DIR/.git" ]]; then
   git clone --depth 1 "$TAP_REPO" "$TAP_DIR"
 fi
 
+# The formula never moves back (issue 1323). The release workflow runs this
+# script only for the newest release, and the tap is still the one place that
+# says which version it serves, so a backport that reached here anyway would
+# downgrade every `brew upgrade`. The same version is a re-run and rewrites
+# the formula as it always did.
+FORMULA="$TAP_DIR/Formula/gitlab-mcp-server.rb"
+if [[ -f "$FORMULA" ]]; then
+  CURRENT=$(sed -n 's/^[[:space:]]*version "\(.*\)"[[:space:]]*$/\1/p' "$FORMULA" | head -n 1)
+  if [[ -n "$CURRENT" && "$CURRENT" != "$VERSION" ]] &&
+    [[ "$(printf '%s\n%s\n' "$CURRENT" "$VERSION" | sort -V | tail -n 1)" == "$CURRENT" ]]; then
+    echo "ERROR: the tap already holds ${CURRENT}, newer than ${VERSION}; a formula never moves back to an older release" >&2
+    exit 1
+  fi
+fi
+
 mkdir -p "$TAP_DIR/Formula"
 cat > "$TAP_DIR/Formula/gitlab-mcp-server.rb" <<EOF
 # typed: false
