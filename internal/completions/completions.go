@@ -226,6 +226,11 @@ func (h *Handler) completeJobArgument(ctx context.Context, resolvedArgs map[stri
 }
 
 // completeResourceArg completes parameters in resource URI templates.
+//
+// The pipeline, job and commit templates are routed here because no served
+// prompt declares pipeline_id, sha or job_id, so a template is the one way a
+// client reaches those completers. The job template names no pipeline, so its
+// job_id is completed across the project's jobs.
 func (h *Handler) completeResourceArg(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
 	argName := req.Params.Argument.Name
 	argValue := req.Params.Argument.Value
@@ -244,6 +249,12 @@ func (h *Handler) completeResourceArg(ctx context.Context, req *mcp.CompleteRequ
 		return h.completeWithProjectID(ctx, resolvedArgs, argValue, h.completeMRIID)
 	case "issue_iid":
 		return h.completeWithProjectID(ctx, resolvedArgs, argValue, h.completeIssueIID)
+	case "pipeline_id":
+		return h.completeWithProjectID(ctx, resolvedArgs, argValue, h.completePipelineID)
+	case "sha":
+		return h.completeWithProjectID(ctx, resolvedArgs, argValue, h.completeSHA)
+	case "job_id":
+		return h.completeWithProjectID(ctx, resolvedArgs, argValue, h.completeProjectJobID)
 	default:
 		return emptyResult(), nil
 	}
@@ -358,24 +369,31 @@ func (h *Handler) completeTag(ctx context.Context, projectID, query string) (*mc
 	return toResultWithTotal(values, total), nil
 }
 
-// completePipelineID lists recent pipelines for a project, filtered by ID prefix.
+// idHalvesOf says which of an ID completer's two requests the operator left:
+// the lookup, which returns what get returns, and the listing, which returns
+// what list returns.
+func (h *Handler) idHalvesOf(get, list string) idHalves {
+	return idHalves{lookup: !h.withholds(get), list: !h.withholds(list)}
+}
+
+// completePipelineID completes a pipeline ID in a project. See [idSearch].
 func (h *Handler) completePipelineID(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
-	values, err := searchPipelines(ctx, h.clientFor(ctx), projectID, query)
+	values, more, err := searchPipelines(ctx, h.clientFor(ctx), projectID, query, h.idHalvesOf(actionPipelineGet, actionPipelineList))
 	if err != nil {
 		slog.DebugContext(ctx, "completion: pipeline search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
-	return toResult(values), nil
+	return toResultWithMore(values, 0, more), nil
 }
 
-// completeSHA lists recent commits for a project, filtered by SHA prefix.
+// completeSHA completes a commit SHA in a project. See [searchCommits].
 func (h *Handler) completeSHA(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
-	values, err := searchCommits(ctx, h.clientFor(ctx), projectID, query)
+	values, more, err := searchCommits(ctx, h.clientFor(ctx), projectID, query, h.idHalvesOf(actionCommitGet, actionCommitList))
 	if err != nil {
 		slog.DebugContext(ctx, "completion: commit search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
-	return toResult(values), nil
+	return toResultWithMore(values, 0, more), nil
 }
 
 // completeBranch returns branches matching the partial value.
@@ -431,19 +449,33 @@ func (h *Handler) completeGroupMilestoneTitle(ctx context.Context, groupID, quer
 	return toResultWithTotal(values, total), nil
 }
 
-// completeJobID lists jobs for a pipeline, filtered by ID prefix.
+// completeJobID completes a job ID within one pipeline of a project. A
+// pipeline_id that names no pipeline, not a number or not a positive one,
+// answers empty rather than widening the search to the whole project.
 func (h *Handler) completeJobID(ctx context.Context, projectID, pipelineIDStr, query string) (*mcp.CompleteResult, error) {
 	plID, err := strconv.ParseInt(pipelineIDStr, 10, 64)
-	if err != nil {
+	if err != nil || plID < 1 {
 		slog.DebugContext(ctx, "completion: invalid pipeline_id for job search", "pipeline_id", pipelineIDStr, "error", err)
 		return emptyResult(), nil
 	}
-	values, err := searchJobs(ctx, h.clientFor(ctx), projectID, plID, query)
+	return h.completeJobs(ctx, projectID, plID, query)
+}
+
+// completeProjectJobID completes a job ID across a project's jobs, for the job
+// resource template, which names no pipeline.
+func (h *Handler) completeProjectJobID(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
+	return h.completeJobs(ctx, projectID, 0, query)
+}
+
+// completeJobs completes a job ID in a project, within one pipeline when
+// pipelineID is positive. See [searchJobs].
+func (h *Handler) completeJobs(ctx context.Context, projectID string, pipelineID int64, query string) (*mcp.CompleteResult, error) {
+	values, more, err := searchJobs(ctx, h.clientFor(ctx), projectID, pipelineID, query, h.idHalvesOf(actionJobGet, actionJobList))
 	if err != nil {
-		slog.DebugContext(ctx, "completion: job search failed", "project", projectID, "pipeline_id", plID, "query", query, "error", err)
+		slog.DebugContext(ctx, "completion: job search failed", "project", projectID, "pipeline_id", pipelineID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
-	return toResult(values), nil
+	return toResultWithMore(values, 0, more), nil
 }
 
 // resolvedArguments returns previously resolved arguments from the request context.
@@ -463,18 +495,10 @@ func emptyResult() *mcp.CompleteResult {
 	}
 }
 
-// toResult converts a string slice to a completion result, enforcing the max
-// limit. Sets HasMore=true when the input exceeds the cap. Total is left at 0
-// (omitted from JSON) because the upstream slice does not carry a true count
-// of all matching items — only what we fetched. Use [toResultWithTotal] when
-// the upstream pagination header (X-Total) is available.
-func toResult(values []string) *mcp.CompleteResult {
-	return toResultWithTotal(values, 0)
-}
-
-// toResultWithTotal is like [toResult] but exposes the upstream total when
-// known (e.g. from gitlab.Response.TotalItems). A non-positive total is
-// treated as unknown and omitted.
+// toResultWithTotal converts a string slice to a completion result, enforcing
+// the max limit and setting HasMore when the input exceeds the cap. It exposes
+// the upstream total when known (from gitlab.Response.TotalItems); a
+// non-positive total is treated as unknown and omitted.
 func toResultWithTotal(values []string, total int) *mcp.CompleteResult {
 	// A nil slice marshals to null, and the MCP schema requires values to be
 	// an array: a client that validates the response rejects it instead of
@@ -493,16 +517,15 @@ func toResultWithTotal(values []string, total int) *mcp.CompleteResult {
 	if total > len(values) {
 		hasMore = true
 	}
-	res := &mcp.CompleteResult{
+	// A total of zero is left out of the JSON by the field's omitempty, so
+	// clamping is all a non-positive total needs.
+	return &mcp.CompleteResult{
 		Completion: mcp.CompletionResultDetails{
 			Values:  values,
 			HasMore: hasMore,
+			Total:   max(total, 0),
 		},
 	}
-	if total > 0 {
-		res.Completion.Total = total
-	}
-	return res
 }
 
 // toResultWithMore is [toResultWithTotal] for a search that knows more may

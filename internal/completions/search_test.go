@@ -584,6 +584,208 @@ func TestNamesNextPage_ReadsOnlyXNextPage(t *testing.T) {
 	}
 }
 
+// bothHalves is an ID completer with nothing excluded.
+var bothHalves = idHalves{lookup: true, list: true}
+
+// idSearchCase is one ID completion over [idListing]: what was typed, the
+// halves left, and what the answer and the requests have to be.
+type idSearchCase struct {
+	name   string
+	items  int
+	typed  string
+	halves idHalves
+	want   []string
+	more   bool
+	asked  []string
+}
+
+// runIDSearchCases drives search over each case against a fresh listing and
+// holds the values, whether more may match, and every request made, in order.
+func runIDSearchCases(t *testing.T, cases []idSearchCase, search func(context.Context, *gitlabclient.Client, string, idHalves) ([]string, bool, error)) {
+	t.Helper()
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			listing := newIDListing(t, testCase.items)
+			client := testutil.NewTestClient(t, listing)
+
+			values, more, err := search(context.Background(), client, testCase.typed, testCase.halves)
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			if !slices.Equal(values, testCase.want) {
+				t.Errorf("values = %v, want %v", values, testCase.want)
+			}
+			if more != testCase.more {
+				t.Errorf("more = %t, want %t", more, testCase.more)
+			}
+			if asked := listing.requested(); !slices.Equal(asked, testCase.asked) {
+				t.Errorf("requests = %v, want %v", asked, testCase.asked)
+			}
+		})
+	}
+}
+
+// TestSearchPipelines_TheTypedPipeline_IsLookedUpBesideTheNewest holds the
+// pipeline completer over a project of more pipelines than a page: what was
+// typed is looked up whatever its age, the newest whose ID begins with it
+// follow, and more may match when the listing names a next page.
+func TestSearchPipelines_TheTypedPipeline_IsLookedUpBesideTheNewest(t *testing.T) {
+	newest := reversed(iidRange(481, 500))
+	runIDSearchCases(t, []idSearchCase{
+		{name: "an old pipeline typed whole", items: 500, typed: "7", halves: bothHalves, want: []string{"7"}, more: true, asked: []string{"pipelines/7", "pipelines"}},
+		{
+			name: "the lookup ahead of the listing", items: 500, typed: "48", halves: bothHalves,
+			want: append([]string{"48"}, reversed(iidRange(481, 489))...), more: true, asked: []string{"pipelines/48", "pipelines"},
+		},
+		{name: "found in both, offered once", items: 500, typed: "490", halves: bothHalves, want: []string{"490"}, more: true, asked: []string{"pipelines/490", "pipelines"}},
+		{name: "no such pipeline", items: 500, typed: "9999", halves: bothHalves, want: []string{}, more: true, asked: []string{"pipelines/9999", "pipelines"}},
+		{name: "too long to look up", items: 500, typed: "99999999999999999999", halves: bothHalves, want: []string{}, more: true, asked: []string{"pipelines"}},
+		{name: "nothing typed", items: 500, typed: "", halves: bothHalves, want: newest, more: true, asked: []string{"pipelines"}},
+		{name: "every pipeline on the page", items: 5, typed: "", halves: bothHalves, want: reversed(iidRange(1, 5)), asked: []string{"pipelines"}},
+		{name: "nothing an ID begins", items: 500, typed: "x", halves: bothHalves, want: []string{}},
+		{name: "a leading zero", items: 500, typed: "07", halves: bothHalves, want: []string{}},
+		{name: "the listing excluded", items: 500, typed: "7", halves: idHalves{lookup: true}, want: []string{"7"}, asked: []string{"pipelines/7"}},
+		{name: "the lookup excluded", items: 500, typed: "7", halves: idHalves{list: true}, want: []string{}, more: true, asked: []string{"pipelines"}},
+	}, func(ctx context.Context, client *gitlabclient.Client, typed string, halves idHalves) ([]string, bool, error) {
+		return searchPipelines(ctx, client, "42", typed, halves)
+	})
+}
+
+// TestSearchCommits_TheTypedSHA_IsLookedUpOnAnyBranch holds the commit
+// completer: a SHA of four characters or more is looked up as a commit of the
+// project, in either case, beside the default branch's newest commits, and the
+// value offered is the short SHA.
+func TestSearchCommits_TheTypedSHA_IsLookedUpOnAnyBranch(t *testing.T) {
+	runIDSearchCases(t, []idSearchCase{
+		{name: "an old commit", items: 500, typed: "0000000c", halves: bothHalves, want: []string{"0000000c"}, more: true, asked: []string{"repository/commits/0000000c", "repository/commits"}},
+		{name: "in capitals", items: 500, typed: "0000000C", halves: bothHalves, want: []string{"0000000c"}, more: true, asked: []string{"repository/commits/0000000c", "repository/commits"}},
+		{name: "a whole SHA", items: 500, typed: idListingSHA(3), halves: bothHalves, want: []string{"00000003"}, more: true, asked: []string{"repository/commits/" + idListingSHA(3), "repository/commits"}},
+		{name: "too short to name a commit", items: 500, typed: "fff", halves: bothHalves, want: []string{}, more: true, asked: []string{"repository/commits"}},
+		{
+			name: "too short to look up, matched in the listing", items: 500, typed: "000001f", halves: idHalves{list: true},
+			want: []string{"000001f4", "000001f3", "000001f2", "000001f1", "000001f0"}, more: true, asked: []string{"repository/commits"},
+		},
+		{name: "no such commit", items: 500, typed: "ffff", halves: bothHalves, want: []string{}, more: true, asked: []string{"repository/commits/ffff", "repository/commits"}},
+		{name: "not hexadecimal", items: 500, typed: "main", halves: bothHalves, want: []string{}},
+		{name: "nothing typed", items: 3, typed: "", halves: bothHalves, want: []string{"00000003", "00000002", "00000001"}, asked: []string{"repository/commits"}},
+	}, func(ctx context.Context, client *gitlabclient.Client, typed string, halves idHalves) ([]string, bool, error) {
+		return searchCommits(ctx, client, "42", typed, halves)
+	})
+}
+
+// TestSearchCommits_ALookupResolvingElsewhere_IsNotOffered holds the one case
+// where a lookup finds something what was typed does not begin: GitLab reads a
+// hexadecimal branch or tag name as that ref, and its head commit is no
+// completion of the SHA prefix typed.
+func TestSearchCommits_ALookupResolvingElsewhere_IsNotOffered(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/projects/42/repository/commits/beef":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":"`+idListingSHA(9)+`","short_id":"00000009","title":"Head of beef"}`)
+		case "/api/v4/projects/42/repository/commits":
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	values, more, err := searchCommits(context.Background(), client, "42", "beef", bothHalves)
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if len(values) != 0 || more {
+		t.Errorf("got values=%v more=%t; the branch named beef has a head commit that does not begin with beef", values, more)
+	}
+}
+
+// TestSearchCommits_TheLookup_AsksForNoStats holds the commit lookup to
+// stats=false. GitLab's single-commit route computes the commit's diff stats
+// unless it is told not to, and the completer reads only the SHA and the
+// title, so a lookup on every keystroke would have GitLab diff a commit,
+// costliest on the largest, for nothing.
+func TestSearchCommits_TheLookup_AsksForNoStats(t *testing.T) {
+	var stats string
+	var looked bool
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/projects/42/repository/commits/beef":
+			looked = true
+			stats = r.URL.Query().Get("stats")
+			testutil.RespondJSON(w, http.StatusOK, `{"id":"beef`+strings.Repeat("0", 36)+`","short_id":"beef0000","title":"Beef"}`)
+		case "/api/v4/projects/42/repository/commits":
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	if _, _, err := searchCommits(context.Background(), client, "42", "beef", bothHalves); err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if !looked {
+		t.Fatal("the commit typed was not looked up")
+	}
+	if stats != "false" {
+		t.Errorf("the lookup sent stats=%q, want false", stats)
+	}
+}
+
+// TestSearchJobs_TheTypedJob_IsLookedUpInItsScope holds the job completer in
+// both of its scopes: across the project for the job template, which names no
+// pipeline, and within one pipeline for a prompt, where a job the lookup finds
+// in another pipeline is not offered.
+func TestSearchJobs_TheTypedJob_IsLookedUpInItsScope(t *testing.T) {
+	inProject := func(ctx context.Context, client *gitlabclient.Client, typed string, halves idHalves) ([]string, bool, error) {
+		return searchJobs(ctx, client, "42", 0, typed, halves)
+	}
+	inPipeline6 := func(ctx context.Context, client *gitlabclient.Client, typed string, halves idHalves) ([]string, bool, error) {
+		return searchJobs(ctx, client, "42", 6, typed, halves)
+	}
+	runIDSearchCases(t, []idSearchCase{
+		{name: "an old job", items: 500, typed: "11", halves: bothHalves, want: []string{"11"}, more: true, asked: []string{"jobs/11", "jobs"}},
+		{name: "nothing typed", items: 2, typed: "", halves: bothHalves, want: []string{"2", "1"}, asked: []string{"jobs"}},
+	}, inProject)
+	runIDSearchCases(t, []idSearchCase{
+		{name: "a job of the pipeline", items: 500, typed: "12", halves: bothHalves, want: []string{"12"}, asked: []string{"jobs/12", "pipelines/6/jobs"}},
+		{name: "a job of another pipeline", items: 500, typed: "3", halves: bothHalves, want: []string{}, asked: []string{"jobs/3", "pipelines/6/jobs"}},
+		{name: "every job of the pipeline", items: 500, typed: "1", halves: bothHalves, want: []string{"12", "11"}, asked: []string{"jobs/1", "pipelines/6/jobs"}},
+	}, inPipeline6)
+}
+
+// TestIDSearch_GitLabFails_IsAnError holds the two failures an ID completer
+// reports rather than reads as an answer: a lookup refused for another reason
+// than a 404, and a listing that fails.
+func TestIDSearch_GitLabFails_IsAnError(t *testing.T) {
+	cases := []struct {
+		name   string
+		failed string
+		want   string
+	}{
+		{name: "the lookup", failed: "/api/v4/projects/42/pipelines/7", want: "look up"},
+		{name: "the listing", failed: "/api/v4/projects/42/pipelines", want: "search pipelines"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			listing := newIDListing(t, 500)
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == testCase.failed {
+					testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+					return
+				}
+				listing.ServeHTTP(w, r)
+			}))
+
+			values, more, err := searchPipelines(context.Background(), client, "42", "7", bothHalves)
+			if err == nil || !strings.Contains(err.Error(), testCase.want) {
+				t.Fatalf("err = %v, want one naming %q", err, testCase.want)
+			}
+			if values != nil || more {
+				t.Errorf("a failed search answered values=%v more=%t", values, more)
+			}
+		})
+	}
+}
+
 // reversed returns values in the opposite order.
 func reversed(values []string) []string {
 	out := slices.Clone(values)
@@ -763,7 +965,7 @@ func TestSearchPipelines(t *testing.T) {
 	}))
 
 	t.Run("filter by ID prefix", func(t *testing.T) {
-		values, err := searchPipelines(context.Background(), client, "42", "10")
+		values, _, err := searchPipelines(context.Background(), client, "42", "10", bothHalves)
 		if err != nil {
 			t.Fatalf(fmtUnexpectedErr, err)
 		}
@@ -776,7 +978,7 @@ func TestSearchPipelines(t *testing.T) {
 	})
 
 	t.Run(subtestEmptyQueryAll, func(t *testing.T) {
-		values, err := searchPipelines(context.Background(), client, "42", "")
+		values, _, err := searchPipelines(context.Background(), client, "42", "", bothHalves)
 		if err != nil {
 			t.Fatalf(fmtUnexpectedErr, err)
 		}
@@ -793,7 +995,7 @@ func TestSearchPipelines_APIError(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
-	_, err := searchPipelines(context.Background(), client, "42", "1")
+	_, _, err := searchPipelines(context.Background(), client, "42", "1", bothHalves)
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)
 	}
@@ -815,7 +1017,7 @@ func TestSearchCommits(t *testing.T) {
 	}))
 
 	t.Run("filter by short SHA prefix", func(t *testing.T) {
-		values, err := searchCommits(context.Background(), client, "42", "abc")
+		values, _, err := searchCommits(context.Background(), client, "42", "abc", bothHalves)
 		if err != nil {
 			t.Fatalf(fmtUnexpectedErr, err)
 		}
@@ -832,7 +1034,7 @@ func TestSearchCommits(t *testing.T) {
 	// in their clipboard. The value offered stays the short SHA either way,
 	// since that is what the argument takes.
 	t.Run("a prefix longer than the short SHA still finds the commit", func(t *testing.T) {
-		values, err := searchCommits(context.Background(), client, "42", "abc123def4")
+		values, _, err := searchCommits(context.Background(), client, "42", "abc123def4", bothHalves)
 		if err != nil {
 			t.Fatalf(fmtUnexpectedErr, err)
 		}
@@ -845,7 +1047,7 @@ func TestSearchCommits(t *testing.T) {
 	})
 
 	t.Run(subtestEmptyQueryAll, func(t *testing.T) {
-		values, err := searchCommits(context.Background(), client, "42", "")
+		values, _, err := searchCommits(context.Background(), client, "42", "", bothHalves)
 		if err != nil {
 			t.Fatalf(fmtUnexpectedErr, err)
 		}
@@ -862,7 +1064,7 @@ func TestSearchCommits_APIError(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
-	_, err := searchCommits(context.Background(), client, "42", "abc")
+	_, _, err := searchCommits(context.Background(), client, "42", "abc", bothHalves)
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)
 	}
@@ -976,7 +1178,7 @@ func TestSearchJobs(t *testing.T) {
 	}))
 
 	t.Run("filter by ID prefix", func(t *testing.T) {
-		values, err := searchJobs(context.Background(), client, "42", 10, "50")
+		values, _, err := searchJobs(context.Background(), client, "42", 10, "50", bothHalves)
 		if err != nil {
 			t.Fatalf(fmtUnexpectedErr, err)
 		}
@@ -989,7 +1191,7 @@ func TestSearchJobs(t *testing.T) {
 	})
 
 	t.Run(subtestEmptyQueryAll, func(t *testing.T) {
-		values, err := searchJobs(context.Background(), client, "42", 10, "")
+		values, _, err := searchJobs(context.Background(), client, "42", 10, "", bothHalves)
 		if err != nil {
 			t.Fatalf(fmtUnexpectedErr, err)
 		}
@@ -1006,7 +1208,7 @@ func TestSearchJobs_APIError(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
-	_, err := searchJobs(context.Background(), client, "42", 10, "1")
+	_, _, err := searchJobs(context.Background(), client, "42", 10, "1", bothHalves)
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)
 	}
@@ -1022,11 +1224,11 @@ func TestSearchNew_ContextCancelled(t *testing.T) {
 		name string
 		fn   func() error
 	}{
-		{"pipelines", func() error { _, err := searchPipelines(ctx, client, "42", "x"); return err }},
-		{"commits", func() error { _, err := searchCommits(ctx, client, "42", "x"); return err }},
+		{"pipelines", func() error { _, _, err := searchPipelines(ctx, client, "42", "x", bothHalves); return err }},
+		{"commits", func() error { _, _, err := searchCommits(ctx, client, "42", "x", bothHalves); return err }},
 		{"labels", func() error { _, _, err := searchLabels(ctx, client, "42", "x"); return err }},
 		{"milestones", func() error { _, _, err := searchMilestones(ctx, client, "42", "x"); return err }},
-		{"jobs", func() error { _, err := searchJobs(ctx, client, "42", 10, "x"); return err }},
+		{"jobs", func() error { _, _, err := searchJobs(ctx, client, "42", 10, "x", bothHalves); return err }},
 		{"milestone titles", func() error { _, _, err := searchMilestoneTitles(ctx, client, "42", "x"); return err }},
 		{"group milestone titles", func() error { _, _, err := searchGroupMilestoneTitles(ctx, client, "99", "x"); return err }},
 	}

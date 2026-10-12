@@ -13,6 +13,7 @@ import (
 	"go/parser"
 	"go/token"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/url"
 	"slices"
@@ -741,6 +742,84 @@ func TestComplete_IIDs_AnOlderOrClosedItem_IsOffered(t *testing.T) {
 	}
 }
 
+// TestComplete_IDs_AnOlderItemTypedWhole_IsOffered completes a pipeline ID, a
+// commit SHA and a job ID in a project holding more of each than one page, on
+// the prompt reference and on the resource templates that carry them.
+//
+// The completers used to read one listing of the 20 newest and keep what began
+// with what was typed, so an older pipeline, commit or job was never offered,
+// even typed whole, and hasMore said nothing more matched. The templates were
+// answered with nothing at all, since only four of their variables were routed.
+func TestComplete_IDs_AnOlderItemTypedWhole_IsOffered(t *testing.T) {
+	cases := []struct {
+		name     string
+		ref      string
+		uri      string
+		argument string
+		typed    string
+		resolved map[string]string
+		want     []string
+		hasMore  bool
+	}{
+		{
+			name: "pipeline on a prompt", ref: refPrompt, argument: "pipeline_id", typed: "7",
+			want: []string{"7"}, hasMore: true,
+		},
+		{
+			name: "pipeline on its template", ref: refResource, uri: "gitlab://project/{project_id}/pipeline/{pipeline_id}",
+			argument: "pipeline_id", typed: "7", want: []string{"7"}, hasMore: true,
+		},
+		{
+			name: "pipeline on the jobs template", ref: refResource, uri: "gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs",
+			argument: "pipeline_id", typed: "7", want: []string{"7"}, hasMore: true,
+		},
+		{
+			name: "commit on a prompt", ref: refPrompt, argument: "sha", typed: "0000000c",
+			want: []string{"0000000c"}, hasMore: true,
+		},
+		{
+			name: "commit on its template, typed in capitals", ref: refResource, uri: "gitlab://project/{project_id}/commit/{sha}",
+			argument: "sha", typed: "0000000C", want: []string{"0000000c"}, hasMore: true,
+		},
+		{
+			name: "job on its template, looked up in the project", ref: refResource, uri: "gitlab://project/{project_id}/job/{job_id}",
+			argument: "job_id", typed: "11", want: []string{"11"}, hasMore: true,
+		},
+		{
+			name: "job on a prompt, in its pipeline", ref: refPrompt, argument: "job_id", typed: "12",
+			resolved: map[string]string{"pipeline_id": "6"}, want: []string{"12"},
+		},
+		{
+			name: "job on a prompt, in another pipeline", ref: refPrompt, argument: "job_id", typed: "3",
+			resolved: map[string]string{"pipeline_id": "6"}, want: []string{},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			h := NewHandler(testutil.NewTestClient(t, newIDListing(t, 500)))
+			arguments := map[string]string{"project_id": "42"}
+			maps.Copy(arguments, testCase.resolved)
+			req := &mcp.CompleteRequest{}
+			req.Params = &mcp.CompleteParams{
+				Ref:      &mcp.CompleteReference{Type: testCase.ref, Name: "review_mr", URI: testCase.uri},
+				Argument: mcp.CompleteParamsArgument{Name: testCase.argument, Value: testCase.typed},
+				Context:  &mcp.CompleteContext{Arguments: arguments},
+			}
+
+			result, err := h.Complete(context.Background(), req)
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			if !slices.Equal(result.Completion.Values, testCase.want) {
+				t.Errorf("typing %q offered %v, want %v", testCase.typed, result.Completion.Values, testCase.want)
+			}
+			if result.Completion.HasMore != testCase.hasMore {
+				t.Errorf("hasMore = %t, want %t", result.Completion.HasMore, testCase.hasMore)
+			}
+		})
+	}
+}
+
 // TestComplete_ResourceMRIIDWithoutProjectID verifies that resource merge_request_iid
 // completion returns empty results when no project_id is resolved.
 func TestComplete_ResourceMRIIDWithoutProjectID(t *testing.T) {
@@ -1181,12 +1260,14 @@ func TestComplete_PromptMilestoneTitle_APIError(t *testing.T) {
 
 // TestComplete_PromptJobID verifies that completing a prompt's job_id argument
 // returns jobs for a pipeline when both project_id and pipeline_id are provided.
+// The pipeline is 1, the smallest ID GitLab gives, which the completer has to
+// accept while refusing 0 and below.
 func TestComplete_PromptJobID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v4/projects/42/pipelines/10/jobs" {
+		if r.URL.Path == "/api/v4/projects/42/pipelines/1/jobs" {
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"id":501,"name":"build","status":"success","pipeline":{"id":10}},
-				{"id":502,"name":"test","status":"running","pipeline":{"id":10}}
+				{"id":501,"name":"build","status":"success","pipeline":{"id":1}},
+				{"id":502,"name":"test","status":"running","pipeline":{"id":1}}
 			]`)
 			return
 		}
@@ -1198,7 +1279,7 @@ func TestComplete_PromptJobID(t *testing.T) {
 	req.Params = &mcp.CompleteParams{
 		Ref:      &mcp.CompleteReference{Type: refPrompt},
 		Argument: mcp.CompleteParamsArgument{Name: "job_id", Value: "50"},
-		Context:  &mcp.CompleteContext{Arguments: map[string]string{"project_id": "42", "pipeline_id": "10"}},
+		Context:  &mcp.CompleteContext{Arguments: map[string]string{"project_id": "42", "pipeline_id": "1"}},
 	}
 
 	result, err := h.Complete(context.Background(), req)
@@ -1272,22 +1353,35 @@ func TestComplete_PromptJobIDWithoutDependencies(t *testing.T) {
 }
 
 // TestComplete_PromptJobIDInvalidPipelineID verifies that job_id completion
-// returns empty results when pipeline_id is not a valid integer.
+// answers empty, asking GitLab nothing, when pipeline_id names no pipeline:
+// not a number, or not a positive one. A zero in particular must not widen the
+// search to every job of the project, which is what the job template asks.
 func TestComplete_PromptJobIDInvalidPipelineID(t *testing.T) {
-	h := NewHandler(testutil.NewTestClient(t, http.NotFoundHandler()))
-	req := &mcp.CompleteRequest{}
-	req.Params = &mcp.CompleteParams{
-		Ref:      &mcp.CompleteReference{Type: refPrompt},
-		Argument: mcp.CompleteParamsArgument{Name: "job_id", Value: "50"},
-		Context:  &mcp.CompleteContext{Arguments: map[string]string{"project_id": "42", "pipeline_id": "not-a-number"}},
-	}
+	for _, pipelineID := range []string{"not-a-number", "0", "-3"} {
+		t.Run(pipelineID, func(t *testing.T) {
+			var requests atomic.Int64
+			h := NewHandler(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				http.NotFound(w, r)
+			})))
+			req := &mcp.CompleteRequest{}
+			req.Params = &mcp.CompleteParams{
+				Ref:      &mcp.CompleteReference{Type: refPrompt},
+				Argument: mcp.CompleteParamsArgument{Name: "job_id", Value: "50"},
+				Context:  &mcp.CompleteContext{Arguments: map[string]string{"project_id": "42", "pipeline_id": pipelineID}},
+			}
 
-	result, err := h.Complete(context.Background(), req)
-	if err != nil {
-		t.Fatalf(fmtUnexpectedErr, err)
-	}
-	if len(result.Completion.Values) != 0 {
-		t.Errorf("expected empty values for invalid pipeline_id, got %d", len(result.Completion.Values))
+			result, err := h.Complete(context.Background(), req)
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			if len(result.Completion.Values) != 0 {
+				t.Errorf("expected empty values for invalid pipeline_id, got %d", len(result.Completion.Values))
+			}
+			if n := requests.Load(); n != 0 {
+				t.Errorf("%d requests were sent for pipeline_id %q, which names no pipeline", n, pipelineID)
+			}
+		})
 	}
 }
 
@@ -1348,16 +1442,16 @@ const fmtExpected1Value = "expected 1 value, got %d"
 // Shared assertion format for unexpected values in format helper tests.
 const fmtUnexpected = "unexpected: %s"
 
-// TestToResult_LimitEnforced verifies that [toResult] caps values at
-// [maxCompletionResults] and sets HasMore when input exceeds the limit.
-// Total is omitted (zero) because [toResult] does not know the upstream count.
-func TestToResult_LimitEnforced(t *testing.T) {
+// TestToResultWithTotal_NoTotal_LimitEnforced verifies that
+// [toResultWithTotal] caps values at [maxCompletionResults] and sets HasMore
+// when input exceeds the limit, and omits a total nobody counted.
+func TestToResultWithTotal_NoTotal_LimitEnforced(t *testing.T) {
 	values := make([]string, 15)
 	for i := range values {
 		values[i] = "item"
 	}
 
-	result := toResult(values)
+	result := toResultWithTotal(values, 0)
 	if len(result.Completion.Values) != maxCompletionResults {
 		t.Errorf("expected %d values, got %d", maxCompletionResults, len(result.Completion.Values))
 	}
@@ -1369,12 +1463,12 @@ func TestToResult_LimitEnforced(t *testing.T) {
 	}
 }
 
-// TestToResult_UnderLimit verifies that [toResult] returns all values and
-// HasMore=false when input is within the limit. Total is omitted because
-// [toResult] does not know the upstream count.
-func TestToResult_UnderLimit(t *testing.T) {
+// TestToResultWithTotal_NoTotal_UnderLimit verifies that [toResultWithTotal]
+// returns all values and HasMore=false when input is within the limit, and
+// omits a total nobody counted.
+func TestToResultWithTotal_NoTotal_UnderLimit(t *testing.T) {
 	values := []string{"a", "b", "c"}
-	result := toResult(values)
+	result := toResultWithTotal(values, 0)
 	if len(result.Completion.Values) != 3 {
 		t.Errorf("expected 3 values, got %d", len(result.Completion.Values))
 	}
@@ -1386,9 +1480,10 @@ func TestToResult_UnderLimit(t *testing.T) {
 	}
 }
 
-// TestToResult_Empty verifies that [toResult] handles an empty input slice.
-func TestToResult_Empty(t *testing.T) {
-	result := toResult([]string{})
+// TestToResultWithTotal_Empty verifies that [toResultWithTotal] handles an
+// empty input slice.
+func TestToResultWithTotal_Empty(t *testing.T) {
+	result := toResultWithTotal([]string{}, 0)
 	if len(result.Completion.Values) != 0 {
 		t.Errorf("expected 0 values, got %d", len(result.Completion.Values))
 	}
@@ -1945,6 +2040,9 @@ var completableArguments = []struct {
 	{name: "group_id", ref: refResource},
 	{name: "merge_request_iid", ref: refResource, resolved: map[string]string{"project_id": "42"}},
 	{name: "issue_iid", ref: refResource, resolved: map[string]string{"project_id": "42"}},
+	{name: "pipeline_id", ref: refResource, resolved: map[string]string{"project_id": "42"}},
+	{name: "sha", ref: refResource, resolved: map[string]string{"project_id": "42"}},
+	{name: "job_id", ref: refResource, resolved: map[string]string{"project_id": "42"}},
 }
 
 // completeRequest builds a completion request for one argument, with the
@@ -2271,6 +2369,143 @@ func (l *iidListing) requests() []url.Values {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return slices.Clone(l.asked)
+}
+
+// idListing answers project 42's pipelines, jobs and commits the way GitLab
+// does, over n of each numbered from 1 in the order they were created: every
+// listing newest first and paged with GitLab's headers, and each item looked up
+// by its ID or SHA, with a 404 for one that does not exist.
+//
+// Job j belongs to pipeline (j+1)/2, so pipeline p holds jobs 2p-1 and 2p.
+// Commit i's SHA is i in hexadecimal, padded to eight digits, followed by 32
+// a's; a lookup by a prefix of four characters or more finds the one commit it
+// begins, as git resolves an abbreviated object name.
+type idListing struct {
+	t     *testing.T
+	n     int
+	mu    sync.Mutex
+	paths []string
+}
+
+// newIDListing returns a listing of n pipelines, n jobs and n commits.
+func newIDListing(t *testing.T, n int) *idListing {
+	t.Helper()
+	return &idListing{t: t, n: n}
+}
+
+// idListingSHA is commit i's SHA.
+func idListingSHA(i int) string {
+	hex := strconv.FormatInt(int64(i), 16)
+	return strings.Repeat("0", 8-len(hex)) + hex + strings.Repeat("a", 32)
+}
+
+// ServeHTTP answers one request.
+func (l *idListing) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	rest, ok := strings.CutPrefix(r.URL.Path, "/api/v4/projects/42/")
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	l.mu.Lock()
+	l.paths = append(l.paths, rest)
+	l.mu.Unlock()
+
+	newest := func(ids []int) []int {
+		slices.Reverse(ids)
+		return ids
+	}
+	all := make([]int, 0, l.n)
+	for id := 1; id <= l.n; id++ {
+		all = append(all, id)
+	}
+	switch {
+	case rest == "pipelines":
+		l.page(w, r, newest(all), idListingPipeline)
+	case strings.HasPrefix(rest, "pipelines/") && strings.HasSuffix(rest, "/jobs"):
+		pipeline, _ := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(rest, "pipelines/"), "/jobs"))
+		var jobs []int
+		for _, job := range []int{2*pipeline - 1, 2 * pipeline} {
+			if job >= 1 && job <= l.n {
+				jobs = append(jobs, job)
+			}
+		}
+		l.page(w, r, newest(jobs), idListingJob)
+	case strings.HasPrefix(rest, "pipelines/"):
+		l.one(w, strings.TrimPrefix(rest, "pipelines/"), idListingPipeline)
+	case rest == "jobs":
+		l.page(w, r, newest(all), idListingJob)
+	case strings.HasPrefix(rest, "jobs/"):
+		l.one(w, strings.TrimPrefix(rest, "jobs/"), idListingJob)
+	case rest == "repository/commits":
+		l.page(w, r, newest(all), idListingCommit)
+	case strings.HasPrefix(rest, "repository/commits/"):
+		ref := strings.TrimPrefix(rest, "repository/commits/")
+		found := 0
+		for id := 1; id <= l.n && len(ref) >= 4; id++ {
+			if strings.HasPrefix(idListingSHA(id), ref) {
+				found = id
+				break
+			}
+		}
+		if found == 0 {
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Commit Not Found"}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, idListingCommit(found))
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+// one answers the lookup of one numbered item.
+func (l *idListing) one(w http.ResponseWriter, raw string, render func(int) string) {
+	id, err := strconv.Atoi(raw)
+	if err != nil || id < 1 || id > l.n {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not found"}`)
+		return
+	}
+	testutil.RespondJSON(w, http.StatusOK, render(id))
+}
+
+// page answers one page of a listing of ids, already in GitLab's order.
+func (l *idListing) page(w http.ResponseWriter, r *http.Request, ids []int, render func(int) string) {
+	query := r.URL.Query()
+	perPage := listingParam(query, "per_page", 20)
+	page := listingParam(query, "page", 1)
+	start := min((page-1)*perPage, len(ids))
+	end := min(start+perPage, len(ids))
+	body := make([]string, 0, end-start)
+	for _, id := range ids[start:end] {
+		body = append(body, render(id))
+	}
+	headers := testutil.PaginationHeaders{Page: strconv.Itoa(page), PerPage: strconv.Itoa(perPage)}
+	if end < len(ids) {
+		headers.NextPage = strconv.Itoa(page + 1)
+	}
+	testutil.RespondJSONWithPagination(w, http.StatusOK, "["+strings.Join(body, ",")+"]", headers)
+}
+
+// requested returns the path, below the project, of every request answered.
+func (l *idListing) requested() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Clone(l.paths)
+}
+
+// idListingPipeline renders pipeline id.
+func idListingPipeline(id int) string {
+	return `{"id":` + strconv.Itoa(id) + `,"iid":` + strconv.Itoa(id) + `,"ref":"main","status":"success"}`
+}
+
+// idListingJob renders job id, in pipeline (id+1)/2.
+func idListingJob(id int) string {
+	return `{"id":` + strconv.Itoa(id) + `,"name":"build","status":"success","pipeline":{"id":` + strconv.Itoa((id+1)/2) + `}}`
+}
+
+// idListingCommit renders commit id.
+func idListingCommit(id int) string {
+	sha := idListingSHA(id)
+	return `{"id":"` + sha + `","short_id":"` + sha[:8] + `","title":"Commit ` + strconv.Itoa(id) + `"}`
 }
 
 // listingParam reads a positive integer parameter, or GitLab's default for it

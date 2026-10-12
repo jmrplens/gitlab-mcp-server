@@ -130,22 +130,57 @@ func TestComplete_ExcludedActionIsNotCompleted(t *testing.T) {
 	}
 }
 
-// TestComplete_PartlyExcludedArgument_KeepsTheHalfTheOperatorLeft pins the two
-// completers that merge sources.
+// TestComplete_PartlyExcludedArgument_KeepsTheHalfTheOperatorLeft pins the
+// completers that read two sources.
 //
-// `from` completes branches and tags together and `milestone` completes a
-// project's or a group's, so withholding either whole on one exclusion would
-// remove data the operator never excluded. The dispatch withholds only when
-// every backing action is gone; each half is asked about on its own below it.
+// `from` completes branches and tags together, `milestone` completes a
+// project's or a group's, and a pipeline, commit or job is looked up and
+// listed, so withholding any of them whole on one exclusion would remove data
+// the operator never excluded. The dispatch withholds only when every backing
+// action is gone; each half is asked about on its own below it.
 func TestComplete_PartlyExcludedArgument_KeepsTheHalfTheOperatorLeft(t *testing.T) {
 	cases := []struct {
 		name      string
 		exclude   []string
 		argName   string
+		value     string
 		resolved  map[string]string
 		wantPaths []string
 		noPaths   []string
 	}{
+		// A pipeline, commit or job is looked up through the action that
+		// reads one and listed through the one that lists them, so each half
+		// answers to its own action.
+		{
+			name: "pipeline lookup excluded, listing kept", exclude: []string{actionPipelineGet}, argName: "pipeline_id", value: "7",
+			wantPaths: []string{"/pipelines"}, noPaths: []string{"/pipelines/7"},
+		},
+		{
+			name: "pipeline listing excluded, lookup kept", exclude: []string{actionPipelineList}, argName: "pipeline_id", value: "7",
+			wantPaths: []string{"/pipelines/7"}, noPaths: []string{"/pipelines"},
+		},
+		{
+			name: "both pipeline halves excluded", exclude: []string{actionPipelineGet, actionPipelineList}, argName: "pipeline_id", value: "7",
+			noPaths: []string{"/pipelines", "/pipelines/7"},
+		},
+		{
+			name: "commit lookup excluded, listing kept", exclude: []string{actionCommitGet}, argName: "sha", value: "abcd",
+			wantPaths: []string{"/repository/commits"}, noPaths: []string{"/repository/commits/abcd"},
+		},
+		{
+			name: "commit listing excluded, lookup kept", exclude: []string{actionCommitList}, argName: "sha", value: "abcd",
+			wantPaths: []string{"/repository/commits/abcd"}, noPaths: []string{"/repository/commits"},
+		},
+		{
+			name: "job lookup excluded, listing kept", exclude: []string{actionJobGet}, argName: "job_id", value: "7",
+			resolved:  map[string]string{"project_id": "group/project", "pipeline_id": "6"},
+			wantPaths: []string{"/pipelines/6/jobs"}, noPaths: []string{"/jobs/7"},
+		},
+		{
+			name: "job listing excluded, lookup kept", exclude: []string{actionJobList}, argName: "job_id", value: "7",
+			resolved:  map[string]string{"project_id": "group/project", "pipeline_id": "6"},
+			wantPaths: []string{"/jobs/7"}, noPaths: []string{"/pipelines/6/jobs"},
+		},
 		{
 			name: "branches excluded, tags kept", exclude: []string{actionBranchList}, argName: "from",
 			wantPaths: []string{"/repository/tags"}, noPaths: []string{"/repository/branches"},
@@ -192,10 +227,14 @@ func TestComplete_PartlyExcludedArgument_KeepsTheHalfTheOperatorLeft(t *testing.
 			if resolved == nil {
 				resolved = map[string]string{"project_id": "group/project"}
 			}
+			value := testCase.value
+			if value == "" {
+				value = "m"
+			}
 			req := &mcp.CompleteRequest{}
 			req.Params = &mcp.CompleteParams{
 				Ref:      &mcp.CompleteReference{Type: refPrompt, Name: "a_prompt"},
-				Argument: mcp.CompleteParamsArgument{Name: testCase.argName, Value: "m"},
+				Argument: mcp.CompleteParamsArgument{Name: testCase.argName, Value: value},
 				Context:  &mcp.CompleteContext{Arguments: resolved},
 			}
 			if _, err := h.Complete(context.Background(), req); err != nil {

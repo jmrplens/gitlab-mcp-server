@@ -228,7 +228,7 @@ Todas las variables salvo `{+path}` son expansiones simples de RFC 6570, y cada 
 
 ### Autocompletado de parámetros de URI
 
-Mediante `completion/complete`, el servidor sugiere valores de `project_id` y `group_id` mientras se escriben, y de `merge_request_iid` e `issue_iid` a partir de las merge requests e issues del proyecto, en cualquier estado, una vez que `project_id` está relleno en la misma petición. Ningún otro parámetro de URI recibe sugerencias, ni tampoco uno cuyos datos haya excluido un operador con `GITLAB_MCP_EXCLUDE_TOOLS`. [Autocompletado](/gitlab-mcp-server/es/capabilities/completions/) describe el mecanismo.
+Mediante `completion/complete`, el servidor sugiere valores de `project_id` y `group_id` mientras se escriben y, una vez que `project_id` está relleno en la misma petición, de `merge_request_iid` e `issue_iid` a partir de las merge requests e issues del proyecto, en cualquier estado, y de `pipeline_id`, `sha` y `job_id` a partir del pipeline, commit o job escrito y de los más recientes del proyecto. Ningún otro parámetro de URI recibe sugerencias, ni tampoco uno cuyos datos haya excluido un operador con `GITLAB_MCP_EXCLUDE_TOOLS`. [Autocompletado](/gitlab-mcp-server/es/capabilities/completions/) describe el mecanismo.
 
 ### ¿Cómo leo un recurso?
 

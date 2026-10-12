@@ -24,11 +24,14 @@ const (
 	actionBranchList        = "branch.list"
 	actionTagList           = "tag.list"
 	actionPipelineList      = "pipeline.list"
+	actionPipelineGet       = "pipeline.get"
 	actionCommitList        = "repository.commit_list"
+	actionCommitGet         = "repository.commit_get"
 	actionLabelList         = "project.label_list"
 	actionMilestoneList     = "project.milestone_list"
 	actionGroupMilestoneLst = "group.group_milestone_list"
 	actionJobList           = "job.list"
+	actionJobGet            = "job.get"
 )
 
 // completionBackingActions maps each completion argument this package answers
@@ -45,7 +48,9 @@ const (
 // An argument backed by several actions is withheld only when **every** one of
 // them is excluded. That is deliberate: `from` completes branches and tags
 // together, and an operator who removed only the tag listing still asked for
-// branches to work.
+// branches to work. A pipeline, commit or job is likewise looked up directly
+// and listed, the first through the action that reads one item and the second
+// through the one that lists them, and each half is withheld on its own.
 var completionBackingActions = map[string][]string{
 	"project_id":        {actionProjectList},
 	"group_id":          {actionGroupList},
@@ -59,12 +64,12 @@ var completionBackingActions = map[string][]string{
 	"source_branch":     {actionBranchList},
 	"target_branch":     {actionBranchList},
 	"tag":               {actionTagList},
-	"pipeline_id":       {actionPipelineList},
-	"sha":               {actionCommitList},
+	"pipeline_id":       {actionPipelineList, actionPipelineGet},
+	"sha":               {actionCommitList, actionCommitGet},
 	"label":             {actionLabelList},
 	"milestone_id":      {actionMilestoneList},
 	"milestone":         {actionMilestoneList, actionGroupMilestoneLst},
-	"job_id":            {actionJobList},
+	"job_id":            {actionJobList, actionJobGet},
 }
 
 // PublishExcludedActions records the canonical catalog action IDs the operator

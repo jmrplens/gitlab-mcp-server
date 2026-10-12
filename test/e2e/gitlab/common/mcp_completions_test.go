@@ -3,8 +3,9 @@
 // mcp_completions_test.go drives a completion for every argument of every
 // served prompt and every variable of every served resource template, on both
 // capability surfaces, and holds the answers of the completers whose matching
-// GitLab decides: a project typed back by its full path, and an IID typed in
-// a project.
+// GitLab decides: a project typed back by its full path or by a name of two
+// characters, an IID typed in a project, and a SHA typed on the commit
+// template.
 //
 // A completion is addressed by a reference and an argument, so the sweep is
 // driven by the two things that carry completable arguments: the prompts and
@@ -124,6 +125,31 @@ func TestCompletions_IssueIID_AClosedIssueCompletesByItsIID(t *testing.T) {
 	values := s.CompleteResource(issueTemplate, "issue_iid", iid, harness.Resolved(map[string]string{"project_id": project.IDParam()}))
 	if !slices.Contains(values, iid) {
 		t.Errorf("issue_iid completion of %q in project %s offered %v, want it to hold the closed issue", iid, project.IDParam(), values)
+	}
+}
+
+// commitTemplate is the resource template whose sha the SHA scenario
+// completes: no served prompt declares that argument either.
+const commitTemplate = "gitlab://project/{project_id}/commit/{sha}"
+
+// TestCompletions_SHA_ACommitTypedWholeCompletesOnItsTemplate commits a file
+// on a branch of its own, types the commit's whole SHA on the commit template
+// with the project resolved, and holds the answer to offering its short SHA.
+//
+// The template's sha used to be answered with nothing, since only four
+// template variables reached a completer, and the completer read only the 20
+// newest commits of the default branch, which a commit on another branch is
+// never among.
+func TestCompletions_SHA_ACommitTypedWholeCompletesOnItsTemplate(t *testing.T) {
+	e := harness.New(t)
+	s := e.On(harness.SurfaceDynamic)
+	project := fixture.NewProject(e, fixture.WithNamePrefix("complete"))
+	branch := fixture.NewBranch(e, project, e.Name("complete"))
+	commit := fixture.CommitFile(e, project, branch.Name, "COMPLETE.md", "complete\n", "docs: add the completion fixture")
+
+	values := s.CompleteResource(commitTemplate, "sha", commit.SHA, harness.Resolved(map[string]string{"project_id": project.IDParam()}))
+	if !slices.Contains(values, commit.ShortID) {
+		t.Errorf("sha completion of %s on branch %s offered %v, want it to hold %s", commit.SHA, branch.Name, values, commit.ShortID)
 	}
 }
 

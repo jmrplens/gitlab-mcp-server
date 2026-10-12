@@ -228,7 +228,7 @@ Every variable except `{+path}` is an RFC 6570 simple expansion, and each one fi
 
 ### Autocomplete for URI parameters
 
-Through `completion/complete`, the server suggests `project_id` and `group_id` values as they are typed, and `merge_request_iid` and `issue_iid` from the project's merge requests and issues, in any state, once `project_id` is filled in the same request. No other URI parameter gets suggestions, and neither does one whose data an operator excluded with `GITLAB_MCP_EXCLUDE_TOOLS`. [Completions](/gitlab-mcp-server/capabilities/completions/) describes the mechanism.
+Through `completion/complete`, the server suggests `project_id` and `group_id` values as they are typed and, once `project_id` is filled in the same request, `merge_request_iid` and `issue_iid` from the project's merge requests and issues, in any state, and `pipeline_id`, `sha` and `job_id` from the pipeline, commit or job typed and the project's newest. No other URI parameter gets suggestions, and neither does one whose data an operator excluded with `GITLAB_MCP_EXCLUDE_TOOLS`. [Completions](/gitlab-mcp-server/capabilities/completions/) describes the mechanism.
 
 ### How do I read a resource?
 
