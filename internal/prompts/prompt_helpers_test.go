@@ -1782,3 +1782,68 @@ func TestMergeDuration_OnlyOneOfTheTwoTimestamps_IsZeroRatherThanADereference(t 
 		})
 	}
 }
+
+// TestThreadState_ReadsADiscussionAsGitLabResolvesIt pins the one rule both
+// discussion-counting prompts share: a thread is a discussion, not a note.
+//
+// GitLab resolves per discussion. ResolvableDiscussion#resolvable? holds when
+// any of its notes is resolvable, and #resolved? when none of its resolvable
+// notes is still to be resolved; resolving one updates every note. Counting
+// per note, as both prompts used to, made one thread with two replies read as
+// three unresolved threads, which is enough to tip release_readiness past its
+// not-ready threshold on a merge request with a single open question.
+func TestThreadState_ReadsADiscussionAsGitLabResolvesIt(t *testing.T) {
+	tests := []struct {
+		name           string
+		notes          []*gl.Note
+		wantResolvable bool
+		wantUnresolved bool
+	}{
+		{name: "no notes", notes: nil},
+		{
+			name:  "a plain comment is no thread",
+			notes: []*gl.Note{{Resolvable: false}},
+		},
+		{
+			name:  "a system note is no thread even when it claims to be resolvable",
+			notes: []*gl.Note{{Resolvable: true, System: true}},
+		},
+		{
+			name: "an opening note and two replies, all unresolved, are one unresolved thread",
+			notes: []*gl.Note{
+				{Resolvable: true}, {Resolvable: true}, {Resolvable: true},
+			},
+			wantResolvable: true, wantUnresolved: true,
+		},
+		{
+			name: "a resolved thread with a comment beside it is one resolved thread",
+			notes: []*gl.Note{
+				{Resolvable: true, Resolved: true}, {Resolvable: false}, {Resolvable: true, Resolved: true},
+			},
+			wantResolvable: true,
+		},
+		{
+			name: "one note still to resolve leaves the whole thread unresolved",
+			notes: []*gl.Note{
+				{Resolvable: true, Resolved: true}, {Resolvable: true, Resolved: false},
+			},
+			wantResolvable: true, wantUnresolved: true,
+		},
+		{
+			name: "a resolved note on a non-resolvable comment does not resolve anything",
+			notes: []*gl.Note{
+				{Resolvable: false, Resolved: false}, {Resolvable: true, Resolved: true},
+			},
+			wantResolvable: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resolvable, unresolved := threadState(&gl.Discussion{ID: "d", Notes: tt.notes})
+			if resolvable != tt.wantResolvable || unresolved != tt.wantUnresolved {
+				t.Errorf("threadState() = (resolvable %v, unresolved %v), want (%v, %v)",
+					resolvable, unresolved, tt.wantResolvable, tt.wantUnresolved)
+			}
+		})
+	}
+}

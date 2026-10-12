@@ -193,6 +193,26 @@ func parseDaysArg(args map[string]string, name string, defaultDays int) (int, er
 	return d, nil
 }
 
+// threadState reads one discussion the way GitLab resolves it: a thread is
+// the discussion, never one of its notes. ResolvableDiscussion#resolvable?
+// holds when any note is resolvable, which the note entity reports as
+// potentially resolvable and not a system note, and #resolved? when no
+// resolvable note is still to be resolved; resolving a thread updates every
+// note in it. The second result is therefore true only for a resolvable thread
+// with at least one resolvable note left unresolved.
+func threadState(d *gl.Discussion) (resolvable, unresolved bool) {
+	for _, n := range d.Notes {
+		if !n.Resolvable || n.System {
+			continue
+		}
+		resolvable = true
+		if !n.Resolved {
+			unresolved = true
+		}
+	}
+	return resolvable, unresolved
+}
+
 // sinceDate returns a time.Time that is the given number of days in the past,
 // truncated to the start of that day in UTC.
 func sinceDate(days int) time.Time {

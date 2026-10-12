@@ -219,7 +219,8 @@ func handleReleaseReadiness(ctx context.Context, client *gitlabclient.Client, re
 	return promptResult(b.String()), nil
 }
 
-// countUnresolvedThreads counts unresolved discussion threads across all MRs.
+// countUnresolvedThreads counts the unresolved discussion threads across all
+// MRs, one per discussion as [threadState] reads it.
 func countUnresolvedThreads(ctx context.Context, client *gitlabclient.Client, projectID string, mrs []*gl.BasicMergeRequest) int {
 	total := 0
 	for _, mr := range mrs {
@@ -230,10 +231,8 @@ func countUnresolvedThreads(ctx context.Context, client *gitlabclient.Client, pr
 			continue
 		}
 		for _, d := range discussions {
-			for _, n := range d.Notes {
-				if n.Resolvable && !n.Resolved {
-					total++
-				}
+			if _, unresolved := threadState(d); unresolved {
+				total++
 			}
 		}
 	}

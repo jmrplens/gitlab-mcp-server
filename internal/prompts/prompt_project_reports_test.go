@@ -685,6 +685,11 @@ func TestProjectEventDays_ReadsEachTimestampGitLabSendsAndSkipsWhatItCannot(t *t
 // never zero for one merge request and non-zero for another in the same run, so
 // the summary could count every merge request that has any thread at all. The
 // whole point of the report is to name the ones still waiting on somebody.
+//
+// A thread is a discussion, as GitLab resolves it, so the first merge
+// request's unresolved thread carries two replies and its resolved one a reply
+// of its own: counted per note they would read as five threads and three
+// unresolved.
 func TestMRDiscussionHealth_ThreadsAndUnresolvedThreadsAreCountedSeparately(t *testing.T) {
 	mux := http.NewServeMux()
 	// The third merge request carries no author, which is what GitLab sends for
@@ -698,11 +703,20 @@ func TestMRDiscussionHealth_ThreadsAndUnresolvedThreadsAreCountedSeparately(t *t
 		]`)
 	})
 	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests/1/discussions", func(w http.ResponseWriter, _ *http.Request) {
-		respondJSON(w, http.StatusOK, `[{"id":"d1","notes":[
-			{"id":1,"resolvable":true,"resolved":false},
-			{"id":2,"resolvable":true,"resolved":true},
-			{"id":3,"resolvable":false,"resolved":false}
-		]}]`)
+		respondJSON(w, http.StatusOK, `[
+			{"id":"d1","notes":[
+				{"id":1,"resolvable":true,"resolved":false},
+				{"id":2,"resolvable":true,"resolved":false},
+				{"id":3,"resolvable":true,"resolved":false}
+			]},
+			{"id":"d1b","notes":[
+				{"id":5,"resolvable":true,"resolved":true},
+				{"id":6,"resolvable":true,"resolved":true}
+			]},
+			{"id":"d1c","individual_note":true,"notes":[
+				{"id":7,"resolvable":false,"resolved":false}
+			]}
+		]`)
 	})
 	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests/{iid}/discussions", func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, `[{"id":"d2","notes":[{"id":4,"resolvable":true,"resolved":true}]}]`)

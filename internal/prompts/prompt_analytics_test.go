@@ -588,14 +588,15 @@ func TestWriteDailyMergeChart_CountsPerDayAndSeparatesThem(t *testing.T) {
 }
 
 // releaseReadinessFixture answers the merge-request and discussion listings
-// release_readiness makes, with the notes given for the first merge request.
-func releaseReadinessFixture(mrs, notesForMR1 string) http.Handler {
+// release_readiness makes, with the discussions given for the first merge
+// request.
+func releaseReadinessFixture(mrs, discussionsForMR1 string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc(routeProjectMergeRequests, func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, mrs)
 	})
 	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests/1/discussions", func(w http.ResponseWriter, _ *http.Request) {
-		respondJSON(w, http.StatusOK, `[{"id":"d1","notes":`+notesForMR1+`}]`)
+		respondJSON(w, http.StatusOK, discussionsForMR1)
 	})
 	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests/{iid}/discussions", func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
@@ -612,12 +613,16 @@ func releaseReadinessFixture(mrs, notesForMR1 string) http.Handler {
 // could report itself ready. The threshold is pinned too: at exactly five the
 // label is the middle one, which is the boundary the `> 5` sits on.
 func TestReleaseReadiness_TheBlockerCount_IsTheSumOfWhatBlocks(t *testing.T) {
-	fourUnresolved := `[{"id":1,"resolvable":true,"resolved":false},` +
-		`{"id":2,"resolvable":true,"resolved":false},` +
-		`{"id":3,"resolvable":true,"resolved":false},` +
-		`{"id":4,"resolvable":true,"resolved":false},` +
-		`{"id":5,"resolvable":true,"resolved":true},` +
-		`{"id":6,"resolvable":false,"resolved":false}]`
+	// Four unresolved threads, each an opening note and a reply, beside one
+	// resolved thread and a plain comment.
+	unresolvedThread := func(id string) string {
+		return `{"id":"` + id + `","notes":[{"id":1,"resolvable":true,"resolved":false},` +
+			`{"id":2,"resolvable":true,"resolved":false}]}`
+	}
+	fourUnresolved := `[` + unresolvedThread("d1") + `,` + unresolvedThread("d2") + `,` +
+		unresolvedThread("d3") + `,` + unresolvedThread("d4") + `,` +
+		`{"id":"d5","notes":[{"id":5,"resolvable":true,"resolved":true}]},` +
+		`{"id":"d6","individual_note":true,"notes":[{"id":6,"resolvable":false,"resolved":false}]}]`
 
 	t.Run("six blockers are not ready", func(t *testing.T) {
 		mrs := `[{"iid":1,"project_id":42,"title":"Draft MR","source_branch":"a","target_branch":"main","draft":true},` +
@@ -651,6 +656,31 @@ func TestReleaseReadiness_TheBlockerCount_IsTheSumOfWhatBlocks(t *testing.T) {
 			t.Errorf("five blockers is below the not-ready threshold:\n%s", text)
 		}
 	})
+}
+
+// TestReleaseReadiness_AThreadWithReplies_IsOneUnresolvedThread verifies that
+// the report counts discussions the way GitLab resolves them.
+//
+// A question with two replies is one thread GitLab resolves in one click, and
+// it was counted as three: one per note. Two such questions on one merge
+// request read as six blockers, and the report called the branch not ready.
+func TestReleaseReadiness_AThreadWithReplies_IsOneUnresolvedThread(t *testing.T) {
+	mrs := `[{"iid":1,"project_id":42,"title":"Asked about","source_branch":"a","target_branch":"main"}]`
+	thread := func(id string) string {
+		return `{"id":"` + id + `","notes":[{"id":1,"resolvable":true,"resolved":false},` +
+			`{"id":2,"resolvable":true,"resolved":false},{"id":3,"resolvable":true,"resolved":false}]}`
+	}
+	discussions := `[` + thread("d1") + `,` + thread("d2") + `]`
+
+	text := getPromptText(t, releaseReadinessFixture(mrs, discussions), "release_readiness",
+		map[string]string{"project_id": "42"})
+
+	if !strings.Contains(text, "| Unresolved threads | 2 |") {
+		t.Errorf("two discussions with replies are two unresolved threads:\n%s", text)
+	}
+	if strings.Contains(text, "Not Ready") {
+		t.Errorf("two unresolved threads are below the not-ready threshold:\n%s", text)
+	}
 }
 
 // TestFilterRecentReleases_ARleaseOutsideTheWindow_IsLeftOut verifies that both

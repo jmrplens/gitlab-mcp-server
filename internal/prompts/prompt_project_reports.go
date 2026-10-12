@@ -383,16 +383,17 @@ func collectMRDiscussionInfos(ctx context.Context, client *gitlabclient.Client, 
 	return infos
 }
 
-// countDiscussionThreads tallies resolvable and unresolved notes in discussions.
+// countDiscussionThreads tallies the resolvable and the unresolved threads of
+// a merge request, one per discussion as [threadState] reads it, so a question
+// with replies is one thread rather than one per note.
 func countDiscussionThreads(info *mrDiscussionInfo, discussions []*gl.Discussion) {
 	for _, d := range discussions {
-		for _, n := range d.Notes {
-			if n.Resolvable {
-				info.threads++
-				if !n.Resolved {
-					info.unresolved++
-				}
-			}
+		resolvable, unresolved := threadState(d)
+		if resolvable {
+			info.threads++
+		}
+		if unresolved {
+			info.unresolved++
 		}
 	}
 }
