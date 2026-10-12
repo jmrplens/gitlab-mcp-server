@@ -1783,6 +1783,16 @@ func TestMergeDuration_OnlyOneOfTheTwoTimestamps_IsZeroRatherThanADereference(t 
 	}
 }
 
+// pinClock makes every reading of the clock in this package answer at until the
+// test ends. No test of this package runs in parallel, which is what makes a
+// package-level seam safe to swap.
+func pinClock(t *testing.T, at time.Time) {
+	t.Helper()
+	previous := timeNow
+	timeNow = func() time.Time { return at }
+	t.Cleanup(func() { timeNow = previous })
+}
+
 // TestThreadState_ReadsADiscussionAsGitLabResolvesIt pins the one rule both
 // discussion-counting prompts share: a thread is a discussion, not a note.
 //

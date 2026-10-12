@@ -285,13 +285,17 @@ func handleReleaseCadence(ctx context.Context, client *gitlabclient.Client, req 
 		return nil, fmt.Errorf("release_cadence: %w", err)
 	}
 
-	filtered := filterRecentReleases(releases, since)
+	filtered, upcoming := filterRecentReleases(releases, since, timeNow())
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Release Cadence: %s (last %d days)\n\n", mdHeading(projectID), days)
 
 	if len(filtered) == 0 {
 		b.WriteString("No releases found in the analysis period.\n")
+		if len(upcoming) > 0 {
+			b.WriteString("\n")
+			writeUpcomingReleases(&b, upcoming)
+		}
 		return promptResult(b.String()), nil
 	}
 
@@ -313,28 +317,62 @@ func handleReleaseCadence(ctx context.Context, client *gitlabclient.Client, req 
 	b.WriteString("\n")
 
 	writeReleaseHistoryTable(&b, filtered)
+	if len(upcoming) > 0 {
+		writeUpcomingReleases(&b, upcoming)
+	}
 
 	b.WriteString("---\nPlease analyze release cadence, compare to team goals, and suggest if frequency should change.\n")
 
 	return promptResult(b.String()), nil
 }
 
-// filterRecentReleases returns releases after since, sorted ascending by date.
-func filterRecentReleases(releases []*gl.Release, since time.Time) []*gl.Release {
-	var filtered []*gl.Release
+// filterRecentReleases splits releases into those made in the period, dated
+// after since and not after now, and those still to come, each sorted
+// ascending by date. A release is still to come when GitLab marks it
+// upcoming_release, which it decides against its own clock, or when its date
+// is after now; neither belongs to a cadence that has been kept. A release with
+// no date and no mark belongs to neither.
+func filterRecentReleases(releases []*gl.Release, since, now time.Time) (filtered, upcoming []*gl.Release) {
 	for _, r := range releases {
 		releaseTime := r.ReleasedAt
 		if releaseTime == nil {
 			releaseTime = r.CreatedAt
 		}
-		if releaseTime != nil && releaseTime.After(since) {
+		if r.UpcomingRelease || (releaseTime != nil && releaseTime.After(now)) {
+			upcoming = append(upcoming, r)
+		} else if releaseTime != nil && releaseTime.After(since) {
 			filtered = append(filtered, r)
 		}
 	}
-	sort.Slice(filtered, func(i, j int) bool {
-		return releaseDate(filtered[i]).Before(releaseDate(filtered[j]))
-	})
-	return filtered
+	byDate := func(rs []*gl.Release) {
+		sort.Slice(rs, func(i, j int) bool {
+			return releaseDate(rs[i]).Before(releaseDate(rs[j]))
+		})
+	}
+	byDate(filtered)
+	byDate(upcoming)
+	return filtered, upcoming
+}
+
+// writeUpcomingReleases lists the releases still to come, apart from the
+// history the cadence is measured over. Its sentence holds under a report that
+// measured no cadence too, and for a release listed for either reason
+// [filterRecentReleases] has: GitLab's mark, or a date after the report.
+//
+//gitlab:allow-raw releaseDate(r).Format(time.DateOnly): the day a release is dated, written as the history table beside it writes its own days
+func writeUpcomingReleases(b *strings.Builder, releases []*gl.Release) {
+	b.WriteString("## Upcoming Releases\n\n")
+	b.WriteString("Not counted in the cadence: GitLab marks these as upcoming, or they are dated after this report was written.\n\n")
+	b.WriteString("| Release | Tag | Date |\n")
+	b.WriteString("|---------|-----|------|\n")
+	for _, r := range releases {
+		name := r.Name
+		if name == "" {
+			name = r.TagName
+		}
+		fmt.Fprintf(b, "| %s | %s | %s |\n", mdInline(name), mdInline(r.TagName), releaseDate(r).Format(time.DateOnly))
+	}
+	b.WriteString("\n")
 }
 
 // writeReleaseHistoryTable writes a Markdown table of release history with intervals.

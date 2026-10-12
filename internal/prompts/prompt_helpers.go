@@ -213,10 +213,15 @@ func threadState(d *gl.Discussion) (resolvable, unresolved bool) {
 	return resolvable, unresolved
 }
 
+// timeNow is the clock every report period is computed from. It is a variable
+// so a test can pin the instant a report is rendered at, since the dates a
+// prompt sends and the releases it counts as made depend on it.
+var timeNow = time.Now
+
 // sinceDate returns a time.Time that is the given number of days in the past,
 // truncated to the start of that day in UTC.
 func sinceDate(days int) time.Time {
-	return time.Now().UTC().AddDate(0, 0, -days).Truncate(24 * time.Hour)
+	return timeNow().UTC().AddDate(0, 0, -days).Truncate(24 * time.Hour)
 }
 
 // extractProjectPath extracts the project path from a BasicMergeRequest.

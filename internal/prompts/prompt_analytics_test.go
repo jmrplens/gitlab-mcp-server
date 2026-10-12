@@ -385,7 +385,7 @@ func TestFilterRecentReleases_CreatedAtFallback_FallsBackToCreatedAt(t *testing.
 	created := time.Now().Add(-24 * time.Hour)
 	since := time.Now().Add(-30 * 24 * time.Hour)
 
-	filtered := filterRecentReleases([]*gl.Release{{CreatedAt: &created}}, since)
+	filtered, _ := filterRecentReleases([]*gl.Release{{CreatedAt: &created}}, since, time.Now())
 	if len(filtered) != 1 {
 		t.Errorf("expected 1 release via created_at fallback, got %d", len(filtered))
 	}
@@ -694,17 +694,172 @@ func TestFilterRecentReleases_ARleaseOutsideTheWindow_IsLeftOut(t *testing.T) {
 	recent := time.Now().Add(-2 * 24 * time.Hour)
 	ancient := time.Now().Add(-400 * 24 * time.Hour)
 
-	filtered := filterRecentReleases([]*gl.Release{
+	filtered, upcoming := filterRecentReleases([]*gl.Release{
 		{TagName: "v2", ReleasedAt: &recent},
 		{TagName: "v1", ReleasedAt: &ancient},
 		{TagName: "undated"},
-	}, since)
+	}, since, time.Now())
 
 	if len(filtered) != 1 {
 		t.Fatalf("kept %d release(s), want 1", len(filtered))
 	}
 	if filtered[0].TagName != "v2" {
 		t.Errorf("kept %q, want the release inside the window", filtered[0].TagName)
+	}
+	if len(upcoming) != 0 {
+		t.Errorf("no release is still to come, yet %d were listed as upcoming", len(upcoming))
+	}
+}
+
+// TestFilterRecentReleases_AReleaseStillToCome_IsUpcomingRatherThanInThePeriod
+// pins the upper bound of the period.
+//
+// The filter had none: a release dated in the future, which GitLab answers with
+// upcoming_release true, was counted in "Total releases" and folded its gap
+// into the average and median intervals, so a project that had planned its
+// next release three months out reported a cadence it had not kept. GitLab
+// computes the flag against its own clock, so a release it marks upcoming is
+// upcoming even when this process's clock already reads past its date.
+func TestFilterRecentReleases_AReleaseStillToCome_IsUpcomingRatherThanInThePeriod(t *testing.T) {
+	now := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
+	since := now.AddDate(0, 0, -120)
+	past := now.AddDate(0, 0, -10)
+	tomorrow := now.Add(24 * time.Hour)
+	threeMonthsOut := now.AddDate(0, 3, 0)
+	aMinuteAgo := now.Add(-time.Minute)
+	atNow := now
+
+	inPeriod, upcoming := filterRecentReleases([]*gl.Release{
+		{TagName: "v3.0.0", ReleasedAt: &threeMonthsOut, UpcomingRelease: true},
+		{TagName: "v1.0.0", ReleasedAt: &past},
+		{TagName: "v2.0.0", ReleasedAt: &tomorrow},
+		{TagName: "v1.1.0", ReleasedAt: &aMinuteAgo, UpcomingRelease: true},
+		{TagName: "v1.0.1", ReleasedAt: &atNow},
+	}, since, now)
+
+	tags := func(rs []*gl.Release) []string {
+		out := make([]string, 0, len(rs))
+		for _, r := range rs {
+			out = append(out, r.TagName)
+		}
+		return out
+	}
+	if got, want := strings.Join(tags(inPeriod), ","), "v1.0.0,v1.0.1"; got != want {
+		t.Errorf("in the period: %s, want %s", got, want)
+	}
+	if got, want := strings.Join(tags(upcoming), ","), "v1.1.0,v2.0.0,v3.0.0"; got != want {
+		t.Errorf("upcoming: %s, want %s, in date order", got, want)
+	}
+}
+
+// upcomingNotCounted is the sentence under "Upcoming Releases". It has to be
+// true both under a cadence and under a report that measured none, and of a
+// release listed for either reason: GitLab's mark, or a date after the
+// instant the report is rendered at.
+const upcomingNotCounted = "Not counted in the cadence: GitLab marks these as upcoming, or they are dated after this report was written."
+
+// TestReleaseCadence_AnUpcomingRelease_IsListedApartFromThePeriod renders the
+// prompt under a pinned clock and holds the cadence to the releases already
+// made, with the one still to come listed on its own under the name it was
+// given (the test below holds the tag standing in for a release with none).
+func TestReleaseCadence_AnUpcomingRelease_IsListedApartFromThePeriod(t *testing.T) {
+	now := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
+	pinClock(t, now)
+	first := now.AddDate(0, 0, -20)
+	second := now.AddDate(0, 0, -10)
+	planned := now.AddDate(0, 3, 0)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/{project}/releases", func(w http.ResponseWriter, _ *http.Request) {
+		data, _ := json.Marshal([]*gl.Release{
+			{Name: "Version 3", TagName: "v3.0.0", ReleasedAt: &planned, UpcomingRelease: true},
+			{TagName: "v1.1.0", ReleasedAt: &second},
+			{TagName: "v1.0.0", ReleasedAt: &first},
+		})
+		respondJSON(w, http.StatusOK, string(data))
+	})
+
+	text := getPromptText(t, mux, "release_cadence", map[string]string{"project_id": "42", "days": "120"})
+
+	for _, want := range []string{
+		"| Total releases | 2 |",
+		"| Average interval | 10d 0h |",
+		"## Upcoming Releases",
+		upcomingNotCounted,
+		"| Version 3 | v3.0.0 | 2027-01-12 |",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("expected %q in:\n%s", want, text)
+			}
+		})
+	}
+	history, _, _ := strings.Cut(text, "## Upcoming Releases")
+	if strings.Contains(history, "v3.0.0") {
+		t.Errorf("the release still to come is part of the history the cadence is measured over:\n%s", text)
+	}
+}
+
+// TestReleaseCadence_OnlyAnUpcomingRelease_SaysNoneWasMadeAndListsIt verifies
+// that a project whose only release is still to come is told so, rather than
+// reported as having released.
+func TestReleaseCadence_OnlyAnUpcomingRelease_SaysNoneWasMadeAndListsIt(t *testing.T) {
+	now := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
+	pinClock(t, now)
+	planned := now.AddDate(0, 0, 7)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/{project}/releases", func(w http.ResponseWriter, _ *http.Request) {
+		data, _ := json.Marshal([]*gl.Release{{TagName: "v1.0.0", ReleasedAt: &planned, UpcomingRelease: true}})
+		respondJSON(w, http.StatusOK, string(data))
+	})
+
+	text := getPromptText(t, mux, "release_cadence", map[string]string{"project_id": "42"})
+
+	for _, want := range []string{"No releases found in the analysis period.", "## Upcoming Releases", upcomingNotCounted, "| v1.0.0 | v1.0.0 | 2026-10-19 |"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("expected %q in:\n%s", want, text)
+			}
+		})
+	}
+	if strings.Contains(text, "Total releases") {
+		t.Errorf("no release was made, yet the report wrote a summary:\n%s", text)
+	}
+}
+
+// TestReleaseCadence_NothingStillToCome_WritesNoUpcomingSection verifies that
+// the "Upcoming Releases" section is written only when a release is still to
+// come, both beside a cadence and in a period with no release made.
+func TestReleaseCadence_NothingStillToCome_WritesNoUpcomingSection(t *testing.T) {
+	now := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
+	made := now.AddDate(0, 0, -10)
+	tests := []struct {
+		name     string
+		releases []*gl.Release
+		want     string
+	}{
+		{"beside a cadence", []*gl.Release{{TagName: "v1.0.0", ReleasedAt: &made}}, "| Total releases | 1 |"},
+		{"in a period with no release made", []*gl.Release{}, "No releases found in the analysis period."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pinClock(t, now)
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /api/v4/projects/{project}/releases", func(w http.ResponseWriter, _ *http.Request) {
+				data, _ := json.Marshal(tt.releases)
+				respondJSON(w, http.StatusOK, string(data))
+			})
+
+			text := getPromptText(t, mux, "release_cadence", map[string]string{"project_id": "42"})
+
+			if !strings.Contains(text, tt.want) {
+				t.Errorf("expected %q in:\n%s", tt.want, text)
+			}
+			if strings.Contains(text, "Upcoming Releases") {
+				t.Errorf("no release is still to come, yet the report lists upcoming releases:\n%s", text)
+			}
+		})
 	}
 }
 
