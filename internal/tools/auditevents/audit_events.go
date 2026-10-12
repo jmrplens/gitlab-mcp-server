@@ -3,10 +3,13 @@ package auditevents
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -17,6 +20,8 @@ import (
 type ListInstanceInput struct {
 	CreatedAfter  string `json:"created_after,omitempty"  jsonschema:"Return events created after this time: an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC"`
 	CreatedBefore string `json:"created_before,omitempty" jsonschema:"Return events created before this time: an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC"`
+	EntityType    string `json:"entity_type,omitempty"    jsonschema:"Return only events of this entity type: Project, User, Group or Gitlab::Audit::InstanceScope"`
+	EntityID      int64  `json:"entity_id,omitempty"      jsonschema:"Return only events of the entity with this ID. Requires entity_type"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
 }
@@ -200,12 +205,36 @@ func ListInstance(ctx context.Context, client *gitlabclient.Client, input ListIn
 	if err != nil {
 		return ListOutput{}, fmt.Errorf("auditListInstance: %w", err)
 	}
-	events, resp, err := client.GL().AuditEvents.ListInstanceAuditEvents(opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
+	if input.EntityID != 0 && input.EntityType == "" {
+		return ListOutput{}, errors.New("auditListInstance: entity_id requires entity_type, since an ID alone names no entity; pass the entity's type (Project, User, Group or Gitlab::Audit::InstanceScope) beside it")
+	}
+	events, resp, err := client.GL().AuditEvents.ListInstanceAuditEvents(opts, gl.WithContext(ctx),
+		toolutil.KeysetContinuation(input.KeysetPaginationInput), entityFilter(input.EntityType, input.EntityID))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("auditListInstance", err, http.StatusForbidden,
-			"requires administrator access; self-managed Premium/Ultimate only; entity_type filters: User, Group, Project")
+			"requires administrator access; self-managed Premium/Ultimate only")
 	}
 	return listOutput(events, resp), nil
+}
+
+// entityFilter adds the entity_type and entity_id filters GET /audit_events
+// takes to the query client-go encoded, which its ListAuditEventsOptions does
+// not model (upstream register row 120). Without an entity_type it returns no
+// option at all, so the query goes out exactly as client-go encoded it;
+// ListInstance refuses an entity_id without one before it gets here.
+func entityFilter(entityType string, entityID int64) gl.RequestOptionFunc {
+	if entityType == "" {
+		return nil
+	}
+	return func(req *retryablehttp.Request) error {
+		query := req.URL.Query()
+		query.Set("entity_type", entityType)
+		if entityID != 0 {
+			query.Set("entity_id", strconv.FormatInt(entityID, 10))
+		}
+		req.URL.RawQuery = query.Encode()
+		return nil
+	}
 }
 
 // GetInstance retrieves a single instance-level audit event.

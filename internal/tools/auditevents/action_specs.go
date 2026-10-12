@@ -61,13 +61,20 @@ func auditEventReadSpec(name string, route toolutil.ActionRoute, individualTool 
 	return toolutil.NewReadActionSpec(name, route, options)
 }
 
+// auditEntityTypes are the entity types GET /audit_events filters by, as
+// AuditEvents::BaseAuditEventFinder::VALID_ENTITY_TYPES lists them.
+var auditEntityTypes = []string{"Project", "User", "Group", "Gitlab::Audit::InstanceScope"}
+
 // decorateAuditEventMeta overlays action-specific discovery metadata
 // (usage, aliases, related actions, and the individual-tool description)
 // onto the shared read-only options for the named audit event tool.
 func decorateAuditEventMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	switch individualTool {
 	case "gitlab_list_instance_audit_events":
-		options.Usage = "List instance-level audit events across the whole GitLab instance. Use when an administrator asks for a security or compliance trail spanning all groups and projects. Filter with created_after and created_before (ISO 8601 dates) and paginate with page and per_page. Requires administrator access on self-managed Premium/Ultimate."
+		options.Usage = "List instance-level audit events across the whole GitLab instance. Use when an administrator asks for a security or compliance trail spanning all groups and projects. Filter with created_after and created_before (ISO 8601 dates), narrow to one kind of entity with entity_type or to one entity with entity_type and entity_id, and paginate with page and per_page. Requires administrator access on self-managed Premium/Ultimate."
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("entity_type", auditEntityTypes...),
+		}
 		options.Aliases = []string{"list instance audit events", "instance audit log", "show admin audit trail", "list all audit events"}
 		options.RelatedActions = []string{actionGetInstance, actionListGroup, actionListProject}
 		options.IndividualTool.Description = "List instance-level audit events (administrator only). Returns: audit events with author, entity, event name/type, details, timestamps, and pagination metadata. See also: gitlab_get_instance_audit_event, gitlab_list_group_audit_events, gitlab_list_project_audit_events."

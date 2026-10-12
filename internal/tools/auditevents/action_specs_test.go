@@ -34,6 +34,33 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_ListInstance_PublishesTheEntityTypesGitLabFiltersBy verifies
+// the instance list publishes entity_type as the closed set GitLab's finder
+// accepts, so a caller picks a value GitLab reads rather than one it answers
+// with a 400.
+func TestActionSpecs_ListInstance_PublishesTheEntityTypesGitLabFiltersBy(t *testing.T) {
+	for _, spec := range ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t))) {
+		if spec.Name != "list_instance" {
+			continue
+		}
+		props, _ := spec.Route.InputSchema["properties"].(map[string]any)
+		entityType, _ := props["entity_type"].(map[string]any)
+		enum, _ := entityType["enum"].([]any)
+		got := make([]string, 0, len(enum))
+		for _, value := range enum {
+			got = append(got, value.(string))
+		}
+		if strings.Join(got, ",") != strings.Join(auditEntityTypes, ",") {
+			t.Errorf("entity_type enum = %v, want %v", got, auditEntityTypes)
+		}
+		if _, ok := props["entity_id"]; !ok {
+			t.Error("list_instance publishes no entity_id")
+		}
+		return
+	}
+	t.Fatal("no list_instance spec")
+}
+
 // TestActionSpecs_DiscoveryMetadata verifies that every spec ActionSpecs
 // returns carries metadata of its own: usage that replaced the shared
 // placeholder, an individual-tool description, aliases beyond the tool name,

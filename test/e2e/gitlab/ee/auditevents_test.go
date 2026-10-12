@@ -111,5 +111,30 @@ func TestAuditEvents_EachScope_ListsAndGetsWhatTheFixtureCaused(t *testing.T) {
 		if instanceEvent.ID != fixtureEventID {
 			e.T.Errorf("get_instance answered event %d, want the fixture's %d", instanceEvent.ID, fixtureEventID)
 		}
+
+		assertInstanceListNarrowsToTheProject(e, s, f.project.ID, projectEvents.AuditEvents[0].ID)
 	})
+}
+
+// assertInstanceListNarrowsToTheProject lists the instance's events with
+// entity_type and entity_id naming the fixture's project, waits until the
+// project's own event is among them, and holds every event answered to that
+// project: a filter the request did not carry would answer the whole
+// instance's trail instead (issue 1308).
+func assertInstanceListNarrowsToTheProject(e *harness.Env, s *harness.Session, projectID, projectEventID int64) {
+	filtered := harness.Eventually(s, actionAuditEventListInstance,
+		map[string]any{"entity_type": "Project", "entity_id": projectID, "per_page": 100},
+		auditEventInterval, auditEventWait, func(out auditevents.ListOutput) bool {
+			for _, event := range out.AuditEvents {
+				if event.ID == projectEventID {
+					return true
+				}
+			}
+			return false
+		})
+	for _, event := range filtered.AuditEvents {
+		if event.EntityType != "Project" || event.EntityID != projectID {
+			e.T.Errorf("list_instance filtered to Project %d answered event %d of %s %d", projectID, event.ID, event.EntityType, event.EntityID)
+		}
+	}
 }

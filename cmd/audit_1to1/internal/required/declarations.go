@@ -140,6 +140,12 @@ func declaredRequiredness() map[declarationKey]declaration {
 		{action: "snippet.project_create", field: "file_name"}:           {DirectionGitLabRequires, categoryConditional, reasonSnippetFileName},
 		{action: "user.create_runner", field: "group_id"}:                {DirectionGitLabRequires, categoryConditional, reasonRunnerScope},
 		{action: "user.create_runner", field: "project_id"}:              {DirectionGitLabRequires, categoryConditional, reasonRunnerScope},
+		{action: "audit_event.list_instance", field: "entity_type"}: {
+			DirectionGitLabRequires, categoryConditional,
+			"ee/lib/api/audit_events.rb requires entity_type only in a given :entity_id block; the record writes it as " +
+				"an unconditional requirement, and a list of every entity takes neither (the handler refuses an " +
+				"entity_id without one, as GitLab would)",
+		},
 
 		// Requirements the handler meets for a caller who leaves the field out.
 		{action: "snippet.project_create", field: "visibility"}: {

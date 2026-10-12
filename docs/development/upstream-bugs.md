@@ -85,6 +85,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The model package file path segment cannot be omitted](#the-model-package-file-path-segment-cannot-be-omitted)
   - [A measure GitLab sends as null decodes as 0](#a-measure-gitlab-sends-as-null-decodes-as-0)
   - [Block, unblock and deactivate drop the answer that says whether anything changed](#block-unblock-and-deactivate-drop-the-answer-that-says-whether-anything-changed)
+  - [ListAuditEventsOptions models neither entity filter the instance list takes](#listauditeventsoptions-models-neither-entity-filter-the-instance-list-takes)
   - [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
@@ -348,6 +349,7 @@ readable without opening the tracker:
 | 116 | client-go | [A measure GitLab sends as null decodes as 0](#a-measure-gitlab-sends-as-null-decodes-as-0) | No; for the joint merge request | No | No | No | Yes, for every measure but a deployable's, which is still left out at 0 |
 | 117 | client-go | [Block, unblock and deactivate drop the answer that says whether anything changed](#block-unblock-and-deactivate-drop-the-answer-that-says-whether-anything-changed) | No; for the joint merge request | No | No | No | Yes, the three handlers read the answer from the captured response |
 | 118 | gitlab-org/gitlab | [The REST delete of a locked Terraform state answers 200 and deletes nothing](#the-rest-delete-of-a-locked-terraform-state-answers-200-and-deletes-nothing) | No | No | No | No | Yes, `admin.terraform_state_delete` reads the state first and refuses a locked one |
+| 120 | client-go | [ListAuditEventsOptions models neither entity filter the instance list takes](#listauditeventsoptions-models-neither-entity-filter-the-instance-list-takes) | No | No | No | No | Yes, `audit_event.list_instance` adds `entity_type` and `entity_id` to the query through a request option |
 | 126 | client-go | [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date) | No | No | No | No | Yes, `user.add_ssh_key`, `user.add_ssh_key_for_user`, `snippet.list_all` and the two changelog actions leave the field unset and write the instant given through a request option |
 | 127 | gitlab-org/gitlab | [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text) | No | No | No | No; GitLab's pages leave such a submodule unlinked | Yes, `repository.list_submodules` and `repository.read_submodule_file` resolve a sibling namespace and the other spellings of the instance's clone URLs |
 
@@ -6246,6 +6248,40 @@ so the status already tells their outcome.
 
 **Effort**: small: return the decoded bool, a signature change that a major
 release of client-go carries, with a test per answer.
+
+### ListAuditEventsOptions models neither entity filter the instance list takes
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no. v3.17.0 carries the same struct.
+- **Blocking**: no.
+- **Workaround**: yes. `audit_event.list_instance` takes `entity_type` and
+  `entity_id` and adds them to the query client-go has encoded through a
+  request option of its own (`entityFilter` in
+  `internal/tools/auditevents/audit_events.go`), and refuses an `entity_id`
+  without an `entity_type` before any request, as GitLab would. It retires
+  when the struct carries both fields.
+
+**Where**: `audit_events.go`, `ListAuditEventsOptions`, which
+`ListInstanceAuditEvents` sends to `GET /audit_events` and the group and
+project lists to their own routes.
+
+**What**: the struct carries the page, `created_after` and `created_before`
+and nothing else, while the instance route
+(`ee/lib/api/audit_events.rb`) also takes `entity_type`, one of `Project`,
+`User`, `Group` and `Gitlab::Audit::InstanceScope`, and `entity_id`, which
+requires `entity_type` beside it. Without them an administrator after one
+project's or one user's trail has to page through every event of the
+instance. The group and project routes take neither, since the entity is in
+their path, so one struct serving all three is right about them and short
+only for the instance list.
+
+**How we found it**: issue 1308. The 403 hint of `audit_event.list_instance`
+told a caller without administrator access to narrow the list by entity,
+which the tool could not do.
+
+**Effort**: small: two fields with `url` tags, and a test that each reaches
+the query.
 
 ### Three option structs carry a timestamp parameter as a date
 
