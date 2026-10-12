@@ -1227,6 +1227,40 @@ func TestFormatNoteMarkdown(t *testing.T) {
 	}
 }
 
+// TestNoteMarkdown_ResourceEvent_IsNamedByItsGlobalID verifies that a note
+// GitLab synthesizes from a resource event is named by its global ID in the
+// note card and in a thread, and that the card says why no note action takes
+// it (issue 1304).
+//
+// Such a note has no numeric ID: GitLab's NoteType answers it with a global
+// ID ending in the hexadecimal discussion ID. Both renderers wrote the
+// numeric ID alone, so every event of an epic read as "note 0" or "#0", an
+// ID GitLab never assigned and one a model then handed to the note actions.
+func TestNoteMarkdown_ResourceEvent_IsNamedByItsGlobalID(t *testing.T) {
+	event := NewNoteMarkdown(0, "set weight to 3", "admin", "2026-05-17T12:00:00Z", NoteMarkdownFlags{System: true}, "")
+	event.EventGID = "gid://gitlab/WeightNote/0f3c9a1e"
+
+	card := FormatNoteMarkdown(event, NoteMarkdownOptions{Title: "Epic Note", Hints: []string{"Use action 'group.epic_get' to read the epic"}})
+	wantCard := "## Epic Note gid://gitlab/WeightNote/0f3c9a1e\n\n" +
+		"- **Author**: @admin\n" +
+		"- **Created**: 17 May 2026 12:00 UTC\n" +
+		"- **System note**\n" +
+		"- **Body**: set weight to 3\n\n" +
+		"GitLab records this resource event as a note with no note ID, so no note action can read, edit or delete it.\n" +
+		hintsSection("Use action 'group.epic_get' to read the epic")
+	if card != wantCard {
+		t.Errorf("note card:\n got %q\nwant %q", card, wantCard)
+	}
+
+	thread := FormatDiscussionMarkdown(NewDiscussionMarkdown("0f3c9a1e", []NoteMarkdown{event}))
+	wantThread := "## Discussion 0f3c9a1e\n\n" +
+		"- **@admin** (17 May 2026 12:00 UTC, resource event gid://gitlab/WeightNote/0f3c9a1e):\n" +
+		"  > set weight to 3\n"
+	if thread != wantThread {
+		t.Errorf("thread:\n got %q\nwant %q", thread, wantThread)
+	}
+}
+
 // TestFormatNoteMarkdown_QuickActions_SectionAfterTheBody verifies the card
 // of a note whose body carried quick actions: the note's own rows first, then
 // a section naming the commands, what they did and what they failed to do,

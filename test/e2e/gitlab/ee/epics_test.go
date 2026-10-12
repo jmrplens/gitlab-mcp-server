@@ -11,6 +11,7 @@ package ee
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/epicdiscussions"
@@ -435,6 +436,60 @@ type epicLabelFixture struct {
 func buildEpicLabelFixture(e *harness.Env) epicLabelFixture {
 	group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("epiclabel"))
 	return epicLabelFixture{group: group, label: fixture.NewGroupLabel(e, group, "epic")}
+}
+
+// TestEpicNotes_LabelEvent_IsNamedByItsGlobalIDNotNoteZero puts the fixture
+// label on an epic of its own per surface and reads the epic's notes and
+// threads, where GitLab answers the label change as a note it synthesizes
+// from the event (issue 1304). That note has a global ID ending in the
+// hexadecimal discussion ID rather than a number, and both listings used to
+// publish it as note 0, an ID GitLab never assigned and every event shared.
+// Each listing must carry the event with its global ID and marked as one,
+// and no note anywhere with id 0 and nothing to name it by.
+func TestEpicNotes_LabelEvent_IsNamedByItsGlobalIDNotNoteZero(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, buildEpicLabelFixture, func(e *harness.Env, surface harness.Surface, f epicLabelFixture) {
+		s := e.On(surface)
+		epic := fixture.NewEpic(e, f.group, e.Name("epic"))
+		params := epicParams(epic)
+		harness.DoVoid(s, actionEpicUpdate, withParams(params, map[string]any{"add_label_ids": []int64{f.label.ID}}))
+
+		notes := harness.Eventually(s, actionEpicNoteList, params, resourceEventInterval, resourceEventWait,
+			func(out epicnotes.ListOutput) bool {
+				return slices.ContainsFunc(out.Notes, func(n epicnotes.Output) bool { return n.ResourceEvent })
+			})
+		for _, n := range notes.Notes {
+			assertNoteNamed(e, "epic_note_list", n.ID, n.GID, n.ResourceEvent)
+		}
+
+		threads := harness.Do[epicdiscussions.ListOutput](s, actionEpicDiscussionList, params)
+		events := 0
+		for _, thread := range threads.Discussions {
+			for _, n := range thread.Notes {
+				assertNoteNamed(e, "epic_discussion_list", n.ID, n.GID, n.ResourceEvent)
+				if n.ResourceEvent {
+					events++
+				}
+			}
+		}
+		if events == 0 {
+			e.T.Errorf("epic_discussion_list answered no resource event for the label put on the epic: %+v", threads.Discussions)
+		}
+	})
+}
+
+// assertNoteNamed checks that a listed epic note can be named: a note with
+// an ID is one, and a note without one is a resource event carrying the
+// global ID GitLab gave it.
+func assertNoteNamed(e *harness.Env, action string, id int64, gid string, resourceEvent bool) {
+	e.T.Helper()
+	if id == 0 && !resourceEvent {
+		e.T.Errorf("%s answered note 0 that is not marked as a resource event (gid %q)", action, gid)
+	}
+	if resourceEvent && !strings.HasPrefix(gid, "gid://gitlab/") {
+		e.T.Errorf("%s answered a resource event without the global ID GitLab gave it: %q", action, gid)
+	}
 }
 
 // TestEpicLabelEvents_LabelAddedAndRemoved_EventsOrTheDocumentedRefusal

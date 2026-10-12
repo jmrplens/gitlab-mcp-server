@@ -863,9 +863,16 @@ func FormatDiscussionMarkdown(discussion DiscussionMarkdown, hints ...string) st
 // wherever it sits, so a one-line body is a value and gets the inline
 // escaper. A body that spans lines keeps its own markup inside the quote, as
 // every description in the tree does.
+//
+// A note GitLab synthesizes from a resource event has no ID, so it is named
+// by its global ID and as the event it is, rather than as note 0.
 func writeDiscussionNotes(b *strings.Builder, notes []NoteMarkdown) {
 	for _, note := range notes {
-		fmt.Fprintf(b, "- **@%s** (%s, note %d):\n", EscapeMdTableCell(note.Author), FormatTime(note.CreatedAt), note.ID)
+		ref := "note " + strconv.FormatInt(note.ID, 10)
+		if note.EventGID != "" {
+			ref = "resource event " + EscapeMdTableCell(note.EventGID)
+		}
+		fmt.Fprintf(b, "- **@%s** (%s, %s):\n", EscapeMdTableCell(note.Author), FormatTime(note.CreatedAt), ref)
 		body := note.Body
 		if !strings.ContainsAny(body, "\r\n") {
 			body = cardInline(body)
@@ -1020,6 +1027,11 @@ type NoteMarkdown struct {
 	// QuickActions is what a note mutation reported about the quick actions
 	// the body carried, nil for a note read back or a body that carried none.
 	QuickActions *QuickActionsStatusOutput
+	// EventGID is the global ID of a note GitLab synthesizes from a resource
+	// event (a label, state, milestone, iteration or weight change), which
+	// has no numeric ID: such a note is named by it, and "" names the note by
+	// ID as every other note is.
+	EventGID string
 }
 
 // NoteMarkdownFlags groups boolean note attributes for Markdown view-model
@@ -1065,9 +1077,16 @@ type NoteMarkdownOptions struct {
 // has one, the body as the card's long text, quoted under its label when it
 // spans more than one line, and what the quick actions in the body did when
 // a mutation reported it.
+//
+// A note GitLab synthesizes from a resource event has no ID, so its card is
+// headed by its global ID and says why no note action takes it.
 func FormatNoteMarkdown(note NoteMarkdown, opts NoteMarkdownOptions) string {
 	var b strings.Builder
-	c := NewCard(&b, fmt.Sprintf("%s #%d", opts.Title, note.ID))
+	heading := fmt.Sprintf("%s #%d", opts.Title, note.ID)
+	if note.EventGID != "" {
+		heading = opts.Title + " " + note.EventGID
+	}
+	c := NewCard(&b, heading)
 	c.Markdown("Author", MdUserHandle(note.Author))
 	c.Time("Created", note.CreatedAt)
 	c.Flag("", "System note", note.System)
@@ -1082,9 +1101,16 @@ func FormatNoteMarkdown(note NoteMarkdown, opts NoteMarkdownOptions) string {
 	}
 	c.Text("Body", note.Body)
 	writeQuickActionsSection(c, note.QuickActions)
+	if note.EventGID != "" {
+		c.Note(resourceEventNote)
+	}
 	c.End(opts.Hints...)
 	return b.String()
 }
+
+// resourceEventNote is the sentence a resource event's card carries: the ID
+// every note action takes is the one thing such a note does not have.
+const resourceEventNote = "GitLab records this resource event as a note with no note ID, so no note action can read, edit or delete it."
 
 // quickActionsOnlyNote is the sentence a card opens with when a body held
 // nothing but quick actions and GitLab therefore kept no note.

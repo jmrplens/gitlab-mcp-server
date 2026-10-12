@@ -277,10 +277,9 @@ func nodeToNoteOutput(n gqlNoteNode) NoteOutput {
 		ResolvedAt:     n.ResolvedAt,
 		ResolvedBy:     n.ResolvedBy.username(),
 		URL:            n.URL,
+		GID:            n.ID,
 	}
-	if _, id, err := toolutil.ParseGID(n.ID); err == nil {
-		out.ID = id
-	}
+	out.ID, out.ResourceEvent = toolutil.NoteIDFromGID(n.ID)
 	if n.CreatedAt != nil {
 		out.CreatedAt = *n.CreatedAt
 	}
@@ -380,9 +379,17 @@ type DeleteNoteInput struct {
 // what the commands did. A reply whose body held nothing but quick actions
 // answers with the status and no note, id 0, since GitLab ran the commands
 // and kept none.
+//
+// gid is the note's GraphQL global ID as GitLab answered it, on every note.
+// It is the only identifier of a note GitLab synthesizes from a resource
+// event (a label, state, milestone, iteration or weight change), whose global
+// ID ends in a hexadecimal discussion ID rather than a number: such a note
+// carries id 0 and resource_event true, and no note action can address it.
 type NoteOutput struct {
 	toolutil.HintableOutput
 	ID                 int64                              `json:"id"`
+	GID                string                             `json:"gid,omitempty"`
+	ResourceEvent      bool                               `json:"resource_event,omitempty"`
 	Body               string                             `json:"body"`
 	Author             string                             `json:"author"`
 	CreatedAt          string                             `json:"created_at"`

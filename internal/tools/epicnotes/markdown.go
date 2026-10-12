@@ -35,8 +35,24 @@ func toNoteMarkdown(n Output) toolutil.NoteMarkdown {
 		toolutil.NoteMarkdownFlags{System: n.System, Internal: n.Internal, Resolvable: n.Resolvable, Resolved: n.Resolved},
 		noteResolverUsername(n))
 	note.QuickActions = n.QuickActionsStatus
+	if n.ResourceEvent {
+		note.EventGID = n.GID
+	}
 	return note
 }
+
+// noteRef is how a list row names a note: its ID, or the global ID of a note
+// GitLab synthesizes from a resource event, which has none.
+func noteRef(n Output) string {
+	if n.ResourceEvent {
+		return toolutil.EscapeMdTableCell(n.GID)
+	}
+	return strconv.FormatInt(n.ID, 10)
+}
+
+// resourceEventRows is the sentence a list carrying a resource event ends
+// its table with, since the next steps below it name note_id.
+const resourceEventRows = "A row identified by a global ID is a resource event GitLab records as a note with no note ID: no note action can read, edit or delete it."
 
 // epicNoteTitle is the heading every epic note card opens with.
 const epicNoteTitle = "Epic Note"
@@ -56,14 +72,18 @@ func FormatOutputMarkdown(n Output) string {
 			toolutil.HintAction(actionEpicNoteList, "read the epic's notes"),
 		)
 	}
+	hints := []string{
+		"Use action 'epic_note_update' with note_id to edit this note",
+		"Use action 'epic_note_delete' with note_id to remove this note",
+	}
+	if n.ResourceEvent {
+		hints = []string{toolutil.HintAction(actionEpicGet, "read the epic the event changed")}
+	}
 	return toolutil.FormatNoteMarkdown(toNoteMarkdown(n), toolutil.NoteMarkdownOptions{
 		Title:             epicNoteTitle,
 		IncludeInternal:   true,
 		IncludeResolvable: true,
-		Hints: []string{
-			"Use action 'epic_note_update' with note_id to edit this note",
-			"Use action 'epic_note_delete' with note_id to remove this note",
-		},
+		Hints:             hints,
 	})
 }
 
@@ -79,9 +99,11 @@ func FormatListMarkdown(out ListOutput) string {
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Epic Notes", len(out.Notes), toolutil.PaginationOutput{})
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Author", "Created", "System", "Internal"))
+	events := false
 	for _, n := range out.Notes {
+		events = events || n.ResourceEvent
 		b.WriteString(toolutil.MarkdownTableRow(
-			strconv.FormatInt(n.ID, 10),
+			noteRef(n),
 			toolutil.EscapeMdTableCell(noteAuthorUsername(n)),
 			toolutil.FormatTime(n.CreatedAt),
 			toolutil.BoolEmoji(n.System),
@@ -92,6 +114,9 @@ func FormatListMarkdown(out ListOutput) string {
 		HasNextPage: out.Pagination.HasNextPage,
 		EndCursor:   out.Pagination.EndCursor,
 	}, len(out.Notes))
+	if events {
+		b.WriteString("\n" + resourceEventRows + "\n")
+	}
 	toolutil.WriteHints(
 		&b,
 		"Use action 'epic_note_get' with note_id to read a specific note",

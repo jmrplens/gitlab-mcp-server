@@ -176,6 +176,33 @@ func TestParseGID_Roundtrip(t *testing.T) {
 	}
 }
 
+// TestNoteIDFromGID verifies the three shapes a note's global ID takes: a
+// note GitLab stores has a number, a note it synthesizes from a resource
+// event has a GitLab global ID ending in something else and is reported as
+// an event, and a value that is no GitLab global ID at all is neither.
+func TestNoteIDFromGID(t *testing.T) {
+	tests := []struct {
+		name      string
+		gid       string
+		wantID    int64
+		wantEvent bool
+	}{
+		{name: "a stored note", gid: "gid://gitlab/Note/100", wantID: 100},
+		{name: "a weight event", gid: "gid://gitlab/WeightNote/0f3c9a1e5b7d", wantEvent: true},
+		{name: "a label event", gid: "gid://gitlab/LabelNote/9a8b7c6d", wantEvent: true},
+		{name: "no global ID at all", gid: "not-a-global-id"},
+		{name: "empty", gid: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			id, event := NoteIDFromGID(tt.gid)
+			if id != tt.wantID || event != tt.wantEvent {
+				t.Errorf("NoteIDFromGID(%q) = (%d, %t), want (%d, %t)", tt.gid, id, event, tt.wantID, tt.wantEvent)
+			}
+		})
+	}
+}
+
 // TestGraphQLTopLevelError verifies top-level GraphQL errors are joined into an
 // operation-specific error message.
 //

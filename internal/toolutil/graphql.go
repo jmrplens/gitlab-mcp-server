@@ -775,6 +775,20 @@ func ParseGID(gid string) (typeName string, id int64, err error) {
 	return typeName, id, nil
 }
 
+// NoteIDFromGID reads a note's numeric ID out of the global ID GitLab
+// answered it with, and reports whether the note is one GitLab synthesizes
+// from a resource event: a label, state, milestone, iteration or weight
+// change GitLab's NoteType answers with a global ID ending in the
+// hexadecimal discussion ID (gid://gitlab/WeightNote/0f3c...), which carries
+// no number. Such a note has ID 0 and no note action can address it; a value
+// that is not a GitLab global ID at all is neither a number nor an event.
+func NoteIDFromGID(gid string) (id int64, resourceEvent bool) {
+	if _, parsed, err := ParseGID(gid); err == nil {
+		return parsed, false
+	}
+	return 0, strings.HasPrefix(gid, "gid://gitlab/")
+}
+
 // MergeVariables merges multiple variable maps into a single map.
 // Later maps override earlier ones for duplicate keys.
 func MergeVariables(sources ...map[string]any) map[string]any {

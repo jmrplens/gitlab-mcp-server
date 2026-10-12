@@ -482,11 +482,13 @@ func TestList(t *testing.T) {
 					t.Fatalf("len(Notes) = %d, want 2", len(out.Notes))
 				}
 				assertEpicNote(t, "Notes[0]", out.Notes[0], Output{
+					GID:    "not-a-global-id",
 					Body:   "unparseable identifiers",
 					Author: &NoteUserOutput{Username: "nobody", Name: "Nobody"},
 				})
 				assertEpicNote(t, "Notes[1]", out.Notes[1], Output{
 					ID:        103,
+					GID:       "gid://gitlab/Note/103",
 					Body:      "author without an id",
 					Author:    &NoteUserOutput{Username: "ghost", Name: "Ghost"},
 					CreatedAt: "2026-01-18T09:00:00Z",
@@ -591,6 +593,81 @@ func TestList(t *testing.T) {
 // timestamps in this fixture do not, since GitLab writes both at once on a note
 // nobody has edited; the pair that a swapped assignment shows up in is the
 // update mutation's, whose created and updated moments are a day apart.
+// gqlNotesResourceEventData is an epic's notes widget holding a comment and
+// the two notes GitLab synthesizes when a weight is set and a label added:
+// their global IDs end in the hexadecimal discussion ID, not a number, which
+// is how GitLab's NoteType answers every resource event note.
+const gqlNotesResourceEventData = `{
+	"namespace": {
+		"workItem": {
+			"id": "gid://gitlab/WorkItem/1",
+			"widgets": [{
+				"discussions": {
+					"pageInfo": {"hasNextPage": false, "endCursor": null},
+					"nodes": [
+						{"notes": {"nodes": [{"id": "gid://gitlab/WeightNote/0f3c9a1e5b7d2468ace0f3c9a1e5b7d2468ace01", "body": "set weight to 3", "author": {"id": "gid://gitlab/User/1", "name": "Administrator", "username": "admin"}, "system": true, "createdAt": "2026-01-15T12:00:00Z", "updatedAt": "2026-01-15T12:00:00Z"}]}},
+						{"notes": {"nodes": [{"id": "gid://gitlab/LabelNote/9a8b7c6d5e4f30211a2b3c4d5e6f708192a3b4c5", "body": "added ~bug label", "author": {"id": "gid://gitlab/User/1", "name": "Administrator", "username": "admin"}, "system": true, "createdAt": "2026-01-15T12:05:00Z", "updatedAt": "2026-01-15T12:05:00Z"}]}},
+						{"notes": {"nodes": [{"id": "gid://gitlab/Note/104", "body": "a comment", "author": {"id": "gid://gitlab/User/5", "name": "Alice Example", "username": "alice"}, "system": false, "createdAt": "2026-01-15T12:10:00Z", "updatedAt": "2026-01-15T12:10:00Z"}]}}
+					]
+				}
+			}]
+		}
+	}
+}`
+
+// TestList_ResourceEventNotes_CarryTheirGlobalIDAndNoNoteID verifies that a
+// note GitLab synthesizes from a resource event is published with the global
+// ID GitLab gave it and marked as a resource event, while a comment beside it
+// keeps its number (issue 1304).
+//
+// The converter kept a note's ID only when the global ID parsed as a number,
+// so every weight, label, state, milestone and iteration event on an epic was
+// published as note 0: an ID GitLab never assigned, shared by all of them,
+// and one a model then handed to the note actions, which address nothing by
+// it.
+func TestList_ResourceEventNotes_CarryTheirGlobalIDAndNoNoteID(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, gqlNotesResourceEventData)
+		},
+	})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{FullPath: testFullPath, IID: 1})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(out.Notes) != 3 {
+		t.Fatalf("len(Notes) = %d, want 3", len(out.Notes))
+	}
+	admin := &NoteUserOutput{ID: 1, Username: "admin", Name: "Administrator"}
+	assertEpicNote(t, "Notes[0]", out.Notes[0], Output{
+		GID:           "gid://gitlab/WeightNote/0f3c9a1e5b7d2468ace0f3c9a1e5b7d2468ace01",
+		ResourceEvent: true,
+		Body:          "set weight to 3",
+		Author:        admin,
+		CreatedAt:     "2026-01-15T12:00:00Z",
+		UpdatedAt:     "2026-01-15T12:00:00Z",
+		System:        true,
+	})
+	assertEpicNote(t, "Notes[1]", out.Notes[1], Output{
+		GID:           "gid://gitlab/LabelNote/9a8b7c6d5e4f30211a2b3c4d5e6f708192a3b4c5",
+		ResourceEvent: true,
+		Body:          "added ~bug label",
+		Author:        admin,
+		CreatedAt:     "2026-01-15T12:05:00Z",
+		UpdatedAt:     "2026-01-15T12:05:00Z",
+		System:        true,
+	})
+	assertEpicNote(t, "Notes[2]", out.Notes[2], Output{
+		ID:        104,
+		GID:       "gid://gitlab/Note/104",
+		Body:      "a comment",
+		Author:    &NoteUserOutput{ID: 5, Username: "alice", Name: "Alice Example"},
+		CreatedAt: "2026-01-15T12:10:00Z",
+		UpdatedAt: "2026-01-15T12:10:00Z",
+	})
+}
+
 func assertEpicNotesList(t *testing.T, out ListOutput) {
 	t.Helper()
 	if len(out.Notes) != 2 {
@@ -599,6 +676,7 @@ func assertEpicNotesList(t *testing.T, out ListOutput) {
 	assertEpicNote(t, "Notes[0]", out.Notes[0], wantFixtureNote100())
 	assertEpicNote(t, "Notes[1]", out.Notes[1], Output{
 		ID:           101,
+		GID:          "gid://gitlab/Note/101",
 		Body:         "changed the description",
 		Author:       &NoteUserOutput{ID: 1, Username: "admin", Name: "Administrator"},
 		CreatedAt:    "2026-01-15T12:00:00Z",
@@ -616,6 +694,7 @@ func assertEpicNotesList(t *testing.T, out ListOutput) {
 func wantFixtureNote100() Output {
 	return Output{
 		ID:   100,
+		GID:  "gid://gitlab/Note/100",
 		Body: "This looks good",
 		Author: &NoteUserOutput{
 			ID:        5,
@@ -891,6 +970,7 @@ func TestCreate(t *testing.T) {
 				t.Helper()
 				assertEpicNote(t, "Create()", out, Output{
 					ID:        200,
+					GID:       "gid://gitlab/Note/200",
 					Body:      "New comment",
 					Author:    &NoteUserOutput{ID: 5, Username: "alice", Name: "Alice Example"},
 					CreatedAt: "2026-01-16T10:00:00Z",
@@ -914,6 +994,7 @@ func TestCreate(t *testing.T) {
 				t.Helper()
 				assertEpicNote(t, "Create()", out, Output{
 					ID:        201,
+					GID:       "gid://gitlab/Note/201",
 					Body:      "Triaged",
 					Author:    &NoteUserOutput{ID: 5, Username: "alice", Name: "Alice Example"},
 					CreatedAt: "2026-01-16T10:00:00Z",
@@ -1125,6 +1206,7 @@ func TestUpdate(t *testing.T) {
 				t.Helper()
 				assertEpicNote(t, "Update()", out, Output{
 					ID:        100,
+					GID:       "gid://gitlab/Note/100",
 					Body:      "Updated comment",
 					Author:    &NoteUserOutput{ID: 5, Username: "alice", Name: "Alice Example"},
 					CreatedAt: "2026-01-15T10:00:00Z",
@@ -1149,6 +1231,7 @@ func TestUpdate(t *testing.T) {
 				t.Helper()
 				assertEpicNote(t, "Update()", out, Output{
 					ID:        100,
+					GID:       "gid://gitlab/Note/100",
 					Body:      "Updated comment",
 					Author:    &NoteUserOutput{ID: 5, Username: "alice", Name: "Alice Example"},
 					CreatedAt: "2026-01-15T10:00:00Z",
@@ -1525,6 +1608,25 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				noteHintsBlock,
 		},
 		{
+			name: "renders a resource event by its global ID with no note action to follow",
+			input: Output{
+				GID:           "gid://gitlab/WeightNote/0f3c9a1e",
+				ResourceEvent: true,
+				Body:          "set weight to 3",
+				Author:        authorObj("admin"),
+				CreatedAt:     "2026-01-15T12:00:00Z",
+				System:        true,
+			},
+			want: "## Epic Note gid://gitlab/WeightNote/0f3c9a1e\n\n" +
+				"- **Author**: @admin\n" +
+				"- **Created**: 15 Jan 2026 12:00 UTC\n" +
+				"- **System note**\n" +
+				"- **Body**: set weight to 3\n\n" +
+				"GitLab records this resource event as a note with no note ID, so no note action can read, edit or delete it.\n" +
+				"\n---\n💡 **Next steps:**\n" +
+				"- Use action 'group.epic_get' to read the epic the event changed\n",
+		},
+		{
 			name: "renders a body of quick actions alone as the commands and no note",
 			input: Output{
 				QuickActionsStatus: &toolutil.QuickActionsStatusOutput{
@@ -1590,6 +1692,23 @@ func TestFormatListMarkdown(t *testing.T) {
 				"| --- | --- | --- | --- | --- |\n" +
 				"| 100 | alice | 15 Jan 2026 10:00 UTC | ❌ | ❌ |\n\n" +
 				"Showing 1 items | next page cursor: `eyJpZCI6IjEwMCJ9`\n" +
+				listHintsBlock,
+		},
+		{
+			name: "identifies a resource event by its global ID and says no note action takes it",
+			input: ListOutput{
+				Notes: []Output{
+					{GID: "gid://gitlab/WeightNote/0f3c9a1e", ResourceEvent: true, Author: authorObj("admin"), CreatedAt: "2026-01-15T12:00:00Z", System: true},
+					{ID: 104, GID: "gid://gitlab/Note/104", Author: authorObj("alice"), CreatedAt: "2026-01-15T12:10:00Z"},
+				},
+			},
+			want: "## Epic Notes (2)\n\n" +
+				"| ID | Author | Created | System | Internal |\n" +
+				"| --- | --- | --- | --- | --- |\n" +
+				"| gid://gitlab/WeightNote/0f3c9a1e | admin | 15 Jan 2026 12:00 UTC | ✅ | ❌ |\n" +
+				"| 104 | alice | 15 Jan 2026 12:10 UTC | ❌ | ❌ |\n\n" +
+				"Showing 2 items | no more pages\n\n" +
+				"A row identified by a global ID is a resource event GitLab records as a note with no note ID: no note action can read, edit or delete it.\n" +
 				listHintsBlock,
 		},
 		{

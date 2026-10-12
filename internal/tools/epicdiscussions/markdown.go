@@ -9,12 +9,24 @@ func FormatListMarkdownString(out ListOutput) string {
 	return markdownRenderer.FormatGraphQLForwardList(toolutil.DiscussionMarkdowns(out.Discussions, toMarkdownDiscussion), out.Pagination)
 }
 
+// readThreadsHint is the next step to the epic's thread list, which every
+// card here that has no note to act on offers.
+const readThreadsHint = "read the epic's threads"
+
 // quickActionsOnlyHints are the next steps of a body that held only quick
 // actions: there is no thread or note to act on, only the epic the commands
 // changed.
 var quickActionsOnlyHints = []string{
 	toolutil.HintAction(actionEpicGet, "see what the quick actions changed on the epic"),
-	toolutil.HintAction(actionDiscussionList, "read the epic's threads"),
+	toolutil.HintAction(actionDiscussionList, readThreadsHint),
+}
+
+// resourceEventHints are the next steps of a thread GitLab synthesized from
+// a resource event: its notes have no note ID, so no note action can address
+// them, and what the event changed is on the epic.
+var resourceEventHints = []string{
+	toolutil.HintAction(actionEpicGet, "read the epic the event changed"),
+	toolutil.HintAction(actionDiscussionList, readThreadsHint),
 }
 
 // FormatMarkdownString renders a discussion as Markdown. A thread-opening
@@ -22,14 +34,34 @@ var quickActionsOnlyHints = []string{
 // renders the commands alone rather than a thread with nothing in it. The
 // test is the notes rather than the id: GitLab can answer a note it kept
 // without naming the thread it opened, and that note is shown, with the
-// commands beside it.
+// commands beside it. A thread of resource events alone ends with the epic
+// and its threads rather than a reply, as the event's note card does, since
+// GitLab synthesized the thread from the event and none of its notes is one
+// a note action can address (issue 1304).
 func FormatMarkdownString(out Output) string {
 	if len(out.Notes) == 0 && out.QuickActionsStatus != nil {
 		return toolutil.FormatQuickActionsOnlyMarkdown("Epic Discussion", *out.QuickActionsStatus, quickActionsOnlyHints...)
 	}
 	discussion := toMarkdownDiscussion(out)
 	discussion.QuickActions = out.QuickActionsStatus
+	if resourceEventsOnly(out.Notes) {
+		return toolutil.FormatDiscussionMarkdown(discussion, resourceEventHints...)
+	}
 	return markdownRenderer.FormatDiscussion(discussion)
+}
+
+// resourceEventsOnly reports whether a thread holds notes and every one of
+// them is a note GitLab synthesized from a resource event.
+func resourceEventsOnly(notes []NoteOutput) bool {
+	if len(notes) == 0 {
+		return false
+	}
+	for _, note := range notes {
+		if !note.ResourceEvent {
+			return false
+		}
+	}
+	return true
 }
 
 // FormatNoteMarkdownString renders a note as Markdown: the note card every
@@ -43,11 +75,15 @@ func FormatNoteMarkdownString(out NoteOutput) string {
 	}
 	note := toMarkdownNote(out)
 	note.QuickActions = out.QuickActionsStatus
+	hints := markdownRenderer.NoteHints
+	if out.ResourceEvent {
+		hints = []string{toolutil.HintAction(actionDiscussionList, readThreadsHint)}
+	}
 	return toolutil.FormatNoteMarkdown(note, toolutil.NoteMarkdownOptions{
 		Title:             "Discussion Note",
 		IncludeInternal:   true,
 		IncludeResolvable: true,
-		Hints:             markdownRenderer.NoteHints,
+		Hints:             hints,
 	})
 }
 
@@ -62,9 +98,13 @@ func toMarkdownDiscussion(out Output) toolutil.DiscussionMarkdown {
 // shows the internal flag; the thread card lists its notes by author and
 // time, as every discussion family's does, and carries no flags.
 func toMarkdownNote(out NoteOutput) toolutil.DiscussionNoteMarkdown {
-	return toolutil.NewNoteMarkdown(out.ID, out.Body, out.Author, out.CreatedAt,
+	note := toolutil.NewNoteMarkdown(out.ID, out.Body, out.Author, out.CreatedAt,
 		toolutil.NoteMarkdownFlags{System: out.System, Internal: out.Internal, Resolvable: out.Resolvable, Resolved: out.Resolved},
 		out.ResolvedBy)
+	if out.ResourceEvent {
+		note.EventGID = out.GID
+	}
+	return note
 }
 
 func init() {

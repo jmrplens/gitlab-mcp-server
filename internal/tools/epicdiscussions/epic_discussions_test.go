@@ -586,6 +586,10 @@ func TestList_NoteIDGitLabSpelledUnparseably_KeepsTheRestOfTheThread(t *testing.
 	if notes[0].ID != 0 {
 		t.Errorf("notes[0].ID = %d, want 0 for a GID that carries no integer", notes[0].ID)
 	}
+	if notes[0].GID != "gid://gitlab/Note/not-a-number" || !notes[0].ResourceEvent {
+		t.Errorf("notes[0] gid = %q, resource_event = %t, want the global ID GitLab sent and the note marked as no note action's to address",
+			notes[0].GID, notes[0].ResourceEvent)
+	}
 	if notes[0].Body != "first note" {
 		t.Errorf("notes[0].Body = %q, want the note published regardless of its id", notes[0].Body)
 	}
@@ -763,14 +767,14 @@ func TestList_EveryFieldGitLabSendsIsPublished(t *testing.T) {
 		Resolvable: true, Resolved: true, ResolvedAt: "2026-01-03T00:00:00Z", ResolvedBy: "erin",
 		Notes: []NoteOutput{
 			{
-				ID: 100, Body: "first note", Author: "alice", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z",
+				ID: 100, GID: "gid://gitlab/Note/100", Body: "first note", Author: "alice", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z",
 				Internal: true, Imported: true, ExternalAuthor: "reporter@example.com",
 				LastEditedAt: "2026-01-02T12:00:00Z", LastEditedBy: "carol",
 				NoteableID: 41, NoteableType: "Issue", Resolvable: true, Resolved: true, ResolvedAt: "2026-01-03T00:00:00Z",
 				ResolvedBy: "dave", URL: "https://gitlab.example.com/groups/my-group/-/epics/1#note_100",
 			},
 			{
-				ID: 101, Body: "reply", Author: "bob", CreatedAt: "2026-01-02T00:00:00Z",
+				ID: 101, GID: "gid://gitlab/Note/101", Body: "reply", Author: "bob", CreatedAt: "2026-01-02T00:00:00Z",
 				NoteableID: 41, NoteableType: "Issue", Resolvable: true,
 			},
 		},
@@ -1095,7 +1099,7 @@ func TestCreate(t *testing.T) {
 				t.Helper()
 				want := Output{
 					ID:                 "d2hex",
-					Notes:              []NoteOutput{{ID: 200, Body: "new thread", Author: "carol", CreatedAt: "2026-01-03T00:00:00Z"}},
+					Notes:              []NoteOutput{{ID: 200, GID: "gid://gitlab/Note/200", Body: "new thread", Author: "carol", CreatedAt: "2026-01-03T00:00:00Z"}},
 					QuickActionsStatus: &toolutil.QuickActionsStatusOutput{CommandNames: []string{"label"}, Messages: []string{"Added ~bug label."}},
 				}
 				if !reflect.DeepEqual(out, want) {
@@ -1299,7 +1303,7 @@ func TestAddNote(t *testing.T) {
 			check: func(t *testing.T, out NoteOutput) {
 				t.Helper()
 				assertNoteOutput(t, "AddNote()", out, NoteOutput{
-					ID: 201, Body: "reply body", Author: "dave", CreatedAt: "2026-01-04T00:00:00Z",
+					ID: 201, GID: "gid://gitlab/Note/201", Body: "reply body", Author: "dave", CreatedAt: "2026-01-04T00:00:00Z",
 					QuickActionsStatus: &toolutil.QuickActionsStatusOutput{CommandNames: []string{"label"}, ErrorMessages: []string{"Could not apply label command."}},
 				})
 			},
@@ -1550,7 +1554,7 @@ func TestUpdateNote(t *testing.T) {
 			check: func(t *testing.T, out NoteOutput) {
 				t.Helper()
 				assertNoteOutput(t, "UpdateNote()", out, NoteOutput{
-					ID: 100, Body: "updated body", Author: "alice", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-05T00:00:00Z",
+					ID: 100, GID: "gid://gitlab/Note/100", Body: "updated body", Author: "alice", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-05T00:00:00Z",
 					QuickActionsStatus: &toolutil.QuickActionsStatusOutput{CommandNames: []string{"close"}, Messages: []string{"Closed this epic."}},
 				})
 			},
@@ -1738,6 +1742,25 @@ func TestFormatListMarkdownString(t *testing.T) {
 				listHintsBlock,
 		},
 		{
+			name: "names a resource event by its global ID rather than as note 0",
+			input: ListOutput{
+				Discussions: []Output{
+					{
+						ID: "0f3c9a1e",
+						Notes: []NoteOutput{
+							{GID: "gid://gitlab/WeightNote/0f3c9a1e", ResourceEvent: true, Body: "set weight to 3", Author: "admin", CreatedAt: "2026-01-01T00:00:00Z", System: true},
+						},
+					},
+				},
+			},
+			want: "## Epic Discussions (1)\n\n" +
+				"### Discussion 0f3c9a1e\n" +
+				"- **@admin** (1 Jan 2026 00:00 UTC, resource event gid://gitlab/WeightNote/0f3c9a1e):\n" +
+				"  > set weight to 3\n\n" +
+				"Showing 1 items | no more pages\n" +
+				listHintsBlock,
+		},
+		{
 			name:  "renders empty state when no discussions",
 			input: ListOutput{},
 			want:  "No epic discussions found.\n",
@@ -1815,6 +1838,41 @@ func TestFormatMarkdownString(t *testing.T) {
 				"\n### Quick Actions\n\n" +
 				"- **Commands**: /label\n" +
 				"- **Applied**: Added ~bug label.\n" +
+				threadHintsBlock,
+		},
+		{
+			// GitLab synthesizes a thread of its own for each resource event,
+			// whose notes no note action can address, so the card offers no
+			// reply and points at the epic and its threads, as the event's
+			// note card does (issue 1304).
+			name: "offers no reply on a thread of resource events",
+			input: Output{
+				ID: "0f3c9a1e",
+				Notes: []NoteOutput{
+					{GID: "gid://gitlab/WeightNote/0f3c9a1e", ResourceEvent: true, Body: "set weight to 3", Author: "admin", CreatedAt: "2026-01-01T00:00:00Z", System: true},
+				},
+			},
+			want: "## Discussion 0f3c9a1e\n\n" +
+				"- **@admin** (1 Jan 2026 00:00 UTC, resource event gid://gitlab/WeightNote/0f3c9a1e):\n" +
+				"  > set weight to 3\n" +
+				"\n---\n\U0001F4A1 **Next steps:**\n" +
+				"- Use action 'group.epic_get' to read the epic the event changed\n" +
+				"- Use action 'group.epic_discussion_list' to read the epic's threads\n",
+		},
+		{
+			name: "keeps the reply on a thread whose notes are not all resource events",
+			input: Output{
+				ID: "d3hex",
+				Notes: []NoteOutput{
+					{GID: "gid://gitlab/WeightNote/d3hex", ResourceEvent: true, Body: "set weight to 3", Author: "admin", CreatedAt: "2026-01-01T00:00:00Z", System: true},
+					{ID: 7, GID: "gid://gitlab/Note/7", Body: "why 3?", Author: "bob", CreatedAt: "2026-01-02T00:00:00Z"},
+				},
+			},
+			want: "## Discussion d3hex\n\n" +
+				"- **@admin** (1 Jan 2026 00:00 UTC, resource event gid://gitlab/WeightNote/d3hex):\n" +
+				"  > set weight to 3\n" +
+				"- **@bob** (2 Jan 2026 00:00 UTC, note 7):\n" +
+				"  > why 3?\n" +
 				threadHintsBlock,
 		},
 		{
@@ -1898,6 +1956,21 @@ func TestFormatNoteMarkdownString_QuickActionsAndResolution(t *testing.T) {
 				"- **Author**: @nobody\n" +
 				"- **Body**: unparseable identifiers\n" +
 				noteHintsBlock,
+		},
+		{
+			name: "a resource event, named by its global ID with no note action offered",
+			input: NoteOutput{
+				GID: "gid://gitlab/LabelNote/9a8b7c6d", ResourceEvent: true,
+				Body: "added ~bug label", Author: "admin", CreatedAt: "2026-01-01T00:00:00Z", System: true,
+			},
+			want: "## Discussion Note gid://gitlab/LabelNote/9a8b7c6d\n\n" +
+				"- **Author**: @admin\n" +
+				"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+				"- **System note**\n" +
+				"- **Body**: added ~bug label\n\n" +
+				"GitLab records this resource event as a note with no note ID, so no note action can read, edit or delete it.\n" +
+				"\n---\n💡 **Next steps:**\n" +
+				"- Use action 'group.epic_discussion_list' to read the epic's threads\n",
 		},
 		{
 			name: "a reply of quick actions alone",
