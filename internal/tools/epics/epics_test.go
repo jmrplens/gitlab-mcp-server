@@ -534,7 +534,7 @@ func TestOptionBuilders_EmptyLists_SendNothing(t *testing.T) {
 	if created.AssigneeIDs != nil || created.LabelIDs != nil {
 		t.Errorf("creation assignees, labels = %#v, %#v; want none for empty lists", created.AssigneeIDs, created.LabelIDs)
 	}
-	updated, err := buildUpdateOptions(UpdateInput{FullPath: testFullPath, IID: 1, AddLabelIDs: []int64{}, RemoveLabelIDs: []int64{}})
+	updated, _, err := buildUpdateOptions(UpdateInput{FullPath: testFullPath, IID: 1, AddLabelIDs: []int64{}, RemoveLabelIDs: []int64{}})
 	if err != nil {
 		t.Fatalf("buildUpdateOptions() error = %v", err)
 	}
@@ -1515,18 +1515,18 @@ func TestUpdate_WithAllOptions(t *testing.T) {
 		FullPath:       testFullPath,
 		IID:            1,
 		Title:          "Updated",
-		Description:    "New description",
+		Description:    new("New description"),
 		StateEvent:     "CLOSE",
 		ParentID:       &parentID,
 		MilestoneID:    &milestoneID,
 		Color:          "#00FF00",
-		StartDate:      "2026-02-01",
-		DueDate:        "2026-04-30",
+		StartDate:      new("2026-02-01"),
+		DueDate:        new("2026-04-30"),
 		AddLabelIDs:    []int64{100},
 		RemoveLabelIDs: []int64{200},
 		AssigneeIDs:    []int64{1, 2, 3},
 		Weight:         &weight,
-		HealthStatus:   "needsAttention",
+		HealthStatus:   new("needsAttention"),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -2504,6 +2504,96 @@ func TestUpdate_WithoutATitle_SendsNoTitle(t *testing.T) {
 	}
 }
 
+// recordEpicUpdate answers the global-ID lookup and the update mutation an
+// epic update sends, and hands back the mutation's input object.
+func recordEpicUpdate(t *testing.T) (http.Handler, func() map[string]any) {
+	t.Helper()
+	var input map[string]any
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		vars, err := testutil.ParseGraphQLVariables(r)
+		if err != nil {
+			t.Errorf("ParseGraphQLVariables: %v", err)
+			http.Error(w, "ParseGraphQLVariables", http.StatusInternalServerError)
+			return
+		}
+		mutation, isUpdate := vars["input"].(map[string]any)
+		if !isUpdate {
+			testutil.RespondJSON(w, http.StatusOK, deleteGIDResponseJSON)
+			return
+		}
+		input = mutation
+		testutil.RespondJSON(w, http.StatusOK, updateResponseJSON)
+	})
+	return handler, func() map[string]any { return input }
+}
+
+// TestUpdate_Removals_ReachTheWire drives each removal an epic update accepts
+// and asserts the leaf it becomes inside the mutation input: 0 for the parent
+// or the milestone and "" for a date or the health status arrive as null,
+// which is how GitLab's schema says each is removed, and "" for the
+// description arrives as an empty description.
+//
+// Before issue 1302 "" sent nothing, so the update answered with the epic's
+// dates and health status still in place, and 0 reached GitLab as a global ID
+// no object carries.
+func TestUpdate_Removals_ReachTheWire(t *testing.T) {
+	zero, empty := int64(0), ""
+	cases := []struct {
+		name          string
+		input         UpdateInput
+		widget, field string
+		want          any
+	}{
+		{"start_date", UpdateInput{StartDate: &empty}, "startAndDueDateWidget", "startDate", nil},
+		{"due_date", UpdateInput{DueDate: &empty}, "startAndDueDateWidget", "dueDate", nil},
+		{"health_status", UpdateInput{HealthStatus: &empty}, "healthStatusWidget", "healthStatus", nil},
+		{"parent_id", UpdateInput{ParentID: &zero}, "hierarchyWidget", "parentId", nil},
+		{"milestone_id", UpdateInput{MilestoneID: &zero}, "milestoneWidget", "milestoneId", nil},
+		{"description", UpdateInput{Description: &empty}, "descriptionWidget", "description", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler, sent := recordEpicUpdate(t)
+			input := tc.input
+			input.FullPath, input.IID = testFullPath, 1
+			if _, err := Update(t.Context(), testutil.NewTestClient(t, handler), input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			widget, ok := sent()[tc.widget].(map[string]any)
+			if !ok {
+				t.Fatalf("mutation input carries no %s: %v", tc.widget, sent())
+			}
+			if value, present := widget[tc.field]; !present || value != tc.want {
+				t.Errorf("%s.%s = %#v (present %v), want %#v", tc.widget, tc.field, value, present, tc.want)
+			}
+		})
+	}
+}
+
+// TestUpdate_NegativeReference_IsRefusedBeforeAnyRequest verifies a negative
+// parent or milestone ID is refused, naming the field, rather than sent as a
+// global ID no object carries.
+func TestUpdate_NegativeReference_IsRefusedBeforeAnyRequest(t *testing.T) {
+	negative := int64(-1)
+	cases := []struct {
+		name  string
+		input UpdateInput
+	}{
+		{"parent_id", UpdateInput{ParentID: &negative}},
+		{"milestone_id", UpdateInput{MilestoneID: &negative}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			input := tc.input
+			input.FullPath, input.IID = testFullPath, 1
+			_, err := Update(t.Context(), testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), input)
+			if err == nil || !strings.Contains(err.Error(), tc.name) {
+				t.Errorf("Update(%s=-1) error = %v, want a refusal naming the field", tc.name, err)
+			}
+		})
+	}
+}
+
 // TestEpicLabels_UnmarshalJSON_SkipsANullDetail verifies that a null element in
 // the detailed labels array contributes no name rather than an empty one.
 //
@@ -2591,7 +2681,7 @@ func TestHandlers_DateThatDoesNotParse_IsRefusedBeforeAnyRequest(t *testing.T) {
 			return err
 		}},
 		{"update", "due_date", func() error {
-			_, err := Update(ctx, client, UpdateInput{FullPath: "grp", IID: 1, DueDate: "not-a-date"})
+			_, err := Update(ctx, client, UpdateInput{FullPath: "grp", IID: 1, DueDate: new("not-a-date")})
 			return err
 		}},
 	}

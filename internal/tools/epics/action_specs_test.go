@@ -137,6 +137,72 @@ func TestActionSpecs_DeleteError(t *testing.T) {
 	}
 }
 
+// TestCatalogSurface_UpdateRemovals_PassTheServedSchema calls the individual
+// epic update tool through an MCP session, so the arguments are validated
+// against the schema the tool serves before the handler sees them, and asserts
+// the removals reach GitLab as null.
+//
+// health_status serves an enum, and an enum without "" would refuse the one
+// value that removes it before the request is built (issue 1302).
+func TestCatalogSurface_UpdateRemovals_PassTheServedSchema(t *testing.T) {
+	handler, sent := recordEpicUpdate(t)
+	byTool := epicSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, handler)))
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	toolutil.RegisterSurfaceToolFromSpec(server, byTool["gitlab_epic_update"], toolutil.SurfaceToolRegisterOptions{
+		Description: "Test epic removals.",
+		Icons:       toolutil.IconEpic,
+	})
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "gitlab_epic_update",
+		Arguments: map[string]any{
+			"full_path": testFullPath, "epic_iid": 1,
+			"health_status": "", "start_date": "", "due_date": "",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result.IsError {
+		text := ""
+		if content, isText := result.Content[0].(*mcp.TextContent); isText {
+			text = content.Text
+		}
+		t.Fatalf("update with removals refused: %s", text)
+	}
+	input := sent()
+	for _, leaf := range []struct{ widget, field string }{
+		{"healthStatusWidget", "healthStatus"},
+		{"startAndDueDateWidget", "startDate"},
+		{"startAndDueDateWidget", "dueDate"},
+	} {
+		t.Run(leaf.widget+"."+leaf.field, func(t *testing.T) {
+			widget, ok := input[leaf.widget].(map[string]any)
+			if !ok {
+				t.Fatalf("mutation input carries no %s: %v", leaf.widget, input)
+			}
+			if value, present := widget[leaf.field]; !present || value != nil {
+				t.Errorf("%s.%s = %#v (present %v), want null", leaf.widget, leaf.field, value, present)
+			}
+		})
+	}
+}
+
 // TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.

@@ -350,7 +350,7 @@ readable without opening the tracker:
 | 116 | client-go | [A measure GitLab sends as null decodes as 0](#a-measure-gitlab-sends-as-null-decodes-as-0) | No; for the joint merge request | No | No | No | Yes, for every measure but a deployable's, which is still left out at 0 |
 | 117 | client-go | [Block, unblock and deactivate drop the answer that says whether anything changed](#block-unblock-and-deactivate-drop-the-answer-that-says-whether-anything-changed) | No; for the joint merge request | No | No | No | Yes, the three handlers read the answer from the captured response |
 | 118 | gitlab-org/gitlab | [The REST delete of a locked Terraform state answers 200 and deletes nothing](#the-rest-delete-of-a-locked-terraform-state-answers-200-and-deletes-nothing) | No | No | No | No | Yes, `admin.terraform_state_delete` reads the state first and refuses a locked one |
-| 119 | client-go | [UpdateWorkItemOptions cannot remove a reference, a date or the health status](#updateworkitemoptions-cannot-remove-a-reference-a-date-or-the-health-status) | No | No | No | No | Yes, `issue.work_item_update` writes null into the mutation input through a request option |
+| 119 | client-go | [UpdateWorkItemOptions cannot remove a reference, a date or the health status](#updateworkitemoptions-cannot-remove-a-reference-a-date-or-the-health-status) | No | No | No | No | Yes, `issue.work_item_update` and `group.epic_update` write null into the mutation input through a request option |
 | 120 | client-go | [ListAuditEventsOptions models neither entity filter the instance list takes](#listauditeventsoptions-models-neither-entity-filter-the-instance-list-takes) | No | No | No | No | Yes, `audit_event.list_instance` adds `entity_type` and `entity_id` to the query through a request option |
 | 126 | client-go | [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date) | No | No | No | No | Yes, `user.add_ssh_key`, `user.add_ssh_key_for_user`, `snippet.list_all` and the two changelog actions leave the field unset and write the instant given through a request option |
 | 127 | gitlab-org/gitlab | [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text) | No | No | No | No; GitLab's pages leave such a submodule unlinked | Yes, `repository.list_submodules` and `repository.read_submodule_file` resolve a sibling namespace and the other spellings of the instance's clone URLs |
@@ -6267,8 +6267,8 @@ release of client-go carries, with a test per answer.
   option that writes null into the matching widget of the `workItemUpdate`
   input client-go has encoded, beside whatever else the update sets. It
   leaves alone the global-ID lookup client-go sends first with the same
-  options. `issue.work_item_update` uses it. It retires when the option
-  struct can express a removal.
+  options. `issue.work_item_update` and `group.epic_update` use it. It
+  retires when the option struct can express a removal.
 
 **Where**: `workitems.go`, `UpdateWorkItemOptions.wrap` and the
 `workItemWidget*InputGQL` structs it fills.
@@ -6292,7 +6292,9 @@ adds a separate REST service and leaves the GraphQL one and its documents as
 they are, so the workaround reads the same request after it merges.
 
 **How we found it**: issue 1303, from a work item whose iteration, parent and
-due date could not be removed through `issue.work_item_update`.
+due date could not be removed through `issue.work_item_update`, and issue
+1302, from the epic dates and health status `group.epic_update` could not
+remove.
 
 **Effort**: small to medium: a removal per field the option struct can say,
 as a `Nullable` type or a set of `Clear` flags, which is a choice of API for

@@ -84,6 +84,43 @@ func TestEpics_Lifecycle_CreateListGetUpdateDelete(t *testing.T) {
 	})
 }
 
+// TestEpics_Update_RefusesAnImpossibleDateAndRemovesDatesAndHealthStatus
+// creates an epic with a start date, a due date and a health status on every
+// surface, asks the update for a date that does not exist and holds it to a
+// refusal naming the field, then removes all three in one update with empty
+// strings and holds the answer to none of them (issue 1302).
+//
+// Before the fix the impossible date was dropped and the unchanged epic came
+// back as a success, and "" sent nothing, so the values stayed.
+func TestEpics_Update_RefusesAnImpossibleDateAndRemovesDatesAndHealthStatus(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Group {
+		return fixture.NewGroup(e, fixture.WithGroupNamePrefix("epicdates"))
+	}, func(e *harness.Env, surface harness.Surface, group fixture.Group) {
+		s := e.On(surface)
+		created := harness.Do[epics.Output](s, actionEpicCreate, map[string]any{
+			"full_path": group.Path, "title": e.Name("epic"),
+			"start_date": "2026-11-01", "due_date": "2026-12-31", "health_status": "onTrack",
+		})
+		if created.StartDate == "" || created.DueDate == "" || created.HealthStatus == "" {
+			e.T.Fatalf("epic_create answered start %q, due %q, health %q, want all three set",
+				created.StartDate, created.DueDate, created.HealthStatus)
+		}
+		params := epicParams(fixture.Epic{IID: created.IID, GroupPath: group.Path})
+
+		refused := harness.ExpectToolError(s, actionEpicUpdate, withParams(params, map[string]any{"due_date": "2026-02-30"}), "due_date")
+		e.T.Logf("the impossible due date was refused: %s", firstLine(refused))
+
+		cleared := harness.Do[epics.Output](s, actionEpicUpdate,
+			withParams(params, map[string]any{"start_date": "", "due_date": "", "health_status": ""}))
+		if cleared.StartDate != "" || cleared.DueDate != "" || cleared.HealthStatus != "" {
+			e.T.Errorf("epic_update answered start %q, due %q, health %q, want all three removed",
+				cleared.StartDate, cleared.DueDate, cleared.HealthStatus)
+		}
+	})
+}
+
 // TestEpicBoards_FreshGroup_ListsAndRefusesAMissingBoard lists the epic
 // boards of a fresh group on every surface, reads the first one back when
 // the instance seeded one, and asks for a board number nothing has, which

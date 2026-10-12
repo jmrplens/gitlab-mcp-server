@@ -554,23 +554,23 @@ type CreateInput struct {
 // ITERATION nor CRM_CONTACTS. Issue and Task carry all three, which is where
 // the field was copied from.
 type UpdateInput struct {
-	FullPath    string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
-	IID         int64  `json:"epic_iid" jsonschema:"Epic IID within the group,required"`
-	Title       string `json:"title,omitempty" jsonschema:"Updated epic title"`
-	Description string `json:"description,omitempty" jsonschema:"Updated description (Markdown supported)"`
-	StateEvent  string `json:"state_event,omitempty" jsonschema:"State event: CLOSE or REOPEN"`
+	FullPath    string  `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
+	IID         int64   `json:"epic_iid" jsonschema:"Epic IID within the group,required"`
+	Title       string  `json:"title,omitempty" jsonschema:"Updated epic title"`
+	Description *string `json:"description,omitempty" jsonschema:"Updated description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched"`
+	StateEvent  string  `json:"state_event,omitempty" jsonschema:"State event: CLOSE or REOPEN"`
 	// Reparenting reaches the same hierarchy creating one does, so it carries
 	// the tier [ListInput.ParentIDs] cites.
-	ParentID       *int64  `json:"parent_id,omitempty" tier:"ultimate" jsonschema:"Global ID of the parent epic work item"`
+	ParentID       *int64  `json:"parent_id,omitempty" tier:"ultimate" jsonschema:"Global ID of the parent epic work item. Pass 0 to remove the parent. Omit the field to leave it untouched"`
 	Color          string  `json:"color,omitempty" jsonschema:"Epic color (hex format)"`
-	StartDate      string  `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD)"`
-	DueDate        string  `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD)"`
+	StartDate      *string `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD). Pass an empty string to remove the start date. Omit the field to leave it untouched"`
+	DueDate        *string `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD). Pass an empty string to remove the due date. Omit the field to leave it untouched"`
 	AddLabelIDs    []int64 `json:"add_label_ids,omitempty" jsonschema:"Global IDs of labels to add"`
 	RemoveLabelIDs []int64 `json:"remove_label_ids,omitempty" jsonschema:"Global IDs of labels to remove"`
 	AssigneeIDs    []int64 `json:"assignee_ids,omitempty" jsonschema:"Global IDs of assignees (empty array to remove all)"`
-	MilestoneID    *int64  `json:"milestone_id,omitempty" jsonschema:"Global ID of the milestone to assign to the epic"`
+	MilestoneID    *int64  `json:"milestone_id,omitempty" jsonschema:"Global ID of the milestone to assign to the epic. Pass 0 to remove the epic from its milestone. Omit the field to leave it untouched"`
 	Weight         *int64  `json:"weight,omitempty" tier:"premium" jsonschema:"Weight of the epic"`
-	HealthStatus   string  `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
+	HealthStatus   *string `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk). Pass an empty string to remove the health status. Omit the field to leave it untouched"`
 }
 
 // DeleteInput defines parameters for deleting an epic.
@@ -1343,11 +1343,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.IID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("epicUpdate", "epic_iid")
 	}
-	opts, err := buildUpdateOptions(input)
+	opts, removals, err := buildUpdateOptions(input)
 	if err != nil {
 		return Output{}, fmt.Errorf("epicUpdate: %w", err)
 	}
-	wi, _, err := client.GL().WorkItems.UpdateWorkItem(input.FullPath, input.IID, opts, gl.WithContext(ctx))
+	wi, _, err := client.GL().WorkItems.UpdateWorkItem(input.FullPath, input.IID, opts, gl.WithContext(ctx), removals)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("epicUpdate", err, http.StatusBadRequest,
 			"state_event must be 'close' or 'reopen'; verify iid with group.epic_list")
@@ -1355,26 +1355,26 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	return toOutput(wi), nil
 }
 
-// buildUpdateOptions maps an UpdateInput onto the Work Items update options,
-// refusing a date it cannot read.
-func buildUpdateOptions(input UpdateInput) (*gl.UpdateWorkItemOptions, error) {
+// buildUpdateOptions maps an UpdateInput onto the Work Items update options
+// and the request option that sends the removals the input asks for, nil when
+// it asks for none, refusing a date it cannot read and a negative reference.
+//
+// The parent, milestone, dates and health status follow the clearing
+// convention of [toolutil.WorkItemWidgetInputs]: 0 removes a reference and ""
+// removes a date or the health status, which client-go cannot send by itself
+// (register row 119). An empty description is sent as one.
+func buildUpdateOptions(input UpdateInput) (*gl.UpdateWorkItemOptions, gl.RequestOptionFunc, error) {
 	opts := &gl.UpdateWorkItemOptions{}
 	if input.Title != "" {
 		opts.Title = &input.Title
 	}
-	if input.Description != "" {
-		desc := toolutil.NormalizeText(input.Description)
+	if input.Description != nil {
+		desc := toolutil.NormalizeText(*input.Description)
 		opts.Description = &desc
 	}
 	if input.StateEvent != "" {
 		ev := gl.WorkItemStateEvent(input.StateEvent)
 		opts.StateEvent = &ev
-	}
-	if input.ParentID != nil {
-		opts.ParentID = input.ParentID
-	}
-	if input.MilestoneID != nil {
-		opts.MilestoneID = input.MilestoneID
 	}
 	if input.Color != "" {
 		opts.Color = &input.Color
@@ -1388,28 +1388,23 @@ func buildUpdateOptions(input UpdateInput) (*gl.UpdateWorkItemOptions, error) {
 	if input.AssigneeIDs != nil {
 		opts.AssigneeIDs = input.AssigneeIDs
 	}
-	if err := applyUpdateWidgets(opts, input); err != nil {
-		return nil, err
-	}
-	return opts, nil
-}
-
-// applyUpdateWidgets copies the widget-backed fields onto the update options.
-//
-// A date that does not parse refuses the call. It used to be dropped, and the
-// unchanged epic came back as the answer to an update that had asked to move
-// it (issue 1302).
-func applyUpdateWidgets(opts *gl.UpdateWorkItemOptions, input UpdateInput) error {
 	if input.Weight != nil {
 		opts.Weight = input.Weight
 	}
-	if input.HealthStatus != "" {
-		opts.HealthStatus = &input.HealthStatus
+	// A date that does not parse refuses the call. It used to be dropped, and
+	// the unchanged epic came back as the answer to an update that had asked
+	// to move it (issue 1302).
+	removals, err := toolutil.ApplyWorkItemWidgets(opts, toolutil.WorkItemWidgetInputs{
+		MilestoneID:  input.MilestoneID,
+		ParentID:     input.ParentID,
+		StartDate:    input.StartDate,
+		DueDate:      input.DueDate,
+		HealthStatus: input.HealthStatus,
+	})
+	if err != nil {
+		return nil, nil, err
 	}
-	return toolutil.ParseDateInputs(
-		toolutil.DateInput{Field: "start_date", Value: input.StartDate, Dest: &opts.StartDate},
-		toolutil.DateInput{Field: "due_date", Value: input.DueDate, Dest: &opts.DueDate},
-	)
+	return opts, removals, nil
 }
 
 // Delete permanently removes an epic using the Work Items API.
