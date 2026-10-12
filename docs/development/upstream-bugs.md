@@ -330,7 +330,7 @@ readable without opening the tracker:
 | 101 | client-go | [The board structs miss keys GitLab sends on a board and its lists](#the-board-structs-miss-keys-gitlab-sends-on-a-board-and-its-lists) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), open, commit 6, beside rows 96 and 98 | No | No; the keys are read around the SDK | Yes; four requests of our own on the group board routes, and the captured response everywhere else; [issue 1283](https://github.com/jmrplens/gitlab-mcp-server/issues/1283) moves three of the four to client-go |
 | 102 | gitlab-org/orbit/knowledge-graph | [The pinned version check stops with "no merge base" on forks and long branches](#the-pinned-version-check-stops-with-no-merge-base-on-forks-and-long-branches) | Yes, by the merge request | Yes, [gitlab-org/orbit/knowledge-graph!2746](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2746), merged | **Yes**, on `main` on 2026-10-09; CI only, so no release carries it | No | Not needed |
 | 103 | client-go | [The target branch rule methods discard GraphQL errors](#the-target-branch-rule-methods-discard-graphql-errors) | No | No | No | No | Yes, the three handlers read the refusal from the captured answer |
-| 104 | client-go | [The Terraform state documents select neither a state's versions nor when it will be deleted](#the-terraform-state-documents-select-neither-a-states-versions-nor-when-it-will-be-deleted) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None possible |
+| 104 | client-go | [The Terraform state documents select neither a state's versions nor when it will be deleted](#the-terraform-state-documents-select-neither-a-states-versions-nor-when-it-will-be-deleted) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | The list's paging: a document of this server's own; none for the fields |
 | 105 | client-go | [The scan profile status document selects the profile's id, name and type and nothing else](#the-scan-profile-status-document-selects-the-profiles-id-name-and-type-and-nothing-else) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None possible |
 | 106 | client-go | [The work item documents select neither the decision log nor the development widget](#the-work-item-documents-select-neither-the-decision-log-nor-the-development-widget) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None possible |
 | 107 | client-go | [The work item documents leave out fields GitLab sends on a work item](#the-work-item-documents-leave-out-fields-gitlab-sends-on-a-work-item) | No; not yet decided | No | No | No | None possible |
@@ -5858,8 +5858,10 @@ without its object from one it refused, for each of the 20 writes of row 88.
 - **Merged**: no. v3.17.0 and the merge request's branch before the push
   (`cc6c70bf`) send the same two documents as v3.15.0.
 - **Blocking**: no.
-- **Workaround**: none possible. Both documents are format strings inside
-  `terraform_states.go`, and a caller cannot add a field to either.
+- **Workaround**: for the fields, none possible. Both documents are format
+  strings inside `terraform_states.go`, and a caller cannot add a field to
+  either. For the list's paging (below), `admin.terraform_state_list` sends
+  a document of its own since issue 1341.
 
 **Where**: `terraform_states.go`, `List` and `Get`.
 
@@ -5895,6 +5897,23 @@ resolving it. A null with no errors is still `ErrNotFound`. `lockedByUser` and t
 are not in the commit: whether they join the default documents is not yet
 decided.
 
+**The list does not page either** (issue 1341). `List` asks for
+`project.terraformStates { nodes }` with no `first`, no `after`, no `count`
+and no `pageInfo`, and GitLab caps every connection at 100 nodes (the
+`default_max_page_size` of `GitlabSchema`), so a project holding more than
+100 states is answered with the first 100 as the whole list, and a caller
+has neither the number of states nor a cursor to ask for the rest. The
+change client-go owes is a paged `List`, taking `first` and `after` and
+answering with the connection's `count` and `pageInfo`, which is a commit
+still to be added to !3063. Until it lands, `admin.terraform_state_list`
+sends a document of this server's own
+(`internal/tools/terraformstates.listStatesQuery`): it takes `first` and
+`after`, publishes `count` and the forward half of `pageInfo`, and selects
+of each state exactly what `List` and `Get` select, so a state reads the
+same through the list as through the get, which still sends client-go's
+document. The list's own document goes back to client-go's on the bump that
+brings the paged `List`.
+
 The latest version's own `createdAt` and `updatedAt`, which the issue lists
 beside these, are not a client-go gap: both documents select them and
 `TerraformStateVersion` decodes them. That gap was this server's, whose state
@@ -5909,8 +5928,8 @@ declarations for these fields name this row and go stale on the client-go
 bump that brings the commit.
 
 **Effort**: small. A paged method and an options pair, with their tests
-and the regenerated mock; three more fields on two documents if they are
-decided.
+and the regenerated mock; the paged `List`, the same shape over the states
+connection; three more fields on two documents if they are decided.
 
 ### The scan profile status document selects the profile's id, name and type and nothing else
 

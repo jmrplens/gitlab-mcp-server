@@ -1,7 +1,8 @@
 package main
 
 // The answers for five GraphQL domains: branch rules, the CI/CD catalog,
-// custom emoji, and security attributes and categories.
+// custom emoji, and security attributes and categories; and for the one
+// document the Terraform state list sends of its own.
 //
 // Each field the pinned schema offered at an object these packages decode, and
 // no document of theirs selected, was triaged. The ones a caller needs are
@@ -19,7 +20,68 @@ const (
 	customEmojiPackage        = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/customemoji"
 	securityAttributesPackage = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/securityattributes"
 	securityCategoriesPackage = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/securitycategories"
+	terraformStatesPackage    = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/terraformstates"
 )
+
+// terraformListMirror is why the Terraform state list's own document selects
+// no more of a state than client-go's documents do: the list and the get
+// publish one StateItem, the get's document is still client-go's, and a field
+// only the list selected would make one state read two ways depending on
+// which action a caller asked.
+func terraformListMirror(what string) string {
+	return recorded("104", what+" The list sends a document of its own only to page (issue 1341), and it "+
+		"selects of a state exactly what client-go's List and Get select, because the get still sends client-go's "+
+		"and both answer with one StateItem: a field the list alone carried would make one state read two ways.")
+}
+
+// terraformStateDeclarations answers what the Terraform state list's own
+// document leaves out of a state and its latest version.
+func terraformStateDeclarations() []sentDeclaration {
+	return []sentDeclaration{
+		{
+			Package: terraformStatesPackage, SchemaType: "TerraformState", Field: "id", Category: categoryUnusedIdentifier,
+			Reason: "The state's GraphQL ID. Every Terraform state action of this server names a state by its " +
+				"project path and name, which is how GitLab's REST state routes and client-go's methods name it too, " +
+				"and nothing here takes the ID.",
+		},
+		{
+			Package: terraformStatesPackage, SchemaType: "TerraformStateVersion", Field: "id", Category: categoryUnusedIdentifier,
+			Reason: "The latest version's GraphQL ID. A version is named by its serial, which the list publishes and " +
+				"admin.terraform_version_delete takes, and the download path ends in it; nothing here takes the ID.",
+		},
+		{
+			Package: terraformStatesPackage, SchemaType: "TerraformState", Field: "versions", Category: categoryNewerThanFloor,
+			Reason: "Every version of the state, a connection GitLab added in 19.5: the 19.4 GraphQL API reference has " +
+				"no versions field on TerraformState and the 19.5.0-pre schema this repository pins does. GitLab refuses " +
+				"a whole document naming a field it does not have, so selecting it would stop the list on every earlier " +
+				"instance, and a list of versions inside every state of a list is a page of its own.",
+		},
+		{
+			Package: terraformStatesPackage, SchemaType: "TerraformState", Field: "permanentDeletionAt", Category: categoryExperiment,
+			Reason: "When a deleted state is removed for good. GitLab added it in 19.5 and marks it an experiment " +
+				"(app/graphql/types/terraform/state_type.rb), so selecting it would stop the list on every earlier " +
+				"instance and stake it on a field GitLab may change or remove without notice.",
+		},
+		{
+			Package: terraformStatesPackage, SchemaType: "TerraformState", Field: "protectionRuleExists", Category: categoryExperiment,
+			Reason: "GitLab marks the field an experiment (experiment: { milestone: '19.0' } in " +
+				"app/graphql/types/terraform/state_type.rb), which it may change or remove without notice, and it refuses " +
+				"a whole document that names a field it no longer has.",
+		},
+		{
+			Package: terraformStatesPackage, SchemaType: "TerraformState", Field: "lockedByUser", Category: categoryRecordedUpstream,
+			Reason: terraformListMirror("who holds the state's lock, which client-go's documents do not select."),
+		},
+		{
+			Package: terraformStatesPackage, SchemaType: "TerraformStateVersion", Field: "createdByUser", Category: categoryRecordedUpstream,
+			Reason: terraformListMirror("who wrote the latest version, which client-go's documents do not select."),
+		},
+		{
+			Package: terraformStatesPackage, SchemaType: "TerraformStateVersion", Field: "job", Category: categoryRecordedUpstream,
+			Reason: terraformListMirror("the CI job that wrote the latest version, which client-go's documents do not select."),
+		},
+	}
+}
 
 // userReferenceReason is why a user named by something other than a note is
 // named with its identity and nothing more. role says what the user is to the
@@ -40,9 +102,11 @@ func branchRuleExperimentReason(field, introduced, meaning string) string {
 		"rule listing on the experiment. It is selected once GitLab declares it generally available."
 }
 
-// domainSentDeclarations answers the sent findings of the five domains.
+// domainSentDeclarations answers the sent findings of the five domains and of
+// the Terraform state list.
 func domainSentDeclarations() []sentDeclaration {
 	declarations := append(branchRuleDeclarations(), ciCatalogDeclarations()...)
+	declarations = append(declarations, terraformStateDeclarations()...)
 	return append(declarations, securityAndEmojiDeclarations()...)
 }
 

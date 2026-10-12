@@ -152,4 +152,13 @@ var graphqlDecisions = map[string]decision{
 	"securitycategories.createSecurityCategory":  {decisionKeep, securityWrapperSwallowsErrors},
 	"securitycategories.updateSecurityCategory":  {decisionKeep, securityWrapperSwallowsErrors},
 	"securitycategories.destroySecurityCategory": {decisionKeep, securityWrapperSwallowsErrors},
+
+	// KEEP: the wrapper cannot page. TerraformStates.List sends a document that
+	// takes neither first nor after and selects neither count nor pageInfo, and
+	// GitLab caps the connection at 100 nodes, so a project holding more states
+	// read as holding 100 (issue 1341). The handler's document selects of each
+	// state exactly what List and Get select; it retires when client-go's List
+	// pages, which upstream-bugs row 104 records as the commit to add to
+	// gitlab-org/api/client-go!3063.
+	"terraformstates.listPage": {decisionKeep, "TerraformStates.List takes no first or after and selects no count or pageInfo, so a project with more than 100 states read as holding 100; the handler's paged document selects of each state what List and Get select, and retires when client-go's List pages (docs/development/upstream-bugs.md row 104)"},
 }

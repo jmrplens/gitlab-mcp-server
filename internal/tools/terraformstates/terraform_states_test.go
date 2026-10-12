@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/vektah/gqlparser/v2/ast"
@@ -139,12 +140,12 @@ var stateItemSchemaFields = map[string][2]string{
 	"deleted_at":                {"TerraformState", "deletedAt"},
 }
 
-// stateSelection is what one client-go document selects of a Terraform
+// stateSelection is what one document selects of a Terraform
 // state: the fields it asks for on the state itself and on its latest
 // version, by the schema object each belongs to.
 type stateSelection map[string][]string
 
-// selectedFields reads a client-go document and returns the fields it selects
+// selectedFields reads a GraphQL document and returns the fields it selects
 // directly on the state found by following path from the operation's root,
 // and directly on that state's latestVersion. Only direct selections count,
 // so a createdAt asked of the latest version is not taken for the state's,
@@ -153,16 +154,16 @@ func selectedFields(t *testing.T, document string, path ...string) stateSelectio
 	t.Helper()
 	parsed, err := parser.ParseQuery(&ast.Source{Input: document})
 	if err != nil {
-		t.Fatalf("parse client-go's document: %v\n%s", err, document)
+		t.Fatalf("parse the document: %v\n%s", err, document)
 	}
 	if len(parsed.Operations) != 1 {
-		t.Fatalf("client-go's document holds %d operations, want one:\n%s", len(parsed.Operations), document)
+		t.Fatalf("the document holds %d operations, want one:\n%s", len(parsed.Operations), document)
 	}
 	selections := parsed.Operations[0].SelectionSet
 	for _, name := range path {
 		field := childField(selections, name)
 		if field == nil {
-			t.Fatalf("client-go's document selects no %s along %v:\n%s", name, path, document)
+			t.Fatalf("the document selects no %s along %v:\n%s", name, path, document)
 		}
 		selections = field.SelectionSet
 	}
@@ -200,13 +201,13 @@ func fieldNames(selections ast.SelectionSet) []string {
 // schema has the field, a field GitLab always sends is always written and one
 // it can send null is left out when it did (a field of the latest version
 // counts as nullable when the schema lets latestVersion itself be null, which
-// it does for a state nothing has written yet), and both of
-// client-go's documents, the list's and the get's, select it on the object it
-// belongs to. The documents are written inside client-go, and a field one of
-// them stops selecting would arrive empty on that path with every other test
-// green, since a mock answers with whatever its fixture holds. The map above
-// must name every published field, so a field added to StateItem without a
-// row fails here too.
+// it does for a state nothing has written yet), and both documents, the
+// list's own and client-go's get, select it on the object it belongs to. The
+// get's document is written inside client-go and the list's beside the
+// handler, and a field one of them stops selecting would arrive empty on that
+// path with every other test green, since a mock answers with whatever its
+// fixture holds. The map above must name every published field, so a field
+// added to StateItem without a row fails here too.
 func TestStateItem_FieldsHeldToThePinnedSchema(t *testing.T) {
 	schema, err := graphqlschema.Schema()
 	if err != nil {
@@ -250,7 +251,7 @@ func TestStateItem_FieldsHeldToThePinnedSchema(t *testing.T) {
 			for document, selected := range documents {
 				t.Run(document, func(t *testing.T) {
 					if !slices.Contains(selected[object], name) {
-						t.Errorf("client-go's %s document selects no %s on %s (it selects %v), so %s would arrive empty", document, name, object, selected[object], jsonName)
+						t.Errorf("the %s document selects no %s on %s (it selects %v), so %s would arrive empty", document, name, object, selected[object], jsonName)
 					}
 				})
 			}
@@ -358,17 +359,185 @@ func TestGet_QueryNamesTheProjectAndTheState(t *testing.T) {
 }
 
 // TestList_QueryNamesTheProject verifies the list call asks GitLab about the
-// project the caller named rather than one written into the handler.
+// project the caller named rather than one written into the handler, and asks
+// for GitLab's default page when the caller named no page: the list's own
+// document carries the project as a variable, so the variable is what is
+// read, and a document written with the project spelled into it would send
+// none.
 func TestList_QueryNamesTheProject(t *testing.T) {
-	var seen string
-	client := testutil.NewTestClient(t, recordGraphQL(t, &seen,
+	var seen graphQLRequest
+	client := testutil.NewTestClient(t, recordGraphQLRequest(t, &seen,
 		`{"data":{"project":{"terraformStates":{"nodes":[]}}}}`))
 	if _, err := List(t.Context(), client, ListInput{ProjectPath: "group/project"}); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if !strings.Contains(seen, `fullPath: "group/project"`) {
-		t.Errorf("query = %q, want it to select the caller's project", seen)
+	want := map[string]any{"fullPath": "group/project", "first": float64(toolutil.GraphQLDefaultFirst)}
+	if !reflect.DeepEqual(seen.Variables, want) {
+		t.Errorf("variables = %v, want %v", seen.Variables, want)
 	}
+}
+
+// pagedStatesBody is one page of a project's states: GitLab counts two and
+// hands back the first, with the cursor of the second.
+const pagedStatesBody = `{"data":{"project":{"terraformStates":{"count":2,"nodes":[` +
+	`{"name":"production","createdAt":"2026-01-02T03:04:05Z","updatedAt":"2026-02-03T04:05:06Z","lockedAt":null,"deletedAt":null,"latestVersion":null}` +
+	`],"pageInfo":{"hasNextPage":true,"endCursor":"c2"}}}}}`
+
+// TestList_PagesThroughTheStates verifies the list asks GitLab for the page
+// the caller named, first and after, and hands back the cursor of the next
+// page and the count GitLab gives. client-go's document took neither and
+// selected neither, so a project with more states than GitLab's 100 per page
+// read as having 100 and no more, with no way to ask for the rest. The input
+// is decoded the way a tool call is, so the test reads only what the caller
+// can send.
+func TestList_PagesThroughTheStates(t *testing.T) {
+	var seen graphQLRequest
+	client := testutil.NewTestClient(t, recordGraphQLRequest(t, &seen, pagedStatesBody))
+	var input ListInput
+	if err := json.Unmarshal([]byte(`{"project_path":"group/project","first":1,"after":"c1"}`), &input); err != nil {
+		t.Fatalf("decoding the input: %v", err)
+	}
+
+	out, err := List(t.Context(), client, input)
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	if seen.Variables["first"] != float64(1) || seen.Variables["after"] != "c1" || seen.Variables["fullPath"] != "group/project" {
+		t.Errorf("variables = %v, want first 1, after c1 and the caller's project", seen.Variables)
+	}
+	published, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var keys map[string]any
+	if err = json.Unmarshal(published, &keys); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if keys["count"] != float64(2) {
+		t.Errorf("count = %v, want the 2 GitLab counted", keys["count"])
+	}
+	wantPage := map[string]any{"has_next_page": true, "end_cursor": "c2"}
+	if !reflect.DeepEqual(keys["pagination"], wantPage) {
+		t.Errorf("pagination = %v, want %v", keys["pagination"], wantPage)
+	}
+	if md := FormatListMarkdown(out); !strings.Contains(md, "## Terraform States (2)") || !strings.Contains(md, "next page cursor: `c2`") {
+		t.Errorf("the list does not say how many states there are and where the next page starts:\n%s", md)
+	}
+}
+
+// TestList_RefusedDocument_ReportsGitLabsErrors verifies a document GitLab
+// refused is reported with GitLab's own words. GitLab answers it with HTTP 200,
+// a null project and a top-level errors array, which client-go does not turn
+// into an error, so read as a missing project it would send the caller to
+// check a path that was right.
+func TestList_RefusedDocument_ReportsGitLabsErrors(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK,
+			`{"data":{"project":null},"errors":[{"message":"Field 'count' doesn't exist on type 'TerraformStateConnection'"}]}`)
+	}))
+	_, err := List(t.Context(), client, ListInput{ProjectPath: "group/project"})
+	if err == nil {
+		t.Fatal(errExpectedErr)
+	}
+	if !strings.Contains(err.Error(), "Field 'count' doesn't exist") || !strings.Contains(err.Error(), "gitlab_list_terraform_states") {
+		t.Errorf("error = %q, want GitLab's refusal under the list's operation", err)
+	}
+	if strings.Contains(err.Error(), wantListNotFoundHint) {
+		t.Errorf("error = %q, want no hint about the project path for a document GitLab refused", err)
+	}
+}
+
+// TestList_NoProject_IsNotFoundWithTheHint verifies a project GitLab does not
+// find, or does not show the caller, which it answers with a null project and
+// no error, is reported as not found and carries the hint that says what to
+// check, as client-go's list reported it.
+func TestList_NoProject_IsNotFoundWithTheHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"project":null}}`)
+	}))
+	_, err := List(t.Context(), client, ListInput{ProjectPath: "group/missing"})
+	if err == nil {
+		t.Fatal(errExpectedErr)
+	}
+	if !strings.Contains(err.Error(), wantListNotFoundHint) {
+		t.Errorf("error = %q, want it to carry %q", err, wantListNotFoundHint)
+	}
+	if !toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+		t.Errorf("error = %v, want it read as a 404", err)
+	}
+}
+
+// TestListPage_DocumentWithoutPageVariables_IsRefusedBeforeSending verifies
+// the one way the page variables can be refused: a document that does not
+// declare them, which GitLab would answer with somebody else's page. Nothing
+// is sent.
+func TestListPage_DocumentWithoutPageVariables_IsRefusedBeforeSending(t *testing.T) {
+	var sent atomic.Bool
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		sent.Store(true)
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"project":null}}`)
+	}))
+	_, err := listPage(t.Context(), client, `query($fullPath: ID!) { project(fullPath: $fullPath) { id } }`,
+		ListInput{ProjectPath: "group/project"})
+	if err == nil || !strings.Contains(err.Error(), "gitlab_list_terraform_states") {
+		t.Errorf("listPage() error = %v, want a refusal under the list's operation", err)
+	}
+	if sent.Load() {
+		t.Error("listPage() sent a document that declares no page variables")
+	}
+}
+
+// listStatesComplexity is what listStatesQuery costs at a page of a hundred.
+// It is the estimate's figure: GitLab.com answered the anonymous measurement
+// with an internal error, so no instance has confirmed it yet, and the figure
+// is to be replaced by a measured one (a queryComplexity { score } selection
+// answers below 200, its own cost being 2) the first time a GitLab is at hand.
+const listStatesComplexity = 17
+
+// TestListStatesQuery_Complexity_IsTheRecordedFigureUnderGitLabsLimit
+// verifies the list's own document still costs the figure recorded above, and
+// that the figure is under the limit GitLab refuses a query above, at the
+// largest page a caller can ask for. Holding the figure rather than only the
+// limit is what sends whoever changes the selection to measure again: the
+// connection is new to this document, and nothing else here can see its cost,
+// since the mock judges a document by the schema alone.
+func TestListStatesQuery_Complexity_IsTheRecordedFigureUnderGitLabsLimit(t *testing.T) {
+	got, err := testutil.GitLabQueryComplexity(listStatesQuery, map[string]any{
+		"fullPath": "group/project", "first": toolutil.GraphQLMaxFirst,
+	})
+	if err != nil {
+		t.Fatalf("GitLabQueryComplexity() error = %v", err)
+	}
+	if got != listStatesComplexity {
+		t.Errorf("listStatesQuery costs %d at first=%d by the estimate, and %d is recorded: measure it and record the figure",
+			got, toolutil.GraphQLMaxFirst, listStatesComplexity)
+	}
+	if got > testutil.GitLabAuthenticatedMaxComplexity {
+		t.Errorf("listStatesQuery costs %d at first=%d, over the %d GitLab refuses a query above",
+			got, toolutil.GraphQLMaxFirst, testutil.GitLabAuthenticatedMaxComplexity)
+	}
+}
+
+// graphQLRequest is what a recorded GraphQL POST carried.
+type graphQLRequest struct {
+	Query     string         `json:"query"`
+	Variables map[string]any `json:"variables"`
+}
+
+// recordGraphQLRequest answers every GraphQL POST with body and writes the
+// request it was sent into seen, for the test goroutine to assert on after
+// the call.
+func recordGraphQLRequest(t *testing.T, seen *graphQLRequest, body string) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(seen); err != nil {
+			t.Errorf("decoding the GraphQL envelope: %v", err)
+			testutil.RespondJSON(w, http.StatusInternalServerError, `{"errors":[{"message":"undecodable envelope"}]}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	})
 }
 
 // recordGraphQL answers every GraphQL POST with body and writes the document
@@ -620,20 +789,47 @@ const listHints = "\n---\n💡 **Next steps:**\n" +
 // yet saying so rather than showing a serial of zero, a state no lock is held
 // on saying "unlocked" rather than leaving the lock column blank, and a state
 // GitLab has deleted but not yet removed saying when, where a live one says
-// "no", so a deleted state in the list does not read as live.
+// "no", so a deleted state in the list does not read as live. The page is the
+// whole list, so the cursor line says there are no more pages.
 func TestFormatListMarkdown(t *testing.T) {
 	got := FormatListMarkdown(ListOutput{States: []StateItem{
 		{Name: "state1", LatestSerial: 3, UpdatedAt: "2026-02-03T04:05:06Z", LockedAt: "2026-03-04T05:06:07Z", DeletedAt: "2026-04-05T06:07:08Z"},
 		{Name: "fresh", UpdatedAt: "2026-01-02T03:04:05Z"},
-	}})
+	}, Count: 2})
 	want := "## Terraform States (2)\n\n" +
 		"| Name | Latest Serial | Updated | Locked Since | Deleted |\n" +
 		"| --- | --- | --- | --- | --- |\n" +
 		"| state1 | 3 | 3 Feb 2026 04:05 UTC | 4 Mar 2026 05:06 UTC | 5 Apr 2026 06:07 UTC |\n" +
 		"| fresh | no versions | 2 Jan 2026 03:04 UTC | unlocked | no |\n" +
+		"\nShowing 2 items | no more pages\n" +
 		listHints
 	if got != want {
 		t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestFormatListMarkdown_FirstOfSeveralPages verifies a page that is not the
+// whole list says so twice over: the heading counts the states GitLab says
+// the project holds rather than the rows shown, and the cursor line names the
+// cursor that asks for the next page. A page with a next page and no count,
+// which GitLab does not send but a decoder can be handed, says more are
+// available instead of a total.
+func TestFormatListMarkdown_FirstOfSeveralPages(t *testing.T) {
+	page := ListOutput{
+		States:     []StateItem{{Name: "production", UpdatedAt: "2026-02-03T04:05:06Z"}},
+		Count:      3,
+		Pagination: toolutil.GraphQLForwardPaginationOutput{HasNextPage: true, EndCursor: "c1"},
+	}
+	got := FormatListMarkdown(page)
+	if !strings.HasPrefix(got, "## Terraform States (3)\n") {
+		t.Errorf("heading of %q, want the 3 GitLab counted", got)
+	}
+	if !strings.Contains(got, "\nShowing 1 items | next page cursor: `c1`\n") {
+		t.Errorf("FormatListMarkdown() = %q, want the cursor of the next page", got)
+	}
+	page.Count = 0
+	if got = FormatListMarkdown(page); !strings.HasPrefix(got, "## Terraform States (1 shown, more available)\n") {
+		t.Errorf("heading of %q, want the page counted with more available", got)
 	}
 }
 

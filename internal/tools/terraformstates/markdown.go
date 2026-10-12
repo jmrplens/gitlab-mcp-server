@@ -22,16 +22,20 @@ const (
 	hintUnlockStaleLock = "Use `admin.terraform_state_unlock` to clear a stale lock"
 )
 
-// FormatListMarkdown formats Terraform states as markdown.
+// FormatListMarkdown formats a page of Terraform states as markdown.
 //
-// The endpoint sends no pagination headers, so the heading counts what is
-// shown; the empty pagination is what says so rather than a zero total.
+// The heading counts the states GitLab says the project holds, which is the
+// connection's count, and says more are available when GitLab sent a next
+// page without one; the cursor that asks for that page closes the table.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.States) == 0 {
 		return toolutil.EmptyMessage("Terraform states")
 	}
 	var sb strings.Builder
-	toolutil.WriteListHeading(&sb, "Terraform States", len(out.States), toolutil.PaginationOutput{})
+	toolutil.WriteListHeading(&sb, "Terraform States", len(out.States), toolutil.PaginationOutput{
+		TotalItems: int64(out.Count),
+		HasMore:    out.Pagination.HasNextPage,
+	})
 	sb.WriteString(toolutil.MarkdownTableHeader("Name", "Latest Serial", "Updated", "Locked Since", "Deleted"))
 	for _, s := range out.States {
 		sb.WriteString(toolutil.MarkdownTableRow(
@@ -42,8 +46,13 @@ func FormatListMarkdown(out ListOutput) string {
 			deletedCell(s.DeletedAt),
 		))
 	}
+	toolutil.WriteGraphQLPagination(&sb, toolutil.GraphQLPaginationOutput{
+		HasNextPage: out.Pagination.HasNextPage,
+		EndCursor:   out.Pagination.EndCursor,
+	}, len(out.States))
 	// The table carries no link, so the footer carries no instruction to keep
-	// the links of a table that has none.
+	// the links of a table that has none. The cursor line above is the page's
+	// whole pagination, so the footer is handed none of its own.
 	toolutil.WriteListFooter(&sb, toolutil.PaginationOutput{}, false,
 		"Use `admin.terraform_state_get` to view details of a specific state")
 	return sb.String()

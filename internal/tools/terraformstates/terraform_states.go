@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -14,7 +15,13 @@ import (
 // List.
 
 // ListInput contains parameters for listing Terraform states.
+//
+// The list offers forward paging only, first and after, as branch.rule_list
+// does, and selects only the forward half of pageInfo. Project.terraformStates
+// takes last and before as well; the list does not offer them, so it never
+// advertises a backward page it does not select the page info for.
 type ListInput struct {
+	toolutil.GraphQLPaginationInput
 	ProjectPath string `json:"project_path" jsonschema:"Full project path (e.g. group/project),required"`
 }
 
@@ -61,24 +68,152 @@ func toStateItem(s gl.TerraformState) StateItem {
 	}
 }
 
-// ListOutput contains a list of Terraform states.
+// ListOutput contains one page of a project's Terraform states, how many
+// states the project holds and where the next page starts.
 type ListOutput struct {
 	toolutil.HintableOutput
-	States []StateItem `json:"states"`
+	States     []StateItem                             `json:"states"`
+	Count      int                                     `json:"count"`
+	Pagination toolutil.GraphQLForwardPaginationOutput `json:"pagination"`
 }
 
-// List retrieves all Terraform states for a project.
+// listOperation labels every error the list reports.
+const listOperation = "gitlab_list_terraform_states"
+
+// listNotFoundHint is what a caller can check when GitLab finds no project or
+// shows the caller none of its states.
+const listNotFoundHint = "verify project_path with project.get; uses GraphQL. Terraform states require Maintainer role to view"
+
+// listStatesQuery is the list's own document rather than client-go's, which
+// asks for the connection with no first, no after, no count and no pageInfo:
+// GitLab caps a connection at 100 nodes, so a project holding more states
+// read as holding 100 and no more, with nothing to ask for the rest by
+// (upstream-bugs row 104 records it for gitlab-org/api/client-go!3063). The
+// nodes select exactly what client-go's list and get select, so a state reads
+// the same through the list as through the get, which is still client-go's.
+const listStatesQuery = `
+query($fullPath: ID!, $first: Int, $after: String) {
+  project(fullPath: $fullPath) {
+    terraformStates(first: $first, after: $after) {
+      count
+      nodes {
+        name
+        createdAt
+        deletedAt
+        latestVersion {
+          createdAt
+          updatedAt
+          downloadPath
+          serial
+        }
+        updatedAt
+        lockedAt
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}`
+
+// listStatesResponse is the answer to [listStatesQuery]. The project is a
+// pointer because GitLab answers null for a project it does not find or does
+// not show the caller, which is client-go's not-found too.
+type listStatesResponse struct {
+	Data struct {
+		Project *struct {
+			TerraformStates struct {
+				Count    int                                `json:"count"`
+				Nodes    []stateNode                        `json:"nodes"`
+				PageInfo toolutil.GraphQLRawForwardPageInfo `json:"pageInfo"`
+			} `json:"terraformStates"`
+		} `json:"project"`
+	} `json:"data"`
+	Errors []toolutil.GraphQLError `json:"errors"`
+}
+
+// stateNode is one state as [listStatesQuery] selects it. It mirrors client-go's
+// TerraformState field for field, and decodes a null the way it does, into the
+// zero value, so [stateNode.state] hands [toStateItem] what the get hands it.
+// It is declared here rather than borrowed from client-go so the document and
+// the struct that decodes it are this package's, and what the document leaves
+// out is answered under this package.
+type stateNode struct {
+	Name          string           `json:"name"`
+	LatestVersion stateVersionNode `json:"latestVersion"`
+	CreatedAt     time.Time        `json:"createdAt"`
+	UpdatedAt     time.Time        `json:"updatedAt"`
+	DeletedAt     time.Time        `json:"deletedAt"`
+	LockedAt      time.Time        `json:"lockedAt"`
+}
+
+// stateVersionNode is a state's latest version as [listStatesQuery] selects it.
+type stateVersionNode struct {
+	Serial       uint64    `json:"serial"`
+	DownloadPath string    `json:"downloadPath"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+}
+
+// state is the node as client-go's TerraformState.
+func (n stateNode) state() gl.TerraformState {
+	return gl.TerraformState{
+		Name:          n.Name,
+		LatestVersion: gl.TerraformStateVersion(n.LatestVersion),
+		CreatedAt:     n.CreatedAt,
+		UpdatedAt:     n.UpdatedAt,
+		DeletedAt:     n.DeletedAt,
+		LockedAt:      n.LockedAt,
+	}
+}
+
+// List retrieves one page of a project's Terraform states.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	states, _, err := client.GL().TerraformStates.List(input.ProjectPath, gl.WithContext(ctx))
+	return listPage(ctx, client, listStatesQuery, input)
+}
+
+// listPage sends document, which is [listStatesQuery] for every caller but the
+// test that hands it a document declaring no page variables, since that is
+// the one way the page variables can be refused.
+func listPage(ctx context.Context, client *gitlabclient.Client, document string, input ListInput) (ListOutput, error) {
+	pageVars, err := input.Variables(document)
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_terraform_states", err, http.StatusNotFound,
-			"verify project_path with project.get; uses GraphQL. Terraform states require Maintainer role to view")
+		return ListOutput{}, fmt.Errorf("%s: %w", listOperation, err)
 	}
-	items := make([]StateItem, 0, len(states))
-	for _, s := range states {
-		items = append(items, toStateItem(s))
+	var resp listStatesResponse
+	_, err = client.GL().GraphQL.Do(gl.GraphQLQuery{
+		Query:     document,
+		Variables: toolutil.MergeVariables(pageVars, map[string]any{"fullPath": input.ProjectPath}),
+	}, &resp, gl.WithContext(ctx))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErrWithStatusHint(listOperation, err, http.StatusNotFound, listNotFoundHint)
 	}
-	return ListOutput{States: items}, nil
+	return listOutput(resp)
+}
+
+// listOutput reads the answer to [listStatesQuery]. GitLab answers a document
+// it refused with HTTP 200 and a top-level errors array, which client-go does
+// not turn into an error, and a project it does not find or does not show the
+// caller with a null project, which is reported the way a 404 is, hint
+// included, since that is what client-go's list reported it as.
+func listOutput(resp listStatesResponse) (ListOutput, error) {
+	if err := toolutil.GraphQLTopLevelError(listOperation, resp.Errors); err != nil {
+		return ListOutput{}, err
+	}
+	project := resp.Data.Project
+	if project == nil {
+		return ListOutput{}, toolutil.WrapErrWithStatusHint(listOperation, gl.ErrNotFound, http.StatusNotFound, listNotFoundHint)
+	}
+	items := make([]StateItem, 0, len(project.TerraformStates.Nodes))
+	for _, node := range project.TerraformStates.Nodes {
+		items = append(items, toStateItem(node.state()))
+	}
+	return ListOutput{
+		States:     items,
+		Count:      project.TerraformStates.Count,
+		Pagination: toolutil.ForwardPageInfoToOutput(project.TerraformStates.PageInfo),
+	}, nil
 }
 
 // Get.

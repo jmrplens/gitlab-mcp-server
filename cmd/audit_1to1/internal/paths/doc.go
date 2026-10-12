@@ -326,13 +326,15 @@
 // declaration to the record alone (issue 1024).
 //
 // The same reading found the class over GraphQL, where the params say nothing
-// at all: admin.terraform_state_list is answered from client-go's document
+// at all: admin.terraform_state_list was answered from client-go's document
 // for a project's terraformStates connection, which asks for no first, no
 // after and no pageInfo, and GitLab caps every connection at 100 nodes
 // (the default_max_page_size its GitlabSchema class sets), so a project with
-// more than 100 states is answered with the first 100 as the whole list. No
-// rule here sees it, since R-PAGE joins REST routes only, and it is not fixed
-// by issue 1024.
+// more than 100 states was answered with the first 100 as the whole list. No
+// rule here sees it, since R-PAGE joins REST routes only. Issue 1024 did not
+// fix it and issue 1341 did: the list sends a document of its own, taking
+// first and after and publishing the connection's count and the forward half
+// of pageInfo, and upstream-bugs row 104 records the client-go half.
 //
 // # Is a param sent that the caller never asked to send
 //
