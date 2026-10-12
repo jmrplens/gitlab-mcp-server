@@ -209,17 +209,37 @@ func AssertQueryParam(t *testing.T, r *http.Request, key, expected string) {
 // backs it is goroutine-safe by construction.
 func NewTestClient(tb testing.TB, handler http.Handler) *gitlabclient.Client {
 	tb.Helper()
+	return newTestClientUnderRoot(tb, "", handler)
+}
+
+// NewTestClientUnderRoot is [NewTestClient] for an instance served under a
+// relative URL root such as "/gitlab". The client's base URL carries the
+// root, as GITLAB_URL does on such an instance, so a handler that derives
+// the instance's web URL from the client sees the root; the root is taken
+// off every request before the handler, the validation and the recording
+// see it, so each reads the paths it reads for any other instance and the
+// request inventory gains no row of its own for the root.
+func NewTestClientUnderRoot(tb testing.TB, root string, handler http.Handler) *gitlabclient.Client {
+	tb.Helper()
+	return newTestClientUnderRoot(tb, root, handler)
+}
+
+// newTestClientUnderRoot builds the server and the client of both
+// constructors; an empty root is [NewTestClient]'s instance at the host's
+// root, which http.StripPrefix leaves untouched.
+func newTestClientUnderRoot(tb testing.TB, root string, handler http.Handler) *gitlabclient.Client {
+	tb.Helper()
 
 	// The two wrappers read the request body separately, and each puts it
 	// back, rather than sharing one read. They answer different questions and
 	// one of them is a gate, so keeping them independent means neither can
 	// break the other; a body a test sends is small enough that reading it
 	// twice costs nothing worth this coupling.
-	srv := httptest.NewServer(recordingHandler(tb, validatingHandler(tb, handler)))
+	srv := httptest.NewServer(http.StripPrefix(root, recordingHandler(tb, validatingHandler(tb, handler))))
 	tb.Cleanup(srv.Close)
 
 	cfg := &config.Config{
-		GitLabURL:      srv.URL,
+		GitLabURL:      srv.URL + root,
 		GitLabToken:    "test-token",
 		SkipTLSVerify:  false,
 		DisableRetries: true,

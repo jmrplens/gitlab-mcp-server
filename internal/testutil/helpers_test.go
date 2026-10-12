@@ -318,6 +318,28 @@ func TestNewTestClient(t *testing.T) {
 	}
 }
 
+// TestNewTestClientUnderRoot_BaseCarriesTheRootAndTheHandlerDoesNot
+// verifies that a client for an instance under a relative URL root has the
+// root in its base URL, as GITLAB_URL does on such an instance, and that the
+// handler receives each request with the root taken off, so it routes the
+// paths it routes for any other instance.
+func TestNewTestClientUnderRoot_BaseCarriesTheRootAndTheHandlerDoesNot(t *testing.T) {
+	var gotPath string
+	client := NewTestClientUnderRoot(t, "/gitlab", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		RespondJSON(w, http.StatusOK, `{"version":"17.0.0","revision":"abc"}`)
+	}))
+	if base := client.GL().BaseURL().Path; base != "/gitlab/api/v4/" {
+		t.Errorf("base URL path = %q, want /gitlab/api/v4/", base)
+	}
+	if _, _, err := client.GL().Version.GetVersion(gl.WithContext(t.Context())); err != nil {
+		t.Fatalf("GetVersion: %v", err)
+	}
+	if gotPath != "/api/v4/version" {
+		t.Errorf("handler saw %q, want /api/v4/version", gotPath)
+	}
+}
+
 // TestRespondJSON verifies that [RespondJSON] writes the supplied status
 // code, sets Content-Type to "application/json", and writes the body
 // verbatim.

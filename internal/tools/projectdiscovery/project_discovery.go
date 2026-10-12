@@ -107,6 +107,15 @@ func Resolve(ctx context.Context, client *gitlabclient.Client, input ResolveInpu
 	if err != nil {
 		return ResolveOutput{}, fmt.Errorf("could not parse remote URL: %w. Provide the URL from 'git remote -v' output", err)
 	}
+	// An http or https remote of this instance names the project below the
+	// instance's web URL, and on an instance served under a relative URL root
+	// that URL carries the root: "https://host/gitlab/group/project.git" is
+	// the project group/project, not gitlab/group/project. An SSH remote
+	// carries no root and a remote on another host is not this instance's,
+	// so both keep the path they parsed to.
+	if below, ok := toolutil.PathBelowInstanceWeb(client.GL().BaseURL(), strings.TrimSpace(input.RemoteURL)); ok {
+		projectPath = cleanPath(below)
+	}
 
 	project, _, err := client.GL().Projects.GetProject(projectPath, nil, gl.WithContext(ctx))
 	if err != nil {

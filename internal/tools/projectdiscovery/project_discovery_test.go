@@ -242,6 +242,54 @@ func TestResolve_Success(t *testing.T) {
 	}
 }
 
+// TestResolve_InstanceUnderRelativeRoot_LooksUpThePathBelowTheRoot verifies
+// that an http or https remote of an instance served under a relative URL
+// root is looked up by the path below the root, as GitLab names the project,
+// and that every other remote keeps the path it carries: an SSH remote,
+// whose clone URL GitLab builds without the root, and a remote on another
+// host, which is not this instance's project anyway. Before the instance's
+// web prefix was stripped, "https://host/gitlab/group/project.git" was
+// looked up as "gitlab/group/project" and answered 404.
+func TestResolve_InstanceUnderRelativeRoot_LooksUpThePathBelowTheRoot(t *testing.T) {
+	var requested string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested = strings.TrimPrefix(r.URL.Path, pathProject)
+		testutil.RespondJSON(w, http.StatusOK, testProjectJSON)
+	})
+	rooted := testutil.NewTestClientUnderRoot(t, "/gitlab", handler)
+	plain := testutil.NewTestClient(t, handler)
+	rootedHost := rooted.GL().BaseURL().Host
+	plainHost := plain.GL().BaseURL().Host
+
+	cases := []struct {
+		name, remote, want string
+		rootedClient       bool
+	}{
+		{"http under the root with .git", "http://" + rootedHost + "/gitlab/group/project.git", "group/project", true},
+		{"http under the root without .git", "http://" + rootedHost + "/gitlab/group/sub/project", "group/sub/project", true},
+		{"scp form on the instance host", "git@" + rooted.GL().BaseURL().Hostname() + ":group/project.git", "group/project", true},
+		{"ssh scheme keeps its path", "ssh://git@" + rootedHost + "/gitlab/group/project.git", "gitlab/group/project", true},
+		{"another host keeps its path", "https://other.example.com/gitlab/group/project.git", "gitlab/group/project", true},
+		{"instance with no root", "http://" + plainHost + "/group/project.git", "group/project", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			client := plain
+			if c.rootedClient {
+				client = rooted
+			}
+			requested = ""
+			out, err := Resolve(t.Context(), client, ResolveInput{RemoteURL: c.remote})
+			if err != nil {
+				t.Fatalf(fmtResolveErr, err)
+			}
+			if out.ExtractedPath != c.want || requested != c.want {
+				t.Errorf("Resolve(%q) looked up %q and extracted %q, want %q", c.remote, requested, out.ExtractedPath, c.want)
+			}
+		})
+	}
+}
+
 // TestResolve_SSHRemote verifies that Resolve works with SSH shorthand URLs.
 func TestResolve_SSHRemote(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
