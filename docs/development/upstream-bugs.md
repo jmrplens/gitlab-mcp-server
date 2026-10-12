@@ -10451,28 +10451,27 @@ version GitLab's `.ruby-version` names at `26212baa`, running `Dir.glob` over
 the 857 files of the 19.4.1 checkout, which gives the counts and the list
 above; the label each refusal would print was worked out from the same files.
 
-**Before anything is filed**: reproduce it on the Docker GitLab
-(`gitlab/gitlab-ee:19.4.1-ee.0`): a fine-grained token holding a project
-permission other than Webhook: Trigger (Project: Read, say) on a project that
-has a webhook, then
-`POST /api/v4/projects/:id/hooks/:hook_id/test/push_events` with it, expecting
-403 and `[Webhook: Test]`. A hidden project answers a plain 404,
+**How it was reproduced** (done for gitlab-org/gitlab#633316, which records
+the body): on the Docker GitLab (`gitlab/gitlab-ee:19.4.1-ee.0`), a
+fine-grained token holding a project permission other than Webhook: Trigger
+(Project: Read, say) on a project that has a webhook, then
+`POST /api/v4/projects/:id/hooks/:hook_id/test/push_events` with it, which
+answers 403 and `[Webhook: Test]`. A hidden project answers a plain 404,
 `{"message":"404 Not Found"}`, instead. At 19.4.1 that is
 `token.can?(:read_boundary, boundary)` (service lines 89-91), which
 `Authz::BoundaryPolicy` grants when the token's user is a member of the
 project or can see it (`app/policies/authz/boundary_policy.rb:16-26`), whatever
 the token grants; on `master` the service asks the same of the token's user
-through the project's own policy. Either way, use a token of a member of the
-project, such as the user who added the webhook. Paste the body observed into
-the draft below in place of its marker. Then search `gitlab-org/gitlab` once
-more; a search on 2026-09-30 found nothing on it.
+through the project's own policy. Either way, the token has to be a member's,
+such as the user who added the webhook. A search of `gitlab-org/gitlab` just
+before filing found nothing on it.
 
 **Proposal**: look the label up with `available_for_permission` at line 130,
 the method the documentation task already uses, with a spec for a permission
-that sits in a deprecated and a live definition. Filed as the issue drafted
-below, or as a small merge request of its own; or, if the group agrees on row
-83's issue that the lookup should change for the new field anyway, carried by
-that merge request.
+that sits in a deprecated and a live definition. Filed as
+gitlab-org/gitlab#633316; the merge request carrying that change is written
+and not opened. If the group agrees on row 83's issue that the lookup should
+change for the new field anyway, that merge request can carry it instead.
 
 **What it costs this server**: see
 [row 83's section](#the-fine-grained-refusal-names-the-missing-permissions-only-as-display-labels-in-prose).
@@ -10485,8 +10484,9 @@ is not there.
   two methods, the load order, the counts and the list (with Ruby 3.3.11's
   `Dir.glob`), the form's and the documentation's lookups, the route
   declarations, the permission checks, and the cleanup task.
-- Inferred: the 403 itself. No refusal naming a deprecated label has been
-  observed on a running instance.
+- Verified on a running instance: the 403 naming `[Webhook: Test]`, on
+  `gitlab/gitlab-ee:19.4.1-ee.0` (`26212baacad`), recorded on
+  gitlab-org/gitlab#633316.
 
 **Effort**: small, a one-line change and a spec, owned by
 `group::authorization`.
@@ -10494,9 +10494,10 @@ is not there.
 <details>
 <summary>Draft: the gitlab-org/gitlab issue ("Bug" headings)</summary>
 
-Written for this entry and reviewed with it, not yet in its final form: the
-current-behaviour section waits on the reproduction above. Native references,
-first person as the maintainer, one paragraph per line.
+Kept as the text this entry was reviewed with before the reproduction. The
+issue as filed, gitlab-org/gitlab#633316, is the current text and carries the
+observed body in place of the marker below. Native references, first person
+as the maintainer, one paragraph per line.
 
 Title: `The insufficient_granular_scope refusal names a deprecated permission for 16 raw permissions`
 
