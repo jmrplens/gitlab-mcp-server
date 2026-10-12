@@ -196,6 +196,57 @@ func TestExportDownload_Success(t *testing.T) {
 	}
 }
 
+// TestExportDownload_ArchiveOverTheCeiling_IsRefusedNotTruncated verifies
+// that a project export larger than the shared download ceiling is refused
+// with the way out, where it used to come back whole: an archive up to the
+// client's 64 MiB response ceiling went into one message as about 85 MB of
+// base64. The archive exactly at the ceiling still comes back whole.
+func TestExportDownload_ArchiveOverTheCeiling_IsRefusedNotTruncated(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		size    int
+		wantErr bool
+	}{
+		{"exactly at the ceiling", toolutil.MaxDownloadBytes, false},
+		{"one byte over the ceiling", toolutil.MaxDownloadBytes + 1, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/octet-stream")
+				_, _ = w.Write(make([]byte, tc.size))
+			}))
+			out, err := ExportDownload(t.Context(), client, ExportDownloadInput{ProjectID: "1"})
+			if !tc.wantErr {
+				if err != nil || out.SizeBytes != tc.size {
+					t.Fatalf("ExportDownload() = %d bytes, %v, want the whole archive", out.SizeBytes, err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("ExportDownload() returned %d bytes, want a refusal", out.SizeBytes)
+			}
+			if !strings.Contains(err.Error(), "GET /projects/:id/export/download") {
+				t.Errorf("ExportDownload() error = %v, want it to name the way out", err)
+			}
+		})
+	}
+}
+
+// TestExportDownload_ResponseOverTheClientCeiling_NamesTheWayOut verifies
+// that an archive the client-wide response ceiling stops is reported with
+// the same way out, where it used to be a bare "unexpected error".
+func TestExportDownload_ResponseOverTheClientCeiling_NamesTheWayOut(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write(make([]byte, 4096))
+	}))
+	client.SetMaxResponseBytes(1024)
+	_, err := ExportDownload(t.Context(), client, ExportDownloadInput{ProjectID: "1"})
+	if err == nil || !strings.Contains(err.Error(), "download it from GitLab directly") {
+		t.Fatalf("ExportDownload() error = %v, want it to name the way out", err)
+	}
+}
+
 // TestImportFromFile_Base64_Success verifies that ImportFromFile with base64
 // content calls the import API and returns import status.
 func TestImportFromFile_Base64_Success(t *testing.T) {

@@ -3,8 +3,6 @@ package groupimportexport
 import (
 	"context"
 	"encoding/base64"
-	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -55,30 +53,25 @@ type ExportDownloadOutput struct {
 	SizeBytes     int    `json:"size_bytes"`
 }
 
-// maxExportBytes is the largest archive this action returns in one response.
-//
-// It bounds what the download becomes rather than what it costs to read: the
-// archive is buffered, base64-encoded a third larger again, and copied into a
-// JSON-RPC message, so one call carries several times the archive itself and
-// nothing capped that chain. The client-wide response ceiling caps the read
-// alone, and a caller can start as many downloads as it likes.
-//
-// An archive above the ceiling is refused rather than truncated. The documented
-// next step for this action is importing the archive into another group, and a
-// prefix of a .tar.gz cannot be imported, so a partial archive answers the
-// request wrongly rather than partially.
-const maxExportBytes = 32 << 20
-
 // errExportTooLarge is the hint an operator or model gets for an archive this
-// action will not carry, whichever ceiling stopped it: this one, or the
-// client-wide response ceiling that stops the read before it reaches here.
+// action will not carry, whichever ceiling stopped it: the shared download
+// ceiling ([toolutil.MaxDownloadBytes]), or the client-wide response ceiling
+// that stops the read before it reaches here. An archive above either is
+// refused rather than truncated: the documented next step for this action is
+// importing the archive into another group, and a prefix of a .tar.gz cannot
+// be imported.
 const errExportTooLarge = "the archive is too large to return in one MCP response; download it from GitLab directly (GET /groups/:id/export/download)"
 
 // ExportDownload downloads the finished export archive of a group as base64.
+//
+// client-go buffers the body before it hands it back, so the shared ceiling
+// is also set as a response limit on this one request, which stops the read
+// of an archive over it where it happens.
 func ExportDownload(ctx context.Context, client *gitlabclient.Client, input ExportDownloadInput) (ExportDownloadOutput, error) {
-	reader, _, err := client.GL().GroupImportExport.ExportDownload(string(input.GroupID), gl.WithContext(ctx))
+	limited := gitlabclient.WithResponseLimit(ctx, toolutil.MaxDownloadBytes)
+	reader, _, err := client.GL().GroupImportExport.ExportDownload(string(input.GroupID), gl.WithContext(limited))
 	if err != nil {
-		if errors.Is(err, gitlabclient.ErrResponseTooLarge) {
+		if toolutil.IsDownloadTooLarge(err) {
 			return ExportDownloadOutput{}, toolutil.WrapErrWithHint("download_group_export", err, errExportTooLarge)
 		}
 		return ExportDownloadOutput{}, toolutil.WrapErrWithStatusHint("download_group_export", err, http.StatusNotFound, "export must be scheduled first with group.group_export_schedule")
@@ -88,16 +81,9 @@ func ExportDownload(ctx context.Context, client *gitlabclient.Client, input Expo
 }
 
 func exportDownloadOutput(reader io.Reader) (ExportDownloadOutput, error) {
-	data, err := io.ReadAll(io.LimitReader(reader, maxExportBytes+1))
+	data, err := toolutil.ReadDownload("download_group_export", reader, errExportTooLarge)
 	if err != nil {
-		return ExportDownloadOutput{}, toolutil.WrapErrWithMessage("download_group_export", fmt.Errorf("reading export data: %w", err))
-	}
-	if len(data) > maxExportBytes {
-		return ExportDownloadOutput{}, toolutil.WrapErrWithHint(
-			"download_group_export",
-			fmt.Errorf("export archive exceeds the %d MiB this action returns", maxExportBytes>>20),
-			errExportTooLarge,
-		)
+		return ExportDownloadOutput{}, err
 	}
 
 	return ExportDownloadOutput{

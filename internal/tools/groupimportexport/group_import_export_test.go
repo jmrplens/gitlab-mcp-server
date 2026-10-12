@@ -214,8 +214,8 @@ func TestExportDownloadOutput_ArchiveOverTheCeiling_IsRefusedNotTruncated(t *tes
 		wantErr bool
 	}{
 		{name: "small archive is returned whole", size: 1024},
-		{name: "archive exactly at the ceiling is returned whole", size: maxExportBytes},
-		{name: "archive one byte over the ceiling is refused", size: maxExportBytes + 1, wantErr: true},
+		{name: "archive exactly at the ceiling is returned whole", size: toolutil.MaxDownloadBytes},
+		{name: "archive one byte over the ceiling is refused", size: toolutil.MaxDownloadBytes + 1, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -152,10 +152,25 @@ type ExportDownloadOutput struct {
 	SizeBytes     int    `json:"size_bytes"`
 }
 
+// errExportTooLarge is the way out for an archive this action will not carry,
+// whichever ceiling stopped it: the shared download ceiling, or the
+// client-wide response ceiling.
+const errExportTooLarge = "the archive is too large to return in one MCP response; download it from GitLab directly (GET /projects/:id/export/download)"
+
 // ExportDownload downloads the finished export archive of a project as base64.
+//
+// client-go reads the whole body before it returns it, so the shared download
+// ceiling is applied where the body is read, as a response limit on this one
+// request: an archive over it stops the read there instead of being buffered
+// up to the client's own ceiling and then refused, and is answered with the
+// way out rather than returned or truncated.
 func ExportDownload(ctx context.Context, client *gitlabclient.Client, input ExportDownloadInput) (ExportDownloadOutput, error) {
-	data, _, err := client.GL().ProjectImportExport.ExportDownload(string(input.ProjectID), gl.WithContext(ctx))
+	limited := gitlabclient.WithResponseLimit(ctx, toolutil.MaxDownloadBytes)
+	data, _, err := client.GL().ProjectImportExport.ExportDownload(string(input.ProjectID), gl.WithContext(limited))
 	if err != nil {
+		if toolutil.IsDownloadTooLarge(err) {
+			return ExportDownloadOutput{}, toolutil.WrapErrWithHint("export_download", err, errExportTooLarge)
+		}
 		return ExportDownloadOutput{}, toolutil.WrapErrWithStatusHint("export_download", err, http.StatusNotFound,
 			"export must be in 'finished' state. Check project.export_status first; archives are kept for 24 hours after generation")
 	}

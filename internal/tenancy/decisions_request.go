@@ -76,7 +76,7 @@ func requestDecisions() []Decision {
 			enforce("internal/tools/jobs", "maxArtifactBytes"),
 			enforce("internal/tools/modelregistry", "maxModelFileBytes"),
 			enforce("internal/tools/settings", "maxNamedUnmodeledKeys"),
-			enforce("internal/tools/groupimportexport", "maxExportBytes"),
+			enforce(pkgToolutil, "MaxDownloadBytes"),
 			enforce("internal/tools/dependencyfirewall", "maxCoordinateLength"),
 			// Local to the function, so the function is the site.
 			enforce("internal/tools/dependencies", "DownloadExport"),
