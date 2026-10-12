@@ -307,11 +307,17 @@ type DeleteVersionInput struct {
 }
 
 // DeleteVersion removes a specific version of a Terraform state.
+//
+// A 404 means the project has no state by that name or the state no version
+// with that serial, and the hint says that and nothing more. It used to add
+// that the latest version cannot be deleted, which GitLab does not enforce:
+// 19.4.2 answers a delete of the latest version 204 and deletes it, whether or
+// not the state is locked.
 func DeleteVersion(ctx context.Context, client *gitlabclient.Client, input DeleteVersionInput) error {
 	_, err := client.GL().TerraformStates.DeleteVersion(string(input.ProjectID), input.Name, input.Serial, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("gitlab_delete_terraform_state_version", err, http.StatusNotFound,
-			"verify serial with admin.terraform_state_list; cannot delete the latest version. Use admin.terraform_state_delete to remove the entire state")
+			"the project has no state by that name, or the state no version with that serial; verify the state name with admin.terraform_state_list, which shows each state's latest serial")
 	}
 	return nil
 }

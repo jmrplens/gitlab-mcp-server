@@ -38,8 +38,8 @@ const (
 	wantGetNotFoundHint     = "verify state name with admin.terraform_state_list; the state may not exist for this project"
 	wantDeleteForbiddenHint = "deleting Terraform states requires Maintainer role; deletion is irreversible. " +
 		"All versions are removed"
-	wantDeleteVersionNotFoundHint = "verify serial with admin.terraform_state_list; cannot delete the latest version. " +
-		"Use admin.terraform_state_delete to remove the entire state"
+	wantDeleteVersionNotFoundHint = "the project has no state by that name, or the state no version with that serial; " +
+		"verify the state name with admin.terraform_state_list, which shows each state's latest serial"
 )
 
 // TestList verifies List.
@@ -986,11 +986,13 @@ func TestDeleteVersion_Error(t *testing.T) {
 	}
 }
 
-// TestDeleteVersion_NotFound_HintsTheSerialAndTheWholeStateAlternative
-// verifies the status DeleteVersion's hint was written for. The package used
-// to drive this handler only through a 400, so the branch that names the
-// serial and points at deleting the whole state never ran.
-func TestDeleteVersion_NotFound_HintsTheSerialAndTheWholeStateAlternative(t *testing.T) {
+// TestDeleteVersion_NotFound_SaysTheStateOrTheSerialWasNotFound verifies the
+// status DeleteVersion's hint is written for, and that the hint says only what
+// a 404 means here: no state by that name, or no version with that serial.
+// It used to add that the latest version cannot be deleted, which GitLab
+// 19.4.2 does not enforce: it answers a delete of the latest version 204 and
+// deletes it, locked state or not.
+func TestDeleteVersion_NotFound_SaysTheStateOrTheSerialWasNotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
@@ -1000,6 +1002,9 @@ func TestDeleteVersion_NotFound_HintsTheSerialAndTheWholeStateAlternative(t *tes
 	}
 	if !strings.Contains(err.Error(), wantDeleteVersionNotFoundHint) {
 		t.Errorf("error = %q, want it to carry %q", err.Error(), wantDeleteVersionNotFoundHint)
+	}
+	if strings.Contains(err.Error(), "cannot delete") {
+		t.Errorf("error = %q, want no claim about a version GitLab would refuse to delete", err.Error())
 	}
 }
 
