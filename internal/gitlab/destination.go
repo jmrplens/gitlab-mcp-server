@@ -242,19 +242,30 @@ func lookupHostAddrs(ctx context.Context, host string) ([]netip.Addr, error) {
 	return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 }
 
-// coversInstance reports whether dest is the instance's own host.
+// coversInstance reports whether dest is the instance's own host: the host the
+// operator named, exactly, with ASCII case folded as [FoldHostCase] folds it.
 //
-// It is the relation [credentialSafeRedirect] already applies to the
-// credential headers, IPv6-zone guard included, and deliberately so: two
-// guards on the same redirect that disagree about what "left the instance"
-// means would be two policies a reader has to hold at once. The scheme is not
-// part of it here, because an https-to-http downgrade does not change which
-// address gets dialed, only who can read the headers.
+// A subdomain is not the instance. It is another name with addresses of its
+// own, and the exemption tier B grants the instance rests on the operator
+// having chosen that name: nobody chose x.gitlab.example.com, and under a
+// split-horizon domain it can resolve to loopback or to the server's own
+// network behind an instance that is public. A hop to one is therefore judged
+// like any other host that left the instance, which still allows it when the
+// instance is itself private (the self-managed object store) or under
+// --allow-private-instances, at the cost of the one memoized lookup of the
+// instance's name that every such hop pays.
+//
+// This is deliberately narrower than [credentialSafeRedirect], which lets the
+// credential headers follow a subdomain the way net/http lets an
+// Authorization header follow one. That relation answers who may read the
+// token; this one answers which addresses a hop may reach, and the two are
+// different questions. The scheme is not part of it, because an
+// https-to-http downgrade does not change which address gets dialed.
 func (p *destinationPolicy) coversInstance(dest *url.URL) bool {
 	if p == nil || p.instanceHost == "" || dest == nil {
 		return false
 	}
-	return isDomainOrSubdomain(FoldHostCase(dest.Hostname()), p.instanceHost)
+	return FoldHostCase(dest.Hostname()) == p.instanceHost
 }
 
 // permitsPrivate reports whether tier B lets one request reach a private

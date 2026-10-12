@@ -671,11 +671,17 @@ func TestDestinationPolicy_InstanceIsPrivate_ResolvesTheNameTheDialerDials(t *te
 // the instance's own host, which is what decides whether a redirect hop is
 // judged at all.
 //
-// The spelling rows hold the comparison [credentialSafeRedirect] makes: ASCII
+// Only the exact host does. A subdomain is a different name with addresses of
+// its own, and a subdomain that resolves to loopback or to the server's own
+// network behind a public instance is exactly the destination tier B exists
+// for; counting it as the instance put the hop in the permissive pool with no
+// tier B at all. The credential headers still follow a subdomain, which is
+// [credentialSafeRedirect]'s relation and a different question.
+//
+// The spelling rows hold the folding [credentialSafeRedirect] applies: ASCII
 // letters are folded and nothing else is, so a host spelled with U+0130 is
 // not the instance whose name it folds to under strings.ToLower. It is
-// dialed as its IDNA form, a different host, and counting it as the
-// instance's own put the hop in the permissive pool with no tier B at all.
+// dialed as its IDNA form, a different host.
 func TestDestinationPolicy_CoversInstance(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -684,7 +690,9 @@ func TestDestinationPolicy_CoversInstance(t *testing.T) {
 		want     bool
 	}{
 		{name: "the instance itself", instance: "https://gitlab.example.com", dest: "https://gitlab.example.com/x", want: true},
-		{name: "a subdomain of it", instance: "https://gitlab.example.com", dest: "https://storage.gitlab.example.com/x", want: true},
+		{name: "a subdomain of it", instance: "https://gitlab.example.com", dest: "https://storage.gitlab.example.com/x", want: false},
+		{name: "a subdomain in ascii upper case", instance: "https://gitlab.example.com", dest: "https://STORAGE.GitLab.example.com/x", want: false},
+		{name: "the parent domain of the instance", instance: "https://gitlab.example.com", dest: "https://example.com/x", want: false},
 		{name: "a different port", instance: "https://gitlab.example.com", dest: "https://gitlab.example.com:9443/x", want: true},
 		{name: "an https to http downgrade", instance: "https://gitlab.example.com", dest: "http://gitlab.example.com/x", want: true},
 		{name: "another host", instance: "https://gitlab.example.com", dest: "https://storage.example.net/x", want: false},
@@ -1072,6 +1080,101 @@ func TestDestinationTransport_RoutesByWhatTierBAnswers(t *testing.T) {
 
 			if served != tt.want {
 				t.Errorf("served from the %s pool, want the %s pool", served, tt.want)
+			}
+		})
+	}
+}
+
+// TestDestinationTransport_SubdomainHop_IsJudgedByTheAddressItReaches drives a
+// redirect hop to a subdomain of the operator's instance through the routing
+// and then through the dialer, the two halves that have to agree.
+//
+// The subdomain resolves to 127.0.0.2, as a split-horizon name under the
+// instance's domain would. Behind a public instance that is a private address
+// no operator chose, so the hop is refused at the dial and served from the
+// strict pool; behind an instance that is itself private it is the
+// self-managed object store, and is allowed. The instance's exact host stays
+// exempt and asks no question.
+func TestDestinationTransport_SubdomainHop_IsJudgedByTheAddressItReaches(t *testing.T) {
+	const instanceURL = "https://pub.test.example"
+	tests := []struct {
+		name          string
+		requestURL    string
+		instanceAddr  string
+		dialed        string
+		wantPool      string
+		wantRefused   bool
+		wantLookups   int
+		wantOffOrigin bool
+	}{
+		{
+			name:       "a subdomain resolving to loopback behind a public instance",
+			requestURL: "https://x.pub.test.example:9002/object", instanceAddr: "203.0.113.1", dialed: "127.0.0.2:9002",
+			wantPool: "strict", wantRefused: true, wantLookups: 1, wantOffOrigin: true,
+		},
+		{
+			name:       "a subdomain resolving to a private address behind a private instance",
+			requestURL: "https://x.pub.test.example:9002/object", instanceAddr: "10.0.0.1", dialed: "10.0.0.7:9002",
+			wantPool: "permissive", wantRefused: false, wantLookups: 1, wantOffOrigin: true,
+		},
+		{
+			name:       "a subdomain resolving to a public address behind a public instance",
+			requestURL: "https://x.pub.test.example/object", instanceAddr: "203.0.113.1", dialed: "203.0.113.9:443",
+			wantPool: "strict", wantRefused: false, wantLookups: 1, wantOffOrigin: true,
+		},
+		{
+			name:       "the instance's exact host on loopback",
+			requestURL: "https://pub.test.example/api/v4/version", instanceAddr: "203.0.113.1", dialed: "127.0.0.2:443",
+			wantPool: "permissive", wantRefused: false, wantLookups: 0, wantOffOrigin: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			policy := newDestinationPolicy(instanceURL, false, false)
+			lookups := 0
+			policy.lookupIP = func(ctx context.Context, host string) ([]netip.Addr, error) {
+				lookups++
+				return resolverAnswering(tt.instanceAddr)(ctx, host)
+			}
+			client := &Client{}
+			client.destination.Store(policy)
+
+			var stamp dialTarget
+			served := ""
+			poolNamed := func(name string) http.RoundTripper {
+				return roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					served = name
+					stamp, _ = dialTargetFrom(req.Context())
+					return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Request: req}, nil
+				})
+			}
+			transport := &destinationTransport{
+				pools:  destinationPools{permissive: poolNamed("permissive"), strict: poolNamed("strict")},
+				client: client,
+			}
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, tt.requestURL, http.NoBody)
+			if err != nil {
+				t.Fatalf("http.NewRequestWithContext() unexpected error: %v", err)
+			}
+			resp, err := transport.RoundTrip(req)
+			if err != nil {
+				t.Fatalf("RoundTrip() unexpected error: %v", err)
+			}
+			_ = resp.Body.Close()
+
+			if served != tt.wantPool {
+				t.Errorf("served from the %s pool, want the %s pool", served, tt.wantPool)
+			}
+			if stamp.offOrigin != tt.wantOffOrigin {
+				t.Errorf("offOrigin = %v, want %v", stamp.offOrigin, tt.wantOffOrigin)
+			}
+			err = guardDestination(withDialTarget(t.Context(), stamp), "tcp", tt.dialed, nil)
+			if got := errors.Is(err, ErrDestinationRefused); got != tt.wantRefused {
+				t.Errorf("dialing %s: refused = %v, want %v (err = %v)", tt.dialed, got, tt.wantRefused, err)
+			}
+			if lookups != tt.wantLookups {
+				t.Errorf("the instance was resolved %d times, want %d", lookups, tt.wantLookups)
 			}
 		})
 	}
