@@ -47,9 +47,20 @@ func TestSnippetNotes_Lifecycle_CreateListGetUpdateDelete(t *testing.T) {
 		params := f.params()
 		body := "note from the " + string(surface) + " surface"
 
-		created := harness.Do[snippetnotes.Output](s, actionSnippetNoteCreate, withParams(params, map[string]any{"body": body}))
+		created, said := harness.DoAnswer[snippetnotes.Output](s, actionSnippetNoteCreate, withParams(params, map[string]any{"body": body}))
 		if created.ID == 0 || created.Body != body {
 			e.T.Fatalf("note_create answered %+v, want the note %q with an ID", created, body)
+		}
+		// The card is the snippet note's own, not the issue note card the
+		// registry used to render every shared note shape with (issue 1291).
+		// Next steps are named in the dynamic surface's call form, the
+		// canonical ID, which the other surfaces may spell their own way.
+		assertMentions(e, "the snippet note card", said, "Snippet Note")
+		if containsAny(said, "Issue Note") {
+			e.T.Errorf("the snippet note card reads as an issue note: %s", firstLine(said))
+		}
+		if surface == harness.SurfaceDynamic {
+			assertMentions(e, "the snippet note card's next steps", said, "snippet.note_update", "snippet.note_delete")
 		}
 		noteParams := withParams(params, map[string]any{"note_id": created.ID})
 

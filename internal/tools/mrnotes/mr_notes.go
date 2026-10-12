@@ -22,11 +22,16 @@ type CreateInput struct {
 	MergeRequestDiffHeadSHA string               `json:"merge_request_diff_head_sha,omitempty" jsonschema:"Required for the deduplication of system notes: SHA referencing the most recent diff version of the merge request."`
 }
 
-// Output is an alias of [toolutil.NoteOutput], the canonical REST note shape
-// shared between mrnotes and issuenotes. Field layout and JSON tags are
-// defined in toolutil; see [toolutil.NoteOutputFromGitLab] for the 1:1 audit
-// conversion logic.
-type Output = toolutil.NoteOutput
+// Output is a merge request note: a type of its own over
+// [toolutil.NoteOutput], the canonical REST note shape the issue, merge
+// request and snippet note packages share, whose fields and JSON tags are
+// defined there; see [toolutil.NoteOutputFromGitLab] for the 1:1 audit
+// conversion logic. It is a defined type rather than an alias because the
+// Markdown registry is keyed by type: while the three packages aliased one,
+// the issue note formatter rendered every merge request note as an "Issue
+// Note" naming issue actions, and this package's card was never served
+// (issue 1291).
+type Output toolutil.NoteOutput
 
 // ListInput defines parameters for listing merge request notes.
 type ListInput struct {
@@ -72,7 +77,7 @@ type GetInput struct {
 // [toolutil.NoteOutputFromGitLab] which owns the 1:1 audit field mapping
 // and timestamp formatting.
 func ToOutput(n *gl.Note, extra toolutil.NoteExtra) Output {
-	return toolutil.NoteOutputFromGitLab(n, extra)
+	return Output(toolutil.NoteOutputFromGitLab(n, extra))
 }
 
 // Create adds a new general comment to a merge request.

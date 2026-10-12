@@ -8,17 +8,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// The thread and note cards below are the ones every REST discussion domain
-// renders. [Output] and [NoteOutput] are aliases of the shared thread shapes
-// ([toolutil.DiscussionThreadOutput] and [toolutil.DiscussionThreadNoteOutput]),
-// the Markdown registry keys on the type and keeps the first registration, and
-// this package's init is the first to run, so a merge request, issue or snippet
-// discussion is rendered by these two functions too. They therefore show every
-// field the shared shape carries, the diff position included, and only their
-// hints name the commit tools. The duplicate registrations are pinned by
-// TestMarkdownRegistry_Registrations_HaveNoUndeclaredProblems and are retired by
-// giving each domain a shape of its own, which is a change to the four packages
-// that share these aliases rather than to a formatter.
+// The thread and note cards below render a commit discussion and nothing
+// else: [Output] and [NoteOutput] are types of this package, so the Markdown
+// registry, which is keyed by type, serves these cards for them alone. They
+// show every field the shared shape carries, the diff position included.
 
 // firstNoteAuthor returns the author username of a discussion's first note, or
 // "" when the thread has no notes.
@@ -68,14 +61,15 @@ func notePosition(p *toolutil.NotePositionOutput) string {
 // domain whose notes cannot be resolved at all.
 func FormatNoteMarkdownString(n NoteOutput) string {
 	var b strings.Builder
+	note := toolutil.DiscussionThreadNoteOutput(n)
 	c := toolutil.NewCard(&b, fmt.Sprintf("Discussion Note #%d", n.ID))
-	c.Markdown("Author", toolutil.MdUserHandle(n.AuthorUsername()))
+	c.Markdown("Author", toolutil.MdUserHandle(note.AuthorUsername()))
 	c.Time("Created", n.CreatedAt)
 	c.Flag("", "System note", n.System)
 	c.Flag("", "Internal note", n.Internal)
 	if n.Resolvable {
 		c.Field("Resolvable", noteResolution(n.Resolved))
-		c.Markdown("Resolved By", toolutil.MdUserHandle(n.ResolvedByUsername()))
+		c.Markdown("Resolved By", toolutil.MdUserHandle(note.ResolvedByUsername()))
 	}
 	c.Markdown("Position", notePosition(n.Position))
 	c.Text("Body", n.Body)

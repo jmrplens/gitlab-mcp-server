@@ -36,7 +36,8 @@ func FormatListMarkdown(out ListOutput) string {
 
 func toNoteMarkdown(n Output) toolutil.NoteMarkdown {
 	flags := toolutil.NoteMarkdownFlags{System: n.System, Internal: n.Internal, Resolvable: n.Resolvable, Resolved: n.Resolved}
-	return toolutil.NewNoteMarkdown(n.ID, n.Body, n.AuthorUsername(), n.CreatedAt, flags, n.ResolvedByUsername())
+	note := toolutil.NoteOutput(n)
+	return toolutil.NewNoteMarkdown(n.ID, n.Body, note.AuthorUsername(), n.CreatedAt, flags, note.ResolvedByUsername())
 }
 
 func init() {

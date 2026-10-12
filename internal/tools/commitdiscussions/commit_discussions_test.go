@@ -198,7 +198,7 @@ func TestAddNote_Success(t *testing.T) {
 	if out.ID != 40 {
 		t.Errorf("got ID=%d, want 40", out.ID)
 	}
-	if got := out.AuthorUsername(); got != "eve" {
+	if got := toolutil.DiscussionThreadNoteOutput(out).AuthorUsername(); got != "eve" {
 		t.Errorf("got author=%q, want eve", got)
 	}
 }
@@ -770,8 +770,8 @@ const (
 func TestFormatListMarkdownString_WithData(t *testing.T) {
 	out := ListOutput{
 		Discussions: []Output{
-			{ID: testDiscussionID, Notes: []*NoteOutput{{Author: &toolutil.NoteUserOutput{Username: testAuthorAlice}, CreatedAt: testDate20260101, Body: "comment"}}},
-			{ID: "d2", Notes: []*NoteOutput{{Author: &toolutil.NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02", Body: "reply"}}},
+			{ID: testDiscussionID, Notes: []*toolutil.DiscussionThreadNoteOutput{{Author: &toolutil.NoteUserOutput{Username: testAuthorAlice}, CreatedAt: testDate20260101, Body: "comment"}}},
+			{ID: "d2", Notes: []*toolutil.DiscussionThreadNoteOutput{{Author: &toolutil.NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02", Body: "reply"}}},
 		},
 		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 20, TotalItems: 45, TotalPages: 3, NextPage: 2, HasMore: true},
 	}
@@ -806,7 +806,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 func TestFormatMarkdownString_WithNotes(t *testing.T) {
 	out := Output{
 		ID:    testDiscussionID,
-		Notes: []*NoteOutput{{ID: 7, Author: &toolutil.NoteUserOutput{Username: "dev"}, CreatedAt: testDate20260101, Body: "LGTM"}},
+		Notes: []*toolutil.DiscussionThreadNoteOutput{{ID: 7, Author: &toolutil.NoteUserOutput{Username: "dev"}, CreatedAt: testDate20260101, Body: "LGTM"}},
 	}
 
 	got := FormatMarkdownString(out)
@@ -833,7 +833,7 @@ func TestFormatMarkdownString_Resolvable(t *testing.T) {
 		IndividualNote: true,
 		Resolvable:     true,
 		Resolved:       true,
-		Notes:          []*NoteOutput{nil},
+		Notes:          []*toolutil.DiscussionThreadNoteOutput{nil},
 	}
 
 	got := FormatMarkdownString(out)

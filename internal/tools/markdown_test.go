@@ -480,7 +480,7 @@ func TestFormatMR_DiscussionMarkdown(t *testing.T) {
 	d := mrdiscussions.Output{
 		ID:             "abc123",
 		IndividualNote: false,
-		Notes: []*mrdiscussions.NoteOutput{
+		Notes: []*toolutil.DiscussionThreadNoteOutput{
 			{ID: 1, Body: "First note", Author: &toolutil.NoteUserOutput{Username: "dev1"}},
 			{ID: 2, Body: "Reply", Author: &toolutil.NoteUserOutput{Username: "dev2"}},
 		},
@@ -2625,23 +2625,82 @@ func TestMarkdownRegistry_Exceptions_NameACaseEach(t *testing.T) {
 // with the runners migration, which gave the registration token an output
 // type of its own so the two secrets stopped sharing a formatter.
 func TestMarkdownRegistry_Registrations_HaveNoUndeclaredProblems(t *testing.T) {
-	got := toolutil.MarkdownRegistrationProblems()
+	if got := toolutil.MarkdownRegistrationProblems(); len(got) != 0 {
+		t.Errorf("registration problems, want none:\n  %s", strings.Join(got, "\n  "))
+	}
+}
 
-	want := []string{
-		"duplicate Markdown formatter for iterationdata.Output: the first registration is kept",
-		"duplicate Markdown formatter for labeldata.Output: the first registration is kept",
-		"duplicate Markdown formatter for toolutil.DiscussionThreadNoteOutput: the first registration is kept",
-		"duplicate Markdown formatter for toolutil.DiscussionThreadNoteOutput: the first registration is kept",
-		"duplicate Markdown formatter for toolutil.DiscussionThreadNoteOutput: the first registration is kept",
-		"duplicate Markdown formatter for toolutil.DiscussionThreadOutput: the first registration is kept",
-		"duplicate Markdown formatter for toolutil.DiscussionThreadOutput: the first registration is kept",
-		"duplicate Markdown formatter for toolutil.DiscussionThreadOutput: the first registration is kept",
-		"duplicate Markdown formatter for toolutil.NoteOutput: the first registration is kept",
-		"duplicate Markdown formatter for toolutil.NoteOutput: the first registration is kept",
+// TestMarkdownRegistry_EveryAction_IsRenderedByItsOwnersFormatter holds the
+// formatter that renders each catalog action's output to the package that
+// owns the action (issue 1291). The registry is keyed by type and keeps the
+// first registration of one, so while the issue, merge request and snippet
+// note and discussion packages published their output as an alias of a
+// shared toolutil type, a merge request note came back as an "Issue Note"
+// and every merge request, issue and snippet thread offered commit
+// discussion actions as its next steps, whichever init ran first. A
+// duplicate registration is caught above; this catches the shape that
+// produces none, an action answering with a type another domain's formatter
+// already claims. sharedFormatterPackages are the packages whose formatter
+// renders a shape several domains answer with by design.
+func TestMarkdownRegistry_EveryAction_IsRenderedByItsOwnersFormatter(t *testing.T) {
+	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	seen := map[string]bool{}
+	for _, action := range catalog.Actions() {
+		out := action.Route.OutputType
+		if out == nil {
+			continue
+		}
+		name := toolutil.RegisteredMarkdownFormatterName(out)
+		if name == "" {
+			continue
+		}
+		formatter := formatterPackage(name)
+		if formatter == action.OwnerPackage || sharedFormatterPackages[formatter] != "" {
+			continue
+		}
+		id := string(action.ID)
+		seen[id] = true
+		if _, declared := borrowedFormatters[id]; !declared {
+			t.Errorf("%s (owned by %s) answers with %s, which %s renders", id, action.OwnerPackage, out, name)
+		}
 	}
-	if strings.Join(got, "\n") != strings.Join(want, "\n") {
-		t.Errorf("registration problems:\n got %q\nwant %q", got, want)
+	for id, reason := range borrowedFormatters {
+		if reason == "" {
+			t.Errorf("the declaration for %s gives no reason", id)
+		}
+		if !seen[id] {
+			t.Errorf("the declaration for %s matches no action rendered by another package's formatter; remove it", id)
+		}
 	}
+	for pkg, reason := range sharedFormatterPackages {
+		if reason == "" {
+			t.Errorf("the shared formatter package %s gives no reason", pkg)
+		}
+	}
+}
+
+// formatterPackage is the package a formatter's runtime name places it in:
+// the last path element before the first dot, so
+// ".../internal/tools/mrnotes.FormatOutputMarkdown" and
+// ".../internal/tools/mrnotes.init.0.func1" both read as mrnotes.
+func formatterPackage(name string) string {
+	last := name[strings.LastIndex(name, "/")+1:]
+	pkg, _, _ := strings.Cut(last, ".")
+	return pkg
+}
+
+// sharedFormatterPackages are the packages whose formatter renders a shape
+// several domains answer with by design, with the reason it is one formatter.
+var sharedFormatterPackages = map[string]string{
+	"toolutil":      "the generic answers every domain returns (a deletion, a void write, a raw result), rendered alike everywhere",
+	"labeldata":     "the project and group label packages answer with one label shape, whose card takes its copy from the label's own scope",
+	"iterationdata": "the project and group iteration packages answer with one iteration shape, whose card names both list actions",
+}
+
+// borrowedFormatters are the catalog actions answered with a type another
+// package's formatter renders on purpose, each with its reason.
+var borrowedFormatters = map[string]string{
+	"repository.merge_base": "the merge base is a commit, answered with the commit package's own output and rendered as the commit card",
 }
 
 // mdGateGlyphRules are the glyphs an absent value must not render as, each

@@ -1,6 +1,8 @@
 package toolutil
 
 import (
+	"reflect"
+
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
@@ -380,17 +382,33 @@ func DiscussionThreadOutputFromGitLab(d *gl.Discussion, extra DiscussionExtra) D
 }
 
 // DiscussionThreadOutputsFromGitLab converts a list of discussions with the
-// extras the captured list answer holds for each, by position.
-func DiscussionThreadOutputsFromGitLab(discussions []*gl.Discussion, extras []DiscussionExtra) []DiscussionThreadOutput {
-	out := make([]DiscussionThreadOutput, 0, len(discussions))
+// extras the captured list answer holds for each, by position, into T, the
+// thread type the caller's package declares over [DiscussionThreadOutput]
+// (see convertShape).
+func DiscussionThreadOutputsFromGitLab[T any](discussions []*gl.Discussion, extras []DiscussionExtra) []T {
+	out := make([]T, 0, len(discussions))
 	for i, d := range discussions {
 		var extra DiscussionExtra
 		if i < len(extras) {
 			extra = extras[i]
 		}
-		out = append(out, DiscussionThreadOutputFromGitLab(d, extra))
+		out = append(out, convertShape[T](DiscussionThreadOutputFromGitLab(d, extra)))
 	}
 	return out
+}
+
+// convertShape converts value into T, a type declared over value's own type,
+// as each note and discussion package declares its output over a shared shape
+// so the Markdown registry finds its own formatter. Go writes that conversion
+// only where T is named: a type parameter admits every type declared over a
+// struct only under a constraint spelling the struct's fields again, so the
+// conversion is made through reflect, and a T of any other underlying type
+// panics on the first call, which each handler's tests make. The assertion
+// after it cannot fail, since Convert answers with a value of type T or
+// panics.
+func convertShape[T, V any](value V) T {
+	converted, _ := reflect.TypeAssert[T](reflect.ValueOf(value).Convert(reflect.TypeFor[T]()))
+	return converted
 }
 
 // MarkdownDiscussion returns the shared Markdown view model for a thread.

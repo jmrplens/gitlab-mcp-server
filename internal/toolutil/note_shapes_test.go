@@ -343,10 +343,26 @@ func TestDiscussionThreadOutputFromGitLab_ReadsBothHalves(t *testing.T) {
 		t.Errorf("a nil discussion converted to %+v, want the zero value", zero)
 	}
 
-	list := DiscussionThreadOutputsFromGitLab([]*gl.Discussion{discussion, {ID: "d2"}}, []DiscussionExtra{threadExtra})
+	list := DiscussionThreadOutputsFromGitLab[packageThread]([]*gl.Discussion{discussion, {ID: "d2"}}, []DiscussionExtra{threadExtra})
 	if len(list) != 2 || !list[0].Resolvable || list[1].ID != "d2" || list[1].Resolvable {
 		t.Errorf("DiscussionThreadOutputsFromGitLab() = %+v, want the first paired and the second without extras", list)
 	}
+}
+
+// TestConvertShape_ATypeOfAnotherShape_Panics verifies the one way the
+// conversion fails: a type declared over another shape panics rather than
+// answering a zero value, so a handler instantiating a helper with the wrong
+// type fails on its first test instead of serving an empty thread.
+func TestConvertShape_ATypeOfAnotherShape_Panics(t *testing.T) {
+	if got := convertShape[packageThread](DiscussionThreadOutput{ID: "d1"}); got.ID != "d1" {
+		t.Fatalf("convertShape() = %+v, want the thread under the package's type", got)
+	}
+	defer func() {
+		if recover() == nil {
+			t.Error("convertShape() into another shape's type did not panic")
+		}
+	}()
+	convertShape[packageThreadNote](DiscussionThreadOutput{ID: "d1"})
 }
 
 // TestDiscussionThreadOutput_Markdown verifies the view models: the author

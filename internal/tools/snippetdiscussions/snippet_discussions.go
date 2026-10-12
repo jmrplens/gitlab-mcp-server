@@ -73,14 +73,20 @@ type DeleteNoteInput struct {
 
 // Output types.
 
-// NoteOutput represents a single note within a discussion.
-type NoteOutput = toolutil.DiscussionThreadNoteOutput
+// NoteOutput is a note of a snippet discussion: a type of its own over
+// [toolutil.DiscussionThreadNoteOutput], the note shape the four REST
+// discussion packages share. It is a defined type rather than an alias
+// because the Markdown registry is keyed by type: while the four packages
+// aliased one, the commit discussion card rendered every snippet thread and
+// note, offering commit discussion actions as their next steps (issue 1291).
+type NoteOutput toolutil.DiscussionThreadNoteOutput
 
-// Output is an alias of [toolutil.DiscussionThreadOutput], the discussion
-// thread shape with full note payloads and the thread's own resolution
-// state. Until 2.8.0 this package published a six-field note with the
-// author's username as a string.
-type Output = toolutil.DiscussionThreadOutput
+// Output is a snippet discussion thread: a type of its own over
+// [toolutil.DiscussionThreadOutput], the thread shape with full note payloads
+// and the thread's own resolution state, for the reason [NoteOutput] gives.
+// Until 2.8.0 this package published a six-field note with the author's
+// username as a string.
+type Output toolutil.DiscussionThreadOutput
 
 // ListOutput holds a list of snippet discussions.
 type ListOutput struct {
@@ -93,14 +99,8 @@ type ListOutput struct {
 
 // List lists snippet discussions.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	if err := ctx.Err(); err != nil {
+	if err := toolutil.RequireProjectItem(ctx, "snippet_discussion_list", input.ProjectID, "snippet_id", input.SnippetID); err != nil {
 		return ListOutput{}, err
-	}
-	if input.ProjectID == "" {
-		return ListOutput{}, errors.New("snippet_discussion_list: project_id is required")
-	}
-	if input.SnippetID <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("snippet_discussion_list", "snippet_id")
 	}
 	opts := &gl.ListSnippetDiscussionsOptions{
 		OrderBy: input.OrderBy, Sort: input.Sort,
@@ -112,7 +112,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_discussion_list", err, http.StatusNotFound,
 			"verify project_id with project.get and snippet_id with snippet.project_list")
 	}
-	threads, err := toolutil.CapturedThreads("snippet_discussion_list", discussions, captured)
+	threads, err := capturedThreads("snippet_discussion_list", discussions, captured)
 	if err != nil {
 		return ListOutput{}, err
 	}
@@ -121,14 +121,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 // Get gets a single snippet discussion.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
-	if err := ctx.Err(); err != nil {
+	if err := toolutil.RequireProjectItem(ctx, "snippet_discussion_get", input.ProjectID, "snippet_id", input.SnippetID); err != nil {
 		return Output{}, err
-	}
-	if input.ProjectID == "" {
-		return Output{}, errors.New("snippet_discussion_get: project_id is required")
-	}
-	if input.SnippetID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("snippet_discussion_get", "snippet_id")
 	}
 	if input.DiscussionID == "" {
 		return Output{}, errors.New("snippet_discussion_get: discussion_id is required")
@@ -139,19 +133,13 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, toolutil.WrapErrWithStatusHint("snippet_discussion_get", err, http.StatusNotFound,
 			"verify discussion_id with snippet.discussion_list (discussion IDs are 40-char hex strings)")
 	}
-	return toolutil.CapturedThread("snippet_discussion_get", d, captured)
+	return capturedThread("snippet_discussion_get", d, captured)
 }
 
 // Create creates a new snippet discussion thread.
 func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
-	if err := ctx.Err(); err != nil {
+	if err := toolutil.RequireProjectItem(ctx, "snippet_discussion_create", input.ProjectID, "snippet_id", input.SnippetID); err != nil {
 		return Output{}, err
-	}
-	if input.ProjectID == "" {
-		return Output{}, errors.New("snippet_discussion_create: project_id is required")
-	}
-	if input.SnippetID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("snippet_discussion_create", "snippet_id")
 	}
 	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
 	if err != nil {
@@ -167,19 +155,13 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, toolutil.WrapErrWithStatusHint("snippet_discussion_create", err, http.StatusBadRequest,
 			"body is required and cannot be empty; commenting requires Reporter role or being the snippet author")
 	}
-	return toolutil.CapturedThread("snippet_discussion_create", d, captured)
+	return capturedThread("snippet_discussion_create", d, captured)
 }
 
 // AddNote adds a note to an existing snippet discussion.
 func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInput) (NoteOutput, error) {
-	if err := ctx.Err(); err != nil {
+	if err := toolutil.RequireProjectItem(ctx, "snippet_discussion_add_note", input.ProjectID, "snippet_id", input.SnippetID); err != nil {
 		return NoteOutput{}, err
-	}
-	if input.ProjectID == "" {
-		return NoteOutput{}, errors.New("snippet_discussion_add_note: project_id is required")
-	}
-	if input.SnippetID <= 0 {
-		return NoteOutput{}, toolutil.ErrRequiredInt64("snippet_discussion_add_note", "snippet_id")
 	}
 	if input.DiscussionID == "" {
 		return NoteOutput{}, errors.New("snippet_discussion_add_note: discussion_id is required")
@@ -198,19 +180,13 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("snippet_discussion_add_note", err, http.StatusNotFound,
 			"verify discussion_id with snippet.discussion_list; the discussion must exist on this snippet")
 	}
-	return toolutil.CapturedThreadNote("snippet_discussion_add_note", note, captured)
+	return capturedThreadNote("snippet_discussion_add_note", note, captured)
 }
 
 // UpdateNote updates an existing snippet discussion note.
 func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNoteInput) (NoteOutput, error) {
-	if err := ctx.Err(); err != nil {
+	if err := toolutil.RequireProjectItem(ctx, "snippet_discussion_update_note", input.ProjectID, "snippet_id", input.SnippetID); err != nil {
 		return NoteOutput{}, err
-	}
-	if input.ProjectID == "" {
-		return NoteOutput{}, errors.New("snippet_discussion_update_note: project_id is required")
-	}
-	if input.SnippetID <= 0 {
-		return NoteOutput{}, toolutil.ErrRequiredInt64("snippet_discussion_update_note", "snippet_id")
 	}
 	if input.DiscussionID == "" {
 		return NoteOutput{}, errors.New("snippet_discussion_update_note: discussion_id is required")
@@ -232,19 +208,13 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("snippet_discussion_update_note", err, http.StatusForbidden,
 			"updating a note requires being the note author; system notes cannot be modified")
 	}
-	return toolutil.CapturedThreadNote("snippet_discussion_update_note", note, captured)
+	return capturedThreadNote("snippet_discussion_update_note", note, captured)
 }
 
 // DeleteNote deletes a snippet discussion note.
 func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNoteInput) error {
-	if err := ctx.Err(); err != nil {
+	if err := toolutil.RequireProjectItem(ctx, "snippet_discussion_delete_note", input.ProjectID, "snippet_id", input.SnippetID); err != nil {
 		return err
-	}
-	if input.ProjectID == "" {
-		return errors.New("snippet_discussion_delete_note: project_id is required")
-	}
-	if input.SnippetID <= 0 {
-		return toolutil.ErrRequiredInt64("snippet_discussion_delete_note", "snippet_id")
 	}
 	if input.DiscussionID == "" {
 		return errors.New("snippet_discussion_delete_note: discussion_id is required")
@@ -259,5 +229,15 @@ func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNo
 	}
 	return nil
 }
+
+// Converters.
+
+// capturedThread, capturedThreads and capturedThreadNote are the shared
+// conversions of a captured answer, answering in this package's own types.
+var (
+	capturedThread     = toolutil.CapturedThread[Output]
+	capturedThreads    = toolutil.CapturedThreads[Output]
+	capturedThreadNote = toolutil.CapturedThreadNote[NoteOutput]
+)
 
 // Formatters.

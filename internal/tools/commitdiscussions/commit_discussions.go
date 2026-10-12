@@ -268,7 +268,7 @@ func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNo
 // answer adds to each discussion, to the tool output format.
 func toListOutput(discussions []*gl.Discussion, extras []toolutil.DiscussionExtra, resp *gl.Response) ListOutput {
 	return ListOutput{
-		Discussions: toolutil.DiscussionThreadOutputsFromGitLab(discussions, extras),
+		Discussions: toolutil.DiscussionThreadOutputsFromGitLab[Output](discussions, extras),
 		Pagination:  toolutil.PaginationFromResponse(resp),
 	}
 }

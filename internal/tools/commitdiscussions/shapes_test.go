@@ -232,13 +232,13 @@ func TestFirstNoteAuthor(t *testing.T) {
 	if got := firstNoteAuthor(Output{}); got != "" {
 		t.Errorf("expected empty author for no notes, got %q", got)
 	}
-	if got := firstNoteAuthor(Output{Notes: []*NoteOutput{nil}}); got != "" {
+	if got := firstNoteAuthor(Output{Notes: []*toolutil.DiscussionThreadNoteOutput{nil}}); got != "" {
 		t.Errorf("expected empty author for nil note, got %q", got)
 	}
-	if got := (NoteOutput{}).AuthorUsername(); got != "" {
+	if got := (toolutil.DiscussionThreadNoteOutput{}).AuthorUsername(); got != "" {
 		t.Errorf("expected empty author for nil author, got %q", got)
 	}
-	d := Output{Notes: []*NoteOutput{{Author: &toolutil.NoteUserOutput{Username: "alice"}}}}
+	d := Output{Notes: []*toolutil.DiscussionThreadNoteOutput{{Author: &toolutil.NoteUserOutput{Username: "alice"}}}}
 	if got := firstNoteAuthor(d); got != "alice" {
 		t.Errorf("expected alice, got %q", got)
 	}

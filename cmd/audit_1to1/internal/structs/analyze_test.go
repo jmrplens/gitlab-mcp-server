@@ -2175,6 +2175,71 @@ func TestCollectConverter_TheResultName_DecidesWhetherThePairIsRecorded(t *testi
 	}
 }
 
+// TestCollectInstantiatedConverters_AGenericConverterOfALocalType_IsPaired
+// verifies the instantiations read as converters: a generic function a
+// package instantiates with its own output type, taking one client-go result
+// struct, pairs the two as a converter the package declared would, which is
+// how a discussion package keeps its pairing once it calls
+// toolutil.CapturedThread[Output] rather than declaring a wrapper. An
+// instantiated generic type, a signature with no result, one whose result is
+// another package's type and one taking no client-go struct record nothing.
+func TestCollectInstantiatedConverters_AGenericConverterOfALocalType_IsPaired(t *testing.T) {
+	const pkgPath = "example.com/x/internal/tools/p"
+	local := types.NewPackage(pkgPath, "p")
+	toolutilPkg := types.NewPackage("example.com/x/internal/toolutil", "toolutil")
+	sdkStruct := makeStruct(structField{"Name", "name", tString})
+	mcpStruct := makeStruct(structField{"BranchName", "branch_name", tString})
+	sdk := types.NewPointer(namedStruct(types.NewPackage(shared.ClientGoPkgPath+"/v2", "gitlab"), "Branch", sdkStruct))
+	output := namedStruct(local, "Output", mcpStruct)
+	errorType := types.Universe.Lookup("error").Type()
+
+	signature := func(result types.Type, params ...types.Type) *types.Signature {
+		vars := make([]*types.Var, 0, len(params))
+		for _, param := range params {
+			vars = append(vars, types.NewParam(token.NoPos, toolutilPkg, "arg", param))
+		}
+		var results *types.Tuple
+		if result != nil {
+			results = types.NewTuple(types.NewParam(token.NoPos, toolutilPkg, "", result), types.NewParam(token.NoPos, toolutilPkg, "", errorType))
+		}
+		return types.NewSignatureType(nil, nil, nil, types.NewTuple(vars...), results, false)
+	}
+
+	cases := []struct {
+		name      string
+		instance  types.Type
+		wantPairs int
+	}{
+		{name: "a converter of a local output type is paired", instance: signature(output, tString, sdk), wantPairs: 1},
+		{name: "an instantiated generic type is not", instance: output, wantPairs: 0},
+		{name: "a signature with no result is not", instance: signature(nil, sdk), wantPairs: 0},
+		{name: "a result another package declares is not", instance: signature(namedStruct(toolutilPkg, "Output", mcpStruct), sdk), wantPairs: 0},
+		{name: "a converter taking no client-go struct is not", instance: signature(output, tString), wantPairs: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pkg := &packages.Package{PkgPath: pkgPath, TypesInfo: &types.Info{
+				Instances: map[*ast.Ident]types.Instance{ast.NewIdent("CapturedThread"): {Type: tc.instance}},
+			}}
+			pairs := map[[2]string]structPair{}
+
+			collectInstantiatedConverters(pkg, pairs)
+
+			if len(pairs) != tc.wantPairs {
+				t.Fatalf("collectInstantiatedConverters recorded %d pair(s), want %d", len(pairs), tc.wantPairs)
+			}
+			if tc.wantPairs == 0 {
+				return
+			}
+			got := pairs[[2]string{"Output", "Branch"}]
+			if got.mcpName != "Output" || got.mcpType != mcpStruct || got.mcpNamed != output ||
+				got.sdkName != "v2.Branch" || got.sdkType != sdkStruct || got.sdkURLTags {
+				t.Errorf("pair = %+v, want the local output against the qualified SDK struct", got)
+			}
+		})
+	}
+}
+
 // TestDiffPair_ATypeMismatch_KeepsEachTypeOnItsOwnSide verifies the input
 // diff's advisory record and the direction its compatibility rule is asked in.
 //

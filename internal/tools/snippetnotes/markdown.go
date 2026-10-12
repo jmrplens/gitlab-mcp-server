@@ -3,12 +3,15 @@ package snippetnotes
 import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 
 // FormatOutputMarkdown renders a single snippet note as a Markdown summary.
+// Its next steps name the canonical action IDs every surface resolves: the
+// card was never served while the note type was shared, so its bare meta
+// action names had reached no reader.
 func FormatOutputMarkdown(n Output) string {
 	return toolutil.FormatNoteMarkdown(toNoteMarkdown(n), toolutil.NoteMarkdownOptions{
 		Title: "Snippet Note",
 		Hints: []string{
-			"Use action 'note_update' with note_id to edit this note",
-			"Use action 'note_delete' with note_id to remove this note",
+			toolutil.HintAction(actionSnippetNoteUpdate, "edit this note"),
+			toolutil.HintAction(actionSnippetNoteDelete, "remove this note"),
 		},
 	})
 }
@@ -19,15 +22,15 @@ func FormatListMarkdown(out ListOutput) string {
 		Title:        "Snippet Notes",
 		EmptyMessage: "No snippet notes found.\n",
 		Hints: toolutil.ListHints(
-			"Use action 'note_get' with note_id to read a specific note",
-			"Use action 'note_create' to add a new note to this snippet",
+			toolutil.HintAction(actionSnippetNoteGet, "read one of these notes in full"),
+			toolutil.HintAction(actionSnippetNoteCreate, "add a new note to this snippet"),
 		),
 	})
 }
 
 func toNoteMarkdown(n Output) toolutil.NoteMarkdown {
 	flags := toolutil.NoteMarkdownFlags{System: n.System}
-	return toolutil.NewNoteMarkdown(n.ID, n.Body, n.AuthorUsername(), n.CreatedAt, flags, "")
+	return toolutil.NewNoteMarkdown(n.ID, n.Body, toolutil.NoteOutput(n).AuthorUsername(), n.CreatedAt, flags, "")
 }
 
 func init() {

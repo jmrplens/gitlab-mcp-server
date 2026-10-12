@@ -2,12 +2,17 @@ package issuediscussions
 
 import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 
+// The next steps below name the canonical action IDs every surface resolves.
+// The thread and note cards were never served while this package's types were
+// aliases of the shared thread shapes, the commit discussion cards answering
+// in their place, so their bare meta action names had reached no reader.
+
 // FormatListMarkdownString renders discussions list as Markdown.
 func FormatListMarkdownString(out ListOutput) string {
 	return toolutil.FormatRESTDiscussionListMarkdown(
 		out.Discussions, out.Pagination, toMarkdownDiscussion, "Issue Discussions", "No issue discussions found.\n",
-		"Use action 'discussion_get' with discussion_id to see full discussion",
-		"Use action 'discussion_add_note' to reply to a discussion",
+		toolutil.HintAction(actionDiscussionGet, "see a full discussion"),
+		toolutil.HintAction(actionDiscussionAddNote, "reply to a discussion"),
 	)
 }
 
@@ -15,8 +20,8 @@ func FormatListMarkdownString(out ListOutput) string {
 func FormatMarkdownString(out Output) string {
 	return toolutil.FormatDiscussionMarkdown(
 		toMarkdownDiscussion(out),
-		"Use action 'discussion_add_note' to reply to this discussion",
-		"Use action 'discussion_update_note' with note_id to edit a note",
+		toolutil.HintAction(actionDiscussionAddNote, "reply to this discussion"),
+		toolutil.HintAction(actionDiscussionUpdateNote, "edit one of its notes"),
 	)
 }
 
@@ -26,18 +31,18 @@ func FormatNoteMarkdownString(out NoteOutput) string {
 		Title:             "Discussion Note",
 		IncludeResolvable: true,
 		Hints: []string{
-			"Use action 'discussion_update_note' with note_id to edit this note",
-			"Use action 'discussion_delete_note' with note_id to remove this note",
+			toolutil.HintAction(actionDiscussionUpdateNote, "edit this note"),
+			toolutil.HintAction(actionDiscussionDeleteNote, "remove this note"),
 		},
 	})
 }
 
 func toMarkdownDiscussion(out Output) toolutil.DiscussionMarkdown {
-	return out.MarkdownDiscussion()
+	return toolutil.DiscussionThreadOutput(out).MarkdownDiscussion()
 }
 
 func toMarkdownNote(out NoteOutput) toolutil.DiscussionNoteMarkdown {
-	return out.MarkdownNote()
+	return toolutil.DiscussionThreadNoteOutput(out).MarkdownNote()
 }
 
 func init() {

@@ -38,32 +38,39 @@ func CapturedDiscussions(capture *gitlabclient.ResponseCapture, decoded int) ([]
 
 // CapturedThread converts one discussion with what its captured answer
 // carries beside the SDK's decode, or reports under op the answer the type
-// cannot hold. It is the whole tail of a handler that returns one thread.
-func CapturedThread(op string, d *gl.Discussion, capture *gitlabclient.ResponseCapture) (DiscussionThreadOutput, error) {
+// cannot hold. It is the whole tail of a handler that returns one thread, and
+// answers in T, the thread type the handler's own package declares over
+// [DiscussionThreadOutput] so the Markdown registry finds that package's
+// formatter (see convertShape for what T must be).
+func CapturedThread[T any](op string, d *gl.Discussion, capture *gitlabclient.ResponseCapture) (T, error) {
 	extra, err := CapturedDiscussion(capture)
 	if err != nil {
-		return DiscussionThreadOutput{}, WrapErr(op, err)
+		var zero T
+		return zero, WrapErr(op, err)
 	}
-	return DiscussionThreadOutputFromGitLab(d, extra), nil
+	return convertShape[T](DiscussionThreadOutputFromGitLab(d, extra)), nil
 }
 
 // CapturedThreads does the same for a list of discussions, pairing each with
 // its own extra by position.
-func CapturedThreads(op string, ds []*gl.Discussion, capture *gitlabclient.ResponseCapture) ([]DiscussionThreadOutput, error) {
+func CapturedThreads[T any](op string, ds []*gl.Discussion, capture *gitlabclient.ResponseCapture) ([]T, error) {
 	extras, err := CapturedDiscussions(capture, len(ds))
 	if err != nil {
 		return nil, WrapErr(op, err)
 	}
-	return DiscussionThreadOutputsFromGitLab(ds, extras), nil
+	return DiscussionThreadOutputsFromGitLab[T](ds, extras), nil
 }
 
-// CapturedThreadNote converts one note of a thread the same way.
-func CapturedThreadNote(op string, n *gl.Note, capture *gitlabclient.ResponseCapture) (DiscussionThreadNoteOutput, error) {
+// CapturedThreadNote converts one note of a thread the same way, answering in
+// T, the note type the handler's package declares over
+// [DiscussionThreadNoteOutput].
+func CapturedThreadNote[T any](op string, n *gl.Note, capture *gitlabclient.ResponseCapture) (T, error) {
 	extra, err := CapturedNote(capture)
 	if err != nil {
-		return DiscussionThreadNoteOutput{}, WrapErr(op, err)
+		var zero T
+		return zero, WrapErr(op, err)
 	}
-	return DiscussionThreadNoteOutputFromGitLab(n, extra), nil
+	return convertShape[T](DiscussionThreadNoteOutputFromGitLab(n, extra)), nil
 }
 
 // capturedOne decodes a captured answer to a request for one object.

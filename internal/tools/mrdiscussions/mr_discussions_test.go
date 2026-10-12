@@ -846,7 +846,7 @@ func TestFormatOutputMarkdown_Full(t *testing.T) {
 	d := Output{
 		ID:             "disc-abc",
 		IndividualNote: false,
-		Notes: []*NoteOutput{
+		Notes: []*toolutil.DiscussionThreadNoteOutput{
 			{ID: 1, Body: "First", Author: &toolutil.NoteUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z"},
 			{ID: 2, Body: "Reply", Author: &toolutil.NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02T00:00:00Z"},
 		},
@@ -880,11 +880,11 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_WithDiscussions(t *testing.T) {
 	out := ListOutput{
 		Discussions: []Output{
-			{ID: "d1", IndividualNote: false, Notes: []*NoteOutput{
+			{ID: "d1", IndividualNote: false, Notes: []*toolutil.DiscussionThreadNoteOutput{
 				{ID: 1, Body: "First", Author: &toolutil.NoteUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z"},
 				{ID: 2, Body: "Reply", Author: &toolutil.NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02T00:00:00Z"},
 			}},
-			{ID: "d2", IndividualNote: true, Notes: []*NoteOutput{
+			{ID: "d2", IndividualNote: true, Notes: []*toolutil.DiscussionThreadNoteOutput{
 				{ID: 3, Body: "Standalone", Author: &toolutil.NoteUserOutput{Username: "carol"}, CreatedAt: "2026-01-03T00:00:00Z"},
 			}},
 		},
@@ -1290,7 +1290,7 @@ func TestNoteToOutput_PositionAndResolvedBy(t *testing.T) {
 
 // assertNoteScalars verifies the additive scalar / user sub-object fields mapped
 // by NoteToOutput from a fully populated note.
-func assertNoteScalars(t *testing.T, n *NoteOutput) {
+func assertNoteScalars(t *testing.T, n *toolutil.DiscussionThreadNoteOutput) {
 	t.Helper()
 	if n.Author == nil || n.Author.Name != "Rev" {
 		t.Fatalf("Author = %+v, want name Rev", n.Author)
@@ -1325,7 +1325,7 @@ func assertNotePosition(t *testing.T, pos *toolutil.NotePositionOutput) {
 // AuthorUsername method carries, which this package's formatters rely on,
 // returns an empty string when the author object is absent.
 func TestNoteAuthorUsername_NilAuthor(t *testing.T) {
-	if got := (NoteOutput{ID: 1}).AuthorUsername(); got != "" {
+	if got := toolutil.DiscussionThreadNoteOutput(NoteOutput{ID: 1}).AuthorUsername(); got != "" {
 		t.Errorf("AuthorUsername() with a nil author = %q, want empty", got)
 	}
 }
@@ -1763,7 +1763,7 @@ func TestFormatNoteMarkdown_InternalFlag_ShownAsAnInternalNote(t *testing.T) {
 // slice of pointers, so the guard is the only thing between a formatter and a
 // nil dereference that would take the whole tool call down.
 func TestFormatOutputMarkdown_NilNote_IsSkipped(t *testing.T) {
-	d := Output{ID: "holed", Notes: []*NoteOutput{
+	d := Output{ID: "holed", Notes: []*toolutil.DiscussionThreadNoteOutput{
 		nil,
 		{ID: 9, Body: "here", Author: &toolutil.NoteUserOutput{Username: "z"}, CreatedAt: "2026-01-01T00:00:00Z"},
 	}}

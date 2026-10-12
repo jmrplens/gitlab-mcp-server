@@ -21,11 +21,15 @@ type CreateInput struct {
 	CreatedAt string               `json:"created_at,omitempty" jsonschema:"Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise."`
 }
 
-// Output is an alias of [toolutil.NoteOutput], the canonical REST note shape
-// shared between issuenotes and mrnotes. Field layout and JSON tags are
-// defined in toolutil; see [toolutil.NoteOutputFromGitLab] for the 1:1 audit
-// conversion logic.
-type Output = toolutil.NoteOutput
+// Output is an issue note: a type of its own over [toolutil.NoteOutput], the
+// canonical REST note shape the issue, merge request and snippet note
+// packages share, whose fields and JSON tags are defined there; see
+// [toolutil.NoteOutputFromGitLab] for the 1:1 audit conversion logic. It is a
+// defined type rather than an alias because the Markdown registry is keyed by
+// type: while the three packages aliased one, whichever init ran first
+// rendered all three, and a merge request note came back as an "Issue Note"
+// (issue 1291).
+type Output toolutil.NoteOutput
 
 // ListInput defines parameters for listing issue notes.
 type ListInput struct {
@@ -71,7 +75,7 @@ type DeleteInput struct {
 // [toolutil.NoteOutputFromGitLab] which owns the 1:1 audit field mapping
 // and timestamp formatting.
 func ToOutput(n *gl.Note, extra toolutil.NoteExtra) Output {
-	return toolutil.NoteOutputFromGitLab(n, extra)
+	return Output(toolutil.NoteOutputFromGitLab(n, extra))
 }
 
 // Create adds a new comment to the specified issue in a GitLab

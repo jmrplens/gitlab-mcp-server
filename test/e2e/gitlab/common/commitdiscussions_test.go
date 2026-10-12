@@ -11,12 +11,13 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/commitdiscussions"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
 
 // commitNoteIDs returns the identifiers of a thread's notes.
-func commitNoteIDs(notes []*commitdiscussions.NoteOutput) []int64 {
+func commitNoteIDs(notes []*toolutil.DiscussionThreadNoteOutput) []int64 {
 	ids := make([]int64, 0, len(notes))
 	for _, note := range notes {
 		if note != nil {

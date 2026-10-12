@@ -16,7 +16,8 @@ func toMarkdownNote(n NoteOutput) toolutil.NoteMarkdown {
 		Resolvable: n.Resolvable,
 		Resolved:   n.Resolved,
 	}
-	return toolutil.NewNoteMarkdown(n.ID, n.Body, n.AuthorUsername(), n.CreatedAt, flags, n.ResolvedByUsername())
+	note := toolutil.DiscussionThreadNoteOutput(n)
+	return toolutil.NewNoteMarkdown(n.ID, n.Body, note.AuthorUsername(), n.CreatedAt, flags, note.ResolvedByUsername())
 }
 
 // toMarkdownDiscussion builds the shared thread view model, every note through
@@ -25,7 +26,7 @@ func toMarkdownDiscussion(d Output) toolutil.DiscussionMarkdown {
 	notes := make([]toolutil.NoteMarkdown, 0, len(d.Notes))
 	for _, n := range d.Notes {
 		if n != nil {
-			notes = append(notes, toMarkdownNote(*n))
+			notes = append(notes, toMarkdownNote(NoteOutput(*n)))
 		}
 	}
 	return toolutil.NewDiscussionMarkdown(d.ID, notes)

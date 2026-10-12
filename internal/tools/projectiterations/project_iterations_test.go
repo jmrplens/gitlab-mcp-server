@@ -12,6 +12,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/iterationdata"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -60,8 +61,12 @@ func TestIssueActionSpecs_ListHint_NamesTheActionThisPackageRegisters(t *testing
 	if len(specs) != 1 {
 		t.Fatalf("len(IssueActionSpecs) = %d, want 1", len(specs))
 	}
-	if want := catalogGroupPrefix + specs[0].Name; actionListProject != want {
-		t.Errorf("project-list hint names %q, but the registered action is %q", actionListProject, want)
+	want := catalogGroupPrefix + specs[0].Name
+	if actionListProject != want {
+		t.Errorf("the spec's own ID is %q, but the registered action is %q", actionListProject, want)
+	}
+	if iterationdata.ActionListProject != want {
+		t.Errorf("project-list hint names %q, but the registered action is %q", iterationdata.ActionListProject, want)
 	}
 }
 

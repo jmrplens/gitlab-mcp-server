@@ -597,11 +597,11 @@ func TestNoteIDRequired_Validation(t *testing.T) {
 // expectation below can pin the whole rendered document.
 const (
 	noteHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'note_update' with note_id to edit this note\n" +
-		"- Use action 'note_delete' with note_id to remove this note\n"
+		"- Use action 'snippet.note_update' to edit this note\n" +
+		"- Use action 'snippet.note_delete' to remove this note\n"
 	listHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'note_get' with note_id to read a specific note\n" +
-		"- Use action 'note_create' to add a new note to this snippet\n"
+		"- Use action 'snippet.note_get' to read one of these notes in full\n" +
+		"- Use action 'snippet.note_create' to add a new note to this snippet\n"
 )
 
 // TestFormatOutputMarkdown_Basic pins the whole card of a note somebody wrote.

@@ -601,7 +601,7 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 		Discussions: []Output{
 			{
 				ID: "d1",
-				Notes: []*NoteOutput{
+				Notes: []*toolutil.DiscussionThreadNoteOutput{
 					{ID: 1, Author: &toolutil.NoteUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z", Body: "note body"},
 				},
 			},
@@ -634,7 +634,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatMarkdown_WithNotes(t *testing.T) {
 	out := Output{
 		ID: "d1",
-		Notes: []*NoteOutput{
+		Notes: []*toolutil.DiscussionThreadNoteOutput{
 			{ID: 1, Author: &toolutil.NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-01T00:00:00Z", Body: "hello"},
 		},
 	}

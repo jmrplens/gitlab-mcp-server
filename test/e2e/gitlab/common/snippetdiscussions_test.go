@@ -31,9 +31,20 @@ func TestSnippetDiscussions_Lifecycle_CreateListGetAddUpdateDeleteNote(t *testin
 		params := f.params()
 		body := "thread from the " + string(surface) + " surface"
 
-		created := harness.Do[snippetdiscussions.Output](s, actionSnippetDiscussionCreate, withParams(params, map[string]any{"body": body}))
+		created, said := harness.DoAnswer[snippetdiscussions.Output](s, actionSnippetDiscussionCreate, withParams(params, map[string]any{"body": body}))
 		if created.ID == "" || len(created.Notes) == 0 || created.Notes[0] == nil || created.Notes[0].Body != body {
 			e.T.Fatalf("discussion_create answered %+v, want a thread with an ID opened by the note %q", created, body)
+		}
+		// The thread card is the snippet discussion's own, not the commit
+		// discussion card the registry used to render every shared thread
+		// shape with (issue 1291). Next steps are named in the dynamic
+		// surface's call form, the canonical ID, which the other surfaces may
+		// spell their own way.
+		if containsAny(said, "commit_discussion") {
+			e.T.Errorf("the snippet thread card points at commit discussion actions: %s", said)
+		}
+		if surface == harness.SurfaceDynamic {
+			assertMentions(e, "the snippet thread card's next steps", said, "snippet.discussion_add_note")
 		}
 		noteID := created.Notes[0].ID
 		threadParams := withParams(params, map[string]any{"discussion_id": created.ID})

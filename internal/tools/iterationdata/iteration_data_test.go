@@ -1,6 +1,7 @@
 package iterationdata
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -129,6 +130,31 @@ func TestFormatOutputMarkdown_WithHint(t *testing.T) {
 		"- custom hint\n"
 	if out != want {
 		t.Errorf("FormatOutputMarkdown()\n got %q\nwant %q", out, want)
+	}
+}
+
+// TestFormatCardMarkdown_IsTheRegisteredCardWithBothListActions pins the card
+// the registry serves for every iteration a group or project action answers
+// with: the shared card closed by both list actions, group first, as
+// canonical action IDs. It also holds that this package's init is what
+// registered it, since the group and project iteration packages answer with
+// this package's Output and used to register a card each for it, the
+// registry keeping whichever init ran first (issue 1291).
+func TestFormatCardMarkdown_IsTheRegisteredCardWithBothListActions(t *testing.T) {
+	out := FormatCardMarkdown(Output{ID: 1, IID: 2, Title: "Sprint", State: 2})
+
+	want := "## Iteration #2: Sprint\n\n" +
+		"- **ID**: 1\n" +
+		"- **IID**: 2\n" +
+		"- **State**: current\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'issue.iteration_list_group' to see every iteration in the group\n" +
+		"- Use action 'issue.iteration_list_project' to see the iterations a project takes part in\n"
+	if out != want {
+		t.Errorf("FormatCardMarkdown()\n got %q\nwant %q", out, want)
+	}
+	if got := toolutil.RegisteredMarkdownFormatterName(reflect.TypeFor[Output]()); !strings.HasSuffix(got, "/iterationdata.FormatCardMarkdown") {
+		t.Errorf("formatter registered for iterationdata.Output = %q, want iterationdata.FormatCardMarkdown", got)
 	}
 }
 

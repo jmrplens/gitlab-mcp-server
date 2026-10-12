@@ -453,6 +453,48 @@ func TestErrRequiredString(t *testing.T) {
 	}
 }
 
+// TestRequireProjectItem_RefusesAnInputThatNamesNoItem holds the check the
+// issue and snippet discussion handlers start with to the refusals they wrote
+// in place before it existed, word for word and in the same order: an ended
+// context as itself, then a missing project_id, then a missing item id under
+// the parameter the caller names, and nothing for an input that names both.
+func TestRequireProjectItem_RefusesAnInputThatNamesNoItem(t *testing.T) {
+	tests := []struct {
+		name      string
+		ended     bool
+		projectID StringOrInt
+		id        int64
+		wantErr   string
+	}{
+		{name: "a project and an item", projectID: "42", id: 7},
+		{name: "a context that has ended", ended: true, projectID: "42", id: 7, wantErr: context.Canceled.Error()},
+		{name: "no project", id: 7, wantErr: "opX: project_id is required"},
+		{name: "no project and no item", wantErr: "opX: project_id is required"},
+		{name: "no item", projectID: "42", wantErr: ErrRequiredInt64("opX", "issue_iid").Error()},
+		{name: "a negative item id", projectID: "42", id: -1, wantErr: ErrRequiredInt64("opX", "issue_iid").Error()},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			if tt.ended {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			err := RequireProjectItem(ctx, "opX", tt.projectID, "issue_iid", tt.id)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("RequireProjectItem() error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || err.Error() != tt.wantErr {
+				t.Errorf("RequireProjectItem() error = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // TestIsHTTPStatus verifies that IsHTTPStatus correctly identifies GitLab
 // ErrorResponse instances matching a given HTTP status code.
 func TestIsHTTPStatus(t *testing.T) {

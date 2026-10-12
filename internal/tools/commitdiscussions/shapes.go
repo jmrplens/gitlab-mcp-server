@@ -6,27 +6,32 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// NoteOutput is an alias of [toolutil.DiscussionThreadNoteOutput], the rich
-// note shape used within discussion threads, shared with mrdiscussions. Field
-// layout and JSON tags (including UpdatedAt with omitempty and
-// Resolved/Resolvable without omitempty) are defined in toolutil.
-type NoteOutput = toolutil.DiscussionThreadNoteOutput
+// NoteOutput is a note of a commit discussion: a type of its own over
+// [toolutil.DiscussionThreadNoteOutput], the rich note shape the four REST
+// discussion packages share, whose fields and JSON tags (UpdatedAt with
+// omitempty, Resolved and Resolvable without) are defined there. It is a
+// defined type rather than an alias because the Markdown registry is keyed by
+// type: while the four packages aliased one, this package's card rendered
+// every merge request, issue and snippet thread too, offering commit
+// discussion actions as their next steps (issue 1291).
+type NoteOutput toolutil.DiscussionThreadNoteOutput
 
-// Output is an alias of [toolutil.DiscussionThreadOutput], the discussion
-// thread shape with full note payloads, shared with mrdiscussions.
-type Output = toolutil.DiscussionThreadOutput
+// Output is a commit discussion thread: a type of its own over
+// [toolutil.DiscussionThreadOutput], the thread shape with full note
+// payloads, for the reason [NoteOutput] gives.
+type Output toolutil.DiscussionThreadOutput
 
 // NoteToOutput converts a GitLab API [gl.Note], and what the captured
 // response adds to it, to a [NoteOutput]: the shared conversion in
 // [toolutil.DiscussionThreadNoteOutputFromGitLab], kept under the package's
 // name for its callers and tests.
 func NoteToOutput(n *gl.Note, extra toolutil.NoteExtra) NoteOutput {
-	return toolutil.DiscussionThreadNoteOutputFromGitLab(n, extra)
+	return NoteOutput(toolutil.DiscussionThreadNoteOutputFromGitLab(n, extra))
 }
 
 // ToOutput converts a GitLab API [gl.Discussion], and what the captured
 // response adds to it, to an [Output], including all notes within the
 // thread.
 func ToOutput(d *gl.Discussion, extra toolutil.DiscussionExtra) Output {
-	return toolutil.DiscussionThreadOutputFromGitLab(d, extra)
+	return Output(toolutil.DiscussionThreadOutputFromGitLab(d, extra))
 }

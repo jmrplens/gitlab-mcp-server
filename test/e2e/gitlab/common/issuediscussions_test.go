@@ -12,25 +12,34 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issuediscussions"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrdiscussions"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/snippetdiscussions"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
 
-// discussionIDs lists the IDs of a discussion listing. The issue, merge
-// request and snippet discussion packages all alias the one shared thread
-// shape, so one helper reads the three listings.
-func discussionIDs(discussions []toolutil.DiscussionThreadOutput) []string {
+// discussionThread is the thread type of each discussion package these
+// helpers read: each is a type of its own over the one shared thread shape,
+// so one helper converts any of them to that shape and reads the three
+// listings.
+type discussionThread interface {
+	issuediscussions.Output | mrdiscussions.Output | snippetdiscussions.Output
+}
+
+// discussionIDs lists the IDs of a discussion listing.
+func discussionIDs[T discussionThread](discussions []T) []string {
 	ids := make([]string, 0, len(discussions))
 	for _, discussion := range discussions {
-		ids = append(ids, discussion.ID)
+		ids = append(ids, toolutil.DiscussionThreadOutput(discussion).ID)
 	}
 	return ids
 }
 
 // threadHoldsNote reports whether the named thread of a listing still
 // carries the note.
-func threadHoldsNote(discussions []toolutil.DiscussionThreadOutput, threadID string, noteID int64) bool {
-	for _, discussion := range discussions {
+func threadHoldsNote[T discussionThread](discussions []T, threadID string, noteID int64) bool {
+	for _, thread := range discussions {
+		discussion := toolutil.DiscussionThreadOutput(thread)
 		if discussion.ID != threadID {
 			continue
 		}
@@ -59,9 +68,20 @@ func TestIssueDiscussions_Lifecycle_CreateListGetAddUpdateDeleteNote(t *testing.
 		params := f.params()
 		body := "thread from the " + string(surface) + " surface"
 
-		created := harness.Do[issuediscussions.Output](s, actionIssueDiscussionCreate, withParams(params, map[string]any{"body": body}))
+		created, said := harness.DoAnswer[issuediscussions.Output](s, actionIssueDiscussionCreate, withParams(params, map[string]any{"body": body}))
 		if created.ID == "" || len(created.Notes) == 0 || created.Notes[0].Body != body {
 			e.T.Fatalf("discussion_create answered %+v, want a thread with an ID opened by the note %q", created, body)
+		}
+		// The thread card is the issue discussion's own, not the commit
+		// discussion card the registry used to render every shared thread
+		// shape with (issue 1291). Next steps are named in the dynamic
+		// surface's call form, the canonical ID, which the other surfaces may
+		// spell their own way.
+		if containsAny(said, "commit_discussion") {
+			e.T.Errorf("the issue thread card points at commit discussion actions: %s", said)
+		}
+		if surface == harness.SurfaceDynamic {
+			assertMentions(e, "the issue thread card's next steps", said, "issue.discussion_add_note", "issue.discussion_update_note")
 		}
 		noteID := created.Notes[0].ID
 		threadParams := withParams(params, map[string]any{"discussion_id": created.ID})

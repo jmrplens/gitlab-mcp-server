@@ -24,7 +24,8 @@ func formatLabelNotFound(out labelNotFoundOutput) *mcp.CallToolResult {
 // FormatMarkdown renders a single label as a Markdown card, with the copy of
 // the scope the label itself belongs to: a project label list carries the
 // group labels the project inherits, and one of those is not a project label
-// whichever action fetched it.
+// whichever action fetched it. [Output] is [labeldata.Output], so the card is
+// registered there once rather than here.
 func FormatMarkdown(l Output) string {
 	return labeldata.FormatMarkdown(l)
 }
@@ -41,6 +42,5 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 
 func init() {
 	toolutil.RegisterMarkdownResult(formatLabelNotFound)
-	toolutil.RegisterMarkdown(FormatMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdownString)
 }

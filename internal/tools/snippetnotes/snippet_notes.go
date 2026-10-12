@@ -52,11 +52,15 @@ type DeleteInput struct {
 	NoteID    int64                `json:"note_id"     jsonschema:"ID of the note to delete,required"`
 }
 
-// Output is an alias of [toolutil.NoteOutput], the canonical REST note
-// shape shared with issuenotes and mrnotes: every field GitLab's Note entity
-// sends, the author as the UserBasic object it is. Until 2.8.0 this package
-// carried a copy of that shape with `updated_at` omitted when empty.
-type Output = toolutil.NoteOutput
+// Output is a snippet note: a type of its own over [toolutil.NoteOutput], the
+// canonical REST note shape shared with issuenotes and mrnotes, every field
+// GitLab's Note entity sends, the author as the UserBasic object it is. Until
+// 2.8.0 this package carried a copy of that shape with `updated_at` omitted
+// when empty. It is a defined type rather than an alias because the Markdown
+// registry is keyed by type: while the three packages aliased one, the issue
+// note formatter rendered every snippet note as an "Issue Note" naming issue
+// actions (issue 1291).
+type Output toolutil.NoteOutput
 
 // ListOutput holds a paginated list of snippet notes.
 type ListOutput struct {
@@ -69,7 +73,7 @@ type ListOutput struct {
 // adds to it, to the MCP tool output format, through the shared conversion
 // in [toolutil.NoteOutputFromGitLab].
 func toOutput(n *gl.Note, extra toolutil.NoteExtra) Output {
-	return toolutil.NoteOutputFromGitLab(n, extra)
+	return Output(toolutil.NoteOutputFromGitLab(n, extra))
 }
 
 // List retrieves a paginated list of notes on a snippet.

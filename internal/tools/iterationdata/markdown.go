@@ -97,3 +97,31 @@ func StateName(state int64) string {
 		return fmt.Sprintf("unknown(%d)", state)
 	}
 }
+
+// The two list actions an iteration card points to, as canonical action IDs
+// every surface resolves. The group and project iteration packages each test
+// that the one they register is spelled here.
+const (
+	ActionListGroup   = "issue.iteration_list_group"
+	ActionListProject = "issue.iteration_list_project"
+)
+
+// FormatCardMarkdown renders one iteration as the card the registry serves for
+// every iteration a group or project action answers with: the card of
+// [FormatOutputMarkdown] with both list actions as its next steps, in one
+// order, since an iteration belongs to a group whichever scope listed it.
+//
+// It is registered here and only here because the group and project
+// iteration packages answer with this package's [Output] itself, and the
+// registry, keyed by type, keeps the first of two registrations of one type
+// (issue 1291). Each of those packages used to register its own card for it.
+func FormatCardMarkdown(output Output) string {
+	return FormatOutputMarkdown(output,
+		toolutil.HintAction(ActionListGroup, "see every iteration in the group"),
+		toolutil.HintAction(ActionListProject, "see the iterations a project takes part in"),
+	)
+}
+
+func init() {
+	toolutil.RegisterMarkdown(FormatCardMarkdown)
+}

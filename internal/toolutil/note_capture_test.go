@@ -59,10 +59,19 @@ func TestCapturedNotes_HoldsTheCountToTheSDKs(t *testing.T) {
 	}
 }
 
+// packageThread and packageThreadNote stand for the types a discussion
+// package declares over the shared thread shapes, which the combinators
+// answer in.
+type (
+	packageThread     DiscussionThreadOutput
+	packageThreadNote DiscussionThreadNoteOutput
+)
+
 // TestCapturedThreadCombinators_ConvertOrReportUnderTheOperation verifies the
 // three combinators a discussion handler ends with: each converts the SDK's
-// value with what the capture read beside it, and each reports a body the
-// type cannot hold under the operation's own name.
+// value with what the capture read beside it into the type the caller names,
+// and each reports a body the type cannot hold under the operation's own
+// name.
 func TestCapturedThreadCombinators_ConvertOrReportUnderTheOperation(t *testing.T) {
 	discussion := &gl.Discussion{ID: "d1", Notes: []*gl.Note{{ID: 1}}}
 	note := &gl.Note{ID: 1, Body: "hello"}
@@ -70,18 +79,18 @@ func TestCapturedThreadCombinators_ConvertOrReportUnderTheOperation(t *testing.T
 		return gitlabclient.CapturedBody([]byte(`{"id":"d1","resolvable":true,"notes":[{"id":1,"imported":true}]}`))
 	}
 
-	thread, err := CapturedThread("op", discussion, good())
+	thread, err := CapturedThread[packageThread]("op", discussion, good())
 	if err != nil || thread.ID != "d1" || !thread.Resolvable || len(thread.Notes) != 1 || !thread.Notes[0].Imported {
 		t.Errorf("CapturedThread() = %+v, %v; want the thread with its captured half", thread, err)
 	}
 
-	threads, err := CapturedThreads("op", []*gl.Discussion{discussion},
+	threads, err := CapturedThreads[packageThread]("op", []*gl.Discussion{discussion},
 		gitlabclient.CapturedBody([]byte(`[{"id":"d1","resolvable":true,"notes":[{"id":1}]}]`)))
 	if err != nil || len(threads) != 1 || !threads[0].Resolvable {
 		t.Errorf("CapturedThreads() = %+v, %v; want one thread with its captured half", threads, err)
 	}
 
-	threadNote, err := CapturedThreadNote("op", note, gitlabclient.CapturedBody([]byte(`{"id":1,"imported":true}`)))
+	threadNote, err := CapturedThreadNote[packageThreadNote]("op", note, gitlabclient.CapturedBody([]byte(`{"id":1,"imported":true}`)))
 	if err != nil || threadNote.Body != "hello" || !threadNote.Imported {
 		t.Errorf("CapturedThreadNote() = %+v, %v; want both halves of the note", threadNote, err)
 	}
@@ -91,15 +100,15 @@ func TestCapturedThreadCombinators_ConvertOrReportUnderTheOperation(t *testing.T
 		call func() error
 	}{
 		{name: "thread", call: func() error {
-			_, readErr := CapturedThread("op", discussion, gitlabclient.CapturedBody([]byte(`{"resolvable":7}`)))
+			_, readErr := CapturedThread[packageThread]("op", discussion, gitlabclient.CapturedBody([]byte(`{"resolvable":7}`)))
 			return readErr
 		}},
 		{name: "threads", call: func() error {
-			_, readErr := CapturedThreads("op", []*gl.Discussion{discussion}, gitlabclient.CapturedBody([]byte(`{}`)))
+			_, readErr := CapturedThreads[packageThread]("op", []*gl.Discussion{discussion}, gitlabclient.CapturedBody([]byte(`{}`)))
 			return readErr
 		}},
 		{name: "thread note", call: func() error {
-			_, readErr := CapturedThreadNote("op", note, gitlabclient.CapturedBody([]byte(`{"imported":7}`)))
+			_, readErr := CapturedThreadNote[packageThreadNote]("op", note, gitlabclient.CapturedBody([]byte(`{"imported":7}`)))
 			return readErr
 		}},
 	}

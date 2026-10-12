@@ -445,30 +445,42 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	// the route, the options and the pagination stay client-go's. The entities
 	// are the evidence; the pages print each field somewhere, and are cited for
 	// where. Recorded in docs/development/upstream-bugs.md.
-	"issuenotes.Output.imported":                    docNotesIssueList,
-	"issuenotes.Output.imported_from":               docNotesIssueList,
-	"issuenotes.Output.commands_changes":            docNotesWikiRetrieve,
-	"issuenotes.Output.suggestions":                 docDiscussionsMRList,
-	"mrnotes.Output.imported":                       docNotesIssueList,
-	"mrnotes.Output.imported_from":                  docNotesIssueList,
-	"mrnotes.Output.commands_changes":               docNotesWikiRetrieve,
-	"mrnotes.Output.suggestions":                    docDiscussionsMRList,
-	"snippetnotes.Output.imported":                  docNotesIssueList,
-	"snippetnotes.Output.imported_from":             docNotesIssueList,
-	"snippetnotes.Output.commands_changes":          docNotesWikiRetrieve,
-	"snippetnotes.Output.suggestions":               docDiscussionsMRList,
-	"commitdiscussions.NoteOutput.imported":         docNotesIssueList,
-	"commitdiscussions.NoteOutput.imported_from":    docNotesIssueList,
-	"commitdiscussions.NoteOutput.commands_changes": docNotesWikiRetrieve,
-	"commitdiscussions.NoteOutput.suggestions":      docDiscussionsMRList,
-	"commitdiscussions.Output.resolvable":           docDiscussionsMRList,
-	"commitdiscussions.Output.resolved":             docDiscussionsMRList,
-	"mrdiscussions.NoteOutput.imported":             docNotesIssueList,
-	"mrdiscussions.NoteOutput.imported_from":        docNotesIssueList,
-	"mrdiscussions.NoteOutput.commands_changes":     docNotesWikiRetrieve,
-	"mrdiscussions.NoteOutput.suggestions":          docDiscussionsMRList,
-	"mrdiscussions.Output.resolvable":               docDiscussionsMRList,
-	"mrdiscussions.Output.resolved":                 docDiscussionsMRList,
+	"issuenotes.Output.imported":                     docNotesIssueList,
+	"issuenotes.Output.imported_from":                docNotesIssueList,
+	"issuenotes.Output.commands_changes":             docNotesWikiRetrieve,
+	"issuenotes.Output.suggestions":                  docDiscussionsMRList,
+	"mrnotes.Output.imported":                        docNotesIssueList,
+	"mrnotes.Output.imported_from":                   docNotesIssueList,
+	"mrnotes.Output.commands_changes":                docNotesWikiRetrieve,
+	"mrnotes.Output.suggestions":                     docDiscussionsMRList,
+	"snippetnotes.Output.imported":                   docNotesIssueList,
+	"snippetnotes.Output.imported_from":              docNotesIssueList,
+	"snippetnotes.Output.commands_changes":           docNotesWikiRetrieve,
+	"snippetnotes.Output.suggestions":                docDiscussionsMRList,
+	"commitdiscussions.NoteOutput.imported":          docNotesIssueList,
+	"commitdiscussions.NoteOutput.imported_from":     docNotesIssueList,
+	"commitdiscussions.NoteOutput.commands_changes":  docNotesWikiRetrieve,
+	"commitdiscussions.NoteOutput.suggestions":       docDiscussionsMRList,
+	"commitdiscussions.Output.resolvable":            docDiscussionsMRList,
+	"commitdiscussions.Output.resolved":              docDiscussionsMRList,
+	"mrdiscussions.NoteOutput.imported":              docNotesIssueList,
+	"mrdiscussions.NoteOutput.imported_from":         docNotesIssueList,
+	"mrdiscussions.NoteOutput.commands_changes":      docNotesWikiRetrieve,
+	"mrdiscussions.NoteOutput.suggestions":           docDiscussionsMRList,
+	"mrdiscussions.Output.resolvable":                docDiscussionsMRList,
+	"mrdiscussions.Output.resolved":                  docDiscussionsMRList,
+	"issuediscussions.NoteOutput.imported":           docNotesIssueList,
+	"issuediscussions.NoteOutput.imported_from":      docNotesIssueList,
+	"issuediscussions.NoteOutput.commands_changes":   docNotesWikiRetrieve,
+	"issuediscussions.NoteOutput.suggestions":        docDiscussionsMRList,
+	"issuediscussions.Output.resolvable":             docDiscussionsMRList,
+	"issuediscussions.Output.resolved":               docDiscussionsMRList,
+	"snippetdiscussions.NoteOutput.imported":         docNotesIssueList,
+	"snippetdiscussions.NoteOutput.imported_from":    docNotesIssueList,
+	"snippetdiscussions.NoteOutput.commands_changes": docNotesWikiRetrieve,
+	"snippetdiscussions.NoteOutput.suggestions":      docDiscussionsMRList,
+	"snippetdiscussions.Output.resolvable":           docDiscussionsMRList,
+	"snippetdiscussions.Output.resolved":             docDiscussionsMRList,
 
 	// members — what lib/api/entities/member.rb exposes that gl.GroupMember
 	// and gl.ProjectMember do not declare, read from the captured response
@@ -1237,7 +1249,8 @@ func CollectPairs(pkg *packages.Package) []Pair {
 }
 
 // discoverPairs walks every function declaration of pkg and records the
-// converter-derived output pairs and the handler-derived input pairs.
+// converter-derived output pairs and the handler-derived input pairs, the
+// generic converters pkg instantiates with a type of its own included.
 func discoverPairs(pkg *packages.Package) (inputPairs, outputPairs map[[2]string]structPair) {
 	inputPairs = map[[2]string]structPair{}
 	outputPairs = map[[2]string]structPair{}
@@ -1251,6 +1264,7 @@ func discoverPairs(pkg *packages.Package) (inputPairs, outputPairs map[[2]string
 			collectHandlerInputs(pkg, fn, inputPairs)
 		}
 	}
+	collectInstantiatedConverters(pkg, outputPairs)
 	return inputPairs, outputPairs
 }
 
@@ -1446,27 +1460,63 @@ func collectConverter(pkg *packages.Package, fn *ast.FuncDecl, out map[[2]string
 	if !ok {
 		return
 	}
+	var params []types.Type
+	if fn.Type.Params != nil {
+		for _, field := range fn.Type.Params.List {
+			params = append(params, pkg.TypesInfo.TypeOf(field.Type))
+		}
+	}
+	recordConverter(mcpNamed, mcpStruct, mcpName, params, out)
+}
+
+// collectInstantiatedConverters records the pairs of the generic converters
+// pkg instantiates with an output type of its own, reading each
+// instantiation's signature as collectConverter reads a declared one. A
+// discussion package naming toolutil.CapturedThread[Output] converts a
+// gl.Discussion into its own Output as surely as a converter it declared
+// would, and without this the output falls out of the audit once the package
+// stops declaring a wrapper around the call.
+func collectInstantiatedConverters(pkg *packages.Package, out map[[2]string]structPair) {
+	for _, instance := range pkg.TypesInfo.Instances {
+		signature, isFunc := instance.Type.(*types.Signature)
+		if !isFunc || signature.Results().Len() == 0 {
+			continue
+		}
+		mcpNamed, mcpStruct, ok := localNamedStruct(pkg, signature.Results().At(0).Type())
+		if !ok {
+			continue
+		}
+		params := make([]types.Type, 0, signature.Params().Len())
+		for param := range signature.Params().Variables() {
+			params = append(params, param.Type())
+		}
+		recordConverter(mcpNamed, mcpStruct, mcpNamed.Obj().Name(), params, out)
+	}
+}
+
+// recordConverter records the (MCP output, SDK result) pair of a converter
+// answering with the MCP struct and taking params, when exactly one of them
+// is a client-go result struct.
+func recordConverter(mcpNamed *types.Named, mcpStruct *types.Struct, mcpName string, params []types.Type, out map[[2]string]structPair) {
 	var sdkNamed *types.Named
 	var sdkStruct *types.Struct
 	sdkCount := 0
-	if fn.Type.Params != nil {
-		for _, field := range fn.Type.Params.List {
-			named, st, isSDK := clientGoNamedStruct(pkg.TypesInfo.TypeOf(field.Type))
-			if !isSDK {
-				continue
-			}
-			// Exclude non-result SDK arguments so the output pair is not formed
-			// against the wrong struct (R-OUTPUT-EXTRA false positives):
-			//   - the pagination Response wrapper of list converters (the data
-			//     slice would look "extra");
-			//   - *Options request structs and time value types (ISOTime/time.Time)
-			//     a converter may also accept alongside no genuine result struct.
-			if nonResultSDKStruct(named) {
-				continue
-			}
-			sdkNamed, sdkStruct = named, st
-			sdkCount++
+	for _, param := range params {
+		named, st, isSDK := clientGoNamedStruct(param)
+		if !isSDK {
+			continue
 		}
+		// Exclude non-result SDK arguments so the output pair is not formed
+		// against the wrong struct (R-OUTPUT-EXTRA false positives):
+		//   - the pagination Response wrapper of list converters (the data
+		//     slice would look "extra");
+		//   - *Options request structs and time value types (ISOTime/time.Time)
+		//     a converter may also accept alongside no genuine result struct.
+		if nonResultSDKStruct(named) {
+			continue
+		}
+		sdkNamed, sdkStruct = named, st
+		sdkCount++
 	}
 	// When no genuine result struct remains after exclusion (e.g. a converter that
 	// only took a Response wrapper or an *Options/time arg), skip the pair rather

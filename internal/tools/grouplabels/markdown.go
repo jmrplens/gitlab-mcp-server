@@ -9,11 +9,10 @@ import (
 
 // FormatMarkdown renders a single group label as a Markdown card.
 //
-// This package and the project label package alias one output type, so the
-// Markdown registry keys them together and keeps whichever init ran first.
-// Both now render through the shared formatter, which picks the copy from the
-// label's own scope, so a group label is no longer titled "Label" and pointed
-// at the project actions because the other package's init won the race.
+// This package and the project label package answer with one output type,
+// [labeldata.Output], so the card is registered once, there, and picks its
+// copy from the label's own scope: a group label is titled as one whichever
+// action fetched it.
 func FormatMarkdown(l Output) string {
 	return labeldata.FormatMarkdown(l)
 }
@@ -29,6 +28,5 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 }
 
 func init() {
-	toolutil.RegisterMarkdown(FormatMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdownString)
 }

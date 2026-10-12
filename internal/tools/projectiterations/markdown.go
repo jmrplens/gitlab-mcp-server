@@ -20,23 +20,13 @@ func FormatListMarkdown(out ListOutput) string {
 }
 
 // FormatOutputMarkdown renders one project iteration as the shared iteration
-// card.
-//
-// Both iteration packages alias one output type, so the Markdown registry keys
-// them together and whichever init runs first answers for both scopes. The
-// card therefore names both list actions, in one order, so the two packages
-// render the same answer and which registration won stops mattering; this
-// card used to carry no hint at all, which made the two scopes differ on
-// nothing a reader could have chosen.
+// card, [iterationdata.FormatCardMarkdown]. [Output] is that package's type,
+// so the card is registered there once rather than here and in the group
+// iteration package, where the registry kept whichever init ran first.
 func FormatOutputMarkdown(out Output) string {
-	return iterationdata.FormatOutputMarkdown(
-		out,
-		toolutil.HintAction(actionListGroup, "see every iteration in the group"),
-		toolutil.HintAction(actionListProject, "see the iterations a project takes part in"),
-	)
+	return iterationdata.FormatCardMarkdown(out)
 }
 
 func init() {
 	toolutil.RegisterMarkdown(FormatListMarkdown)
-	toolutil.RegisterMarkdown(FormatOutputMarkdown)
 }

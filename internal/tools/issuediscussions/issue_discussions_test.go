@@ -520,7 +520,7 @@ func TestFormatListMarkdownString_Populated(t *testing.T) {
 			{
 				ID:             "disc1",
 				IndividualNote: false,
-				Notes: []*NoteOutput{
+				Notes: []*toolutil.DiscussionThreadNoteOutput{
 					{ID: 1, Body: "First note", Author: &toolutil.NoteUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z"},
 					{ID: 2, Body: "Second note", Author: &toolutil.NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02T00:00:00Z"},
 				},
@@ -528,7 +528,7 @@ func TestFormatListMarkdownString_Populated(t *testing.T) {
 			{
 				ID:             "disc2",
 				IndividualNote: true,
-				Notes: []*NoteOutput{
+				Notes: []*toolutil.DiscussionThreadNoteOutput{
 					{ID: 3, Body: "Solo note", Author: &toolutil.NoteUserOutput{Username: "carol"}, CreatedAt: "2026-01-03T00:00:00Z"},
 				},
 			},
@@ -561,15 +561,15 @@ func TestFormatListMarkdownString_Populated(t *testing.T) {
 // hint is a string literal no gate reads: the two could trade places, or one
 // could be the thread card's, and every mutant would still die.
 const discussionListHints = "\n\n---\n\U0001F4A1 **Next steps:**\n" +
-	"- Use action 'discussion_get' with discussion_id to see full discussion\n" +
-	"- Use action 'discussion_add_note' to reply to a discussion\n"
+	"- Use action 'issue.discussion_get' to see a full discussion\n" +
+	"- Use action 'issue.discussion_add_note' to reply to a discussion\n"
 
 // discussionCardHints is the same for the single-thread card, whose two hints
 // are deliberately not the list's: a reader holding one thread is told how to
 // reply to it and how to edit a note in it, not how to fetch it again.
 const discussionCardHints = "\n\n---\n\U0001F4A1 **Next steps:**\n" +
-	"- Use action 'discussion_add_note' to reply to this discussion\n" +
-	"- Use action 'discussion_update_note' with note_id to edit a note\n"
+	"- Use action 'issue.discussion_add_note' to reply to this discussion\n" +
+	"- Use action 'issue.discussion_update_note' to edit one of its notes\n"
 
 // TestFormatMarkdownString_Populated renders one thread and asserts its
 // heading, both authors, both bodies and both timestamps reach the card, and
@@ -578,7 +578,7 @@ func TestFormatMarkdownString_Populated(t *testing.T) {
 	out := Output{
 		ID:             "disc-abc",
 		IndividualNote: false,
-		Notes: []*NoteOutput{
+		Notes: []*toolutil.DiscussionThreadNoteOutput{
 			{ID: 10, Body: "Hello world", Author: &toolutil.NoteUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z"},
 			{ID: 11, Body: "Reply here", Author: &toolutil.NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02T00:00:00Z"},
 		},
@@ -638,8 +638,8 @@ func TestFormatNoteMarkdownString_Populated(t *testing.T) {
 // discussionNoteCardHints is the guidance section every issue discussion
 // note card ends with.
 const discussionNoteCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
-	"- Use action 'discussion_update_note' with note_id to edit this note\n" +
-	"- Use action 'discussion_delete_note' with note_id to remove this note\n"
+	"- Use action 'issue.discussion_update_note' to edit this note\n" +
+	"- Use action 'issue.discussion_delete_note' to remove this note\n"
 
 // TestFormatNoteMarkdownString_Empty verifies that a zero note renders the
 // heading and the hints alone: no author, time or body row is written for a

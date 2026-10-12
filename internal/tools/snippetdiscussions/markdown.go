@@ -6,19 +6,22 @@ var markdownRenderer = toolutil.NewDiscussionRenderer("Snippet Discussions", "No
 
 // FormatListMarkdownString renders discussions list as Markdown.
 func FormatListMarkdownString(out ListOutput) string {
-	discussions := toolutil.DiscussionThreadOutputMarkdowns(out.Discussions)
-	return markdownRenderer.FormatRESTList(discussions, out.Pagination)
+	return markdownRenderer.FormatRESTList(toolutil.DiscussionMarkdowns(out.Discussions, toMarkdownDiscussion), out.Pagination)
 }
 
 // FormatMarkdownString renders a discussion as Markdown.
 func FormatMarkdownString(out Output) string {
-	discussion := out.MarkdownDiscussion()
-	return markdownRenderer.FormatDiscussion(discussion)
+	return markdownRenderer.FormatDiscussion(toMarkdownDiscussion(out))
+}
+
+// toMarkdownDiscussion builds the shared thread view model of a thread.
+func toMarkdownDiscussion(out Output) toolutil.DiscussionMarkdown {
+	return toolutil.DiscussionThreadOutput(out).MarkdownDiscussion()
 }
 
 // FormatNoteMarkdownString renders a note as Markdown.
 func FormatNoteMarkdownString(out NoteOutput) string {
-	note := out.MarkdownNote()
+	note := toolutil.DiscussionThreadNoteOutput(out).MarkdownNote()
 	return markdownRenderer.FormatNote(note)
 }
 

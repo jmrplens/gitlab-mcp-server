@@ -171,10 +171,9 @@ func isProjectLabel(label Output) bool {
 }
 
 // The copy each scope's label surfaces are rendered with. It lives here, with
-// the type, because both label packages alias this one output type: the
-// Markdown registry keys them together and keeps whichever init ran first, so
-// the formatter that wins has to answer for both scopes and cannot do that
-// from copy held in one of them.
+// the type, because both label packages answer with this one output type and
+// the one card registered for it, [FormatMarkdown], answers for both scopes,
+// which it cannot do from copy held in one of them.
 var (
 	// ProjectMarkdownOptions is the copy of a project label.
 	ProjectMarkdownOptions = toolutil.LabelMarkdownOptions{
@@ -224,11 +223,16 @@ func MarkdownOptionsFor(label Output) toolutil.LabelMarkdownOptions {
 }
 
 // FormatMarkdown renders one label as the card of one object, with the copy of
-// the scope it belongs to. Both label packages register this same rendering
-// for the one type they share, so which of their inits ran first no longer
-// decides whether a group label is shown as a project one.
+// the scope it belongs to. It is registered here and only here: the project
+// and group label packages answer with this package's [Output] itself, and
+// the registry, keyed by type, keeps the first of two registrations of one
+// type, which is what each of them used to make (issue 1291).
 func FormatMarkdown(label Output) string {
 	return toolutil.FormatLabelMarkdown(ToMarkdown(label), MarkdownOptionsFor(label))
+}
+
+func init() {
+	toolutil.RegisterMarkdown(FormatMarkdown)
 }
 
 type labelFields struct {

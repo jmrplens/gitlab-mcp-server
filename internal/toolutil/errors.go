@@ -700,6 +700,24 @@ func ErrRequiredString(operation, field string) error {
 	return fmt.Errorf("%s: %s is required (must be non-empty). Ensure you use the exact parameter name '%s' as documented in the tool description", operation, field, field)
 }
 
+// RequireProjectItem refuses, under operation, what a handler acting on one
+// item of a project is handed when it names none: a context that has already
+// ended, no project_id, or no positive id under the parameter field names. It
+// sends nothing. The issue and snippet discussion handlers each start with
+// these three checks, in this order and in these words.
+func RequireProjectItem(ctx context.Context, operation string, projectID StringOrInt, field string, id int64) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if projectID == "" {
+		return fmt.Errorf("%s: project_id is required", operation)
+	}
+	if id <= 0 {
+		return ErrRequiredInt64(operation, field)
+	}
+	return nil
+}
+
 // ErrInvalidEnum returns a validation error indicating that a field value
 // is not one of the allowed options. The error message lists the valid values
 // to guide LLMs toward correct parameter usage.

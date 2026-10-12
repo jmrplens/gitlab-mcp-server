@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issuenotes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrnotes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/snippetnotes"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
@@ -33,22 +35,27 @@ func (f issueFixture) params() map[string]any {
 	return map[string]any{"project_id": f.project.IDParam(), "issue_iid": f.issue.IID}
 }
 
-// noteIDs lists the IDs of a note listing. The issue, merge request and
-// snippet note packages all alias the one shared note shape, so one helper
-// reads the three listings.
-func noteIDs(notes []toolutil.NoteOutput) []int64 {
+// restNote is the note type of each note package these helpers read: each is
+// a type of its own over the one shared note shape, so one helper converts
+// any of them to that shape and reads the three listings.
+type restNote interface {
+	issuenotes.Output | mrnotes.Output | snippetnotes.Output
+}
+
+// noteIDs lists the IDs of a note listing.
+func noteIDs[T restNote](notes []T) []int64 {
 	ids := make([]int64, 0, len(notes))
 	for _, note := range notes {
-		ids = append(ids, note.ID)
+		ids = append(ids, toolutil.NoteOutput(note).ID)
 	}
 	return ids
 }
 
 // noteBodies lists the bodies of a note listing.
-func noteBodies(notes []toolutil.NoteOutput) []string {
+func noteBodies[T restNote](notes []T) []string {
 	bodies := make([]string, 0, len(notes))
 	for _, note := range notes {
-		bodies = append(bodies, note.Body)
+		bodies = append(bodies, toolutil.NoteOutput(note).Body)
 	}
 	return bodies
 }

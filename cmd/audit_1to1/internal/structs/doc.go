@@ -11,7 +11,9 @@
 //     tag) to find SDK fields with no MCP counterpart (R-INPUT) and advisory
 //     Go-type divergences.
 //   - output pairs: each converter func(...src *gl.Y...) LocalStruct maps an SDK
-//     result struct to an MCP output struct. The SDK result fields (by json tag)
+//     result struct to an MCP output struct, whether the package declares it or
+//     instantiates a generic one with its own output type
+//     (toolutil.CapturedThread[Output]). The SDK result fields (by json tag)
 //     are diffed against the MCP output fields (R-OUTPUT).
 //
 // Beside them it reads the projections (CollectProjections): an output struct

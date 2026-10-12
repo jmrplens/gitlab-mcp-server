@@ -221,12 +221,15 @@ func publishedTypesIn(dir, pkg string, shared map[string]declaredStruct, sharedN
 	for _, candidate := range found {
 		byName[candidate.Name] = candidate
 	}
-	// An alias of a shared shape is that shape under the package's own name:
-	// resolvable where a field names it, and published by the package, since
-	// the name is the package's even though the fields are not. It is nested
-	// when the shape is named under either name, or named by another shared
-	// shape, since a package that keeps the alias for its converters while
-	// the field naming the shape is typed toolutil.X, or sits inside
+	// An alias of a shared shape, or a type declared over one (each note and
+	// discussion package declares its own, so the Markdown registry, keyed by
+	// type, holds one formatter per package), is that shape under the
+	// package's own name: resolvable where a field names it, and published by
+	// the package, since the name is the package's even though the fields are
+	// not. Both spellings land here, the parse not telling them apart. It is
+	// nested when the shape is named under either name, or named by another
+	// shared shape, since a package that keeps the alias for its converters
+	// while the field naming the shape is typed toolutil.X, or sits inside
 	// toolutil.MergeRequestOutput, has not made the alias a response of its
 	// own; unless an exported function of the package returns it, which is
 	// what a handler does with the note it adds to a discussion.
