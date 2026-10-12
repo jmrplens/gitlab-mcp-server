@@ -14,7 +14,11 @@
 package common
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
@@ -75,4 +79,59 @@ func bindPromptArguments(world *fixture.World, spec harness.PromptSpec) (map[str
 		}
 	}
 	return args, ""
+}
+
+// TestPrompts_UnassignedItems_CountsAnIssueWithNoAssignee renders
+// unassigned_items for a project holding one issue nobody is assigned to and
+// one assigned to the token's own user, and holds the report to counting the
+// first and not the second.
+//
+// The prompt used to ask GitLab for assignee_id=0. GitLab's assignee filter
+// reads "no assignee" only from None, and takes any other value as a user id,
+// so a real instance answered both lists empty and the report congratulated a
+// project whose work nobody owned. A mock that ignores the parameter cannot see
+// that, which is why it is held here against an instance.
+func TestPrompts_UnassignedItems_CountsAnIssueWithNoAssignee(t *testing.T) {
+	e := harness.New(t)
+	s := e.On(harness.SurfaceDynamic)
+
+	project := fixture.NewProject(e, fixture.WithNamePrefix("unassigned"))
+	orphan := fixture.NewIssue(e, project, "Nobody owns this issue")
+
+	me, _, err := e.Client().GL().Users.CurrentUser(gl.WithContext(e.Ctx))
+	if err != nil {
+		t.Fatalf("reading the token's own user: %v", err)
+	}
+	owned, _, err := e.Client().GL().Issues.CreateIssue(project.ID, &gl.CreateIssueOptions{
+		Title:       new("Somebody owns this issue"),
+		AssigneeIDs: &[]int64{me.ID},
+	}, gl.WithContext(e.Ctx))
+	if err != nil {
+		t.Fatalf("creating the assigned issue: %v", err)
+	}
+
+	result := s.GetPrompt("unassigned_items", map[string]string{"project_id": project.IDParam()})
+	if len(result.Messages) == 0 {
+		t.Fatal("unassigned_items answered with no message")
+	}
+	content, ok := result.Messages[0].Content.(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("unassigned_items answered %T, want text", result.Messages[0].Content)
+	}
+	text := content.Text
+
+	for _, want := range []string{"| Unassigned issues | 1 |", "## Unassigned Issues", orphan.Title} {
+		t.Run("holds "+want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("the report does not hold %q:\n%s", want, text)
+			}
+		})
+	}
+	for _, unwanted := range []string{owned.Title, "All open items have assignees"} {
+		t.Run("leaves out "+unwanted, func(t *testing.T) {
+			if strings.Contains(text, unwanted) {
+				t.Errorf("the report holds %q, which an assigned issue or an empty answer would write:\n%s", unwanted, text)
+			}
+		})
+	}
 }

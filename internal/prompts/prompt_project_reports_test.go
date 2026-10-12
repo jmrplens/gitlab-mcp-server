@@ -269,7 +269,26 @@ func TestMRDiscussionHealth_MissingProjectID(t *testing.T) {
 
 // unassigned_items.
 
-// TestUnassignedItems_FindsUnownedItems verifies UnassignedItems when finds unowned items.
+// answerLikeGitLabsAssigneeFilter writes body when the request asks for the
+// items with no assignee the way GitLab reads that question, and an empty list
+// otherwise. Issuables::AssigneeFilter treats an assignee_id as "no assignee"
+// only when it is None (FILTER_NONE, compared case-insensitively); any other
+// value, 0 included, runs assigned_to with that id and matches nothing, since no
+// user has id 0. A mock that ignored the parameter could not tell the prompt
+// asking for None from one asking for a user who does not exist.
+func answerLikeGitLabsAssigneeFilter(w http.ResponseWriter, r *http.Request, body string) {
+	if !strings.EqualFold(r.URL.Query().Get("assignee_id"), "None") {
+		respondJSON(w, http.StatusOK, `[]`)
+		return
+	}
+	respondJSON(w, http.StatusOK, body)
+}
+
+// TestUnassignedItems_FindsUnownedItems verifies that the report counts the
+// items GitLab answers for assignee_id=None, which is the only value its filter
+// reads as "no assignee". The prompt used to send 0, which GitLab reads as a
+// user id, so a real instance answered nothing and the report congratulated a
+// project full of unowned work.
 func TestUnassignedItems_FindsUnownedItems(t *testing.T) {
 	created := time.Now().Add(-48 * time.Hour)
 	mux := http.NewServeMux()
@@ -282,7 +301,7 @@ func TestUnassignedItems_FindsUnownedItems(t *testing.T) {
 			},
 		}
 		data, _ := json.Marshal(mrs)
-		respondJSON(w, http.StatusOK, string(data))
+		answerLikeGitLabsAssigneeFilter(w, r, string(data))
 	})
 	mux.HandleFunc("GET /api/v4/projects/{project}/issues", func(w http.ResponseWriter, r *http.Request) {
 		issues := []*gl.Issue{
@@ -290,7 +309,7 @@ func TestUnassignedItems_FindsUnownedItems(t *testing.T) {
 			{IID: 6, Title: "Task without owner", State: "opened", CreatedAt: &created, WebURL: "http://example.com/issues/6"},
 		}
 		data, _ := json.Marshal(issues)
-		respondJSON(w, http.StatusOK, string(data))
+		answerLikeGitLabsAssigneeFilter(w, r, string(data))
 	})
 
 	session := newMCPSession(t, mux)

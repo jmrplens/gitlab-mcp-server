@@ -419,10 +419,14 @@ func handleUnassignedItems(ctx context.Context, client *gitlabclient.Client, req
 		return nil, toolutil.InvalidParams(errors.New("unassigned_items: project_id is required"))
 	}
 
+	// GitLab's assignee filter reads "no assignee" from assignee_id=None alone:
+	// any other value, 0 included, is a user id, and no user has id 0, so the
+	// lists would come back empty whatever the project holds.
+
 	// Unassigned MRs
 	unassignedMRs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:      new("opened"),
-		AssigneeID: gl.AssigneeID(0),
+		AssigneeID: gl.AssigneeID(gl.UserIDNone),
 		PerPage:    maxListItems,
 	}, gl.WithContext(ctx))
 	warnFetch(ctx, "unassigned merge requests", err)
@@ -430,7 +434,7 @@ func handleUnassignedItems(ctx context.Context, client *gitlabclient.Client, req
 	// Unassigned issues
 	unassignedIssues, _, err := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
 		State:      new("opened"),
-		AssigneeID: gl.AssigneeID(0),
+		AssigneeID: gl.AssigneeID(gl.UserIDNone),
 		PerPage:    maxListItems,
 	}, gl.WithContext(ctx))
 	warnFetch(ctx, "unassigned issues", err)
