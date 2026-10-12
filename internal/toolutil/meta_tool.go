@@ -1022,7 +1022,7 @@ func normalizeEncodedPathIdentifiers(out map[string]any, accepts func(string) bo
 		if !ok {
 			continue
 		}
-		decoded, changed := decodeEncodedPathIdentifier(value)
+		decoded, changed := DecodeEncodedPathIdentifier(value)
 		if !changed {
 			continue
 		}
@@ -1030,13 +1030,18 @@ func normalizeEncodedPathIdentifiers(out map[string]any, accepts func(string) bo
 	}
 }
 
-// decodeEncodedPathIdentifier reports the percent-decoding of a namespaced
+// DecodeEncodedPathIdentifier reports the percent-decoding of a namespaced
 // path an LLM sent URL-encoded ("group%2Fproject"), and false for anything
 // else. Only a value carrying %2F is decoded, so a successful decode always
 // differs from the input and always carries the "/" the caller is after:
 // '%' is not a hex digit, so no earlier escape can absorb the '%' of a %2F,
 // and PathUnescape either turns it into "/" or fails on the whole value.
-func decodeEncodedPathIdentifier(value string) (string, bool) {
+//
+// It is exported for the handlers whose path input is not one of the
+// identifiers above: a repository file path, a wiki slug, a submodule path.
+// Those are decoded in their own handlers rather than by name here, because
+// "file_path" also names a local filesystem path on every upload action.
+func DecodeEncodedPathIdentifier(value string) (string, bool) {
 	if !strings.Contains(strings.ToLower(value), "%2f") {
 		return "", false
 	}
@@ -1045,6 +1050,17 @@ func decodeEncodedPathIdentifier(value string) (string, bool) {
 		return "", false
 	}
 	return decoded, true
+}
+
+// PlainPath returns a repository path as GitLab names it: value decoded once
+// when it carries a URL-encoded "/" ([DecodeEncodedPathIdentifier]), and value
+// unchanged otherwise. client-go escapes a path segment itself, so a path the
+// caller encoded and the handler passed through reached GitLab escaped twice.
+func PlainPath(value string) string {
+	if decoded, ok := DecodeEncodedPathIdentifier(value); ok {
+		return decoded
+	}
+	return value
 }
 
 func normalizeIIDAlias(params map[string]any, fields map[string]struct{}, accepts func(string) bool, clone func() map[string]any) {

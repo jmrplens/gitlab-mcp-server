@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -23,6 +24,71 @@ const (
 	// pathProjectWikiSlug identifies the path project wiki slug constant used by this package.
 	pathProjectWikiSlug = "/api/v4/projects/42/wikis/my-page"
 )
+
+// TestWikiSlug_EncodedSubpage_ReachesGitLabEscapedOnce verifies that get,
+// update and delete send a subpage slug escaped exactly once, whether the
+// caller wrote it plainly ("dir/page") or URL-encoded it ("dir%2Fpage", which
+// the schema used to ask for). client-go escapes the segment itself, so an
+// encoded slug passed through reached GitLab as "dir%252Fpage" and named no
+// page.
+func TestWikiSlug_EncodedSubpage_ReachesGitLabEscapedOnce(t *testing.T) {
+	const want = "/api/v4/projects/42/wikis/dir%2Fpage"
+	actions := []struct {
+		name string
+		call func(context.Context, *gitlabclient.Client, string) error
+	}{
+		{"get", func(ctx context.Context, c *gitlabclient.Client, slug string) error {
+			_, err := Get(ctx, c, GetInput{ProjectID: "42", Slug: slug})
+			return err
+		}},
+		{"update", func(ctx context.Context, c *gitlabclient.Client, slug string) error {
+			_, err := Update(ctx, c, UpdateInput{ProjectID: "42", Slug: slug, Title: "t"})
+			return err
+		}},
+		{"delete", func(ctx context.Context, c *gitlabclient.Client, slug string) error {
+			return Delete(ctx, c, DeleteInput{ProjectID: "42", Slug: slug})
+		}},
+	}
+	for _, a := range actions {
+		for _, slug := range []string{"dir/page", "dir%2Fpage", "dir%2fpage"} {
+			t.Run(a.name+"/"+slug, func(t *testing.T) {
+				var got string
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					got = r.URL.EscapedPath()
+					if r.Method == http.MethodDelete {
+						w.WriteHeader(http.StatusNoContent)
+						return
+					}
+					testutil.RespondJSON(w, http.StatusOK, `{"title":"page","slug":"dir/page","format":"markdown"}`)
+				}))
+				if err := a.call(t.Context(), client, slug); err != nil {
+					t.Fatalf("%s(%q) error: %v", a.name, slug, err)
+				}
+				if got != want {
+					t.Errorf("request path = %q, want %q", got, want)
+				}
+			})
+		}
+	}
+}
+
+// TestWikiInputs_SlugDescription_AsksForAPlainSlug verifies that no slug
+// input tells the caller to URL-encode it: client-go escapes the segment, so
+// a model that followed the old wording sent a slug escaped twice.
+func TestWikiInputs_SlugDescription_AsksForAPlainSlug(t *testing.T) {
+	for _, v := range []any{GetInput{}, UpdateInput{}, DeleteInput{}} {
+		typ := reflect.TypeOf(v)
+		t.Run(typ.Name(), func(t *testing.T) {
+			field, ok := typ.FieldByName("Slug")
+			if !ok {
+				t.Fatalf("%s has no Slug field", typ.Name())
+			}
+			if tag := field.Tag.Get("jsonschema"); strings.Contains(tag, "URL-encoded") {
+				t.Errorf("%s.Slug description = %q, want a plain slug", typ.Name(), tag)
+			}
+		})
+	}
+}
 
 // TestWikiList_Success verifies WikiList when success.
 func TestWikiList_Success(t *testing.T) {

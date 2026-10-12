@@ -14,9 +14,11 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -91,15 +93,19 @@ func TestFileGet_NotFound(t *testing.T) {
 	}
 }
 
-// TestFileGet_NestedPath verifies that fileGet correctly handles URL-encoded
-// nested file paths (e.g., "src%2Futils%2Fhelpers.go"). The mock returns a
-// file at a nested path, and the test asserts the decoded path and content.
+// TestFileGet_NestedPath verifies that fileGet sends a nested path GitLab
+// reads as one, whether the caller wrote it plainly or URL-encoded it
+// ("src%2Futils%2Fhelpers.go"). The mock answers only the path escaped once,
+// as GitLab names the file, and the test asserts the path and content.
+//
+// It used to match r.URL.Path against the encoded spelling, which is the
+// decoding of a path escaped twice: it held the double escape in place.
 func TestFileGet_NestedPath(t *testing.T) {
 	content := "package utils\n"
 	b64 := base64.StdEncoding.EncodeToString([]byte(content))
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/files/src%2Futils%2Fhelpers.go" {
+		if r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/projects/42/repository/files/src%2Futils%2Fhelpers.go" {
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"file_name":"helpers.go",
 				"file_path":"src/utils/helpers.go",
@@ -130,6 +136,131 @@ func TestFileGet_NestedPath(t *testing.T) {
 	if out.Content != content {
 		t.Errorf("out.Content = %q, want %q", out.Content, content)
 	}
+}
+
+// TestFileActions_EncodedPath_ReachesGitLabEscapedOnce verifies that every
+// repository file action sends a nested path escaped exactly once, whether
+// the caller wrote it plainly ("src/main.go") or URL-encoded it
+// ("src%2Fmain.go", which the schemas used to ask for). client-go escapes the
+// segment itself, so an encoded value passed through reached GitLab as
+// "src%252Fmain.go": a read answered 404 for a file that exists, and a create
+// committed a file literally named "src%2Fmain.go" at the repository root.
+func TestFileActions_EncodedPath_ReachesGitLabEscapedOnce(t *testing.T) {
+	const wantSegment = "/repository/files/src%2Fmain.go"
+
+	actions := []struct {
+		name string
+		call func(context.Context, *gitlabclient.Client, string) error
+	}{
+		{"get", func(ctx context.Context, c *gitlabclient.Client, p string) error {
+			_, err := Get(ctx, c, GetInput{ProjectID: "42", FilePath: p, Ref: "main"})
+			return err
+		}},
+		{"create", func(ctx context.Context, c *gitlabclient.Client, p string) error {
+			_, err := Create(ctx, c, CreateInput{ProjectID: "42", FilePath: p, Branch: "main", Content: "x", CommitMessage: "add"})
+			return err
+		}},
+		{"update", func(ctx context.Context, c *gitlabclient.Client, p string) error {
+			_, err := Update(ctx, c, UpdateInput{ProjectID: "42", FilePath: p, Branch: "main", Content: "x", CommitMessage: "edit"})
+			return err
+		}},
+		{"delete", func(ctx context.Context, c *gitlabclient.Client, p string) error {
+			return Delete(ctx, c, DeleteInput{ProjectID: "42", FilePath: p, Branch: "main", CommitMessage: "rm"})
+		}},
+		{"blame", func(ctx context.Context, c *gitlabclient.Client, p string) error {
+			_, err := Blame(ctx, c, BlameInput{ProjectID: "42", FilePath: p, Ref: "main"})
+			return err
+		}},
+		{"metadata", func(ctx context.Context, c *gitlabclient.Client, p string) error {
+			_, err := GetMetaData(ctx, c, MetaDataInput{ProjectID: "42", FilePath: p, Ref: "main"})
+			return err
+		}},
+		{"raw", func(ctx context.Context, c *gitlabclient.Client, p string) error {
+			_, err := GetRaw(ctx, c, RawInput{ProjectID: "42", FilePath: p, Ref: "main"})
+			return err
+		}},
+		{"raw_metadata", func(ctx context.Context, c *gitlabclient.Client, p string) error {
+			_, err := GetRawFileMetaData(ctx, c, RawMetaDataInput{ProjectID: "42", FilePath: p, Ref: "main"})
+			return err
+		}},
+	}
+	for _, a := range actions {
+		for _, spelling := range []string{"src/main.go", "src%2Fmain.go", "src%2fmain.go"} {
+			t.Run(a.name+"/"+spelling, func(t *testing.T) {
+				client, recordedPaths := newPathRecordingClient(t)
+				if err := a.call(t.Context(), client, spelling); err != nil {
+					t.Fatalf("%s(%q) error: %v", a.name, spelling, err)
+				}
+				paths := recordedPaths()
+				if len(paths) == 0 {
+					t.Fatal("no request reached the mock")
+				}
+				if !strings.Contains(paths[0], wantSegment) {
+					t.Errorf("first request path = %q, want it to carry %q", paths[0], wantSegment)
+				}
+				for _, p := range paths {
+					if strings.Contains(p, "%25") {
+						t.Errorf("request path %q escapes the file path twice", p)
+					}
+				}
+			})
+		}
+	}
+}
+
+// TestFileInputs_FilePathDescription_AsksForAPlainPath verifies that no
+// repository file input tells the caller to URL-encode the path or gives an
+// encoded example: client-go escapes the segment, so a model that followed
+// the old wording sent a path escaped twice.
+func TestFileInputs_FilePathDescription_AsksForAPlainPath(t *testing.T) {
+	for _, v := range []any{GetInput{}, CreateInput{}, UpdateInput{}, DeleteInput{}, BlameInput{}, MetaDataInput{}, RawInput{}, RawMetaDataInput{}} {
+		typ := reflect.TypeOf(v)
+		t.Run(typ.Name(), func(t *testing.T) {
+			field, ok := typ.FieldByName("FilePath")
+			if !ok {
+				t.Fatalf("%s has no FilePath field", typ.Name())
+			}
+			tag := field.Tag.Get("jsonschema")
+			if strings.Contains(tag, "URL-encoded") || strings.Contains(tag, "%2F") {
+				t.Errorf("%s.FilePath description = %q, want a plain path", typ.Name(), tag)
+			}
+		})
+	}
+}
+
+// newPathRecordingClient returns a client whose mock records the escaped path
+// of every request, and a function returning what it recorded so far. The
+// mock answers each route of the files API with the smallest body client-go
+// decodes: a file object for a JSON route, an empty blame, a byte for a raw
+// read, and no content for a delete or a HEAD.
+func newPathRecordingClient(t *testing.T) (*gitlabclient.Client, func() []string) {
+	t.Helper()
+	var (
+		mu    sync.Mutex
+		paths []string
+	)
+	recorded := func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), paths...)
+	}
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		paths = append(paths, r.URL.EscapedPath())
+		mu.Unlock()
+		switch {
+		case r.Method == http.MethodHead:
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		case strings.HasSuffix(r.URL.EscapedPath(), "/blame"):
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+		case strings.HasSuffix(r.URL.EscapedPath(), "/raw"):
+			_, _ = w.Write([]byte("x"))
+		default:
+			testutil.RespondJSON(w, http.StatusOK, `{"file_name":"main.go","file_path":"src/main.go","branch":"main"}`)
+		}
+	})), recorded
 }
 
 // TestEnrichFileInfoOutput_MissingInputsReturnsPartialOutput verifies the

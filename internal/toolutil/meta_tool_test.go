@@ -4340,9 +4340,33 @@ func TestNormalizeParamAliasesForSchemaWithExplanation_EnvironmentIDAlias(t *tes
 // value containing "%2f" but with a malformed trailing escape sequence is
 // rejected (url.PathUnescape error) instead of being partially decoded.
 func TestDecodeEncodedPathIdentifier_InvalidEscape_ReturnsFalse(t *testing.T) {
-	decoded, ok := decodeEncodedPathIdentifier("group%2fproject%")
+	decoded, ok := DecodeEncodedPathIdentifier("group%2fproject%")
 	if ok || decoded != "" {
-		t.Errorf("decodeEncodedPathIdentifier(invalid escape) = (%q, %v), want (\"\", false)", decoded, ok)
+		t.Errorf("DecodeEncodedPathIdentifier(invalid escape) = (%q, %v), want (\"\", false)", decoded, ok)
+	}
+}
+
+// TestPlainPath_DecodesOnlyAnEncodedSlash verifies that PlainPath decodes a
+// path carrying an encoded "/" once, in either case, and hands every other
+// value back as it came: a plain path, a name that merely contains a "%", a
+// value whose escapes do not parse, and the empty string.
+func TestPlainPath_DecodesOnlyAnEncodedSlash(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"src%2Fmain.go", "src/main.go"},
+		{"src%2fmain.go", "src/main.go"},
+		{"dir%2Fsub%20page", "dir/sub page"},
+		{"src/main.go", "src/main.go"},
+		{"100%.txt", "100%.txt"},
+		{"a%20b.txt", "a%20b.txt"},
+		{"dir%2Fpage%", "dir%2Fpage%"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.in, func(t *testing.T) {
+			if got := PlainPath(c.in); got != c.want {
+				t.Errorf("PlainPath(%q) = %q, want %q", c.in, got, c.want)
+			}
+		})
 	}
 }
 

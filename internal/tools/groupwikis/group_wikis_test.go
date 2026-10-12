@@ -23,6 +23,69 @@ const (
 	pathGroupWikiSlug = "/api/v4/groups/mygroup/wikis/home"
 )
 
+// TestGroupWikiSlug_EncodedSubpage_ReachesGitLabEscapedOnce verifies that
+// get, edit and delete send a subpage slug escaped exactly once, whether the
+// caller wrote it plainly ("dir/page") or URL-encoded it ("dir%2Fpage", which
+// the schema used to ask for). client-go escapes the segment itself, so an
+// encoded slug passed through reached GitLab as "dir%252Fpage".
+func TestGroupWikiSlug_EncodedSubpage_ReachesGitLabEscapedOnce(t *testing.T) {
+	const want = "/api/v4/groups/mygroup/wikis/dir%2Fpage"
+	actions := []struct {
+		name string
+		call func(context.Context, *gitlabclient.Client, string) error
+	}{
+		{"get", func(ctx context.Context, c *gitlabclient.Client, slug string) error {
+			_, err := Get(ctx, c, GetInput{GroupID: "mygroup", Slug: slug})
+			return err
+		}},
+		{"edit", func(ctx context.Context, c *gitlabclient.Client, slug string) error {
+			_, err := Edit(ctx, c, EditInput{GroupID: "mygroup", Slug: slug, Title: "t"})
+			return err
+		}},
+		{"delete", func(ctx context.Context, c *gitlabclient.Client, slug string) error {
+			return Delete(ctx, c, DeleteInput{GroupID: "mygroup", Slug: slug})
+		}},
+	}
+	for _, a := range actions {
+		for _, slug := range []string{"dir/page", "dir%2Fpage", "dir%2fpage"} {
+			t.Run(a.name+"/"+slug, func(t *testing.T) {
+				var got string
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					got = r.URL.EscapedPath()
+					if r.Method == http.MethodDelete {
+						w.WriteHeader(http.StatusNoContent)
+						return
+					}
+					testutil.RespondJSON(w, http.StatusOK, `{"title":"page","slug":"dir/page","format":"markdown"}`)
+				}))
+				if err := a.call(t.Context(), client, slug); err != nil {
+					t.Fatalf("%s(%q) error: %v", a.name, slug, err)
+				}
+				if got != want {
+					t.Errorf("request path = %q, want %q", got, want)
+				}
+			})
+		}
+	}
+}
+
+// TestGroupWikiInputs_SlugDescription_AsksForAPlainSlug verifies that no
+// slug input tells the caller to URL-encode it.
+func TestGroupWikiInputs_SlugDescription_AsksForAPlainSlug(t *testing.T) {
+	for _, v := range []any{GetInput{}, EditInput{}, DeleteInput{}} {
+		typ := reflect.TypeOf(v)
+		t.Run(typ.Name(), func(t *testing.T) {
+			field, ok := typ.FieldByName("Slug")
+			if !ok {
+				t.Fatalf("%s has no Slug field", typ.Name())
+			}
+			if tag := field.Tag.Get("jsonschema"); strings.Contains(tag, "URL-encoded") {
+				t.Errorf("%s.Slug description = %q, want a plain slug", typ.Name(), tag)
+			}
+		})
+	}
+}
+
 // TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.

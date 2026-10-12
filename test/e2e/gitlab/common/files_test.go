@@ -127,6 +127,41 @@ func TestRepositoryFile_Reads_ClassifyTextImageAndBinary(t *testing.T) {
 	})
 }
 
+// TestRepositoryFile_EncodedNestedPath_NamesTheFileGitLabStores creates a
+// nested file on every surface with its path URL-encoded, the spelling the
+// schemas used to ask for, and reads it back under the plain path and the
+// encoded one. Both reads find the same file, and the create answers the
+// plain path: before the handlers decoded it, client-go escaped the value a
+// second time and GitLab committed a file named "dir%2Fnested%2Fenc.txt" at
+// the root, which the plain read could not find.
+func TestRepositoryFile_EncodedNestedPath_NamesTheFileGitLabStores(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("fileenc"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		plain := "enc-" + string(surface) + "/nested/enc.txt"
+		encoded := strings.ReplaceAll(plain, "/", "%2F")
+
+		created := harness.Do[files.FileInfoOutput](s, actionRepositoryFileCreate, map[string]any{
+			"project_id": project.IDParam(), "file_path": encoded, "branch": project.DefaultBranch,
+			"content": "encoded path", "commit_message": "chore: add " + plain,
+		})
+		if created.FilePath != plain {
+			e.T.Fatalf("file create with the encoded path answered %q, want the file stored at %q", created.FilePath, plain)
+		}
+		for _, spelling := range []string{plain, encoded} {
+			got := harness.Do[files.Output](s, actionRepositoryFileGet, map[string]any{
+				"project_id": project.IDParam(), "file_path": spelling, "ref": project.DefaultBranch,
+			})
+			if got.FilePath != plain || got.Content != "encoded path" {
+				e.T.Errorf("file get of %q answered %q with %q, want %q with its content", spelling, got.FilePath, got.Content, plain)
+			}
+		}
+	})
+}
+
 // TestRepositoryFile_Lifecycle_CreateUpdateDelete creates a text file on
 // every surface, reads it back, updates it, reads the new content back,
 // deletes it and asserts the read afterwards is refused as not found.

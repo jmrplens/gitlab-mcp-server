@@ -16,6 +16,34 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdate_EncodedSubmodulePath_ReachesGitLabEscapedOnce verifies that the
+// update sends a nested submodule path escaped exactly once, whether the
+// caller wrote it plainly ("libs/dep") or URL-encoded it ("libs%2Fdep", which
+// the schema used to ask for). client-go escapes the segment itself, so an
+// encoded path passed through reached GitLab as "libs%252Fdep".
+func TestUpdate_EncodedSubmodulePath_ReachesGitLabEscapedOnce(t *testing.T) {
+	const want = "/api/v4/projects/42/repository/submodules/libs%2Fdep"
+	for _, spelling := range []string{"libs/dep", "libs%2Fdep", "libs%2fdep"} {
+		t.Run(spelling, func(t *testing.T) {
+			var got string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = r.URL.EscapedPath()
+				testutil.RespondJSON(w, http.StatusOK, `{"id":"abc","short_id":"abc","title":"t","message":"m"}`)
+			}))
+			if _, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", Submodule: spelling, Branch: "main", CommitSHA: "abc"}); err != nil {
+				t.Fatalf("Update(%q) error: %v", spelling, err)
+			}
+			if got != want {
+				t.Errorf("request path = %q, want %q", got, want)
+			}
+		})
+	}
+	field, _ := reflect.TypeFor[UpdateInput]().FieldByName("Submodule")
+	if tag := field.Tag.Get("jsonschema"); strings.Contains(tag, "URL-encoded") {
+		t.Errorf("UpdateInput.Submodule description = %q, want a plain path", tag)
+	}
+}
+
 // TestUpdate_Success verifies Update when success.
 func TestUpdate_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

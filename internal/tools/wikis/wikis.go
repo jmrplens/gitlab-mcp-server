@@ -20,7 +20,7 @@ type ListInput struct {
 // GetInput defines parameters for retrieving a single wiki page.
 type GetInput struct {
 	ProjectID  toolutil.StringOrInt `json:"project_id"             jsonschema:"Project ID or URL-encoded path,required"`
-	Slug       string               `json:"slug"                   jsonschema:"URL-encoded slug of the wiki page (e.g. 'my-page'),required"`
+	Slug       string               `json:"slug"                   jsonschema:"Slug of the wiki page as wiki.list returns it, a subpage with its slash (e.g. 'my-page' or 'dir/page'),required"`
 	RenderHTML bool                 `json:"render_html,omitempty"  jsonschema:"Return HTML-rendered content instead of raw format"`
 	Version    string               `json:"version,omitempty"      jsonschema:"Wiki page version SHA to retrieve a specific revision"`
 }
@@ -36,7 +36,7 @@ type CreateInput struct {
 // UpdateInput defines parameters for updating an existing wiki page.
 type UpdateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Slug      string               `json:"slug"              jsonschema:"URL-encoded slug of the wiki page to update,required"`
+	Slug      string               `json:"slug"              jsonschema:"Slug of the wiki page to update as wiki.list returns it (e.g. 'dir/page'),required"`
 	Title     string               `json:"title,omitempty"   jsonschema:"New title for the wiki page"`
 	Content   string               `json:"content,omitempty" jsonschema:"New content for the wiki page"`
 	Format    string               `json:"format,omitempty"  jsonschema:"Content format: markdown, rdoc, asciidoc, or org"`
@@ -45,7 +45,7 @@ type UpdateInput struct {
 // DeleteInput defines parameters for deleting a wiki page.
 type DeleteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Slug      string               `json:"slug"       jsonschema:"URL-encoded slug of the wiki page to delete,required"`
+	Slug      string               `json:"slug"       jsonschema:"Slug of the wiki page to delete as wiki.list returns it (e.g. 'dir/page'),required"`
 }
 
 // Output represents a single wiki page.
@@ -123,6 +123,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.ProjectID == "" {
 		return Output{}, errors.New("wikiGet: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
+	input.Slug = toolutil.PlainPath(input.Slug)
 	if input.Slug == "" {
 		return Output{}, errors.New("wikiGet: slug is required. Use wiki.list to find available pages first")
 	}
@@ -195,6 +196,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.ProjectID == "" {
 		return Output{}, errors.New("wikiUpdate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
+	input.Slug = toolutil.PlainPath(input.Slug)
 	if input.Slug == "" {
 		return Output{}, errors.New("wikiUpdate: slug is required. Use wiki.list to find available pages first")
 	}
@@ -231,6 +233,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	if input.ProjectID == "" {
 		return errors.New("wikiDelete: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
+	input.Slug = toolutil.PlainPath(input.Slug)
 	if input.Slug == "" {
 		return errors.New("wikiDelete: slug is required. Use wiki.list to find available pages first")
 	}

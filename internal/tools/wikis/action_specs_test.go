@@ -257,6 +257,40 @@ func TestActionSpecs_RichMetadata(t *testing.T) {
 	}
 }
 
+// TestDecorateWikiMeta_EntryFillsNothing_KeepsEveryGenericDefault asserts that
+// decorateWikiMeta replaces exactly the fields its entry fills and leaves the
+// rest as wikiOptions produced them, as the group wikis package already holds
+// its own. Every entry in the table fills all four, so each of the four guards
+// was a claim nothing exercised: were one dropped or inverted, an entry added
+// later to override only its usage would blank the tool's aliases. The entry is
+// inserted into the real map, so what is asserted is the lookup and the
+// decoration a spec actually goes through.
+func TestDecorateWikiMeta_EntryFillsNothing_KeepsEveryGenericDefault(t *testing.T) {
+	const tool = "gitlab_wiki_partial"
+	wikiActionMeta[tool] = wikiActionMetaEntry{}
+	t.Cleanup(func() { delete(wikiActionMeta, tool) })
+
+	opts := wikiOptions(tool)
+	want := wikiOptions(tool)
+	decorateWikiMeta(&opts, tool)
+
+	if opts.Usage != want.Usage {
+		t.Errorf("Usage = %q, want the generic %q", opts.Usage, want.Usage)
+	}
+	if !slices.Equal(opts.Aliases, want.Aliases) {
+		t.Errorf("Aliases = %#v, want the generic %#v", opts.Aliases, want.Aliases)
+	}
+	if !slices.Equal(opts.RelatedActions, want.RelatedActions) {
+		t.Errorf("RelatedActions = %#v, want the generic %#v", opts.RelatedActions, want.RelatedActions)
+	}
+	if opts.IndividualTool.Description != "" {
+		t.Errorf("Description = %q, want it left empty", opts.IndividualTool.Description)
+	}
+	if len(opts.InputSchemaOverrides) != 0 {
+		t.Errorf("InputSchemaOverrides = %#v, want none", opts.InputSchemaOverrides)
+	}
+}
+
 // TestActionSpecs_FormatEnum verifies that create and update constrain format
 // to the four page formats the Wikis API accepts, and that no other wiki
 // action carries a format override.

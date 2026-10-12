@@ -23,7 +23,7 @@ const hintVerifyFilePathRef = "verify file_path and ref exist with repository.tr
 // GetInput defines parameters for retrieving a file from a repository.
 type GetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	FilePath  string               `json:"file_path"  jsonschema:"URL-encoded full path of the file (e.g. src%2Fmain.go or src/main.go),required"`
+	FilePath  string               `json:"file_path"  jsonschema:"Full path of the file in the repository, as written (e.g. src/main.go),required"`
 	Ref       string               `json:"ref,omitempty" jsonschema:"Branch name, tag, or commit SHA,required"`
 }
 
@@ -60,6 +60,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.ProjectID == "" {
 		return Output{}, errors.New("fileGet: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
+	input.FilePath = toolutil.PlainPath(input.FilePath)
 
 	opts := &gl.GetFileOptions{}
 	if input.Ref != "" {
@@ -113,7 +114,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 // CreateInput defines parameters for creating a new file in a repository.
 type CreateInput struct {
 	ProjectID       toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
-	FilePath        string               `json:"file_path"               jsonschema:"URL-encoded full path of the new file,required"`
+	FilePath        string               `json:"file_path"               jsonschema:"Full path of the new file in the repository, as written (e.g. src/main.go),required"`
 	Branch          string               `json:"branch"                  jsonschema:"Branch to create the file on,required"`
 	Content         string               `json:"content"                 jsonschema:"File content,required"`
 	CommitMessage   string               `json:"commit_message"          jsonschema:"Commit message,required"`
@@ -143,7 +144,10 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	// The file path is the last segment of the endpoint, so an empty one sends
 	// GitLab a POST to /projects/:id/repository/files/ and asks it to create a
-	// file with no name, which it refuses.
+	// file with no name, which it refuses. An encoded one is decoded first:
+	// GitLab takes the segment as the file's name, so "src%2Fmain.go" passed
+	// through would commit a file literally named that at the root.
+	input.FilePath = toolutil.PlainPath(input.FilePath)
 	if input.FilePath == "" {
 		return FileInfoOutput{}, errors.New("fileCreate: file_path is required")
 	}
@@ -190,7 +194,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 // UpdateInput defines parameters for updating an existing file in a repository.
 type UpdateInput struct {
 	ProjectID       toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
-	FilePath        string               `json:"file_path"               jsonschema:"URL-encoded full path of the file to update,required"`
+	FilePath        string               `json:"file_path"               jsonschema:"Full path of the file to update, as written (e.g. src/main.go),required"`
 	Branch          string               `json:"branch"                  jsonschema:"Branch to update the file on,required"`
 	Content         string               `json:"content"                 jsonschema:"New file content,required"`
 	CommitMessage   string               `json:"commit_message"          jsonschema:"Commit message,required"`
@@ -210,6 +214,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.ProjectID == "" {
 		return FileInfoOutput{}, errors.New("fileUpdate: project_id is required")
 	}
+	input.FilePath = toolutil.PlainPath(input.FilePath)
 	if input.Branch == "" {
 		return FileInfoOutput{}, errors.New("fileUpdate: branch is required")
 	}
@@ -276,7 +281,7 @@ func enrichFileInfoOutput(ctx context.Context, client *gitlabclient.Client, proj
 // DeleteInput defines parameters for deleting a file from a repository.
 type DeleteInput struct {
 	ProjectID     toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
-	FilePath      string               `json:"file_path"               jsonschema:"URL-encoded full path of the file to delete,required"`
+	FilePath      string               `json:"file_path"               jsonschema:"Full path of the file to delete, as written (e.g. src/main.go),required"`
 	Branch        string               `json:"branch"                  jsonschema:"Branch to delete the file from,required"`
 	CommitMessage string               `json:"commit_message"          jsonschema:"Commit message,required"`
 	StartBranch   string               `json:"start_branch,omitempty"  jsonschema:"Branch to start from"`
@@ -293,6 +298,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	if input.ProjectID == "" {
 		return errors.New("fileDelete: project_id is required")
 	}
+	input.FilePath = toolutil.PlainPath(input.FilePath)
 	if input.Branch == "" {
 		return errors.New("fileDelete: branch is required")
 	}
@@ -332,7 +338,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 // BlameInput defines parameters for retrieving file blame information.
 type BlameInput struct {
 	ProjectID  toolutil.StringOrInt `json:"project_id"            jsonschema:"Project ID or URL-encoded path,required"`
-	FilePath   string               `json:"file_path"             jsonschema:"URL-encoded full path of the file,required"`
+	FilePath   string               `json:"file_path"             jsonschema:"Full path of the file in the repository, as written (e.g. src/main.go),required"`
 	Ref        string               `json:"ref,omitempty"         jsonschema:"Branch, tag, or commit SHA,required"`
 	RangeStart int                  `json:"range_start,omitempty" jsonschema:"Start line number for blame range"`
 	RangeEnd   int                  `json:"range_end,omitempty"   jsonschema:"End line number for blame range"`
@@ -369,6 +375,7 @@ func Blame(ctx context.Context, client *gitlabclient.Client, input BlameInput) (
 	if input.ProjectID == "" {
 		return BlameOutput{}, errors.New("fileBlame: project_id is required")
 	}
+	input.FilePath = toolutil.PlainPath(input.FilePath)
 	opts := &gl.GetFileBlameOptions{}
 	if input.Ref != "" {
 		opts.Ref = new(input.Ref)
@@ -497,7 +504,7 @@ func langFromPath(filePath string) string {
 // MetaDataInput defines parameters for retrieving file metadata (no content).
 type MetaDataInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	FilePath  string               `json:"file_path"  jsonschema:"URL-encoded full path of the file,required"`
+	FilePath  string               `json:"file_path"  jsonschema:"Full path of the file in the repository, as written (e.g. src/main.go),required"`
 	Ref       string               `json:"ref,omitempty" jsonschema:"Branch, tag, or commit SHA,required"`
 }
 
@@ -539,7 +546,7 @@ func getFileMetadata(ctx context.Context, projectID toolutil.StringOrInt, filePa
 	if projectID == "" {
 		return MetaDataOutput{}, errors.New(missingProjectMsg)
 	}
-	file, err := get(string(projectID), filePath, ref)
+	file, err := get(string(projectID), toolutil.PlainPath(filePath), ref)
 	if err != nil {
 		return MetaDataOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, hintVerifyFilePathRef)
 	}
@@ -569,7 +576,7 @@ func fileMetadataOutput(file *gl.File) MetaDataOutput {
 // RawInput defines parameters for retrieving raw file content.
 type RawInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	FilePath  string               `json:"file_path"  jsonschema:"URL-encoded full path of the file,required"`
+	FilePath  string               `json:"file_path"  jsonschema:"Full path of the file in the repository, as written (e.g. src/main.go),required"`
 	Ref       string               `json:"ref,omitempty" jsonschema:"Branch, tag, or commit SHA (defaults to default branch)"`
 	LFS       *bool                `json:"lfs,omitempty" jsonschema:"Fetch the target of an LFS pointer instead of the pointer file itself"`
 }
@@ -596,6 +603,7 @@ func GetRaw(ctx context.Context, client *gitlabclient.Client, input RawInput) (R
 	if input.ProjectID == "" {
 		return RawOutput{}, errors.New("fileGetRaw: project_id is required")
 	}
+	input.FilePath = toolutil.PlainPath(input.FilePath)
 	opts := &gl.GetRawFileOptions{}
 	if input.Ref != "" {
 		opts.Ref = new(input.Ref)
@@ -643,7 +651,7 @@ func GetRaw(ctx context.Context, client *gitlabclient.Client, input RawInput) (R
 // RawMetaDataInput defines parameters for retrieving raw file metadata via HEAD request.
 type RawMetaDataInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	FilePath  string               `json:"file_path"  jsonschema:"URL-encoded full path of the file,required"`
+	FilePath  string               `json:"file_path"  jsonschema:"Full path of the file in the repository, as written (e.g. src/main.go),required"`
 	Ref       string               `json:"ref,omitempty" jsonschema:"Branch, tag, or commit SHA (defaults to default branch)"`
 	LFS       *bool                `json:"lfs,omitempty" jsonschema:"Fetch the target of an LFS pointer instead of the pointer file itself"`
 }

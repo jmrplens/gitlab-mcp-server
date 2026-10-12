@@ -53,7 +53,7 @@ type ListInput struct {
 // GetInput defines parameters for the Get action which retrieves a single group wiki page by slug.
 type GetInput struct {
 	GroupID    toolutil.StringOrInt `json:"group_id"             jsonschema:"Group ID or URL-encoded path,required"`
-	Slug       string               `json:"slug"                  jsonschema:"URL-encoded slug of the wiki page,required"`
+	Slug       string               `json:"slug"                  jsonschema:"Slug of the wiki page as group.wiki_list returns it, a subpage with its slash (e.g. 'dir/page'),required"`
 	RenderHTML bool                 `json:"render_html,omitempty" jsonschema:"Return HTML-rendered content"`
 	Version    string               `json:"version,omitempty"     jsonschema:"Wiki page version SHA"`
 }
@@ -69,7 +69,7 @@ type CreateInput struct {
 // EditInput defines parameters for the Edit action which updates an existing group wiki page.
 type EditInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	Slug    string               `json:"slug"              jsonschema:"URL-encoded slug of the wiki page to edit,required"`
+	Slug    string               `json:"slug"              jsonschema:"Slug of the wiki page to edit as group.wiki_list returns it (e.g. 'dir/page'),required"`
 	Title   string               `json:"title,omitempty"   jsonschema:"New title"`
 	Content string               `json:"content,omitempty" jsonschema:"New content"`
 	Format  string               `json:"format,omitempty"  jsonschema:"Content format: markdown, rdoc, asciidoc, or org"`
@@ -78,7 +78,7 @@ type EditInput struct {
 // DeleteInput defines parameters for the Delete action which removes a group wiki page by slug.
 type DeleteInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	Slug    string               `json:"slug"     jsonschema:"URL-encoded slug of the wiki page to delete,required"`
+	Slug    string               `json:"slug"     jsonschema:"Slug of the wiki page to delete as group.wiki_list returns it (e.g. 'dir/page'),required"`
 }
 
 // List retrieves all wiki pages for a GitLab group.
@@ -118,6 +118,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.GroupID == "" {
 		return Output{}, toolutil.ErrFieldRequired("group_id")
 	}
+	input.Slug = toolutil.PlainPath(input.Slug)
 	if input.Slug == "" {
 		return Output{}, toolutil.ErrFieldRequired("slug")
 	}
@@ -184,6 +185,7 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Ou
 	if input.GroupID == "" {
 		return Output{}, toolutil.ErrFieldRequired("group_id")
 	}
+	input.Slug = toolutil.PlainPath(input.Slug)
 	if input.Slug == "" {
 		return Output{}, toolutil.ErrFieldRequired("slug")
 	}
@@ -219,6 +221,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	if input.GroupID == "" {
 		return toolutil.ErrFieldRequired("group_id")
 	}
+	input.Slug = toolutil.PlainPath(input.Slug)
 	if input.Slug == "" {
 		return toolutil.ErrFieldRequired("slug")
 	}

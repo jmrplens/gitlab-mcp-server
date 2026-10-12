@@ -13,7 +13,7 @@ import (
 // UpdateInput is the input for updating a submodule reference.
 type UpdateInput struct {
 	ProjectID     toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Submodule     string               `json:"submodule" jsonschema:"URL-encoded full path to the submodule,required"`
+	Submodule     string               `json:"submodule" jsonschema:"Full path of the submodule in the repository, as .gitmodules writes it (e.g. libs/dep),required"`
 	Branch        string               `json:"branch" jsonschema:"Branch name to commit the update to,required"`
 	CommitSHA     string               `json:"commit_sha" jsonschema:"Full commit SHA to update the submodule to,required"`
 	CommitMessage string               `json:"commit_message,omitempty" jsonschema:"Custom commit message (optional)"`
@@ -68,6 +68,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if string(input.ProjectID) == "" {
 		return UpdateOutput{}, toolutil.ErrRequiredString("update_repository_submodule", "project_id")
 	}
+	input.Submodule = toolutil.PlainPath(input.Submodule)
 	opts := &gl.UpdateSubmoduleOptions{
 		Branch:    new(input.Branch),
 		CommitSHA: new(input.CommitSHA),

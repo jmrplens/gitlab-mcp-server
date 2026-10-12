@@ -1242,9 +1242,9 @@ func TestNormalizeEnvironmentNameAliasDirect(t *testing.T) {
 // returns the decoded path with the changed flag and rejects paths
 // that do not contain an encoded slash.
 func TestDecodeEncodedPathIdentifierDirect(t *testing.T) {
-	got, changed := decodeEncodedPathIdentifier("group%2Fsubgroup%2Fproject")
+	got, changed := DecodeEncodedPathIdentifier("group%2Fsubgroup%2Fproject")
 	if !changed {
-		t.Fatal("decodeEncodedPathIdentifier(%2F) changed = false, want true")
+		t.Fatal("DecodeEncodedPathIdentifier(%2F) changed = false, want true")
 	}
 	if got != "group/subgroup/project" {
 		t.Errorf("decoded = %q, want group/subgroup/project", got)
@@ -1252,22 +1252,22 @@ func TestDecodeEncodedPathIdentifierDirect(t *testing.T) {
 
 	// URL percent-encoding is case-insensitive: lowercase %2f must
 	// decode the same as uppercase %2F.
-	gotLower, changedLower := decodeEncodedPathIdentifier("group%2fsubgroup%2fproject")
+	gotLower, changedLower := DecodeEncodedPathIdentifier("group%2fsubgroup%2fproject")
 	if !changedLower {
-		t.Fatal("decodeEncodedPathIdentifier(%2f) changed = false, want true")
+		t.Fatal("DecodeEncodedPathIdentifier(%2f) changed = false, want true")
 	}
 	if gotLower != "group/subgroup/project" {
 		t.Errorf("decoded = %q, want group/subgroup/project", gotLower)
 	}
 
-	if _, isChanged := decodeEncodedPathIdentifier("plain/path"); isChanged {
-		t.Error("decodeEncodedPathIdentifier(no %2F) changed = true, want false")
+	if _, isChanged := DecodeEncodedPathIdentifier("plain/path"); isChanged {
+		t.Error("DecodeEncodedPathIdentifier(no %2F) changed = true, want false")
 	}
-	if _, isChanged := decodeEncodedPathIdentifier(""); isChanged {
-		t.Error("decodeEncodedPathIdentifier(empty) changed = true, want false")
+	if _, isChanged := DecodeEncodedPathIdentifier(""); isChanged {
+		t.Error("DecodeEncodedPathIdentifier(empty) changed = true, want false")
 	}
-	if _, isChanged := decodeEncodedPathIdentifier("no-slash-here"); isChanged {
-		t.Error("decodeEncodedPathIdentifier(no slash) changed = true, want false")
+	if _, isChanged := DecodeEncodedPathIdentifier("no-slash-here"); isChanged {
+		t.Error("DecodeEncodedPathIdentifier(no slash) changed = true, want false")
 	}
 }
 
