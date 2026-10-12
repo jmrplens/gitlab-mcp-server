@@ -281,24 +281,26 @@ func (h *Handler) completeGroupID(ctx context.Context, query string) (*mcp.Compl
 	return toResultWithTotal(values, total), nil
 }
 
-// completeMRIID lists open MRs for the given project and filters by IID prefix.
+// completeMRIID completes a merge request IID in the given project, in any
+// state. See [searchIIDs].
 func (h *Handler) completeMRIID(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
-	values, err := searchMRs(ctx, h.clientFor(ctx), projectID, query)
+	values, total, more, err := searchMRs(ctx, h.clientFor(ctx), projectID, query)
 	if err != nil {
 		slog.DebugContext(ctx, "completion: MR search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
-	return toResult(values), nil
+	return toResultWithMore(values, total, more), nil
 }
 
-// completeIssueIID lists open issues for the given project and filters by IID prefix.
+// completeIssueIID completes an issue IID in the given project, in any state.
+// See [searchIIDs].
 func (h *Handler) completeIssueIID(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
-	values, err := searchIssues(ctx, h.clientFor(ctx), projectID, query)
+	values, total, more, err := searchIssues(ctx, h.clientFor(ctx), projectID, query)
 	if err != nil {
 		slog.DebugContext(ctx, "completion: issue search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
-	return toResult(values), nil
+	return toResultWithMore(values, total, more), nil
 }
 
 // completeUsername searches GitLab users matching the partial value.
@@ -499,6 +501,18 @@ func toResultWithTotal(values []string, total int) *mcp.CompleteResult {
 	}
 	if total > 0 {
 		res.Completion.Total = total
+	}
+	return res
+}
+
+// toResultWithMore is [toResultWithTotal] for a search that knows more may
+// match than its total says: GitLab named a next page, which it does whether
+// or not it counted the matches, or the search asked about fewer items than
+// could match.
+func toResultWithMore(values []string, total int, more bool) *mcp.CompleteResult {
+	res := toResultWithTotal(values, total)
+	if more {
+		res.Completion.HasMore = true
 	}
 	return res
 }

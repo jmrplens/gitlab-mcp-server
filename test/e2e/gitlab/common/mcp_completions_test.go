@@ -2,7 +2,9 @@
 
 // mcp_completions_test.go drives a completion for every argument of every
 // served prompt and every variable of every served resource template, on both
-// capability surfaces.
+// capability surfaces, and holds the answers of the completers whose matching
+// GitLab decides: a project typed back by its full path, and an IID typed in
+// a project.
 //
 // A completion is addressed by a reference and an argument, so the sweep is
 // driven by the two things that carry completable arguments: the prompts and
@@ -23,11 +25,13 @@ package common
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
@@ -90,6 +94,36 @@ func TestCompletions_ProjectID_AFullPathCompletesThroughTheNamespace(t *testing.
 				t.Errorf("project_id completion of %q offered %v, want it to hold %s", typed, values, project.Path)
 			}
 		})
+	}
+}
+
+// issueTemplate is the resource template whose issue_iid the IID scenario
+// completes: no served prompt declares that argument.
+const issueTemplate = "gitlab://project/{project_id}/issue/{issue_iid}"
+
+// TestCompletions_IssueIID_AClosedIssueCompletesByItsIID closes an issue,
+// types its IID with the project resolved, and holds the answer to offering
+// it.
+//
+// The completer used to read the 20 newest open issues and keep the IIDs that
+// began with what was typed, so a closed issue was never offered, nor an open
+// one older than the 20 newest.
+func TestCompletions_IssueIID_AClosedIssueCompletesByItsIID(t *testing.T) {
+	e := harness.New(t)
+	s := e.On(harness.SurfaceDynamic)
+	project := fixture.NewProject(e, fixture.WithNamePrefix("complete"))
+	issue := fixture.NewIssue(e, project, e.Name("closed"))
+	closed := harness.Do[issues.Output](s, actionIssueUpdate, map[string]any{
+		"project_id": project.IDParam(), "issue_iid": issue.IID, "state_event": "close",
+	})
+	if closed.State != "closed" {
+		t.Fatalf("the update answered state %q, want the issue closed", closed.State)
+	}
+
+	iid := strconv.FormatInt(issue.IID, 10)
+	values := s.CompleteResource(issueTemplate, "issue_iid", iid, harness.Resolved(map[string]string{"project_id": project.IDParam()}))
+	if !slices.Contains(values, iid) {
+		t.Errorf("issue_iid completion of %q in project %s offered %v, want it to hold the closed issue", iid, project.IDParam(), values)
 	}
 }
 

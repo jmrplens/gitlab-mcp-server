@@ -14,9 +14,11 @@ import (
 	"go/token"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -685,6 +687,60 @@ func TestComplete_ResourceMRIID(t *testing.T) {
 	}
 }
 
+// TestComplete_IIDs_AnOlderOrClosedItem_IsOffered completes a merge request and
+// an issue IID in a project holding more items than one page, two in three of
+// them closed or merged, on both reference types.
+//
+// The completers used to read the 20 newest open items and keep the ones whose
+// IID began with what was typed, so in a project of 500 the IID 12 and the ten
+// after it were never offered, a closed item was never offered at all, and the
+// answer said nothing more matched.
+func TestComplete_IIDs_AnOlderOrClosedItem_IsOffered(t *testing.T) {
+	cases := []struct {
+		name    string
+		items   int
+		typed   string
+		want    []string
+		hasMore bool
+	}{
+		{
+			name: "eleven match and ten are shown", items: 500, typed: "12",
+			want:    []string{"12", "120", "121", "122", "123", "124", "125", "126", "127", "128"},
+			hasMore: true,
+		},
+		{name: "every match is shown", items: 149, typed: "15", want: []string{"15"}},
+		{name: "a longer IID may follow one digit longer", items: 150, typed: "15", want: []string{"15", "150"}, hasMore: true},
+		{name: "a closed item typed whole", items: 500, typed: "300", want: []string{"300"}},
+		{name: "one digit typed", items: 500, typed: "1", want: []string{"1", "10", "11", "12", "13", "14", "15", "16", "17", "18"}, hasMore: true},
+	}
+	for _, argument := range []string{"merge_request_iid", "issue_iid"} {
+		for _, ref := range []string{refPrompt, refResource} {
+			for _, testCase := range cases {
+				t.Run(argument+"/"+ref+"/"+testCase.name, func(t *testing.T) {
+					h := NewHandler(testutil.NewTestClient(t, newIIDListing(t, testCase.items)))
+					req := &mcp.CompleteRequest{}
+					req.Params = &mcp.CompleteParams{
+						Ref:      &mcp.CompleteReference{Type: ref, Name: "review_mr", URI: "gitlab://project/{project_id}/mr/{merge_request_iid}"},
+						Argument: mcp.CompleteParamsArgument{Name: argument, Value: testCase.typed},
+						Context:  &mcp.CompleteContext{Arguments: map[string]string{"project_id": "42"}},
+					}
+
+					result, err := h.Complete(context.Background(), req)
+					if err != nil {
+						t.Fatalf(fmtUnexpectedErr, err)
+					}
+					if !slices.Equal(result.Completion.Values, testCase.want) {
+						t.Errorf("typing %q offered %v, want %v", testCase.typed, result.Completion.Values, testCase.want)
+					}
+					if result.Completion.HasMore != testCase.hasMore {
+						t.Errorf("hasMore = %t, want %t", result.Completion.HasMore, testCase.hasMore)
+					}
+				})
+			}
+		}
+	}
+}
+
 // TestComplete_ResourceMRIIDWithoutProjectID verifies that resource merge_request_iid
 // completion returns empty results when no project_id is resolved.
 func TestComplete_ResourceMRIIDWithoutProjectID(t *testing.T) {
@@ -1266,10 +1322,12 @@ func TestComplete_APIErrorPaths(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := NewHandler(testutil.NewTestClient(t, errHandler))
+			// A digit, so the IID completers reach the failing GitLab too:
+			// a value no IID begins with is answered without asking.
 			req := &mcp.CompleteRequest{}
 			req.Params = &mcp.CompleteParams{
 				Ref:      &mcp.CompleteReference{Type: tt.refType},
-				Argument: mcp.CompleteParamsArgument{Name: tt.argName, Value: "x"},
+				Argument: mcp.CompleteParamsArgument{Name: tt.argName, Value: "1"},
 				Context:  tt.context,
 			}
 
@@ -1892,10 +1950,13 @@ var completableArguments = []struct {
 // completeRequest builds a completion request for one argument, with the
 // sibling arguments the dispatcher needs already resolved.
 func completeRequest(ref, name string, resolved map[string]string) *mcp.CompleteRequest {
+	// A digit, because it is a value every completer sends to GitLab: an IID,
+	// a pipeline or a job is made of digits, and a value nothing of the kind
+	// begins with is answered without asking.
 	req := &mcp.CompleteRequest{}
 	req.Params = &mcp.CompleteParams{
 		Ref:      &mcp.CompleteReference{Type: ref, Name: "review_mr"},
-		Argument: mcp.CompleteParamsArgument{Name: name, Value: "a"},
+		Argument: mcp.CompleteParamsArgument{Name: name, Value: "1"},
 	}
 	if len(resolved) > 0 {
 		req.Params.Context = &mcp.CompleteContext{Arguments: resolved}
@@ -2091,4 +2152,137 @@ func TestComplete_AnAbandonedRequest_IsNotBlamedOnTheWiring(t *testing.T) {
 	if strings.Contains(logged.String(), toolutil.UnattributedRequestMessage) {
 		t.Errorf("a client that pressed stop was logged at warn as a wiring defect:\n%s", logged.String())
 	}
+}
+
+// The two listings the IID completers read, for project 42.
+const (
+	pathProjectMergeRequests = "/api/v4/projects/42/merge_requests"
+	pathProjectIssues        = "/api/v4/projects/42/issues"
+)
+
+// iidListing answers project 42's merge request and issue listings the way
+// GitLab does, over items whose IIDs run from 1 to n in the order they were
+// created.
+//
+// It honors everything that decides which items a page holds: iids[], state,
+// the creation order in either direction, per_page and page, and it sets the
+// pagination headers GitLab sets. Two items in three are closed or merged, so
+// a completer that asks for open items only loses them. It also refuses, as
+// GitLab's own nginx does, a query string longer than
+// [iidListingQueryLimit].
+type iidListing struct {
+	t     *testing.T
+	n     int
+	mu    sync.Mutex
+	asked []url.Values
+}
+
+// newIIDListing returns a listing of n items.
+func newIIDListing(t *testing.T, n int) *iidListing {
+	t.Helper()
+	return &iidListing{t: t, n: n}
+}
+
+// iidListingState is the state the listing gives an item: open, closed and
+// merged in turn, the first one open.
+func iidListingState(iid int) string {
+	switch iid % 3 {
+	case 1:
+		return "opened"
+	case 2:
+		return "merged"
+	default:
+		return "closed"
+	}
+}
+
+// iidListingQueryLimit is the longest query string the listing answers, as
+// client-go encodes it.
+//
+// GitLab writes the request's query string into every link of the Link header
+// it answers a listing with, and the nginx a GitLab package bundles refuses
+// response headers over its 4 KiB buffer with a 502 ("upstream sent too big
+// header"). Measured on CE 19.4.2, an issue listing naming the 111 IIDs that
+// begin with 1 up to two digits longer was refused, and one naming the 100
+// from 100 to 199 was not; a longer instance URL or project path takes the
+// line lower, so the stand-in draws it at 1 KiB.
+const iidListingQueryLimit = 1024
+
+// ServeHTTP answers one listing request.
+func (l *iidListing) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != pathProjectMergeRequests && r.URL.Path != pathProjectIssues {
+		http.NotFound(w, r)
+		return
+	}
+	query := r.URL.Query()
+	l.mu.Lock()
+	l.asked = append(l.asked, query)
+	l.mu.Unlock()
+
+	if len(r.URL.RawQuery) > iidListingQueryLimit {
+		w.WriteHeader(http.StatusBadGateway)
+		return
+	}
+
+	if orderBy := query.Get("order_by"); orderBy != "" && orderBy != "created_at" {
+		l.t.Errorf("order_by = %q; the listing orders by creation only", orderBy)
+	}
+	wanted := map[int]bool{}
+	for _, raw := range query["iids[]"] {
+		iid, err := strconv.Atoi(raw)
+		if err != nil {
+			l.t.Errorf("iids[] carried %q, which GitLab refuses as an integer", raw)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		wanted[iid] = true
+	}
+	var items []int
+	for iid := 1; iid <= l.n; iid++ {
+		if len(wanted) > 0 && !wanted[iid] {
+			continue
+		}
+		if state := query.Get("state"); state != "" && state != "all" && state != iidListingState(iid) {
+			continue
+		}
+		items = append(items, iid)
+	}
+	if query.Get("sort") != "asc" {
+		slices.Reverse(items)
+	}
+	perPage := listingParam(query, "per_page", 20)
+	page := listingParam(query, "page", 1)
+	start := min((page-1)*perPage, len(items))
+	end := min(start+perPage, len(items))
+	body := make([]string, 0, end-start)
+	for _, iid := range items[start:end] {
+		body = append(body, `{"id":`+strconv.Itoa(1000+iid)+`,"iid":`+strconv.Itoa(iid)+
+			`,"title":"Item","state":"`+iidListingState(iid)+`"}`)
+	}
+	headers := testutil.PaginationHeaders{Page: strconv.Itoa(page), PerPage: strconv.Itoa(perPage), Total: strconv.Itoa(len(items))}
+	if end < len(items) {
+		headers.NextPage = strconv.Itoa(page + 1)
+	}
+	testutil.RespondJSONWithPagination(w, http.StatusOK, "["+strings.Join(body, ",")+"]", headers)
+}
+
+// requests returns the query of every request the listing answered.
+func (l *iidListing) requests() []url.Values {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Clone(l.asked)
+}
+
+// listingParam reads a positive integer parameter, or GitLab's default for it
+// when the request did not send one.
+func listingParam(query url.Values, name string, fallback int) int {
+	raw := query.Get(name)
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 1 {
+		return fallback
+	}
+	return value
 }

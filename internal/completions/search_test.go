@@ -7,9 +7,12 @@ package completions
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -324,40 +327,268 @@ func TestSearchUsers_APIError(t *testing.T) {
 	}
 }
 
-// TestSearchMRs verifies that [searchMRs] returns merge request entries
-// filtered by IID prefix, using subtests for prefix match and unfiltered queries.
-func TestSearchMRs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v4/projects/42/merge_requests" {
-			testutil.RespondJSON(w, http.StatusOK, `[
-				{"iid":1,"title":"Fix critical bug"},
-				{"iid":12,"title":"Add documentation"},
-				{"iid":23,"title":"Refactor auth"}
-			]`)
-			return
-		}
-		http.NotFound(w, r)
-	}))
+// iidSearches are the two IID completers, each reading its own listing.
+var iidSearches = []struct {
+	name   string
+	search iidSearchFunc
+}{
+	{name: "merge requests", search: searchMRs},
+	{name: "issues", search: searchIssues},
+}
 
-	t.Run("filter by IID prefix", func(t *testing.T) {
-		values, err := searchMRs(context.Background(), client, "42", "1")
-		if err != nil {
-			t.Fatalf(fmtUnexpectedErr, err)
-		}
-		if len(values) != 2 {
-			t.Fatalf("expected 2 values matching prefix '1', got %d: %v", len(values), values)
-		}
-	})
+// iidRange spells the IIDs from first to last, inclusive, as a completion
+// offers them.
+func iidRange(first, last int) []string {
+	values := make([]string, 0, last-first+1)
+	for iid := first; iid <= last; iid++ {
+		values = append(values, itoa(iid))
+	}
+	return values
+}
 
-	t.Run(subtestEmptyQueryAll, func(t *testing.T) {
-		values, err := searchMRs(context.Background(), client, "42", "")
-		if err != nil {
-			t.Fatalf(fmtUnexpectedErr, err)
+// iidSearchFunc is the shape of the two IID completers.
+type iidSearchFunc func(context.Context, *gitlabclient.Client, string, string) ([]string, int, bool, error)
+
+// iidSearchCase is one IID completion over [iidListing]: the project's size,
+// what was typed, and the values, total and whether more may match that the
+// answer has to carry.
+type iidSearchCase struct {
+	name  string
+	items int
+	typed string
+	want  []string
+	total int
+	more  bool
+}
+
+// runIIDSearch drives search over a fresh listing of testCase.items, holds the
+// answer to testCase, and returns the query of every request the listing was
+// sent, for the caller to hold too.
+func runIIDSearch(t *testing.T, search iidSearchFunc, testCase iidSearchCase) []url.Values {
+	t.Helper()
+	listing := newIIDListing(t, testCase.items)
+	client := testutil.NewTestClient(t, listing)
+
+	values, total, more, err := search(context.Background(), client, "42", testCase.typed)
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if !slices.Equal(values, testCase.want) {
+		t.Errorf("values = %v, want %v", values, testCase.want)
+	}
+	if total != testCase.total {
+		t.Errorf("total = %d, want %d", total, testCase.total)
+	}
+	if more != testCase.more {
+		t.Errorf("more = %t, want %t", more, testCase.more)
+	}
+	return listing.requests()
+}
+
+// assertCandidateQuery holds the one request a typed IID sends: every IID what
+// was typed begins up to one digit longer, in any state, oldest first.
+func assertCandidateQuery(t *testing.T, asked []url.Values) {
+	t.Helper()
+	if len(asked) != 1 {
+		t.Fatalf("%d requests were sent, want one", len(asked))
+	}
+	query := asked[0]
+	if got := len(query["iids[]"]); got != 11 {
+		t.Errorf("iids[] named %d IIDs, want 11: what was typed and the ten one digit longer", got)
+	}
+	if query.Has("state") {
+		t.Errorf("state = %q; a closed or merged item is completed too", query.Get("state"))
+	}
+	if query.Get("order_by") != "created_at" || query.Get("sort") != "asc" {
+		t.Errorf("order_by = %q, sort = %q; want the oldest first, so the page holds the shortest matches",
+			query.Get("order_by"), query.Get("sort"))
+	}
+}
+
+// TestSearchIIDs_ATypedNumber_IsAskedForByIID types a number into both IID
+// completers over a project holding more items than one page, two in three of
+// them closed or merged, and holds the values offered, whether more may match,
+// and the one request that was sent.
+//
+// The request names every IID what was typed begins, up to one digit longer,
+// in any state and oldest first. Whether more may match comes from a next
+// page, or from an IID one digit longer than what was typed coming back, since
+// nothing longer was asked about. No total is reported: GitLab's counts the
+// candidates named, not every match.
+func TestSearchIIDs_ATypedNumber_IsAskedForByIID(t *testing.T) {
+	cases := []iidSearchCase{
+		{name: "nothing one digit longer exists", items: 119, typed: "12", want: []string{"12"}},
+		{
+			name: "an IID one digit longer came back", items: 500, typed: "12",
+			want: append([]string{"12"}, iidRange(120, 129)...), more: true,
+		},
+		{
+			name: "one digit typed", items: 1205, typed: "1",
+			want: append([]string{"1"}, iidRange(10, 19)...), more: true,
+		},
+		{name: "nothing matches", items: 9, typed: "12", want: []string{}},
+	}
+	for _, search := range iidSearches {
+		for _, testCase := range cases {
+			t.Run(search.name+"/"+testCase.name, func(t *testing.T) {
+				assertCandidateQuery(t, runIIDSearch(t, search.search, testCase))
+			})
 		}
-		if len(values) != 3 {
-			t.Fatalf(fmtExpected3Values, len(values))
+	}
+}
+
+// TestSearchIIDs_NothingTyped_OffersTheNewestOfAnyState holds the listing a
+// completion starts from: the newest items whatever their state, with the
+// total GitLab counted, which for an empty query is every item.
+func TestSearchIIDs_NothingTyped_OffersTheNewestOfAnyState(t *testing.T) {
+	cases := []iidSearchCase{
+		{name: "more than a page", items: 500, want: reversed(iidRange(481, 500)), total: 500, more: true},
+		{name: "one page", items: 5, want: reversed(iidRange(1, 5)), total: 5},
+	}
+	for _, search := range iidSearches {
+		for _, testCase := range cases {
+			t.Run(search.name+"/"+testCase.name, func(t *testing.T) {
+				for _, query := range runIIDSearch(t, search.search, testCase) {
+					if query.Has("iids[]") || query.Has("state") || query.Has("sort") {
+						t.Errorf("an empty query sent %v; it asks for the newest items, unfiltered", query)
+					}
+				}
+			})
 		}
-	})
+	}
+}
+
+// TestSearchIIDs_NoIIDBeginsSo_NothingIsAsked types what no IID can begin with
+// and requires an empty answer with no request: an IID is digits and never
+// begins with a zero, and one too long for an integer names nothing.
+func TestSearchIIDs_NoIIDBeginsSo_NothingIsAsked(t *testing.T) {
+	for _, search := range iidSearches {
+		for _, typed := range []string{"x", "1x", " 12", "0", "012", "9223372036854775808"} {
+			t.Run(search.name+"/"+typed, func(t *testing.T) {
+				listing := newIIDListing(t, 500)
+				client := testutil.NewTestClient(t, listing)
+
+				values, total, more, err := search.search(context.Background(), client, "42", typed)
+				if err != nil {
+					t.Fatalf(fmtUnexpectedErr, err)
+				}
+				if values == nil || len(values) != 0 || total != 0 || more {
+					t.Errorf("got values=%v total=%d more=%t, want an empty array and nothing more", values, total, more)
+				}
+				if asked := listing.requests(); len(asked) != 0 {
+					t.Errorf("%d requests were sent for %q, which no IID begins", len(asked), typed)
+				}
+			})
+		}
+	}
+}
+
+// TestSearchIIDs_ATypedNumberGitLabPages_MoreMayMatch holds a typed IID's
+// answer to the next page GitLab names: the eleven IIDs asked about fit on one
+// page of twenty, but a page GitLab says goes on is not the whole answer, so
+// more may match although nothing one digit longer came back.
+func TestSearchIIDs_ATypedNumberGitLabPages_MoreMayMatch(t *testing.T) {
+	for _, search := range iidSearches {
+		t.Run(search.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":1012,"iid":12,"title":"Item","state":"opened"}]`,
+					testutil.PaginationHeaders{Page: "1", PerPage: "20", NextPage: "2"})
+			}))
+
+			values, total, more, err := search.search(context.Background(), client, "42", "12")
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			if !slices.Equal(values, []string{"12"}) || total != 0 || !more {
+				t.Errorf("got values=%v total=%d more=%t, want [12], no total and more", values, total, more)
+			}
+		})
+	}
+}
+
+// TestSearchIIDs_TheLongestTypedIIDs_AreAnswered types the longest numbers an
+// IID can begin with and requires an answer from the listing, which refuses,
+// as GitLab's own nginx does, a query string longer than
+// [iidListingQueryLimit]. GitLab repeats the query string in every link of
+// its Link header, so the request a completion sends has to stay short
+// whatever was typed: naming every IID two digits longer than 17 typed digits
+// took it past 3 KB.
+func TestSearchIIDs_TheLongestTypedIIDs_AreAnswered(t *testing.T) {
+	for _, search := range iidSearches {
+		for _, typed := range []string{"10000000000000000", "92233720368547758"} {
+			t.Run(search.name+"/"+typed, func(t *testing.T) {
+				listing := newIIDListing(t, 500)
+				client := testutil.NewTestClient(t, listing)
+
+				values, total, more, err := search.search(context.Background(), client, "42", typed)
+				if err != nil {
+					t.Fatalf("typing %q: %v", typed, err)
+				}
+				if len(values) != 0 || total != 0 || more {
+					t.Errorf("got values=%v total=%d more=%t, want nothing, since no IID that long exists", values, total, more)
+				}
+				assertCandidateQuery(t, listing.requests())
+			})
+		}
+	}
+}
+
+// TestIIDCandidates_EndAtTheFirstTooLongForAnInt64 holds the candidates to
+// what fits in client-go's IID type: they ascend, so the first that does not
+// fit ends the list.
+func TestIIDCandidates_EndAtTheFirstTooLongForAnInt64(t *testing.T) {
+	cases := []struct {
+		name  string
+		typed string
+		want  []int64
+	}{
+		{name: "nothing typed", typed: "", want: nil},
+		{name: "one digit", typed: "7", want: []int64{7, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79}},
+		{
+			name: "the last ones overflow", typed: "922337203685477580",
+			want: []int64{
+				922337203685477580, 9223372036854775800, 9223372036854775801, 9223372036854775802,
+				9223372036854775803, 9223372036854775804, 9223372036854775805, 9223372036854775806,
+				9223372036854775807,
+			},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := iidCandidates(testCase.typed)
+			if !slices.Equal(got, testCase.want) {
+				t.Errorf("iidCandidates(%q) = %v, want %v", testCase.typed, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestNamesNextPage_ReadsOnlyXNextPage holds the one header that says a
+// listing goes on, including the absent response a lister may hand back.
+func TestNamesNextPage_ReadsOnlyXNextPage(t *testing.T) {
+	cases := []struct {
+		name string
+		resp *gl.Response
+		want bool
+	}{
+		{name: "no response", resp: nil, want: false},
+		{name: "the last page", resp: &gl.Response{TotalItems: 40}, want: false},
+		{name: "a next page", resp: &gl.Response{NextPage: 2}, want: true},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := namesNextPage(testCase.resp); got != testCase.want {
+				t.Errorf("namesNextPage = %t, want %t", got, testCase.want)
+			}
+		})
+	}
+}
+
+// reversed returns values in the opposite order.
+func reversed(values []string) []string {
+	out := slices.Clone(values)
+	slices.Reverse(out)
+	return out
 }
 
 // TestSearchMRs_APIError verifies that [searchMRs] returns an error when the
@@ -367,58 +598,10 @@ func TestSearchMRs_APIError(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
-	_, err := searchMRs(context.Background(), client, "42", "1")
+	_, _, _, err := searchMRs(context.Background(), client, "42", "1")
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)
 	}
-}
-
-// TestSearchIssues verifies that [searchIssues] returns issue entries filtered
-// by IID prefix, using subtests for matching and non-matching queries.
-func TestSearchIssues(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v4/projects/42/issues" {
-			testutil.RespondJSON(w, http.StatusOK, `[
-				{"id":100,"iid":5,"title":"Login broken"},
-				{"id":101,"iid":50,"title":"Performance issue"}
-			]`)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	t.Run("filter by IID prefix", func(t *testing.T) {
-		values, err := searchIssues(context.Background(), client, "42", "5")
-		if err != nil {
-			t.Fatalf(fmtUnexpectedErr, err)
-		}
-		if len(values) != 2 {
-			t.Fatalf("expected 2 values matching '5', got %d: %v", len(values), values)
-		}
-	})
-
-	t.Run("no match", func(t *testing.T) {
-		values, err := searchIssues(context.Background(), client, "42", "9")
-		if err != nil {
-			t.Fatalf(fmtUnexpectedErr, err)
-		}
-		if len(values) != 0 {
-			t.Errorf("expected 0 values, got %d", len(values))
-		}
-	})
-
-	// The IID filter is applied here rather than by GitLab, so an empty query
-	// has to fall through it: a client that has typed nothing yet must be
-	// offered the open issues, not an empty dropdown.
-	t.Run(subtestEmptyQueryAll, func(t *testing.T) {
-		values, err := searchIssues(context.Background(), client, "42", "")
-		if err != nil {
-			t.Fatalf(fmtUnexpectedErr, err)
-		}
-		if len(values) != 2 {
-			t.Errorf("expected every open issue, got %d: %v", len(values), values)
-		}
-	})
 }
 
 // TestSearchIssues_APIError verifies that [searchIssues] returns an error when
@@ -428,7 +611,7 @@ func TestSearchIssues_APIError(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
-	_, err := searchIssues(context.Background(), client, "42", "1")
+	_, _, _, err := searchIssues(context.Background(), client, "42", "1")
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)
 	}
@@ -547,8 +730,8 @@ func TestSearch_ContextCancelled(t *testing.T) {
 		{"projects", func() error { _, _, err := searchProjects(ctx, client, "x"); return err }},
 		{"groups", func() error { _, _, err := searchGroups(ctx, client, "x"); return err }},
 		{"users", func() error { _, _, err := searchUsers(ctx, client, "x"); return err }},
-		{"mrs", func() error { _, err := searchMRs(ctx, client, "42", "x"); return err }},
-		{"issues", func() error { _, err := searchIssues(ctx, client, "42", "x"); return err }},
+		{"mrs", func() error { _, _, _, err := searchMRs(ctx, client, "42", "x"); return err }},
+		{"issues", func() error { _, _, _, err := searchIssues(ctx, client, "42", "x"); return err }},
 		{"branches", func() error { _, _, err := searchBranches(ctx, client, "42", "x"); return err }},
 		{"tags", func() error { _, _, err := searchTags(ctx, client, "42", "x"); return err }},
 	}

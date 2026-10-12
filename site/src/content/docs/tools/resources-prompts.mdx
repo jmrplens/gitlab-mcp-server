@@ -228,7 +228,7 @@ Every variable except `{+path}` is an RFC 6570 simple expansion, and each one fi
 
 ### Autocomplete for URI parameters
 
-Through `completion/complete`, the server suggests `project_id` and `group_id` values as they are typed, and `merge_request_iid` and `issue_iid` from the project's open merge requests and issues once `project_id` is filled in the same request. No other URI parameter gets suggestions, and neither does one whose data an operator excluded with `GITLAB_MCP_EXCLUDE_TOOLS`. [Completions](/gitlab-mcp-server/capabilities/completions/) describes the mechanism.
+Through `completion/complete`, the server suggests `project_id` and `group_id` values as they are typed, and `merge_request_iid` and `issue_iid` from the project's merge requests and issues, in any state, once `project_id` is filled in the same request. No other URI parameter gets suggestions, and neither does one whose data an operator excluded with `GITLAB_MCP_EXCLUDE_TOOLS`. [Completions](/gitlab-mcp-server/capabilities/completions/) describes the mechanism.
 
 ### How do I read a resource?
 
@@ -414,7 +414,7 @@ Project configuration audit prompts.
 
 ### Autocomplete for prompt arguments
 
-Through `completion/complete`, the server suggests `project_id`, `group_id` and `username` values as they are typed. `merge_request_iid` (from the project's open merge requests), `from` and `to` (branch and tag names), `branch` and `target_branch` (branch names) and `milestone` (milestone titles) are suggested once `project_id` is filled in the same request. `days`, `stale_days` and `state` get no suggestions. A completion naming a prompt this server does not serve is refused with `-32602`. [Completions](/gitlab-mcp-server/capabilities/completions/) describes the mechanism.
+Through `completion/complete`, the server suggests `project_id`, `group_id` and `username` values as they are typed. `merge_request_iid` (from the project's merge requests, in any state), `from` and `to` (branch and tag names), `branch` and `target_branch` (branch names) and `milestone` (milestone titles) are suggested once `project_id` is filled in the same request. `days`, `stale_days` and `state` get no suggestions. A completion naming a prompt this server does not serve is refused with `-32602`. [Completions](/gitlab-mcp-server/capabilities/completions/) describes the mechanism.
 
 ### How do I use a prompt?
 

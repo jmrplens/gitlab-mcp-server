@@ -72,7 +72,7 @@ Each request is answered in five steps:
 
 GitLab MCP Server completes **18 argument names**, organized into global and per-project completers. Global completers resolve values that exist instance-wide, while per-project completers take the `project_id` the client sends in `context.arguments` and search only within that project. Prompt arguments (`ref/prompt`) get the full set; resource URI templates (`ref/resource`) complete `project_id`, `group_id`, `merge_request_iid` and `issue_iid`.
 
-Two ways of matching are used. Arguments backed by a GitLab search (projects, groups, users, branches, tags, labels and milestones) pass what you typed to GitLab's own `search` filter for that list, which decides what matches and is not limited to the start of a name. For `project_id` the search also reaches the namespace (`search_namespaces`) whenever what you typed holds a word of three characters or more, so the full path it offers can be typed back, whole or in part. GitLab compares a query with no such word with each name whole, and no full path equals a bare name, so that query goes without the flag and a project named `p1` is still found by typing `p1`. Arguments that are numbers or hashes (merge request and issue IIDs, pipeline and job IDs, commit SHAs) read one page of 20 recent items and keep those whose identifier starts with what you typed.
+Two ways of matching are used. Arguments backed by a GitLab search (projects, groups, users, branches, tags, labels and milestones) pass what you typed to GitLab's own `search` filter for that list, which decides what matches and is not limited to the start of a name. For `project_id` the search also reaches the namespace (`search_namespaces`) whenever what you typed holds a word of three characters or more, so the full path it offers can be typed back, whole or in part. GitLab compares a query with no such word with each name whole, and no full path equals a bare name, so that query goes without the flag and a project named `p1` is still found by typing `p1`. A merge request or issue IID is asked for by number: what you typed is sent to GitLab's `iids[]` filter as the IIDs it begins, itself and every IID one digit longer, in one request and in any state, so an old, closed or merged item is offered too, and each digit you add asks about the next ten. It stops at one digit because GitLab repeats the request's query string in every link of its `Link` header, and the nginx a GitLab package bundles answers 502 once that header outgrows its buffer, as it did for the 111 IIDs that looking two digits ahead named. Pipeline and job IDs and commit SHAs read one page of 20 recent items and keep those whose identifier starts with what you typed.
 
 ### Global completers
 
@@ -93,8 +93,8 @@ These require a `project_id` in `context.arguments` and search within that proje
 | `branch`, `source_branch`, `target_branch` | Branch names                                | GitLab branch search                                                 | `feature/login`           |
 | `from`, `to`, `ref`                        | Branch and tag names                        | Branch search and tag search, merged with branches first             | `v1.2.0`, `feature/login` |
 | `tag`                                      | Tag names                                   | GitLab tag search                                                    | `v1.2.0`                  |
-| `merge_request_iid`                        | Open MR IIDs                                | The 20 newest open merge requests, by IID prefix                     | `42`                      |
-| `issue_iid`                                | Open issue IIDs                             | The 20 newest open issues, by IID prefix                             | `100`                     |
+| `merge_request_iid`                        | MR IIDs, in any state                       | The IIDs what you typed begins, up to one digit longer (`iids[]`)    | `42`                      |
+| `issue_iid`                                | Issue IIDs, in any state                    | The IIDs what you typed begins, up to one digit longer (`iids[]`)    | `100`                     |
 | `pipeline_id`                              | Recent pipeline IDs                         | The 20 newest pipelines, by ID prefix                                | `12345`                   |
 | `sha`                                      | Recent commit SHAs                          | The 20 newest commits of the default branch, by SHA prefix, any case | `ddcc2f13`                |
 | `label`                                    | Label names                                 | GitLab label search                                                  | `priority::high`          |
@@ -106,13 +106,13 @@ Two completers take a different context. `milestone` resolves against `project_i
 
 ## What does a completion return?
 
-| Field     | Value                                                                                                                                                                                                                      |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `values`  | At most 10 bare values, always an array (empty rather than absent). Each is the literal string that replaces what you typed: a project path, an IID, a ref, never a label such as `15: Fix login`                          |
-| `total`   | The number of matches GitLab reports in its `X-Total` header, for the arguments backed by a GitLab search; left out when GitLab does not send it, and for the IID, ID and SHA arguments, which are filtered after the read |
-| `hasMore` | `true` when more matches exist than the values returned; left out otherwise                                                                                                                                                |
+| Field     | Value                                                                                                                                                                                                                                                                                                                                 |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `values`  | At most 10 bare values, always an array (empty rather than absent). Each is the literal string that replaces what you typed: a project path, an IID, a ref, never a label such as `15: Fix login`                                                                                                                                     |
+| `total`   | The number of matches GitLab reports in its `X-Total` header, for the arguments backed by a GitLab search and for an IID nothing has been typed into yet; left out when GitLab does not send it, for a typed IID, where it would count only the IIDs asked about, and for the ID and SHA arguments, which are filtered after the read |
+| `hasMore` | `true` when more matches exist than the values returned, or may exist: GitLab named a next page, or a typed IID came back one digit longer than what was typed and nothing longer was asked about; left out otherwise                                                                                                                 |
 
-The server reads up to 20 items from GitLab so it can tell when more than 10 match. Results are never cached. On protocol 2026-07-28 the result also carries `"resultType": "complete"`.
+The server reads up to 20 items from GitLab so it can tell when more than 10 match. A typed IID reads the oldest of the IIDs it asks about first, so the page holds the shortest matches. Results are never cached. On protocol 2026-07-28 the result also carries `"resultType": "complete"`.
 
 ## When is the answer empty?
 
@@ -238,11 +238,11 @@ The values are bare IIDs. A client that wants to show titles in its dropdown rea
 
 Completions do not change how the assistant calls tools. What they change is the input it starts from: the values a user picks for a prompt or a resource URI come from GitLab, so the prompt the assistant receives names things that exist.
 
-| Without completions                                        | With completions                                    |
-| ---------------------------------------------------------- | --------------------------------------------------- |
-| A prompt's `branch` is typed from memory and may not exist | It is picked from the branches GitLab returns       |
-| A merge request IID is recalled from memory                | It is picked from the project's open merge requests |
-| A tag name is guessed                                      | It is picked from the project's real tags           |
+| Without completions                                        | With completions                                                       |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------- |
+| A prompt's `branch` is typed from memory and may not exist | It is picked from the branches GitLab returns                          |
+| A merge request IID is recalled from memory                | It is picked from the project's merge requests, open, closed or merged |
+| A tag name is guessed                                      | It is picked from the project's real tags                              |
 
 In practice:
 

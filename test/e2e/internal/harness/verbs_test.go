@@ -469,6 +469,32 @@ func TestCompletionCallTarget_ReferenceAndArgument_JoinedWithASpace(t *testing.T
 	}
 }
 
+// TestCompleteParams_Resolved_IsSentAsTheCompletionContext pins what a
+// completion request carries: no context unless [Resolved] named arguments,
+// and exactly those arguments when it did, since a completer scoped to a
+// project answers nothing without its project_id.
+func TestCompleteParams_Resolved_IsSentAsTheCompletionContext(t *testing.T) {
+	ref := &mcp.CompleteReference{Type: "ref/resource", URI: "gitlab://project/{project_id}/issue/{issue_iid}"}
+
+	bare := completeParams(ref, "issue_iid", "4", resolveCallOptions(nil))
+	if bare.Context != nil {
+		t.Errorf("a completion with no Resolved option carried context %+v", bare.Context)
+	}
+	if bare.Ref != ref || bare.Argument.Name != "issue_iid" || bare.Argument.Value != "4" {
+		t.Errorf("completeParams() = %+v, want the reference, argument and value it was given", bare)
+	}
+
+	empty := completeParams(ref, "issue_iid", "4", resolveCallOptions([]CallOption{Resolved(map[string]string{})}))
+	if empty.Context != nil {
+		t.Errorf("Resolved with no arguments sent context %+v; an empty context says nothing", empty.Context)
+	}
+
+	scoped := completeParams(ref, "issue_iid", "4", resolveCallOptions([]CallOption{Resolved(map[string]string{"project_id": "42"})}))
+	if scoped.Context == nil || len(scoped.Context.Arguments) != 1 || scoped.Context.Arguments["project_id"] != "42" {
+		t.Errorf("Resolved(project_id=42) sent context %+v, want exactly that argument", scoped.Context)
+	}
+}
+
 // TestSession_TrySubscribe_Acknowledged_IsRecordedAsAccepted checks the
 // ordinary case on protocol 2026-07-28: the server acknowledges the URI, the
 // verb hands back a subscription, and the record says the subscribe was

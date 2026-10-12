@@ -147,6 +147,9 @@ type callOptions struct {
 	// dispatch is the route the caller declared this call would run, when the
 	// server rewrites what was asked for.
 	dispatch ActionID
+	// resolved is what a completion is told the client has already filled
+	// in. Empty sends no completion context.
+	resolved map[string]string
 }
 
 // CallOption adjusts one call.
@@ -167,6 +170,14 @@ func For(purpose Purpose) CallOption {
 // protected_get, so a test of that behavior says so here and is held to it.
 func ExpectDispatch(route ActionID) CallOption {
 	return func(o *callOptions) { o.dispatch = route }
+}
+
+// Resolved sends a completion the arguments the client has already filled in,
+// the way an editor does once a project was picked: a completer scoped to a
+// project, such as an IID, a branch or a pipeline, answers nothing without its
+// project_id. It changes nothing for a call that is not a completion.
+func Resolved(arguments map[string]string) CallOption {
+	return func(o *callOptions) { o.resolved = arguments }
 }
 
 // WithoutConfirmation sends a destructive action with no explicit approval,

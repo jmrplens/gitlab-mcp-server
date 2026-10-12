@@ -72,7 +72,7 @@ Cada petición se responde en cinco pasos:
 
 GitLab MCP Server completa **18 nombres de argumento**, organizados en completadores globales y por proyecto. Los completadores globales resuelven valores que existen a nivel de toda la instancia, mientras que los completadores por proyecto toman el `project_id` que el cliente envía en `context.arguments` y buscan solo dentro de ese proyecto. Los argumentos de prompt (`ref/prompt`) reciben el conjunto completo; las plantillas de URI de recurso (`ref/resource`) completan `project_id`, `group_id`, `merge_request_iid` e `issue_iid`.
 
-Se usan dos formas de coincidencia. Los argumentos respaldados por una búsqueda de GitLab (proyectos, grupos, usuarios, ramas, tags, etiquetas y milestones) pasan lo que escribiste al propio filtro `search` de GitLab para ese listado, que decide qué coincide y no se limita al principio de un nombre. En `project_id` la búsqueda alcanza también el espacio de nombres (`search_namespaces`) siempre que lo que escribiste contenga una palabra de tres caracteres o más, así que la ruta completa que ofrece se puede volver a escribir, entera o en parte. GitLab compara una consulta sin ninguna palabra así con cada nombre entero, y ninguna ruta completa es igual a un nombre suelto, así que esa consulta se envía sin la opción y un proyecto llamado `p1` se sigue encontrando al escribir `p1`. Los argumentos que son números o hashes (IIDs de merge requests e issues, IDs de pipelines y jobs, SHAs de commits) leen una página de 20 elementos recientes y se quedan con aquellos cuyo identificador empieza por lo que escribiste.
+Se usan dos formas de coincidencia. Los argumentos respaldados por una búsqueda de GitLab (proyectos, grupos, usuarios, ramas, tags, etiquetas y milestones) pasan lo que escribiste al propio filtro `search` de GitLab para ese listado, que decide qué coincide y no se limita al principio de un nombre. En `project_id` la búsqueda alcanza también el espacio de nombres (`search_namespaces`) siempre que lo que escribiste contenga una palabra de tres caracteres o más, así que la ruta completa que ofrece se puede volver a escribir, entera o en parte. GitLab compara una consulta sin ninguna palabra así con cada nombre entero, y ninguna ruta completa es igual a un nombre suelto, así que esa consulta se envía sin la opción y un proyecto llamado `p1` se sigue encontrando al escribir `p1`. Un IID de merge request o de issue se pide por número: lo que escribiste se envía al filtro `iids[]` de GitLab como los IIDs que empieza, él mismo y cada IID con un dígito más, en una sola petición y en cualquier estado, así que también se ofrece un elemento antiguo, cerrado o fusionado, y cada dígito que añades pregunta por los diez siguientes. Se detiene en un dígito porque GitLab repite la cadena de consulta de la petición en cada enlace de su cabecera `Link`, y el nginx que incluye un paquete de GitLab responde 502 cuando esa cabecera supera su búfer, como ocurrió con los 111 IIDs que nombraba mirar dos dígitos más allá. Los IDs de pipelines y jobs y los SHAs de commits leen una página de 20 elementos recientes y se quedan con aquellos cuyo identificador empieza por lo que escribiste.
 
 ### Completadores globales
 
@@ -93,8 +93,8 @@ Requieren un `project_id` en `context.arguments` y buscan dentro de ese proyecto
 | `branch`, `source_branch`, `target_branch` | Nombres de ramas                                    | Búsqueda de ramas de GitLab                                                                        | `feature/login`           |
 | `from`, `to`, `ref`                        | Nombres de ramas y tags                             | Búsqueda de ramas y de tags, combinadas con las ramas primero                                      | `v1.2.0`, `feature/login` |
 | `tag`                                      | Nombres de tags                                     | Búsqueda de tags de GitLab                                                                         | `v1.2.0`                  |
-| `merge_request_iid`                        | IIDs de MRs abiertas                                | Las 20 merge requests abiertas más recientes, por prefijo de IID                                   | `42`                      |
-| `issue_iid`                                | IIDs de issues abiertos                             | Los 20 issues abiertos más recientes, por prefijo de IID                                           | `100`                     |
+| `merge_request_iid`                        | IIDs de MRs, en cualquier estado                    | Los IIDs que empieza lo que escribiste, hasta un dígito más largos (`iids[]`)                      | `42`                      |
+| `issue_iid`                                | IIDs de issues, en cualquier estado                 | Los IIDs que empieza lo que escribiste, hasta un dígito más largos (`iids[]`)                      | `100`                     |
 | `pipeline_id`                              | IDs de pipelines recientes                          | Los 20 pipelines más recientes, por prefijo de ID                                                  | `12345`                   |
 | `sha`                                      | SHAs de commits recientes                           | Los 20 commits más recientes de la rama por defecto, por prefijo de SHA, sin distinguir mayúsculas | `ddcc2f13`                |
 | `label`                                    | Nombres de etiquetas                                | Búsqueda de etiquetas de GitLab                                                                    | `priority::high`          |
@@ -106,13 +106,13 @@ Dos completadores usan un contexto distinto. `milestone` se resuelve contra `pro
 
 ## ¿Qué devuelve un autocompletado?
 
-| Campo     | Valor                                                                                                                                                                                                                                         |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `values`  | Como máximo 10 valores tal cual, siempre un array (vacío en lugar de ausente). Cada uno es la cadena literal que sustituye a lo que escribiste: una ruta de proyecto, un IID, una ref, nunca una etiqueta como `15: Fix login`                |
-| `total`   | El número de coincidencias que GitLab indica en su cabecera `X-Total`, para los argumentos respaldados por una búsqueda de GitLab; se omite cuando GitLab no la envía, y para los argumentos de IID, ID y SHA, que se filtran después de leer |
-| `hasMore` | `true` cuando hay más coincidencias que valores devueltos; se omite en otro caso                                                                                                                                                              |
+| Campo     | Valor                                                                                                                                                                                                                                                                                                                                                 |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `values`  | Como máximo 10 valores tal cual, siempre un array (vacío en lugar de ausente). Cada uno es la cadena literal que sustituye a lo que escribiste: una ruta de proyecto, un IID, una ref, nunca una etiqueta como `15: Fix login`                                                                                                                        |
+| `total`   | El número de coincidencias que GitLab indica en su cabecera `X-Total`, para los argumentos respaldados por una búsqueda de GitLab y para un IID en el que aún no se ha escrito nada; se omite cuando GitLab no la envía, para un IID escrito, donde contaría solo los IIDs pedidos, y para los argumentos de ID y SHA, que se filtran después de leer |
+| `hasMore` | `true` cuando hay, o puede haber, más coincidencias que valores devueltos: GitLab indicó una página siguiente, o un IID escrito volvió con un dígito más que lo escrito y no se pidió ninguno más largo; se omite en otro caso                                                                                                                        |
 
-El servidor lee hasta 20 elementos de GitLab para poder saber cuándo coinciden más de 10. Los resultados nunca se guardan en caché. En el protocolo 2026-07-28 el resultado lleva además `"resultType": "complete"`.
+El servidor lee hasta 20 elementos de GitLab para poder saber cuándo coinciden más de 10. Un IID escrito lee primero los más antiguos de los IIDs que pide, así que la página tiene las coincidencias más cortas. Los resultados nunca se guardan en caché. En el protocolo 2026-07-28 el resultado lleva además `"resultType": "complete"`.
 
 ## ¿Cuándo es vacía la respuesta?
 
@@ -238,11 +238,11 @@ Los valores son los IIDs tal cual, sin título. Un cliente que quiera mostrar t�
 
 El autocompletado no cambia cómo llama el asistente a las herramientas. Lo que cambia es la entrada de la que parte: los valores que un usuario elige para un prompt o una URI de recurso vienen de GitLab, así que el prompt que recibe el asistente nombra cosas que existen.
 
-| Sin autocompletado                                                | Con autocompletado                                      |
-| ----------------------------------------------------------------- | ------------------------------------------------------- |
-| La `branch` de un prompt se escribe de memoria y puede no existir | Se elige entre las ramas que devuelve GitLab            |
-| El IID de una merge request se recuerda de memoria                | Se elige entre las merge requests abiertas del proyecto |
-| El nombre de un tag se adivina                                    | Se elige entre los tags reales del proyecto             |
+| Sin autocompletado                                                | Con autocompletado                                                              |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| La `branch` de un prompt se escribe de memoria y puede no existir | Se elige entre las ramas que devuelve GitLab                                    |
+| El IID de una merge request se recuerda de memoria                | Se elige entre las merge requests del proyecto, abiertas, cerradas o fusionadas |
+| El nombre de un tag se adivina                                    | Se elige entre los tags reales del proyecto                                     |
 
 En la práctica:
 

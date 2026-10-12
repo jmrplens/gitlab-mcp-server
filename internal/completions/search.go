@@ -1,8 +1,10 @@
 package completions
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -164,50 +166,174 @@ func searchUsers(ctx context.Context, client *gitlabclient.Client, query string)
 	return values, totalFromResponse(resp), nil
 }
 
-// searchMRs returns merge request entries for a project, filtered by IID prefix.
-func searchMRs(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
+// iidExtraDigits is how far past what was typed an IID completion looks: what
+// was typed, then each IID one digit longer.
+//
+// It stops at one digit because GitLab writes the request's query string into
+// every link of the Link header it answers a listing with, and the nginx a
+// GitLab package bundles refuses response headers over its 4 KiB buffer with a
+// 502. Looking two digits past a typed 1 named 111 IIDs, and CE 19.4.2 refused
+// that request so, which left the completion empty; the 11 IIDs of one digit
+// stay under 400 bytes whatever was typed. Completion runs again on every
+// keystroke, so the next digit typed asks about the IIDs a second digit would
+// have named.
+const iidExtraDigits = 1
+
+// iidSuffixes are the endings appended to what was typed to name the IIDs it
+// begins: none, then every single digit in ascending order, 11 in all.
+var iidSuffixes = func() []string {
+	suffixes := []string{""}
+	for digit := range 10 {
+		suffixes = append(suffixes, strconv.Itoa(digit))
 	}
-	opts := &gl.ListProjectMergeRequestsOptions{
-		State: new("opened"),
+	return suffixes
+}()
+
+// iidCandidates returns the IIDs that begin with query and run at most
+// [iidExtraDigits] digits past it, or none when query cannot begin an IID: it
+// holds something other than digits, or begins with a zero, which no IID does.
+//
+// The candidates ascend, so the first one too long for an int64 ends the list:
+// every one after it is longer still.
+func iidCandidates(query string) []int64 {
+	if query == "" || query[0] == '0' || strings.Trim(query, "0123456789") != "" {
+		return nil
 	}
-	opts.PerPage = searchPerPage
-	mrs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, opts, gl.WithContext(ctx))
-	if err != nil {
-		return nil, fmt.Errorf("search merge requests: %w", err)
-	}
-	values := make([]string, 0, len(mrs))
-	for _, mr := range mrs {
-		entry := formatMREntry(mr.IID, mr.Title)
-		if query == "" || strings.HasPrefix(strconv.FormatInt(mr.IID, 10), query) {
-			values = append(values, entry)
+	candidates := make([]int64, 0, len(iidSuffixes))
+	for _, suffix := range iidSuffixes {
+		iid, err := strconv.ParseInt(query+suffix, 10, 64)
+		if err != nil {
+			break
 		}
+		candidates = append(candidates, iid)
 	}
-	return values, nil
+	return candidates
 }
 
-// searchIssues returns issue entries for a project, filtered by IID prefix.
-func searchIssues(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
+// iidEntry is one merge request or issue a listing answered: its IID, and the
+// value the completion offers for it.
+type iidEntry struct {
+	iid   int64
+	value string
+}
+
+// iidLister reads one page of a project's merge requests or issues in any
+// state. Given IIDs, it asks for those alone, oldest first; given none, it asks
+// for the newest.
+type iidLister func(ctx context.Context, iids []int64) ([]iidEntry, *gl.Response, error)
+
+// iidPage is the request an IID listing sends, in the fields the merge request
+// and issue listing options share: one page, restricted to the IIDs given when
+// there are any.
+type iidPage struct {
+	list    gl.ListOptions
+	iids    *[]int64
+	orderBy *string
+	sort    *string
+}
+
+// newIIDPage builds the request for iids. Naming IIDs, it reads them oldest
+// first, so that when more candidates match than a page holds, the page holds
+// the shortest of them, which are the ones a completion shows first; naming
+// none, it keeps GitLab's own order, the newest first.
+func newIIDPage(iids []int64) iidPage {
+	page := iidPage{list: gl.ListOptions{PerPage: searchPerPage}}
+	if iids != nil {
+		page.iids = &iids
+		page.orderBy = new("created_at")
+		page.sort = new("asc")
 	}
-	opts := &gl.ListProjectIssuesOptions{
-		State: new("opened"),
+	return page
+}
+
+// listIIDs adapts a merge request or issue listing to an [iidLister]: list
+// sends the request, and entry reads one item it answered.
+func listIIDs[T any](list func(ctx context.Context, page iidPage) ([]T, *gl.Response, error), entry func(T) iidEntry) iidLister {
+	return func(ctx context.Context, iids []int64) ([]iidEntry, *gl.Response, error) {
+		items, resp, err := list(ctx, newIIDPage(iids))
+		entries := make([]iidEntry, 0, len(items))
+		for _, item := range items {
+			entries = append(entries, entry(item))
+		}
+		return entries, resp, err
 	}
-	opts.PerPage = searchPerPage
-	issues, _, err := client.GL().Issues.ListProjectIssues(projectID, opts, gl.WithContext(ctx))
-	if err != nil {
-		return nil, fmt.Errorf("search issues: %w", err)
+}
+
+// searchIIDs completes a merge request or issue IID through list, and reports
+// the total GitLab counted and whether more may match than it answered.
+//
+// What was typed is sent to GitLab as the IIDs it begins (see
+// [iidCandidates]) in one request with no state filter, so an item is offered
+// whatever its age and whether it is open, closed or merged. Reading the 20
+// newest open items and filtering them here found none of them. More may match
+// when GitLab named a next page, or when an IID [iidExtraDigits] digits longer
+// than what was typed came back: the request asked about nothing longer, and
+// the project may hold it. A total is reported only for an empty query, where
+// GitLab's count is every item; for a typed one it would count only the
+// candidates the request named.
+func searchIIDs(ctx context.Context, query, operation string, list iidLister) (values []string, total int, more bool, err error) {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, 0, false, ctxErr
 	}
-	values := make([]string, 0, len(issues))
-	for _, issue := range issues {
-		entry := formatIssueEntry(issue.IID, issue.Title)
-		if query == "" || strings.HasPrefix(strconv.FormatInt(issue.IID, 10), query) {
-			values = append(values, entry)
+	var candidates []int64
+	if query != "" {
+		if candidates = iidCandidates(query); len(candidates) == 0 {
+			return []string{}, 0, false, nil
 		}
 	}
-	return values, nil
+	entries, resp, err := list(ctx, candidates)
+	if err != nil {
+		return nil, 0, false, fmt.Errorf("%s: %w", operation, err)
+	}
+	if query == "" {
+		return iidValues(entries), totalFromResponse(resp), namesNextPage(resp), nil
+	}
+	slices.SortFunc(entries, func(a, b iidEntry) int { return cmp.Compare(a.iid, b.iid) })
+	n := len(entries)
+	reachedTheLongest := n > 0 && len(strconv.FormatInt(entries[n-1].iid, 10)) == len(query)+iidExtraDigits
+	return iidValues(entries), 0, namesNextPage(resp) || reachedTheLongest, nil
+}
+
+// iidValues returns the value each entry offers, in the entries' order.
+func iidValues(entries []iidEntry) []string {
+	values := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		values = append(values, entry.value)
+	}
+	return values
+}
+
+// namesNextPage reports whether GitLab said a listing goes on past the page it
+// answered. It does so in X-Next-Page whether or not it counted the items, which
+// it stops doing on a large enough collection.
+func namesNextPage(resp *gl.Response) bool {
+	return resp != nil && resp.NextPage > 0
+}
+
+// searchMRs completes a merge request IID in a project. See [searchIIDs].
+func searchMRs(ctx context.Context, client *gitlabclient.Client, projectID, query string) (values []string, total int, more bool, err error) {
+	return searchIIDs(ctx, query, "search merge requests", listIIDs(
+		func(ctx context.Context, page iidPage) ([]*gl.BasicMergeRequest, *gl.Response, error) {
+			opts := &gl.ListProjectMergeRequestsOptions{ListOptions: page.list, IIDs: page.iids, OrderBy: page.orderBy, Sort: page.sort}
+			return client.GL().MergeRequests.ListProjectMergeRequests(projectID, opts, gl.WithContext(ctx))
+		},
+		func(mr *gl.BasicMergeRequest) iidEntry {
+			return iidEntry{iid: mr.IID, value: formatMREntry(mr.IID, mr.Title)}
+		},
+	))
+}
+
+// searchIssues completes an issue IID in a project. See [searchIIDs].
+func searchIssues(ctx context.Context, client *gitlabclient.Client, projectID, query string) (values []string, total int, more bool, err error) {
+	return searchIIDs(ctx, query, "search issues", listIIDs(
+		func(ctx context.Context, page iidPage) ([]*gl.Issue, *gl.Response, error) {
+			opts := &gl.ListProjectIssuesOptions{ListOptions: page.list, IIDs: page.iids, OrderBy: page.orderBy, Sort: page.sort}
+			return client.GL().Issues.ListProjectIssues(projectID, opts, gl.WithContext(ctx))
+		},
+		func(issue *gl.Issue) iidEntry {
+			return iidEntry{iid: issue.IID, value: formatIssueEntry(issue.IID, issue.Title)}
+		},
+	))
 }
 
 // searchBranches returns branch names matching the query plus the total

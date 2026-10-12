@@ -94,16 +94,27 @@ func (s *Session) CompleteResource(uriTemplate, argument, value string, opts ...
 func (s *Session) complete(ref *mcp.CompleteReference, argument, value string, opts []CallOption) []string {
 	s.env.T.Helper()
 
-	ctx := s.attribute(s.env.Ctx, resolveCallOptions(opts).purpose, ExpectationOK, callAttribution{target: completionCallTarget(completionTarget(ref), argument)})
-	result, err := s.conn.client().Complete(ctx, &mcp.CompleteParams{
-		Ref:      ref,
-		Argument: mcp.CompleteParamsArgument{Name: argument, Value: value},
-	})
+	options := resolveCallOptions(opts)
+	ctx := s.attribute(s.env.Ctx, options.purpose, ExpectationOK, callAttribution{target: completionCallTarget(completionTarget(ref), argument)})
+	result, err := s.conn.client().Complete(ctx, completeParams(ref, argument, value, options))
 	if err != nil {
 		s.env.T.Fatalf("completion/complete %s %s: %v%s", completionTarget(ref), argument, err, s.conn.failureContext())
 		return nil
 	}
 	return result.Completion.Values
+}
+
+// completeParams builds one completion request, carrying the arguments
+// [Resolved] named as its context when there are any.
+func completeParams(ref *mcp.CompleteReference, argument, value string, options callOptions) *mcp.CompleteParams {
+	params := &mcp.CompleteParams{
+		Ref:      ref,
+		Argument: mcp.CompleteParamsArgument{Name: argument, Value: value},
+	}
+	if len(options.resolved) > 0 {
+		params.Context = &mcp.CompleteContext{Arguments: options.resolved}
+	}
+	return params
 }
 
 // completionTarget names what a completion reference addressed, for a message.
