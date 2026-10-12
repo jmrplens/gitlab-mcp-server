@@ -709,7 +709,7 @@ func (n gqlBranchRuleNode) item() BranchRuleItem {
 
 // ListInput is the input for listing branch rules.
 type ListInput struct {
-	ProjectPath string `json:"project_path" jsonschema:"required,Project full path (e.g. my-group/my-project)"`
+	ProjectPath string `json:"project_path" jsonschema:"Project full path (e.g. my-group/my-project),required"`
 	toolutil.GraphQLPaginationInput
 }
 

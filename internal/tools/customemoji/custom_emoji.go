@@ -148,7 +148,7 @@ func mutationRefusal(operation, payloadKey string, responseErrors []toolutil.Gra
 
 // ListInput is the input for listing custom emoji.
 type ListInput struct {
-	GroupPath             string `json:"group_path" jsonschema:"required,Group full path (e.g. my-group)"`
+	GroupPath             string `json:"group_path" jsonschema:"Group full path (e.g. my-group),required"`
 	IncludeAncestorGroups bool   `json:"include_ancestor_groups,omitempty" jsonschema:"Also list the custom emoji of every ancestor group, which a subgroup can use as well. Default false, as GitLab defaults: a subgroup is then listed with its own emoji only"`
 	toolutil.GraphQLCursorPaginationInput
 }
@@ -248,9 +248,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 // CreateInput is the input for creating a custom emoji.
 type CreateInput struct {
-	GroupPath string `json:"group_path" jsonschema:"required,Group full path (e.g. my-group)"`
-	Name      string `json:"name"       jsonschema:"required,Emoji name without colons (e.g. party_parrot)"`
-	URL       string `json:"url"        jsonschema:"required,URL to the emoji image (PNG or GIF recommended)"`
+	GroupPath string `json:"group_path" jsonschema:"Group full path (e.g. my-group),required"`
+	Name      string `json:"name"       jsonschema:"Emoji name without colons (e.g. party_parrot),required"`
+	URL       string `json:"url"        jsonschema:"URL to the emoji image (PNG or GIF recommended),required"`
 }
 
 // CreateOutput is the output for creating a custom emoji.
@@ -320,7 +320,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 // DeleteInput is the input for deleting a custom emoji.
 type DeleteInput struct {
-	ID string `json:"id" jsonschema:"required,Custom emoji GID (e.g. gid://gitlab/CustomEmoji/1)"`
+	ID string `json:"id" jsonschema:"Custom emoji GID (e.g. gid://gitlab/CustomEmoji/1),required"`
 }
 
 // Delete removes a custom emoji via the GitLab GraphQL API.

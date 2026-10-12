@@ -12,10 +12,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
 	"maps"
 	"math"
 	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +33,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/elicitation"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/sourcewalk"
 )
 
 // Helpers.
@@ -3524,6 +3532,159 @@ func TestInputSchemaForType_RequiredSuffixRemoved(t *testing.T) {
 	if !reflect.DeepEqual(required, []string{"name"}) {
 		t.Fatalf("required = %v, want [name]", required)
 	}
+}
+
+// TestJSONSchemaTags_InternalTools_PutRequiredLast holds every jsonschema tag
+// under internal/tools to the one order this package reads: the description
+// first and the required marker last. jsonschema-go takes the whole tag as the
+// property's description, and inputSchemaForType trims only a trailing
+// ",required" from it, so a tag written "required,Description" keeps its field
+// required (jsonSchemaTagHasRequired splits the tag on commas) while every
+// surface serves "required," at the head of the description (issue 1355).
+// Nothing else reads the order, so this is what stops a new tag being written
+// that way.
+func TestJSONSchemaTags_InternalTools_PutRequiredLast(t *testing.T) {
+	misplaced, err := jsonSchemaTagsWithRequiredNotLast(filepath.Join(findRepoRoot(t), "internal", "tools"))
+	if err != nil {
+		t.Fatalf("read internal/tools: %v", err)
+	}
+	if len(misplaced) > 0 {
+		t.Errorf("%d jsonschema tag(s) put required before the description, which is then served beginning \"required,\"; write it last:\n  %s",
+			len(misplaced), strings.Join(misplaced, "\n  "))
+	}
+}
+
+// TestJSONSchemaTagsWithRequiredNotLast_PlantedTree_FindsOnlyTheMisplacedTag
+// drives the sweep over a tree it plants, so the guardrail above cannot pass
+// for having read nothing: a required marker ahead of the description is
+// reported with its file and line; one at the end, a description that merely
+// contains the word, a tag with no marker and a struct tag carrying no
+// jsonschema key are not; and a nested checkout, which on a machine running
+// the parallel-agent tooling is another branch's copy of this tree, is not
+// read at all.
+func TestJSONSchemaTagsWithRequiredNotLast_PlantedTree_FindsOnlyTheMisplacedTag(t *testing.T) {
+	dir := t.TempDir()
+	plant := func(rel, src string) {
+		t.Helper()
+		path := filepath.Join(dir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+	plant("domain/input.go", "package domain\n\n"+
+		"type Input struct {\n"+
+		"\tFirst  string `json:\"first\" jsonschema:\"required,Group full path\"`\n"+
+		"\tLast   string `json:\"last\" jsonschema:\"Group full path,required\"`\n"+
+		"\tWord   string `json:\"word\" jsonschema:\"Path, required for a subgroup\"`\n"+
+		"\tNone   string `json:\"none\" jsonschema:\"Optional path\"`\n"+
+		"\tNoKey  string `json:\"no_key\"`\n"+
+		"\tNoTag  string\n"+
+		"}\n")
+	plant("worktree/.git", "gitdir: elsewhere\n")
+	plant("worktree/input.go", "package worktree\n\n"+
+		"type Input struct {\n"+
+		"\tFirst string `json:\"first\" jsonschema:\"required,Another branch\"`\n"+
+		"}\n")
+
+	misplaced, err := jsonSchemaTagsWithRequiredNotLast(dir)
+	if err != nil {
+		t.Fatalf("jsonSchemaTagsWithRequiredNotLast() error = %v", err)
+	}
+	want := []string{"domain/input.go:4: required,Group full path"}
+	if !reflect.DeepEqual(misplaced, want) {
+		t.Errorf("jsonSchemaTagsWithRequiredNotLast() = %q, want %q", misplaced, want)
+	}
+}
+
+// TestJSONSchemaTagsWithRequiredNotLast_Unreadable_ReportsTheFailure holds the
+// two ways the sweep can fail to an error rather than to an empty, passing
+// list: a root it cannot open and a file that does not parse.
+func TestJSONSchemaTagsWithRequiredNotLast_Unreadable_ReportsTheFailure(t *testing.T) {
+	t.Run("missing root", func(t *testing.T) {
+		if _, err := jsonSchemaTagsWithRequiredNotLast(filepath.Join(t.TempDir(), "absent")); err == nil {
+			t.Error("jsonSchemaTagsWithRequiredNotLast(absent) error = nil, want one")
+		}
+	})
+	t.Run("unparsable file", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "broken.go"), []byte("package broken\n\ntype {"), 0o600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		if _, err := jsonSchemaTagsWithRequiredNotLast(dir); err == nil {
+			t.Error("jsonSchemaTagsWithRequiredNotLast(broken) error = nil, want one")
+		}
+	})
+}
+
+// jsonSchemaTagsWithRequiredNotLast parses every Go file below dir and returns,
+// as "path:line: tag" relative to dir, each struct field whose jsonschema tag
+// carries a required element anywhere but last. Test files are read too,
+// since a fixture written that way teaches the order to whoever copies it.
+// The walk is scoped to dir with os.OpenRoot and prunes what sourcewalk says
+// is not this repository's source.
+func jsonSchemaTagsWithRequiredNotLast(dir string) ([]string, error) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	rootFS := root.FS()
+	fset := token.NewFileSet()
+	var misplaced []string
+	walkErr := fs.WalkDir(rootFS, ".", func(rel string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			if sourcewalk.SkipDirBelowRootFS(rootFS, rel) {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(rel, ".go") {
+			return nil
+		}
+		src, err := fs.ReadFile(rootFS, rel)
+		if err != nil {
+			return err
+		}
+		file, err := parser.ParseFile(fset, rel, src, parser.SkipObjectResolution)
+		if err != nil {
+			return err
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			field, ok := node.(*ast.Field)
+			if !ok || field.Tag == nil {
+				return true
+			}
+			tag, unquoteErr := strconv.Unquote(field.Tag.Value)
+			if unquoteErr != nil {
+				return true
+			}
+			value, found := reflect.StructTag(tag).Lookup("jsonschema")
+			if found && requiredNotLast(value) {
+				misplaced = append(misplaced, fmt.Sprintf("%s:%d: %s", rel, fset.Position(field.Pos()).Line, value))
+			}
+			return true
+		})
+		return nil
+	})
+	return misplaced, walkErr
+}
+
+// requiredNotLast reports whether a jsonschema tag value carries a required
+// element before its last one.
+func requiredNotLast(value string) bool {
+	parts := strings.Split(value, ",")
+	for _, part := range parts[:len(parts)-1] {
+		if strings.TrimSpace(part) == "required" {
+			return true
+		}
+	}
+	return false
 }
 
 // TestInputSchemaForType_SecretFieldsWriteOnly verifies token inputs are marked
