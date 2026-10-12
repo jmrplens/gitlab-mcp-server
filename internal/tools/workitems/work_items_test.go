@@ -1783,17 +1783,17 @@ func TestUpdate_AllOptions(t *testing.T) {
 		IID:            42,
 		Title:          "All opts updated",
 		StateEvent:     "CLOSE",
-		Description:    "new desc",
+		Description:    new("new desc"),
 		AssigneeIDs:    []int64{1, 2},
 		MilestoneID:    &milestone,
 		CRMContactIDs:  []int64{10},
 		ParentID:       &parent,
 		AddLabelIDs:    []int64{20, 30},
 		RemoveLabelIDs: []int64{40},
-		StartDate:      "2026-06-01",
-		DueDate:        "2026-06-30",
+		StartDate:      new("2026-06-01"),
+		DueDate:        new("2026-06-30"),
 		Weight:         &weight,
-		HealthStatus:   "needsAttention",
+		HealthStatus:   new("needsAttention"),
 		IterationID:    &iteration,
 		Color:          "#00ff00",
 	})
@@ -1847,8 +1847,11 @@ func TestUpdate_MalformedDate_RefusesBeforeAnyRequest(t *testing.T) {
 		name  string
 		input UpdateInput
 	}{
-		{"start_date", UpdateInput{StartDate: "not-a-date"}},
-		{"due_date", UpdateInput{DueDate: "also-invalid"}},
+		{"start_date", UpdateInput{StartDate: new("not-a-date")}},
+		{"due_date", UpdateInput{DueDate: new("also-invalid")}},
+		{"milestone_id", UpdateInput{MilestoneID: new(int64(-1))}},
+		{"parent_id", UpdateInput{ParentID: new(int64(-1))}},
+		{"iteration_id", UpdateInput{IterationID: new(int64(-1))}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -3384,7 +3387,7 @@ func TestUpdate_Fields_ReachTheWire(t *testing.T) {
 	}{
 		{UpdateInput{Title: "Renamed"}, wireCase{name: "title", field: "title", want: "Renamed"}},
 		{UpdateInput{StateEvent: "CLOSE"}, wireCase{name: "state_event", field: "stateEvent", want: "CLOSE"}},
-		{UpdateInput{Description: "new desc"}, wireCase{name: "description", widget: "descriptionWidget", field: "description", want: "new desc"}},
+		{UpdateInput{Description: new("new desc")}, wireCase{name: "description", widget: "descriptionWidget", field: "description", want: "new desc"}},
 		{UpdateInput{AssigneeIDs: []int64{5}}, wireCase{name: "assignee_ids", widget: "assigneesWidget", field: "assigneeIds", want: []any{"gid://gitlab/User/5"}}},
 		{UpdateInput{MilestoneID: &milestone}, wireCase{name: "milestone_id", widget: "milestoneWidget", field: "milestoneId", want: "gid://gitlab/Milestone/4"}},
 		{UpdateInput{CRMContactIDs: []int64{6}}, wireCase{name: "crm_contact_ids", widget: "crmContactsWidget", field: "contactIds", want: []any{"gid://gitlab/CustomerRelations::Contact/6"}}},
@@ -3394,10 +3397,10 @@ func TestUpdate_Fields_ReachTheWire(t *testing.T) {
 		{UpdateInput{ParentID: &parent}, wireCase{name: "parent_id", widget: "hierarchyWidget", field: "parentId", want: "gid://gitlab/WorkItem/9"}},
 		{UpdateInput{AddLabelIDs: []int64{11}}, wireCase{name: "add_label_ids", widget: "labelsWidget", field: "addLabelIds", want: []any{"gid://gitlab/Label/11"}}},
 		{UpdateInput{RemoveLabelIDs: []int64{12}}, wireCase{name: "remove_label_ids", widget: "labelsWidget", field: "removeLabelIds", want: []any{"gid://gitlab/Label/12"}}},
-		{UpdateInput{StartDate: "2026-06-01"}, wireCase{name: "start_date", widget: "startAndDueDateWidget", field: "startDate", want: "2026-06-01"}},
-		{UpdateInput{DueDate: "2026-06-30"}, wireCase{name: "due_date", widget: "startAndDueDateWidget", field: "dueDate", want: "2026-06-30"}},
+		{UpdateInput{StartDate: new("2026-06-01")}, wireCase{name: "start_date", widget: "startAndDueDateWidget", field: "startDate", want: "2026-06-01"}},
+		{UpdateInput{DueDate: new("2026-06-30")}, wireCase{name: "due_date", widget: "startAndDueDateWidget", field: "dueDate", want: "2026-06-30"}},
 		{UpdateInput{Weight: &weight}, wireCase{name: "weight", widget: "weightWidget", field: "weight", want: float64(3)}},
-		{UpdateInput{HealthStatus: "needsAttention"}, wireCase{name: "health_status", widget: "healthStatusWidget", field: "healthStatus", want: "needsAttention"}},
+		{UpdateInput{HealthStatus: new("needsAttention")}, wireCase{name: "health_status", widget: "healthStatusWidget", field: "healthStatus", want: "needsAttention"}},
 		{UpdateInput{IterationID: &iteration}, wireCase{name: "iteration_id", widget: "iterationWidget", field: "iterationId", want: "gid://gitlab/Iteration/7"}},
 		{UpdateInput{Color: "#00ff00"}, wireCase{name: "color", widget: "colorWidget", field: "color", want: "#00ff00"}},
 		{UpdateInput{Status: "IN_PROGRESS"}, wireCase{name: "status", widget: "statusWidget", field: "status", want: string(gl.WorkItemStatusInProgress)}},
@@ -3412,6 +3415,49 @@ func TestUpdate_Fields_ReachTheWire(t *testing.T) {
 				t.Fatalf(fmtUnexpErr, err)
 			}
 			assertWire(t, mutationInput(t, got), testCase.wireCase)
+		})
+	}
+}
+
+// TestUpdate_Removals_ReachTheWire drives each removal the update accepts and
+// asserts the leaf it becomes inside the mutation input: 0 for a reference and
+// "" for a date or the health status arrive as null, which is how GitLab's
+// schema says each is removed, and "" for the description arrives as an empty
+// description.
+//
+// Before issue 1303, 0 reached GitLab as gid://gitlab/Milestone/0, refused as
+// "No object found", and "" sent nothing at all, so the update answered success
+// with the value still in place.
+func TestUpdate_Removals_ReachTheWire(t *testing.T) {
+	zero, empty := int64(0), ""
+	cases := []struct {
+		input UpdateInput
+		wireCase
+	}{
+		{UpdateInput{MilestoneID: &zero}, wireCase{name: "milestone_id", widget: "milestoneWidget", field: "milestoneId", want: nil}},
+		{UpdateInput{ParentID: &zero}, wireCase{name: "parent_id", widget: "hierarchyWidget", field: "parentId", want: nil}},
+		{UpdateInput{IterationID: &zero}, wireCase{name: "iteration_id", widget: "iterationWidget", field: "iterationId", want: nil}},
+		{UpdateInput{StartDate: &empty}, wireCase{name: "start_date", widget: "startAndDueDateWidget", field: "startDate", want: nil}},
+		{UpdateInput{DueDate: &empty}, wireCase{name: "due_date", widget: "startAndDueDateWidget", field: "dueDate", want: nil}},
+		{UpdateInput{HealthStatus: &empty}, wireCase{name: "health_status", widget: "healthStatusWidget", field: "healthStatus", want: nil}},
+		{UpdateInput{Description: &empty}, wireCase{name: "description", widget: "descriptionWidget", field: "description", want: ""}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var got graphQLRequest
+			client := testutil.NewTestClient(t, recordWorkItemUpdate(t, &got))
+			input := testCase.input
+			input.FullPath, input.IID = testFullPath, 42
+			if _, err := Update(t.Context(), client, input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			widget, ok := mutationInput(t, got)[testCase.widget].(map[string]any)
+			if !ok {
+				t.Fatalf("mutation input carries no %s", testCase.widget)
+			}
+			if value, present := widget[testCase.field]; !present || value != testCase.want {
+				t.Errorf("%s.%s = %#v (present %v), want %#v", testCase.widget, testCase.field, value, present, testCase.want)
+			}
 		})
 	}
 }

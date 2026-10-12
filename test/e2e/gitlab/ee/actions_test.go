@@ -394,6 +394,10 @@ const (
 	actionIssueIterationEventGet  harness.ActionID = "issue.event_issue_iteration_get"
 )
 
+// The work item update, driven here for the widgets it can set only on a
+// licensed instance: the iteration and the health status.
+const actionWorkItemUpdate harness.ActionID = "issue.work_item_update"
+
 // Runner controllers, their tokens and their scopes.
 const (
 	actionRunnerControllerList                harness.ActionID = "runner.controller_list"

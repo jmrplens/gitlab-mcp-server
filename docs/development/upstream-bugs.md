@@ -85,6 +85,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The model package file path segment cannot be omitted](#the-model-package-file-path-segment-cannot-be-omitted)
   - [A measure GitLab sends as null decodes as 0](#a-measure-gitlab-sends-as-null-decodes-as-0)
   - [Block, unblock and deactivate drop the answer that says whether anything changed](#block-unblock-and-deactivate-drop-the-answer-that-says-whether-anything-changed)
+  - [UpdateWorkItemOptions cannot remove a reference, a date or the health status](#updateworkitemoptions-cannot-remove-a-reference-a-date-or-the-health-status)
   - [ListAuditEventsOptions models neither entity filter the instance list takes](#listauditeventsoptions-models-neither-entity-filter-the-instance-list-takes)
   - [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
@@ -349,6 +350,7 @@ readable without opening the tracker:
 | 116 | client-go | [A measure GitLab sends as null decodes as 0](#a-measure-gitlab-sends-as-null-decodes-as-0) | No; for the joint merge request | No | No | No | Yes, for every measure but a deployable's, which is still left out at 0 |
 | 117 | client-go | [Block, unblock and deactivate drop the answer that says whether anything changed](#block-unblock-and-deactivate-drop-the-answer-that-says-whether-anything-changed) | No; for the joint merge request | No | No | No | Yes, the three handlers read the answer from the captured response |
 | 118 | gitlab-org/gitlab | [The REST delete of a locked Terraform state answers 200 and deletes nothing](#the-rest-delete-of-a-locked-terraform-state-answers-200-and-deletes-nothing) | No | No | No | No | Yes, `admin.terraform_state_delete` reads the state first and refuses a locked one |
+| 119 | client-go | [UpdateWorkItemOptions cannot remove a reference, a date or the health status](#updateworkitemoptions-cannot-remove-a-reference-a-date-or-the-health-status) | No | No | No | No | Yes, `issue.work_item_update` writes null into the mutation input through a request option |
 | 120 | client-go | [ListAuditEventsOptions models neither entity filter the instance list takes](#listauditeventsoptions-models-neither-entity-filter-the-instance-list-takes) | No | No | No | No | Yes, `audit_event.list_instance` adds `entity_type` and `entity_id` to the query through a request option |
 | 126 | client-go | [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date) | No | No | No | No | Yes, `user.add_ssh_key`, `user.add_ssh_key_for_user`, `snippet.list_all` and the two changelog actions leave the field unset and write the instant given through a request option |
 | 127 | gitlab-org/gitlab | [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text) | No | No | No | No; GitLab's pages leave such a submodule unlinked | Yes, `repository.list_submodules` and `repository.read_submodule_file` resolve a sibling namespace and the other spellings of the instance's clone URLs |
@@ -6248,6 +6250,53 @@ so the status already tells their outcome.
 
 **Effort**: small: return the decoded bool, a signature change that a major
 release of client-go carries, with a test per answer.
+
+### UpdateWorkItemOptions cannot remove a reference, a date or the health status
+
+- **Reported**: no. It belongs with the work item commits of the joint merge
+  request,
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  and is not in it yet.
+- **In review**: no.
+- **Merged**: no. v3.17.0 builds the input the same way.
+- **Blocking**: no.
+- **Workaround**: yes. `toolutil.ApplyWorkItemWidgets` reads the milestone,
+  parent, iteration, start date, due date and health status of an update
+  under the clearing convention every update here follows (0 removes a
+  reference, "" removes a date or the health status) and returns a request
+  option that writes null into the matching widget of the `workItemUpdate`
+  input client-go has encoded, beside whatever else the update sets. It
+  leaves alone the global-ID lookup client-go sends first with the same
+  options. `issue.work_item_update` uses it. It retires when the option
+  struct can express a removal.
+
+**Where**: `workitems.go`, `UpdateWorkItemOptions.wrap` and the
+`workItemWidget*InputGQL` structs it fills.
+
+**What**: `wrap` turns every reference it is handed into a global ID, so a
+milestone, parent or iteration of 0 reaches GitLab as
+`gid://gitlab/Milestone/0`, `gid://gitlab/WorkItem/0` or
+`gid://gitlab/Iteration/0`, which GitLab answers with "No object found". The
+start and due dates, the health status and the three references are each
+carried by a pointer whose widget field is tagged `omitempty`, so there is no
+value of the option struct that makes the widget carry null, and null is how
+GitLab's schema removes each of them (`WorkItemWidgetHierarchyUpdateInput`
+documents `parentId` as "Use `null` to remove the association"; the
+milestone, iteration, start and due date and health status inputs are all
+nullable). A caller of client-go can therefore set any of these and remove
+none.
+
+The replacement of the closed draft that moved this service to REST,
+[gitlab-org/api/client-go!3078](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3078),
+adds a separate REST service and leaves the GraphQL one and its documents as
+they are, so the workaround reads the same request after it merges.
+
+**How we found it**: issue 1303, from a work item whose iteration, parent and
+due date could not be removed through `issue.work_item_update`.
+
+**Effort**: small to medium: a removal per field the option struct can say,
+as a `Nullable` type or a set of `Clear` flags, which is a choice of API for
+the maintainers.
 
 ### ListAuditEventsOptions models neither entity filter the instance list takes
 

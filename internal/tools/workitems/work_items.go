@@ -683,20 +683,12 @@ func applyCreateWidgets(opts *gl.CreateWorkItemOptions, input CreateInput) error
 	if input.Color != "" {
 		opts.Color = new(input.Color)
 	}
-	return applyWorkItemDates(input.StartDate, input.DueDate, &opts.StartDate, &opts.DueDate)
-}
-
-// applyWorkItemDates parses the start and due dates create and update share,
-// refusing the call on the first one it cannot read.
-//
-// Both used to drop a malformed date and report success, so a work item asked
-// for with a due date came back without one and nothing in the answer said the
-// date had been discarded. That is the same failure the eight list filters
-// refuse and the same one created_at refuses; these two now match.
-func applyWorkItemDates(startDate, dueDate string, start, due **gl.ISOTime) error {
+	// A date that does not parse refuses the call. Both used to be dropped and
+	// the creation reported as a success, so a work item asked for with a due
+	// date came back without one and nothing in the answer said so.
 	return toolutil.ParseDateInputs(
-		toolutil.DateInput{Field: "start_date", Value: startDate, Dest: start},
-		toolutil.DateInput{Field: "due_date", Value: dueDate, Dest: due},
+		toolutil.DateInput{Field: "start_date", Value: input.StartDate, Dest: &opts.StartDate},
+		toolutil.DateInput{Field: "due_date", Value: input.DueDate, Dest: &opts.DueDate},
 	)
 }
 
@@ -708,18 +700,18 @@ type UpdateInput struct {
 	IID            int64   `json:"work_item_iid" jsonschema:"Work item IID,required"`
 	Title          string  `json:"title,omitempty" jsonschema:"New title"`
 	StateEvent     string  `json:"state_event,omitempty" jsonschema:"State event: CLOSE or REOPEN"`
-	Description    string  `json:"description,omitempty" jsonschema:"New description"`
+	Description    *string `json:"description,omitempty" jsonschema:"New description. Pass an empty string to remove the description. Omit the field to leave it untouched"`
 	AssigneeIDs    []int64 `json:"assignee_ids,omitempty" jsonschema:"Global IDs of assignees. Replaces the current assignees. Pass an empty array [] to remove every assignee. Omit the field to leave assignees untouched"`
-	MilestoneID    *int64  `json:"milestone_id,omitempty" jsonschema:"Global ID of the milestone"`
+	MilestoneID    *int64  `json:"milestone_id,omitempty" jsonschema:"Global ID of the milestone. Pass 0 to remove the work item from its milestone. Omit the field to leave it untouched"`
 	CRMContactIDs  []int64 `json:"crm_contact_ids,omitempty" jsonschema:"CRM contact IDs. Replaces the current contacts. Pass an empty array [] to remove every contact. Omit the field to leave contacts untouched"`
-	ParentID       *int64  `json:"parent_id,omitempty" jsonschema:"Global ID of the parent work item"`
+	ParentID       *int64  `json:"parent_id,omitempty" jsonschema:"Global ID of the parent work item. Pass 0 to remove the parent. Omit the field to leave it untouched"`
 	AddLabelIDs    []int64 `json:"add_label_ids,omitempty" jsonschema:"Global IDs of labels to add"`
 	RemoveLabelIDs []int64 `json:"remove_label_ids,omitempty" jsonschema:"Global IDs of labels to remove"`
-	StartDate      string  `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD)"`
-	DueDate        string  `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD)"`
+	StartDate      *string `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD). Pass an empty string to remove the start date. Omit the field to leave it untouched"`
+	DueDate        *string `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD). Pass an empty string to remove the due date. Omit the field to leave it untouched"`
 	Weight         *int64  `json:"weight,omitempty" tier:"premium" jsonschema:"Weight of the work item"`
-	HealthStatus   string  `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
-	IterationID    *int64  `json:"iteration_id,omitempty" tier:"premium" jsonschema:"Global ID of the iteration"`
+	HealthStatus   *string `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk). Pass an empty string to remove the health status. Omit the field to leave it untouched"`
+	IterationID    *int64  `json:"iteration_id,omitempty" tier:"premium" jsonschema:"Global ID of the iteration. Pass 0 to remove the work item from its iteration. Omit the field to leave it untouched"`
 	Color          string  `json:"color,omitempty" tier:"premium" jsonschema:"Color hex code (e.g. #fefefe)"`
 	Status         string  `json:"status,omitempty" tier:"premium" jsonschema:"Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE"`
 	// Confirm is declared so the input schema advertises the reserved confirm
@@ -737,14 +729,14 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	// The options are built before the clearing guard so a malformed date is
 	// refused without first spending a round trip to read the current
 	// assignees, which would have been read only to reject the call anyway.
-	opts, buildErr := buildUpdateOptions(input)
+	opts, removals, buildErr := buildUpdateOptions(input)
 	if buildErr != nil {
 		return GetOutput{}, fmt.Errorf("update_work_item: %w", buildErr)
 	}
 	if err := confirmListClearing(ctx, client, input); err != nil {
 		return GetOutput{}, err
 	}
-	wi, _, err := client.GL().WorkItems.UpdateWorkItem(input.FullPath, input.IID, opts, gl.WithContext(ctx))
+	wi, _, err := client.GL().WorkItems.UpdateWorkItem(input.FullPath, input.IID, opts, gl.WithContext(ctx), removals)
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("update_work_item", err, http.StatusBadRequest,
 			"verify full_path + iid with issue.work_item_list; only widget-supported fields can be updated for the type; state_event values: close|reopen")
@@ -752,8 +744,18 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	return GetOutput{WorkItem: workItemToItem(wi)}, nil
 }
 
-func buildUpdateOptions(input UpdateInput) (*gl.UpdateWorkItemOptions, error) {
-	opts := &gl.UpdateWorkItemOptions{}
+// buildUpdateOptions translates the tool input into SDK update options and the
+// request option that sends the removals the input asks for, nil when it asks
+// for none.
+//
+// The milestone, parent, iteration, dates and health status follow the
+// clearing convention of [toolutil.WorkItemWidgetInputs]: 0 removes a
+// reference and "" removes a date or the health status, which client-go cannot
+// send by itself (register row 119). An empty description is sent as one,
+// since the description widget takes "" and client-go sends whatever pointer
+// it is handed.
+func buildUpdateOptions(input UpdateInput) (*gl.UpdateWorkItemOptions, gl.RequestOptionFunc, error) {
+	opts := &gl.UpdateWorkItemOptions{Description: input.Description}
 	if input.Title != "" {
 		opts.Title = &input.Title
 	}
@@ -761,37 +763,30 @@ func buildUpdateOptions(input UpdateInput) (*gl.UpdateWorkItemOptions, error) {
 		ev := gl.WorkItemStateEvent(input.StateEvent)
 		opts.StateEvent = &ev
 	}
-	if input.Description != "" {
-		opts.Description = &input.Description
-	}
 	if input.AssigneeIDs != nil {
 		opts.AssigneeIDs = input.AssigneeIDs
 	}
-	if input.MilestoneID != nil {
-		opts.MilestoneID = input.MilestoneID
-	}
 	if input.CRMContactIDs != nil {
 		opts.CRMContactIDs = input.CRMContactIDs
-	}
-	if input.ParentID != nil {
-		opts.ParentID = input.ParentID
 	}
 	// Both label lists go over as given: client-go builds the labels widget
 	// only when one of them has entries, so guarding them here was a copy of
 	// its decision.
 	opts.AddLabelIDs = input.AddLabelIDs
 	opts.RemoveLabelIDs = input.RemoveLabelIDs
-	if err := applyWorkItemDates(input.StartDate, input.DueDate, &opts.StartDate, &opts.DueDate); err != nil {
-		return nil, err
+	removals, err := toolutil.ApplyWorkItemWidgets(opts, toolutil.WorkItemWidgetInputs{
+		MilestoneID:  input.MilestoneID,
+		ParentID:     input.ParentID,
+		IterationID:  input.IterationID,
+		StartDate:    input.StartDate,
+		DueDate:      input.DueDate,
+		HealthStatus: input.HealthStatus,
+	})
+	if err != nil {
+		return nil, nil, err
 	}
 	if input.Weight != nil {
 		opts.Weight = input.Weight
-	}
-	if input.HealthStatus != "" {
-		opts.HealthStatus = &input.HealthStatus
-	}
-	if input.IterationID != nil {
-		opts.IterationID = input.IterationID
 	}
 	if input.Color != "" {
 		opts.Color = &input.Color
@@ -800,7 +795,7 @@ func buildUpdateOptions(input UpdateInput) (*gl.UpdateWorkItemOptions, error) {
 		status := mapStatusToID(input.Status)
 		opts.Status = &status
 	}
-	return opts, nil
+	return opts, removals, nil
 }
 
 // Delete.

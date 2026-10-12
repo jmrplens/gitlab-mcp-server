@@ -2,7 +2,8 @@
 
 // issues_test.go covers the licensed reads of the issue group: an issue's
 // weight events, the iterations of a project and of its group, and an
-// issue's iteration events.
+// issue's iteration events; and the one licensed write beside them, a work
+// item update removing the iteration and the health status.
 //
 // Every one of them stands on state GitLab records asynchronously, so the
 // first read of each waits; and the iteration reads stand on a fixture
@@ -22,6 +23,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/iterationdata"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projectiterations"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/resourceevents"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/workitems"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
@@ -138,6 +140,40 @@ func TestIterations_GroupAndProject_ListAndRecordTheIssueEvent(t *testing.T) {
 			withParams(params, map[string]any{"iteration_event_id": events.Events[0].ID}))
 		if got.ID != events.Events[0].ID {
 			e.T.Errorf("event_issue_iteration_get answered event %d, want the listed %d", got.ID, events.Events[0].ID)
+		}
+	})
+}
+
+// TestWorkItems_Update_RemovesIterationAndHealthStatus puts the fixture's
+// issue in the fixture's iteration and gives it a health status on every
+// surface, then removes both in one work item update, 0 for the iteration and
+// "" for the health status, and holds the answer to neither (issue 1303).
+// The issue is put back in the iteration at the start of each surface,
+// because the surface before it removed it and the fixture is built once.
+//
+// Before the fix 0 reached GitLab as gid://gitlab/Iteration/0, refused as
+// "No object found", and "" sent nothing, so the health status stayed.
+func TestWorkItems_Update_RemovesIterationAndHealthStatus(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, buildIterationFixture, func(e *harness.Env, surface harness.Surface, f iterationFixture) {
+		s := e.On(surface)
+		fixture.AssignIssueIteration(e, f.project, f.issue, f.iteration)
+		item := map[string]any{"full_path": f.project.Path, "work_item_iid": f.issue.IID}
+
+		rated := harness.Do[workitems.GetOutput](s, actionWorkItemUpdate, withParams(item, map[string]any{"health_status": "atRisk"}))
+		if rated.WorkItem.HealthStatus != "atRisk" || rated.WorkItem.IterationID == 0 {
+			e.T.Fatalf("work_item_update answered health %q and iteration %d, want atRisk in the fixture's %s",
+				rated.WorkItem.HealthStatus, rated.WorkItem.IterationID, f.iteration)
+		}
+
+		cleared := harness.Do[workitems.GetOutput](s, actionWorkItemUpdate,
+			withParams(item, map[string]any{"iteration_id": 0, "health_status": ""}))
+		if cleared.WorkItem.IterationID != 0 {
+			e.T.Errorf("work_item_update answered the issue still in iteration %d, want none", cleared.WorkItem.IterationID)
+		}
+		if cleared.WorkItem.HealthStatus != "" {
+			e.T.Errorf("work_item_update answered the health status %q, want none", cleared.WorkItem.HealthStatus)
 		}
 	})
 }

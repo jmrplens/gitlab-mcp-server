@@ -213,6 +213,69 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
+// TestCatalogSurface_UpdateRemovals_PassTheServedSchema calls the individual
+// update tool through an MCP session, so the arguments are validated against
+// the schema the tool serves before the handler sees them, and asserts the
+// removals reach GitLab as null.
+//
+// The handler accepting "" is not enough: health_status serves an enum, and an
+// enum without "" would refuse the one value that removes it before the request
+// is built, leaving the removal reachable on no surface that validates.
+func TestCatalogSurface_UpdateRemovals_PassTheServedSchema(t *testing.T) {
+	var got graphQLRequest
+	client := testutil.NewTestClient(t, recordWorkItemUpdate(t, &got))
+	byTool := workItemSpecsByTool(t, ActionSpecs(client))
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	toolutil.RegisterSurfaceToolFromSpec(server, byTool["gitlab_update_work_item"], toolutil.SurfaceToolRegisterOptions{
+		Description: "Test work item removals.",
+		Icons:       toolutil.IconIssue,
+	})
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "gitlab_update_work_item",
+		Arguments: map[string]any{
+			"full_path": testProjectPath, "work_item_iid": 42,
+			"health_status": "", "due_date": "", "milestone_id": 0, "description": "",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("update with removals refused: %s", extractText(t, result))
+	}
+	input := mutationInput(t, got)
+	for _, leaf := range []struct{ widget, field string }{
+		{"healthStatusWidget", "healthStatus"},
+		{"startAndDueDateWidget", "dueDate"},
+		{"milestoneWidget", "milestoneId"},
+	} {
+		t.Run(leaf.widget+"."+leaf.field, func(t *testing.T) {
+			if value := widgetField(t, input, leaf.widget, leaf.field); value != nil {
+				t.Errorf("%s.%s = %#v, want null", leaf.widget, leaf.field, value)
+			}
+		})
+	}
+	if description := widgetField(t, input, "descriptionWidget", "description"); description != "" {
+		t.Errorf("descriptionWidget.description = %#v, want an empty description", description)
+	}
+}
+
 // TestActionSpecs_ListFilters_PublishTheirEnums verifies the served schema
 // carries the closed value set of every enum and wildcard filter.
 //

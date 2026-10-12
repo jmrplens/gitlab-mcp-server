@@ -111,7 +111,7 @@ func workItemCreateSpec(name string, route toolutil.ActionRoute, individualTool 
 // workItemUpdateSpec builds the canonical update spec for a work item tool.
 func workItemUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	opts := workItemOptions(individualTool)
-	opts.Usage = "Update an existing work item's fields, status, labels, or hierarchy. Provide full_path plus work_item_iid. Set state_event to CLOSE or REOPEN to change state, and supply only the widget-supported fields you want to change. assignee_ids and crm_contact_ids replace the whole list: send an empty array to remove every entry, and omit the field to leave it untouched. Clearing entries that exist requires confirm=true (or an approved elicitation prompt)."
+	opts.Usage = "Update an existing work item's fields, status, labels, or hierarchy. Provide full_path plus work_item_iid. Set state_event to CLOSE or REOPEN to change state, and supply only the widget-supported fields you want to change. To remove a value, send 0 for milestone_id, parent_id or iteration_id and an empty string for start_date, due_date, health_status or description. assignee_ids and crm_contact_ids replace the whole list: send an empty array to remove every entry, and omit the field to leave it untouched. Clearing entries that exist requires confirm=true (or an approved elicitation prompt)."
 	opts.Aliases = []string{"update work item", "edit work item fields", "close or reopen work item", individualTool}
 	opts.RelatedActions = []string{actionWorkItemGet, actionWorkItemDelete, actionWorkItemList}
 	opts.IndividualTool.Description = "Update an existing work item by namespace path and IID. Returns: the updated work item with id, iid, type, state, status, title, description, assignees, labels, linked items, parent and child work items, milestone, iteration, weight, health status, color, start and due dates, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_delete_work_item, gitlab_list_work_items."
@@ -302,14 +302,17 @@ func workItemCreateEnumOverrides() []toolutil.InputSchemaOverride {
 // workItemUpdateEnumOverrides constrains state_event, health_status, and
 // status on the work item update action. state_event values come from
 // WorkItemStateEvent SDK constants. health_status from the GraphQL HealthStatus
-// enum. status from the mapStatusToID lookup table (WorkItemStatusID GIDs).
+// enum, plus the empty string that removes the health status (issue 1303),
+// which a schema validating the arguments would otherwise refuse before the
+// handler saw it. status from the mapStatusToID lookup table
+// (WorkItemStatusID GIDs).
 func workItemUpdateEnumOverrides() []toolutil.InputSchemaOverride {
 	return []toolutil.InputSchemaOverride{
 		toolutil.SchemaPropertyOverride("state_event", map[string]any{
 			"enum": []any{"CLOSE", "REOPEN"},
 		}),
 		toolutil.SchemaPropertyOverride("health_status", map[string]any{
-			"enum": []any{"onTrack", "needsAttention", "atRisk"},
+			"enum": []any{"onTrack", "needsAttention", "atRisk", ""},
 		}),
 		toolutil.SchemaPropertyOverride("status", map[string]any{
 			"enum": []any{"TODO", "IN_PROGRESS", "DONE", "WONT_DO", "DUPLICATE"},

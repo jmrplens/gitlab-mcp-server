@@ -178,6 +178,95 @@ func workItemLifecycleOnCommunity(e *harness.Env, surface harness.Surface, proje
 	}
 }
 
+// workItemTaskTypeName is the type a child work item is created as, since an
+// Issue may hold a Task and not another Issue.
+const workItemTaskTypeName = "Task"
+
+// TestWorkItems_Update_RemovesParentMilestoneAndDueDate creates a Task under
+// an Issue with a milestone and a due date on every surface, then removes all
+// three in one update, with 0 for the two references and "" for the date, and
+// reads the work item back without them (issue 1303).
+//
+// Before the fix 0 reached GitLab as gid://gitlab/WorkItem/0 and
+// gid://gitlab/Milestone/0, refused as "No object found", and "" sent nothing,
+// so the update answered success with the date still set.
+//
+// On a Community image the update document is refused whatever it carries
+// (docs/development/upstream-bugs.md, entry 45), so it holds that refusal for
+// the removal too: [workItemRemovalsOnCommunity].
+func TestWorkItems_Update_RemovesParentMilestoneAndDueDate(t *testing.T) {
+	e := harness.New(t)
+	removals := workItemRemovals
+	if !e.Runtime().Enterprise {
+		removals = workItemRemovalsOnCommunity
+	}
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("wiclear"))
+	}, removals)
+}
+
+// workItemRemovals builds the Task, its parent and its milestone, and holds
+// the update that removes them to what it answers and to a read after it.
+func workItemRemovals(e *harness.Env, surface harness.Surface, project fixture.Project) {
+	s := e.On(surface)
+	params := map[string]any{"full_path": project.Path}
+	types := harness.Do[workitems.WorkItemTypeListOutput](s, actionWorkItemTypeList, params)
+	issueType, issueFound := workItemTypeID(types.Types, issueTypeName)
+	taskType, taskFound := workItemTypeID(types.Types, workItemTaskTypeName)
+	if !issueFound || !taskFound {
+		e.T.Fatalf("the project's work item types do not hold both %s and %s: %+v", issueTypeName, workItemTaskTypeName, types.Types)
+	}
+	milestone, _, err := e.Client().GL().Milestones.CreateMilestone(project.ID,
+		&gl.CreateMilestoneOptions{Title: new(e.Name("milestone"))}, gl.WithContext(e.Ctx))
+	if err != nil {
+		e.T.Fatalf("creating a milestone in %s: %v", project.Path, err)
+	}
+
+	parent := harness.Do[workitems.GetOutput](s, actionWorkItemCreate,
+		withParams(params, map[string]any{"work_item_type_id": issueType, "title": e.Name("parent")}))
+	child := harness.Do[workitems.GetOutput](s, actionWorkItemCreate, withParams(params, map[string]any{
+		"work_item_type_id": taskType, "title": e.Name("child"),
+		"parent_id": parent.WorkItem.ID, "milestone_id": milestone.ID, "due_date": "2026-12-31",
+	}))
+	if child.WorkItem.Parent == nil || child.WorkItem.MilestoneID != milestone.ID || child.WorkItem.DueDate == "" {
+		e.T.Fatalf("work_item_create answered %+v, want the Task under #%d with milestone %d and a due date",
+			child.WorkItem, parent.WorkItem.IID, milestone.ID)
+	}
+	item := withParams(params, map[string]any{"work_item_iid": child.WorkItem.IID})
+
+	cleared := harness.Do[workitems.GetOutput](s, actionWorkItemUpdate,
+		withParams(item, map[string]any{"parent_id": 0, "milestone_id": 0, "due_date": ""}))
+	assertWorkItemCleared(e, "work_item_update", cleared.WorkItem)
+	assertWorkItemCleared(e, "work_item_get", harness.Do[workitems.GetOutput](s, actionWorkItemGet, item).WorkItem)
+}
+
+// assertWorkItemCleared holds a work item to having no parent, milestone or
+// due date, naming the action whose answer it read.
+func assertWorkItemCleared(e *harness.Env, action string, item workitems.WorkItemItem) {
+	e.T.Helper()
+	if item.Parent != nil {
+		e.T.Errorf("%s answered the Task still under %+v, want no parent", action, *item.Parent)
+	}
+	if item.MilestoneID != 0 {
+		e.T.Errorf("%s answered the Task still in milestone %d, want none", action, item.MilestoneID)
+	}
+	if item.DueDate != "" {
+		e.T.Errorf("%s answered the Task still due %s, want no due date", action, item.DueDate)
+	}
+}
+
+// workItemRemovalsOnCommunity holds the removal to the refusal Community
+// Edition answers every work item update with while client-go's document
+// selects licensed widgets, on an issue made through the REST API, which is a
+// work item of the Issue type under the same iid.
+func workItemRemovalsOnCommunity(e *harness.Env, surface harness.Surface, project fixture.Project) {
+	issue := fixture.NewIssue(e, project, e.Name("item"))
+	assertCommunityWidgetRefusal(e, e.On(surface), actionWorkItemUpdate, map[string]any{
+		"full_path": project.Path, "work_item_iid": issue.IID, "milestone_id": 0, "due_date": "",
+	})
+}
+
 // assertWorkItemListed lists the project's work items by title and fails the
 // test when the one with the given iid is not among them.
 func assertWorkItemListed(e *harness.Env, s *harness.Session, params map[string]any, title string, iid int64) {

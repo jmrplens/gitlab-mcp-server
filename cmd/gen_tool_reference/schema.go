@@ -95,9 +95,22 @@ func schemaType(property map[string]any) string {
 	}
 	quoted := make([]string, 0, len(enum))
 	for _, value := range enum {
-		quoted = append(quoted, "`"+fmt.Sprint(value)+"`")
+		quoted = append(quoted, enumValue(value))
 	}
 	return "`" + typ + "` (" + strings.Join(quoted, ", ") + ")"
+}
+
+// enumValue renders one enumerated value as a code span. The empty string,
+// which a property offers where sending it removes what the field holds, is
+// written as the JSON literal "": a code span cannot be empty, and two
+// backticks with nothing between them open a span the table row never
+// closes, so every cell after it moved and the row no longer had the columns
+// of its table.
+func enumValue(value any) string {
+	if value == "" {
+		return "`\"\"`"
+	}
+	return "`" + fmt.Sprint(value) + "`"
 }
 
 // typeName is the non-null type or types a schema names, from its type

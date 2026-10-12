@@ -56,6 +56,7 @@ func TestSchemaType_EverySchemaShape_RendersItsType(t *testing.T) {
 		{name: "array", property: map[string]any{"type": []any{"null", "array"}, "items": map[string]any{"type": "integer"}}, want: "`integer[]`"},
 		{name: "array of untyped", property: map[string]any{"type": "array"}, want: "`any[]`"},
 		{name: "enum", property: map[string]any{"type": "string", "enum": []any{"asc", "desc"}}, want: "`string` (`asc`, `desc`)"},
+		{name: "enum with the empty string", property: map[string]any{"type": "string", "enum": []any{"onTrack", ""}}, want: "`string` (`onTrack`, `\"\"`)"},
 		{name: "array enum", property: map[string]any{"type": "array", "items": map[string]any{"type": "string", "enum": []any{"a"}}}, want: "`string[]` (`a`)"},
 	}
 	for _, tt := range tests {
