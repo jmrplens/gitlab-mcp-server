@@ -3612,6 +3612,76 @@ func TestLoadWorkflows_ReleaseWorkflow_OnlyTheNewestReleaseMovesAPointer(t *test
 	}
 }
 
+// TestLoadWorkflows_ReleaseEnvironment_IsNamedOnlyForATagPush verifies that a
+// dispatched run never holds the release environment's identity (issue 1322).
+//
+// The npm, PyPI and nuget.org trusted publishers bind this repository,
+// release.yml and the release environment, and none of them can bind a ref, so
+// the environment a job names is what tells a release's OIDC identity from a
+// rehearsal's. Every job of release.yml that names an environment has to name
+// it through the one expression that sends a workflow_dispatch to
+// release-rehearsal, the seven publisher jobs have to name one, no other
+// workflow may name release at all, the NuGet login, which mints a key that
+// can push, has to be skipped in a rehearsal, and the REHEARSAL switch that
+// guard reads has to be decided by the same event the expression reads.
+//
+// What decides the environment from outside the tree, its deployment policy
+// and the tag creation rule, is a setting on GitHub that no test here can
+// read; docs/development/repository-settings.md carries the gh api check for
+// each.
+func TestLoadWorkflows_ReleaseEnvironment_IsNamedOnlyForATagPush(t *testing.T) {
+	t.Parallel()
+
+	const expression = "${{ github.event_name == 'workflow_dispatch' && 'release-rehearsal' || 'release' }}"
+	root := repositoryRoot(t)
+	workflows, err := loadWorkflows(root)
+	if err != nil {
+		t.Fatalf("loadWorkflows: %v", err)
+	}
+
+	var named []string
+	for _, loaded := range workflows {
+		jobs, _ := loaded.doc["jobs"].(map[string]any)
+		for _, id := range orderedKeys(jobs, loaded.jobOrder) {
+			job, _ := jobs[id].(map[string]any)
+			environment := job["environment"]
+			if holder, ok := environment.(map[string]any); ok {
+				environment = holder["name"]
+			}
+			if environment == nil {
+				continue
+			}
+			value := pythonStr(environment)
+			switch {
+			case loaded.path == workflowDir+"/release.yml":
+				named = append(named, id)
+				if value != expression {
+					t.Errorf("%s job %s runs in %q, want %q", loaded.path, id, value, expression)
+				}
+			case strings.Contains(value, "release"):
+				t.Errorf("%s job %s names the environment %q; only release.yml may name a release environment",
+					loaded.path, id, value)
+			}
+		}
+	}
+	want := []string{"release", "npm", "pypi", "nuget", "homebrew", "mcp-registry", "commit-manifests"}
+	if strings.Join(named, ",") != strings.Join(want, ",") {
+		t.Errorf("release.yml jobs naming an environment = %v, want %v", named, want)
+	}
+
+	release := releaseWorkflow(t, root)
+	env, _ := release["env"].(map[string]any)
+	if got, want := pythonStr(env["REHEARSAL"]), "${{ github.event_name == 'workflow_dispatch' }}"; got != want {
+		t.Errorf("release.yml decides REHEARSAL as %q, want %q", got, want)
+	}
+	login := releaseStep(t, releaseJob(t, release, "nuget"), func(step map[string]any) bool {
+		return strings.HasPrefix(pythonStr(step["uses"]), "NuGet/login@")
+	})
+	if got, want := pythonStr(login["if"]), "env.REHEARSAL != 'true'"; got != want {
+		t.Errorf("the NuGet login runs if %q, want %q", got, want)
+	}
+}
+
 // releaseWorkflow returns the release workflow under root as loadWorkflows,
 // the reader every rule of this command uses, decodes it.
 func releaseWorkflow(t *testing.T, root string) map[string]any {

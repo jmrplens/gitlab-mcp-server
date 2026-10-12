@@ -25,6 +25,19 @@
 # rehearsal is of the code about to be released, and the first one, run
 # against v2.7.5's tree, found half the scripts this workflow calls missing.
 #
+# A rehearsal runs its publisher jobs in the `release-rehearsal` environment,
+# never in `release` (issue 1322). The npm, PyPI and nuget.org trusted
+# publishers bind this repository, this workflow file and the `release`
+# environment, and none of them can bind a ref, so the environment is the one
+# thing that tells a release's OIDC identity from a dispatch's: a branch whose
+# copy of this file publishes regardless of REHEARSAL would otherwise mint the
+# release's identity. `release-rehearsal` holds no secret and no publisher
+# names it, so the NuGet login, which used to run in a rehearsal to prove the
+# policy, is skipped there. What binds `release` to release tags is a setting
+# on GitHub rather than anything in this file: its deployment policy admits
+# only tags matching v*, and the tag ruleset restricts who may create one
+# (docs/development/repository-settings.md).
+#
 # One job per credential. Until 2.7.5 a single `release` job held the OIDC
 # identity that npm, PyPI, NuGet, cosign, the MCP Registry and the attestation
 # store all trust, a write-scoped GITHUB_TOKEN, the Homebrew tap deploy key and the
@@ -1029,7 +1042,7 @@ jobs:
     name: "📦 GoReleaser"
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: release
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'release-rehearsal' || 'release' }}
     # docker is a prerequisite because the release is what downstream publishers
     # fetch, and the MCP Registry publish validates the server.json OCI entry by
     # fetching ghcr.io for this version's tag — a tag only the docker job
@@ -1242,7 +1255,7 @@ jobs:
     needs: [preflight, release]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
-    environment: release
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'release-rehearsal' || 'release' }}
     permissions:
       contents: read # download the published release assets
       id-token: write # npm trusted publishing
@@ -1279,8 +1292,9 @@ jobs:
       # registry, so re-running this job is safe.
       #
       # The trusted publisher on npmjs.com must name this workflow file
-      # (release.yml) and, because this job runs in the `release` environment,
-      # that same environment. The job id is not part of the binding.
+      # (release.yml) and the `release` environment, which this job runs in
+      # for a tag push; a dispatch runs it in `release-rehearsal`, which no
+      # publisher names. The job id is not part of the binding.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
@@ -1321,7 +1335,7 @@ jobs:
     needs: [preflight, release]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
-    environment: release
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'release-rehearsal' || 'release' }}
     permissions:
       contents: read # download the published release assets
       id-token: write # PyPI trusted publishing
@@ -1374,7 +1388,7 @@ jobs:
       # is the stream the validator's handshake has to find pure JSON-RPC on.
       DOTNET_NOLOGO: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-    environment: release
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'release-rehearsal' || 'release' }}
     permissions:
       contents: read # download the published release assets
       id-token: write # nuget.org trusted publishing (NuGet/login), and the attestation's signing identity
@@ -1470,11 +1484,15 @@ jobs:
       # the account-level policy that names this repository, this workflow
       # file and the `release` environment (docs/development/repository-
       # settings.md records it). The user input is the nuget.org profile
-      # name, which is public, so it is a literal rather than a secret. This
-      # step runs in a rehearsal too: it pushes nothing and proves the policy
-      # matches the identity this job presents.
+      # name, which is public, so it is a literal rather than a secret. A
+      # rehearsal skips it (issue 1322): it runs in `release-rehearsal`,
+      # which no policy names, so the exchange would be refused, and a
+      # policy naming that environment would hand a branch-dispatched run a
+      # key that can push. The first real release after a policy change is
+      # what proves it now, and it fails here, before any push.
       - name: NuGet login (OIDC to a temporary API key)
         id: nuget-login
+        if: env.REHEARSAL != 'true'
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         with:
           user: jmrplens
@@ -1518,7 +1536,7 @@ jobs:
     if: needs.preflight.outputs.newest == 'true'
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
-    environment: release
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'release-rehearsal' || 'release' }}
     permissions:
       contents: read # download the published release assets
     steps:
@@ -1590,7 +1608,7 @@ jobs:
     if: needs.preflight.outputs.newest == 'true'
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
-    environment: release
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'release-rehearsal' || 'release' }}
     permissions:
       contents: read # download the published release assets
       id-token: write # mcp-publisher login github-oidc
@@ -1810,7 +1828,7 @@ jobs:
     if: needs.preflight.outputs.newest == 'true'
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
-    environment: release
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'release-rehearsal' || 'release' }}
     permissions:
       contents: read # download the published release assets
       attestations: read # verify the .mcpb provenance before hashing it

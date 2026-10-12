@@ -31,7 +31,7 @@ granted it: `administration` is not one of the scopes the `permissions:` key
 accepts. A scheduled job that checked these settings would therefore need a
 personal access token stored as a repository secret, which is one more
 long-lived credential to rotate and is itself an unmanaged repository setting.
-That trade is not worth taking for two items that change roughly never, so the
+That trade is not worth taking for items that change roughly never, so the
 checks below are run by hand.
 
 The one exception is release immutability, which is visible in the public
@@ -103,6 +103,122 @@ gh api repos/jmrplens/gitlab-mcp-server/rulesets --jq '.[] | {id, name, target, 
 than the `v*` pattern above and equally acceptable) with the `deletion`,
 `update` and `non_fast_forward` rules and no bypass actors. Checked on
 2026-09-05 with the command above.
+
+## SC-04: deploy the release environment from release tags only
+
+**What to set.** Two environments, under Repository → Settings →
+Environments:
+
+- `release`: under **Deployment branches and tags**, choose **Selected branches
+  and tags** and add one rule of type **Tag** with the pattern `v*`; turn off
+  **Allow administrators to bypass configured protection rules**.
+- `release-rehearsal`: created with no secret, no variable and no protection
+  rule, and named by no trusted publisher anywhere.
+
+The same settings through the API:
+
+```bash
+gh api -X PUT repos/jmrplens/gitlab-mcp-server/environments/release-rehearsal
+gh api -X PUT repos/jmrplens/gitlab-mcp-server/environments/release --input - <<'EOF'
+{"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}, "can_admins_bypass": false}
+EOF
+gh api -X POST repos/jmrplens/gitlab-mcp-server/environments/release/deployment-branch-policies -f name='v*' -f type=tag
+```
+
+**Why.** The npm, PyPI and nuget.org trusted publishers each accept an OIDC
+token from this repository, the workflow file `release.yml` and the `release`
+environment. None of the three can name a ref, so any run whose copy of
+`release.yml` puts a job in `release` holds the identity a release publishes
+with, and the environment's secrets with it. `release.yml` sends a dispatched
+run (a rehearsal) to `release-rehearsal` instead (issue 1322), but that is the
+workflow's own decision, and a branch can carry a `release.yml` that decides
+otherwise. The deployment policy is what decides it from outside the tree: a
+job that names `release` from anything but a `v*` tag is refused before it
+starts. Administrator bypass is turned off so the policy holds for an
+administrator's run too; it costs a release nothing, since a release runs from
+a tag the policy admits.
+
+**Order.** Create `release-rehearsal` before the first rehearsal that names it.
+Restrict `release` only once the workflow that sends rehearsals elsewhere is on
+`main`: until then every rehearsal runs in `release` and would be refused.
+
+**How to check.**
+
+```bash
+gh api repos/jmrplens/gitlab-mcp-server/environments/release --jq '{deployment_branch_policy, can_admins_bypass}'
+gh api repos/jmrplens/gitlab-mcp-server/environments/release/deployment-branch-policies --jq '.branch_policies[] | {name, type}'
+gh api repos/jmrplens/gitlab-mcp-server/environments/release-rehearsal/secrets --jq '.total_count'
+```
+
+The first answers `custom_branch_policies: true`, `protected_branches: false`
+and `can_admins_bypass: false`; the second lists exactly one policy,
+`{"name": "v*", "type": "tag"}`; the third answers `0`.
+
+**Current state.** Not yet applied. On 2026-10-12 `release` had no deployment
+policy (`deployment_branch_policy: null`) and administrator bypass on, and
+`release-rehearsal` did not exist.
+
+**Caveat.** The policy binds the environment and nothing outside it. A
+repository secret, as opposed to an environment secret, reaches any workflow
+run in the repository whatever environment its job names. Every secret the
+publisher jobs read that is a repository secret, a repository-level copy of one
+the `release` environment also holds included, is outside what this item
+protects; moving those into `release` is what would bring them under it.
+
+**What tells you it drifted.** Nothing automatic. A rehearsal still passes with
+the policy gone, because it no longer runs in `release`; only the commands above
+show it.
+
+## SC-04: restrict who creates a release tag
+
+**What to set.** Repository → Settings → Rules → new ruleset `Create release
+tags`, target **Tags**, enforcement **Active**, targeting the pattern `v*`, with
+**Restrict creations** enabled and the **Repository admin** role as the only
+bypass actor. Through the API:
+
+```bash
+gh api -X POST repos/jmrplens/gitlab-mcp-server/rulesets --input - <<'EOF'
+{"name": "Create release tags", "target": "tag", "enforcement": "active",
+ "conditions": {"ref_name": {"include": ["refs/tags/v*"], "exclude": []}},
+ "rules": [{"type": "creation"}],
+ "bypass_actors": [{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}]}
+EOF
+```
+
+**Why.** The deployment policy above admits any tag matching `v*`, so it binds
+the `release` identity to release tags only as far as creating such a tag is
+restricted. Without this rule, anything that can push a tag can create one on a
+commit whose `release.yml` publishes whatever it likes. A deploy key with write
+access pushes it, and the push itself runs that workflow in `release`. A tag a
+workflow creates with a `GITHUB_TOKEN` holding `contents: write` starts no run
+by itself, since GitHub triggers nothing from that token's pushes, but a
+`workflow_dispatch` against the tag then runs the tagged commit's
+`release.yml`, which can name `release` outright, and the policy admits it
+because it judges the ref, a tag matching `v*`. Push access to this repository
+is held by administrators alone today, so this item and the one above are
+defense in depth rather than the only barrier.
+
+**Why a ruleset of its own.** A ruleset's bypass list applies to every rule in
+it. `Protect tags` (id `22194732`) restricts deletion and update of every tag
+with no bypass at all; adding the administrator role there so administrators
+could still create release tags would also let them delete or move one, which
+that ruleset exists to forbid.
+
+**How to check.**
+
+```bash
+gh api repos/jmrplens/gitlab-mcp-server/rulesets --jq '.[] | select(.target == "tag") | {id, name, enforcement}'
+gh api repos/jmrplens/gitlab-mcp-server/rulesets/<id> --jq '{include: .conditions.ref_name.include, rules: [.rules[].type], bypass: .bypass_actors}'
+```
+
+The second command, given the id of `Create release tags`, answers
+`include: ["refs/tags/v*"]`, `rules: ["creation"]` and one bypass actor,
+`{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}`.
+
+**Current state.** Not yet applied. On 2026-10-12 the only tag ruleset was
+`Protect tags`, with the rules `deletion`, `update` and `non_fast_forward`.
+
+**What tells you it drifted.** Nothing automatic; the commands above.
 
 ## SC-01: keep the deploy-key ruleset bypass declared
 
@@ -176,9 +292,10 @@ input; that is the account the policy belongs to, not a secret.
 
 **How to check.** There is no API for it; open nuget.org, the username menu,
 Trusted Publishing, and confirm the policy is listed as Active with the fields
-above. A release rehearsal (`gh workflow run release.yml --ref <branch>`)
-exercises the exchange without pushing: the `NuGet login` step of the `nuget`
-job fails when the policy no longer matches the identity the job presents.
+above. A release rehearsal no longer exercises the exchange: it runs in the
+`release-rehearsal` environment, which this policy does not name and must not,
+since a policy naming it would hand every rehearsal a push key, so the
+`NuGet login` step is skipped there (issue 1322).
 
 **Caveat.** A policy nuget.org cannot bind to repository and owner ids at
 creation starts as **temporarily active for 7 days** and lapses if no publish
@@ -195,6 +312,9 @@ its login step, before any push, and nothing else in the release is affected.
 gh api repos/jmrplens/gitlab-mcp-server/releases/latest --jq '"immutable_release=\(.immutable)"'
 gh api repos/jmrplens/gitlab-mcp-server/rulesets --jq '.[] | "ruleset=\(.name) target=\(.target)"'
 gh api repos/jmrplens/gitlab-mcp-server/rulesets/16049728 --jq '.bypass_actors[] | "bypass=\(.actor_type)"'
+gh api repos/jmrplens/gitlab-mcp-server/environments/release --jq '"release_policy=\(.deployment_branch_policy) admins_bypass=\(.can_admins_bypass)"'
+gh api repos/jmrplens/gitlab-mcp-server/environments/release/deployment-branch-policies --jq '.branch_policies[] | "release_ref=\(.type):\(.name)"'
+gh api repos/jmrplens/gitlab-mcp-server/environments/release-rehearsal/secrets --jq '"rehearsal_secrets=\(.total_count)"'
 ```
 
 Run these after any change to repository settings, and before a release when one
