@@ -2,8 +2,8 @@ package dependencies
 
 import (
 	"context"
-	"io"
 	"net/http"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -73,11 +73,18 @@ type ListOutput struct {
 	Pagination   toolutil.PaginationOutput `json:"pagination"`
 }
 
-// ExportOutput represents a dependency list export.
+// ExportOutput represents a dependency list export as GitLab's
+// API::Entities::DependencyListExport renders it. Status is the export's
+// state (created, running, finished or failed), the one the hints tell a
+// caller to wait on; ExpiresAt is when GitLab removes the finished file.
 type ExportOutput struct {
 	toolutil.HintableOutput
 	ID          int64  `json:"id"`
+	Status      string `json:"status,omitempty"`
 	HasFinished bool   `json:"has_finished"`
+	ExportType  string `json:"export_type,omitempty"`
+	SendEmail   bool   `json:"send_email"`
+	ExpiresAt   string `json:"expires_at,omitempty"`
 	Self        string `json:"self"`
 	Download    string `json:"download"`
 }
@@ -115,13 +122,34 @@ func toOutput(d *gl.Dependency, extra toolutil.DependencyExtra) Output {
 	return o
 }
 
-func toExportOutput(e *gl.DependencyListExport) ExportOutput {
+// exportExtra is what API::Entities::DependencyListExport sends that
+// client-go's DependencyListExport does not model: it carries four of the
+// eight fields (upstream-bugs row 113), and the four left out are the ones a
+// caller waiting on an export needs, its status first.
+type exportExtra struct {
+	Status     string     `json:"status"`
+	ExportType string     `json:"export_type"`
+	SendEmail  bool       `json:"send_email"`
+	ExpiresAt  *time.Time `json:"expires_at"`
+}
+
+// toExportOutput builds the export's output from the decoded export and from
+// the fields the captured response carried beside it.
+func toExportOutput(op string, e *gl.DependencyListExport, captured *gitlabclient.ResponseCapture) (ExportOutput, error) {
+	var extra exportExtra
+	if err := captured.Decode(&extra); err != nil {
+		return ExportOutput{}, toolutil.WrapErr(op, err)
+	}
 	return ExportOutput{
 		ID:          e.ID,
+		Status:      extra.Status,
 		HasFinished: e.HasFinished,
+		ExportType:  extra.ExportType,
+		SendEmail:   extra.SendEmail,
+		ExpiresAt:   toolutil.RFC3339Ptr(extra.ExpiresAt),
 		Self:        e.Self,
 		Download:    e.Download,
-	}
+	}, nil
 }
 
 // ListDeps lists dependencies for a project.
@@ -173,6 +201,7 @@ func CreateExport(ctx context.Context, client *gitlabclient.Client, input Create
 	if input.ExportType != "" {
 		opts.ExportType = new(input.ExportType)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	e, _, err := client.GL().DependencyListExport.CreateDependencyListExport(input.PipelineID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
@@ -180,9 +209,9 @@ func CreateExport(ctx context.Context, client *gitlabclient.Client, input Create
 				"verify pipeline_id with pipeline.latest or pipeline.list; dependency list exports require an existing pipeline with dependency scanning or SBOM data and an Ultimate license")
 		}
 		return ExportOutput{}, toolutil.WrapErrWithStatusHint("dependencyCreateExport", err, http.StatusBadRequest,
-			"requires Developer + Ultimate; export_type defaults to sbom; the pipeline must contain dependency scanning or SBOM data; creation is async. Poll with dependency.export_get until status=finished")
+			"requires Developer + Ultimate; export_type defaults to sbom; the pipeline must contain dependency scanning or SBOM data; creation is async. Poll with dependency.export_get until its status is finished")
 	}
-	return toExportOutput(e), nil
+	return toExportOutput("dependencyCreateExport", e, captured)
 }
 
 // GetExport checks the status of a dependency list export.
@@ -193,12 +222,13 @@ func GetExport(ctx context.Context, client *gitlabclient.Client, input GetExport
 	if input.ExportID <= 0 {
 		return ExportOutput{}, toolutil.ErrRequiredInt64("dependencyGetExport", "export_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	e, _, err := client.GL().DependencyListExport.GetDependencyListExport(input.ExportID, gl.WithContext(ctx))
 	if err != nil {
 		return ExportOutput{}, toolutil.WrapErrWithStatusHint("dependencyGetExport", err, http.StatusNotFound,
-			"verify export_id with the response from dependency.export_create; status values: created, running, finished, failed; only finished exports can be downloaded")
+			"verify export_id with the response from dependency.export_create; the status field reads created, running, finished or failed, and only a finished export can be downloaded")
 	}
-	return toExportOutput(e), nil
+	return toExportOutput("dependencyGetExport", e, captured)
 }
 
 // DownloadExport downloads the content of a dependency list export (SBOM).
@@ -212,16 +242,22 @@ func DownloadExport(ctx context.Context, client *gitlabclient.Client, input Down
 	rc, _, err := client.GL().DependencyListExport.DownloadDependencyListExport(input.ExportID, gl.WithContext(ctx))
 	if err != nil {
 		return DownloadOutput{}, toolutil.WrapErrWithStatusHint("dependencyDownloadExport", err, http.StatusNotFound,
-			"verify export_id; export must be in status=finished (poll with dependency.export_get); content is CycloneDX-format SBOM. Capped at 1MB")
+			"verify export_id; the export must have status finished (poll with dependency.export_get); content is a CycloneDX SBOM")
 	}
 	defer rc.Close()
 
-	// Limit read to 1MB to prevent excessive memory usage
-	const maxSize = 1 << 20
-	limited := io.LimitReader(rc, maxSize)
-	data, err := io.ReadAll(limited)
+	// The export is read whole or refused: a prefix of a CycloneDX document is
+	// not valid JSON, and it used to be returned as the complete export,
+	// missing every component past the first MiB. client-go hands the body
+	// back unread, so the client-wide response ceiling, too, stops it here,
+	// where ReadDownload answers it with the same way out.
+	data, err := toolutil.ReadDownload("dependencyDownloadExport", rc, errExportTooLarge)
 	if err != nil {
-		return DownloadOutput{}, toolutil.WrapErrWithMessage("dependencyDownloadExport", err)
+		return DownloadOutput{}, err
 	}
 	return DownloadOutput{Content: string(data)}, nil
 }
+
+// errExportTooLarge is the way out for an SBOM this action will not carry,
+// whichever ceiling stopped it.
+const errExportTooLarge = "the export is too large to return in one MCP response; download it from GitLab directly (GET /dependency_list_exports/:id/download)"

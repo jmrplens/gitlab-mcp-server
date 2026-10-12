@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -473,6 +474,108 @@ func TestGetExport(t *testing.T) {
 	}
 }
 
+// exportJSON is a dependency list export as API::Entities::DependencyListExport
+// renders it, with every one of its eight fields and no two values alike.
+const exportJSON = `{"id":7,"status":"running","has_finished":false,"export_type":"cyclonedx","send_email":true,` +
+	`"expires_at":"2026-10-19T10:00:00.000Z","self":"https://gitlab.example.com/api/v4/dependency_list_exports/7",` +
+	`"download":"https://gitlab.example.com/api/v4/dependency_list_exports/7/download"}`
+
+// TestExport_CreateAndGet_PublishWhatGitLabSends verifies that the create
+// and the status read publish the export's status, type, mail flag and
+// expiry, which client-go's DependencyListExport does not model and the
+// handlers read off the captured response. The hints tell a caller to wait
+// for status finished, and the output used to carry only has_finished.
+func TestExport_CreateAndGet_PublishWhatGitLabSends(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, exportJSON)
+	}))
+	created, err := CreateExport(t.Context(), client, CreateExportInput{PipelineID: 3})
+	if err != nil {
+		t.Fatalf("CreateExport: %v", err)
+	}
+	got, err := GetExport(t.Context(), client, GetExportInput{ExportID: 7})
+	if err != nil {
+		t.Fatalf("GetExport: %v", err)
+	}
+	want := ExportOutput{
+		ID: 7, Status: "running", HasFinished: false, ExportType: "cyclonedx", SendEmail: true,
+		ExpiresAt: "2026-10-19T10:00:00Z",
+		Self:      "https://gitlab.example.com/api/v4/dependency_list_exports/7",
+		Download:  "https://gitlab.example.com/api/v4/dependency_list_exports/7/download",
+	}
+	for name, out := range map[string]ExportOutput{"create": created, "get": got} {
+		t.Run(name, func(t *testing.T) {
+			if !reflect.DeepEqual(out, want) {
+				t.Errorf("%s = %+v, want %+v", name, out, want)
+			}
+		})
+	}
+}
+
+// TestExport_UndecodableCapture_IsAnError verifies that an answer whose
+// fields beyond client-go's do not decode is reported, not dropped.
+func TestExport_UndecodableCapture_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":7,"status":5}`)
+	}))
+	if _, err := GetExport(t.Context(), client, GetExportInput{ExportID: 7}); err == nil {
+		t.Error("GetExport with an undecodable status succeeded, want an error")
+	}
+	if _, err := CreateExport(t.Context(), client, CreateExportInput{PipelineID: 3}); err == nil {
+		t.Error("CreateExport with an undecodable status succeeded, want an error")
+	}
+}
+
+// TestDownloadExport_BodyOverTheCeiling_IsRefusedNotTruncated verifies that
+// an SBOM larger than the shared download ceiling is refused with the way
+// out, and that one past the old 1 MiB cut comes back whole and parses. The
+// download used to keep the first MiB and return it as a complete export, a
+// CycloneDX document cut mid-string that json could not parse.
+func TestDownloadExport_BodyOverTheCeiling_IsRefusedNotTruncated(t *testing.T) {
+	big := `{"bomFormat":"CycloneDX","components":["` + strings.Repeat("x", 1<<20) + `"]}`
+	for _, tc := range []struct {
+		name    string
+		body    string
+		wantErr bool
+	}{
+		{"past the old 1 MiB cut", big, false},
+		{"one byte over the ceiling", strings.Repeat("x", toolutil.MaxDownloadBytes+1), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			out, err := DownloadExport(t.Context(), client, DownloadExportInput{ExportID: 7})
+			if !tc.wantErr {
+				if err != nil || out.Content != tc.body || !json.Valid([]byte(out.Content)) {
+					t.Fatalf("DownloadExport() = %d bytes, %v, want the whole document", len(out.Content), err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("DownloadExport() returned %d bytes, want a refusal", len(out.Content))
+			}
+			if !strings.Contains(err.Error(), "GET /dependency_list_exports/:id/download") {
+				t.Errorf("DownloadExport() error = %v, want it to name the way out", err)
+			}
+		})
+	}
+}
+
+// TestDownloadExport_ResponseOverTheClientCeiling_NamesTheWayOut verifies
+// that a body the client-wide response ceiling stopped is answered with the
+// same way out.
+func TestDownloadExport_ResponseOverTheClientCeiling_NamesTheWayOut(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(make([]byte, 4096))
+	}))
+	client.SetMaxResponseBytes(1024)
+	_, err := DownloadExport(t.Context(), client, DownloadExportInput{ExportID: 7})
+	if err == nil || !strings.Contains(err.Error(), "download it from GitLab directly") {
+		t.Fatalf("DownloadExport() error = %v, want it to name the way out", err)
+	}
+}
+
 // TestGetExport_CancelledContext verifies the GetExport_CancelledContext handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
@@ -700,13 +803,23 @@ func TestFormatExportMarkdown(t *testing.T) {
 	const (
 		heading = "## Dependency List Export\n\n"
 		hints   = "\n---\n💡 **Next steps:**\n" +
-			"- Use `dependency.export_download` once the export has finished\n"
+			"- Use `dependency.export_download` once its status is finished\n"
 	)
 	tests := []struct {
 		name  string
 		input ExportOutput
 		want  string
 	}{
+		{
+			name:  "renders the status, type and expiry GitLab sent",
+			input: ExportOutput{ID: 7, Status: "running", ExportType: "cyclonedx", ExpiresAt: "2026-10-19T10:00:00Z"},
+			want: heading +
+				"- **ID**: 7\n" +
+				"- **Status**: running\n" +
+				"- **Finished**: " + toolutil.BoolEmoji(false) + "\n" +
+				"- **Export Type**: cyclonedx\n" +
+				"- **Expires**: " + toolutil.FormatTime("2026-10-19T10:00:00Z") + "\n" + hints,
+		},
 		{
 			name:  "renders finished export with download URL",
 			input: ExportOutput{ID: 1, HasFinished: true, Self: "https://example.com/self", Download: "https://example.com/download"},

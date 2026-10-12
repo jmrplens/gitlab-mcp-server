@@ -63,10 +63,10 @@ func dependencyOptions(actionName, individualTool string) toolutil.ActionSpecOpt
 	case "export_get", "export_download":
 		if actionName == "export_get" {
 			aliases = []string{"get dependency export", "dependency export status", "sbom export status"}
-			usage = "Get dependency list export status and metadata."
+			usage = "Get a dependency list export's status (created, running, finished or failed), its type and its expiry. Poll it until the status is finished before fetching the content."
 		} else {
 			aliases = []string{"download dependency export", "download sbom export", "dependency export download"}
-			usage = "Download generated dependency list export content."
+			usage = "Download generated dependency list export content whole. An export over 32 MiB is refused with the GitLab route to fetch it directly, never cut short."
 		}
 		guidance["export_id"] = toolutil.ParameterGuidance{
 			SemanticRole:   "dependency_export_id",

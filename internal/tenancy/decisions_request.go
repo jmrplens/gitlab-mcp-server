@@ -76,10 +76,11 @@ func requestDecisions() []Decision {
 			enforce("internal/tools/jobs", "maxArtifactBytes"),
 			enforce("internal/tools/modelregistry", "maxModelFileBytes"),
 			enforce("internal/tools/settings", "maxNamedUnmodeledKeys"),
+			// The one ceiling every download action reads its body under:
+			// the project and group export archives and the dependency list
+			// export, each refused whole above it rather than cut short.
 			enforce(pkgToolutil, "MaxDownloadBytes"),
 			enforce("internal/tools/dependencyfirewall", "maxCoordinateLength"),
-			// Local to the function, so the function is the site.
-			enforce("internal/tools/dependencies", "DownloadExport"),
 			enforce(pkgToolutil, "maxGitLabMessageLen")),
 		// A fine-grained token's grant is the minter's to size: every project
 		// or group id becomes a scope of its own, each scope may name every

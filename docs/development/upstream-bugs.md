@@ -81,6 +81,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The work item documents select neither the decision log nor the development widget](#the-work-item-documents-select-neither-the-decision-log-nor-the-development-widget)
   - [The work item documents leave out fields GitLab sends on a work item](#the-work-item-documents-leave-out-fields-gitlab-sends-on-a-work-item)
   - [The saved view documents leave out who made a view, when it changed and how to share it](#the-saved-view-documents-leave-out-who-made-a-view-when-it-changed-and-how-to-share-it)
+  - [DependencyListExport carries four of the eight fields GitLab sends](#dependencylistexport-carries-four-of-the-eight-fields-gitlab-sends)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -335,6 +336,7 @@ readable without opening the tracker:
 | 110 | gitlab-org/gitlab | [The API pages list access levels the API refuses](#the-api-pages-list-access-levels-the-api-refuses) | Yes, by the merge request | Yes, [gitlab-org/gitlab!261285](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261285), open, the documentation review pending | No | No; a refused value is answered 400, except that `access.approve_project` and `access.approve_group` grant Developer for `0` and report as approved a request that `5` leaves pending where GitLab does not accept it | None yet; this server's own schemas offer refused values: eleven filters `5` (six of them `60` too), six writes `0`, five project writes `5` and the group member update `60`; #1280 tracks it |
 | 111 | gitlab-org/gitlab | [The forks list returns statistics when asked not to](#the-forks-list-returns-statistics-when-asked-not-to) | Yes, [gitlab-org/gitlab#633318](https://gitlab.com/gitlab-org/gitlab/-/issues/633318) | No | No | No; `project.list_forks` with `statistics: false` answers every fork's statistics, and an administrator's `project.list_user_starred` with `with_custom_attributes: false` the custom attributes | None taken |
 | 112 | gitlab-org/gitlab | [The contributed projects route writes a keyset link its finder never reads](#the-contributed-projects-route-writes-a-keyset-link-its-finder-never-reads) | No | No | No | No | Yes, `project.list_user_contributed` refuses keyset pagination and pages by offset only |
+| 113 | client-go | [`DependencyListExport` carries four of the eight fields GitLab sends](#dependencylistexport-carries-four-of-the-eight-fields-gitlab-sends) | No; for the joint merge request | No | No | No | Yes, the export create and status read take the four from the captured response |
 | 127 | gitlab-org/gitlab | [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text) | No | No | No | No; GitLab's pages leave such a submodule unlinked | Yes, `repository.list_submodules` and `repository.read_submodule_file` resolve a sibling namespace and the other spellings of the instance's clone URLs |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
@@ -6054,6 +6056,37 @@ purpose as an experiment, and `private` as a field GitLab deprecated for the
 1022.
 
 **Effort**: small: four fields and their tests.
+
+### DependencyListExport carries four of the eight fields GitLab sends
+
+- **Reported**: no. It goes into the joint merge request,
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  with the other struct gaps of this register.
+- **In review**: no.
+- **Merged**: no. v3.15.0 carries the four fields.
+- **Blocking**: no.
+- **Workaround**: yes. `dependency.export_create` and `dependency.export_get`
+  (`internal/tools/dependencies/dependencies.go`) call the SDK under
+  `gitlabclient.WithResponseCapture` (ADR-0021) and read `status`,
+  `export_type`, `send_email` and `expires_at` from the captured answer. It
+  retires when the struct models them.
+
+**Where**: `dependency_list_export.go`, `DependencyListExport`, at v3.15.0,
+which `CreateDependencyListExport` and `GetDependencyListExport` decode into.
+
+**What**: GitLab renders a dependency list export through
+`API::Entities::DependencyListExport`, which exposes `id`, `status` (the
+state's name: `created`, `running`, `finished` or `failed`), `has_finished`,
+`export_type`, `send_email`, `expires_at`, `self` and `download`. The struct
+models `id`, `has_finished`, `self` and `download`. The status is the field a
+caller polls on, and the one this server's own hints told a model to wait
+for, while the output it was handed had only the boolean.
+
+**How we found it**: issue 1307. GitLab's generated record carries no
+response entity for the `dependency_list_exports` routes, so R-PATH never
+compared them; the entity itself is in `gitlab-api-live.json`.
+
+**Effort**: small: four fields and a decoding test.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

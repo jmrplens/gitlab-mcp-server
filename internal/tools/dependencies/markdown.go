@@ -39,15 +39,18 @@ func FormatListMarkdown(out ListOutput) string {
 // carries the warning sign, a cleared package the tick, and a package no scan
 // covered a dash, since an absent flag means the scan did not run rather than
 // that the package is clean.
+//
+// The three answers are if statements rather than the cases of a tagless
+// switch, because a mutation run cannot credit a test with the expression of
+// such a case and reports it as never reached.
 func malwareCell(malware *bool) string {
-	switch {
-	case malware == nil:
+	if malware == nil {
 		return "-"
-	case *malware:
-		return toolutil.EmojiWarning + " detected"
-	default:
-		return toolutil.EmojiSuccess + " clear"
 	}
+	if *malware {
+		return toolutil.EmojiWarning + " detected"
+	}
+	return toolutil.EmojiSuccess + " clear"
 }
 
 // FormatExportMarkdown renders a dependency list export status as the card of
@@ -56,10 +59,13 @@ func FormatExportMarkdown(e ExportOutput) string {
 	var sb strings.Builder
 	c := toolutil.NewCard(&sb, "Dependency List Export")
 	c.Int("ID", e.ID)
+	c.Field("Status", e.Status)
 	c.Bool("Finished", e.HasFinished)
+	c.Field("Export Type", e.ExportType)
+	c.Time("Expires", e.ExpiresAt)
 	c.Field("Self", e.Self)
 	c.Field("Download", e.Download)
-	c.End("Use `dependency.export_download` once the export has finished")
+	c.End("Use `dependency.export_download` once its status is finished")
 	return sb.String()
 }
 
