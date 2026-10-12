@@ -197,6 +197,14 @@ retries a connection failure and never a request it already delivered, so a
 `tools/call` that created an issue and then lost its response is not replayed on
 a second instance.
 
+For the authentication budgets to charge the client rather than the balancer,
+add `option forwardfor` to the backend and start each server with
+`--trusted-proxy-header=X-Forwarded-For` and `--trusted-proxies` set to the
+address HAProxy connects from. HAProxy appends an `X-Forwarded-For` line of its
+own after any line the client sent instead of extending it, and the server reads
+every line, joined in order, so the address HAProxy heard from is the one
+charged and whatever a client wrote in its own line is never reached.
+
 ## Health-driven ejection and the drain window
 
 On `SIGTERM` the process marks itself draining before anything else. From that

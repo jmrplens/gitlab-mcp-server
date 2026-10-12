@@ -608,7 +608,11 @@ carga el primero que no lo esté: con un nginx delante ese es el cliente, y con
 un segundo proxy delante de nginx sigue siendo el cliente, siempre que los dos
 proxies estén en la lista. Un valor que el cliente se inventara por la izquierda
 nunca se alcanza, y un salto que no sea una dirección carga al origen de la
-conexión. `X-Real-IP` puesta desde `$remote_addr` en el salto más cercano al
+conexión. Una cabecera que llega en varias líneas de campo se lee como una sola
+lista, con las líneas unidas en orden: nginx alarga la línea del cliente,
+mientras que `option forwardfor` de HAProxy añade una línea propia detrás de
+ella, y en ambos casos la dirección que oyó el proxy queda a la derecha.
+`X-Real-IP` puesta desde `$remote_addr` en el salto más cercano al
 servidor lleva una sola dirección y no necesita recorrido, y es la cabecera que
 usa la propia prueba de extremo a extremo del proyecto con proxy.
 

@@ -589,7 +589,11 @@ right, skipping every hop that is itself in the list, and charges the first hop
 that is not: with one nginx in front that is the client, and with a second proxy
 in front of nginx it is still the client, provided both proxies are listed. A
 value the client invented on the left is never reached, and a hop that is not
-an address charges the peer instead. `X-Real-IP` set from `$remote_addr` at the
+an address charges the peer instead. A header that arrives as several field
+lines is read as one list, the lines joined in order: nginx extends the
+client's line, while HAProxy's `option forwardfor` appends a line of its own
+after it, and both end with the address the proxy heard from on the right.
+`X-Real-IP` set from `$remote_addr` at the
 hop nearest the server carries one address and needs no walk, and it is the
 header the project's own end-to-end proxy test uses.
 

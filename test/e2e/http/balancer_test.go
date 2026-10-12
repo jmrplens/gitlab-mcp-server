@@ -160,6 +160,69 @@ backend mcp_servers
   server two 127.0.0.1:%d check inter 500ms fall 2 rise 2
 `
 
+// haproxyForwardforConfig is a balancer that tells the server who its client
+// was the way HAProxy does by default: option forwardfor appends an
+// X-Forwarded-For field line of its own, after any line the client sent,
+// rather than extending the client's line as nginx's
+// proxy_add_x_forwarded_for does.
+//
+// It connects to the server from 127.0.0.2 so the proxy and the client are
+// different addresses on one loopback: --trusted-proxies can then name the
+// proxy without also vouching for the client, which is the deployment the
+// header exists for.
+const haproxyForwardforConfig = `global
+  daemon
+defaults
+  mode http
+  timeout connect 2s
+  timeout client 30s
+  timeout server 30s
+  option http-server-close
+  option forwardfor
+frontend mcp
+  bind 127.0.0.1:%d
+  default_backend mcp_servers
+backend mcp_servers
+  server one 127.0.0.1:%d source 127.0.0.2
+`
+
+// TestBalancer_HAProxyForwardforChargesTheRealClient is the deployment the
+// header was being misread in. A client that sends its own X-Forwarded-For
+// through HAProxy arrives with two field lines: the client's, then the one
+// HAProxy appended. Reading only the first line charged each failure to
+// whatever the client wrote there, so a client that changed the value on every
+// request was never blocked; read as one list from the right, the proxy's line
+// names the client every time and the failure budget engages.
+func TestBalancer_HAProxyForwardforChargesTheRealClient(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	upstream := freePort(t)
+	startServerOnPort(t, upstream, nil,
+		"--gitlab-url="+gitlab.url,
+		"--trusted-proxy-header=X-Forwarded-For",
+		"--trusted-proxies=127.0.0.2",
+		"--auth-failure-limit=3",
+	)
+	port := freePort(t)
+	conf := writeBalancerConfig(t, "haproxy.cfg", fmt.Sprintf(haproxyForwardforConfig, port, upstream))
+	base := startBalancer(t, "haproxy:3.0-alpine", conf, "/usr/local/etc/haproxy/haproxy.cfg", port)
+	through := &server{baseURL: base}
+
+	for i := range 8 {
+		got := through.do(t, mcpPOST(map[string]string{
+			"PRIVATE-TOKEN":   fmt.Sprintf("glpat-forwardfor-%d", i),
+			"X-Forwarded-For": fmt.Sprintf("198.51.100.%d", i+1),
+		}))
+		if got.status == http.StatusTooManyRequests {
+			return
+		}
+		if got.status != http.StatusUnauthorized {
+			t.Fatalf("request %d through HAProxy = %d, want 401 or 429: %s", i, got.status, truncate(got.body))
+		}
+	}
+	t.Error("eight failures through HAProxy were never blocked with a limit of three: " +
+		"each was charged to the address the client wrote in its own X-Forwarded-For line instead of the one HAProxy appended")
+}
+
 // startBalancer runs a container with the given configuration mounted where
 // the image expects it, and returns the base URL of the port it listens on.
 //

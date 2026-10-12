@@ -201,6 +201,15 @@ fallo de conexión y nunca una petición que ya entregó, así que un `tools/cal
 que creó un issue y luego perdió su respuesta no se repite en otra
 instancia.
 
+Para que los presupuestos de autenticación carguen al cliente y no al
+balanceador, añade `option forwardfor` al backend y arranca cada servidor con
+`--trusted-proxy-header=X-Forwarded-For` y `--trusted-proxies` con la dirección
+desde la que conecta HAProxy. HAProxy añade una línea `X-Forwarded-For` propia
+detrás de cualquier línea que haya enviado el cliente en lugar de alargarla, y
+el servidor lee todas las líneas, unidas en orden, así que se carga la dirección
+que oyó HAProxy y lo que un cliente escribiera en su propia línea nunca se
+alcanza.
+
 ## Expulsión por salud y ventana de drenaje
 
 Con `SIGTERM` el proceso se marca en drenaje antes que nada. Desde ese momento

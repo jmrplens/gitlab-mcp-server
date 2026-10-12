@@ -101,6 +101,51 @@ func TestClientIP_TrustedPeer_BelievesASingleValueHeader(t *testing.T) {
 	}
 }
 
+// TestClientIP_HeaderSplitAcrossFieldLines_IsReadAsOneList covers a header the
+// client sent and a proxy then appended to as a second field line, which is
+// what HAProxy's option forwardfor does. Reading only the first line handed
+// the walk the client's own text, so the address a request was charged to
+// was the one the client chose. Joined, the lines are the list the proxy
+// meant, and the walk from the right reaches the proxy's entry first.
+func TestClientIP_HeaderSplitAcrossFieldLines_IsReadAsOneList(t *testing.T) {
+	t.Parallel()
+	proxies, err := parseTrustedProxies([]string{"10.0.0.0/8"})
+	if err != nil {
+		t.Fatalf("parseTrustedProxies: %v", err)
+	}
+	cases := []struct {
+		name   string
+		header string
+		lines  []string
+		want   string
+	}{
+		{
+			name: "X-Forwarded-For with the client's line first", header: "X-Forwarded-For",
+			lines: []string{"198.51.100.77", "203.0.113.9"}, want: "203.0.113.9",
+		},
+		{
+			name: "X-Forwarded-For with a list in each line", header: "X-Forwarded-For",
+			lines: []string{"198.51.100.77, 198.51.100.78", "203.0.113.9, 10.0.0.6"}, want: "203.0.113.9",
+		},
+		{
+			name: "a single-value header the client sent too", header: "X-Real-IP",
+			lines: []string{"198.51.100.77", "203.0.113.9"}, want: "203.0.113.9",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			r := &http.Request{RemoteAddr: "10.0.0.5:12345", Header: http.Header{}}
+			for _, line := range tc.lines {
+				r.Header.Add(tc.header, line)
+			}
+			if got := clientIP(r, tc.header, proxies); got != tc.want {
+				t.Errorf("clientIP() = %q, want %q: the proxy's line is the one it vouches for", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestClientIP_XForwardedFor_TakesTheFirstUntrustedHopFromTheRight covers the
 // shapes a forwarded chain takes, including the one that motivated the list:
 // two proxies in front, where the rightmost entry is the inner proxy and the

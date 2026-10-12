@@ -101,6 +101,14 @@ func commaSeparated(value string) []string {
 // This is what makes a two-proxy deployment count per client: read rightmost
 // without the list, the address of the inner proxy was the answer and every
 // caller behind it shared one budget.
+//
+// Every field line of the header is read, joined in order, as RFC 9110
+// section 5.3 makes a repeated field one comma-separated list. A proxy that
+// appends a line of its own rather than extending the client's (HAProxy's
+// option forwardfor) leaves the client's text in the first line and its own
+// in the last; reading the first line alone charged the request to whatever
+// the client wrote there. Joined, a single-value header the client also sent
+// resolves to its last line, which is the proxy's.
 func clientIP(r *http.Request, trustedHeader string, proxies trustedProxies) string {
 	peer := remoteHost(r)
 	if trustedHeader == "" || proxies.empty() {
@@ -110,7 +118,7 @@ func clientIP(r *http.Request, trustedHeader string, proxies trustedProxies) str
 	if err != nil || !proxies.contains(peerAddr) {
 		return peer
 	}
-	value := r.Header.Get(trustedHeader)
+	value := strings.Join(r.Header.Values(trustedHeader), ",")
 	if value == "" {
 		return peer
 	}
