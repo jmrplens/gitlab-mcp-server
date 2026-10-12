@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -113,17 +114,6 @@ func TestDownload(t *testing.T) {
 			errContain:    "model_version_id is required",
 		},
 		{
-			name: "empty path is refused before any request",
-			input: DownloadInput{
-				ProjectID:      toolutil.StringOrInt("42"),
-				ModelVersionID: toolutil.StringOrInt("7"),
-				Filename:       "model.bin",
-			},
-			forbidRequest: true,
-			wantErr:       true,
-			errContain:    "path is required",
-		},
-		{
 			name: "empty filename is refused before any request",
 			input: DownloadInput{
 				ProjectID:      toolutil.StringOrInt("42"),
@@ -147,6 +137,10 @@ func TestDownload(t *testing.T) {
 			},
 			wantErr:   true,
 			errPrefix: wantDownloadOp,
+			// A personal access token client sends this route the token as
+			// Bearer, which the route reads, so a 401 here is about the token
+			// itself and not about the route's limit on OAuth tokens.
+			errOmit: wantBearerLimitHint,
 		},
 		{
 			name: "returns error on 403 forbidden",
@@ -280,9 +274,227 @@ const wantDownloadOp = "download ml model package: "
 // "model.bin". It is spelled out for the reason [wantDownloadOp] is, and
 // because the two names are what a crossing at the wrap site exchanges.
 const wantOverCeilingRefusal = wantDownloadOp + "unexpected error. Suggestion: " +
-	"the file is too large to return in one MCP response; download it from GitLab directly " +
-	"(GET /projects/:id/packages/ml_models/:model_version_id/files/:path/:filename): " +
+	"the file is too large to return in one MCP response; download it from GitLab directly, " +
+	"sending the token as Authorization: Bearer " +
+	"(GET /projects/:id/packages/ml_models/:model_version_id/files/:path/:filename, " +
+	"with :path/ left out for a file at the package root): " +
 	"model.bin exceeds the 32 MiB this action returns"
+
+// wantBearerLimitHint is what a 401 from this route says in a session whose
+// client sends Bearer: the route takes a personal access token or a CI job
+// token and nothing else, so a GitLab OAuth access token is refused on every
+// project, which no ordinary reading of a 401 tells a caller.
+const wantBearerLimitHint = "GitLab's ML model package route authenticates only a personal access token " +
+	"or a CI job token, so it refuses a GitLab OAuth access token on every project; " +
+	"connect with a personal access token to download model files"
+
+// wantRootEscapedPath is the request line a file at the package root
+// produces: the file name straight after files/, with no path segment. GitLab
+// 19.4.2 serves the root file there and answers 404 to files/./model.bin,
+// since it joins the path and the file name into the name it looks up.
+const wantRootEscapedPath = "/api/v4/projects/42/packages/ml_models/7/files/model.bin"
+
+// TestDownload_FileAtThePackageRoot_IsRequestedWithoutAPathSegment verifies
+// that a file stored at the root of a model package can be downloaded, which
+// it could not be while path was required.
+//
+// The empty path, ".", and the two forms of either a caller writes with a
+// slash all name the root, and each is requested as files/<name>. That is the
+// form GitLab serves: "." passed through, as client-go's method would send it,
+// is files/./model.bin, which GitLab answers 404 because it looks up the file
+// "./model.bin". "." is also what the meta surface's file_path alias hands
+// this action for a bare file name, so the root has to be read there too.
+func TestDownload_FileAtThePackageRoot_IsRequestedWithoutAPathSegment(t *testing.T) {
+	for _, path := range []string{"", ".", "/", "./"} {
+		t.Run("path "+strconv.Quote(path), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodGet)
+				if got := r.URL.EscapedPath(); got != wantRootEscapedPath {
+					t.Errorf("escaped URL path = %q, want %q", got, wantRootEscapedPath)
+				}
+				w.Header().Set("Content-Type", "application/octet-stream")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("root-model-data"))
+			}))
+
+			out, err := Download(t.Context(), client, DownloadInput{
+				ProjectID:      toolutil.StringOrInt("42"),
+				ModelVersionID: toolutil.StringOrInt("7"),
+				Path:           path,
+				Filename:       "model.bin",
+			})
+			if err != nil {
+				t.Fatalf("Download() error: %v", err)
+			}
+			want := DownloadOutput{
+				ProjectID:      "42",
+				ModelVersionID: "7",
+				Path:           path,
+				Filename:       "model.bin",
+				ContentBase64:  base64.StdEncoding.EncodeToString([]byte("root-model-data")),
+				SizeBytes:      len("root-model-data"),
+			}
+			if !reflect.DeepEqual(out, want) {
+				t.Errorf("Download() = %+v, want %+v", out, want)
+			}
+		})
+	}
+}
+
+// TestDownload_PathWrittenWithSlashes_NamesTheSameDirectory verifies that a
+// nested path a caller writes with a leading or trailing slash reaches the
+// directory it names. GitLab joins the path and the file name into the name
+// it looks the file up by, so "/deep/nested/" sent as written would look for
+// "/deep/nested//weights.h5", which no upload ever creates. The other
+// spellings a caller writes for the same directory, "./deep/nested", a
+// doubled slash and a "." segment, are read as it too: "./deep/nested" used to
+// be sent as it was, and GitLab looked up "./deep/nested/weights.h5" and
+// answered 404, the failure it gives files/./<name> at the root.
+func TestDownload_PathWrittenWithSlashes_NamesTheSameDirectory(t *testing.T) {
+	const want = "/api/v4/projects/42/packages/ml_models/7/files/deep%2Fnested/weights.h5"
+	for _, path := range []string{"/deep/nested/", "./deep/nested", "deep//nested", "deep/./nested"} {
+		t.Run(path, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if got := r.URL.EscapedPath(); got != want {
+					t.Errorf("escaped URL path = %q, want %q", got, want)
+				}
+				w.Header().Set("Content-Type", "application/octet-stream")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("weight-data"))
+			}))
+
+			out, err := Download(t.Context(), client, DownloadInput{
+				ProjectID:      toolutil.StringOrInt("42"),
+				ModelVersionID: toolutil.StringOrInt("7"),
+				Path:           path,
+				Filename:       "weights.h5",
+			})
+			if err != nil {
+				t.Fatalf("Download() error: %v", err)
+			}
+			// The output echoes the caller's own spelling: it reports what
+			// was asked for, and the request line above is where the reading
+			// shows.
+			if out.Path != path {
+				t.Errorf("Path = %q, want the caller's %q", out.Path, path)
+			}
+		})
+	}
+}
+
+// TestDownload_SendsTheTokenAsBearer pins the header this route is
+// authenticated by.
+//
+// GitLab's ML model package API declares the route authenticated by a
+// personal access token or a job token sent through the Bearer header and
+// reads no other: the same personal access token gets 200 as Bearer and 404
+// "Project Not Found" as PRIVATE-TOKEN on a private project (GitLab 19.4.2),
+// so the download of every file of a private project's model read as a file
+// that does not exist. Both request forms are pinned, the nested path through
+// client-go and the root through this package's own request.
+func TestDownload_SendsTheTokenAsBearer(t *testing.T) {
+	for _, path := range []string{"models", ""} {
+		t.Run("path "+strconv.Quote(path), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
+					t.Errorf("Authorization = %q, want %q", got, "Bearer test-token")
+				}
+				w.Header().Set("Content-Type", "application/octet-stream")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("model-binary-data"))
+			}))
+
+			if _, err := Download(t.Context(), client, DownloadInput{
+				ProjectID:      toolutil.StringOrInt("42"),
+				ModelVersionID: toolutil.StringOrInt("7"),
+				Path:           path,
+				Filename:       "model.bin",
+			}); err != nil {
+				t.Fatalf("Download() error: %v", err)
+			}
+		})
+	}
+}
+
+// TestDownload_BearerSessionRefused_NamesTheRouteLimit verifies what a 401
+// from this route says in a session whose client sends Bearer, which is an
+// oauth HTTP mode session.
+//
+// There a GitLab OAuth access token is refused on every project: the route
+// resolves a personal access token or a job token, and an OAuth token is
+// neither. GitLab answers it 401 with nothing in the body that says why, so the
+// refusal names the limit and the way round it. The 404 of a session that
+// reached a project it cannot read keeps the identifier hint, since that one
+// is not about the token.
+func TestDownload_BearerSessionRefused_NamesTheRouteLimit(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  int
+		path    string
+		want    string
+		without string
+	}{
+		{name: "401 on a nested file", status: http.StatusUnauthorized, path: "models", want: wantBearerLimitHint, without: wantIdentifierHint},
+		{name: "401 on a root file", status: http.StatusUnauthorized, path: "", want: wantBearerLimitHint, without: wantIdentifierHint},
+		{name: "404 keeps the identifier hint", status: http.StatusNotFound, path: "models", want: wantIdentifierHint, without: wantBearerLimitHint},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewOAuthTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, `{"message":"`+http.StatusText(tt.status)+`"}`)
+			}))
+
+			_, err := Download(t.Context(), client, DownloadInput{
+				ProjectID:      toolutil.StringOrInt("42"),
+				ModelVersionID: toolutil.StringOrInt("7"),
+				Path:           tt.path,
+				Filename:       "model.bin",
+			})
+			if err == nil {
+				t.Fatal("Download() error = nil, want a refusal")
+			}
+			if !strings.HasPrefix(err.Error(), wantDownloadOp) {
+				t.Errorf("error = %q, want it to open with %q", err.Error(), wantDownloadOp)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %q, want it to carry %q", err.Error(), tt.want)
+			}
+			if strings.Contains(err.Error(), tt.without) {
+				t.Errorf("error = %q, want it not to carry %q", err.Error(), tt.without)
+			}
+		})
+	}
+}
+
+// TestDownloadFromPackageRoot_PathNewRequestRefuses_IsAnError verifies that
+// the root request returns what client-go's NewRequest refuses rather than
+// sending anything. downloadFromPackageRoot takes the path rather than the
+// identifiers so this branch can be driven: rootFilePath escapes every value a
+// caller supplies, so no real input reaches it.
+func TestDownloadFromPackageRoot_PathNewRequestRefuses_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	reader, err := downloadFromPackageRoot(t.Context(), client, "projects/%zz/packages/ml_models/7/files/model.bin")
+	if err == nil {
+		t.Fatal("downloadFromPackageRoot() error = nil, want the unreadable path refused")
+	}
+	if reader != nil {
+		t.Errorf("reader = %v, want none alongside the error", reader)
+	}
+}
+
+// TestDownloadInput_Path_IsOptional verifies that path is not required by the
+// schema every surface serves, which is read from the jsonschema tag's
+// required marker. GitLab's route writes the path as an optional group,
+// (*path/):file_name, and a file at the package root has none.
+func TestDownloadInput_Path_IsOptional(t *testing.T) {
+	field, ok := reflect.TypeFor[DownloadInput]().FieldByName("Path")
+	if !ok {
+		t.Fatal("DownloadInput has no Path field")
+	}
+	if tag := field.Tag.Get("jsonschema"); strings.HasSuffix(tag, ",required") {
+		t.Errorf("Path jsonschema tag = %q, want it without the required marker", tag)
+	}
+}
 
 type downloadCase struct {
 	name  string
@@ -464,31 +676,37 @@ func TestDownloadOutput_FileOverTheCeiling_IsRefusedNotTruncated(t *testing.T) {
 // call rather than the later read, and it arrives as a transport error saying
 // nothing about model files. An operator whose weights file is simply too big
 // to travel this way otherwise sees only that something exceeded a maximum.
+// The root file's request is this package's own rather than client-go's, and
+// is held to the same answer.
 func TestDownload_ResponseOverTheClientCeiling_NamesTheWayOut(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(make([]byte, 4096))
-	})
-	client := testutil.NewTestClient(t, handler)
-	client.SetMaxResponseBytes(1024)
+	for _, path := range []string{"models", ""} {
+		t.Run("path "+strconv.Quote(path), func(t *testing.T) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/octet-stream")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(make([]byte, 4096))
+			})
+			client := testutil.NewTestClient(t, handler)
+			client.SetMaxResponseBytes(1024)
 
-	_, err := Download(t.Context(), client, DownloadInput{
-		ProjectID:      toolutil.StringOrInt("42"),
-		ModelVersionID: toolutil.StringOrInt("7"),
-		Path:           "models",
-		Filename:       "model.bin",
-	})
-	if err == nil {
-		t.Fatal("Download() error = nil, want an error for a response over the client ceiling")
-	}
-	if !strings.Contains(err.Error(), "download it from GitLab directly") {
-		t.Errorf("Download() error = %v, want it to name the way out", err)
-	}
-	// The whole message cannot be pinned here, since its tail is whatever the
-	// transport said about the body it stopped reading, but the label is this
-	// action's own and opens it.
-	if !strings.HasPrefix(err.Error(), wantDownloadOp) {
-		t.Errorf("Download() error = %q, want it to open with %q", err.Error(), wantDownloadOp)
+			_, err := Download(t.Context(), client, DownloadInput{
+				ProjectID:      toolutil.StringOrInt("42"),
+				ModelVersionID: toolutil.StringOrInt("7"),
+				Path:           path,
+				Filename:       "model.bin",
+			})
+			if err == nil {
+				t.Fatal("Download() error = nil, want an error for a response over the client ceiling")
+			}
+			if !strings.Contains(err.Error(), "download it from GitLab directly") {
+				t.Errorf("Download() error = %v, want it to name the way out", err)
+			}
+			// The whole message cannot be pinned here, since its tail is
+			// whatever the transport said about the body it stopped reading,
+			// but the label is this action's own and opens it.
+			if !strings.HasPrefix(err.Error(), wantDownloadOp) {
+				t.Errorf("Download() error = %q, want it to open with %q", err.Error(), wantDownloadOp)
+			}
+		})
 	}
 }

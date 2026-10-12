@@ -541,6 +541,59 @@ func (r *fatalRecorder) Fatalf(format string, args ...any) {
 	r.fatals = append(r.fatals, fmt.Sprintf(format, args...))
 }
 
+// TestNewOAuthTestClient_SendsTheTokenAsBearerAndNothingElse verifies that the
+// client of an OAuth session's test authenticates the way oauth HTTP mode's
+// client does: the token travels as "Authorization: Bearer" and never as
+// PRIVATE-TOKEN, which GitLab refuses for an OAuth access token, and the
+// client says it sends Bearer, which is what a handler asks to tell such a
+// session's refusals apart from a personal access token's.
+func TestNewOAuthTestClient_SendsTheTokenAsBearerAndNothingElse(t *testing.T) {
+	var bearer, private string
+	client := NewOAuthTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bearer = r.Header.Get("Authorization")
+		private = r.Header.Get("PRIVATE-TOKEN")
+		RespondJSON(w, http.StatusOK, `{"version":"17.0.0","revision":"abc"}`)
+	}))
+
+	if !client.SendsBearer() {
+		t.Error("SendsBearer() = false, want true for an OAuth session's client")
+	}
+	if _, _, err := client.GL().Version.GetVersion(gl.WithContext(t.Context())); err != nil {
+		t.Fatalf("GetVersion() error: %v", err)
+	}
+	if bearer != "Bearer test-token" {
+		t.Errorf("Authorization = %q, want %q", bearer, "Bearer test-token")
+	}
+	if private != "" {
+		t.Errorf("PRIVATE-TOKEN = %q, want none", private)
+	}
+}
+
+// TestNewOAuthTestClient_ConstructionFailureFatals verifies that
+// NewOAuthTestClient reports a fatal error when the OAuth client constructor
+// fails, through the same seam [TestNewTestClient_ConstructionFailureFatals]
+// uses, since a live httptest URL can never make the real constructor fail.
+func TestNewOAuthTestClient_ConstructionFailureFatals(t *testing.T) {
+	orig := newOAuthGitLabClient
+	newOAuthGitLabClient = func(string, string, bool) (*gitlabclient.Client, error) {
+		return nil, errors.New("boom")
+	}
+	t.Cleanup(func() { newOAuthGitLabClient = orig })
+
+	rec := &fatalRecorder{TB: t}
+	client := NewOAuthTestClient(rec, http.NotFoundHandler())
+
+	if len(rec.fatals) != 1 {
+		t.Fatalf("Fatalf calls = %d, want 1: %v", len(rec.fatals), rec.fatals)
+	}
+	if !strings.Contains(rec.fatals[0], "boom") {
+		t.Errorf("fatal message = %q, want the constructor error named", rec.fatals[0])
+	}
+	if client != nil {
+		t.Errorf("client = %v, want nil after recorded fatal", client)
+	}
+}
+
 // TestNewTestClient_ConstructionFailureFatals verifies that NewTestClient
 // reports a fatal error when the underlying GitLab client constructor fails.
 // The constructor seam is stubbed because a live httptest URL can never make

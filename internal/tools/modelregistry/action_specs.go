@@ -22,7 +22,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 				"pull ml model binary",
 			},
 			Tags:           []string{"model_registry", "package", "download"},
-			Usage:          "Download a single artifact file from a model package version in the project ML model registry, returning the raw bytes base64-encoded.",
+			Usage:          "Download a single artifact file from a model package version in the project ML model registry, returning the raw bytes base64-encoded. Leave path empty for a file at the package root.",
 			RelatedActions: []string{"package.list", "release.link_create", "repository.raw_blob"},
 			ParameterGuidance: map[string]toolutil.ParameterGuidance{
 				"project_id": {
@@ -37,7 +37,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 				},
 				"path": {
 					SemanticRole:   "model_artifact_path",
-					ValueSource:    "Subdirectory path in the package where the artifact is stored.",
+					ValueSource:    "Directory in the package where the artifact is stored, such as models or sub/dir. Empty or . for a file at the package root.",
 					ExampleBinding: `params.path:"models"`,
 				},
 				"filename": {
@@ -51,7 +51,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			IndividualTool: toolutil.IndividualToolSpec{
 				Name:        "gitlab_download_ml_model_package",
 				Title:       toolutil.TitleFromName("gitlab_download_ml_model_package"),
-				Description: "Download one artifact file from a project ML model registry package version by project, model version, path, and filename. Returns: the artifact bytes base64-encoded in content_base64, plus project, model version, path, filename, and decoded size_bytes. See also: gitlab_package_list, gitlab_release_link_create, gitlab_repository_raw_blob.",
+				Description: "Download one artifact file from a project ML model registry package version by project, model version, path (empty for a file at the package root), and filename. Returns: the artifact bytes base64-encoded in content_base64, plus project, model version, path, filename, and decoded size_bytes. See also: gitlab_package_list, gitlab_release_link_create, gitlab_repository_raw_blob.",
 			},
 		}),
 	}

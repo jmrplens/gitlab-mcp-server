@@ -190,3 +190,19 @@ func TestPlacements_TwoParamsOnOneField_AreRequiredIfEitherIs(t *testing.T) {
 		t.Errorf("placements = %v, want project_id required by the path", got)
 	}
 }
+
+// TestPlacements_TwoRequiredParamsOnOneField_StayRequired verifies a field a
+// param placed as required stays required when a second param lands on it.
+// The test above cannot fix that order, since the map hands either param over
+// first; with both required, the second always meets a field already placed.
+func TestPlacements_TwoRequiredParamsOnOneField_StayRequired(t *testing.T) {
+	route := &apilive.Route{
+		Method: "GET",
+		Path:   apilive.EndpointPrefix + "/projects/:id",
+		Params: map[string]apilive.Param{"project_id": {Required: true}, "id": {}},
+	}
+	got := placements(route, nil, map[string]bool{})
+	if !maps.Equal(got, map[string]bool{"project_id": true}) {
+		t.Errorf("placements = %v, want project_id required once", got)
+	}
+}

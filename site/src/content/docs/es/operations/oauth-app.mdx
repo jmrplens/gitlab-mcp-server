@@ -264,6 +264,10 @@ Así que **una aplicación prerregistrada con `api` o `read_api` es obligatoria*
 
 GitLab tampoco implementa los Client ID Metadata Documents (CIMD), el mecanismo que la especificación de autorización de MCP prefiere ahora al DCR, al que declara obsoleto. Está registrado aguas arriba en [gitlab-org/gitlab#585069](https://gitlab.com/gitlab-org/gitlab/-/work_items/585069).
 
+## Una acción que un token de acceso OAuth no puede ejecutar
+
+La ruta de GitLab para los ficheros de un paquete de modelo de ML autentica un token de acceso personal o un token de job de CI enviado como Bearer, y nada más. Un token de acceso OAuth no es ninguno de los dos, así que `model_registry.download` lo rechaza con `401` en todos los proyectos, públicos incluidos, y la respuesta del servidor a ese rechazo nombra este límite. Un token de acceso personal enviado como `Authorization: Bearer` sí funciona ahí, en el modo OAuth como en cualquier otro. Ninguna otra acción llega a una ruta que GitLab declare así.
+
 ## Duración de los tokens y caché de identidades
 
 Hay dos duraciones en juego: la del token de GitLab y la de la caché de verificación de este servidor.

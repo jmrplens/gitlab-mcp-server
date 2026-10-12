@@ -1976,6 +1976,76 @@ func TestPoolClientConstructors_UseTheirAuthScheme(t *testing.T) {
 	}
 }
 
+// TestClient_BearerToken_SendsTheTokenAsBearerOnTheOneRequest verifies that
+// the request option [Client.BearerToken] puts the client's own token in
+// "Authorization: Bearer" on the request it is handed, whichever constructor
+// built the client, and that [Client.SendsBearer] says which scheme the
+// client sends on every other request.
+//
+// The option exists for a route GitLab authenticates through the Bearer
+// header alone (the ML model package files), where a personal access token
+// sent as PRIVATE-TOKEN leaves the request unauthenticated and a private
+// project answers 404. The legacy client keeps its PRIVATE-TOKEN beside it,
+// since the option adds a header rather than replacing the client's scheme;
+// the OAuth client already sends the same Bearer value, so the option changes
+// nothing there. A request made without the option is checked too, so the
+// option cannot pass by leaking onto every request of the client.
+func TestClient_BearerToken_SendsTheTokenAsBearerOnTheOneRequest(t *testing.T) {
+	const oauthToken = "gloas-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd"
+
+	tests := []struct {
+		name        string
+		newClient   func(string, string, bool) (*Client, error)
+		token       string
+		sendsBearer bool
+		wantPrivate bool
+	}{
+		{"legacy client adds Bearer beside PRIVATE-TOKEN", NewClientWithToken, testValidToken, false, true},
+		{"oauth client sends the Bearer it always sends", NewOAuthClientWithToken, oauthToken, true, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			type seen struct{ path, bearer, private string }
+			var requests []seen
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests = append(requests, seen{r.URL.Path, r.Header.Get("Authorization"), r.Header.Get("PRIVATE-TOKEN")})
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, `{}`)
+			}))
+			defer srv.Close()
+
+			client, err := tt.newClient(srv.URL, tt.token, false)
+			if err != nil {
+				t.Fatalf("constructor error: %v", err)
+			}
+			if got := client.SendsBearer(); got != tt.sendsBearer {
+				t.Errorf("SendsBearer() = %v, want %v", got, tt.sendsBearer)
+			}
+
+			for _, path := range []string{"projects/1/with-option", "projects/1/without-option"} {
+				options := []gl.RequestOptionFunc{gl.WithContext(t.Context())}
+				if strings.HasSuffix(path, "with-option") {
+					options = append(options, client.BearerToken())
+				}
+				req, reqErr := client.GL().NewRequest(http.MethodGet, path, nil, options)
+				if reqErr != nil {
+					t.Fatalf("NewRequest(%s) error: %v", path, reqErr)
+				}
+				if _, doErr := client.GL().Do(req, nil); doErr != nil {
+					t.Fatalf("Do(%s) error: %v", path, doErr)
+				}
+			}
+
+			if len(requests) != 2 {
+				t.Fatalf("requests = %+v, want the two the test sent", requests)
+			}
+			with, without := requests[0], requests[1]
+			assertAuthScheme(t, with.path, with.bearer, with.private, tt.token, true, tt.wantPrivate)
+			assertAuthScheme(t, without.path, without.bearer, without.private, tt.token, tt.sendsBearer, tt.wantPrivate)
+		})
+	}
+}
+
 // assertAuthScheme checks one probed request carried exactly the expected
 // authentication scheme and nothing else.
 func assertAuthScheme(t *testing.T, path, bearer, private, token string, wantBearer, wantPrivate bool) {

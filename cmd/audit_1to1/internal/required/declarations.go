@@ -133,14 +133,6 @@ func declaredRequiredness() map[declarationKey]declaration {
 				"(docs/development/upstream-bugs.md, entry 54)",
 		},
 
-		// A path segment client-go always writes.
-		{action: "model_registry.download", field: "path"}: {
-			DirectionGitLabOptional, categorySDKPositional,
-			"GitLab's route writes the path as an optional group, (*path/):file_name, and client-go's " +
-				"DownloadMachineLearningModelPackage writes the path argument between two slashes whatever its value, " +
-				"so the action cannot spell the route without it",
-		},
-
 		// Requirements GitLab states inside a given block.
 		{action: "repository.commit_comment_create", field: "line"}:      {DirectionGitLabRequires, categoryConditional, reasonCommitCommentLine},
 		{action: "repository.commit_comment_create", field: "line_type"}: {DirectionGitLabRequires, categoryConditional, reasonCommitCommentLine},

@@ -224,10 +224,29 @@ func NewTestClientUnderRoot(tb testing.TB, root string, handler http.Handler) *g
 	return newTestClientUnderRoot(tb, root, handler)
 }
 
-// newTestClientUnderRoot builds the server and the client of both
-// constructors; an empty root is [NewTestClient]'s instance at the host's
-// root, which http.StripPrefix leaves untouched.
-func newTestClientUnderRoot(tb testing.TB, root string, handler http.Handler) *gitlabclient.Client {
+// NewOAuthTestClient is [NewTestClient] for an oauth HTTP mode session: the
+// client is the one [gitlabclient.NewOAuthClientWithToken] builds for every
+// credential that mode admits, so "test-token" travels as "Authorization:
+// Bearer" and never as PRIVATE-TOKEN, and [gitlabclient.Client.SendsBearer]
+// is true. It is for a handler whose answer depends on which of the two
+// schemes its session sends. The validation and the recording are
+// [NewTestClient]'s; retries are the constructor's own and are not disabled,
+// so a test should not answer it with a status the client retries.
+func NewOAuthTestClient(tb testing.TB, handler http.Handler) *gitlabclient.Client {
+	tb.Helper()
+	srv := newTestServer(tb, "", handler)
+	client, err := newOAuthGitLabClient(srv.URL, "test-token", false)
+	if err != nil {
+		tb.Fatalf("failed to create test gitlab oauth client: %v", err)
+	}
+	return client
+}
+
+// newTestServer starts the mock GitLab every test client of this package
+// talks to, behind the request validation and the recording, with root taken
+// off each request first; an empty root is an instance at the host's root,
+// which http.StripPrefix leaves untouched.
+func newTestServer(tb testing.TB, root string, handler http.Handler) *httptest.Server {
 	tb.Helper()
 
 	// The two wrappers read the request body separately, and each puts it
@@ -237,6 +256,15 @@ func newTestClientUnderRoot(tb testing.TB, root string, handler http.Handler) *g
 	// twice costs nothing worth this coupling.
 	srv := httptest.NewServer(http.StripPrefix(root, recordingHandler(tb, validatingHandler(tb, handler))))
 	tb.Cleanup(srv.Close)
+	return srv
+}
+
+// newTestClientUnderRoot builds the server and the client of both
+// [NewTestClient] and [NewTestClientUnderRoot].
+func newTestClientUnderRoot(tb testing.TB, root string, handler http.Handler) *gitlabclient.Client {
+	tb.Helper()
+
+	srv := newTestServer(tb, root, handler)
 
 	cfg := &config.Config{
 		GitLabURL:      srv.URL + root,
@@ -258,6 +286,11 @@ func newTestClientUnderRoot(tb testing.TB, root string, handler http.Handler) *g
 // always a valid base URL, so [gitlabclient.NewClient] cannot be made to fail
 // from outside.
 var newGitLabClient = gitlabclient.NewClient
+
+// newOAuthGitLabClient is the client constructor used by
+// [NewOAuthTestClient], a package variable for the reason [newGitLabClient]
+// is one.
+var newOAuthGitLabClient = gitlabclient.NewOAuthClientWithToken
 
 // RespondJSON writes a JSON response with the given HTTP status and raw body.
 // It sets Content-Type to "application/json". body is written verbatim —

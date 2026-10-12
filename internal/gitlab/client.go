@@ -478,6 +478,33 @@ func (c *Client) GL() *gl.Client {
 	return c.inner
 }
 
+// BearerToken returns a request option that sends this client's token as
+// "Authorization: Bearer" on the one request it is handed.
+//
+// It is for a GitLab route that authenticates through that header alone. The
+// ML model package files route declares its token types sent through the
+// Bearer header and reads no other, so the PRIVATE-TOKEN header a personal
+// access token client sends everywhere else leaves the request
+// unauthenticated there, and a private project answers 404 (see "The ML model
+// package route accepts neither PRIVATE-TOKEN nor a GitLab OAuth access token"
+// in docs/development/upstream-bugs.md). The option adds the header beside the
+// client's own rather than replacing it, since client-go applies the client's
+// header after the request options and only when that header is absent; an
+// OAuth client already sends the same Bearer value, so on one it changes
+// nothing.
+func (c *Client) BearerToken() gl.RequestOptionFunc {
+	return gl.WithToken(gl.OAuthToken, c.token)
+}
+
+// SendsBearer reports whether every request this client makes carries its
+// token as "Authorization: Bearer", which is what the client of an oauth HTTP
+// mode session does ([NewOAuthClientWithToken]). A handler asks it when a
+// route refuses some Bearer tokens and not others, so that a refusal there can
+// name the cause GitLab's answer does not.
+func (c *Client) SendsBearer() bool {
+	return c.bearerAuth
+}
+
 // Initialize validates GitLab connectivity via a direct HTTP health check
 // (bypassing the SDK transport chain to avoid recursion). On success it
 // marks the client as initialized and returns the GitLab version string.

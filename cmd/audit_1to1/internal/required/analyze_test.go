@@ -240,6 +240,26 @@ func TestJudgeAll_DeclarationsAndAliasesAnswerOrGoStale(t *testing.T) {
 	}
 }
 
+// TestAliasesByAction_TwoAliasesOfOneAction_ShareOneMap verifies the declared
+// aliases are indexed under one map per action, so a second alias of an action
+// joins the first rather than replacing it. The tree declares two aliases for
+// feature_flags.feature_flag_update, but only the run over the tree reaches
+// them, and a stacked layer defers that run.
+func TestAliasesByAction_TwoAliasesOfOneAction_ShareOneMap(t *testing.T) {
+	aliased := map[aliasKey]pathAlias{
+		{action: "thing.update", param: "name"}: {Field: "thing"},
+		{action: "thing.update", param: "ref"}:  {Field: "branch"},
+		{action: "thing.list", param: "search"}: {Field: "query"},
+	}
+	want := map[string]map[string]string{
+		"thing.update": {"name": "thing", "ref": "branch"},
+		"thing.list":   {"search": "query"},
+	}
+	if got := aliasesByAction(aliased); !reflect.DeepEqual(got, want) {
+		t.Errorf("aliasesByAction = %v, want %v", got, want)
+	}
+}
+
 // TestSummaryClean_PassesOnlyWithNoFindingAndNothingStale verifies the gate
 // holds both what it fails on, each alone.
 func TestSummaryClean_PassesOnlyWithNoFindingAndNothingStale(t *testing.T) {
