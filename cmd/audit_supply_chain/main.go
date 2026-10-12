@@ -21,11 +21,19 @@ import (
 )
 
 // A pinned reference is owner/repo[/subpath]@<40 hex>, optionally followed by a
-// comment naming the human-readable version Dependabot keeps current.
+// comment naming the human-readable version Dependabot keeps current. A
+// docker:// image is pinned only by the sha256 digest of its manifest, after
+// its name and an optional tag, since a registry moves a tag as freely as a
+// repository moves a branch.
 var (
-	pinnedUses = regexp.MustCompile(`^[^@\s]+@[0-9a-f]{40}$`)
-	usesLine   = regexp.MustCompile(`^\s*(?:-\s*)?uses:\s*(\S+)`)
+	pinnedUses  = regexp.MustCompile(`^[^@\s]+@[0-9a-f]{40}$`)
+	pinnedImage = regexp.MustCompile(`^docker://[^@\s]+@sha256:[0-9a-f]{64}$`)
+	usesLine    = regexp.MustCompile(`^\s*(?:-\s*)?uses:\s*(\S+)`)
 )
+
+// dockerScheme is the prefix GitHub Actions reads a uses: of a container
+// image by.
+const dockerScheme = "docker://"
 
 // envExpression matches the one indirection a version pin is allowed to take:
 // a ${{ env.NAME }} reference into the workflow's top-level env block.
@@ -402,31 +410,117 @@ func documentMapping(node *yaml.Node) *yaml.Node {
 	return node
 }
 
+// usesReference is one uses: value rule 1 read, with the line its key sits on.
+type usesReference struct {
+	reference string
+	line      int
+}
+
 // checkPinnedUses reports every action reference that is a tag, a branch or a
-// short SHA rather than a full commit SHA.
+// short SHA rather than a full commit SHA, and every docker:// image named by
+// anything but its sha256 digest, in the order of the lines they sit on.
 //
-// It reads the file text rather than the parsed document on purpose: a uses:
-// line inside a comment, or in a region a parser skipped, is still a line a
-// future edit can uncomment, and the rule that catches a hijacked tag is worth
-// nothing if it can be hidden behind a #.
+// It reads every uses: twice. The file text is read line by line, which
+// reaches the lines the parser never does: those of a document after one that
+// does not parse, and a uses: line inside a block scalar, such as a script
+// that writes a workflow out. A line that opens with # is a comment and is not
+// read: it runs nothing, and the edit that uncomments it is judged then. The
+// parsed document is read too, every key named uses at any depth, because YAML
+// spells a step in ways no line pattern reads (a flow mapping, a quoted key, a
+// space before the colon, a value on the next line, an anchor or an alias) and
+// GitHub Actions runs each of them. A finding the text already made on a line
+// is not made again from the document.
 func checkPinnedUses(pathLabel, text string) []string {
-	var problems []string
+	var found []usesReference
+	reported := map[int]bool{}
 	for index, line := range splitLines(text) {
 		groups := usesLine.FindStringSubmatch(line)
 		if groups == nil {
 			continue
 		}
-		reference := strings.Trim(strings.TrimSpace(groups[1]), "\"'")
-		if strings.HasPrefix(reference, "./") || strings.HasPrefix(reference, "docker://") {
+		if strings.HasPrefix(groups[1], "*") || strings.HasPrefix(groups[1], "&") {
+			// An alias or an anchor is not the reference: the first word after
+			// the colon names one, and the parsed document resolves it.
 			continue
 		}
-		if !pinnedUses.MatchString(reference) {
-			problems = append(problems, fmt.Sprintf(
-				"%s:%d: uses: %s is not pinned to a 40-character commit SHA", pathLabel, index+1, reference,
-			))
+		reference := strings.Trim(strings.TrimSpace(groups[1]), "\"'")
+		if unpinnedReason(reference) != "" {
+			reported[index+1] = true
+			found = append(found, usesReference{reference: reference, line: index + 1})
 		}
 	}
+	for _, parsed := range parsedUses(text) {
+		if !reported[parsed.line] && unpinnedReason(parsed.reference) != "" {
+			found = append(found, parsed)
+		}
+	}
+	sort.SliceStable(found, func(i, j int) bool { return found[i].line < found[j].line })
+	problems := make([]string, 0, len(found))
+	for _, unpinned := range found {
+		problems = append(problems, fmt.Sprintf("%s:%d: uses: %s %s",
+			pathLabel, unpinned.line, unpinned.reference, unpinnedReason(unpinned.reference)))
+	}
 	return problems
+}
+
+// unpinnedReason says why rule 1 refuses a uses: value, and is empty for one
+// it accepts: a directory of the workspace, which this repository fixes, a
+// docker:// image named by its digest, and a remote reference pinned to a full
+// commit.
+func unpinnedReason(reference string) string {
+	switch {
+	case strings.HasPrefix(reference, "./"):
+		return ""
+	case strings.HasPrefix(reference, dockerScheme):
+		if pinnedImage.MatchString(reference) {
+			return ""
+		}
+		return "is not pinned to a sha256 image digest"
+	case pinnedUses.MatchString(reference):
+		return ""
+	default:
+		return "is not pinned to a 40-character commit SHA"
+	}
+}
+
+// parsedUses returns the scalar value of every key named uses in every
+// document of text, with the line of its key, an alias resolved to the value
+// it names. A document that does not parse ends the reading there, leaving
+// the rest to the line scan; the failure itself is reported where the
+// document's structure is read.
+func parsedUses(text string) []usesReference {
+	decoder := yaml.NewDecoder(strings.NewReader(text))
+	var found []usesReference
+	for {
+		var document yaml.Node
+		if decoder.Decode(&document) != nil {
+			return found
+		}
+		found = appendUsesKeys(found, &document)
+	}
+}
+
+// appendUsesKeys appends every uses key under node whose value is a scalar.
+// An anchored node is read where it is written; an alias is followed only as
+// the value of a uses key, so nothing is read twice. A mapping node's content
+// alternates key and value, which the decoder guarantees, so it is read in
+// pairs.
+func appendUsesKeys(found []usesReference, node *yaml.Node) []usesReference {
+	if node.Kind == yaml.MappingNode {
+		for pair := range slices.Chunk(node.Content, 2) {
+			key, value := pair[0], pair[1]
+			if value.Kind == yaml.AliasNode {
+				value = value.Alias
+			}
+			if key.Value == "uses" && value.Kind == yaml.ScalarNode {
+				found = append(found, usesReference{reference: value.Value, line: key.Line})
+			}
+		}
+	}
+	for _, child := range node.Content {
+		found = appendUsesKeys(found, child)
+	}
+	return found
 }
 
 // jobPermissions returns the effective permissions for a job: its own if

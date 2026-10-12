@@ -4,9 +4,16 @@
 // Five properties, each of which was false at some point and each of which is
 // invisible to every other gate in this repository:
 //
-//  1. Every uses: in .github/workflows is pinned to a 40-character commit SHA.
-//     A mutable tag is resolved by the runner at job start, so a hijacked v7 is
-//     consumed with no pull request, no cooldown and no review.
+//  1. Every uses: in .github/workflows is pinned to a 40-character commit SHA,
+//     and every docker:// image a step names to the sha256 digest of its
+//     manifest. A mutable tag is resolved by the runner at job start, so a
+//     hijacked v7 is consumed with no pull request, no cooldown and no review,
+//     and an image tag moves the same way. Every uses: is read as text, line
+//     by line, and again as YAML, every key named uses at any depth, so a
+//     step written as a flow mapping or a flow sequence, behind a quoted key,
+//     with a space before the colon, with its value on the next line or
+//     through an anchor or an alias is held to the rule as well as the block
+//     spelling is (issue 1320).
 //  2. A credentialed job runs no code resolved at run time. A job is
 //     credentialed when its permissions grant contents: write, id-token: write
 //     or packages: write, or when it reads a secret the secret table
@@ -116,9 +123,13 @@
 // Exits non-zero and prints one line per violation. -record prints how many
 // actions it recorded first, and writes nothing when a fetch fails.
 //
-// The auditor is deliberately split in two: pinning is decided on the raw file
-// text, so a uses: inside a comment or an unparsed region still counts, while
-// job structure comes from the parsed YAML.
+// The auditor deliberately reads pinning twice: on the raw file text, so a
+// uses: line the parser never reaches counts (one in a document after a
+// document that does not parse, or inside a block scalar), and on the parsed
+// YAML, so a spelling no line pattern reads counts too, a finding the text
+// made on a line not being made again from the document. A commented-out
+// uses: is read by neither: it runs nothing, and the edit that uncomments it
+// is judged then. Job structure comes from the parsed YAML alone.
 //
 // This began as a port of a Python auditor and still prints the findings that
 // auditor printed byte for byte, down to the repr() quoting three messages

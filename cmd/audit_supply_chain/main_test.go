@@ -24,6 +24,10 @@ import (
 // wherever a fixture needs a reference that is pinned the way the rule wants.
 const testSHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 
+// testDigest is an image manifest digest in the one spelling rule 1 accepts
+// for a docker:// step, the only reference to an image a registry cannot move.
+const testDigest = "sha256:" + "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
 // TestCheckPinnedUses_MutableReference_IsReported verifies that only
 // 40-character commit SHAs count as a pinned action.
 //
@@ -45,7 +49,12 @@ func TestCheckPinnedUses_MutableReference_IsReported(t *testing.T) {
 		{name: "commit sha with version comment", reference: "actions/checkout@" + testSHA + " # v7", wantOK: true},
 		{name: "subpath action pinned", reference: "github/codeql-action/init@" + testSHA + " # v4", wantOK: true},
 		{name: "local action", reference: "./.github/actions/thing", wantOK: true},
-		{name: "docker action", reference: "docker://alpine:3.22", wantOK: true},
+		{name: "docker image by tag", reference: "docker://alpine:3.22", wantOK: false},
+		{name: "docker image by latest", reference: "docker://alpine:latest", wantOK: false},
+		{name: "docker image by commit sha", reference: "docker://example/image@" + testSHA, wantOK: false},
+		{name: "docker image by short digest", reference: "docker://alpine@sha256:" + strings.Repeat("a", 63), wantOK: false},
+		{name: "docker image by digest", reference: "docker://alpine@" + testDigest, wantOK: true},
+		{name: "docker image by tag and digest", reference: "docker://ghcr.io/owner/image:3.22@" + testDigest, wantOK: true},
 		{name: "quoted mutable tag", reference: `"actions/checkout@v7"`, wantOK: false},
 	}
 
@@ -73,6 +82,210 @@ func TestCheckPinnedUses_UnpinnedReference_NamesLineAndReference(t *testing.T) {
 	want := ".github/workflows/ci.yml:4: uses: actions/checkout@v7 is not pinned to a 40-character commit SHA"
 	if len(problems) != 1 || problems[0] != want {
 		t.Errorf("checkPinnedUses() = %v, want exactly [%q]", problems, want)
+	}
+}
+
+// TestCheckPinnedUses_EverySpellingOfAUsesKey_IsRead verifies that rule 1
+// reads a uses: however YAML lets it be written, in a workflow and in a
+// composite action alike, and names the line the key sits on.
+//
+// Each of these spellings is an ordinary step or job to GitHub Actions and
+// was invisible to the line scan alone (issue 1320): a flow mapping, a quoted
+// key, a flow sequence, a space before the colon, a value on the next line and
+// a reusable workflow written as a flow mapping. A docker:// step is held to a
+// sha256 digest, since an image tag moves exactly as an action tag does.
+func TestCheckPinnedUses_EverySpellingOfAUsesKey_IsRead(t *testing.T) {
+	t.Parallel()
+
+	const tagged = " is not pinned to a 40-character commit SHA"
+	const image = " is not pinned to a sha256 image digest"
+	cases := []struct {
+		name  string
+		steps string
+		want  []string
+	}{
+		{
+			name:  "flow mapping",
+			steps: "      - { name: x, uses: example/tool@v4 }\n",
+			want:  []string{"4: uses: example/tool@v4" + tagged},
+		},
+		{
+			name:  "double-quoted key",
+			steps: "      - \"uses\": example/tool@main\n",
+			want:  []string{"4: uses: example/tool@main" + tagged},
+		},
+		{
+			name:  "single-quoted key",
+			steps: "      - 'uses': example/tool@main\n",
+			want:  []string{"4: uses: example/tool@main" + tagged},
+		},
+		{
+			name:  "space before the colon",
+			steps: "      - uses : example/tool@v4\n",
+			want:  []string{"4: uses: example/tool@v4" + tagged},
+		},
+		{
+			name:  "value on the next line",
+			steps: "      - uses:\n          example/tool@v4\n",
+			want:  []string{"4: uses: example/tool@v4" + tagged},
+		},
+		{
+			name:  "flow mappings, one of them pinned",
+			steps: "      - { uses: example/one@v4 }\n      - { uses: example/two@" + testSHA + " }\n      - { uses: example/three@main }\n",
+			want: []string{
+				"4: uses: example/one@v4" + tagged,
+				"6: uses: example/three@main" + tagged,
+			},
+		},
+		{
+			name:  "docker image by tag",
+			steps: "      - uses: docker://alpine:latest\n",
+			want:  []string{"4: uses: docker://alpine:latest" + image},
+		},
+		{
+			name:  "docker image by tag in a flow mapping",
+			steps: "      - { uses: 'docker://alpine:3' }\n",
+			want:  []string{"4: uses: docker://alpine:3" + image},
+		},
+		{
+			name:  "docker image by digest",
+			steps: "      - uses: docker://alpine@" + testDigest + "\n      - { uses: docker://alpine@" + testDigest + " }\n",
+		},
+		{
+			name:  "pinned flow mapping",
+			steps: "      - { name: x, uses: example/tool@" + testSHA + " }\n",
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name+" in a workflow", func(t *testing.T) {
+			t.Parallel()
+
+			text := "jobs:\n  a:\n    steps:\n" + testCase.steps
+			assertPinFindings(t, "wf.yml", text, testCase.want)
+		})
+		t.Run(testCase.name+" in a composite action", func(t *testing.T) {
+			t.Parallel()
+
+			text := "runs:\n  using: composite\n  steps:\n" + strings.ReplaceAll(testCase.steps, "      ", "    ")
+			assertPinFindings(t, "action.yml", text, testCase.want)
+		})
+	}
+}
+
+// TestCheckPinnedUses_StructuralSpellings_AreRead verifies the spellings whose
+// shape is the document's rather than one step's: a flow sequence of steps,
+// a reusable workflow named in a flow mapping or by a quoted key, and a uses:
+// whose value is an alias of a reference written elsewhere or carries an
+// anchor, each judged by the reference it resolves to rather than by the
+// alias or anchor written on its line.
+func TestCheckPinnedUses_StructuralSpellings_AreRead(t *testing.T) {
+	t.Parallel()
+
+	const tagged = " is not pinned to a 40-character commit SHA"
+	cases := []struct {
+		name string
+		text string
+		want []string
+	}{
+		{
+			name: "flow sequence of steps",
+			text: "jobs:\n  a:\n    steps: [ { uses: example/tool@v4 }, { run: make } ]\n",
+			want: []string{"3: uses: example/tool@v4" + tagged},
+		},
+		{
+			name: "flow sequence holding two references",
+			text: "jobs:\n  a:\n    steps: [ { uses: example/one@v4 }, { uses: example/two@main } ]\n",
+			want: []string{"3: uses: example/one@v4" + tagged, "3: uses: example/two@main" + tagged},
+		},
+		{
+			name: "composite steps as a flow sequence",
+			text: "runs: { using: composite, steps: [ { uses: example/tool@v4 } ] }\n",
+			want: []string{"1: uses: example/tool@v4" + tagged},
+		},
+		{
+			name: "reusable workflow as a flow mapping",
+			text: "jobs:\n  a: { uses: example/repo/.github/workflows/x.yml@main }\n",
+			want: []string{"2: uses: example/repo/.github/workflows/x.yml@main" + tagged},
+		},
+		{
+			name: "reusable workflow by a quoted key",
+			text: "jobs:\n  a:\n    \"uses\": example/repo/.github/workflows/x.yml@main\n",
+			want: []string{"3: uses: example/repo/.github/workflows/x.yml@main" + tagged},
+		},
+		{
+			name: "pinned reusable workflow as a flow mapping",
+			text: "jobs:\n  a: { uses: example/repo/.github/workflows/x.yml@" + testSHA + " }\n",
+		},
+		{
+			name: "alias in a block step judged by the reference it names",
+			text: "x-ref: &ref example/tool@v4\njobs:\n  a:\n    steps:\n      - uses: *ref\n",
+			want: []string{"5: uses: example/tool@v4" + tagged},
+		},
+		{
+			name: "alias in a block step naming a pinned reference",
+			text: "x-ref: &ref example/tool@" + testSHA + "\njobs:\n  a:\n    steps:\n      - uses: *ref\n",
+		},
+		{
+			name: "anchored reference in a block step judged by its value",
+			text: "jobs:\n  a:\n    steps:\n      - uses: &ref example/tool@v4\n",
+			want: []string{"4: uses: example/tool@v4" + tagged},
+		},
+		{
+			name: "anchored pinned reference in a block step",
+			text: "jobs:\n  a:\n    steps:\n      - uses: &ref example/tool@" + testSHA + "\n",
+		},
+		{
+			name: "alias in a flow mapping resolved",
+			text: "x-ref: &ref example/tool@v4\njobs:\n  a:\n    steps:\n      - { uses: *ref }\n",
+			want: []string{"5: uses: example/tool@v4" + tagged},
+		},
+		{
+			name: "second document",
+			text: "jobs: {}\n---\njobs:\n  a:\n    steps: [ { uses: example/tool@v4 } ]\n",
+			want: []string{"5: uses: example/tool@v4" + tagged},
+		},
+		{
+			name: "commented-out reference runs nothing and is not read",
+			text: "jobs:\n  a:\n    steps:\n      # - uses: example/tool@v4\n      #uses: example/other@v4\n      - run: make\n",
+		},
+		{
+			name: "reference inside a block scalar read by the line scan",
+			text: "jobs:\n  a:\n    steps:\n      - run: |\n          cat > wf.yml <<'EOF'\n          - uses: example/tool@v4\n          EOF\n",
+			want: []string{"6: uses: example/tool@v4" + tagged},
+		},
+		{
+			name: "mapping value is not a reference",
+			text: "jobs:\n  a:\n    steps:\n      - { with: { uses: { nested: true } }, run: make }\n",
+		},
+		{
+			name: "text that does not parse keeps the line scan",
+			text: "jobs:\n  a:\n    steps:\n      - uses: example/tool@v4\n      - { uses: example/other@v4\n",
+			want: []string{"4: uses: example/tool@v4" + tagged},
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			assertPinFindings(t, "wf.yml", testCase.text, testCase.want)
+		})
+	}
+}
+
+// assertPinFindings holds checkPinnedUses on text to exactly the findings
+// want names, each written as line and message after the path label.
+func assertPinFindings(t *testing.T, label, text string, want []string) {
+	t.Helper()
+
+	expected := make([]string, len(want))
+	for index, finding := range want {
+		expected[index] = label + ":" + finding
+	}
+	got := checkPinnedUses(label, text)
+	if strings.Join(got, "\n") != strings.Join(expected, "\n") {
+		t.Errorf("checkPinnedUses(%q) =\n%s\nwant\n%s", text, strings.Join(got, "\n"), strings.Join(expected, "\n"))
 	}
 }
 

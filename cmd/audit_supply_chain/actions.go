@@ -106,7 +106,7 @@ func (a *supplyChainAudit) checkJobActions(pathLabel, jobID string, job, doc map
 // this repository. A container is not opened, and a reference rule 1 refuses
 // is left to rule 1.
 func (a *supplyChainAudit) judgeUses(walk actionWalk, where, uses string, with map[string]any, writer string) []string {
-	if uses == "" || strings.HasPrefix(uses, "docker://") {
+	if uses == "" || strings.HasPrefix(uses, dockerScheme) {
 		return nil
 	}
 	if strings.HasPrefix(uses, "./") {

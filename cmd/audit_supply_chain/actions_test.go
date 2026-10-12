@@ -110,7 +110,8 @@ func TestAuditWorkflows_PinnedAction_IsUnjudgedWithoutARecord(t *testing.T) {
 // TestAuditWorkflows_NodeAndDockerActions_NeedOnlyTheirRecord verifies that an
 // action whose code is the bundle committed at its pin, or a container, is
 // recorded and read no further, so it passes with its metadata in the record
-// and nothing else.
+// and nothing else, and that a docker:// image named by its digest is not
+// opened either.
 func TestAuditWorkflows_NodeAndDockerActions_NeedOnlyTheirRecord(t *testing.T) {
 	t.Parallel()
 
@@ -122,8 +123,8 @@ func TestAuditWorkflows_NodeAndDockerActions_NeedOnlyTheirRecord(t *testing.T) {
     steps:
       - uses: `+attestKey+`
       - uses: `+dockerKey+`
-      - uses: docker://alpine:3
-      - uses: docker://example/image@`+testSHA+`
+      - uses: docker://alpine@`+testDigest+`
+      - uses: docker://example/image:3@`+testDigest+`
 `)
 	writeRecord(t, root, recordOf(map[string]string{
 		attestKey: "runs:\n  using: 'node24'\n  main: dist/index.js\n",
@@ -136,6 +137,86 @@ func TestAuditWorkflows_NodeAndDockerActions_NeedOnlyTheirRecord(t *testing.T) {
 	}
 	if len(problems) != 0 {
 		t.Errorf("auditWorkflows() = %#v, want no findings", problems)
+	}
+}
+
+// TestAuditWorkflows_UsesKeyInAnySpelling_IsHeldToRuleOne verifies, through
+// the audit of a tree, that a uses: written as a flow mapping, behind a quoted
+// key or as a docker:// image by tag is held to rule 1 in a workflow, in a
+// composite action of this repository and in a pinned composite action read
+// from the record (issue 1320). Each of them used to pass the gate.
+func TestAuditWorkflows_UsesKeyInAnySpelling_IsHeldToRuleOne(t *testing.T) {
+	t.Parallel()
+
+	const composite = `runs:
+  using: composite
+  steps:
+    - { name: x, uses: example/flow@v4 }
+    - "uses": example/quoted@main
+    - uses: docker://alpine:latest
+    - uses: docker://alpine@` + testDigest + `
+`
+	root := t.TempDir()
+	writeFile(t, root, ".github/actions/local/action.yml", composite)
+	writeWorkflow(t, root, "ci.yml", `jobs:
+  lint:
+    steps:
+      - { name: x, uses: example/flow@v4 }
+      - 'uses': example/quoted@main
+      - uses: docker://alpine:3
+      - uses: ./.github/actions/local
+      - uses: `+composedKey+`
+  reuse: { uses: example/repo/.github/workflows/x.yml@main }
+`)
+	writeRecord(t, root, recordOf(map[string]string{composedKey: composite}))
+
+	problems, err := auditTree(root, tables{})
+	if err != nil {
+		t.Fatalf("auditWorkflows: %v", err)
+	}
+	const tagged = " is not pinned to a 40-character commit SHA"
+	const image = " is not pinned to a sha256 image digest"
+	const workflow = ".github/workflows/ci.yml:"
+	want := []string{
+		workflow + "4: uses: example/flow@v4" + tagged,
+		workflow + "5: uses: example/quoted@main" + tagged,
+		workflow + "6: uses: docker://alpine:3" + image,
+		workflow + "9: uses: example/repo/.github/workflows/x.yml@main" + tagged,
+		".github/actions/local/action.yml:4: uses: example/flow@v4" + tagged,
+		".github/actions/local/action.yml:5: uses: example/quoted@main" + tagged,
+		".github/actions/local/action.yml:6: uses: docker://alpine:latest" + image,
+		composedKey + "/action.yml:4: uses: example/flow@v4" + tagged,
+		composedKey + "/action.yml:5: uses: example/quoted@main" + tagged,
+		composedKey + "/action.yml:6: uses: docker://alpine:latest" + image,
+	}
+	if strings.Join(problems, "\n") != strings.Join(want, "\n") {
+		t.Errorf("auditWorkflows() =\n%s\nwant\n%s", strings.Join(problems, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// TestAuditWorkflows_DockerImageOnACommitSHA_IsLeftToRuleOne verifies that a
+// docker:// reference is never opened as an action, even when what follows the
+// image is a 40-character hexadecimal string and so has the shape of a pinned
+// action. Rule 1 refuses it, since a commit SHA is not an image digest; opening
+// it as an action would add a second finding claiming it names no repository.
+func TestAuditWorkflows_DockerImageOnACommitSHA_IsLeftToRuleOne(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	writeWorkflow(t, root, "ci.yml", `jobs:
+  lint:
+    steps:
+      - uses: docker://example/image@`+testSHA+`
+`)
+	writeRecord(t, root, recordOf(nil))
+
+	problems, err := auditTree(root, tables{})
+	if err != nil {
+		t.Fatalf("auditWorkflows: %v", err)
+	}
+	want := ".github/workflows/ci.yml:4: uses: docker://example/image@" + testSHA + " is not pinned to a sha256 image digest"
+	if len(problems) != 1 || problems[0] != want {
+		t.Errorf("auditWorkflows() =\n%s\nwant only\n%s", strings.Join(problems, "\n"), want)
 	}
 }
 
