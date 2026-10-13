@@ -125,7 +125,7 @@ jobs:
             local method="$1"
             local url="$2"
             local payload="${3:-}"
-            local response
+            local body
             local args=(--fail-with-body --show-error --silent --connect-timeout 10 --max-time 60 --request "$method" --header "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}")
             # Only reads are retried: a write GitLab committed before the
             # connection dropped would be made twice.
@@ -135,11 +135,17 @@ jobs:
             if [ -n "$payload" ]; then
               args+=(--header "Content-Type: application/json" --data "$payload")
             fi
-            if ! response=$(curl "${args[@]}" "$url"); then
-              echo "::error::GitLab ${method} ${url#"$gitlab_api"} failed: ${response}" >&2
+            # The body goes to a file rather than stdout: curl empties a file
+            # before it retries, while on stdout a retried request leaves the
+            # failed attempt's body in front of the answer.
+            body=$(mktemp)
+            if ! curl "${args[@]}" --output "$body" "$url"; then
+              echo "::error::GitLab ${method} ${url#"$gitlab_api"} failed: $(cat "$body")" >&2
+              rm -f "$body"
               return 1
             fi
-            printf '%s' "$response"
+            cat "$body"
+            rm -f "$body"
           }
 
           request_json() {
@@ -170,18 +176,24 @@ jobs:
           # does not have it yet.
           current_release() {
             local tag_encoded="$1"
-            local response
+            local body
             local status
-            response=$(curl --silent --show-error --write-out '\n%{http_code}' \
+            # To a file for the reason gitlab_request gives.
+            body=$(mktemp)
+            status=$(curl --silent --show-error --output "$body" --write-out '%{http_code}' \
               --connect-timeout 10 --max-time 60 --retry 3 --retry-delay 5 \
               --header "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" \
               "${gitlab_api}/releases/${tag_encoded}")
-            status=${response##*$'\n'}
             case "$status" in
-              200) printf '%s' "${response%$'\n'*}" ;;
+              200) cat "$body" ;;
               404) ;;
-              *) echo "::error::Unexpected GitLab release lookup status ${status}: ${response%$'\n'*}" >&2; exit 1 ;;
+              *)
+                echo "::error::Unexpected GitLab release lookup status ${status}: $(cat "$body")" >&2
+                rm -f "$body"
+                exit 1
+                ;;
             esac
+            rm -f "$body"
           }
 
           sync_link() {
