@@ -14,7 +14,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -269,12 +271,20 @@ func TestSessionOwners_SendingMiddleware_DeliversOnlyToTheOwningSession(t *testi
 // produced: what the middleware returned, and what the handler behind it saw.
 type sendingOutcome struct {
 	result mcp.Result
-	// calls, forwarded and seenMeta are what the next handler observed. seenMeta
-	// is read inside the handler on purpose: the middleware puts the owner key
-	// back on the way out, so the stripped map only exists for that call.
-	calls     int
-	forwarded mcp.Request
-	seenMeta  mcp.Meta
+	// calls, forwarded, seenParams and seenMeta are what the next handler
+	// observed.
+	calls      int
+	forwarded  mcp.Request
+	seenParams *mcp.ResourceUpdatedNotificationParams
+	seenMeta   mcp.Meta
+	// handedMeta is the `_meta` of the params the middleware was handed, read
+	// inside the next handler, which is while the send is in flight. On the
+	// legacy path the SDK hands one params value to every subscriber, and
+	// go-sdk's main after v1.8.0 sends to each on a goroutine of its own, so
+	// whatever the middleware wrote there is what another session's send
+	// reads at that moment; a write put back afterwards is invisible to any
+	// check made once the middleware has returned.
+	handedMeta mcp.Meta
 }
 
 // runSendingMiddleware drives one notification through the filter.
@@ -282,11 +292,16 @@ func runSendingMiddleware(t *testing.T, owners *sessionOwners, req mcp.Request) 
 	t.Helper()
 
 	var got sendingOutcome
+	handed, _ := req.GetParams().(*mcp.ResourceUpdatedNotificationParams)
 	handler := owners.sendingMiddleware(func(_ context.Context, _ string, sent mcp.Request) (mcp.Result, error) {
 		got.calls++
 		got.forwarded = sent
 		if params, ok := sent.GetParams().(*mcp.ResourceUpdatedNotificationParams); ok {
+			got.seenParams = params
 			got.seenMeta = params.Meta
+		}
+		if handed != nil {
+			got.handedMeta = handed.Meta
 		}
 		return delivered, nil
 	})
@@ -311,10 +326,11 @@ func assertNotDelivered(t *testing.T, got sendingOutcome, why string) {
 	}
 }
 
-// assertDelivered checks a notification the filter passed on: the request and
-// the result travel through untouched, the private owner tag does not reach the
-// handler, the SDK's own metadata does, and the tag is back on the params
-// afterwards for the next subscriber's turn.
+// assertDelivered checks a notification the filter passed on: the result
+// travels through untouched; what reaches the handler is a request of the same
+// shape for the same session, carrying a copy of the params with the same URI,
+// the SDK's own metadata and no private owner tag; and the params the
+// middleware was handed are never written to, during the send or after it.
 func assertDelivered(
 	t *testing.T,
 	got sendingOutcome,
@@ -330,8 +346,24 @@ func assertDelivered(
 	if got.result != delivered {
 		t.Errorf("result = %v, want the next handler's own; the middleware swallowed it", got.result)
 	}
-	if got.forwarded != req {
-		t.Error("the middleware forwarded a request other than the one it was given")
+	// Each delivery path's request is rebuilt as itself, so whatever the SDK
+	// does with it after the middleware is what it would have done with the
+	// request it handed in.
+	if gotType, wantType := reflect.TypeOf(got.forwarded), reflect.TypeOf(req); gotType != wantType {
+		t.Errorf("the middleware forwarded a %v, want a %v like the one it was given", gotType, wantType)
+	}
+	if got.forwarded.GetSession() != req.GetSession() {
+		t.Error("the middleware forwarded the notification to another session than the one it was given")
+	}
+	if got.seenParams == nil {
+		t.Fatal("the forwarded request carries no resource-updated params")
+	}
+	if got.seenParams == params {
+		t.Error("the middleware forwarded the params it was handed; " +
+			"the legacy path shares that value with every other subscriber's send")
+	}
+	if got.seenParams.URI != uri {
+		t.Errorf("uri = %q, want %q carried through unchanged", got.seenParams.URI, uri)
 	}
 	if _, leaked := got.seenMeta[ownerMetaKey]; leaked {
 		t.Error("the private owner tag reached the client; " +
@@ -340,25 +372,32 @@ func assertDelivered(
 	if _, kept := got.seenMeta[sdkSubscriptionIDKey]; !kept {
 		t.Error("stripping the owner tag also dropped the SDK's own metadata")
 	}
-	if params.URI != uri {
-		t.Errorf("uri = %q, want %q carried through unchanged", params.URI, uri)
+	// The params handed in keep the tag while the send is in flight and after
+	// it. Another subscriber's send reads the same value on the legacy path,
+	// so a stripped tag there makes that session look untagged and be dropped.
+	if _, kept := got.handedMeta[ownerMetaKey]; !kept {
+		t.Error("the middleware wrote to the params it was handed during the send; " +
+			"a concurrent send to another session of the same credential reads them as untagged")
 	}
-	// The key goes back on the way out. On the legacy path one params value is
-	// handed to every subscriber in turn, so a key left stripped would make the
-	// second session onwards look untagged and be dropped.
-	if _, restored := params.Meta[ownerMetaKey]; !restored {
-		t.Error("the owner tag was not restored after the send; " +
-			"every later subscriber of this notification would look untagged")
+	if _, kept := params.Meta[ownerMetaKey]; !kept {
+		t.Error("the params handed in lost their owner tag")
 	}
 }
 
 // TestSessionOwners_SendingMiddleware_OneNotificationReachesEverySessionOfItsOwner
-// is the sharpest form of the restore: the SAME params value delivered to two
-// sessions of one credential in sequence, which is exactly what the legacy path
-// does, since it does not copy the params at all.
+// hands the SAME params value to two sessions of one credential, which is what
+// the legacy path does, since it does not copy the params at all, and checks
+// that the middleware leaves that value exactly as it found it: the owner tag
+// is still on it while each send is in flight, and the map is the same map.
 //
-// A middleware that stripped the owner key and left it stripped passes every
-// single-session test and drops the second session onwards here.
+// A middleware that stripped the owner key and left it stripped drops the
+// second session onwards. One that stripped it and put it back after the send
+// passes as long as the SDK delivers one session at a time, and loses
+// notifications once it delivers to several at once, which go-sdk's main after
+// v1.8.0 does: the second send then reads the params while the first has them
+// stripped. Checking the params inside the handler is what tells the two apart
+// without a concurrent SDK, and [TestSessionOwners_SendingMiddleware_RealServer_EveryLegacySessionOfAnOwnerReceivesEveryNotification]
+// drives the real one.
 func TestSessionOwners_SendingMiddleware_OneNotificationReachesEverySessionOfItsOwner(t *testing.T) {
 	const owner = "owner-mine"
 	owners := newSessionOwners(false)
@@ -370,16 +409,18 @@ func TestSessionOwners_SendingMiddleware_OneNotificationReachesEverySessionOfIts
 	params := updateParams(owner, "gitlab://project/42/pipeline/99")
 	originalMeta := params.Meta
 
-	var sends int
+	var sends, strippedWhileSending int
 	handler := owners.sendingMiddleware(func(context.Context, string, mcp.Request) (mcp.Result, error) {
 		sends++
+		if params.Meta[ownerMetaKey] != owner {
+			strippedWhileSending++
+		}
 		return delivered, nil
 	})
 
-	// Sequential, as ResourceUpdated delivers: one send per subscribed session,
-	// each carrying the same params. Written out rather than looped, because
-	// these are two dependent steps and not two cases: the second send is the
-	// assertion, and it only means anything after the first has been made.
+	// Written out rather than looped, because these are two dependent steps
+	// and not two cases: the second send is the assertion, and it only means
+	// anything after the first has been made.
 	send := func(session *mcp.ServerSession) {
 		t.Helper()
 		req := &mcp.ServerRequest[*mcp.ResourceUpdatedNotificationParams]{Session: session, Params: params}
@@ -392,14 +433,146 @@ func TestSessionOwners_SendingMiddleware_OneNotificationReachesEverySessionOfIts
 
 	if sends != 2 {
 		t.Errorf("%d of 2 sessions of one credential received the notification; "+
-			"the owner tag was not put back between sends", sends)
+			"the owner tag was missing from the shared params at the second send", sends)
+	}
+	if strippedWhileSending != 0 {
+		t.Errorf("the params handed in had no owner tag during %d of %d sends; "+
+			"a concurrent send to another session would read them as untagged and drop it",
+			strippedWhileSending, sends)
 	}
 	if params.Meta[ownerMetaKey] != owner {
-		t.Errorf("the tag left on the params is %v, want %q restored", params.Meta[ownerMetaKey], owner)
+		t.Errorf("the tag left on the params is %v, want %q untouched", params.Meta[ownerMetaKey], owner)
+	}
+	if reflect.ValueOf(params.Meta).UnsafePointer() != reflect.ValueOf(originalMeta).UnsafePointer() {
+		t.Error("the params handed in carry another _meta map than the one they arrived with")
 	}
 	if _, mutated := originalMeta[ownerMetaKey]; !mutated {
 		t.Error("the caller's own _meta map was mutated; the SDK shares it between per-session copies " +
 			"and stamps its own subscription id into it")
+	}
+}
+
+// TestSessionOwners_SendingMiddleware_AnUnknownRequestShape_IsDropped covers
+// the request the filter cannot rebuild. It forwards a new request of the
+// shape it was handed, so a notification arriving in a third shape, which no
+// delivery path of the SDK this server builds against produces, is dropped
+// rather than forwarded as it came: forwarding it would hand the client the
+// private owner tag, or write the stripped copy into params the SDK shares.
+func TestSessionOwners_SendingMiddleware_AnUnknownRequestShape_IsDropped(t *testing.T) {
+	const owner = "owner-mine"
+	owners := newSessionOwners(false)
+	session, _ := connectedSessions(t)
+	owners.record(session, owner)
+
+	params := updateParams(owner, "gitlab://project/42/pipeline/99")
+	req := &mcp.ServerRequest[unfamiliarParams]{Session: session, Params: params}
+
+	got := runSendingMiddleware(t, owners, req)
+
+	assertNotDelivered(t, got, "a notification in a request shape the filter does not rebuild was delivered")
+	if params.Meta[ownerMetaKey] != owner {
+		t.Error("the params of a dropped notification were written to")
+	}
+}
+
+// unfamiliarParams instantiates the SDK's request type with a params type of
+// its own, which makes a request shape neither delivery path produces.
+type unfamiliarParams interface{ mcp.Params }
+
+// TestSessionOwners_SendingMiddleware_RealServer_EveryLegacySessionOfAnOwnerReceivesEveryNotification
+// drives the filter through a real server, with several sessions of one
+// credential subscribed to one URI over resources/subscribe on protocol
+// 2025-11-25, which is the delivery path that hands every session the same
+// params value.
+//
+// The unit tests above call the middleware by hand, one send at a time, which
+// is how go-sdk v1.8.0 delivers. go-sdk's main after v1.8.0 sends to each
+// session on a goroutine of its own, and a middleware that wrote a stripped
+// `_meta` into the shared params and put it back after its send lost about
+// four notifications in ten with two sessions, and with eight sent the owner
+// tag to a client, in an ordinary run. This test is what fails on the go-sdk
+// bump that brings that change if the middleware ever writes to the params
+// again, since the race detector does not run on a pull request.
+func TestSessionOwners_SendingMiddleware_RealServer_EveryLegacySessionOfAnOwnerReceivesEveryNotification(t *testing.T) {
+	const (
+		owner    = "owner-mine"
+		uri      = "gitlab://project/42/pipeline/99"
+		sessions = 4
+		rounds   = 100
+	)
+	ctx := t.Context()
+	owners := newSessionOwners(false)
+	server := mcp.NewServer(&mcp.Implementation{Name: "host", Version: "1"}, &mcp.ServerOptions{
+		SubscribeHandler: func(_ context.Context, req *mcp.SubscribeRequest) error {
+			owners.record(req.Session, owner)
+			return nil
+		},
+		UnsubscribeHandler: func(context.Context, *mcp.UnsubscribeRequest) error { return nil },
+	})
+	server.AddSendingMiddleware(owners.sendingMiddleware)
+
+	// One count per session, because the promise is per session: a delivery
+	// that sent some sessions a notification twice and others not at all
+	// would reach the right total.
+	var received [sessions]atomic.Int64
+	var complete, leaked atomic.Int64
+	all := make(chan struct{})
+	var once sync.Once
+	for i := range sessions {
+		st, ct := mcp.NewInMemoryTransports()
+		if _, err := server.Connect(ctx, st, nil); err != nil {
+			t.Fatalf("server connect: %v", err)
+		}
+		client := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "1"}, &mcp.ClientOptions{
+			ResourceUpdatedHandler: func(_ context.Context, req *mcp.ResourceUpdatedNotificationRequest) {
+				if _, ok := req.Params.Meta[ownerMetaKey]; ok {
+					leaked.Add(1)
+				}
+				if received[i].Add(1) == rounds && complete.Add(1) == sessions {
+					once.Do(func() { close(all) })
+				}
+			},
+		})
+		session, err := client.Connect(ctx, ct, &mcp.ClientSessionOptions{ProtocolVersion: "2025-11-25"})
+		if err != nil {
+			t.Fatalf("client connect: %v", err)
+		}
+		t.Cleanup(func() { _ = session.Close() })
+		// resources/subscribe is answered after the SDK has filed the
+		// subscription, so every session is in its table once this returns.
+		if subErr := session.Subscribe(ctx, &mcp.SubscribeParams{URI: uri}); subErr != nil {
+			t.Fatalf("Subscribe: %v", subErr)
+		}
+	}
+
+	for range rounds {
+		if err := server.ResourceUpdated(ctx, updateParams(owner, uri)); err != nil {
+			t.Fatalf("ResourceUpdated: %v", err)
+		}
+	}
+
+	counts := func() []int64 {
+		got := make([]int64, sessions)
+		for i := range received {
+			got[i] = received[i].Load()
+		}
+		return got
+	}
+	select {
+	case <-all:
+	case <-time.After(30 * time.Second):
+		t.Fatalf("the %d sessions of one credential received %v of %d notifications each, %d of them carrying the owner tag",
+			sessions, counts(), rounds, leaked.Load())
+	}
+	// A count past rounds after the last session completed is a duplicate,
+	// which the wait above cannot see.
+	for i, n := range counts() {
+		if n != rounds {
+			t.Errorf("session %d received %d notifications, want %d", i, n, rounds)
+		}
+	}
+	if n := leaked.Load(); n != 0 {
+		t.Errorf("the private owner tag reached a client %d time(s)", n)
 	}
 }
 

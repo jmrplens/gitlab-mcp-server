@@ -7355,8 +7355,23 @@ reach it: the header check rejects a `_meta`-only version with `-32020`, and
 - **Workaround**: yes. `sessionOwners.sendingMiddleware` in
   `cmd/server/session_owner.go` stamps the owning pool entry into the
   notification's `_meta`, filters delivery per session on the way out, and
-  strips the private key from a clone before the frame is written. It retires
-  the day either fix below lands.
+  sends a new request carrying a copy of the params with the private key
+  removed, never writing to the params the SDK handed it. Until 2026-10-13
+  (issue 1359) it wrote a stripped map into the shared params and put the
+  original back after the send, which was safe only while the SDK delivered to
+  one session at a time;
+  [modelcontextprotocol/go-sdk#1228](https://github.com/modelcontextprotocol/go-sdk/pull/1228)
+  (merged 2026-09-21, in no tag yet) delivers to every session on its own
+  goroutine and hands the legacy path's sessions one shared params value.
+  Against go-sdk main, eight 2025-11-25 sessions of one credential subscribed
+  to one URI received between 267 and 297 of 1600 notifications a run through
+  that version, the owner key reaching a client between 1 and 15 times a run
+  (issue 1359); four such sessions received between 112 and 125 of 400 in
+  five runs of
+  `TestSessionOwners_SendingMiddleware_RealServer_EveryLegacySessionOfAnOwnerReceivesEveryNotification`,
+  none of them more than 69 of its 100, and the test passes against both
+  v1.8.0 and that main with the new version, under the race detector too. It
+  retires the day either fix below lands.
 
 **What**: `Server.ResourceUpdated(ctx, params)` is the only exported delivery
 for `notifications/resources/updated`, and it notifies **every** session
@@ -7378,7 +7393,8 @@ told the resource changed by somebody else's polling.
 id from the table, so a caller can deliver to the sessions it knows about. Or
 propagating the caller's context to the sending middleware: both delivery paths
 build a fresh `context.Background()` with a ten second timeout
-(`notifySessions` in `shared.go`, `notifySubscribedSessions` in `server.go`), so
+(`notifySessions` in `shared.go`, `notifySubscribedSessions` in `server.go`),
+one per session since modelcontextprotocol/go-sdk#1228 on main, so
 nothing a caller of `ResourceUpdated` puts on its context can reach the
 middleware, which is why the owner has to travel in the params instead.
 

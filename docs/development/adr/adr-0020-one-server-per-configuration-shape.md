@@ -172,8 +172,8 @@ when its subscribe arrived, so none of the three absences can happen in a
 correct wiring; treating any of them as "deliver anyway" would turn one wiring
 mistake into cross-tenant delivery.
 
-It reads the params rather than the request, and it puts the key back after the
-send. Both are forced by how the SDK delivers. The two paths instantiate the
+It reads the params rather than the request, and it never writes to the params
+it is handed. Both are forced by how the SDK delivers. The two paths instantiate the
 request generic differently: the legacy one passes concrete params and produces
 a `*mcp.ServerRequest[*mcp.ResourceUpdatedNotificationParams]`, while the
 2026-07-28 one passes a `func() Params` and produces a
@@ -184,12 +184,16 @@ delivered, and the server logged that it had sent them. The params interface is
 the same on both paths and the concrete params behind it are always the same
 type, so that is what the decision reads. And because
 `notifySubscribedSessions` shallow-copies the params per session while the
-legacy path hands one value to every subscriber in turn, leaving the key
-stripped would make every session after the first look untagged; restoring it
-after the send is safe because delivery within one `ResourceUpdated` call is
-sequential, and because each call builds its own params and its own `_meta`. The
-map itself is never mutated: the stripped `_meta` is a new map, which matters
-because the per-session copies share one and the SDK stamps its own subscription
+legacy path hands one value to every subscriber, the middleware sends a new
+request of the shape it was handed, for the same session, carrying a copy of the
+params whose `_meta` lacks the key, and drops a request of any other shape. It
+first stripped the key in place and put it back after the send, which held only
+while delivery within one `ResourceUpdated` call was sequential: go-sdk v1.8.0
+delivers one session at a time, and go-sdk's main after it sends to each session
+on a goroutine of its own, where that design lost notifications and sent the key
+to clients (row 23 of `docs/development/upstream-bugs.md`). The map itself is
+never mutated: the stripped `_meta` is a new map, which matters because on
+v1.8.0 the per-session copies share one and the SDK stamps its own subscription
 id into it.
 
 ### Session ownership is recorded, not derived
@@ -311,9 +315,10 @@ writing.
   ten second timeout, created inside those two functions. Nothing the caller of
   `ResourceUpdated` puts on its own context reaches it, which is why the owner
   travels in the params.
-- `notifySubscribedSessions` shallow-copies the params per session (`p :=
-  *params`) and `injectMetaSubscriptionID` writes into the `Meta` map those
-  copies share, so a middleware must never mutate that map.
+- On v1.8.0, `notifySubscribedSessions` shallow-copies the params per session
+  (`p := *params`) and `injectMetaSubscriptionID` writes into the `Meta` map
+  those copies share, so a middleware must never mutate that map. The legacy
+  `notifySessions` does not copy them at all.
 - `ServerOptions.GetSessionID` takes no request, so a shared server cannot mint
   per-credential session ids.
 

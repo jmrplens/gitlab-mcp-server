@@ -364,10 +364,10 @@ const methodResourcesSubscribe = "resources/subscribe"
 // send one either.
 //
 // Both of the SDK's delivery paths do run the notification through the server's
-// sending middleware, one session at a time, with the session and the params in
-// hand: the legacy path builds the request per session in notifySessions, and
-// the 2026-07-28 path does the same in notifySubscribedSessions after stamping
-// the subscription ID. So this is the one point at which "who is this for" can
+// sending middleware once per session, with the session and the params in hand:
+// the legacy path builds the request per session in notifySessions, and the
+// 2026-07-28 path does the same in notifySubscribedSessions after stamping the
+// subscription ID. So this is the one point at which "who is this for" can
 // still be asked.
 //
 // The channel is the params, and it has to be: both of those functions create a
@@ -397,19 +397,30 @@ const methodResourcesSubscribe = "resources/subscribe"
 // are always `*mcp.ResourceUpdatedNotificationParams`, so that is what this
 // reads.
 //
-// # Why it puts the key back
+// # Why it sends a copy and never writes to the params
 //
 // notifySubscribedSessions shallow-copies the params per session and the legacy
 // path does not copy at all, so on the legacy path one params value is handed to
-// every subscriber in turn. Stripping the owner key and leaving it stripped
-// would make the second session onwards look untagged, and they would all be
-// dropped. Restoring it after the send is safe because delivery is sequential
-// within one ResourceUpdated call, and because each call builds its own params
-// and its own `_meta` map, so two watchers of the same URI never share one.
+// every subscriber. go-sdk v1.8.0 hands it to one session at a time; go-sdk's
+// main after v1.8.0 sends to each session on a goroutine of its own, with that
+// one value shared between them. A middleware that wrote a stripped `_meta`
+// into those params, even one that put it back after its send, would have
+// another session's send read them stripped and drop the notification as
+// untagged, or serialize them after another send had put the key back and
+// hand the owner key to a client.
 //
-// The map itself is never mutated: metaWithout returns a new one, and the
-// `_meta` map really is shared between the per-session copies, which is also
-// where the SDK stamps its own subscription id.
+// So the params handed in are only read. The notification goes on as a new
+// request of the same shape, for the same session, carrying a copy of the
+// params whose `_meta` is a new map without the owner key. The request is
+// rebuilt as the type the delivery path built so that every sending
+// middleware after this one, and the SDK's own handler, see it in the shape
+// they would have seen without the filter. A request of any other shape is
+// dropped, since there is no copy of it to send and forwarding the one handed
+// in would carry the key.
+//
+// The `_meta` map is never mutated either: metaWithout returns a new one. On
+// go-sdk v1.8.0 that map is shared between the per-session copies of the
+// 2026-07-28 path and is where the SDK stamps its own subscription id.
 func (o *sessionOwners) sendingMiddleware(next mcp.MethodHandler) mcp.MethodHandler {
 	return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 		if method != notificationResourceUpdated || req == nil {
@@ -431,10 +442,20 @@ func (o *sessionOwners) sendingMiddleware(next mcp.MethodHandler) mcp.MethodHand
 			return nil, nil
 		}
 
-		original := update.Meta
-		update.Meta = metaWithout(original, ownerMetaKey)
-		defer func() { update.Meta = original }()
-		return next(ctx, method, req)
+		stripped := *update
+		stripped.Meta = metaWithout(update.Meta, ownerMetaKey)
+		switch r := req.(type) {
+		case *mcp.ServerRequest[*mcp.ResourceUpdatedNotificationParams]:
+			return next(ctx, method, &mcp.ServerRequest[*mcp.ResourceUpdatedNotificationParams]{
+				Session: r.Session, Params: &stripped, Extra: r.Extra,
+			})
+		case *mcp.ServerRequest[mcp.Params]:
+			return next(ctx, method, &mcp.ServerRequest[mcp.Params]{
+				Session: r.Session, Params: &stripped, Extra: r.Extra,
+			})
+		}
+		o.dropped(ctx, update.URI, "the notification arrived in a request shape this filter does not rebuild")
+		return nil, nil
 	}
 }
 

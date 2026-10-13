@@ -525,11 +525,15 @@ Two details of that middleware are load-bearing and neither is obvious. It reads
 the **params**, not the request: the SDK's two delivery paths instantiate the
 request generic differently, so a type assertion on the request matches one and
 drops the other in silence, which is precisely what the first version did. And
-it restores the key after the send, because the legacy path hands one params
-value to every subscriber in turn and a key stripped for good would make every
-session after the first look untagged. The `_meta` map is never written to: the
-stripped one is a new map, and the shared one is where the SDK stamps its own
-subscription id.
+it never writes to the params it is handed, because the legacy path hands one
+params value to every subscriber: it forwards a new request of the same shape
+carrying a copy of the params without the key. It used to strip the key in place
+and restore it after the send, which held only while the SDK delivered to one
+session at a time; go-sdk's main after v1.8.0 sends to each session on a
+goroutine of its own, and that design then lost notifications and sent the key
+to clients (row 23 of `docs/development/upstream-bugs.md`). The `_meta` map is
+never written to either: the stripped one is a new map, and on v1.8.0 the shared
+one is where the SDK stamps its own subscription id.
 
 The invariant, stated so it can be tested: two credentials listening to the same
 resource URI each receive exactly their own watcher's notifications, with their
