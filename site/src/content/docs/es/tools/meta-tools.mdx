@@ -513,4 +513,6 @@ El selector booleano `META_TOOLS` al que sustituyó `GITLAB_MCP_TOOL_SURFACE` se
 
 Cada acción de meta-herramienta lleva metadatos de descubrimiento (alias, uso, guía de parámetros, acciones relacionadas) que ayudan a los modelos a elegir la acción correcta y a dar forma a los parámetros.
 
+El uso y la guía de parámetros se escriben una vez para todas las superficies y se sirven en la descripción de cada meta-herramienta, así que nombran otras acciones por su ID canónico, como en `Use issue.get for one of them`. El argumento `action` de una meta-herramienta rechaza un ID con punto, y la cabecera de la descripción dice cómo llamar a uno: la acción que sigue al punto en la herramienta `gitlab_<domain>`, así que `issue.get` es `{"action":"get"}` en `gitlab_issue`, o esa misma herramienta cuando no recibe acción, como `discover_project.resolve` es `gitlab_discover_project`. Los próximos pasos de un resultado no necesitan esa regla, porque la superficie meta los reescribe en esa llamada antes de enviar el resultado ([Formato de salida](/gitlab-mcp-server/es/reference/output-format/)).
+
 <FAQ />

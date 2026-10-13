@@ -2028,6 +2028,49 @@ func TestMetaToolDescriptionPrefix_IncludesActionGuidance(t *testing.T) {
 	}
 }
 
+// TestMetaToolDescriptionPrefix_SaysHowAGuidanceIDIsCalled verifies that a
+// meta tool whose description carries guidance says how the canonical IDs
+// that guidance names are called on this surface (issue 1325): the meta tool's
+// action argument takes the part after the dot, on the tool the part before it
+// names, and refuses the dotted ID itself, while an ID whose tool takes no
+// action, as discover_project.resolve's does not, names that tool itself.
+// Parameter guidance names IDs too, so it carries the sentence on its own. A
+// tool with no guidance names no ID and carries no such sentence. The header
+// still strips whole.
+func TestMetaToolDescriptionPrefix_SaysHowAGuidanceIDIsCalled(t *testing.T) {
+	const rule = `A domain.action ID below is the action after the dot on the gitlab_<domain> tool, ` +
+		`or that tool itself where it takes no action, so issue.list is {"action":"list"} on this one.`
+	cases := []struct {
+		name   string
+		routes ActionMap
+	}{
+		{name: "action guidance", routes: ActionMap{
+			"list": Route(nil).WithUsage("List issues. Use issue.get for one of them."),
+			"get":  Route(nil),
+		}},
+		{name: "parameter guidance alone", routes: ActionMap{
+			"list": Route(nil).WithParameterGuidance(map[string]ParameterGuidance{
+				"project_id": {CommonConfusions: []string{"Do not call discover_project.resolve for a path."}},
+			}),
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := MetaToolDescriptionPrefix("gitlab_issue", tc.routes)
+			if !strings.Contains(got, "Action params schema: gitlab://tools/gitlab_issue.<action>. "+rule+"\n") {
+				t.Errorf("prefix = %q, want the schema line to carry %q", got, rule)
+			}
+			if stripped := strippedWithin(t, got+"Manage issues."); stripped != "Manage issues." {
+				t.Errorf("StripMetaToolDescriptionPrefix() = %q, want the base description", stripped)
+			}
+		})
+	}
+
+	if bare := MetaToolDescriptionPrefix("gitlab_issue", ActionMap{"list": Route(nil)}); strings.Contains(bare, "domain.action") {
+		t.Errorf("prefix without guidance = %q, want no ID sentence", bare)
+	}
+}
+
 // strippedWithin returns StripMetaToolDescriptionPrefix(description), failing
 // the test rather than waiting for ever when the scan does not come back.
 //

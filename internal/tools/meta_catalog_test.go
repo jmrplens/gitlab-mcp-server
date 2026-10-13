@@ -2,11 +2,13 @@ package tools
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -205,4 +207,78 @@ func TestRegisterMetaCatalog_NextSteps_NameTheMetaCall(t *testing.T) {
 			}
 		})
 	}
+}
+
+// guidanceIDExample reads the example ID out of the sentence a meta tool's
+// header carries about the IDs its guidance names, "so issue.list is ...".
+var guidanceIDExample = regexp.MustCompile(`so ([a-z0-9_]+\.[a-z0-9_]+) is \{"action":`)
+
+// TestMetaToolDescriptions_GuidanceIDs_AreCalledAsTheHeaderSays holds the
+// sentence [toolutil.MetaToolDescriptionPrefix] puts on a meta tool with
+// guidance to the catalog it describes (issue 1325). The guidance names other
+// actions by canonical ID, which the meta tool's action argument refuses, and
+// the sentence says how to call one: the action after the dot on the
+// gitlab_<domain> meta tool, or that tool itself where it takes no action.
+// Every ID any meta tool's guidance names has to be called that way, a catalog
+// ID through its meta tool and a standalone ID through its own tool, and each
+// sentence's example has to be an action of the tool that carries it. The
+// sentence is one rule for every ID rather than a translation of each, so an
+// action registered under another tool or another name would be called wrong
+// by every model that read it, and this is what would notice.
+func TestMetaToolDescriptions_GuidanceIDs_AreCalledAsTheHeaderSays(t *testing.T) {
+	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+	actions := make(map[string]actioncatalog.Action)
+	for _, action := range catalog.Actions() {
+		actions[string(action.ID)] = action
+	}
+	standalone := make(map[string]string)
+	for _, spec := range StandaloneSurfaceToolSpecs(nil) {
+		standalone[spec.BaseDomain+"."+spec.ActionName] = spec.Name
+	}
+
+	var catalogIDs, standaloneIDs int
+	for _, group := range catalog.Groups() {
+		prefix := toolutil.MetaToolDescriptionPrefix(group.ToolName, group.ActionMap())
+		if example := guidanceIDExample.FindStringSubmatch(prefix); example != nil {
+			if action, ok := actions[example[1]]; !ok || action.ToolName != group.ToolName {
+				t.Errorf("%s gives %s as its example, which is no action of that tool", group.ToolName, example[1])
+			}
+		}
+		named, namedStandalone := checkGuidanceIDCalls(t, group.ToolName, prefix, actions, standalone)
+		catalogIDs += named
+		standaloneIDs += namedStandalone
+	}
+	if catalogIDs == 0 || standaloneIDs == 0 {
+		t.Errorf("the meta descriptions name %d catalog and %d standalone IDs, want some of each for this test to hold anything",
+			catalogIDs, standaloneIDs)
+	}
+}
+
+// guidanceDottedWord is a dotted word of a meta description's header, which
+// may be a canonical ID, an action and parameter pair, or neither.
+var guidanceDottedWord = regexp.MustCompile(`[a-z0-9_]+\.[a-z0-9_]+`)
+
+// checkGuidanceIDCalls fails the test for each canonical ID the header of the
+// meta tool toolName names that is not called the way the header says, and
+// returns how many catalog and standalone IDs it named.
+func checkGuidanceIDCalls(t *testing.T, toolName, prefix string, actions map[string]actioncatalog.Action, standalone map[string]string) (catalogIDs, standaloneIDs int) {
+	t.Helper()
+	for _, id := range guidanceDottedWord.FindAllString(prefix, -1) {
+		domain, name, _ := strings.Cut(id, ".")
+		if action, ok := actions[id]; ok {
+			catalogIDs++
+			if action.ToolName != "gitlab_"+domain || action.Name != name {
+				t.Errorf("%s names %s, which the meta surface calls as %s with action %q, not as gitlab_%s with action %q",
+					toolName, id, action.ToolName, action.Name, domain, name)
+			}
+			continue
+		}
+		if tool, ok := standalone[id]; ok {
+			standaloneIDs++
+			if tool != "gitlab_"+domain {
+				t.Errorf("%s names the standalone %s, whose tool is %s, not gitlab_%s", toolName, id, tool, domain)
+			}
+		}
+	}
+	return catalogIDs, standaloneIDs
 }

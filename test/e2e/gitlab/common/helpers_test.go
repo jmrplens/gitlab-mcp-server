@@ -94,6 +94,23 @@ func assertMentions(e *harness.Env, what, text string, substrings ...string) {
 	}
 }
 
+// assertNextStepsCall checks that the next steps a result carries name each
+// action the way the session's surface calls it (issue 1325): the canonical
+// ID on dynamic, the domain tool with the action's name within it on meta,
+// and the declared tool on individual. The expectation comes from the
+// session rather than from a literal because the right spelling is a
+// different one on each surface, and a literal holding one of them would pass
+// on that surface against a step the other two could not follow.
+func assertNextStepsCall(e *harness.Env, s *harness.Session, what string, steps []string, ids ...harness.ActionID) {
+	e.T.Helper()
+	for _, id := range ids {
+		want := "Use " + s.NextStepCall(id) + " to "
+		if !slices.ContainsFunc(steps, func(step string) bool { return strings.HasPrefix(step, want) }) {
+			e.T.Errorf("%s: no next step reads %q: %q", what, want, steps)
+		}
+	}
+}
+
 // firstLine returns the first line of a refusal for a log line, since the
 // card a refusal comes as runs to a dozen lines and the first names the
 // reason.

@@ -564,20 +564,50 @@ func (s *Session) resolve(id ActionID, params map[string]any, confirm bool) (too
 // cannot tell the two apart. Whether the session serves the action is the
 // caller's question, and [Withheld] deliberately asks the opposite one.
 func (s *Session) project(id ActionID, params map[string]any, confirm bool) (toolCall, error) {
-	inst := s.conn.inst
-	projected, err := newProjection(inst.facts.Tier, inst.client.IsGitLabDotCom())
+	action, err := s.projected(id)
 	if err != nil {
 		return toolCall{}, err
 	}
+	return action.callOn(s.Surface(), params, confirm)
+}
+
+// projected reads an action's projection for this session's instance, refusing
+// one the catalog does not hold and one the package's tier cannot reach.
+func (s *Session) projected(id ActionID) (projectedAction, error) {
+	inst := s.conn.inst
+	projected, err := newProjection(inst.facts.Tier, inst.client.IsGitLabDotCom())
+	if err != nil {
+		return projectedAction{}, err
+	}
 	action, known := projected.lookup(id)
 	if !known {
-		return toolCall{}, fmt.Errorf("no action %s in the catalog this instance serves (tier %s)", id, inst.facts.Tier)
+		return projectedAction{}, fmt.Errorf("no action %s in the catalog this instance serves (tier %s)", id, inst.facts.Tier)
 	}
 	if ceiling := inst.actionTierCeiling(); !ceiling.AtLeast(action.minimumTier) {
-		return toolCall{}, fmt.Errorf("action %s needs %s, and the %s package runs on %s: move the scenario to a "+
+		return projectedAction{}, fmt.Errorf("action %s needs %s, and the %s package runs on %s: move the scenario to a "+
 			"package whose requirement provides it", id, action.minimumTier, inst.pkg, ceiling)
 	}
-	return action.callOn(s.Surface(), params, confirm)
+	return action, nil
+}
+
+// NextStepCall returns how a next step this session is served names the action
+// id, the words after "Use" once the server has resolved the step for the
+// session's surface (issue 1325), failing the test when the action has no such
+// spelling here. A scenario compares the steps a result carries with it rather
+// than with a literal, since the right spelling is a different one on each
+// surface.
+func (s *Session) NextStepCall(id ActionID) string {
+	s.env.T.Helper()
+
+	action, err := s.projected(id)
+	if err == nil {
+		var call string
+		if call, err = action.nextStepCallOn(s.Surface()); err == nil {
+			return call
+		}
+	}
+	s.env.T.Fatalf("next step naming %s on the %s surface: %v", id, s.Surface(), err)
+	return ""
 }
 
 // send makes the call, retrying what failed in transit.

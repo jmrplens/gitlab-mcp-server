@@ -323,6 +323,32 @@ func (a projectedAction) callOn(surface Surface, params map[string]any, confirm 
 	}
 }
 
+// nextStepCallOn spells how a next step the server serves names this action on
+// one surface, the words after "Use" once the server has resolved it (issue
+// 1325): the call HintAction writes on dynamic, whose execute tool takes the
+// canonical ID, the domain tool with the action's name within it on meta, and
+// the declared tool on individual. A standalone action has no name within a
+// domain tool, and the server leaves a step naming one as written on meta, so
+// it is refused here rather than spelled.
+func (a projectedAction) nextStepCallOn(surface Surface) (string, error) {
+	switch surface {
+	case SurfaceDynamic:
+		return "action '" + string(a.id) + "'", nil
+	case SurfaceMeta:
+		if a.standalone || a.metaTool == "" || a.metaAction == "" {
+			return "", fmt.Errorf("action %s has no name within a meta domain tool for a next step to resolve to", a.id)
+		}
+		return a.metaTool + " with action '" + a.metaAction + "'", nil
+	case SurfaceIndividual:
+		if a.individualTool == "" {
+			return "", a.unservableOnIndividual()
+		}
+		return a.individualTool, nil
+	default:
+		return "", fmt.Errorf("unknown surface %q", surface)
+	}
+}
+
 // unservableOnIndividual says why this action cannot be called on the
 // individual surface, naming the sibling that took its tool name when one did.
 func (a projectedAction) unservableOnIndividual() error {

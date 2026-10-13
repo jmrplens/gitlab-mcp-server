@@ -18,7 +18,8 @@ import (
 )
 
 // TestProjectLabels_SubscribeAndPromote_ReadBack creates a label in a
-// personal project of each surface's own, subscribes to it, reads the
+// personal project of each surface's own, reads it back with next steps that
+// name the calls that surface takes, subscribes to it, reads the
 // subscription back, ends it, and shows the promotion of a personal
 // project's label refused; then promotes a label of a group project and
 // finds it among the group's labels.
@@ -43,6 +44,9 @@ func TestProjectLabels_SubscribeAndPromote_ReadBack(t *testing.T) {
 		if got.ID != created.ID || got.Subscribed {
 			e.T.Errorf("label_get answered %+v, want label %d with no subscription yet", got, created.ID)
 		}
+		// The card names the update and the delete as its next steps, and
+		// each has to read as a call this surface takes.
+		assertNextStepsCall(e, s, "label_get", got.NextSteps, actionProjectLabelUpdate, actionProjectLabelDelete)
 		subscribed := harness.Do[labeldata.Output](s, actionProjectLabelSubscribe, label)
 		if subscribed.ID != created.ID || !subscribed.Subscribed {
 			e.T.Errorf("label_subscribe answered %+v, want label %d subscribed", subscribed, created.ID)

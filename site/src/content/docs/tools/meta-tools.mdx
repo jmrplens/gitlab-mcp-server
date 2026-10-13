@@ -513,4 +513,6 @@ The boolean `META_TOOLS` selector that `GITLAB_MCP_TOOL_SURFACE` replaced was re
 
 Each meta-tool action carries discovery metadata (aliases, usage, parameter guidance, related actions) that helps models choose the correct action and shape parameters.
 
+The usage and parameter guidance are written once for every surface and served in each meta-tool's description, so they name other actions by canonical ID, as in `Use issue.get for one of them`. A meta-tool's `action` argument refuses a dotted ID, and the description's header says how to call one: the action after the dot on the `gitlab_<domain>` tool, so `issue.get` is `{"action":"get"}` on `gitlab_issue`, or that tool itself where it takes no action, as `discover_project.resolve` is `gitlab_discover_project`. Next steps in a result need no such rule, since the meta surface rewrites them into that call before the result is sent ([Output format](/gitlab-mcp-server/reference/output-format/)).
+
 <FAQ />

@@ -2875,11 +2875,31 @@ func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
 	sort.Strings(actions)
 	exampleAction := metaToolExampleAction(actions)
 	guidance := metaToolActionGuidanceSummary(routes, actions) + metaToolParameterGuidanceSummary(routes, actions)
+	idRule := ""
+	if guidance != "" {
+		idRule = metaToolGuidanceIDRule(toolName, exampleAction)
+	}
 	return fmt.Sprintf(
-		"Use {\"action\":%q,\"params\":{...}}. The only top-level keys are action and params.\nAction params schema: gitlab://tools/%s.<action>.%s\n\n",
-		exampleAction, toolName,
-		guidance,
+		"Use {\"action\":%q,\"params\":{...}}. The only top-level keys are action and params.\nAction params schema: gitlab://tools/%s.<action>.%s%s\n\n",
+		exampleAction, toolName, idRule, guidance,
 	)
+}
+
+// metaToolGuidanceIDRule says how the canonical IDs the guidance names are
+// called on the meta surface (issue 1325). The guidance is each action's Usage
+// line and parameter guidance, written once for every surface, and it names
+// other actions by canonical ID, "Use issue.get for one of them", which the
+// meta tool's action argument refuses. A catalog action is the action after
+// the dot on the gitlab_<domain> meta tool, and the one standalone action any
+// guidance names, discover_project.resolve in project.get's, is
+// gitlab_discover_project itself, a tool that takes no action, so one sentence
+// on the header resolves all of them, with an example drawn from this tool's
+// own actions, and leaves the guidance as the one text every surface serves.
+// A test in internal/tools holds that claim to the catalog.
+func metaToolGuidanceIDRule(toolName, exampleAction string) string {
+	return fmt.Sprintf(" A domain.action ID below is the action after the dot on the gitlab_<domain> tool, "+
+		"or that tool itself where it takes no action, so %s.%s is {\"action\":%q} on this one.",
+		strings.TrimPrefix(toolName, "gitlab_"), exampleAction, exampleAction)
 }
 
 func metaToolExampleAction(sortedActions []string) string {

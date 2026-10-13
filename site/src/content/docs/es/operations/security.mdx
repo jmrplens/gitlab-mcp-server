@@ -259,6 +259,8 @@ Los resultados de las herramientas llevan texto que escribieron otras personas: 
 
 Los cuatro primeros también eliminan los caracteres de control. Un bloque de código es el único sitio donde escapar no es la respuesta, porque un archivo o un log tiene que mostrarse tal cual; la contención la da la valla. Una comprobación de la propia compilación del proyecto lee cada formateador y la hace fallar cuando un valor que viene de GitLab llega a uno de esos sitios sin pasar por su función, así que ninguna versión publicada puede llevar uno así.
 
+Las superficies meta e individual reescriben los IDs canónicos que nombran los próximos pasos de un resultado en la llamada que aceptan, y la reescritura solo lee la sección de guía que escribió el servidor al principio o al final de la respuesta. Un ID de acción escrito en una descripción, un archivo o un log se deja tal como lo guarda GitLab, así que el texto que escribieron otras personas ni cambia con la reescritura ni puede usarla para convertir sus propias palabras en una llamada que la superficie sirve ([Formato de salida](/gitlab-mcp-server/es/reference/output-format/#próximos-pasos)).
+
 Se consideraron marcadores de frontera alrededor de ese texto, como etiquetas `<user_content>`, y no se adoptaron. Los resultados de herramientas ya llegan como elementos `content` estructurados y separados, aparte de los prompts del sistema y del usuario y entre sí, y con la estructura contenida un marcador añadiría tokens sin añadir ninguna frontera. Nada de esto impide que un modelo siga una instrucción escrita en prosa normal; para eso están la confirmación de las acciones destructivas, el modo de solo lectura y un token con pocos permisos.
 
 ### Errores

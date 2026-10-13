@@ -541,6 +541,50 @@ func TestProjection_MetaCallWithNoParameters_CarriesNoParamsObject(t *testing.T)
 	}
 }
 
+// TestProjection_NextStepCall_SpellsWhatEachSurfaceResolvesTo checks the words
+// a next step naming an action reads after "Use" on each surface once the
+// server has resolved it (issue 1325), read from the real Free projection so
+// the meta and individual names are the ones registration binds, and the
+// refusals for an action with no such spelling.
+func TestProjection_NextStepCall_SpellsWhatEachSurfaceResolvesTo(t *testing.T) {
+	action, known := freeProjection(t).lookup("project.label_delete")
+	if !known {
+		t.Fatal("the Free catalog has no project.label_delete")
+	}
+	for surface, want := range map[Surface]string{
+		SurfaceDynamic:    "action 'project.label_delete'",
+		SurfaceMeta:       "gitlab_project with action 'label_delete'",
+		SurfaceIndividual: action.individualTool,
+	} {
+		t.Run(surface.String(), func(t *testing.T) {
+			got, err := action.nextStepCallOn(surface)
+			if err != nil || got != want || got == "" {
+				t.Errorf("nextStepCallOn(%s) = %q, %v, want %q", surface, got, err, want)
+			}
+		})
+	}
+
+	refusals := []struct {
+		name    string
+		action  projectedAction
+		surface Surface
+		want    string
+	}{
+		{name: "standalone on meta", action: projectedAction{id: "discover_project.resolve", standalone: true, metaTool: "gitlab_discover_project"}, surface: SurfaceMeta, want: "no name within a meta domain tool"},
+		{name: "no meta tool", action: projectedAction{id: "ghost.list", metaAction: "list"}, surface: SurfaceMeta, want: "no name within a meta domain tool"},
+		{name: "no meta action", action: projectedAction{id: "ghost.list", metaTool: "gitlab_ghost"}, surface: SurfaceMeta, want: "no name within a meta domain tool"},
+		{name: "no individual tool", action: projectedAction{id: "ghost.list"}, surface: SurfaceIndividual, want: "declares no individual tool"},
+		{name: "unknown surface", action: action, surface: Surface("http"), want: "unknown surface"},
+	}
+	for _, refusal := range refusals {
+		t.Run(refusal.name, func(t *testing.T) {
+			if _, err := refusal.action.nextStepCallOn(refusal.surface); err == nil || !strings.Contains(err.Error(), refusal.want) {
+				t.Errorf("nextStepCallOn(%s) = %v, want an error naming %q", refusal.surface, err, refusal.want)
+			}
+		})
+	}
+}
+
 // TestProjection_MetaActionWithoutAPair_IsRefused checks the meta refusal an
 // ordinary action with no tool and action pair gets, which the standalone
 // branch sits in front of: a projection that sent it anyway would name a tool

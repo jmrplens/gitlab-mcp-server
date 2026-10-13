@@ -478,7 +478,14 @@ that carry IDs: a hint, the message of an error a handler returns, a refusal,
 the next steps of a result, a `Usage` line, parameter guidance (`ValueSource`,
 `CommonConfusions`) and a field's description, a `jsonschema` tag or a schema
 map's `description` entry, all name an action by its canonical ID. Each is
-served on every surface, and a tool name is right on one of three.
+served on every surface, and a tool name is right on one of three. The ID
+is the one form every surface's call can be derived from, and two of them
+derive it before the model reads it (issue 1325): the meta and individual
+dispatchers rewrite the next steps of a result into their own call
+(`toolutil.WithResolvedNextSteps`), and a meta tool's description keeps the
+IDs its usage and parameter guidance name and says on its header how one is
+called there, which `TestMetaToolDescriptions_GuidanceIDs_AreCalledAsTheHeaderSays`
+holds to the catalog.
 `cmd/audit_action_ids` reads them, and lets `internal/tools/dynamic` alone
 name a tool, its own two, since only the two tools of the dynamic surface
 return its text. A domain action's individual tool `Description` keeps its

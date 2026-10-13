@@ -259,6 +259,8 @@ Tool results carry text other people wrote: issue and merge request descriptions
 
 The first four also drop control characters. A code block is the one place where escaping is not the answer, because a file or a log has to be shown as it is; containment comes from the fence instead. A check in the project's own build reads every formatter and fails it when a value from GitLab reaches one of these places without its helper, so a release cannot ship one that does.
 
+The meta and individual surfaces rewrite the canonical IDs a result's next steps name into the call they take, and the rewrite reads only the guidance section the server wrote at the start or the end of the response. An action ID spelled in a description, a file or a log is left as GitLab holds it, so text other people wrote can neither be changed by the rewrite nor borrow it to turn its own words into a call the surface serves ([Output format](/gitlab-mcp-server/reference/output-format/#next-steps)).
+
 Boundary markers around such text, such as `<user_content>` tags, were considered and not adopted. Tool results already arrive as separate structured `content` items, apart from the system and user prompts and from each other, and with the structure contained a marker would add tokens without adding a boundary. None of this stops a model from following an instruction written in plain prose; that is what the confirmation on destructive actions, read-only mode and a narrow token are for.
 
 ### Errors
