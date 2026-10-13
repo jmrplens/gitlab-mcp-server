@@ -416,6 +416,82 @@ func TestFineGrainedErrorNote_AddsTheNullNoteToANotFoundGraphQLError(t *testing.
 	}
 }
 
+// heldElsewhereContext is a request context bound to a client whose phase B
+// authority was evaluated from a grant holding Merge Request: Approve for
+// selected projects, and nothing else.
+func heldElsewhereContext() context.Context {
+	table := &finegrained.Table{
+		Version:     "19.4.1-ee",
+		Bucket:      "19.4",
+		Permissions: []string{"approve_merge_request", "read_project"},
+		Displays:    []string{"", "Merge Request: Approve", "Project: Read"},
+		Display:     []uint16{1, 2},
+		Assignables: []finegrained.Assignable{
+			{Name: "mr_approve", Permissions: []uint16{0}, Boundaries: finegrained.BoundaryProject, Grantable: true},
+			{Name: "project_read", Permissions: []uint16{1}, Boundaries: finegrained.BoundaryProject | finegrained.BoundaryGroup, Grantable: true},
+		},
+		Actions: []finegrained.Requirement{{ID: fgAllowed}},
+	}
+	grant := finegrained.Grant{Scopes: []finegrained.Scope{{
+		Access:      finegrained.AccessSelectedMemberships,
+		Namespace:   finegrained.NamespaceProject,
+		NamespaceID: 1,
+		Permissions: []string{"mr_approve"},
+	}}}
+	client := gitlabclient.NewUnboundClient("https://gitlab.example.com")
+	client.SetAuthority(finegrained.Evaluate(table, grant))
+	return gitlabclient.WithClient(context.Background(), client)
+}
+
+// TestFineGrainedErrorNote_SaysWhenTheGrantHoldsTheRefusedPermissionElsewhere
+// verifies the per-session sentence a dispatcher appends to GitLab's refusal
+// of a permission the session's grant does hold, at the boundary type the
+// refusal names: what is missing there is the project or group in the grant,
+// or its user's membership, not the permission. The sentence is not added
+// when the grant does not hold every refused permission, nor for a classic
+// session, a phase A one or a refusal of another kind.
+func TestFineGrainedErrorNote_SaysWhenTheGrantHoldsTheRefusedPermissionElsewhere(t *testing.T) {
+	refused := func(t *testing.T, sentence string) error {
+		t.Helper()
+		_, err := restAnswer(t, "POST", "projects/2/merge_requests/3/approve", 403, granularRefusalBody(t, sentence))
+		return WrapErr("approveMR", err)
+	}
+	approve := "Access denied: This operation requires a fine-grained personal access token with the following project permissions: [Merge Request: Approve]."
+	cases := []struct {
+		name     string
+		ctx      context.Context
+		sentence string
+		noted    bool
+	}{
+		{name: "a permission the grant holds for other projects", ctx: heldElsewhereContext(), sentence: approve, noted: true},
+		{name: "a permission the grant does not hold", ctx: heldElsewhereContext(), sentence: "Access denied: This operation requires a fine-grained personal access token with the following project permissions: [Project: Read]."},
+		{name: "one of two permissions held", ctx: heldElsewhereContext(), sentence: "Access denied: This operation requires a fine-grained personal access token with the following project permissions: [Merge Request: Approve, Project: Read]."},
+		{name: "held at a project but refused at a group", ctx: heldElsewhereContext(), sentence: "Access denied: This operation requires a fine-grained personal access token with the following group permissions: [Merge Request: Approve]."},
+		{name: "a classic session", ctx: context.Background(), sentence: approve},
+		{name: "a phase A session", ctx: fineGrainedContext(), sentence: approve},
+		{name: "another refusal", ctx: heldElsewhereContext(), sentence: "Access denied: This operation doesn't support fine-grained personal access tokens."},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := refused(t, tc.sentence)
+			got := FineGrainedErrorNote(tc.ctx, fgAllowed, err)
+			if !tc.noted {
+				if got != err { //nolint:errorlint // the very error is what the case expects back
+					t.Errorf("FineGrainedErrorNote = %v, want the error unchanged", got)
+				}
+				return
+			}
+			if !errors.Is(got, err) {
+				t.Errorf("FineGrainedErrorNote does not unwrap to the handler's error: %v", got)
+			}
+			want := err.Error() + ". This session's token does hold [Merge Request: Approve], for other projects"
+			if !strings.HasPrefix(got.Error(), want) {
+				t.Errorf("FineGrainedErrorNote = %q, want it to begin %q", got.Error(), want)
+			}
+		})
+	}
+}
+
 // TestEmptyCollection_IsAnEmptyListOutput verifies which outputs read as an
 // empty list: an empty slice, and a struct whose one exported slice is empty,
 // through any pointer or interface; never a struct with two lists or none, an

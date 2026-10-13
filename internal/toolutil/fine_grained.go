@@ -93,13 +93,29 @@ func FineGrainedNotes(ctx context.Context, actionID string, callResult *mcp.Call
 	return callResult
 }
 
-// FineGrainedErrorNote is [FineGrainedNotes] for a handler that reported a
-// not-found answer as a Go error, which is how most GraphQL handlers report a
-// null: the error comes back carrying the note after its own message, and
-// still unwraps to the error it was.
+// FineGrainedErrorNote is [FineGrainedNotes] for a handler that reported an
+// answer as a Go error: the error comes back carrying a note after its own
+// message, and still unwraps to the error it was.
+//
+// Two answers get one. GitLab's missing-permissions refusal of a permission
+// the session's grant does hold, at the boundary type the refusal names, gets
+// the authority's HeldElsewhereNote: GitLab's sentence is the same whether
+// the grant lacks the permission or holds it for other projects, and only the
+// session knows which, so the note says what is missing is this project or
+// group in the grant, or its user's membership there (issue 1336). A
+// not-found error, which is how most GraphQL handlers report a null, gets the
+// NullNote.
 func FineGrainedErrorNote(ctx context.Context, actionID string, err error) error {
 	authority := gitlabclient.AuthorityFrom(ctx)
-	if err == nil || authority == nil || !mentionsNotFound(err.Error()) {
+	if err == nil || authority == nil {
+		return err
+	}
+	if refusal, refused := fineGrainedRefusalOf(err); refused {
+		if note := authority.HeldElsewhereNote(refusal.Boundary, refusal.Permissions); note != "" {
+			return &notedError{err: err, note: note}
+		}
+	}
+	if !mentionsNotFound(err.Error()) {
 		return err
 	}
 	note := authority.NullNote(actionID)

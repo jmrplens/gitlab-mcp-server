@@ -3763,24 +3763,42 @@ func TestClassifyError_FineGrainedRefusalOverREST_DescribesEachOfGitLabsTexts(t 
 		unwanted []string
 	}{
 		{
+			// GitLab answers this one sentence for three causes it does not
+			// tell apart: a grant without the permission, a grant holding it
+			// only for other projects or groups, and a user who is not a
+			// member of the project the call targets. The description names
+			// all three rather than only the first.
 			name:     "one missing permission",
 			sentence: approveRefusalSentence,
 			want: []string{
-				"access denied: this call needs the fine-grained project permission [Merge Request: Approve], which the token was not granted",
-				"create a fine-grained personal access token that grants it, or use a classic token with the api scope",
+				"access denied: this call needs the fine-grained project permission [Merge Request: Approve], which GitLab did not find in the token's grant for the project this call targets",
+				"Either the grant does not hold it, or it holds it only for other projects or groups, or the token's user is not a member of this project",
+				"create a fine-grained personal access token whose grant names this project, or a group above it, with it, for a user who is a member there, or use a classic token with the api scope",
 				"where only a fine-grained token that grants it will do",
 			},
-			unwanted: []string{"insufficient project role", "missing API scope"},
+			unwanted: []string{"insufficient project role", "missing API scope", "which the token was not granted"},
 		},
 		{
 			name:     "two missing permissions",
 			sentence: twoPermissionsSentence,
-			want:     []string{"the fine-grained project permissions [Issue: Create, Merge Request: Approve]", "that grants them, or", "that grants them will do"},
+			want:     []string{"the fine-grained project permissions [Issue: Create, Merge Request: Approve]", "it holds them only for other projects or groups", "with them, for a user", "that grants them will do"},
 		},
 		{
+			name:     "a missing permission at a group",
+			sentence: "Access denied: This operation requires a fine-grained personal access token with the following group permissions: [Epic: Read].",
+			want:     []string{"for the group this call targets", "the token's user is not a member of this group", "whose grant names this group, or a group above it, with it"},
+		},
+		{
+			// An instance permission is not held per project or group, so the
+			// grant either holds it or it does not, and membership is not
+			// among the causes.
 			name:     "a deprecated first match",
 			sentence: bulkImportRefusalSentence,
-			want:     []string{"the fine-grained instance permission [Bulk Import: Read]"},
+			want: []string{
+				"the fine-grained instance permission [Bulk Import: Read], which GitLab did not find in the token's grant for the instance this call targets. The grant does not hold it.",
+				"create a fine-grained personal access token whose grant holds it, or use a classic token",
+			},
+			unwanted: []string{"not a member", "other projects or groups"},
 		},
 		{
 			name:     "no fine-grained permission reaches the operation",

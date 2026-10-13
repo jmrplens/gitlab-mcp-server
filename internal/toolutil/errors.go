@@ -503,16 +503,7 @@ const classicTokenWayOut = "use a classic token with the api scope, or read_api 
 func describeFineGrainedRefusal(refusal gitlabclient.GranularRefusal) string {
 	switch refusal.Kind {
 	case gitlabclient.GranularRefusalMissingPermissions:
-		noun, pronoun := "permission", "it"
-		if len(refusal.Permissions) > 1 {
-			noun, pronoun = "permissions", "them"
-		}
-		list := "[" + boundedGitLabMessage(strings.Join(refusal.Permissions, ", ")) + "]"
-		return "access denied: this call needs the fine-grained " + refusal.Boundary + " " + noun + " " + list +
-			", which the token was not granted. A token's grant cannot be changed after it is created, so create a fine-grained " +
-			refusal.TokenType + " that grants " + pronoun + ", or " + classicTokenWayOut +
-			". A classic token refused this way is under a group that requires fine-grained tokens, where only a fine-grained token that grants " +
-			pronoun + " will do"
+		return describeMissingPermissions(refusal)
 	case gitlabclient.GranularRefusalUnsupported:
 		return "access denied: GitLab declares no fine-grained permission for this operation, so no fine-grained " +
 			refusal.TokenType + " can call it on this instance. Instead, " + classicTokenWayOut
@@ -529,6 +520,40 @@ func describeFineGrainedRefusal(refusal gitlabclient.GranularRefusal) string {
 			"in words this server does not recognize, which follow. A token's grant cannot be changed after it is created, " +
 			"so a permission it lacks needs a new token that grants it, or " + classicTokenWayOut
 	}
+}
+
+// describeMissingPermissions is what [describeFineGrainedRefusal] says about
+// GitLab's missing-permissions sentence.
+//
+// GitLab answers that one sentence for three causes it does not tell apart at
+// a project or a group: a grant that does not hold the permission, a grant
+// that holds it only for other projects or groups, and a token whose user is
+// not a member of the project or group the call targets, which no grant
+// reaches past (boundary_policy.rb enables a granted permission only for a
+// member). The description names all three there, since saying the token
+// was not granted the permission sent a reader holding it for another project
+// to create a second token that failed the same way (issue 1336). A
+// permission at the user or instance boundary is not held per project or
+// group, so there the grant either holds it or it does not.
+func describeMissingPermissions(refusal gitlabclient.GranularRefusal) string {
+	noun, pronoun := "permission", "it"
+	if len(refusal.Permissions) > 1 {
+		noun, pronoun = "permissions", "them"
+	}
+	list := "[" + boundedGitLabMessage(strings.Join(refusal.Permissions, ", ")) + "]"
+	causes, grant := "The grant does not hold "+pronoun+".", "holds "+pronoun
+	if refusal.Boundary == "project" || refusal.Boundary == "group" {
+		causes = "Either the grant does not hold " + pronoun + ", or it holds " + pronoun +
+			" only for other projects or groups, or the token's user is not a member of this " + refusal.Boundary +
+			", and a grant reaches only the projects and groups its user is a member of."
+		grant = "names this " + refusal.Boundary + ", or a group above it, with " + pronoun + ", for a user who is a member there"
+	}
+	return "access denied: this call needs the fine-grained " + refusal.Boundary + " " + noun + " " + list +
+		", which GitLab did not find in the token's grant for the " + refusal.Boundary + " this call targets. " + causes +
+		" A token's grant cannot be changed after it is created, so create a fine-grained " + refusal.TokenType +
+		" whose grant " + grant + ", or " + classicTokenWayOut +
+		". A classic token refused this way is under a group that requires fine-grained tokens, where only a fine-grained token that grants " +
+		pronoun + " will do"
 }
 
 // ClassifyHTTPStatus returns a semantic description for common HTTP status codes.

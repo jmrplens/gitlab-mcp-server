@@ -112,3 +112,53 @@ func TestAuthority_EmptyNote_OnlyForAnAnswerThatIsAGraphQLList(t *testing.T) {
 		})
 	}
 }
+
+// TestAuthority_HeldElsewhereNote_OnlyWhenTheGrantHoldsEveryRefusedPermission
+// verifies the per-session sentence for GitLab's missing-permissions refusal:
+// it is written when the grant holds, at the boundary type the refusal names,
+// every permission the refusal quotes by its words, and it says then that
+// what is missing is this project or group in the grant, or its user's
+// membership there. It is "" for a permission the grant does not hold, for
+// one held at another boundary type only, for words no raw permission
+// displays as, for a boundary that is not a project or a group, for no words
+// at all, and for a phase A authority, which holds no grant.
+func TestAuthority_HeldElsewhereNote_OnlyWhenTheGrantHoldsEveryRefusedPermission(t *testing.T) {
+	granted := Evaluate(phaseBTable(), Grant{Scopes: []Scope{
+		scope(AccessSelectedMemberships, NamespaceProject, "mr_approve"),
+		scope(AccessSelectedMemberships, NamespaceGroup, "project_read"),
+	}})
+	cases := []struct {
+		name      string
+		authority *Authority
+		boundary  string
+		words     []string
+		want      string
+	}{
+		{
+			name: "a project permission held for other projects", authority: granted, boundary: "project", words: []string{"Merge Request: Approve"},
+			want: "This session's token does hold [Merge Request: Approve], for other projects, so what this call is missing is this project in the grant, or a group above it, or its user's membership here.",
+		},
+		{
+			name: "a group permission held for other groups", authority: granted, boundary: "group", words: []string{"Project: Read"},
+			want: "This session's token does hold [Project: Read], for other groups, so what this call is missing is this group in the grant, or a group above it, or its user's membership here.",
+		},
+		{
+			name: "two permissions both held", authority: granted, boundary: "project", words: []string{"Merge Request: Approve", "Project: Read"},
+			want: "This session's token does hold [Merge Request: Approve, Project: Read], for other projects, so what this call is missing is this project in the grant, or a group above it, or its user's membership here.",
+		},
+		{name: "one of two permissions held", authority: granted, boundary: "project", words: []string{"Merge Request: Approve", "Issue Link: Read"}},
+		{name: "a permission the grant does not hold", authority: granted, boundary: "project", words: []string{"Vulnerability: Read"}},
+		{name: "held at a project only and refused at a group", authority: granted, boundary: "group", words: []string{"Merge Request: Approve"}},
+		{name: "words no permission displays as", authority: granted, boundary: "project", words: []string{"Nothing: Here"}},
+		{name: "a boundary that is not a project or a group", authority: granted, boundary: "user", words: []string{"User: Read"}},
+		{name: "no words", authority: granted, boundary: "project"},
+		{name: "a phase A authority", authority: Unevaluated(phaseBTable(), FallbackNone, ""), boundary: "project", words: []string{"Merge Request: Approve"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.authority.HeldElsewhereNote(tc.boundary, tc.words); got != tc.want {
+				t.Errorf("HeldElsewhereNote(%q, %q) = %q, want %q", tc.boundary, tc.words, got, tc.want)
+			}
+		})
+	}
+}

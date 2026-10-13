@@ -360,7 +360,13 @@ Dónde mirar después:
 ## Lo que puede significar una respuesta vacía
 
 Por REST, una llamada fuera de la concesión recibe el `403` del propio GitLab, que
-nombra el permiso que falta. Por GraphQL no: una posición que la concesión no alcanza
+nombra el permiso que falta. Lo nombra con las mismas palabras tanto si la concesión
+no lo tiene, como si lo tiene solo para otros proyectos o grupos, como si el usuario
+del token no es miembro del proyecto o grupo que toca la llamada, así que la
+descripción que da este servidor nombra las tres causas; cuando la propia concesión de
+la sesión sí tiene el permiso para otros proyectos o grupos, la respuesta añade una
+frase que lo dice, y lo que falta es el proyecto o grupo en la concesión, o la
+pertenencia del usuario allí. Por GraphQL no: una posición que la concesión no alcanza
 vuelve como `null`, y una conexión quita los elementos que no alcanza, sin ningún error
 en ninguno de los dos casos. Por eso una sesión de grano fino recibe un siguiente paso
 junto a tres tipos de respuesta:

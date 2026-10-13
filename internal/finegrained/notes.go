@@ -41,6 +41,54 @@ func (a *Authority) DegradedNote(decision Decision) string {
 		"Empty there does not mean there is nothing.", a.table.DisplayVersion(), strings.Join(parts, "; "))
 }
 
+// heldElsewhereBoundaries are the boundaries GitLab's missing-permissions
+// refusal names at which a grant can hold a permission for some projects or
+// groups and not for others, each with its index into the covered sets.
+var heldElsewhereBoundaries = map[string]int{"project": 0, "group": 1}
+
+// HeldElsewhereNote is the sentence added to GitLab's missing-permissions
+// refusal of a call when this session's grant does hold, at the boundary
+// type the refusal names, every permission it quotes, or "" when it does not.
+//
+// GitLab writes the same sentence whether the grant lacks a permission or
+// holds it for other projects or groups, and whether the token's user is a
+// member of the project or group the call targets, so the description of the
+// refusal names every cause. A session whose grant holds the permission can
+// rule the first one out, and this says so: what the call is missing is the
+// project or group in the grant, or its user's membership there.
+//
+// boundary is the refusal's boundary word and words its quoted permissions,
+// both GitLab's text. A word is matched against the words the table displays
+// each raw permission by, and the grant is asked whether it covers at that
+// boundary type any raw permission displayed that way, which is the most a
+// grant's covered sets can say since they keep no namespace. The words the
+// sentence repeats are therefore always the table's own. A phase A authority
+// covers nothing, so it never writes the sentence.
+func (a *Authority) HeldElsewhereNote(boundary string, words []string) string {
+	index, membership := heldElsewhereBoundaries[boundary]
+	if !membership || len(words) == 0 {
+		return ""
+	}
+	for _, word := range words {
+		if !a.holdsAt(index, word) {
+			return ""
+		}
+	}
+	return "This session's token does hold [" + strings.Join(words, ", ") + "], for other " + boundary +
+		"s, so what this call is missing is this " + boundary + " in the grant, or a group above it, or its user's membership here."
+}
+
+// holdsAt reports whether the grant covers, at the boundary type of index b,
+// a raw permission the table displays as words.
+func (a *Authority) holdsAt(b int, words string) bool {
+	for perm, display := range a.table.Display {
+		if a.table.Displays[display] == words && a.covered[b].has(perm) {
+			return true
+		}
+	}
+	return false
+}
+
 // NullNote is the next step a not-found answer gets when the action reads
 // GitLab over GraphQL, or "" when it does not. GitLab answers null, with no
 // error, for an object a fine-grained token is not granted or that sits in a

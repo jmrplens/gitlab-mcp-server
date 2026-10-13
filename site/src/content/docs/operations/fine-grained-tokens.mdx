@@ -348,7 +348,12 @@ Where to look next:
 ## What an empty answer can mean
 
 Over REST, a call outside the grant is GitLab's own `403`, which names the missing
-permission. Over GraphQL it is not: a position the grant does not reach comes back
+permission. It names it in the same words whether the grant lacks the permission,
+holds it only for other projects or groups, or the token's user is not a member of the
+project or group the call targets, so the description this server gives names all
+three; when the session's own grant does hold the permission for other projects or
+groups, the answer adds a sentence saying so, and what is missing is the project or
+group in the grant, or the user's membership there. Over GraphQL it is not: a position the grant does not reach comes back
 `null`, and a connection drops the items it does not reach, with no error either way.
 So a fine-grained session is given a next step beside three kinds of answer:
 
