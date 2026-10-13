@@ -23,6 +23,25 @@ type BodyEdit struct {
 	Drop []string
 }
 
+// NullWhenZero reads one optional update field that GitLab clears only with
+// null, for an option struct whose pointer is tagged omitempty and so cannot
+// carry one. A field left out (nil) returns nil and edits nothing. A field
+// given its zero value, "" for a text or 0 for an ID reference, which is how a
+// caller asks to clear it, records key as null in edit and returns nil, so the
+// option struct leaves the key to the edit. Any other value is returned as
+// given, for the option struct to send.
+func NullWhenZero[T comparable](value *T, key string, edit *BodyEdit) *T {
+	var zero T
+	if value == nil || *value != zero {
+		return value
+	}
+	if edit.Set == nil {
+		edit.Set = map[string]any{}
+	}
+	edit.Set[key] = nil
+	return nil
+}
+
 // EditJSONBody returns the request option that applies edit to the body of a
 // write client-go has encoded, for the values an update has to send that its
 // option struct cannot express: a null that clears a field whose pointer is

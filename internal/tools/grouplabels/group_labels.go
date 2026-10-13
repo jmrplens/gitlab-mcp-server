@@ -39,18 +39,19 @@ type CreateInput struct {
 	Name        string               `json:"name"                  jsonschema:"Label name,required"`
 	Color       string               `json:"color"                 jsonschema:"Label color in hex format (e.g. #FF0000),required"`
 	Description string               `json:"description,omitempty" jsonschema:"Label description"`
-	Priority    int64                `json:"priority,omitempty"    jsonschema:"Label priority (lower is higher priority, 0 means no priority)"`
 	Archived    *bool                `json:"archived,omitempty"    jsonschema:"Whether to create the label in archived state"`
 }
 
-// UpdateInput defines parameters for updating a group label.
+// UpdateInput defines parameters for updating a group label. Like
+// [CreateInput] it offers no priority: neither group label route declares
+// one, and GitLab's label helper applies a priority to a project label only
+// (issue 1306).
 type UpdateInput struct {
 	GroupID     toolutil.StringOrInt `json:"group_id"              jsonschema:"Group ID or URL-encoded path,required"`
 	LabelID     toolutil.StringOrInt `json:"label_id"              jsonschema:"Label ID or name,required"`
 	NewName     string               `json:"new_name,omitempty"    jsonschema:"New label name"`
 	Color       string               `json:"color,omitempty"       jsonschema:"New label color in hex format"`
 	Description *string              `json:"description,omitempty" jsonschema:"New label description. Pass an empty string to remove it. Omit the field to leave it untouched"`
-	Priority    int64                `json:"priority,omitempty"    jsonschema:"New label priority (0 to remove)"`
 	Archived    *bool                `json:"archived,omitempty"    jsonschema:"Set true to archive, false to unarchive"`
 }
 
@@ -147,9 +148,6 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Description != "" {
 		opts.Description = new(input.Description)
 	}
-	if input.Priority > 0 {
-		opts.Priority = gl.NewNullableWithValue(input.Priority)
-	}
 	if input.Archived != nil {
 		opts.Archived = input.Archived
 	}
@@ -180,9 +178,6 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	// Presence decides, never emptiness: an empty description is the caller
 	// removing it (issue 1306).
 	opts.Description = input.Description
-	if input.Priority > 0 {
-		opts.Priority = gl.NewNullableWithValue(input.Priority)
-	}
 	if input.Archived != nil {
 		opts.Archived = input.Archived
 	}

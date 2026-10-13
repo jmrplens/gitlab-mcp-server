@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -20,6 +21,42 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// TestEditMember_MemberRoleIDZero_SendsNull holds a member_role_id of 0 to
+// null, which is how GitLab takes a custom role off a member, and a field left
+// out to nothing at all. With the role assigned GitLab refuses to change the
+// access level, so a role that could not be removed left the member stuck at
+// it (issue 1306).
+func TestEditMember_MemberRoleIDZero_SendsNull(t *testing.T) {
+	cases := []struct {
+		name   string
+		params map[string]any
+		want   string
+		sent   bool
+	}{
+		{name: "zero removes the role", params: map[string]any{"member_role_id": 0}, want: "null", sent: true},
+		{name: "left out", params: map[string]any{}, sent: false},
+		{name: "a role", params: map[string]any{"member_role_id": 7}, want: "7", sent: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			params := map[string]any{"group_id": "5", "user_id": 9, "access_level": 20}
+			maps.Copy(params, tc.params)
+			input, err := toolutil.UnmarshalParams[EditInput](params)
+			if err != nil {
+				t.Fatalf("UnmarshalParams() error: %v", err)
+			}
+			client, recorder := testutil.RecordWrites(t, `{}`, `{"id":9,"username":"u","access_level":20}`)
+			if _, err = EditMember(t.Context(), client, input); err != nil {
+				t.Fatalf("EditMember() error: %v", err)
+			}
+			got, sent := recorder.Member("member_role_id")
+			if sent != tc.sent || got != tc.want {
+				t.Errorf("member_role_id = %q (sent %v), want %q (sent %v)", got, sent, tc.want, tc.sent)
+			}
+		})
+	}
+}
 
 // descFor returns the canonical access-level label for an output's access
 // level, mirroring how markdown derives the human-readable role.
@@ -221,7 +258,7 @@ func TestEditMember_MemberRoleID(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	_, err := EditMember(context.Background(), client, EditInput{
-		GroupID: "5", UserID: 10, AccessLevel: 40, MemberRoleID: 9, ExpiresAt: "2026-12-31",
+		GroupID: "5", UserID: 10, AccessLevel: 40, MemberRoleID: new(int64(9)), ExpiresAt: "2026-12-31",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1940,7 +1977,7 @@ func TestGroupMemberWrites_OptionalParametersReachTheRequestOnlyWhenGiven(t *tes
 			name: "edit",
 			full: func(client *gitlabclient.Client) error {
 				_, err := EditMember(context.Background(), client, EditInput{
-					GroupID: "5", UserID: 7, AccessLevel: 30, ExpiresAt: "2027-01-31", MemberRoleID: 3,
+					GroupID: "5", UserID: 7, AccessLevel: 30, ExpiresAt: "2027-01-31", MemberRoleID: new(int64(3)),
 				})
 				return err
 			},

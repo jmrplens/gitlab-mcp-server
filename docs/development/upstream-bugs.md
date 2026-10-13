@@ -88,6 +88,7 @@ for the fork, branch, fix, test and MR workflow.
   - [UpdateWorkItemOptions cannot remove a reference, a date or the health status](#updateworkitemoptions-cannot-remove-a-reference-a-date-or-the-health-status)
   - [ListAuditEventsOptions models neither entity filter the instance list takes](#listauditeventsoptions-models-neither-entity-filter-the-instance-list-takes)
   - [UpdateReleaseOptions sends the title and the notes as null on every partial update](#updatereleaseoptions-sends-the-title-and-the-notes-as-null-on-every-partial-update)
+  - [Seven update option structs cannot send the null or the empty list that clears a field](#seven-update-option-structs-cannot-send-the-null-or-the-empty-list-that-clears-a-field)
   - [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
@@ -354,6 +355,7 @@ readable without opening the tracker:
 | 119 | client-go | [UpdateWorkItemOptions cannot remove a reference, a date or the health status](#updateworkitemoptions-cannot-remove-a-reference-a-date-or-the-health-status) | No | No | No | No | Yes, `issue.work_item_update` and `group.epic_update` write null into the mutation input through a request option |
 | 120 | client-go | [ListAuditEventsOptions models neither entity filter the instance list takes](#listauditeventsoptions-models-neither-entity-filter-the-instance-list-takes) | No | No | No | No | Yes, `audit_event.list_instance` adds `entity_type` and `entity_id` to the query through a request option |
 | 121 | client-go | [UpdateReleaseOptions sends the title and the notes as null on every partial update](#updatereleaseoptions-sends-the-title-and-the-notes-as-null-on-every-partial-update) | No | No | No | No | Yes, `release.update` takes the two keys out of the body through a request option whenever the caller did not set them |
+| 122 | client-go | [Seven update option structs cannot send the null or the empty list that clears a field](#seven-update-option-structs-cannot-send-the-null-or-the-empty-list-that-clears-a-field) | No | No | No | No | Yes, the seven update actions write the null or the `[]` into the body through a request option, and the group label actions no longer offer the priority |
 | 126 | client-go | [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date) | No | No | No | No | Yes, `user.add_ssh_key`, `user.add_ssh_key_for_user`, `snippet.list_all` and the two changelog actions leave the field unset and write the instant given through a request option |
 | 127 | gitlab-org/gitlab | [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text) | No | No | No | No; GitLab's pages leave such a submodule unlinked | Yes, `repository.list_submodules` and `repository.read_submodule_file` resolve a sibling namespace and the other spellings of the instance's clone URLs |
 
@@ -6375,6 +6377,76 @@ regenerated.
 
 **Effort**: small: `omitempty` on both halves of two tags, and a test that a
 date-only update sends neither key.
+
+### Seven update option structs cannot send the null or the empty list that clears a field
+
+- **Reported**: no. It belongs with the option struct commits of the joint
+  merge request,
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  and is not in it yet.
+- **In review**: no.
+- **Merged**: no. v3.18.0 carries the same fields.
+- **Blocking**: no.
+- **Workaround**: yes. Each handler reads the field as a pointer and passes
+  `toolutil.EditJSONBody`, the request option that writes into the JSON body
+  client-go encoded: `toolutil.NullWhenZero` records the key as null when the
+  caller sent `""` or `0`, and the broadcast message update writes `[]` when
+  the caller sent an empty list. It retires field by field as each option can
+  carry the value.
+
+**Where**: seven option structs and the methods that send them, at v3.15.0:
+
+- `EditGroupMemberOptions.MemberRoleID` and
+  `EditProjectMemberOptions.MemberRoleID`, `*int64` tagged `omitempty`, sent
+  by `EditGroupMember` and `EditProjectMember`.
+- `UpdateReleaseLinkOptions.FilePath` and `DirectAssetPath`, `*string`
+  tagged `omitempty`, sent by `UpdateReleaseLink`.
+- `UpdatePagesOptions.PagesPrimaryDomain`, `*string` tagged `omitempty`,
+  sent by `UpdatePages`.
+- `UpdateBroadcastMessageOptions.TargetAccessLevels`, a
+  `[]AccessLevelValue` tagged `omitempty`, sent by `UpdateBroadcastMessage`.
+- `UpdateAdminCompliancePolicySettingsOptions.CSPNamespaceID`, `*int64`
+  tagged `omitempty`, sent by `UpdateCompliancePolicySettings`.
+- `EditProjectOptions.MaxArtifactsSize` and `CIDeletePipelinesInSeconds`,
+  `*int64` tagged `omitempty`, sent by `EditProject`.
+
+Beside them, `CreateGroupLabelOptions.Priority` and
+`UpdateGroupLabelOptions.Priority` offer a priority that no group label
+route takes.
+
+**What**: each of these fields is one GitLab clears only with a value the
+struct cannot hold. A nil pointer is left out and a pointer to `""` or `0` is
+sent as written, while GitLab clears with null: a member's custom role
+(`ee/app/services/ee/members/update_service.rb` removes it on an explicit
+null, and refuses to change the access level while one is assigned), a
+release link's paths (`app/models/releases/link.rb` refuses `""` through
+`FILEPATH_REGEX`), the Pages primary domain (`lib/api/pages.rb` refuses a
+value that is not one of the project's domains, and `""` is not), the
+compliance policy namespace (the route requires the key, and on GitLab
+19.4.2 `null` clears it while leaving the key out is answered 400), and a
+project's artifact size limit and pipeline retention (`app/models/project.rb`
+validates `max_artifacts_size` above 0 and `app/models/project_ci_cd_setting.rb`
+validates `delete_pipelines_in_seconds` at a day or more, both allowing nil,
+which puts back the instance's limit and keeps pipelines for ever). A slice
+tagged `omitempty` leaves an empty list out, and `[]` is what GitLab reads as
+a broadcast message shown to every role. A caller of client-go can therefore
+set each of these and clear none. The group label priority is the reverse:
+neither `POST` nor `PUT /groups/:id/labels` declares one, and
+`lib/api/helpers/label_helpers.rb` applies a priority to a project label
+only, so the field is sent and does nothing.
+
+**How we found it**: issue 1306 and its comments, from a member whose custom
+role could not be removed (and whose access level could not change because
+of it) through `group.group_member_edit`, and by reading the handlers the
+clearing gate in `internal/tools/action_specs_test.go` reported once every
+other field reached GitLab, the two project limits once the gate probed the
+integer fields with 0 as well. The compliance policy half was measured on
+GitLab 19.4.2 before the workaround was written; the project limits are read
+from GitLab 19.4.1's models, not measured.
+
+**Effort**: small to medium: a `Nullable` type on each pointer, or a set of
+`Clear` flags, which is the same choice of API row 119 leaves to the
+maintainers; the slice and the priority are one tag and one deletion.
 
 ### Three option structs carry a timestamp parameter as a date
 

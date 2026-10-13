@@ -220,7 +220,7 @@ type EditInput struct {
 	UserID       int64                `json:"user_id"                 jsonschema:"User ID of the member to edit,required"`
 	AccessLevel  int                  `json:"access_level"            jsonschema:"New access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner),required"`
 	ExpiresAt    string               `json:"expires_at,omitempty"    jsonschema:"Membership expiration date (YYYY-MM-DD)"`
-	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role ID"`
+	MemberRoleID *int64               `json:"member_role_id,omitempty" jsonschema:"Custom member role ID. Pass 0 to remove the custom role, which GitLab requires before it changes the access level of a member that holds one. Omit the field to leave it untouched"`
 }
 
 // DeleteInput defines parameters for removing a project member.
@@ -358,12 +358,16 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Ou
 		AccessLevel: new(gl.AccessLevelValue(input.AccessLevel)),
 		ExpiresAt:   expiresAt,
 	}
-	if input.MemberRoleID != 0 {
-		opts.MemberRoleID = new(input.MemberRoleID)
-	}
+	// GitLab takes a custom role off a member only on null, which the
+	// option's omitempty pointer cannot carry, so 0 is written into the body
+	// as null through a request option (issue 1306, upstream register row
+	// 122).
+	var nulls toolutil.BodyEdit
+	opts.MemberRoleID = toolutil.NullWhenZero(input.MemberRoleID, "member_role_id", &nulls)
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	m, _, err := client.GL().ProjectMembers.EditProjectMember(string(input.ProjectID), input.UserID, opts, gl.WithContext(ctx))
+	m, _, err := client.GL().ProjectMembers.EditProjectMember(string(input.ProjectID), input.UserID, opts, gl.WithContext(ctx),
+		toolutil.EditJSONBody(nulls))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return Output{}, toolutil.WrapErrWithHint("memberEdit", err, "you need at least the same or higher access level as the target member")

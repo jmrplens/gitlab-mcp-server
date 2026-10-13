@@ -21,6 +21,22 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdate_EmptyTargetAccessLevels_SendsAnEmptyList holds [] to reaching
+// GitLab, which reads it as showing the message to every role. client-go
+// tags the levels omitempty, so an empty list used to leave the body and the
+// message kept its audience (issue 1306).
+func TestUpdate_EmptyTargetAccessLevels_SendsAnEmptyList(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"id": 1, "target_access_levels": []any{}})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"id":1,"message":"m"}`)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"target_access_levels": "[]"})
+}
+
 // TestUpdate_EmptyTargetPath_ReachesTheBody holds a broadcast message's target
 // path to an empty value removing it, so the message shows everywhere again.
 // The handler used to drop it and GitLab kept the old path (issue 1306).

@@ -172,7 +172,10 @@ const (
 	// skypeDiscarded is the reason the user create and modify inputs offer no
 	// skype, which client-go's options still carry.
 	skypeDiscarded = "GitLab discards it: the users.skype column is ignored since 18.4 and neither POST /users nor PUT /users/:id declares the param, so a caller who set it changed nothing"
-	tagKeyJSON     = "json"
+	// groupLabelPriority is the reason the group label inputs offer no
+	// priority, which client-go's options still carry.
+	groupLabelPriority = "GitLab discards it: neither POST nor PUT /groups/:id/labels declares priority, and the label helper applies one to a project label only, so a caller who set it changed nothing"
+	tagKeyJSON         = "json"
 	// tagKeyURL is the tag go-querystring names a query parameter by, which
 	// client-go's Options structs carry beside their json tags.
 	tagKeyURL = "url"
@@ -957,6 +960,12 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	// Deprecated params the current endpoint replaced.
 	"grouplabels.DeleteInput.name": "deprecated DELETE /groups/:id/labels name param; current endpoint uses label_id in path",
 	"grouplabels.UpdateInput.name": "deprecated PUT /groups/:id/labels name param; current endpoint uses label_id in path",
+	// client-go offers a priority on both group label option structs, which no
+	// group label route declares and GitLab's label helper applies to a project
+	// label only (lib/api/helpers/label_helpers.rb), so it was sent and did
+	// nothing (issue 1306, upstream register row 122).
+	"grouplabels.CreateInput.priority": groupLabelPriority,
+	"grouplabels.UpdateInput.priority": groupLabelPriority,
 	// The Bitbucket Cloud app-password pair, which no current GitLab or
 	// Bitbucket accepts: GitLab 19.0 dropped both from POST /import/bitbucket,
 	// an earlier instance refuses them beside the API token the action always

@@ -7,6 +7,7 @@ package members
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -19,6 +20,40 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// TestEdit_MemberRoleIDZero_SendsNull holds a project member's member_role_id
+// of 0 to null, which is how GitLab takes a custom role off a member, and a
+// field left out to nothing at all (issue 1306).
+func TestEdit_MemberRoleIDZero_SendsNull(t *testing.T) {
+	cases := []struct {
+		name   string
+		params map[string]any
+		want   string
+		sent   bool
+	}{
+		{name: "zero removes the role", params: map[string]any{"member_role_id": 0}, want: "null", sent: true},
+		{name: "left out", params: map[string]any{}, sent: false},
+		{name: "a role", params: map[string]any{"member_role_id": 7}, want: "7", sent: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			params := map[string]any{"project_id": "42", "user_id": 9, "access_level": 20}
+			maps.Copy(params, tc.params)
+			input, err := toolutil.UnmarshalParams[EditInput](params)
+			if err != nil {
+				t.Fatalf("UnmarshalParams() error: %v", err)
+			}
+			client, recorder := testutil.RecordWrites(t, `{}`, `{"id":9,"username":"u","access_level":20}`)
+			if _, err = Edit(t.Context(), client, input); err != nil {
+				t.Fatalf("Edit() error: %v", err)
+			}
+			got, sent := recorder.Member("member_role_id")
+			if sent != tc.sent || got != tc.want {
+				t.Errorf("member_role_id = %q (sent %v), want %q (sent %v)", got, sent, tc.want, tc.sent)
+			}
+		})
+	}
+}
 
 // Test endpoint paths and format strings for project member operation tests.
 const (
@@ -1080,7 +1115,7 @@ func TestMemberEdit_WithMemberRoleID(t *testing.T) {
 		ProjectID:    "42",
 		UserID:       10,
 		AccessLevel:  40,
-		MemberRoleID: 7,
+		MemberRoleID: new(int64(7)),
 	})
 	if err != nil {
 		t.Fatalf("Edit() unexpected error: %v", err)
@@ -1588,7 +1623,7 @@ func TestMemberEdit_SendsOnlyTheOptionsItWasGiven(t *testing.T) {
 		},
 		{
 			name:    "member_role_id is carried when set",
-			input:   EditInput{ProjectID: testProjectID, UserID: 10, AccessLevel: 40, MemberRoleID: 7},
+			input:   EditInput{ProjectID: testProjectID, UserID: 10, AccessLevel: 40, MemberRoleID: new(int64(7))},
 			present: map[string]any{fieldMemberRoleID: float64(7)},
 		},
 	}

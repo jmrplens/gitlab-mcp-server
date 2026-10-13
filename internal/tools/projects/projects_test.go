@@ -90,6 +90,43 @@ func TestUpdate_ZeroSettings_ReachTheBody(t *testing.T) {
 	})
 }
 
+// TestUpdate_ZeroLimits_GoOutAsNull holds a max_artifacts_size and a
+// ci_delete_pipelines_in_seconds of 0 to null in the body. GitLab stores
+// neither as 0 (the artifact size must be above 0, and pipelines are kept at
+// least a day), and null is what puts each back to its default: the instance's
+// artifact size limit, and pipelines kept for ever. client-go's pointers are
+// tagged omitempty and cannot carry a null (issue 1306, upstream register row
+// 122).
+func TestUpdate_ZeroLimits_GoOutAsNull(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
+		"project_id": "42", "max_artifacts_size": 0, "ci_delete_pipelines_in_seconds": 0,
+	})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, projectJSON)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"max_artifacts_size": "null", "ci_delete_pipelines_in_seconds": "null"})
+}
+
+// TestUpdate_PositiveLimits_ReachTheBody holds a max_artifacts_size and a
+// ci_delete_pipelines_in_seconds above 0 to the body as given.
+func TestUpdate_PositiveLimits_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
+		"project_id": "42", "max_artifacts_size": 50, "ci_delete_pipelines_in_seconds": 86400,
+	})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, projectJSON)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"max_artifacts_size": "50", "ci_delete_pipelines_in_seconds": "86400"})
+}
+
 // TestEditHook_EmptyValues_ReachTheBody holds a project hook's description,
 // branch filter and custom template to an empty value removing each (issue
 // 1306).
@@ -1135,7 +1172,7 @@ func TestProjectHandlers_ValidationErrors(t *testing.T) {
 // pointers are populated with the requested values. This protects Premium push
 // rule metadata from being dropped during option conversion.
 func TestBuildUpdateOpts_MergeRequestTitleRegexOptions(t *testing.T) {
-	opts := buildUpdateOpts(UpdateInput{
+	opts, _ := buildUpdateOpts(UpdateInput{
 		MergeRequestTitleRegex:            new(testCommitRegex),
 		MergeRequestTitleRegexDescription: new("Conventional commits"),
 	})
@@ -4309,7 +4346,7 @@ func TestBuildUpdateOpts_AllFields(t *testing.T) {
 		SnippetsAccessLevel:            "private",
 	}
 
-	opts := buildUpdateOpts(input)
+	opts, _ := buildUpdateOpts(input)
 	assertEditProjectOpts(t, opts)
 }
 
@@ -5111,7 +5148,7 @@ func TestUpdate_AutomaticRebaseEnabled_ReachesTheOptionOnlyWhenGiven(t *testing.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			opts := buildUpdateOpts(UpdateInput{ProjectID: "42", AutomaticRebaseEnabled: tt.input})
+			opts, _ := buildUpdateOpts(UpdateInput{ProjectID: "42", AutomaticRebaseEnabled: tt.input})
 			if !reflect.DeepEqual(opts.AutomaticRebaseEnabled, tt.input) {
 				t.Errorf("AutomaticRebaseEnabled = %v, want %v", opts.AutomaticRebaseEnabled, tt.input)
 			}
@@ -8471,7 +8508,7 @@ func TestBuildUpdateOpts_AdditiveFields_AllMapped(t *testing.T) {
 		GroupRunnersEnabled:                      new(true),
 		KeepLatestArtifact:                       new(true),
 		BuildTimeout:                             new(int64(600)),
-		MaxArtifactsSize:                         100,
+		MaxArtifactsSize:                         new(int64(100)),
 		AutoDevopsEnabled:                        new(true),
 		AutoDevopsDeployStrategy:                 "manual",
 		AutoDuoCodeReviewEnabled:                 new(true),
@@ -8479,7 +8516,7 @@ func TestBuildUpdateOpts_AdditiveFields_AllMapped(t *testing.T) {
 		AutoCancelPendingPipelines:               "enabled",
 		CICDCatalogEnabled:                       new(true),
 		CIDefaultGitDepth:                        new(int64(20)),
-		CIDeletePipelinesInSeconds:               86400,
+		CIDeletePipelinesInSeconds:               new(int64(86400)),
 		CIDisplayPipelineVariables:               new(true),
 		CIForwardDeploymentEnabled:               new(true),
 		CIForwardDeploymentRollbackAllowed:       new(true),
@@ -8503,7 +8540,7 @@ func TestBuildUpdateOpts_AdditiveFields_AllMapped(t *testing.T) {
 		RepositoryAccessLevel:                    "enabled",
 		ForkingAccessLevel:                       "private",
 	}
-	opts := buildUpdateOpts(input)
+	opts, _ := buildUpdateOpts(input)
 	assertUpdateAdditiveScalars(t, opts)
 	assertUpdateAdditiveBools(t, opts)
 	assertUpdateAdditiveMisc(t, opts)
@@ -8636,7 +8673,7 @@ func TestBuildUpdateOpts_AccessLevels_AllMapped(t *testing.T) {
 		ModelExperimentsAccessLevel:      "enabled",
 		ModelRegistryAccessLevel:         "private",
 	}
-	opts := buildUpdateOpts(input)
+	opts, _ := buildUpdateOpts(input)
 	levels := map[string]*gl.AccessControlValue{
 		"IssuesAccessLevel":                opts.IssuesAccessLevel,
 		"MergeRequestsAccessLevel":         opts.MergeRequestsAccessLevel,
@@ -8661,7 +8698,7 @@ func TestBuildUpdateOpts_AccessLevels_AllMapped(t *testing.T) {
 		})
 	}
 	// Bool toggle still bridges when access-level string is absent.
-	bridged := buildUpdateOpts(UpdateInput{ProjectID: "1", IssuesEnabled: new(false)})
+	bridged, _ := buildUpdateOpts(UpdateInput{ProjectID: "1", IssuesEnabled: new(false)})
 	if bridged.IssuesAccessLevel == nil || *bridged.IssuesAccessLevel != gl.DisabledAccessControl {
 		t.Error("IssuesEnabled bool did not bridge to IssuesAccessLevel")
 	}
@@ -8686,7 +8723,7 @@ func TestBuildUpdateOpts_EachDeprecatedToggle_BridgesToItsOwnAccessLevel(t *test
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			opts := buildUpdateOpts(tc.input)
+			opts, _ := buildUpdateOpts(tc.input)
 			levels := map[string]*gl.AccessControlValue{
 				"IssuesAccessLevel":        opts.IssuesAccessLevel,
 				"MergeRequestsAccessLevel": opts.MergeRequestsAccessLevel,

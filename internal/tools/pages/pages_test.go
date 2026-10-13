@@ -18,6 +18,23 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdatePages_EmptyPrimaryDomain_SendsNull holds an empty primary domain
+// to the one value GitLab removes it with. GitLab refuses "" as a domain the
+// project does not have, and client-go's option cannot carry null, so the
+// handler used to drop the field and report success with the old domain
+// (issue 1306).
+func TestUpdatePages_EmptyPrimaryDomain_SendsNull(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdatePagesInput](map[string]any{"project_id": "42", "pages_primary_domain": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"url":"https://p.example.com"}`)
+	if _, err = UpdatePages(t.Context(), client, input); err != nil {
+		t.Fatalf("UpdatePages() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"pages_primary_domain": "null"})
+}
+
 // TestGetPages_Success verifies GetPages when success.
 func TestGetPages_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -540,7 +557,7 @@ func TestUpdatePages_AllOptionalFields(t *testing.T) {
 		ProjectID:                "42",
 		PagesUniqueDomainEnabled: &uniqueDomain,
 		PagesHTTPSOnly:           &httpsOnly,
-		PagesPrimaryDomain:       "custom.io",
+		PagesPrimaryDomain:       new("custom.io"),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -598,7 +615,7 @@ func TestUpdatePages_OptionalFieldsReachTheRequestBody(t *testing.T) {
 				ProjectID:                "42",
 				PagesUniqueDomainEnabled: &uniqueDomain,
 				PagesHTTPSOnly:           &httpsOnly,
-				PagesPrimaryDomain:       "primary.example.com",
+				PagesPrimaryDomain:       new("primary.example.com"),
 			},
 			want: map[string]any{
 				"pages_unique_domain_enabled": true,

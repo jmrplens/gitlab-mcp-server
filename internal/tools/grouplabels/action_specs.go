@@ -114,13 +114,13 @@ var groupLabelActionMeta = map[string]groupLabelActionMetaEntry{
 		description: "Get a single group label by ID or name. Returns: the label with color, text color, description, and subscription state. GitLab sends a label's usage counts only to group.group_label_list with with_counts. See also: gitlab_group_label_list, gitlab_group_label_update, gitlab_group_label_delete.",
 	},
 	"gitlab_group_label_create": {
-		usage:       "Create a new label in a group. Provide group_id, a unique name, and a hex color. Add description, priority, or archived only when requested.",
+		usage:       "Create a new label in a group. Provide group_id, a unique name, and a hex color. Add description or archived only when requested. A group label takes no priority: only a project label has one.",
 		aliases:     []string{"create group label", "add group label", "new group label"},
 		related:     []string{actionGroupLabelList, actionGroupLabelGet, actionGroupLabelUpdate},
 		description: "Create a new group label. Returns: the created label with id, name, color, text color, description, and subscription state. See also: gitlab_group_label_list, gitlab_group_label_get, gitlab_group_label_update.",
 	},
 	"gitlab_group_label_update": {
-		usage:       "Update an existing group label. Provide at least one of new_name, color, description, priority, or archived to change the label.",
+		usage:       "Update an existing group label. Provide at least one of new_name, color, description, or archived to change the label.",
 		aliases:     []string{"update group label", "edit group label", "rename group label"},
 		related:     []string{actionGroupLabelGet, actionGroupLabelList, actionGroupLabelDelete},
 		description: "Update a group label. Returns: the updated label with id, name, color, text color, description, and subscription state. See also: gitlab_group_label_get, gitlab_group_label_list, gitlab_group_label_delete.",

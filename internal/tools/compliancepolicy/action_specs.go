@@ -36,7 +36,7 @@ func compliancePolicyOptions(actionName, individualTool string) toolutil.ActionS
 	related := []string{"compliance_policy.update", "group.get"}
 
 	if actionName == "update" {
-		usage = "Bind the centralized compliance security policy (CSP) project to a top-level group namespace so its compliance frameworks and security policies apply instance-wide. Requires an Ultimate license and the Owner role. GitLab may lock CSP namespace changes for several minutes after each update."
+		usage = "Bind the centralized compliance security policy (CSP) project to a top-level group namespace so its compliance frameworks and security policies apply instance-wide, or pass 0 to remove the binding. Requires an administrator and an Ultimate license. Every change locks the setting for ten minutes, and GitLab refuses a second change inside that time."
 		aliases = []string{
 			individualTool,
 			"set csp namespace",
@@ -49,7 +49,7 @@ func compliancePolicyOptions(actionName, individualTool string) toolutil.ActionS
 			SemanticRole:     "compliance_namespace_id",
 			ValueSource:      "ID of an existing top-level group namespace that should host the compliance security policy (CSP) project.",
 			ExampleBinding:   "params.csp_namespace_id:200",
-			CommonConfusions: []string{"Use a top-level group namespace ID, not a project ID or a subgroup. GitLab rejects empty update requests."},
+			CommonConfusions: []string{"Use a top-level group namespace ID, not a project ID or a subgroup. Pass 0 to remove the binding: GitLab requires the field on every update, so leaving it out is refused rather than read as a removal."},
 		}
 		description = "Update the instance compliance policy settings. Returns: the compliance policy settings with the newly bound centralized compliance security policy (CSP) namespace ID. See also: gitlab_get_compliance_policy_settings, gitlab_group_get."
 		related = []string{"compliance_policy.get", "group.get"}

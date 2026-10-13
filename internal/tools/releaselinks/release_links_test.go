@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -19,6 +20,58 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// TestUpdate_EmptyAssetPaths_SendNull holds an empty filepath and direct asset
+// path to null, the one value GitLab removes either with: it refuses "" as a
+// path, and client-go's options cannot carry null, so the handler used to
+// drop both and report success with the old path (issue 1306).
+func TestUpdate_EmptyAssetPaths_SendNull(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
+		"project_id": "42", "tag_name": "v1", "link_id": 3, "name": "bin", "filepath": "", "direct_asset_path": "",
+	})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"id":3,"name":"bin","url":"https://example.com/bin"}`)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"name": `"bin"`, "filepath": "null", "direct_asset_path": "null"})
+}
+
+// TestUpdate_NeitherNameNorURL_RefusedBeforeTheRequest holds an update that
+// carries neither name nor url to a refusal that sends nothing. GitLab's
+// route requires at least one of the two (at_least_one_of in
+// lib/api/release/links.rb) and answers 400 "name, url are missing" to any
+// other update, which on CE 19.4.2 was how removing a direct asset path alone
+// failed; the refusal says to send the link's current name beside the change.
+func TestUpdate_NeitherNameNorURL_RefusedBeforeTheRequest(t *testing.T) {
+	cases := []struct {
+		name   string
+		params map[string]any
+	}{
+		{name: "an empty direct asset path", params: map[string]any{"direct_asset_path": ""}},
+		{name: "a filepath", params: map[string]any{"filepath": "/bin/linux"}},
+		{name: "a link type", params: map[string]any{"link_type": "runbook"}},
+		{name: "nothing to change", params: map[string]any{}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			params := map[string]any{"project_id": "42", "tag_name": "v1", "link_id": 3}
+			maps.Copy(params, testCase.params)
+			input, err := toolutil.UnmarshalParams[UpdateInput](params)
+			if err != nil {
+				t.Fatalf("UnmarshalParams() error: %v", err)
+			}
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+			_, err = Update(t.Context(), client, input)
+			if err == nil || !strings.Contains(err.Error(), "name or url") || !strings.Contains(err.Error(), actionLinkGet) {
+				t.Errorf("Update() error = %v, want a refusal naming name or url and %s", err, actionLinkGet)
+			}
+		})
+	}
+}
 
 // Test endpoint path for release asset link operations.
 const (
@@ -726,8 +779,8 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 		LinkID:          10,
 		Name:            "New Name",
 		URL:             "https://new.example.com",
-		FilePath:        "/binaries/linux-amd64",
-		DirectAssetPath: "/direct/path",
+		FilePath:        new("/binaries/linux-amd64"),
+		DirectAssetPath: new("/direct/path"),
 		LinkType:        "image",
 	})
 	if err != nil {
@@ -1344,13 +1397,12 @@ func TestReleaseLinkUpdate_SendsOnlyTheFieldsTheCallerSet(t *testing.T) {
 	}{
 		{"name only", UpdateInput{Name: "renamed"}, map[string]any{"name": "renamed"}},
 		{"url only", UpdateInput{URL: "https://example.com/v2"}, map[string]any{"url": "https://example.com/v2"}},
-		{"filepath only", UpdateInput{FilePath: "/legacy/path"}, map[string]any{"filepath": "/legacy/path"}},
-		{"direct asset path only", UpdateInput{DirectAssetPath: "/direct/path"}, map[string]any{"direct_asset_path": "/direct/path"}},
-		{"link type only", UpdateInput{LinkType: "runbook"}, map[string]any{"link_type": "runbook"}},
-		{"nothing optional", UpdateInput{}, map[string]any{}},
+		{"filepath beside the name", UpdateInput{Name: "renamed", FilePath: new("/legacy/path")}, map[string]any{"name": "renamed", "filepath": "/legacy/path"}},
+		{"direct asset path beside the url", UpdateInput{URL: "https://example.com/v2", DirectAssetPath: new("/direct/path")}, map[string]any{"url": "https://example.com/v2", "direct_asset_path": "/direct/path"}},
+		{"link type beside the name", UpdateInput{Name: "renamed", LinkType: "runbook"}, map[string]any{"name": "renamed", "link_type": "runbook"}},
 		{
 			"every field, each a different value",
-			UpdateInput{Name: "renamed", URL: "https://example.com/v2", FilePath: "/legacy/path", DirectAssetPath: "/direct/path", LinkType: "runbook"},
+			UpdateInput{Name: "renamed", URL: "https://example.com/v2", FilePath: new("/legacy/path"), DirectAssetPath: new("/direct/path"), LinkType: "runbook"},
 			map[string]any{
 				"name":              "renamed",
 				"url":               "https://example.com/v2",

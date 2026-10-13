@@ -82,6 +82,24 @@ func releaseLinkLifecycle(e *harness.Env, s *harness.Session, release map[string
 		e.T.Errorf("release link create batch answered %+v, want batch-two with a direct asset URL ending in %s", batch.Created, permalink)
 	}
 
+	// An empty direct asset path removes it, which GitLab does only on null,
+	// so the link goes back to answering with its own URL. The update used
+	// to drop the empty value and report success with the permalink still in
+	// place (issue 1306). GitLab updates a link only when the request carries
+	// its name or its URL, so the current name goes beside the removal.
+	if index := slices.IndexFunc(batch.Created, func(link releaselinks.Output) bool { return link.Name == "batch-two" }); index >= 0 {
+		second := withParams(release, map[string]any{"link_id": batch.Created[index].ID})
+		updated := harness.Do[releaselinks.Output](s, actionReleaseLinkUpdate, withParams(second, map[string]any{"name": "batch-two", "direct_asset_path": ""}))
+		cleared := harness.Do[releaselinks.Output](s, actionReleaseLinkGet, second)
+		assertOwnURL := func(call string, out releaselinks.Output) {
+			if strings.HasSuffix(out.DirectAssetURL, permalink) || out.DirectAssetURL != out.URL {
+				e.T.Errorf("release link %s after removing the direct asset path answered %+v, want the link's own URL as its direct asset URL", call, out)
+			}
+		}
+		assertOwnURL("update", updated)
+		assertOwnURL("get", cleared)
+	}
+
 	linkDeleted := harness.Do[releaselinks.Output](s, actionReleaseLinkDelete, byLink)
 	if linkDeleted.ID != link.ID {
 		e.T.Errorf("release link delete answered %+v, want link %d", linkDeleted, link.ID)

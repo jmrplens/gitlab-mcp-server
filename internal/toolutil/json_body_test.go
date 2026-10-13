@@ -32,6 +32,44 @@ func sentBody(t *testing.T, req *retryablehttp.Request) string {
 	return string(raw)
 }
 
+// TestNullWhenZero_SendsNullOnlyForTheZeroValue holds the three answers an
+// update field GitLab clears only with null takes: a field left out edits
+// nothing and returns nil, a zero value records the key as null and returns
+// nil so the option struct leaves it to the edit, and any other value comes
+// back as given and edits nothing. It runs for a text and an ID reference, the
+// two kinds the handlers read through it, and with an edit that already holds
+// a key, which a second field must not replace.
+func TestNullWhenZero_SendsNullOnlyForTheZeroValue(t *testing.T) {
+	t.Run("text", func(t *testing.T) {
+		var edit BodyEdit
+		if got := NullWhenZero[string](nil, "filepath", &edit); got != nil || edit.Set != nil {
+			t.Errorf("left out: got %v, Set %v, want nil and no edit", got, edit.Set)
+		}
+		path := "/bin/app"
+		if got := NullWhenZero(&path, "filepath", &edit); got != &path || edit.Set != nil {
+			t.Errorf("a path: got %v, Set %v, want the same pointer and no edit", got, edit.Set)
+		}
+		if got := NullWhenZero(new(""), "filepath", &edit); got != nil {
+			t.Errorf("empty: got %v, want nil", got)
+		}
+		if value, ok := edit.Set["filepath"]; !ok || value != nil {
+			t.Errorf("empty: Set = %v, want filepath set to null", edit.Set)
+		}
+	})
+	t.Run("ID reference", func(t *testing.T) {
+		edit := BodyEdit{Set: map[string]any{"other": "kept"}}
+		if got := NullWhenZero(new(int64(0)), "member_role_id", &edit); got != nil {
+			t.Errorf("zero: got %v, want nil", got)
+		}
+		if value, ok := edit.Set["member_role_id"]; !ok || value != nil || edit.Set["other"] != "kept" {
+			t.Errorf("zero: Set = %v, want member_role_id null beside the key already there", edit.Set)
+		}
+		if got := NullWhenZero(new(int64(7)), "member_role_id", &edit); got == nil || *got != 7 {
+			t.Errorf("a role: got %v, want 7", got)
+		}
+	})
+}
+
 // TestEditJSONBody_SetsAndDropsKeys holds the option to its contract on the
 // body client-go encoded: a key in Set is written with its value, nil writing
 // null, a key in Drop is removed, and every other key is left as it was, a

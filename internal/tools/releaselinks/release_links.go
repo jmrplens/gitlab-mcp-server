@@ -65,8 +65,8 @@ type UpdateInput struct {
 	LinkID          int64                `json:"link_id"                   jsonschema:"ID of the release link to update,required"`
 	Name            string               `json:"name,omitempty"            jsonschema:"New name of the link"`
 	URL             string               `json:"url,omitempty"             jsonschema:"New URL of the link"`
-	FilePath        string               `json:"filepath,omitempty"        jsonschema:"New filepath for a direct asset link"`
-	DirectAssetPath string               `json:"direct_asset_path,omitempty" jsonschema:"New direct asset path for the link"`
+	FilePath        *string              `json:"filepath,omitempty"        jsonschema:"New filepath for a direct asset link. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	DirectAssetPath *string              `json:"direct_asset_path,omitempty" jsonschema:"New direct asset path for the link. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	LinkType        string               `json:"link_type,omitempty"       jsonschema:"New link type (runbook, package, image, other)"`
 }
 
@@ -276,6 +276,15 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.LinkID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("Update", "link_id")
 	}
+	// GitLab requires at least one of the two (at_least_one_of in
+	// lib/api/release/links.rb) and answers any other update 400 "name, url
+	// are missing". The schema says so with an anyOf, which the meta surface
+	// does not check, so an update changing only a path or the type is
+	// refused here with the way through rather than sent.
+	if input.Name == "" && input.URL == "" {
+		return Output{}, errors.New("Update: name or url is required, since GitLab updates a release link only when the request carries at least one of them. " +
+			"To change only a path or the link type, pass the link's current name from " + actionLinkGet + " beside the change")
+	}
 	opts := &gl.UpdateReleaseLinkOptions{}
 	if input.Name != "" {
 		opts.Name = new(input.Name)
@@ -283,16 +292,18 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.URL != "" {
 		opts.URL = new(input.URL)
 	}
-	if input.FilePath != "" {
-		opts.FilePath = new(input.FilePath)
-	}
-	if input.DirectAssetPath != "" {
-		opts.DirectAssetPath = new(input.DirectAssetPath)
-	}
+	// GitLab refuses "" as a path and removes one only on null, which the
+	// option struct cannot carry, so an empty path is written into the body
+	// as null through a request option (issue 1306, upstream register row
+	// 122).
+	var nulls toolutil.BodyEdit
+	opts.FilePath = toolutil.NullWhenZero(input.FilePath, "filepath", &nulls)
+	opts.DirectAssetPath = toolutil.NullWhenZero(input.DirectAssetPath, "direct_asset_path", &nulls)
 	if input.LinkType != "" {
 		opts.LinkType = new(gl.LinkTypeValue(input.LinkType))
 	}
-	l, _, err := client.GL().ReleaseLinks.UpdateReleaseLink(string(input.ProjectID), input.TagName, input.LinkID, opts, gl.WithContext(ctx))
+	l, _, err := client.GL().ReleaseLinks.UpdateReleaseLink(string(input.ProjectID), input.TagName, input.LinkID, opts, gl.WithContext(ctx),
+		toolutil.EditJSONBody(nulls))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("Update", err, http.StatusBadRequest,
 			"name and url must remain unique within the release; link_type must be one of {other, runbook, image, package}; verify link_id with release.link_list")

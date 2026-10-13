@@ -576,7 +576,7 @@ type UpdateInput struct {
 	GroupRunnersEnabled      *bool  `json:"group_runners_enabled,omitempty" jsonschema:"Enable group runners"`
 	KeepLatestArtifact       *bool  `json:"keep_latest_artifact,omitempty" jsonschema:"Keep the latest artifact for each pipeline"`
 	BuildTimeout             *int64 `json:"build_timeout,omitempty" jsonschema:"Build timeout in seconds. GitLab accepts 10 minutes to one month"`
-	MaxArtifactsSize         int64  `json:"max_artifacts_size,omitempty" jsonschema:"Maximum artifacts size in MB"`
+	MaxArtifactsSize         *int64 `json:"max_artifacts_size,omitempty" jsonschema:"Maximum artifacts size in MB. Pass 0 to go back to the instance's limit. Omit the field to leave it untouched"`
 
 	// Auto DevOps (additive)
 	AutoDevopsEnabled        *bool  `json:"auto_devops_enabled,omitempty" jsonschema:"Enable Auto DevOps for the project"`
@@ -588,7 +588,7 @@ type UpdateInput struct {
 	AutoCancelPendingPipelines             string   `json:"auto_cancel_pending_pipelines,omitempty" jsonschema:"Auto-cancel pending pipelines (enabled, disabled)"`
 	CICDCatalogEnabled                     *bool    `json:"cicd_catalog_enabled,omitempty" jsonschema:"Publish the project as a CI/CD catalog resource"`
 	CIDefaultGitDepth                      *int64   `json:"ci_default_git_depth,omitempty" jsonschema:"Default Git clone depth for CI/CD, 0 to 1000. Pass 0 to fetch the whole history. Omit the field to leave it untouched"`
-	CIDeletePipelinesInSeconds             int64    `json:"ci_delete_pipelines_in_seconds,omitempty" jsonschema:"Auto-delete pipelines older than this many seconds"`
+	CIDeletePipelinesInSeconds             *int64   `json:"ci_delete_pipelines_in_seconds,omitempty" jsonschema:"Auto-delete pipelines older than this many seconds, at least a day. Pass 0 to stop deleting them. Omit the field to leave it untouched"`
 	CIDisplayPipelineVariables             *bool    `json:"ci_display_pipeline_variables,omitempty" jsonschema:"Display pipeline variables in the UI"`
 	CIForwardDeploymentEnabled             *bool    `json:"ci_forward_deployment_enabled,omitempty" jsonschema:"Enable CI/CD forward deployment (skip outdated jobs)"`
 	CIForwardDeploymentRollbackAllowed     *bool    `json:"ci_forward_deployment_rollback_allowed,omitempty" jsonschema:"Allow job retries even for outdated deployment jobs"`
@@ -1434,8 +1434,10 @@ func Restore(ctx context.Context, client *gitlabclient.Client, input RestoreInpu
 	return projectOutput("projectRestore", p, captured)
 }
 
-// buildUpdateOpts maps UpdateInput fields to the GitLab API edit options.
-func buildUpdateOpts(input UpdateInput) *gl.EditProjectOptions {
+// buildUpdateOpts maps UpdateInput fields to the GitLab API edit options, and
+// returns beside them the edit that writes into the encoded body the nulls the
+// options cannot carry.
+func buildUpdateOpts(input UpdateInput) (*gl.EditProjectOptions, toolutil.BodyEdit) {
 	opts := &gl.EditProjectOptions{}
 	if input.Name != "" {
 		opts.Name = new(input.Name)
@@ -1468,7 +1470,16 @@ func buildUpdateOpts(input UpdateInput) *gl.EditProjectOptions {
 		opts.OnlyAllowMergeIfAllDiscussionsAreResolved = input.OnlyAllowMergeIfAllDiscussionsAreResolved
 	}
 	applyUpdateFeatureOpts(opts, input)
-	return opts
+	// GitLab stores neither limit as 0: the artifact size must be above 0 and
+	// pipelines are kept at least a day. Each goes back to its default, the
+	// instance's limit and no deletion, only on null, which client-go's
+	// pointers tagged omitempty cannot send, so a 0 is written into the body
+	// as null through a request option (issue 1306, upstream register row
+	// 122).
+	var nulls toolutil.BodyEdit
+	opts.MaxArtifactsSize = toolutil.NullWhenZero(input.MaxArtifactsSize, "max_artifacts_size", &nulls)
+	opts.CIDeletePipelinesInSeconds = toolutil.NullWhenZero(input.CIDeletePipelinesInSeconds, "ci_delete_pipelines_in_seconds", &nulls)
+	return opts, nulls
 }
 
 // applyUpdateFeatureOpts sets optional feature toggles and advanced merge settings.
@@ -1537,9 +1548,6 @@ func applyUpdateToggleOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	// A timeout of 0 is GitLab's to refuse ("needs to be between 10 minutes
 	// and 1 month"), not this server's to drop (issue 1306).
 	opts.BuildTimeout = input.BuildTimeout
-	if input.MaxArtifactsSize > 0 {
-		opts.MaxArtifactsSize = new(input.MaxArtifactsSize)
-	}
 }
 
 // applyUpdatePipelineOpts applies Auto DevOps and pipeline transformations.
@@ -1573,9 +1581,6 @@ func applyUpdateCIOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	opts.CIDefaultGitDepth = input.CIDefaultGitDepth
 	if input.CICDCatalogEnabled != nil {
 		opts.CICDCatalogEnabled = input.CICDCatalogEnabled
-	}
-	if input.CIDeletePipelinesInSeconds > 0 {
-		opts.CIDeletePipelinesInSeconds = new(input.CIDeletePipelinesInSeconds)
 	}
 	if input.CIDisplayPipelineVariables != nil {
 		opts.CIDisplayPipelineVariables = input.CIDisplayPipelineVariables
@@ -1759,9 +1764,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.ProjectID == "" {
 		return Output{}, errors.New("projectUpdate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
-	opts := buildUpdateOpts(input)
+	opts, nulls := buildUpdateOpts(input)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	p, _, err := client.GL().Projects.EditProject(string(input.ProjectID), opts, gl.WithContext(ctx))
+	p, _, err := client.GL().Projects.EditProject(string(input.ProjectID), opts, gl.WithContext(ctx), toolutil.EditJSONBody(nulls))
 	if err != nil {
 		switch {
 		case toolutil.IsHTTPStatus(err, http.StatusBadRequest):

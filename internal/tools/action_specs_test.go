@@ -1458,8 +1458,6 @@ var clearingDeclarations = map[string]clearingDeclaration{
 	"project.update.security_and_compliance_access_level":            clearOneOf(reasonAccessLevelChoice),
 	"project.update.snippets_access_level":                           clearOneOf(reasonAccessLevelChoice),
 	"project.update.wiki_access_level":                               clearOneOf(reasonAccessLevelChoice),
-	"release.link_update.name":                                       clearRequired("a release link has a name"),
-	"release.link_update.url":                                        clearRequired("a release link points at a URL"),
 	"release.update.description":                                     clearUnverified,
 	"release.update.name":                                            clearUnverified,
 	"release.update.released_at":                                     clearUnverified,

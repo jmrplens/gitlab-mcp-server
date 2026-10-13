@@ -3,6 +3,7 @@ package releaselinks
 
 import (
 	"context"
+	"encoding/json"
 	"maps"
 	"net/http"
 	"reflect"
@@ -94,6 +95,31 @@ func TestActionSpecs_SingleLinkURLGuidance(t *testing.T) {
 				t.Fatalf("url schema description = %q, want absolute URL warning", description)
 			}
 		})
+	}
+}
+
+// TestActionSpecs_LinkUpdate_RequiresNameOrURL verifies the update's schema
+// says what GitLab's route requires: name and url are each optional and at
+// least one of them is required (at_least_one_of in
+// lib/api/release/links.rb), which the anyOf says and a required list cannot.
+func TestActionSpecs_LinkUpdate_RequiresNameOrURL(t *testing.T) {
+	byTool := releaseLinkSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, releaseLinksActionHandler())))
+	for toolName, want := range map[string]string{
+		"gitlab_release_link_update": `[{"required":["name"]},{"required":["url"]}]`,
+		"gitlab_release_link_create": "null",
+	} {
+		t.Run(toolName, func(t *testing.T) {
+			raw, err := json.Marshal(byTool[toolName].Route.InputSchema["anyOf"])
+			if err != nil {
+				t.Fatalf("marshal anyOf: %v", err)
+			}
+			if string(raw) != want {
+				t.Errorf("anyOf = %s, want %s", raw, want)
+			}
+		})
+	}
+	if usage := byTool["gitlab_release_link_update"].Usage; !strings.Contains(usage, "name or url") || !strings.Contains(usage, actionLinkGet) {
+		t.Errorf("link_update Usage = %q, want it to say name or url is required and where the current name is read", usage)
 	}
 }
 

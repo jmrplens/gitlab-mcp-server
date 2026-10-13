@@ -85,7 +85,7 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 			options.Usage = "Create a single release asset link. The url must be an absolute http, https, or ftp URL. Do not pass local file paths or relative paths as url. To create several links at once (e.g. one per uploaded package file), use link_create_batch instead."
 			options.Aliases = []string{"create release link", "add release asset link", "link release asset"}
 		} else {
-			options.Usage = "Update an existing release asset link by link_id. When changing url, use an absolute http, https, or ftp URL. Do not pass local file paths or relative paths as url."
+			options.Usage = "Update an existing release asset link by link_id. GitLab requires name or url on every update, so to change only a path or the link type, pass the link's current name from " + actionLinkGet + " beside the change. When changing url, use an absolute http, https, or ftp URL. Do not pass local file paths or relative paths as url."
 			options.Aliases = []string{"update release link", "edit release asset link", "modify release asset link"}
 		}
 		options.RelatedActions = []string{actionReleaseCreate, actionLinkList, actionPackagePublish, actionPackagePublishDir}
@@ -118,6 +118,13 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 				"enum":        []any{"other", "runbook", "image", "package"},
 				"description": "Type of the release link: other, runbook, image, or package.",
 			}),
+		}
+		if actionName == "link_update" {
+			// GitLab declares name and url each optional on the update and
+			// requires at least one of them (at_least_one_of in
+			// lib/api/release/links.rb), which the anyOf says and a required
+			// list cannot.
+			options.InputSchemaOverrides = append(options.InputSchemaOverrides, toolutil.SchemaAnyOfRequired("name", "url"))
 		}
 	}
 	if actionName == "link_create_batch" {

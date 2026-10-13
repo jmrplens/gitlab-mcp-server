@@ -25,7 +25,7 @@ type UpdatePagesInput struct {
 	ProjectID                toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	PagesUniqueDomainEnabled *bool                `json:"pages_unique_domain_enabled,omitempty" jsonschema:"Enable unique domain for Pages"`
 	PagesHTTPSOnly           *bool                `json:"pages_https_only,omitempty" jsonschema:"Enforce HTTPS for Pages"`
-	PagesPrimaryDomain       string               `json:"pages_primary_domain,omitempty" jsonschema:"Primary domain for Pages"`
+	PagesPrimaryDomain       *string              `json:"pages_primary_domain,omitempty" jsonschema:"Primary domain for Pages. Pass an empty string to remove it. Omit the field to leave it untouched"`
 }
 
 // UnpublishPagesInput defines parameters for unpublishing Pages.
@@ -165,9 +165,14 @@ func GetPages(ctx context.Context, client *gitlabclient.Client, input GetPagesIn
 }
 
 // UpdatePages updates the Pages settings for a project via the GitLab
-// Pages API (PUT /projects/:id/pages). Only non-nil fields are
-// applied; pages_primary_domain must reference a domain previously
-// added via [CreateDomain].
+// Pages API (PATCH /projects/:id/pages). Only the fields the caller sent are
+// applied; pages_primary_domain must reference a domain previously added via
+// [CreateDomain], and an empty one removes it.
+//
+// GitLab removes the primary domain only on null: it refuses "" as a domain
+// the project does not have. client-go's option cannot carry null, so an empty
+// value is written into the body through a request option (issue 1306,
+// upstream register row 122).
 func UpdatePages(ctx context.Context, client *gitlabclient.Client, input UpdatePagesInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.ErrFieldRequired("project_id")
@@ -180,11 +185,10 @@ func UpdatePages(ctx context.Context, client *gitlabclient.Client, input UpdateP
 	if input.PagesHTTPSOnly != nil {
 		opts.PagesHTTPSOnly = input.PagesHTTPSOnly
 	}
-	if input.PagesPrimaryDomain != "" {
-		opts.PagesPrimaryDomain = new(input.PagesPrimaryDomain)
-	}
+	var nulls toolutil.BodyEdit
+	opts.PagesPrimaryDomain = toolutil.NullWhenZero(input.PagesPrimaryDomain, "pages_primary_domain", &nulls)
 
-	pages, _, err := client.GL().Pages.UpdatePages(string(input.ProjectID), opts, gl.WithContext(ctx))
+	pages, _, err := client.GL().Pages.UpdatePages(string(input.ProjectID), opts, gl.WithContext(ctx), toolutil.EditJSONBody(nulls))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("gitlab_pages_update", err, http.StatusForbidden,
 			"updating Pages settings requires Maintainer role; pages_primary_domain must be a domain previously added via project.pages_domain_create")

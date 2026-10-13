@@ -200,7 +200,7 @@ type EditInput struct {
 	UserID       int64                `json:"user_id" jsonschema:"User ID,required"`
 	AccessLevel  int                  `json:"access_level,omitempty" jsonschema:"New access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner, 60=Admin),required"`
 	ExpiresAt    string               `json:"expires_at,omitempty" jsonschema:"New membership expiration date (YYYY-MM-DD)"`
-	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role ID to assign. Ultimate only. The role's base access level must match access_level"`
+	MemberRoleID *int64               `json:"member_role_id,omitempty" jsonschema:"Custom member role ID to assign. Ultimate only. The role's base access level must match access_level. Pass 0 to remove the custom role, which GitLab requires before it changes the access level of a member that holds one. Omit the field to leave it untouched"`
 }
 
 // RemoveInput contains parameters for removing a group member.
@@ -382,12 +382,15 @@ func EditMember(ctx context.Context, client *gitlabclient.Client, input EditInpu
 	if input.AccessLevel != 0 {
 		opts.AccessLevel = new(gl.AccessLevelValue(input.AccessLevel))
 	}
-	if input.MemberRoleID != 0 {
-		opts.MemberRoleID = new(input.MemberRoleID)
-	}
+	// GitLab takes a custom role off a member only on null, which the
+	// option's omitempty pointer cannot carry, so 0 is written into the body
+	// as null through a request option (issue 1306, upstream register row
+	// 122).
+	var nulls toolutil.BodyEdit
+	opts.MemberRoleID = toolutil.NullWhenZero(input.MemberRoleID, "member_role_id", &nulls)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	m, _, err := client.GL().GroupMembers.EditGroupMember(
-		string(input.GroupID), input.UserID, opts, gl.WithContext(ctx),
+		string(input.GroupID), input.UserID, opts, gl.WithContext(ctx), toolutil.EditJSONBody(nulls),
 	)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {

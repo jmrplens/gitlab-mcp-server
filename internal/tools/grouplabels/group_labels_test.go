@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -15,6 +16,24 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// TestCreateAndUpdateInputs_OfferNoPriority holds the group label inputs to
+// the parameters GitLab's group label routes take. Neither POST nor PUT
+// /groups/:id/labels declares a priority, and GitLab's label helper applies
+// one only to a project label, so a priority offered here was sent and
+// silently did nothing, and a caller asked to remove one could not tell why it
+// stayed (issue 1306).
+func TestCreateAndUpdateInputs_OfferNoPriority(t *testing.T) {
+	for _, input := range []reflect.Type{reflect.TypeFor[CreateInput](), reflect.TypeFor[UpdateInput]()} {
+		t.Run(input.Name(), func(t *testing.T) {
+			for field := range input.Fields() {
+				if name, _, _ := strings.Cut(field.Tag.Get("json"), ","); name == "priority" {
+					t.Errorf("%s.%s offers priority, which no group label route takes", input.Name(), field.Name)
+				}
+			}
+		})
+	}
+}
 
 // TestUpdate_EmptyDescription_ReachesTheBody holds a group label's
 // description to an empty value removing it. The handler used to drop it and
@@ -788,7 +807,6 @@ func TestCreate_WithOptionalFields(t *testing.T) {
 		Name:        "feature",
 		Color:       "#428bca",
 		Description: "Feature request",
-		Priority:    3,
 	})
 	if err != nil {
 		t.Fatalf("Create() unexpected error: %v", err)
@@ -850,7 +868,6 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 		NewName:     "critical-bug",
 		Color:       "#ff0000",
 		Description: new("Critical bugs only"),
-		Priority:    5,
 	})
 	if err != nil {
 		t.Fatalf("Update() unexpected error: %v", err)
@@ -1324,10 +1341,9 @@ func assertLabelRequestFields(t *testing.T, sent, present map[string]any, absent
 // the three optional guards inverted or with their boundary moved.
 //
 // Both directions matter to a caller. A description that never leaves the
-// handler is a label created without one, and a priority sent as 0 where the
-// input asked for none is not the same request: GitLab reads priority 0 as a
-// priority rather than as its absence, so the boundary decides whether an
-// ordinary label is created or one pinned to the top of every list.
+// handler is a label created without one, and a key the caller never set is a
+// request it did not make. priority is held absent in both cases: no group
+// label route takes one (issue 1306).
 func TestCreate_OptionalFields_AreSentOnlyWhenTheInputCarriesThem(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -1337,8 +1353,9 @@ func TestCreate_OptionalFields_AreSentOnlyWhenTheInputCarriesThem(t *testing.T) 
 	}{
 		{
 			name:    "every optional field set",
-			input:   CreateInput{GroupID: "10", Name: "feature", Color: "#428bca", Description: "Feature request", Priority: 3},
-			present: map[string]any{"name": "feature", "color": "#428bca", "description": "Feature request", "priority": float64(3)},
+			input:   CreateInput{GroupID: "10", Name: "feature", Color: "#428bca", Description: "Feature request"},
+			present: map[string]any{"name": "feature", "color": "#428bca", "description": "Feature request"},
+			absent:  []string{"priority"},
 		},
 		{
 			name:    "no optional field set",
@@ -1374,9 +1391,10 @@ func TestUpdate_OptionalFields_AreSentOnlyWhenTheInputCarriesThem(t *testing.T) 
 			name: "every optional field set",
 			input: UpdateInput{
 				GroupID: "10", LabelID: "1",
-				NewName: "critical-bug", Color: "#ff0000", Description: new("Critical bugs only"), Priority: 5,
+				NewName: "critical-bug", Color: "#ff0000", Description: new("Critical bugs only"),
 			},
-			present: map[string]any{"new_name": "critical-bug", "color": "#ff0000", "description": "Critical bugs only", "priority": float64(5)},
+			present: map[string]any{"new_name": "critical-bug", "color": "#ff0000", "description": "Critical bugs only"},
+			absent:  []string{"priority"},
 		},
 		{
 			name:   "no optional field set",

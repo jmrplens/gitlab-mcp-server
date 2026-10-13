@@ -13,6 +13,107 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdate_CSPNamespaceIDZero_SendsNull holds a csp_namespace_id of 0 to
+// null, which GitLab 19.4.2 clears the designation with, and a group to its
+// ID. GitLab requires the key, so leaving it out is no way to clear it, and
+// client-go writes the 0 a pointer carries as 0 (issue 1306).
+func TestUpdate_CSPNamespaceIDZero_SendsNull(t *testing.T) {
+	cases := []struct {
+		name string
+		id   int64
+		want string
+	}{
+		{name: "zero clears the designation", id: 0, want: "null"},
+		{name: "a group", id: 15, want: "15"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"csp_namespace_id": tc.id})
+			if err != nil {
+				t.Fatalf("UnmarshalParams() error: %v", err)
+			}
+			client, recorder := testutil.RecordWrites(t, `{}`, `{"csp_namespace_id":null}`)
+			if _, err = Update(t.Context(), client, input); err != nil {
+				t.Fatalf("Update() error: %v", err)
+			}
+			recorder.AssertMembers(t, map[string]string{"csp_namespace_id": tc.want})
+		})
+	}
+}
+
+// TestUpdate_LockedSetting_SaysToWaitUntilTheTimeGitLabNames holds the 422
+// GitLab answers a change made inside the ten minutes every change locks the
+// setting for to a hint that says so, rather than to the hint about a group
+// that does not qualify.
+func TestUpdate_LockedSetting_SaysToWaitUntilTheTimeGitLabNames(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":"CSP namespace locked until 17:59 UTC"}`)
+	}))
+	_, err := Update(t.Context(), client, UpdateInput{CSPNamespaceID: new(int64(15))})
+	if err == nil {
+		t.Fatal("Update() error = nil, want the lock refusal")
+	}
+	for _, want := range []string{"locked until 17:59 UTC", "ten minutes", "Wait until the time GitLab names"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("Update() error = %q, want it to contain %q", err, want)
+			}
+		})
+	}
+	if strings.Contains(err.Error(), "top-level group") {
+		t.Errorf("Update() error = %q, want no hint about the group's kind for a lock", err)
+	}
+}
+
+// TestPermissionRefusal_NamesWhatTheSettingsNeed holds a refusal of a missing
+// permission, at 401 as well as 403, to the hint naming the administrator and
+// the license the settings need, on the read and on the update. GitLab
+// answers a missing permission with 401 at some routes (entry 55 of
+// docs/development/upstream-bugs.md), so a hint keyed on 403 alone was never
+// shown there. A refusal of the token itself names neither.
+func TestPermissionRefusal_NamesWhatTheSettingsNeed(t *testing.T) {
+	const hint = "require an administrator and an Ultimate license"
+	calls := []struct {
+		name string
+		call func(*gitlabclient.Client) error
+	}{
+		{"get", func(c *gitlabclient.Client) error {
+			_, err := Get(t.Context(), c, GetInput{})
+			return err
+		}},
+		{"update", func(c *gitlabclient.Client) error {
+			_, err := Update(t.Context(), c, UpdateInput{CSPNamespaceID: new(int64(15))})
+			return err
+		}},
+	}
+	refusals := []struct {
+		name     string
+		status   int
+		body     string
+		wantHint bool
+	}{
+		{"401 with no token error", http.StatusUnauthorized, `{"message":"401 Unauthorized"}`, true},
+		{"403 with no token error", http.StatusForbidden, `{"message":"403 Forbidden"}`, true},
+		{"401 for a revoked token", http.StatusUnauthorized, `{"error":"invalid_token","error_description":"Token was revoked. You have to re-authorize from the user."}`, false},
+	}
+	for _, call := range calls {
+		for _, refusal := range refusals {
+			t.Run(call.name+"/"+refusal.name, func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, refusal.status, refusal.body)
+				}))
+				err := call.call(client)
+				if err == nil {
+					t.Fatalf("error = nil, want the %d reported", refusal.status)
+				}
+				if got := strings.Contains(err.Error(), hint); got != refusal.wantHint {
+					t.Errorf("error = %q, carries the hint = %t, want %t", err, got, refusal.wantHint)
+				}
+			})
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Get
 // ---------------------------------------------------------------------------
@@ -139,12 +240,12 @@ func TestUpdate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:  "updates with zero value csp_namespace_id",
+			name:  "clears csp_namespace_id with zero",
 			input: UpdateInput{CSPNamespaceID: &zeroID},
 			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusOK, `{"csp_namespace_id":0}`)
+				testutil.RespondJSON(w, http.StatusOK, `{"csp_namespace_id":null}`)
 			}),
-			wantCSP: 0,
+			wantNilCSP: true,
 		},
 		{
 			name:  "returns error on 400 bad request",
