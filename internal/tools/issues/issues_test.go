@@ -24,6 +24,46 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// listWithParams adapts a list handler to the params a meta or dynamic route
+// hands it, decoded by toolutil.UnmarshalParams as those routes decode them.
+func listWithParams[I, O any](list func(context.Context, *gitlabclient.Client, I) (O, error)) func(context.Context, *gitlabclient.Client, map[string]any) error {
+	return func(ctx context.Context, client *gitlabclient.Client, params map[string]any) error {
+		input, err := toolutil.UnmarshalParams[I](params)
+		if err != nil {
+			return err
+		}
+		_, err = list(ctx, client, input)
+		return err
+	}
+}
+
+// TestListFilters_AssigneeID_TakesAUserIDNoneOrAny holds assignee_id on the
+// three issue lists to what GitLab's filter takes: a user ID, None for issues
+// nobody is assigned, and Any for issues somebody is. The filter used to be an
+// integer, so None and Any were refused before a request and the 0 a caller
+// reached for was sent as an ID no user has, which GitLab answers with an empty
+// list (issue 1354).
+func TestListFilters_AssigneeID_TakesAUserIDNoneOrAny(t *testing.T) {
+	lists := []struct {
+		name   string
+		call   func(context.Context, *gitlabclient.Client, map[string]any) error
+		params map[string]any
+	}{
+		{name: "issue.list", call: listWithParams(List), params: map[string]any{"project_id": "42"}},
+		{name: "issue.list_group", call: listWithParams(ListGroup), params: map[string]any{"group_id": "7"}},
+		{name: "issue.list_all", call: listWithParams(ListAll)},
+	}
+	for _, list := range lists {
+		for _, c := range testutil.UserIDFilterCases() {
+			t.Run(list.name+"/"+c.Name, func(t *testing.T) {
+				client, recorder := testutil.RecordQueries(t, `[]`)
+				err := list.call(t.Context(), client, c.Params(list.params, "assignee_id"))
+				recorder.AssertUserIDFilter(t, "assignee_id", c, err)
+			})
+		}
+	}
+}
+
 // Test endpoint paths and JSON response fixtures for issue operation tests.
 const (
 	errExpMissingProjectID = "expected error for missing project_id"
@@ -4712,7 +4752,7 @@ func TestList_AdvancedFilters(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	five, six, seven, eight, iter := int64(5), int64(6), int64(7), int64(8), int64(3)
+	six, seven, eight, iter := int64(6), int64(7), int64(8), int64(3)
 	yes := true
 	_, err := List(context.Background(), client, ListInput{
 		ProjectID:           testProjectID,
@@ -4721,7 +4761,7 @@ func TestList_AdvancedFilters(t *testing.T) {
 		NotMilestone:        "v2",
 		In:                  "title",
 		NotIn:               "description",
-		AssigneeID:          &five,
+		AssigneeID:          "5",
 		NotAssigneeID:       &six,
 		NotAssigneeUsername: "mallory",
 		AuthorID:            &seven,
@@ -5721,7 +5761,7 @@ func TestListGroup_EveryFilter_ReachesItsOwnQueryParameter(t *testing.T) {
 		WithLabelsDetails: &details,
 		Milestone:         "m1", NotMilestone: "m2",
 		Scope: "all", Search: "s1", NotSearch: "s2", In: "title", NotIn: "description",
-		AssigneeID: &assignee, NotAssigneeID: &notAssignee,
+		AssigneeID: toolutil.StringOrInt(strconv.FormatInt(assignee, 10)), NotAssigneeID: &notAssignee,
 		AssigneeUsername: "u1", NotAssigneeUsername: "u2",
 		AuthorID: &author, NotAuthorID: &notAuthor,
 		AuthorUsername: "u3", NotAuthorUsername: "u4",
@@ -5763,7 +5803,7 @@ func TestListAll_EveryFilter_ReachesItsOwnQueryParameter(t *testing.T) {
 		WithLabelsDetails: &details,
 		Milestone:         "m1", NotMilestone: "m2",
 		Scope: "all", Search: "s1", NotSearch: "s2", In: "title", NotIn: "description",
-		AssigneeID: &assignee, NotAssigneeID: []int64{32, 38},
+		AssigneeID: toolutil.StringOrInt(strconv.FormatInt(assignee, 10)), NotAssigneeID: []int64{32, 38},
 		AssigneeUsername: "u1", NotAssigneeUsername: "u2",
 		AuthorID: &author, NotAuthorID: []int64{34},
 		AuthorUsername: "u3", NotAuthorUsername: "u4",

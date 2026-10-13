@@ -8,6 +8,7 @@
 package common
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
@@ -78,5 +79,42 @@ func TestIssue_Update_EmptyValuesRemoveDescriptionDueDateAssigneesAndLabels(t *t
 		}
 		assertCleared("update", cleared)
 		assertCleared("get", read)
+	})
+}
+
+// TestIssueList_AssigneeNoneAndAny_SplitTheIssuesByAssignment creates one
+// issue nobody is assigned and one assigned to the runtime user, then asks
+// issue.list for assignee_id None and for any and holds each answer to the
+// one issue it names. Both literals used to be refused as not an integer, and
+// the 0 a caller reached for instead answered with no issue at all (issue
+// 1354).
+func TestIssueList_AssigneeNoneAndAny_SplitTheIssuesByAssignment(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("unassigned"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		params := map[string]any{"project_id": project.IDParam()}
+
+		nobody := harness.Do[issues.Output](s, actionIssueCreate, withParams(params, map[string]any{"title": e.Name("nobody")}))
+		somebody := harness.Do[issues.Output](s, actionIssueCreate, withParams(params, map[string]any{
+			"title": e.Name("somebody"), "assignee_ids": []int64{e.Runtime().UserID},
+		}))
+		cases := []struct {
+			value string
+			want  int64
+			not   int64
+		}{
+			{value: "None", want: nobody.IID, not: somebody.IID},
+			{value: "any", want: somebody.IID, not: nobody.IID},
+		}
+		for _, c := range cases {
+			listed := harness.Do[issues.ListOutput](s, actionIssueList, withParams(params, map[string]any{"assignee_id": c.value, "state": "opened"}))
+			iids := issueIIDs(listed.Issues)
+			if !slices.Contains(iids, c.want) || slices.Contains(iids, c.not) {
+				e.T.Errorf("issue list with assignee_id %s answered %v, want #%d and not #%d", c.value, iids, c.want, c.not)
+			}
+		}
 	})
 }

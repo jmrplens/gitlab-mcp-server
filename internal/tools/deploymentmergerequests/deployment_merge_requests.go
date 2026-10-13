@@ -36,11 +36,11 @@ type ListInput struct {
 	ApprovedByIDs       toolutil.ApproverIDsFilter `json:"approved_by_ids,omitempty" jsonschema:"Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)"`
 	ApprovedByUsernames []string                   `json:"approved_by_usernames,omitempty" jsonschema:"Filter by MRs approved by all listed usernames"`
 	ApproverIDs         toolutil.ApproverIDsFilter `json:"approver_ids,omitempty"    jsonschema:"Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)"`
-	AssigneeID          int64                      `json:"assignee_id,omitempty"     jsonschema:"Filter by assignee user ID"`
+	AssigneeID          toolutil.StringOrInt       `json:"assignee_id,omitempty"     jsonschema:"Filter by assignee: a user ID, None for merge requests nobody is assigned, or Any for those somebody is"`
 	AuthorID            int64                      `json:"author_id,omitempty"       jsonschema:"Filter by author user ID"`
 	AuthorUsername      string                     `json:"author_username,omitempty" jsonschema:"Filter by author username"`
 	NotAuthorUsername   string                     `json:"not_author_username,omitempty" jsonschema:"Exclude MRs authored by this username"`
-	ReviewerID          int64                      `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer user ID"`
+	ReviewerID          toolutil.StringOrInt       `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer: a user ID, None for merge requests with no reviewer, or Any for those with one"`
 	ReviewerUsername    string                     `json:"reviewer_username,omitempty"   jsonschema:"Filter by reviewer username"`
 	Labels              []string                   `json:"labels,omitempty"          jsonschema:"Label names to filter by"`
 	NotLabels           []string                   `json:"not_labels,omitempty"      jsonschema:"Label names to exclude"`
@@ -185,17 +185,16 @@ func applyLabelAndBoolFilters(input ListInput, opts *gl.ListMergeRequestsOptions
 	}
 }
 
-// applyIDFilters sets the user-ID filters, wrapping interface-typed values via
-// the SDK constructors (gl.AssigneeID, gl.ReviewerID, gl.ApproverIDs).
+// applyIDFilters sets the user-ID filters: the assignee and reviewer through
+// toolutil.AssigneeFilter and toolutil.ReviewerFilter, which take a user ID,
+// None or Any and refuse 0, and the approver filters through the SDK's
+// gl.ApproverIDs.
 func applyIDFilters(input ListInput, opts *gl.ListMergeRequestsOptions) error {
 	if input.AuthorID != 0 {
 		opts.AuthorID = new(input.AuthorID)
 	}
-	if input.AssigneeID != 0 {
-		opts.AssigneeID = gl.AssigneeID(input.AssigneeID)
-	}
-	if input.ReviewerID != 0 {
-		opts.ReviewerID = gl.ReviewerID(input.ReviewerID)
+	if err := applyUserIDFilters(input, opts); err != nil {
+		return err
 	}
 	if len(input.ApproverIDs) > 0 {
 		converted, err := input.ApproverIDs.ApproverIDsValue()
@@ -214,6 +213,22 @@ func applyIDFilters(input ListInput, opts *gl.ListMergeRequestsOptions) error {
 	if len(input.ApprovedByUsernames) > 0 {
 		opts.ApprovedByUsernames = &input.ApprovedByUsernames
 	}
+	return nil
+}
+
+// applyUserIDFilters sets the assignee and reviewer filters, each a user ID,
+// None or Any, refusing 0 and anything else no user is before any request
+// (issue 1354).
+func applyUserIDFilters(input ListInput, opts *gl.ListMergeRequestsOptions) error {
+	assignee, err := toolutil.AssigneeFilter("assignee_id", input.AssigneeID)
+	if err != nil {
+		return err
+	}
+	reviewer, err := toolutil.ReviewerFilter("reviewer_id", input.ReviewerID)
+	if err != nil {
+		return err
+	}
+	opts.AssigneeID, opts.ReviewerID = assignee, reviewer
 	return nil
 }
 

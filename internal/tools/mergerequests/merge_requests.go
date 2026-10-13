@@ -99,8 +99,8 @@ type ListInput struct {
 	View                   string                     `json:"view,omitempty"                jsonschema:"Set to 'simple' to return only basic MR fields"`
 	WIP                    string                     `json:"wip,omitempty"                 jsonschema:"Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft"`
 	AuthorID               int64                      `json:"author_id,omitempty"           jsonschema:"Filter by author user ID"`
-	AssigneeID             int64                      `json:"assignee_id,omitempty"         jsonschema:"Filter by assignee user ID"`
-	ReviewerID             int64                      `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer user ID"`
+	AssigneeID             toolutil.StringOrInt       `json:"assignee_id,omitempty"         jsonschema:"Filter by assignee: a user ID, None for merge requests nobody is assigned, or Any for those somebody is"`
+	ReviewerID             toolutil.StringOrInt       `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer: a user ID, None for merge requests with no reviewer, or Any for those with one"`
 	ApproverIDs            toolutil.ApproverIDsFilter `json:"approver_ids,omitempty"        jsonschema:"Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)"`
 	ApprovedByIDs          toolutil.ApproverIDsFilter `json:"approved_by_ids,omitempty"     jsonschema:"Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)"`
 	ApprovedByUsernames    []string                   `json:"approved_by_usernames,omitempty" jsonschema:"Filter by MRs approved by all listed usernames"`
@@ -146,8 +146,8 @@ type mergeRequestListFilters struct {
 	WIP                 string
 	Environment         string
 	AuthorID            int64
-	AssigneeID          int64
-	ReviewerID          int64
+	AssigneeID          toolutil.StringOrInt
+	ReviewerID          toolutil.StringOrInt
 	ApproverIDs         toolutil.ApproverIDsFilter
 	ApprovedByIDs       toolutil.ApproverIDsFilter
 	ApprovedByUsernames []string
@@ -190,8 +190,8 @@ type mergeRequestListTarget struct {
 	wip                 func(*string)
 	environment         func(*string)
 	authorID            func(int64)
-	assigneeID          func(int64)
-	reviewerID          func(int64)
+	assigneeID          func(*gl.AssigneeIDValue)
+	reviewerID          func(*gl.ReviewerIDValue)
 	approverIDs         func(*gl.ApproverIDsValue)
 	approvedByIDs       func(*gl.ApproverIDsValue)
 	approvedByUsernames func([]string)
@@ -264,8 +264,9 @@ func applyMergeRequestListFilters(input mergeRequestListFilters, target mergeReq
 	setString(input.OrderBy, target.orderBy)
 	setString(input.Sort, target.sort)
 	setInt64(input.AuthorID, target.authorID)
-	setInt64(input.AssigneeID, target.assigneeID)
-	setInt64(input.ReviewerID, target.reviewerID)
+	if err := applyUserIDFilters(input, target); err != nil {
+		return err
+	}
 	if err := setApproverIDs(input.ApproverIDs, target.approverIDs); err != nil {
 		return fmt.Errorf("approver_ids: %w", err)
 	}
@@ -309,6 +310,27 @@ func applyMergeRequestListFilters(input mergeRequestListFilters, target mergeReq
 		}
 	}
 	toolutil.ApplyListOptions(target.listOptions, toolutil.PaginationInput{Page: input.Page, PerPage: input.PerPage}, input.Keyset)
+	return nil
+}
+
+// applyUserIDFilters sets the assignee and reviewer filters, each a user ID,
+// None or Any, refusing 0 and anything else no user is before any request
+// (issue 1354).
+func applyUserIDFilters(input mergeRequestListFilters, target mergeRequestListTarget) error {
+	assignee, err := toolutil.AssigneeFilter("assignee_id", input.AssigneeID)
+	if err != nil {
+		return err
+	}
+	reviewer, err := toolutil.ReviewerFilter("reviewer_id", input.ReviewerID)
+	if err != nil {
+		return err
+	}
+	if assignee != nil {
+		target.assigneeID(assignee)
+	}
+	if reviewer != nil {
+		target.reviewerID(reviewer)
+	}
 	return nil
 }
 
@@ -1242,8 +1264,8 @@ type ListGlobalInput struct {
 	View                   string                     `json:"view,omitempty"                jsonschema:"Set to 'simple' to return only basic MR fields"`
 	WIP                    string                     `json:"wip,omitempty"                 jsonschema:"Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft"`
 	AuthorID               int64                      `json:"author_id,omitempty"           jsonschema:"Filter by author user ID"`
-	AssigneeID             int64                      `json:"assignee_id,omitempty"         jsonschema:"Filter by assignee user ID"`
-	ReviewerID             int64                      `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer user ID"`
+	AssigneeID             toolutil.StringOrInt       `json:"assignee_id,omitempty"         jsonschema:"Filter by assignee: a user ID, None for merge requests nobody is assigned, or Any for those somebody is"`
+	ReviewerID             toolutil.StringOrInt       `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer: a user ID, None for merge requests with no reviewer, or Any for those with one"`
 	ApproverIDs            toolutil.ApproverIDsFilter `json:"approver_ids,omitempty"        jsonschema:"Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)"`
 	ApprovedByIDs          toolutil.ApproverIDsFilter `json:"approved_by_ids,omitempty"     jsonschema:"Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)"`
 	ApprovedByUsernames    []string                   `json:"approved_by_usernames,omitempty" jsonschema:"Filter by MRs approved by all listed usernames"`
@@ -1396,16 +1418,16 @@ func setInt64Ptr(target **int64) func(int64) {
 	}
 }
 
-// setAssigneeIDPtr returns a setter that wraps an int64 user ID into the SDK's
-// *AssigneeIDValue via gl.AssigneeID.
-func setAssigneeIDPtr(target **gl.AssigneeIDValue) func(int64) {
-	return func(value int64) { *target = gl.AssigneeID(value) }
+// setAssigneeIDPtr returns a setter that stores an assignee filter, a user ID
+// or None or Any, on the target options field.
+func setAssigneeIDPtr(target **gl.AssigneeIDValue) func(*gl.AssigneeIDValue) {
+	return func(value *gl.AssigneeIDValue) { *target = value }
 }
 
-// setReviewerIDPtr returns a setter that wraps an int64 user ID into the SDK's
-// *ReviewerIDValue via gl.ReviewerID.
-func setReviewerIDPtr(target **gl.ReviewerIDValue) func(int64) {
-	return func(value int64) { *target = gl.ReviewerID(value) }
+// setReviewerIDPtr returns a setter that stores a reviewer filter, a user ID
+// or None or Any, on the target options field.
+func setReviewerIDPtr(target **gl.ReviewerIDValue) func(*gl.ReviewerIDValue) {
+	return func(value *gl.ReviewerIDValue) { *target = value }
 }
 
 // setApproverIDsPtr returns a setter that wraps a slice of user IDs into the
@@ -1454,8 +1476,8 @@ type ListGroupInput struct {
 	View                   string                     `json:"view,omitempty"                jsonschema:"Set to 'simple' to return only basic MR fields"`
 	WIP                    string                     `json:"wip,omitempty"                 jsonschema:"Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft"`
 	AuthorID               int64                      `json:"author_id,omitempty"           jsonschema:"Filter by author user ID"`
-	AssigneeID             int64                      `json:"assignee_id,omitempty"         jsonschema:"Filter by assignee user ID"`
-	ReviewerID             int64                      `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer user ID"`
+	AssigneeID             toolutil.StringOrInt       `json:"assignee_id,omitempty"         jsonschema:"Filter by assignee: a user ID, None for merge requests nobody is assigned, or Any for those somebody is"`
+	ReviewerID             toolutil.StringOrInt       `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer: a user ID, None for merge requests with no reviewer, or Any for those with one"`
 	ApproverIDs            toolutil.ApproverIDsFilter `json:"approver_ids,omitempty"        jsonschema:"Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)"`
 	ApprovedByIDs          toolutil.ApproverIDsFilter `json:"approved_by_ids,omitempty"     jsonschema:"Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)"`
 	ApprovedByUsernames    []string                   `json:"approved_by_usernames,omitempty" jsonschema:"Filter by MRs approved by all listed usernames"`

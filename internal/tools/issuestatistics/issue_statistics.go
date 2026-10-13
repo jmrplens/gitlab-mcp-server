@@ -55,22 +55,22 @@ func fromGL(s *gl.IssuesStatistics) StatisticsOutput {
 // [gl.GetProjectIssuesStatisticsOptions] so the option-builder helpers stay in
 // lockstep across the three scopes.
 type statisticsFilters struct {
-	Labels           []string `json:"labels,omitempty"`
-	Milestone        string   `json:"milestone,omitempty"`
-	Scope            string   `json:"scope,omitempty"`
-	Search           string   `json:"search,omitempty"`
-	AssigneeID       *int64   `json:"assignee_id,omitempty"`
-	AssigneeUsername []string `json:"assignee_username,omitempty"`
-	AuthorID         *int64   `json:"author_id,omitempty"`
-	AuthorUsername   string   `json:"author_username,omitempty"`
-	Confidential     *bool    `json:"confidential,omitempty"`
-	CreatedAfter     string   `json:"created_after,omitempty"`
-	CreatedBefore    string   `json:"created_before,omitempty"`
-	UpdatedAfter     string   `json:"updated_after,omitempty"`
-	UpdatedBefore    string   `json:"updated_before,omitempty"`
-	IIDs             []int64  `json:"iids[],omitempty"`
-	In               string   `json:"in,omitempty"`
-	MyReactionEmoji  string   `json:"my_reaction_emoji,omitempty"`
+	Labels           []string             `json:"labels,omitempty"`
+	Milestone        string               `json:"milestone,omitempty"`
+	Scope            string               `json:"scope,omitempty"`
+	Search           string               `json:"search,omitempty"`
+	AssigneeID       toolutil.StringOrInt `json:"assignee_id,omitempty"`
+	AssigneeUsername []string             `json:"assignee_username,omitempty"`
+	AuthorID         *int64               `json:"author_id,omitempty"`
+	AuthorUsername   string               `json:"author_username,omitempty"`
+	Confidential     *bool                `json:"confidential,omitempty"`
+	CreatedAfter     string               `json:"created_after,omitempty"`
+	CreatedBefore    string               `json:"created_before,omitempty"`
+	UpdatedAfter     string               `json:"updated_after,omitempty"`
+	UpdatedBefore    string               `json:"updated_before,omitempty"`
+	IIDs             []int64              `json:"iids[],omitempty"`
+	In               string               `json:"in,omitempty"`
+	MyReactionEmoji  string               `json:"my_reaction_emoji,omitempty"`
 }
 
 // labelOptions converts a label-name slice into a [*gl.LabelOptions], or nil
@@ -112,22 +112,22 @@ func optIIDs(iids []int64) *[]int64 {
 // GetInput contains parameters for global issue statistics, which GitLab
 // counts over the issues the caller created unless Scope names another scope.
 type GetInput struct {
-	Labels           []string `json:"labels,omitempty"            jsonschema:"Label names to filter by"`
-	Milestone        string   `json:"milestone,omitempty"         jsonschema:"Milestone title to filter by"`
-	Scope            string   `json:"scope,omitempty"             jsonschema:"Which issues to count: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see)"`
-	Search           string   `json:"search,omitempty"            jsonschema:"Search string for title and description"`
-	In               string   `json:"in,omitempty"                jsonschema:"Fields the search query applies to (title, description, or title,description)"`
-	AssigneeID       *int64   `json:"assignee_id,omitempty"       jsonschema:"Filter by assignee user ID"`
-	AssigneeUsername []string `json:"assignee_username,omitempty" jsonschema:"Filter by assignee usernames"`
-	AuthorID         *int64   `json:"author_id,omitempty"         jsonschema:"Filter by author user ID"`
-	AuthorUsername   string   `json:"author_username,omitempty"   jsonschema:"Filter by author username"`
-	Confidential     *bool    `json:"confidential,omitempty"      jsonschema:"Filter by confidential status"`
-	CreatedAfter     string   `json:"created_after,omitempty"     jsonschema:"Return issues created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
-	CreatedBefore    string   `json:"created_before,omitempty"    jsonschema:"Return issues created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
-	UpdatedAfter     string   `json:"updated_after,omitempty"     jsonschema:"Return issues updated after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
-	UpdatedBefore    string   `json:"updated_before,omitempty"    jsonschema:"Return issues updated before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
-	IIDs             []int64  `json:"iids,omitempty"              jsonschema:"Filter by issue internal IDs"`
-	MyReactionEmoji  string   `json:"my_reaction_emoji,omitempty" jsonschema:"Filter by issues you reacted to with this emoji (or None/Any)"`
+	Labels           []string             `json:"labels,omitempty"            jsonschema:"Label names to filter by"`
+	Milestone        string               `json:"milestone,omitempty"         jsonschema:"Milestone title to filter by"`
+	Scope            string               `json:"scope,omitempty"             jsonschema:"Which issues to count: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see)"`
+	Search           string               `json:"search,omitempty"            jsonschema:"Search string for title and description"`
+	In               string               `json:"in,omitempty"                jsonschema:"Fields the search query applies to (title, description, or title,description)"`
+	AssigneeID       toolutil.StringOrInt `json:"assignee_id,omitempty"       jsonschema:"Filter by assignee: a user ID, None for issues nobody is assigned, or Any for issues somebody is"`
+	AssigneeUsername []string             `json:"assignee_username,omitempty" jsonschema:"Filter by assignee usernames"`
+	AuthorID         *int64               `json:"author_id,omitempty"         jsonschema:"Filter by author user ID"`
+	AuthorUsername   string               `json:"author_username,omitempty"   jsonschema:"Filter by author username"`
+	Confidential     *bool                `json:"confidential,omitempty"      jsonschema:"Filter by confidential status"`
+	CreatedAfter     string               `json:"created_after,omitempty"     jsonschema:"Return issues created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
+	CreatedBefore    string               `json:"created_before,omitempty"    jsonschema:"Return issues created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
+	UpdatedAfter     string               `json:"updated_after,omitempty"     jsonschema:"Return issues updated after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
+	UpdatedBefore    string               `json:"updated_before,omitempty"    jsonschema:"Return issues updated before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
+	IIDs             []int64              `json:"iids,omitempty"              jsonschema:"Filter by issue internal IDs"`
+	MyReactionEmoji  string               `json:"my_reaction_emoji,omitempty" jsonschema:"Filter by issues you reacted to with this emoji (or None/Any)"`
 }
 
 // Get retrieves global issue statistics via the GitLab Issue statistics API
@@ -144,20 +144,24 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Stat
 		In:               optStr(input.In),
 		AuthorID:         input.AuthorID,
 		AuthorUsername:   optStr(input.AuthorUsername),
-		AssigneeID:       input.AssigneeID,
 		AssigneeUsername: optStrings(input.AssigneeUsername),
 		MyReactionEmoji:  optStr(input.MyReactionEmoji),
 		IIDs:             optIIDs(input.IIDs),
 		Confidential:     input.Confidential,
 	}
-	dates := statisticsFilters{
+	assigneeQuery, err := parseStatisticsFilters(statisticsFilters{
+		AssigneeID:   input.AssigneeID,
 		CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore,
 		UpdatedAfter: input.UpdatedAfter, UpdatedBefore: input.UpdatedBefore,
-	}
-	if err := parseStatisticsDates(dates, &opts.CreatedAfter, &opts.CreatedBefore, &opts.UpdatedAfter, &opts.UpdatedBefore); err != nil {
+	}, statisticsDests{
+		assignee:     &opts.AssigneeID,
+		createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
+		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore,
+	})
+	if err != nil {
 		return StatisticsOutput{}, err
 	}
-	stats, _, err := client.GL().IssuesStatistics.GetIssuesStatistics(opts, gl.WithContext(ctx))
+	stats, _, err := client.GL().IssuesStatistics.GetIssuesStatistics(opts, gl.WithContext(ctx), assigneeQuery)
 	if err != nil {
 		return StatisticsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_issue_statistics", err, http.StatusForbidden, "verify your token has read_api scope")
 	}
@@ -168,22 +172,22 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Stat
 
 // GetGroupInput contains parameters for group issue statistics.
 type GetGroupInput struct {
-	GroupID          string   `json:"group_id"                    jsonschema:"Group ID or URL-encoded path,required"`
-	Labels           []string `json:"labels,omitempty"            jsonschema:"Label names to filter by"`
-	Milestone        string   `json:"milestone,omitempty"         jsonschema:"Milestone title to filter by"`
-	Scope            string   `json:"scope,omitempty"             jsonschema:"Scope: created_by_me, assigned_to_me, all"`
-	Search           string   `json:"search,omitempty"            jsonschema:"Search string for title and description"`
-	AssigneeID       *int64   `json:"assignee_id,omitempty"       jsonschema:"Filter by assignee user ID"`
-	AssigneeUsername []string `json:"assignee_username,omitempty" jsonschema:"Filter by assignee usernames"`
-	AuthorID         *int64   `json:"author_id,omitempty"         jsonschema:"Filter by author user ID"`
-	AuthorUsername   string   `json:"author_username,omitempty"   jsonschema:"Filter by author username"`
-	Confidential     *bool    `json:"confidential,omitempty"      jsonschema:"Filter by confidential status"`
-	CreatedAfter     string   `json:"created_after,omitempty"     jsonschema:"Return issues created after date (ISO 8601)"`
-	CreatedBefore    string   `json:"created_before,omitempty"    jsonschema:"Return issues created before date (ISO 8601)"`
-	UpdatedAfter     string   `json:"updated_after,omitempty"     jsonschema:"Return issues updated after date (ISO 8601)"`
-	UpdatedBefore    string   `json:"updated_before,omitempty"    jsonschema:"Return issues updated before date (ISO 8601)"`
-	IIDs             []int64  `json:"iids,omitempty"              jsonschema:"Filter by issue internal IDs"`
-	MyReactionEmoji  string   `json:"my_reaction_emoji,omitempty" jsonschema:"Filter by issues you reacted to with this emoji (or None/Any)"`
+	GroupID          string               `json:"group_id"                    jsonschema:"Group ID or URL-encoded path,required"`
+	Labels           []string             `json:"labels,omitempty"            jsonschema:"Label names to filter by"`
+	Milestone        string               `json:"milestone,omitempty"         jsonschema:"Milestone title to filter by"`
+	Scope            string               `json:"scope,omitempty"             jsonschema:"Scope: created_by_me, assigned_to_me, all"`
+	Search           string               `json:"search,omitempty"            jsonschema:"Search string for title and description"`
+	AssigneeID       toolutil.StringOrInt `json:"assignee_id,omitempty"       jsonschema:"Filter by assignee: a user ID, None for issues nobody is assigned, or Any for issues somebody is"`
+	AssigneeUsername []string             `json:"assignee_username,omitempty" jsonschema:"Filter by assignee usernames"`
+	AuthorID         *int64               `json:"author_id,omitempty"         jsonschema:"Filter by author user ID"`
+	AuthorUsername   string               `json:"author_username,omitempty"   jsonschema:"Filter by author username"`
+	Confidential     *bool                `json:"confidential,omitempty"      jsonschema:"Filter by confidential status"`
+	CreatedAfter     string               `json:"created_after,omitempty"     jsonschema:"Return issues created after date (ISO 8601)"`
+	CreatedBefore    string               `json:"created_before,omitempty"    jsonschema:"Return issues created before date (ISO 8601)"`
+	UpdatedAfter     string               `json:"updated_after,omitempty"     jsonschema:"Return issues updated after date (ISO 8601)"`
+	UpdatedBefore    string               `json:"updated_before,omitempty"    jsonschema:"Return issues updated before date (ISO 8601)"`
+	IIDs             []int64              `json:"iids,omitempty"              jsonschema:"Filter by issue internal IDs"`
+	MyReactionEmoji  string               `json:"my_reaction_emoji,omitempty" jsonschema:"Filter by issues you reacted to with this emoji (or None/Any)"`
 }
 
 // GetGroup retrieves issue statistics scoped to a group and its
@@ -214,7 +218,7 @@ func GetGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupIn
 type scopedStatisticsRead[O any] struct {
 	id        string
 	filters   statisticsFilters
-	build     func(statisticsFilters) (O, error)
+	build     func(statisticsFilters) (O, gl.RequestOptionFunc, error)
 	get       func(any, O, ...gl.RequestOptionFunc) (*gl.IssuesStatistics, *gl.Response, error)
 	operation string
 	hint      string
@@ -222,17 +226,47 @@ type scopedStatisticsRead[O any] struct {
 
 // scopedStatistics builds the options of read, refusing a filter that does not
 // parse before any request, and reads the statistics, answering a 404 with the
-// read's hint.
+// read's hint. The request option build returns beside the options carries
+// what they cannot, the None and Any of assignee_id.
 func scopedStatistics[O any](ctx context.Context, read scopedStatisticsRead[O]) (StatisticsOutput, error) {
-	opts, err := read.build(read.filters)
+	opts, query, err := read.build(read.filters)
 	if err != nil {
 		return StatisticsOutput{}, err
 	}
-	stats, _, err := read.get(read.id, opts, gl.WithContext(ctx))
+	stats, _, err := read.get(read.id, opts, gl.WithContext(ctx), query)
 	if err != nil {
 		return StatisticsOutput{}, toolutil.WrapErrWithStatusHint(read.operation, err, http.StatusNotFound, read.hint)
 	}
 	return fromGL(stats), nil
+}
+
+// statisticsDests names the option fields of one statistics read that
+// [parseStatisticsFilters] fills.
+type statisticsDests struct {
+	assignee      **int64
+	createdAfter  **time.Time
+	createdBefore **time.Time
+	updatedAfter  **time.Time
+	updatedBefore **time.Time
+}
+
+// parseStatisticsFilters reads the filters of a statistics read that have to
+// be parsed into dest, refusing the call on the first that does not parse:
+// the assignee, a user ID or None or Any, then the four dates. client-go types
+// the assignee *int64 on all three routes (upstream register row 125), so an
+// ID goes into the option and None or Any come back as the request option
+// that writes them into the query (issue 1354).
+func parseStatisticsFilters(filters statisticsFilters, dest statisticsDests) (gl.RequestOptionFunc, error) {
+	assignee, assigneeQuery, err := toolutil.Int64UserIDFilter("assignee_id", filters.AssigneeID)
+	if err != nil {
+		return nil, err
+	}
+	*dest.assignee = assignee
+	dateErr := parseStatisticsDates(filters, dest.createdAfter, dest.createdBefore, dest.updatedAfter, dest.updatedBefore)
+	if dateErr != nil {
+		return nil, dateErr
+	}
+	return assigneeQuery, nil
 }
 
 // parseStatisticsDates parses the created and updated bounds of filters, which
@@ -250,8 +284,9 @@ func parseStatisticsDates(filters statisticsFilters, createdAfter, createdBefore
 }
 
 // groupIssueStatsOptions builds a [gl.GetGroupIssuesStatisticsOptions]
-// from the shared [statisticsFilters] set.
-func groupIssueStatsOptions(filters statisticsFilters) (*gl.GetGroupIssuesStatisticsOptions, error) {
+// from the shared [statisticsFilters] set, with the request option that
+// carries an assignee_id of None or Any.
+func groupIssueStatsOptions(filters statisticsFilters) (*gl.GetGroupIssuesStatisticsOptions, gl.RequestOptionFunc, error) {
 	opts := &gl.GetGroupIssuesStatisticsOptions{
 		Labels:           labelOptions(filters.Labels),
 		IIDs:             optIIDs(filters.IIDs),
@@ -259,38 +294,42 @@ func groupIssueStatsOptions(filters statisticsFilters) (*gl.GetGroupIssuesStatis
 		Scope:            optStr(filters.Scope),
 		AuthorID:         filters.AuthorID,
 		AuthorUsername:   optStr(filters.AuthorUsername),
-		AssigneeID:       filters.AssigneeID,
 		AssigneeUsername: optStrings(filters.AssigneeUsername),
 		MyReactionEmoji:  optStr(filters.MyReactionEmoji),
 		Search:           optStr(filters.Search),
 		Confidential:     filters.Confidential,
 	}
-	if err := parseStatisticsDates(filters, &opts.CreatedAfter, &opts.CreatedBefore, &opts.UpdatedAfter, &opts.UpdatedBefore); err != nil {
-		return nil, err
+	assigneeQuery, err := parseStatisticsFilters(filters, statisticsDests{
+		assignee:     &opts.AssigneeID,
+		createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
+		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore,
+	})
+	if err != nil {
+		return nil, nil, err
 	}
-	return opts, nil
+	return opts, assigneeQuery, nil
 }
 
 // GetProject.
 
 // GetProjectInput contains parameters for project issue statistics.
 type GetProjectInput struct {
-	ProjectID        string   `json:"project_id"                  jsonschema:"Project ID or URL-encoded path,required"`
-	Labels           []string `json:"labels,omitempty"            jsonschema:"Label names to filter by"`
-	Milestone        string   `json:"milestone,omitempty"         jsonschema:"Milestone title to filter by"`
-	Scope            string   `json:"scope,omitempty"             jsonschema:"Scope: created_by_me, assigned_to_me, all"`
-	Search           string   `json:"search,omitempty"            jsonschema:"Search string for title and description"`
-	AssigneeID       *int64   `json:"assignee_id,omitempty"       jsonschema:"Filter by assignee user ID"`
-	AssigneeUsername []string `json:"assignee_username,omitempty" jsonschema:"Filter by assignee usernames"`
-	AuthorID         *int64   `json:"author_id,omitempty"         jsonschema:"Filter by author user ID"`
-	AuthorUsername   string   `json:"author_username,omitempty"   jsonschema:"Filter by author username"`
-	Confidential     *bool    `json:"confidential,omitempty"      jsonschema:"Filter by confidential status"`
-	CreatedAfter     string   `json:"created_after,omitempty"     jsonschema:"Return issues created after date (ISO 8601)"`
-	CreatedBefore    string   `json:"created_before,omitempty"    jsonschema:"Return issues created before date (ISO 8601)"`
-	UpdatedAfter     string   `json:"updated_after,omitempty"     jsonschema:"Return issues updated after date (ISO 8601)"`
-	UpdatedBefore    string   `json:"updated_before,omitempty"    jsonschema:"Return issues updated before date (ISO 8601)"`
-	IIDs             []int64  `json:"iids,omitempty"              jsonschema:"Filter by issue internal IDs"`
-	MyReactionEmoji  string   `json:"my_reaction_emoji,omitempty" jsonschema:"Filter by issues you reacted to with this emoji (or None/Any)"`
+	ProjectID        string               `json:"project_id"                  jsonschema:"Project ID or URL-encoded path,required"`
+	Labels           []string             `json:"labels,omitempty"            jsonschema:"Label names to filter by"`
+	Milestone        string               `json:"milestone,omitempty"         jsonschema:"Milestone title to filter by"`
+	Scope            string               `json:"scope,omitempty"             jsonschema:"Scope: created_by_me, assigned_to_me, all"`
+	Search           string               `json:"search,omitempty"            jsonschema:"Search string for title and description"`
+	AssigneeID       toolutil.StringOrInt `json:"assignee_id,omitempty"       jsonschema:"Filter by assignee: a user ID, None for issues nobody is assigned, or Any for issues somebody is"`
+	AssigneeUsername []string             `json:"assignee_username,omitempty" jsonschema:"Filter by assignee usernames"`
+	AuthorID         *int64               `json:"author_id,omitempty"         jsonschema:"Filter by author user ID"`
+	AuthorUsername   string               `json:"author_username,omitempty"   jsonschema:"Filter by author username"`
+	Confidential     *bool                `json:"confidential,omitempty"      jsonschema:"Filter by confidential status"`
+	CreatedAfter     string               `json:"created_after,omitempty"     jsonschema:"Return issues created after date (ISO 8601)"`
+	CreatedBefore    string               `json:"created_before,omitempty"    jsonschema:"Return issues created before date (ISO 8601)"`
+	UpdatedAfter     string               `json:"updated_after,omitempty"     jsonschema:"Return issues updated after date (ISO 8601)"`
+	UpdatedBefore    string               `json:"updated_before,omitempty"    jsonschema:"Return issues updated before date (ISO 8601)"`
+	IIDs             []int64              `json:"iids,omitempty"              jsonschema:"Filter by issue internal IDs"`
+	MyReactionEmoji  string               `json:"my_reaction_emoji,omitempty" jsonschema:"Filter by issues you reacted to with this emoji (or None/Any)"`
 }
 
 // GetProject retrieves issue statistics scoped to a single project via
@@ -316,8 +355,9 @@ func GetProject(ctx context.Context, client *gitlabclient.Client, input GetProje
 }
 
 // projectIssueStatsOptions builds a [gl.GetProjectIssuesStatisticsOptions]
-// from the shared [statisticsFilters] set.
-func projectIssueStatsOptions(filters statisticsFilters) (*gl.GetProjectIssuesStatisticsOptions, error) {
+// from the shared [statisticsFilters] set, with the request option that
+// carries an assignee_id of None or Any.
+func projectIssueStatsOptions(filters statisticsFilters) (*gl.GetProjectIssuesStatisticsOptions, gl.RequestOptionFunc, error) {
 	opts := &gl.GetProjectIssuesStatisticsOptions{
 		IIDs:             optIIDs(filters.IIDs),
 		Labels:           labelOptions(filters.Labels),
@@ -325,16 +365,20 @@ func projectIssueStatsOptions(filters statisticsFilters) (*gl.GetProjectIssuesSt
 		Scope:            optStr(filters.Scope),
 		AuthorID:         filters.AuthorID,
 		AuthorUsername:   optStr(filters.AuthorUsername),
-		AssigneeID:       filters.AssigneeID,
 		AssigneeUsername: optStrings(filters.AssigneeUsername),
 		MyReactionEmoji:  optStr(filters.MyReactionEmoji),
 		Search:           optStr(filters.Search),
 		Confidential:     filters.Confidential,
 	}
-	if err := parseStatisticsDates(filters, &opts.CreatedAfter, &opts.CreatedBefore, &opts.UpdatedAfter, &opts.UpdatedBefore); err != nil {
-		return nil, err
+	assigneeQuery, err := parseStatisticsFilters(filters, statisticsDests{
+		assignee:     &opts.AssigneeID,
+		createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
+		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore,
+	})
+	if err != nil {
+		return nil, nil, err
 	}
-	return opts, nil
+	return opts, assigneeQuery, nil
 }
 
 // formatters.

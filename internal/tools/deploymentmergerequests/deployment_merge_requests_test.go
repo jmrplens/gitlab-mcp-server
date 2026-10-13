@@ -20,6 +20,26 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestList_AssigneeAndReviewerID_TakeAUserIDNoneOrAny holds assignee_id and
+// reviewer_id on a deployment's merge requests to what GitLab's filters take:
+// a user ID, None for merge requests with nobody in the role, and Any for
+// those with somebody. Both used to be integers whose 0 was dropped (issue
+// 1354).
+func TestList_AssigneeAndReviewerID_TakeAUserIDNoneOrAny(t *testing.T) {
+	for _, filter := range []string{"assignee_id", "reviewer_id"} {
+		for _, c := range testutil.UserIDFilterCases() {
+			t.Run(filter+"/"+c.Name, func(t *testing.T) {
+				client, recorder := testutil.RecordQueries(t, `[]`)
+				input, err := toolutil.UnmarshalParams[ListInput](c.Params(map[string]any{"project_id": "42", "deployment_id": 7}, filter))
+				if err == nil {
+					_, err = List(t.Context(), client, input)
+				}
+				recorder.AssertUserIDFilter(t, filter, c, err)
+			})
+		}
+	}
+}
+
 // TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
 // The mock GitLab API at /api/v4/projects/42/deployments/7/merge_requests (GET) responds with HTTP OK.
 // It asserts the returned output matches the expected fields.
@@ -423,7 +443,7 @@ func TestList_MergeRequestFilters(t *testing.T) {
 		ApprovedByIDs:       toolutil.ApproverIDsFilter{"13"},
 		ApprovedByUsernames: []string{"alice", "bob"},
 		ApproverIDs:         toolutil.ApproverIDsFilter{"11"},
-		AssigneeID:          9,
+		AssigneeID:          "9",
 		AuthorID:            7,
 		AuthorUsername:      "alice",
 		CreatedAfter:        "2025-01-01T00:00:00Z",
@@ -487,7 +507,7 @@ func TestList_AdditionalMergeRequestFilters(t *testing.T) {
 		ProjectID:         "1",
 		DeploymentID:      2,
 		NotAuthorUsername: "bob",
-		ReviewerID:        21,
+		ReviewerID:        "21",
 		ReviewerUsername:  "carol",
 		Milestone:         "v1.0",
 		Scope:             "all",

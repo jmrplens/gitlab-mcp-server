@@ -20,6 +20,47 @@ import (
 // errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
 
+// statisticsWithParams adapts a statistics handler to the params a meta or
+// dynamic route hands it, decoded by toolutil.UnmarshalParams as those routes
+// decode them.
+func statisticsWithParams[I any](get func(context.Context, *gitlabclient.Client, I) (StatisticsOutput, error)) func(context.Context, *gitlabclient.Client, map[string]any) error {
+	return func(ctx context.Context, client *gitlabclient.Client, params map[string]any) error {
+		input, err := toolutil.UnmarshalParams[I](params)
+		if err != nil {
+			return err
+		}
+		_, err = get(ctx, client, input)
+		return err
+	}
+}
+
+// TestStatistics_AssigneeID_TakesAUserIDNoneOrAny holds assignee_id on the
+// three statistics actions to what GitLab's filter takes: a user ID, None for
+// issues nobody is assigned, and Any for issues somebody is. client-go types
+// the option *int64, so None and Any reach the query through a request option
+// (upstream register row 125), and 0 is refused rather than counted as the
+// issues of a user nobody is (issue 1354).
+func TestStatistics_AssigneeID_TakesAUserIDNoneOrAny(t *testing.T) {
+	gets := []struct {
+		name   string
+		call   func(context.Context, *gitlabclient.Client, map[string]any) error
+		params map[string]any
+	}{
+		{name: "issue.statistics_get", call: statisticsWithParams(Get)},
+		{name: "issue.statistics_get_group", call: statisticsWithParams(GetGroup), params: map[string]any{"group_id": "7"}},
+		{name: "issue.statistics_get_project", call: statisticsWithParams(GetProject), params: map[string]any{"project_id": "42"}},
+	}
+	for _, get := range gets {
+		for _, c := range testutil.UserIDFilterCases() {
+			t.Run(get.name+"/"+c.Name, func(t *testing.T) {
+				client, recorder := testutil.RecordQueries(t, `{"statistics":{"counts":{"all":1,"closed":0,"opened":1}}}`)
+				err := get.call(t.Context(), client, c.Params(get.params, "assignee_id"))
+				recorder.AssertUserIDFilter(t, "assignee_id", c, err)
+			})
+		}
+	}
+}
+
 // newStats builds a [StatisticsOutput] with the nested statistics/counts
 // structure populated from the given all/opened/closed values.
 func newStats(all, opened, closed int64) StatisticsOutput {
@@ -951,7 +992,7 @@ func TestGet_ExtendedFilters(t *testing.T) {
 	want.Set("in", "title")
 	client := testutil.NewTestClient(t, statsRequest(t, pathGlobalStats, want, commonStatsJSON))
 	_, err := Get(t.Context(), client, GetInput{
-		AssigneeID:       new(int64(7)),
+		AssigneeID:       "7",
 		AssigneeUsername: []string{"alice"},
 		AuthorID:         new(int64(9)),
 		AuthorUsername:   "octocat",
@@ -977,7 +1018,7 @@ func TestGetGroup_ExtendedFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, statsRequest(t, pathGroupStats, extendedStatsQuery(), commonStatsJSON))
 	_, err := GetGroup(t.Context(), client, GetGroupInput{
 		GroupID:          "99",
-		AssigneeID:       new(int64(7)),
+		AssigneeID:       "7",
 		AssigneeUsername: []string{"alice"},
 		AuthorID:         new(int64(9)),
 		AuthorUsername:   "octocat",
@@ -1001,7 +1042,7 @@ func TestGetProject_ExtendedFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, statsRequest(t, pathProjectStats, extendedStatsQuery(), commonStatsJSON))
 	_, err := GetProject(t.Context(), client, GetProjectInput{
 		ProjectID:        "42",
-		AssigneeID:       new(int64(7)),
+		AssigneeID:       "7",
 		AssigneeUsername: []string{"alice"},
 		AuthorID:         new(int64(9)),
 		AuthorUsername:   "octocat",

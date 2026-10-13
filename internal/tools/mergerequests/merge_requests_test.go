@@ -30,6 +30,48 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// listWithParams adapts a list handler to the params a meta or dynamic route
+// hands it, decoded by toolutil.UnmarshalParams as those routes decode them.
+func listWithParams[I any](list func(context.Context, *gitlabclient.Client, I) (ListOutput, error)) func(context.Context, *gitlabclient.Client, map[string]any) error {
+	return func(ctx context.Context, client *gitlabclient.Client, params map[string]any) error {
+		input, err := toolutil.UnmarshalParams[I](params)
+		if err != nil {
+			return err
+		}
+		_, err = list(ctx, client, input)
+		return err
+	}
+}
+
+// TestListFilters_AssigneeAndReviewerID_TakeAUserIDNoneOrAny holds
+// assignee_id and reviewer_id on the three merge request lists to what
+// GitLab's filters take: a user ID, None for merge requests with nobody in the
+// role, and Any for those with somebody. Both used to be integers whose 0 was
+// dropped, so None and Any were refused before a request and 0 listed every
+// merge request whatever its assignee or reviewer (issue 1354).
+func TestListFilters_AssigneeAndReviewerID_TakeAUserIDNoneOrAny(t *testing.T) {
+	lists := []struct {
+		name   string
+		call   func(context.Context, *gitlabclient.Client, map[string]any) error
+		params map[string]any
+	}{
+		{name: "merge_request.list", call: listWithParams(List), params: map[string]any{"project_id": "42"}},
+		{name: "merge_request.list_global", call: listWithParams(ListGlobal)},
+		{name: "merge_request.list_group", call: listWithParams(ListGroup), params: map[string]any{"group_id": "7"}},
+	}
+	for _, list := range lists {
+		for _, filter := range []string{"assignee_id", "reviewer_id"} {
+			for _, c := range testutil.UserIDFilterCases() {
+				t.Run(list.name+"/"+filter+"/"+c.Name, func(t *testing.T) {
+					client, recorder := testutil.RecordQueries(t, `[]`)
+					err := list.call(t.Context(), client, c.Params(list.params, filter))
+					recorder.AssertUserIDFilter(t, filter, c, err)
+				})
+			}
+		}
+	}
+}
+
 // TestUpdate_EmptyDescription_ReachesTheBody holds a merge request's
 // description to an empty value removing it. The handler used to drop it and
 // answer with the old description as an update (issue 1306).
@@ -5930,8 +5972,8 @@ func TestList_NewFilterFields_ReachQuery(t *testing.T) {
 		View:                   "simple",
 		WIP:                    "no",
 		AuthorID:               7,
-		AssigneeID:             8,
-		ReviewerID:             9,
+		AssigneeID:             "8",
+		ReviewerID:             "9",
 		ApproverIDs:            toolutil.ApproverIDsFilter{"11", "12"},
 		ApprovedByIDs:          toolutil.ApproverIDsFilter{"13"},
 		ApprovedByUsernames:    []string{"alice", "bob"},
@@ -6048,8 +6090,8 @@ func TestListGlobal_NewFilterFields_ReachQuery(t *testing.T) {
 		View:                   "simple",
 		WIP:                    "yes",
 		AuthorID:               1,
-		AssigneeID:             2,
-		ReviewerID:             3,
+		AssigneeID:             "2",
+		ReviewerID:             "3",
 		ApproverIDs:            toolutil.ApproverIDsFilter{"4"},
 		ApprovedByIDs:          toolutil.ApproverIDsFilter{"5", "6"},
 		WithLabelsDetails:      &boolTrue,
@@ -6097,8 +6139,8 @@ func TestListGroup_NewFilterFields_ReachQuery(t *testing.T) {
 		View:                   "simple",
 		WIP:                    "no",
 		AuthorID:               10,
-		AssigneeID:             20,
-		ReviewerID:             30,
+		AssigneeID:             "20",
+		ReviewerID:             "30",
 		ApproverIDs:            toolutil.ApproverIDsFilter{"40"},
 		ApprovedByIDs:          toolutil.ApproverIDsFilter{"50"},
 		WithLabelsDetails:      &boolTrue,
