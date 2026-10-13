@@ -390,8 +390,8 @@ type MergeInput struct {
 	ProjectID                 toolutil.StringOrInt `json:"project_id"                              jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID                     int64                `json:"merge_request_iid"                                  jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	MergeCommitMessage        string               `json:"merge_commit_message,omitempty"           jsonschema:"Custom merge commit message"`
-	Squash                    *bool                `json:"squash,omitempty"                         jsonschema:"Squash commits on merge. Only set if explicitly requested by the user. Omit to preserve repository defaults"`
-	ShouldRemoveSourceBranch  *bool                `json:"should_remove_source_branch,omitempty"   jsonschema:"Delete source branch after merge. Only set if explicitly requested by the user. Omit to preserve repository defaults"`
+	Squash                    *bool                `json:"squash,omitempty"                         jsonschema:"Squash commits on merge. Only set if explicitly requested by the user. Omit to apply the merge request's own squash setting. false is refused when the merge request squashes on merge, since GitLab ignores false on this route: turn its squash off first with merge_request.update"`
+	ShouldRemoveSourceBranch  *bool                `json:"should_remove_source_branch,omitempty"   jsonschema:"Delete source branch after merge. Only set if explicitly requested by the user. Omit to apply the merge request's own Delete source branch setting. Set false to keep the branch even when that setting is on"`
 	AutoMerge                 *bool                `json:"auto_merge,omitempty"                     jsonschema:"Automatically merge when pipeline succeeds (auto-merge)"`
 	MergeWhenPipelineSucceeds *bool                `json:"merge_when_pipeline_succeeds,omitempty"   jsonschema:"Deprecated alias for auto_merge: merge when the pipeline succeeds. Prefer auto_merge"`
 	SHA                       string               `json:"sha,omitempty"                            jsonschema:"Head SHA of the merge request. Merge only if HEAD matches (safety check)"`
@@ -823,11 +823,17 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	return mergeRequestOutput("mrUpdate", mr, captured)
 }
 
-// Merge accepts (merges) a merge request. When squash or
-// should_remove_source_branch are not explicitly set by the caller, the
-// function pre-fetches the MR to detect project-level requirements
-// (squash_on_merge, force_remove_source_branch) and applies them
-// automatically, avoiding merge rejections from enforced settings.
+// Merge accepts (merges) a merge request. It reads the merge request first,
+// for two reasons. When the caller left squash out and the merge request
+// squashes on merge, it sends squash=true, which a project whose squash option
+// is always needs when the merge request's own squash flag is off. When the
+// caller sent squash=false and the merge request squashes on merge, it refuses
+// before merging, because GitLab ignores squash=false on this route and would
+// squash anyway (D12 of issue 1293). should_remove_source_branch is the
+// caller's alone: GitLab applies the merge request's own flag when it is left
+// out and keeps the branch on an explicit false, and the handler used to send
+// the flag in place of the caller's false. The read also lets a 405 be
+// explained by what blocks the merge.
 func Merge(ctx context.Context, client *gitlabclient.Client, input MergeInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -839,21 +845,15 @@ func Merge(ctx context.Context, client *gitlabclient.Client, input MergeInput) (
 		return Output{}, toolutil.ErrRequiredInt64("mrMerge", "merge_request_iid")
 	}
 
-	// Always pre-fetch the MR to detect enforced project merge settings.
-	// Projects can require squash (squash_option=always) or force source
-	// branch deletion — the API rejects merge requests that violate these
-	// constraints. LLMs tend to explicitly send squash=false even when
-	// omitting it would be correct, so we override when the MR indicates
-	// an enforced setting.
 	//gitlab:request optional: a failed prefetch is ignored and the merge runs with the caller's options, so only the merge itself is needed
 	prefetched, _, fetchErr := client.GL().MergeRequests.GetMergeRequest(string(input.ProjectID), input.MRIID, nil, gl.WithContext(ctx))
-	if fetchErr == nil {
-		if prefetched.SquashOnMerge {
-			input.Squash = &prefetched.SquashOnMerge
+	if fetchErr == nil && prefetched.SquashOnMerge {
+		if input.Squash != nil && !*input.Squash {
+			return Output{}, fmt.Errorf("mrMerge: merge request !%d squashes its commits on merge, and GitLab ignores squash=false on the merge route, so it would squash anyway. "+
+				"To merge without squashing, turn its squash off first with merge_request.update and squash=false, then merge; "+
+				"a project whose squash option is always squashes whatever the merge request says", input.MRIID)
 		}
-		if prefetched.ForceRemoveSourceBranch {
-			input.ShouldRemoveSourceBranch = &prefetched.ForceRemoveSourceBranch
-		}
+		input.Squash = new(true)
 	}
 
 	opts := &gl.AcceptMergeRequestOptions{}

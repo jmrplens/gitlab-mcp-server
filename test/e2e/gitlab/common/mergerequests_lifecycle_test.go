@@ -15,6 +15,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/branches"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/resourceevents"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -169,6 +170,48 @@ func TestMergeRequest_Update_EmptyListsRemoveAssigneesReviewersAndLabels(t *test
 		if len(read.Assignees) != 0 || len(read.Reviewers) != 0 || len(read.Labels) != 0 {
 			e.T.Errorf("merge_request get after the clear reads assignees %v, reviewers %v, labels %v; want none",
 				read.Assignees, read.Reviewers, read.Labels)
+		}
+	})
+}
+
+// TestMergeRequest_Merge_KeepsTheBranchAskedForAndRefusesAnOverruledSquashFalse
+// opens a mergeable request on every surface whose own settings delete its
+// source branch and squash on merge, set through the update action. A merge
+// asking for squash=false is refused naming merge_request.update, since GitLab
+// ignores false on the merge route and would squash anyway; a merge asking to
+// keep the branch merges and leaves the branch in place. The handler used to
+// replace both of the caller's answers with the request's own (issue 1293).
+func TestMergeRequest_Merge_KeepsTheBranchAskedForAndRefusesAnOverruledSquashFalse(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("mrkeep"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		branch := fixture.NewBranch(e, project, e.Name("mrkeep"))
+		fixture.CommitFile(e, project, branch.Name, "mrkeep.txt", "mrkeep fixture on "+branch.Name+"\n", "add the mrkeep fixture")
+		mr := fixture.NewMergeableMergeRequest(e, project, branch.Name, project.DefaultBranch, e.Name("mrkeep"))
+		params := map[string]any{"project_id": project.IDParam(), "merge_request_iid": mr.IID}
+
+		set := harness.Do[mergerequests.Output](s, actionMergeRequestUpdate, withParams(params, map[string]any{
+			"remove_source_branch": true, "squash": true,
+		}))
+		if !set.ForceRemoveSourceBranch || !set.SquashOnMerge {
+			e.T.Fatalf("merge_request update answered force_remove_source_branch=%t squash_on_merge=%t, want both true",
+				set.ForceRemoveSourceBranch, set.SquashOnMerge)
+		}
+
+		harness.ExpectToolError(s, actionMergeRequestMerge, withParams(params, map[string]any{"squash": false}), "merge_request.update")
+
+		fixture.WaitForMergeRequest(e, project, mr.IID)
+		merged := harness.Eventually(s, actionMergeRequestMerge, withParams(params, map[string]any{"should_remove_source_branch": false}),
+			mergeInterval, mergeWait, func(out mergerequests.Output) bool { return out.State == "merged" })
+		if merged.IID != mr.IID {
+			e.T.Errorf("merge answered request !%d, want !%d", merged.IID, mr.IID)
+		}
+		kept := harness.Do[branches.Output](s, actionBranchGet, map[string]any{"project_id": project.IDParam(), "branch_name": branch.Name})
+		if kept.Name != branch.Name {
+			e.T.Errorf("branch.get after the merge answered %q, want the source branch %q kept", kept.Name, branch.Name)
 		}
 	})
 }

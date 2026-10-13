@@ -4858,87 +4858,104 @@ func TestMerge_AutoDetectsSquashOnMerge(t *testing.T) {
 	}
 }
 
-// TestMerge_AutoDetectsForceRemoveSourceBranch verifies that Merge sets
-// should_remove_source_branch=true when force_remove_source_branch is true
-// on the MR and the caller omitted the parameter.
-func TestMerge_AutoDetectsForceRemoveSourceBranch(t *testing.T) {
-	mrWithForceRemove := `{"id":100,"iid":1,"title":"Test MR","state":"opened","squash_on_merge":false,"force_remove_source_branch":true,"detailed_merge_status":"can_be_merged"}`
+// mrDeletingAndSquashing is a merge request whose own settings delete its
+// source branch and squash on merge: the "Delete source branch" box the
+// project ticks by default, and a squash option of default_on or always.
+const mrDeletingAndSquashing = `{"id":100,"iid":1,"title":"Test MR","state":"opened","squash_on_merge":true,"force_remove_source_branch":true,"detailed_merge_status":"can_be_merged"}`
 
-	var mergeRequestBody string
+// mergeAgainst drives Merge on merge request 1 with the pre-fetch answered by
+// prefetched, and returns the merge body the mock received (nil when no merge
+// was sent) and Merge's error.
+func mergeAgainst(t *testing.T, prefetched string, input MergeInput) (map[string]json.RawMessage, error) {
+	t.Helper()
+	var body map[string]json.RawMessage
+	capture := captureJSONBody(t, http.MethodPut, pathMR1+"/merge", http.StatusOK, mrJSONCoverage, &body)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet && r.URL.Path == pathMR1:
-			testutil.RespondJSON(w, http.StatusOK, mrWithForceRemove)
-		case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				t.Errorf("read request body: %v", err)
-				http.Error(w, "read request body", http.StatusInternalServerError)
-				return
-			}
-			mergeRequestBody = string(body)
-			testutil.RespondJSON(w, http.StatusOK, mrJSONCoverage)
-		default:
-			http.NotFound(w, r)
+		if r.Method == http.MethodGet && r.URL.Path == pathMR1 {
+			testutil.RespondJSON(w, http.StatusOK, prefetched)
+			return
 		}
+		capture(w, r)
 	}))
+	input.ProjectID, input.MRIID = testProjectID, 1
+	_, err := Merge(context.Background(), client, input)
+	return body, err
+}
 
-	out, err := Merge(context.Background(), client, MergeInput{
-		ProjectID: testProjectID,
-		MRIID:     1,
-	})
-	if err != nil {
-		t.Fatalf("Merge() unexpected error: %v", err)
+// TestMerge_ShouldRemoveSourceBranch_IsTheCallersOrTheMergeRequests holds the
+// merge body to the caller's choice about the source branch, and to no key at
+// all when the caller made none. GitLab applies the merge request's own
+// force_remove_source_branch when the key is absent
+// (MergeRequests::MergeService#delete_source_branch? fetches the param with
+// that flag as its default) and keeps the branch on an explicit false. The
+// handler used to overwrite every choice with the merge request's flag, so a
+// branch the caller asked to keep was deleted (issue 1293).
+func TestMerge_ShouldRemoveSourceBranch_IsTheCallersOrTheMergeRequests(t *testing.T) {
+	tests := []struct {
+		name  string
+		input MergeInput
+		want  map[string]string
+	}{
+		{"omitted leaves it to the merge request", MergeInput{}, map[string]string{"squash": "true"}},
+		{"false keeps the branch", MergeInput{ShouldRemoveSourceBranch: new(false)}, map[string]string{"squash": "true", "should_remove_source_branch": "false"}},
+		{"true deletes it", MergeInput{ShouldRemoveSourceBranch: new(true)}, map[string]string{"squash": "true", "should_remove_source_branch": "true"}},
 	}
-	if out.IID != 1 {
-		t.Errorf(fmtIIDWant, out.IID)
-	}
-	if !strings.Contains(mergeRequestBody, `"should_remove_source_branch":true`) {
-		t.Errorf("expected merge body to contain should_remove_source_branch=true, got %s", mergeRequestBody)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body, err := mergeAgainst(t, mrDeletingAndSquashing, tt.input)
+			if err != nil {
+				t.Fatalf("Merge() unexpected error: %v", err)
+			}
+			assertBodyKeys(t, body, tt.want)
+		})
 	}
 }
 
-// TestMerge_EnforcedSquashOverridesExplicitFalse verifies that when the MR
-// has squash_on_merge=true (enforced by project settings), the Merge function
-// overrides an explicit squash=false from the caller to prevent API rejection.
-func TestMerge_EnforcedSquashOverridesExplicitFalse(t *testing.T) {
-	mrWithSquashOnMerge := `{"id":100,"iid":1,"title":"Test MR","state":"opened","squash_on_merge":true,"force_remove_source_branch":false,"detailed_merge_status":"can_be_merged"}`
-
-	var mergeRequestBody string
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet && r.URL.Path == pathMR1:
-			testutil.RespondJSON(w, http.StatusOK, mrWithSquashOnMerge)
-		case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				t.Errorf("read request body: %v", err)
-				http.Error(w, "read request body", http.StatusInternalServerError)
-				return
+// TestMerge_SquashFalseOnASquashingRequest_IsRefusedBeforeTheMerge holds a
+// squash=false the merge request's own setting would overrule to a refusal
+// that sends no merge. GitLab ignores squash=false on the merge route (it
+// updates the merge request's squash only when the param is true) and
+// squashes whenever the merge request does, so the merge would squash however
+// the call was written; the handler used to send squash=true in its place and
+// report the squashed merge as asked. The refusal names merge_request.update,
+// which turns the merge request's squash off first.
+func TestMerge_SquashFalseOnASquashingRequest_IsRefusedBeforeTheMerge(t *testing.T) {
+	body, err := mergeAgainst(t, mrDeletingAndSquashing, MergeInput{Squash: new(false)})
+	if err == nil {
+		t.Fatal("Merge() succeeded, want a refusal of squash=false on a merge request that squashes on merge")
+	}
+	for _, want := range []string{"squash", "merge_request.update", "always"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("Merge() error = %q, want it to mention %q", err, want)
 			}
-			mergeRequestBody = string(body)
-			testutil.RespondJSON(w, http.StatusOK, mrJSONCoverage)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
+		})
+	}
+	if body != nil {
+		t.Errorf("a merge was sent with body %v, want none", body)
+	}
+}
 
-	boolFalse := false
-	out, err := Merge(context.Background(), client, MergeInput{
-		ProjectID:                testProjectID,
-		MRIID:                    1,
-		Squash:                   &boolFalse,
-		ShouldRemoveSourceBranch: &boolFalse,
-	})
+// TestMerge_SquashTrueOnASquashingRequest_IsSent holds a squash=true that
+// agrees with the merge request's own setting to the merge it asks for: only
+// a false the merge request would overrule is refused.
+func TestMerge_SquashTrueOnASquashingRequest_IsSent(t *testing.T) {
+	body, err := mergeAgainst(t, mrDeletingAndSquashing, MergeInput{Squash: new(true)})
 	if err != nil {
 		t.Fatalf("Merge() unexpected error: %v", err)
 	}
-	if out.IID != 1 {
-		t.Errorf(fmtIIDWant, out.IID)
+	assertBodyKeys(t, body, map[string]string{"squash": "true"})
+}
+
+// TestMerge_SquashFalseOnARequestThatDoesNotSquash_IsSent holds an explicit
+// false to the body when the merge request would not squash anyway, so the
+// refusal above is reached only where GitLab would overrule the caller.
+func TestMerge_SquashFalseOnARequestThatDoesNotSquash_IsSent(t *testing.T) {
+	body, err := mergeAgainst(t, mrJSONCoverage, MergeInput{Squash: new(false)})
+	if err != nil {
+		t.Fatalf("Merge() unexpected error: %v", err)
 	}
-	if !strings.Contains(mergeRequestBody, `"squash":true`) {
-		t.Errorf("expected enforced squash_on_merge to override explicit false, got body: %s", mergeRequestBody)
-	}
+	assertBodyKeys(t, body, map[string]string{"squash": "false"})
 }
 
 // TestMerge_ExplicitSquashRespectedWhenNotEnforced verifies that when the MR
