@@ -337,7 +337,7 @@ func individualCatalogHandler(toolName string, action actioncatalog.Action, form
 // removed on the other two.
 func individualCatalogActionReadOnly(action actioncatalog.Action) bool {
 	readOnly := action.ReadOnly
-	overrides := action.IndividualTool.AnnotationOverrides.NarrowingOnly(action.ReadOnly, action.Idempotent)
+	overrides := action.IndividualTool.AnnotationOverrides.NarrowingOnly(action.ReadOnly, action.Destructive, action.Idempotent)
 	if overrides.ReadOnly != nil {
 		readOnly = *overrides.ReadOnly
 	}

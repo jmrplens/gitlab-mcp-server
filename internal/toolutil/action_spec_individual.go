@@ -132,7 +132,8 @@ func TypeIdentity(rt reflect.Type) string {
 }
 
 // NarrowingOnly returns the overrides with every claim removed that would make
-// a mutating or non-repeatable action look safer than the action itself is.
+// a mutating, destructive or non-repeatable action look safer than the action
+// itself is.
 //
 // readOnlyHint and idempotentHint both say "this call is safe to make, and safe
 // to repeat", and both are consulted by things that act on them: --read-only
@@ -141,19 +142,31 @@ func TypeIdentity(rt reflect.Type) string {
 // raises either one is therefore not a presentation choice, it is a silent
 // widening of the operator's own controls.
 //
-// Overrides that narrow are untouched, and are the reason this type exists: a
-// delete whose confirmation is handled elsewhere may declare destructiveHint
-// false, and an update that is not repeatable may declare idempotentHint false.
+// destructiveHint false says the opposite of what the server does with a
+// destructive action. MCP defines it as "the tool performs only additive
+// updates", and the individual handler demands confirm for exactly the actions
+// whose route is destructive, so a client deciding from the hint whether to ask
+// its user would send a merge, a ban or a forced mirror push without asking and
+// meet the server's own confirmation instead. Twelve actions declared it on the
+// individual surface alone, on the reading that a reversible action is not
+// terminal, until issue 1335.
+//
+// Overrides that narrow are untouched, and are the reason this type exists: an
+// action that is not destructive may declare destructiveHint true, and an
+// update that is not repeatable may declare idempotentHint false.
 //
 // The case this was written for is system_hook_test, a mutating create that
 // declared readOnlyHint true on the individual surface alone because the test
 // event changes nothing on the instance. It changes no GitLab state, but it
 // makes GitLab deliver an event to the hook's configured URL, so it is not a
-// read — and one action classified read-only on one surface and mutating on the
+// read, and one action classified read-only on one surface and mutating on the
 // other two cannot be right on more than one of them.
-func (o IndividualToolAnnotationOverrides) NarrowingOnly(readOnly, idempotent bool) IndividualToolAnnotationOverrides {
+func (o IndividualToolAnnotationOverrides) NarrowingOnly(readOnly, destructive, idempotent bool) IndividualToolAnnotationOverrides {
 	if !readOnly && o.ReadOnly != nil && *o.ReadOnly {
 		o.ReadOnly = nil
+	}
+	if destructive && o.Destructive != nil && !*o.Destructive {
+		o.Destructive = nil
 	}
 	if !idempotent && o.Idempotent != nil && *o.Idempotent {
 		o.Idempotent = nil
@@ -166,7 +179,7 @@ func annotationsFromActionSpec(spec ActionSpec) *mcp.ToolAnnotations {
 	destructive := spec.Destructive
 	idempotent := spec.Idempotent
 	openWorld := spec.OpenWorld
-	overrides := spec.IndividualTool.AnnotationOverrides.NarrowingOnly(spec.ReadOnly, spec.Idempotent)
+	overrides := spec.IndividualTool.AnnotationOverrides.NarrowingOnly(spec.ReadOnly, spec.Destructive, spec.Idempotent)
 	if overrides.ReadOnly != nil {
 		readOnly = *overrides.ReadOnly
 	}

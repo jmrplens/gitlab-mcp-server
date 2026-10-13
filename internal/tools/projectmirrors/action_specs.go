@@ -89,9 +89,7 @@ func mirrorDeleteSpec(name string, route toolutil.ActionRoute, individualTool st
 }
 
 func mirrorForcePushSpec(client *gitlabclient.Client) toolutil.ActionSpec {
-	individualDestructive := false
 	options := mirrorOptions("gitlab_force_push_mirror_update")
-	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
 	return toolutil.NewDeleteActionSpec("mirror_force_push", toolutil.DestructiveAction(client, forcePushOutput), options)
 }
 

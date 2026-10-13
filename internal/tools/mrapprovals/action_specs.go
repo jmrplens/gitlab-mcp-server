@@ -87,9 +87,7 @@ func approvalDeleteSpec(name string, route toolutil.ActionRoute, individualTool 
 }
 
 func approvalResetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
-	individualDestructive := false
 	options := approvalOptions("gitlab_mr_approval_reset")
-	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
 	toolutil.ApplyActionMeta(&options, approvalActionMeta["gitlab_mr_approval_reset"])
 	return toolutil.NewDeleteActionSpec("approval_reset", toolutil.DestructiveAction(client, resetOutput), options)
 }

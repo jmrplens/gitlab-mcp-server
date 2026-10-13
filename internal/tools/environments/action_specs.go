@@ -94,9 +94,7 @@ func environmentDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 }
 
 func environmentStopSpec(client *gitlabclient.Client) toolutil.ActionSpec {
-	individualDestructive := false
 	options := environmentOptionsForAction(actionNameStop, "gitlab_environment_stop")
-	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
 	return toolutil.NewDeleteActionSpec(actionNameStop, toolutil.DestructiveAction(client, Stop), options)
 }
 

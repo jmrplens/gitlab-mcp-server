@@ -71,9 +71,7 @@ func enterpriseUserDestructiveSpec(name string, route toolutil.ActionRoute, indi
 }
 
 func enterpriseUserDisable2FASpec(client *gitlabclient.Client) toolutil.ActionSpec {
-	individualDestructive := false
 	options := enterpriseUserOptions("gitlab_disable_2fa_enterprise_user")
-	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
 	options.Usage = "Disable two-factor authentication for an enterprise user by group_id plus user_id. Use when a user is locked out of 2FA and the group administrator must reset it."
 	options.Aliases = []string{"gitlab_disable_2fa_enterprise_user", "disable 2fa enterprise user", "reset enterprise user two-factor", "reset enterprise user 2fa", "unlock enterprise user"}
 	options.RelatedActions = []string{actionEnterpriseUserGet, actionEnterpriseUserList, actionEnterpriseUserDelete}

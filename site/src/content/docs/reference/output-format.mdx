@@ -209,7 +209,7 @@ How each surface sets them:
 - **Meta**: one tool per domain, with the most cautious combination of its actions: `destructiveHint: true` when any action of the tool is destructive, and `readOnlyHint: true` only when every action only reads.
 - **Dynamic**: `gitlab_find_action` is read-only. `gitlab_execute_action` is destructive unless every action the session can reach only reads, as in read-only mode, where it is read-only too.
 
-The server acts on the same classification itself, whatever a client does with the hints: read-only mode removes what does not only read, safe mode answers it with a preview, and a destructive action asks for confirmation on the server ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)). A client or a gateway may ask before a destructive tool and allow a read-only one without asking, which is why an action can never be declared read-only or idempotent on one surface when the catalog says it is not.
+The server acts on the same classification itself, whatever a client does with the hints: read-only mode removes what does not only read, safe mode answers it with a preview, and a destructive action asks for confirmation on the server ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)). A client or a gateway may ask before a destructive tool and allow a read-only one without asking, which is why an action can never be declared read-only or idempotent on one surface when the catalog says it is not, nor declared non-destructive on one surface when the server asks for confirmation before running it.
 
 ## Response examples
 

@@ -103,29 +103,32 @@ func TestIndividualToolFromActionSpec_FallsBackToOptionDescriptionAndGeneratedTi
 
 // TestIndividualToolFromActionSpec_AppliesAnnotationOverrides verifies that
 // IndividualToolFromActionSpec applies the annotation overrides that narrow and
-// refuses the one that widens.
+// refuses the two that widen.
 //
-// The spec is a mutating archive that overrides all four hints. Three of them
-// make the tool look less capable or less safe and are applied verbatim. The
-// fourth claims readOnlyHint on an action the spec itself calls mutating, and
-// is dropped: --read-only, safe mode and a gateway's auto-allow all act on that
-// bit, so honoring it would widen the operator's controls rather than describe
-// the tool.
+// The spec is a destructive delete that overrides all four hints. Two of them
+// make the tool look less capable and are applied verbatim. The other two make
+// it look safer than the action is, and are dropped. readOnlyHint is claimed on
+// an action the spec itself calls mutating: --read-only, safe mode and a
+// gateway's auto-allow all act on that bit. destructiveHint false is claimed on
+// an action whose handler still demands confirm: MCP defines false as "only
+// additive updates", so a client that decides from the hint whether to ask its
+// user would not ask before a call the server itself treats as irreversible.
 func TestIndividualToolFromActionSpec_AppliesAnnotationOverrides(t *testing.T) {
 	overrideReadOnly := true
 	overrideDestructive := false
 	overrideIdempotent := false
 	overrideOpenWorld := false
-	spec := NewActionSpec("archive", ActionRoute{
+	spec := NewActionSpec("delete", ActionRoute{
 		InputSchema:  testActionSpecSchema("project_id"),
 		OutputSchema: testActionSpecSchema("id"),
 	}, ActionSpecOptions{
+		Destructive:  true,
 		Idempotent:   true,
 		OpenWorld:    true,
 		OwnerPackage: "projects",
 		IndividualTool: IndividualToolSpec{
-			Name:        "gitlab_project_archive",
-			Description: "Archive a GitLab project.",
+			Name:        "gitlab_project_delete",
+			Description: "Delete a GitLab project.",
 			AnnotationOverrides: IndividualToolAnnotationOverrides{
 				ReadOnly:    &overrideReadOnly,
 				Destructive: &overrideDestructive,
@@ -145,7 +148,7 @@ func TestIndividualToolFromActionSpec_AppliesAnnotationOverrides(t *testing.T) {
 		want bool
 	}{
 		{"the widening read-only override is dropped", tool.Annotations.ReadOnlyHint, false},
-		{"the narrowing destructive override is applied", tool.Annotations.DestructiveHint != nil && *tool.Annotations.DestructiveHint, false},
+		{"the widening destructive override is dropped", tool.Annotations.DestructiveHint != nil && *tool.Annotations.DestructiveHint, true},
 		{"the narrowing idempotent override is applied", tool.Annotations.IdempotentHint, false},
 		{"the narrowing open-world override is applied", tool.Annotations.OpenWorldHint != nil && *tool.Annotations.OpenWorldHint, false},
 	}
@@ -155,6 +158,35 @@ func TestIndividualToolFromActionSpec_AppliesAnnotationOverrides(t *testing.T) {
 				t.Errorf("annotation = %t, want %t", check.got, check.want)
 			}
 		})
+	}
+}
+
+// TestIndividualToolFromActionSpec_NarrowingDestructiveOverride_IsApplied
+// verifies that an action the spec does not call destructive may still declare
+// destructiveHint true on the individual surface. That is the one destructive
+// override NarrowingOnly keeps since issue 1335, because it makes the tool look
+// more dangerous than the action is rather than less, so the projection has to
+// apply it rather than fall back to the spec.
+func TestIndividualToolFromActionSpec_NarrowingDestructiveOverride_IsApplied(t *testing.T) {
+	overrideDestructive := true
+	spec := NewActionSpec("update", ActionRoute{
+		InputSchema:  testActionSpecSchema("project_id"),
+		OutputSchema: testActionSpecSchema("id"),
+	}, ActionSpecOptions{
+		OwnerPackage: "projects",
+		IndividualTool: IndividualToolSpec{
+			Name:                "gitlab_project_update",
+			Description:         "Update a GitLab project.",
+			AnnotationOverrides: IndividualToolAnnotationOverrides{Destructive: &overrideDestructive},
+		},
+	})
+
+	tool, err := IndividualToolFromActionSpec(spec, IndividualToolProjectionOptions{})
+	if err != nil {
+		t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
+	}
+	if hint := tool.Annotations.DestructiveHint; hint == nil || !*hint {
+		t.Errorf("destructiveHint = %v, want true from the narrowing override", hint)
 	}
 }
 
@@ -441,17 +473,46 @@ func TestIndividualToolFromActionSpec_NarrowingReadOnlyOverride_IsApplied(t *tes
 // override that raises either therefore widens the operator's controls rather
 // than describing the tool, which is how one mutating action came to be
 // read-only on the individual surface and mutating on the other two.
+//
+// destructiveHint false is the same widening in the other direction: the
+// handler of a destructive action demands confirm whatever the hint says, so a
+// hint that tells a client the call is additive is dropped, while a hint that
+// calls a non-destructive action destructive narrows and is kept.
 func TestIndividualToolAnnotationOverrides_NarrowingOnly(t *testing.T) {
 	truth, falsehood := true, false
 	tests := []struct {
-		name           string
-		overrides      IndividualToolAnnotationOverrides
-		readOnly       bool
-		idempotent     bool
-		wantReadOnly   *bool
-		wantIdempotent *bool
+		name            string
+		overrides       IndividualToolAnnotationOverrides
+		readOnly        bool
+		destructive     bool
+		idempotent      bool
+		wantReadOnly    *bool
+		wantDestructive *bool
+		wantIdempotent  *bool
 	}{
 		{name: "no overrides"},
+		{
+			name:            "destructive false on a destructive action is dropped",
+			overrides:       IndividualToolAnnotationOverrides{Destructive: &falsehood},
+			destructive:     true,
+			wantDestructive: nil,
+		},
+		{
+			name:            "destructive true on a destructive action is kept",
+			overrides:       IndividualToolAnnotationOverrides{Destructive: &truth},
+			destructive:     true,
+			wantDestructive: &truth,
+		},
+		{
+			name:            "a narrowing destructive override is kept",
+			overrides:       IndividualToolAnnotationOverrides{Destructive: &truth},
+			wantDestructive: &truth,
+		},
+		{
+			name:            "destructive false on a non-destructive action is kept",
+			overrides:       IndividualToolAnnotationOverrides{Destructive: &falsehood},
+			wantDestructive: &falsehood,
+		},
 		{
 			name:         "read-only claim on a mutating action is dropped",
 			overrides:    IndividualToolAnnotationOverrides{ReadOnly: &truth},
@@ -499,9 +560,12 @@ func TestIndividualToolAnnotationOverrides_NarrowingOnly(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.overrides.NarrowingOnly(tt.readOnly, tt.idempotent)
+			got := tt.overrides.NarrowingOnly(tt.readOnly, tt.destructive, tt.idempotent)
 			if !sameOptionalBool(got.ReadOnly, tt.wantReadOnly) {
 				t.Errorf("ReadOnly = %s, want %s", optionalBoolString(got.ReadOnly), optionalBoolString(tt.wantReadOnly))
+			}
+			if !sameOptionalBool(got.Destructive, tt.wantDestructive) {
+				t.Errorf("Destructive = %s, want %s", optionalBoolString(got.Destructive), optionalBoolString(tt.wantDestructive))
 			}
 			if !sameOptionalBool(got.Idempotent, tt.wantIdempotent) {
 				t.Errorf("Idempotent = %s, want %s", optionalBoolString(got.Idempotent), optionalBoolString(tt.wantIdempotent))
@@ -509,11 +573,11 @@ func TestIndividualToolAnnotationOverrides_NarrowingOnly(t *testing.T) {
 		})
 	}
 
-	t.Run("destructive and open-world overrides are untouched", func(t *testing.T) {
-		overrides := IndividualToolAnnotationOverrides{Destructive: &falsehood, OpenWorld: &falsehood}
-		got := overrides.NarrowingOnly(false, false)
-		if !sameOptionalBool(got.Destructive, &falsehood) || !sameOptionalBool(got.OpenWorld, &falsehood) {
-			t.Errorf("Destructive/OpenWorld = %s/%s, want false/false", optionalBoolString(got.Destructive), optionalBoolString(got.OpenWorld))
+	t.Run("open-world overrides are untouched", func(t *testing.T) {
+		overrides := IndividualToolAnnotationOverrides{OpenWorld: &falsehood}
+		got := overrides.NarrowingOnly(false, true, false)
+		if !sameOptionalBool(got.OpenWorld, &falsehood) {
+			t.Errorf("OpenWorld = %s, want false", optionalBoolString(got.OpenWorld))
 		}
 	})
 }

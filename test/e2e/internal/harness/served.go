@@ -550,7 +550,7 @@ func individualGroupRegistered(group actioncatalog.Group) bool {
 // override that can only ever narrow it.
 func individualActionReadOnly(action actioncatalog.Action) bool {
 	readOnly := action.ReadOnly
-	overrides := action.IndividualTool.AnnotationOverrides.NarrowingOnly(action.ReadOnly, action.Idempotent)
+	overrides := action.IndividualTool.AnnotationOverrides.NarrowingOnly(action.ReadOnly, action.Destructive, action.Idempotent)
 	if overrides.ReadOnly != nil {
 		readOnly = *overrides.ReadOnly
 	}

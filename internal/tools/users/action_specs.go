@@ -54,24 +54,24 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		userReadSpec("contribution_events", toolutil.RouteAction(client, ListContributionEvents), "gitlab_list_user_contribution_events"),
 		// gitlab_get_user_associations_count — return the user's count of groups/projects owned.
 		userReadSpec("associations_count", toolutil.RouteAction(client, GetAssociationsCount), "gitlab_get_user_associations_count"),
-		// gitlab_block_user — block a user from signing in (destructive annotation: reversible via unblock).
-		userDestructiveUpdateIndividualSpec("block", toolutil.DestructiveAction(client, BlockUser), "gitlab_block_user"),
+		// gitlab_block_user: block a user from signing in (destructive, reversible via unblock).
+		userDeleteSpec("block", toolutil.DestructiveAction(client, BlockUser), "gitlab_block_user"),
 		// gitlab_unblock_user — unblock a previously blocked user.
 		userUpdateSpec("unblock", toolutil.RouteAction(client, UnblockUser), "gitlab_unblock_user"),
-		// gitlab_ban_user — ban a user from a top-level group (destructive annotation: reversible via unban).
-		userDestructiveUpdateIndividualSpec("ban", toolutil.DestructiveAction(client, BanUser), "gitlab_ban_user"),
+		// gitlab_ban_user: ban a user from a top-level group (destructive, reversible via unban).
+		userDeleteSpec("ban", toolutil.DestructiveAction(client, BanUser), "gitlab_ban_user"),
 		// gitlab_unban_user — unban a previously banned user.
 		userUpdateSpec("unban", toolutil.RouteAction(client, UnbanUser), "gitlab_unban_user"),
 		// gitlab_activate_user — activate a deactivated user account (admin-only).
 		userUpdateSpec("activate", toolutil.RouteAction(client, ActivateUser), "gitlab_activate_user"),
-		// gitlab_deactivate_user — deactivate an active user (destructive annotation: reversible via activate).
-		userDestructiveUpdateIndividualSpec("deactivate", toolutil.DestructiveAction(client, DeactivateUser), "gitlab_deactivate_user"),
+		// gitlab_deactivate_user: deactivate an active user (destructive, reversible via activate).
+		userDeleteSpec("deactivate", toolutil.DestructiveAction(client, DeactivateUser), "gitlab_deactivate_user"),
 		// gitlab_approve_user — approve a pending sign-up.
 		userUpdateSpec("approve", toolutil.RouteAction(client, ApproveUser), "gitlab_approve_user"),
 		// gitlab_reject_user — reject a pending sign-up (destructive).
 		userDeleteSpec("reject", toolutil.DestructiveAction(client, RejectUser), "gitlab_reject_user"),
-		// gitlab_disable_two_factor — disable 2FA for a user (destructive annotation: reversible via reset).
-		userDestructiveUpdateIndividualSpec("disable_two_factor", toolutil.DestructiveAction(client, DisableTwoFactor), "gitlab_disable_two_factor"),
+		// gitlab_disable_two_factor: disable 2FA for a user (destructive, reversible only by the user enrolling again).
+		userDeleteSpec("disable_two_factor", toolutil.DestructiveAction(client, DisableTwoFactor), "gitlab_disable_two_factor"),
 		// gitlab_create_user — provision a new user account (admin-only).
 		userCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_create_user"),
 		// gitlab_modify_user — update an existing user's profile fields.
@@ -142,16 +142,6 @@ func userUpdateSpec(name string, route toolutil.ActionRoute, individualTool stri
 // userDeleteSpec builds the canonical destructive delete spec for a user tool.
 func userDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewDeleteActionSpec(name, route, userOptionsForAction(name, individualTool))
-}
-
-// userDestructiveUpdateIndividualSpec builds the catalog destructive spec for actions that
-// are reversible (block/ban/deactivate/disable_two_factor). It overrides the individual tool
-// annotation so the model does not flag the action as terminal.
-func userDestructiveUpdateIndividualSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	individualDestructive := false
-	options := userOptionsForAction(name, individualTool)
-	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
-	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
 // userToolMeta carries the discovery metadata (R-META) for a user individual

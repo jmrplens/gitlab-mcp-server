@@ -101,11 +101,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_mr_update — update MR fields.
 		mergeRequestUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_mr_update"),
 		// gitlab_mr_merge — merge an MR now or schedule merge-when-pipeline-succeeds.
-		mergeRequestDestructiveUpdateIndividualSpec("merge", toolutil.DestructiveAction(client, Merge), "gitlab_mr_merge"),
+		mergeRequestDeleteSpec("merge", toolutil.DestructiveAction(client, Merge), "gitlab_mr_merge"),
 		// gitlab_mr_approve — add the caller's approval to the MR.
 		mergeRequestUpdateSpec("approve", toolutil.RouteAction(client, Approve), "gitlab_mr_approve"),
 		// gitlab_mr_unapprove — remove the caller's approval (destructive, idempotent).
-		mergeRequestDestructiveUpdateIndividualSpec("unapprove", toolutil.RouteAction(client, Unapprove), "gitlab_mr_unapprove"),
+		mergeRequestDeleteSpec("unapprove", toolutil.RouteAction(client, Unapprove), "gitlab_mr_unapprove"),
 		// gitlab_mr_commits — list commits on the MR.
 		mergeRequestReadSpec("commits", toolutil.RouteAction(client, Commits), "gitlab_mr_commits"),
 		// gitlab_mr_pipelines — list pipelines attached to the MR.
@@ -225,18 +225,6 @@ func mergeRequestDeleteSpec(name string, route toolutil.ActionRoute, individualT
 func mergeRequestPremiumSpec(spec toolutil.ActionSpec) toolutil.ActionSpec {
 	spec.Edition = "premium"
 	return spec
-}
-
-// mergeRequestDestructiveUpdateIndividualSpec builds a destructive
-// [toolutil.ActionSpec] whose individual tool is NOT marked
-// destructive, used for actions that are destructive through the
-// dynamic surface but a normal update through the individual tool
-// (for example merge and unapprove).
-func mergeRequestDestructiveUpdateIndividualSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	individualDestructive := false
-	options := mergeRequestOptions(name, individualTool)
-	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
-	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
 // mergeRequestActionMetadata holds the per-action discovery metadata that

@@ -218,7 +218,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminReadSpec("usage_data_metric_definitions", ownerUsageData, toolutil.RouteAction(client, usagedata.GetMetricDefinitions), "gitlab_get_metric_definitions"),
 		adminCreateSpec("usage_data_track_event", ownerUsageData, toolutil.RouteAction(client, usagedata.TrackEvent), "gitlab_track_event"),
 		adminCreateSpec("usage_data_track_events", ownerUsageData, toolutil.RouteAction(client, usagedata.TrackEvents), "gitlab_track_events"),
-		adminDestructiveUpdateIndividualSpec("db_migration_mark", ownerDBMigrations, toolutil.DestructiveAction(client, dbmigrations.Mark), "gitlab_mark_migration"),
+		adminDeleteSpec("db_migration_mark", ownerDBMigrations, toolutil.DestructiveAction(client, dbmigrations.Mark), "gitlab_mark_migration"),
 		adminReadSpec("application_list", ownerApplications, toolutil.RouteAction(client, applications.List), "gitlab_list_applications"),
 		adminCreateSpec("application_create", ownerApplications, toolutil.RouteAction(client, applications.Create), "gitlab_create_application"),
 		adminCreateSpec("application_renew_secret", ownerApplications, toolutil.RouteAction(client, applications.RenewSecret), "gitlab_renew_application_secret"),
@@ -293,13 +293,6 @@ func adminUpdateCreateIndividualSpec(name, owner string, route toolutil.ActionRo
 	options := adminOptions(owner, individualTool)
 	options.IndividualTool.AnnotationOverrides.Idempotent = &individualIdempotent
 	return toolutil.NewUpdateActionSpec(name, route, options)
-}
-
-func adminDestructiveUpdateIndividualSpec(name, owner string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	individualDestructive := false
-	options := adminOptions(owner, individualTool)
-	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
-	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
 func adminSystemHookEditSpec(client *gitlabclient.Client) toolutil.ActionSpec {
@@ -383,9 +376,7 @@ func adminApplicationStatisticsGetSpec(client *gitlabclient.Client) toolutil.Act
 }
 
 func adminTerraformStateUnlockSpec(client *gitlabclient.Client) toolutil.ActionSpec {
-	individualDestructive := false
 	options := adminOptions(ownerTerraformStates, "gitlab_unlock_terraform_state")
-	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
 	options.Tags = append(options.Tags, "terraform", "terraform_state", "state", "lock", "unlock")
 	options.Usage = "Unlock a GitLab Terraform state by project_id and state name. Use params.name for the Terraform state name. Do not send the state name as id."
 	options.Aliases = []string{"terraform_state.unlock", "unlock terraform state", "unlock terraform state lock", "terraform state unlock"}

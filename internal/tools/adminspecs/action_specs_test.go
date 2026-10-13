@@ -87,34 +87,39 @@ func TestActionSpecs_OwnerPackage_IsThePackageTheHandlerComesFrom(t *testing.T) 
 	}
 }
 
-// TestActionSpecs_MarkMigration_IsProjectedAsNonDestructive verifies the one
-// place this group deliberately disagrees with itself: marking a migration is
-// registered through NewDeleteActionSpec, so the action stays destructive for
-// the confirmation prompt and the read-only filter, while the tool an
-// individual-surface client is listed declares destructiveHint false.
+// TestActionSpecs_DestructiveActions_AreProjectedAsDestructive verifies that
+// the two admin actions that used to declare destructiveHint false on the
+// individual surface alone, marking a migration and unlocking a Terraform
+// state, are served as destructive there too.
 //
-// Both halves are asserted together because either one alone is satisfied by
-// deleting the override: with it gone the annotation simply follows the
-// catalog, and every other test here still passes. The assertion reads the
-// projected tool rather than the override field, because what a client is told
-// is the annotation, and the projection may narrow an override on its way out.
-func TestActionSpecs_MarkMigration_IsProjectedAsNonDestructive(t *testing.T) {
-	spec := specsByName(t, ActionSpecs(nil))["db_migration_mark"]
-	if !spec.Destructive {
-		t.Fatal("db_migration_mark should stay destructive in the catalog")
-	}
-
-	tool, err := toolutil.IndividualToolFromActionSpec(spec, toolutil.IndividualToolProjectionOptions{
-		Description: "Mark a pending database migration as successfully executed.",
-	})
-	if err != nil {
-		t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
-	}
-	if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil {
-		t.Fatalf("individual tool declares no destructive hint: %+v", tool.Annotations)
-	}
-	if *tool.Annotations.DestructiveHint {
-		t.Error("destructiveHint = true, want false: the individual projection overrides the catalog classification")
+// Both are registered through NewDeleteActionSpec, so the individual handler
+// demands confirm for them exactly as the dynamic and meta dispatchers do. MCP
+// defines destructiveHint false as "only additive updates", which neither is,
+// and a client that decides from the hint whether to ask its user would have
+// sent the call without asking and met the server's own confirmation instead.
+// The assertion reads the projected tool rather than the override field,
+// because what a client is told is the annotation.
+func TestActionSpecs_DestructiveActions_AreProjectedAsDestructive(t *testing.T) {
+	specs := specsByName(t, ActionSpecs(nil))
+	for _, name := range []string{"db_migration_mark", "terraform_state_unlock"} {
+		t.Run(name, func(t *testing.T) {
+			spec := specs[name]
+			if !spec.Destructive || !spec.Route.Destructive {
+				t.Fatalf("%s should stay destructive in the catalog", name)
+			}
+			tool, err := toolutil.IndividualToolFromActionSpec(spec, toolutil.IndividualToolProjectionOptions{
+				Description: "An admin action that demands confirmation.",
+			})
+			if err != nil {
+				t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
+			}
+			if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil {
+				t.Fatalf("individual tool declares no destructive hint: %+v", tool.Annotations)
+			}
+			if !*tool.Annotations.DestructiveHint {
+				t.Error("destructiveHint = false, want true: the individual handler demands confirm for this action")
+			}
+		})
 	}
 }
 
@@ -293,7 +298,7 @@ func TestActionSpecs_SelectedActionSemantics(t *testing.T) {
 		{name: "topic_update", idempotent: true, individualTool: "gitlab_update_topic"},
 		{name: "topic_delete", destructive: true, idempotent: true, individualTool: "gitlab_delete_topic"},
 		{name: "feature_set", idempotent: true, individualTool: "gitlab_set_feature_flag", individualIdempotent: new(false)},
-		{name: "db_migration_mark", destructive: true, idempotent: true, individualTool: "gitlab_mark_migration", individualDestructive: new(false)},
+		{name: "db_migration_mark", destructive: true, idempotent: true, individualTool: "gitlab_mark_migration"},
 		{name: "system_hook_edit", idempotent: true, individualTool: "gitlab_edit_system_hook"},
 		{name: "system_hook_set_url_variable", idempotent: true, individualTool: "gitlab_set_system_hook_url_variable"},
 		{name: "system_hook_delete_url_variable", destructive: true, idempotent: true, individualTool: "gitlab_delete_system_hook_url_variable"},

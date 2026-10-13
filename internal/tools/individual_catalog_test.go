@@ -1133,61 +1133,87 @@ func TestIndividualToolAnnotations_AgreeWithCatalogClassification(t *testing.T) 
 	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
 	opts := IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true}
 
-	type violation struct {
-		tool    string
-		action  string
-		hint    string
-		catalog bool
-	}
-	var readOnlyViolations, idempotentViolations, disagreements []violation
+	found := map[string][]annotationViolation{}
 	for _, group := range catalog.Groups() {
 		for _, action := range group.ActionsInOrder() {
 			if strings.TrimSpace(action.IndividualTool.Name) == "" {
 				continue
 			}
 			tool := mustIndividualToolFromCatalogAction(action, group.Icons, opts)
-			if tool.Annotations == nil {
-				continue
-			}
-			if tool.Annotations.ReadOnlyHint && !action.ReadOnly {
-				readOnlyViolations = append(readOnlyViolations, violation{tool.Name, string(action.ID), "readOnlyHint", action.ReadOnly})
-			}
-			if tool.Annotations.IdempotentHint && !action.Idempotent {
-				idempotentViolations = append(idempotentViolations, violation{tool.Name, string(action.ID), "idempotentHint", action.Idempotent})
-			}
-			if individualCatalogActionReadOnly(action) != tool.Annotations.ReadOnlyHint {
-				disagreements = append(disagreements, violation{tool.Name, string(action.ID), "readOnlyHint", action.ReadOnly})
+			if tool.Annotations != nil {
+				recordAnnotationViolations(found, tool, action)
 			}
 		}
 	}
 
 	checks := []struct {
-		name       string
-		violations []violation
-		detail     string
+		name   string
+		detail string
 	}{
 		{
-			name:       "no tool claims readOnlyHint for a mutating action",
-			violations: readOnlyViolations,
-			detail:     "an operator's --read-only keeps these on the individual surface and removes them everywhere else",
+			name:   checkReadOnlyClaim,
+			detail: "an operator's --read-only keeps these on the individual surface and removes them everywhere else",
 		},
 		{
-			name:       "no tool claims idempotentHint for a non-repeatable action",
-			violations: idempotentViolations,
-			detail:     "idempotentHint invites a model to retry a call whose side effect repeats",
+			name:   checkIdempotentClaim,
+			detail: "idempotentHint invites a model to retry a call whose side effect repeats",
 		},
 		{
-			name:       "the read-only bit registration uses is the bit the client is served",
-			violations: disagreements,
-			detail:     "safe mode reads one and the gateway trusts the other",
+			name:   checkReadOnlyBit,
+			detail: "safe mode reads one and the gateway trusts the other",
+		},
+		{
+			name:   checkDestructiveHint,
+			detail: "the handler asks for confirm exactly when Route.Destructive is true, and a client deciding from destructiveHint whether to ask its user has to be told the same",
 		},
 	}
 	for _, check := range checks {
 		t.Run(check.name, func(t *testing.T) {
-			for _, v := range check.violations {
-				t.Errorf("tool %s (action %s) served %s=true while the catalog says %t: %s", v.tool, v.action, v.hint, v.catalog, check.detail)
+			for _, v := range found[check.name] {
+				t.Errorf("tool %s (action %s) served %s that disagrees with the catalog's %t: %s", v.tool, v.action, v.hint, v.catalog, check.detail)
 			}
 		})
+	}
+}
+
+// The invariants [TestIndividualToolAnnotations_AgreeWithCatalogClassification]
+// holds, each the name of its subtest and the key its violations are filed
+// under.
+const (
+	checkReadOnlyClaim   = "no tool claims readOnlyHint for a mutating action"
+	checkIdempotentClaim = "no tool claims idempotentHint for a non-repeatable action"
+	checkReadOnlyBit     = "the read-only bit registration uses is the bit the client is served"
+	checkDestructiveHint = "destructiveHint is the confirmation the handler demands"
+)
+
+// annotationViolation is one annotation an individual tool is served that
+// disagrees with the catalog classification of its action.
+type annotationViolation struct {
+	tool    string
+	action  string
+	hint    string
+	catalog bool
+}
+
+// recordAnnotationViolations files each annotation tool is served that
+// disagrees with the catalog classification of action under the invariant it
+// breaks.
+func recordAnnotationViolations(found map[string][]annotationViolation, tool *mcp.Tool, action actioncatalog.Action) {
+	record := func(check, hint string, catalog bool) {
+		found[check] = append(found[check], annotationViolation{tool.Name, string(action.ID), hint, catalog})
+	}
+	if tool.Annotations.ReadOnlyHint && !action.ReadOnly {
+		record(checkReadOnlyClaim, "readOnlyHint", action.ReadOnly)
+	}
+	if tool.Annotations.IdempotentHint && !action.Idempotent {
+		record(checkIdempotentClaim, "idempotentHint", action.Idempotent)
+	}
+	if individualCatalogActionReadOnly(action) != tool.Annotations.ReadOnlyHint {
+		record(checkReadOnlyBit, "readOnlyHint", action.ReadOnly)
+	}
+	served := tool.Annotations.DestructiveHint != nil && *tool.Annotations.DestructiveHint
+	if served != action.Route.Destructive {
+		record(checkDestructiveHint, "destructiveHint", action.Route.Destructive)
 	}
 }
 
