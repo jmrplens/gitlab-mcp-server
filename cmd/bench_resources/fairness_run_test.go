@@ -649,8 +649,11 @@ func (c *timedConn) arrivals() []time.Time {
 //
 // A population whose credentials fired together would offer a burst per period
 // rather than a rate, and one whose ticks bunched up would offer the bound
-// something other than what the plan says it offers. The period is 400 ms so
-// that every wrong schedule is off by far more than a loaded host's jitter.
+// something other than what the plan says it offers. Each request is held to
+// the instant it was due, never to the request before it: the driver keeps an
+// absolute schedule, so one late tick is followed by an early-looking gap, and
+// a gap check read the one Windows tick a loaded hosted runner delivered 92 ms
+// late (2026-10-13) as two errors.
 func TestDrive_SpreadsEachPopulationAcrossOnePeriod(t *testing.T) {
 	bound, err := boundByID("tools-call-rps")
 	if err != nil {
@@ -672,33 +675,33 @@ func TestDrive_SpreadsEachPopulationAcrossOnePeriod(t *testing.T) {
 	for i, conn := range timed {
 		conns = append(conns, &clientConn{rpc: conn, label: "client " + strconv.Itoa(i)})
 	}
+	begin := time.Now()
 	finishWithin(t, 10*time.Second, "a 1.25 s phase", func() {
-		drive(t.Context(), driveInput{plan: plan, conns: conns, call: call}, time.Now(), plan.ticks, newFairTally(call, plan.Bound.Refusals))
+		drive(t.Context(), driveInput{plan: plan, conns: conns, call: call}, begin, plan.ticks, newFairTally(call, plan.Bound.Refusals))
 	})
 
-	const period, half, slack = 400 * time.Millisecond, 200 * time.Millisecond, 80 * time.Millisecond
-	arrivals := make([][]time.Time, len(timed))
-	for i, conn := range timed {
-		arrivals[i] = conn.arrivals()
-	}
-	if len(arrivals[0]) == 0 {
-		t.Fatal("the first quiet credential made no request, so the window has no start to measure from")
-	}
-	start := arrivals[0][0]
+	// A request is due at begin plus its credential's offset plus one period
+	// per tick, and the driver never sends one before it is due. It may arrive
+	// up to lateness after that: under half a period, so a credential that
+	// fired with its neighbor, a burst, or a period off by half of one still
+	// fails, and well over the 92 ms a hosted runner was seen to add.
+	const period, half, lateness = 400 * time.Millisecond, 200 * time.Millisecond, 150 * time.Millisecond
 	// Credentials 0 and 1 are the quiet population, 2 and 3 the noisy one.
 	offsets := []time.Duration{0, half, 0, half}
-	for i, got := range arrivals {
+	for i, conn := range timed {
+		got := conn.arrivals()
 		t.Run("credential "+strconv.Itoa(i), func(t *testing.T) {
 			if len(got) != 3 {
 				t.Fatalf("made %d requests, want the 3 a 1.25 s phase at 2.5 a second holds", len(got))
 			}
-			for tick := 1; tick < len(got); tick++ {
-				if gap := got[tick].Sub(got[tick-1]); gap < period-slack || gap > period+slack {
-					t.Errorf("requests %d and %d were %s apart, want one period of %s", tick-1, tick, gap, period)
+			for tick, at := range got {
+				due := begin.Add(offsets[i] + time.Duration(tick)*period)
+				switch late := at.Sub(due); {
+				case late < 0:
+					t.Errorf("request %d arrived %s before it was due, want it never early", tick, -late)
+				case late > lateness:
+					t.Errorf("request %d arrived %s after it was due, want at most %s", tick, late, lateness)
 				}
-			}
-			if offset := got[0].Sub(start); offset < offsets[i]-slack || offset > offsets[i]+slack {
-				t.Errorf("began %s into the window, want %s", offset, offsets[i])
 			}
 		})
 	}
