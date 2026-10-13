@@ -1824,31 +1824,60 @@ func TestMetaToolSchema_OpaqueDefault(t *testing.T) {
 	}
 }
 
-// TestBuildMetaToolSchema_FullEmitsOneOf verifies that full mode produces
-// a oneOf branch per action with action pinned to a const.
-func TestBuildMetaToolSchema_FullEmitsOneOf(t *testing.T) {
+// metaConditional returns the action the i-th conditional of a compact or full
+// envelope pins and the params schema its then holds the call to, failing the
+// test when the envelope does not have that shape.
+func metaConditional(t *testing.T, schema map[string]any, i int) (action any, params map[string]any) {
+	t.Helper()
+	conditionals, ok := schema["allOf"].([]any)
+	if !ok || i >= len(conditionals) {
+		t.Fatalf("allOf = %#v, want at least %d conditionals", schema["allOf"], i+1)
+	}
+	conditional, _ := conditionals[i].(map[string]any)
+	ifSchema, _ := conditional["if"].(map[string]any)
+	ifProps, _ := ifSchema["properties"].(map[string]any)
+	actionSchema, _ := ifProps["action"].(map[string]any)
+	if required, _ := ifSchema["required"].([]any); !reflect.DeepEqual(required, []any{"action"}) {
+		t.Errorf("conditional[%d].if.required = %#v, want [action]", i, required)
+	}
+	thenSchema, _ := conditional["then"].(map[string]any)
+	thenProps, _ := thenSchema["properties"].(map[string]any)
+	params, _ = thenProps["params"].(map[string]any)
+	if required, _ := thenSchema["required"].([]any); !reflect.DeepEqual(required, []any{"params"}) {
+		t.Errorf("conditional[%d].then.required = %#v, want [params]", i, required)
+	}
+	if params == nil {
+		t.Fatalf("conditional[%d] holds no params schema: %#v", i, conditional)
+	}
+	return actionSchema["const"], params
+}
+
+// TestBuildMetaToolSchema_FullEmitsAConditionalPerAction verifies that full
+// mode produces one if/then per action under allOf, the if pinning action to
+// a const and the then holding params to that action's schema, and no oneOf.
+func TestBuildMetaToolSchema_FullEmitsAConditionalPerAction(t *testing.T) {
 	routes := ActionMap{
 		"create": RouteAction[testInput, testOutput](nil, nil),
 		"get":    RouteAction[testInput, testOutput](nil, nil),
 	}
 	schema := BuildMetaToolSchema(routes, MetaParamSchemaFull)
 
-	branches, ok := schema["oneOf"].([]any)
-	if !ok {
-		t.Fatalf("oneOf missing or wrong type: %T", schema["oneOf"])
+	if _, has := schema["oneOf"]; has {
+		t.Error("full mode should not emit a oneOf, whose failure names no field")
 	}
-	if len(branches) != 2 {
-		t.Fatalf("oneOf len = %d, want 2", len(branches))
+	conditionals, ok := schema["allOf"].([]any)
+	if !ok {
+		t.Fatalf("allOf missing or wrong type: %T", schema["allOf"])
+	}
+	if len(conditionals) != 2 {
+		t.Fatalf("allOf len = %d, want 2", len(conditionals))
 	}
 	wantActions := []string{"create", "get"} // sorted
-	for i, b := range branches {
-		bm := b.(map[string]any)
-		bp := bm["properties"].(map[string]any)
-		ap := bp["action"].(map[string]any)
-		if ap["const"] != wantActions[i] {
-			t.Errorf("branch[%d].action.const = %v, want %q", i, ap["const"], wantActions[i])
+	for i := range conditionals {
+		action, paramsBranch := metaConditional(t, schema, i)
+		if action != wantActions[i] {
+			t.Errorf("conditional[%d] action const = %v, want %q", i, action, wantActions[i])
 		}
-		paramsBranch := bp["params"].(map[string]any)
 		// Full mode should preserve the reflected schema, which carries a
 		// type or a $ref pointing into $defs.
 		_, hasType := paramsBranch["type"]
@@ -1868,12 +1897,10 @@ func TestBuildMetaToolSchema_CompactStripsDescriptions(t *testing.T) {
 	}
 	schema := BuildMetaToolSchema(routes, MetaParamSchemaCompact)
 
-	branches := schema["oneOf"].([]any)
-	if len(branches) != 1 {
-		t.Fatalf("oneOf len = %d, want 1", len(branches))
+	if conditionals, _ := schema["allOf"].([]any); len(conditionals) != 1 {
+		t.Fatalf("allOf len = %d, want 1", len(conditionals))
 	}
-	bp := branches[0].(map[string]any)["properties"].(map[string]any)
-	paramsBranch := bp["params"].(map[string]any)
+	_, paramsBranch := metaConditional(t, schema, 0)
 	if paramsBranch["additionalProperties"] != true {
 		t.Errorf("compact params.additionalProperties = %v, want true", paramsBranch["additionalProperties"])
 	}
@@ -1894,8 +1921,8 @@ func TestBuildMetaToolSchema_CompactStripsDescriptions(t *testing.T) {
 func TestBuildMetaToolSchema_UnknownModeFallsBackToOpaque(t *testing.T) {
 	routes := ActionMap{"get": Route(nil)}
 	schema := BuildMetaToolSchema(routes, "verbose")
-	if _, has := schema["oneOf"]; has {
-		t.Error("unknown mode should not emit oneOf")
+	if _, has := schema["allOf"]; has {
+		t.Error("unknown mode should not emit the per-action conditionals")
 	}
 }
 
@@ -3218,7 +3245,7 @@ func TestDestructiveRoute_OutputSchema_Nil(t *testing.T) {
 //     missing or malformed.
 //   - compactParamsSchema: nil input, missing/non-object properties,
 //     non-map property entries, and $ref resolution.
-//   - buildMetaOneOf: per-action InputSchema = nil fallback.
+//   - buildMetaActionConditionals: per-action InputSchema = nil fallback.
 //   - schemaForType: pointer dereference and cache hit paths.
 //   - stripReservedKeys: presence of reserved keys mixed with real fields
 //     (covers the "out[k] = v" copy branch).
@@ -3430,21 +3457,20 @@ func TestCompactParamsSchema_ResolvesTopLevelRef(t *testing.T) {
 	}
 }
 
-// TestBuildMetaOneOf_NilInputSchemaFallsBackToOpenObject substitutes a
-// permissive object schema when a route does not declare an InputSchema.
-func TestBuildMetaOneOf_NilInputSchemaFallsBackToOpenObject(t *testing.T) {
+// TestBuildMetaActionConditionals_NilInputSchemaFallsBackToOpenObject
+// substitutes a permissive object schema when a route does not declare an
+// InputSchema.
+func TestBuildMetaActionConditionals_NilInputSchemaFallsBackToOpenObject(t *testing.T) {
 	routes := ActionMap{
 		"act": {Handler: func(_ context.Context, _ map[string]any) (any, error) {
 			return struct{}{}, nil
 		}},
 	}
-	branches := buildMetaOneOf(routes, []string{"act"}, false)
-	if len(branches) != 1 {
-		t.Fatalf("len(branches) = %d, want 1", len(branches))
+	conditionals := buildMetaActionConditionals(routes, []string{"act"}, false)
+	if len(conditionals) != 1 {
+		t.Fatalf("len(conditionals) = %d, want 1", len(conditionals))
 	}
-	branch, _ := branches[0].(map[string]any)
-	props, _ := branch["properties"].(map[string]any)
-	params, _ := props["params"].(map[string]any)
+	_, params := metaConditional(t, map[string]any{"allOf": conditionals}, 0)
 	if params["type"] != "object" {
 		t.Errorf("nil InputSchema should fall back to type:object, got %v", params)
 	}
@@ -5071,6 +5097,10 @@ func TestMetaEnvelopeKey_NamesSharedSchemasByIdentity(t *testing.T) {
 	ShareSchema(shared)
 	identity, _ := SharedSchemaIdentity(shared)
 	private := map[string]any{"type": "object"}
+	guidance := map[string]ParameterGuidance{"project_id": {SemanticRole: "project"}}
+	if ParameterGuidanceIdentity(guidance) == "" {
+		t.Fatal("ParameterGuidanceIdentity() of a non-empty guidance is empty, so the key could not tell it apart")
+	}
 
 	cases := []struct {
 		name   string
@@ -5081,13 +5111,22 @@ func TestMetaEnvelopeKey_NamesSharedSchemasByIdentity(t *testing.T) {
 		{
 			name:   "absent schemas are cacheable",
 			routes: ActionMap{"list": Route(noop)},
-			want:   "meta|full|list=nil",
+			want:   "meta|full|list=nil|destructive=false|guidance=",
 			wantOK: true,
 		},
 		{
 			name:   "shared schemas are named by identity",
 			routes: ActionMap{"list": Route(noop), "get": {Handler: noop, InputSchema: shared}},
-			want:   "meta|full|get=" + identity + "|list=nil",
+			want:   "meta|full|get=" + identity + "|destructive=false|guidance=|list=nil|destructive=false|guidance=",
+			wantOK: true,
+		},
+		{
+			// The served params of a destructive action carry confirm, and
+			// those of a guided one its guidance, so one schema served under
+			// two routes that differ there is two envelopes.
+			name:   "the destructive flag and the guidance are part of the key",
+			routes: ActionMap{"delete": {Handler: noop, InputSchema: shared, Destructive: true, ParameterGuidance: guidance}},
+			want:   "meta|full|delete=" + identity + "|destructive=true|guidance=" + ParameterGuidanceIdentity(guidance),
 			wantOK: true,
 		},
 		{
@@ -6116,17 +6155,27 @@ func TestMetaToolParameterGuidanceSummary_RendersEachFacetOnItsOwn(t *testing.T)
 	}
 }
 
-// TestBuildMetaOneOf_CompactNilInputSchema_FallsBackToOpenObject verifies the
-// compact mode leaves a route with no InputSchema to the same permissive
-// object the full mode gives it, rather than compacting nothing.
-func TestBuildMetaOneOf_CompactNilInputSchema_FallsBackToOpenObject(t *testing.T) {
-	routes := ActionMap{"act": {}}
-	branches := buildMetaOneOf(routes, []string{"act"}, true)
-	branch, _ := branches[0].(map[string]any)
-	props, _ := branch["properties"].(map[string]any)
-	params, _ := props["params"].(map[string]any)
+// TestBuildMetaActionConditionals_CompactNilInputSchema_FallsBackToOpenObject
+// verifies the compact mode leaves a route with no InputSchema to a
+// permissive object, and that a destructive one keeps its confirm property
+// there, since that is the one place a client without elicitation can confirm
+// it.
+func TestBuildMetaActionConditionals_CompactNilInputSchema_FallsBackToOpenObject(t *testing.T) {
+	routes := ActionMap{"act": {}, "drop": {Destructive: true}}
+	conditionals := buildMetaActionConditionals(routes, []string{"act", "drop"}, true)
+	envelope := map[string]any{"allOf": conditionals}
+	_, params := metaConditional(t, envelope, 0)
 	if want := map[string]any{"type": "object", "additionalProperties": true}; !reflect.DeepEqual(params, want) {
 		t.Errorf("params = %#v, want %#v", params, want)
+	}
+	_, destructive := metaConditional(t, envelope, 1)
+	want := map[string]any{
+		"type":                 "object",
+		"properties":           map[string]any{"confirm": map[string]any{"type": "boolean"}},
+		"additionalProperties": true,
+	}
+	if !reflect.DeepEqual(destructive, want) {
+		t.Errorf("destructive params = %#v, want %#v", destructive, want)
 	}
 }
 
@@ -6891,24 +6940,13 @@ func TestStripMetaToolDescriptionPrefix_HeaderEdgeCases(t *testing.T) {
 // the reflected params schema as it is and compact mode is the one that drops
 // the descriptions. Full mode exists to give the model the whole per-action
 // schema in the tool list; compacting it there would make the two modes the
-// same document at 18.3x the opaque envelope's cost for no gain.
+// same document at the full mode's cost for no gain.
 func TestBuildMetaToolSchema_FullKeepsWhatCompactStrips(t *testing.T) {
 	routes := ActionMap{"get": RouteAction[testRequiredInput, testOutput](nil, nil)}
 
 	describedName := func(t *testing.T, mode string) map[string]any {
 		t.Helper()
-		branches, ok := BuildMetaToolSchema(routes, mode)["oneOf"].([]any)
-		if !ok || len(branches) != 1 {
-			t.Fatalf("%s oneOf = %#v, want one branch", mode, branches)
-		}
-		properties, ok := branches[0].(map[string]any)["properties"].(map[string]any)
-		if !ok {
-			t.Fatalf("%s branch has no properties: %#v", mode, branches[0])
-		}
-		params, ok := properties["params"].(map[string]any)
-		if !ok {
-			t.Fatalf("%s branch has no params schema: %#v", mode, properties)
-		}
+		_, params := metaConditional(t, BuildMetaToolSchema(routes, mode), 0)
 		fields, ok := resolveTopLevelRef(params)["properties"].(map[string]any)
 		if !ok {
 			t.Fatalf("%s params schema has no properties: %#v", mode, params)
@@ -6925,5 +6963,124 @@ func TestBuildMetaToolSchema_FullKeepsWhatCompactStrips(t *testing.T) {
 	}
 	if got, has := describedName(t, MetaParamSchemaCompact)["description"]; has {
 		t.Errorf("compact mode name.description = %#v, want it stripped", got)
+	}
+}
+
+// metaConfirmTestInput is the typed input of the routes the meta schema mode
+// tests register, kept apart from the other test inputs so its reflected
+// schema is not shared with them.
+type metaConfirmTestInput struct {
+	Name  string `json:"name" jsonschema:"Resource name,required"`
+	Count int    `json:"count,omitempty" jsonschema:"How many"`
+}
+
+// callMetaToolInMode registers a meta tool with one destructive and one read
+// route over metaConfirmTestInput under the given parameter schema mode,
+// connects a client that cannot answer an elicitation, calls the tool with
+// arguments, and returns the text a caller is told together with whether the
+// call was refused and how many times each route ran.
+func callMetaToolInMode(t *testing.T, mode string, arguments map[string]any) (text string, refused bool, deleted, read int) {
+	t.Helper()
+	restore := SetMetaParamSchemaModeScoped(mode)
+	t.Cleanup(restore)
+
+	routes := ActionMap{
+		"delete": DestructiveAction(nil, func(_ context.Context, _ *gitlabclient.Client, _ metaConfirmTestInput) (testOutput, error) {
+			deleted++
+			return testOutput{Result: "deleted"}, nil
+		}),
+		"get": RouteAction(nil, func(_ context.Context, _ *gitlabclient.Client, _ metaConfirmTestInput) (testOutput, error) {
+			read++
+			return testOutput{Result: "read"}, nil
+		}),
+	}
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	AddMetaTool(server, "meta_modes", "Test the schema modes.", routes, nil, nil)
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(t.Context(), serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { _ = serverSession.Wait() })
+	client := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	clientSession, err := client.Connect(t.Context(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = clientSession.Close() })
+
+	result, err := clientSession.CallTool(context.Background(), &mcp.CallToolParams{Name: "meta_modes", Arguments: arguments})
+	if err != nil {
+		return err.Error(), true, deleted, read
+	}
+	var parts []string
+	for _, content := range result.Content {
+		if tc, ok := content.(*mcp.TextContent); ok {
+			parts = append(parts, tc.Text)
+		}
+	}
+	return strings.Join(parts, "\n"), result.IsError, deleted, read
+}
+
+// TestMetaTool_ParamsConfirm_ReachesTheHandlerInEveryMode verifies that a
+// client which cannot answer an elicitation can confirm a destructive meta
+// action through params.confirm under every parameter schema mode.
+//
+// The refusal of an unconfirmed destructive call tells the caller to re-send
+// with confirm set, and the meta envelope keeps confirm inside params, so the
+// served schema has to accept it there. Under full mode it did not: each
+// branch inlined the route's reflected schema, which is closed and has no
+// confirm property, so the call was refused by schema validation on every
+// destructive action of every meta tool and no place for confirm passed.
+func TestMetaTool_ParamsConfirm_ReachesTheHandlerInEveryMode(t *testing.T) {
+	for _, mode := range []string{MetaParamSchemaOpaque, MetaParamSchemaCompact, MetaParamSchemaFull} {
+		t.Run(mode, func(t *testing.T) {
+			text, refused, deleted, _ := callMetaToolInMode(t, mode, map[string]any{
+				"action": "delete",
+				"params": map[string]any{"name": "x", "confirm": true},
+			})
+			if refused || deleted != 1 {
+				t.Fatalf("call refused = %t, delete ran %d times, text %q; want the confirmed delete to run once", refused, deleted, text)
+			}
+		})
+	}
+}
+
+// TestMetaTool_ValidationError_NamesTheField verifies that a call the served
+// schema refuses under compact or full mode is told which field is wrong.
+//
+// With one oneOf branch per action, every mistake in any field was reported
+// as "oneOf: did not validate against any of [<anonymous schema> ...]", which
+// names neither the action nor the field, so a model had nothing to correct
+// the call by. A conditional per action applies only the chosen action's
+// schema and reports its error as it is.
+func TestMetaTool_ValidationError_NamesTheField(t *testing.T) {
+	tests := []struct {
+		name   string
+		mode   string
+		params map[string]any
+	}{
+		{name: "full refuses a missing required field", mode: MetaParamSchemaFull, params: map[string]any{}},
+		{name: "full refuses a string for an integer", mode: MetaParamSchemaFull, params: map[string]any{"name": "x", "count": "five"}},
+		{name: "compact refuses a string for an integer", mode: MetaParamSchemaCompact, params: map[string]any{"name": "x", "count": "five"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			text, refused, _, read := callMetaToolInMode(t, tt.mode, map[string]any{"action": "get", "params": tt.params})
+			if !refused || read != 0 {
+				t.Fatalf("call refused = %t, get ran %d times, text %q; want the schema to refuse it", refused, read, text)
+			}
+			field := "count"
+			if len(tt.params) == 0 {
+				field = "name"
+			}
+			if !strings.Contains(text, field) {
+				t.Errorf("refusal %q does not name the field %q", text, field)
+			}
+			if strings.Contains(text, "oneOf") {
+				t.Errorf("refusal %q is the oneOf summary that names no field", text)
+			}
+		})
 	}
 }

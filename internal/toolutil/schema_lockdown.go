@@ -104,13 +104,7 @@ func lockdownSchemaNode(node map[string]any) {
 		}
 	}
 
-	if props, ok := node["properties"].(map[string]any); ok {
-		for _, v := range props {
-			if child, isMap := v.(map[string]any); isMap {
-				lockdownSchemaNode(child)
-			}
-		}
-	}
+	lockdownProperties(node)
 
 	if items, ok := node["items"].(map[string]any); ok {
 		lockdownSchemaNode(items)
@@ -122,6 +116,33 @@ func lockdownSchemaNode(node map[string]any) {
 				if child, isMap := v.(map[string]any); isMap {
 					lockdownSchemaNode(child)
 				}
+			}
+		}
+	}
+
+	for _, key := range []string{"if", "then", "else"} {
+		if conditional, ok := node[key].(map[string]any); ok {
+			lockdownConditionalNode(conditional)
+		}
+	}
+}
+
+// lockdownConditionalNode locks down what an if, then or else subschema
+// names without closing the subschema itself. A conditional applies to the
+// same instance as the schema it sits in and names only some of its
+// properties: the meta envelope's if names `action` and its then names
+// `params`, so closing either would refuse the property the other names and
+// no call would pass.
+func lockdownConditionalNode(node map[string]any) {
+	lockdownProperties(node)
+}
+
+// lockdownProperties locks down every subschema node names in its properties.
+func lockdownProperties(node map[string]any) {
+	if props, ok := node["properties"].(map[string]any); ok {
+		for _, v := range props {
+			if child, isMap := v.(map[string]any); isMap {
+				lockdownSchemaNode(child)
 			}
 		}
 	}

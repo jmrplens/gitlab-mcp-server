@@ -424,19 +424,19 @@ func TestSetMetaParamSchema_PropagatesToMetaToolSchema(t *testing.T) {
 
 	SetMetaParamSchema("full")
 	schema := toolutil.MetaToolSchema(routes)
-	if _, hasOneOf := schema["oneOf"]; !hasOneOf {
-		t.Errorf("full mode should emit oneOf, got keys=%v", keysOf(schema))
+	if _, hasConditionals := schema["allOf"]; !hasConditionals {
+		t.Errorf("full mode should emit the per-action conditionals, got keys=%v", keysOf(schema))
 	}
 
 	SetMetaParamSchema("opaque")
 	schema = toolutil.MetaToolSchema(routes)
-	if _, hasOneOf := schema["oneOf"]; hasOneOf {
-		t.Errorf("opaque mode should not emit oneOf, got keys=%v", keysOf(schema))
+	if _, hasConditionals := schema["allOf"]; hasConditionals {
+		t.Errorf("opaque mode should not emit the per-action conditionals, got keys=%v", keysOf(schema))
 	}
 
 	SetMetaParamSchema("garbage")
 	schema = toolutil.MetaToolSchema(routes)
-	if _, hasOneOf := schema["oneOf"]; hasOneOf {
+	if _, hasConditionals := schema["allOf"]; hasConditionals {
 		t.Errorf("unknown mode should fall back to opaque, got keys=%v", keysOf(schema))
 	}
 }
@@ -519,9 +519,10 @@ func TestMetaSchema_DispatchParity(t *testing.T) {
 	}
 }
 
-// TestMetaSchema_FullModeAdvertisesOneOf verifies that ListTools in full
-// mode emits a structured oneOf in the meta-tool InputSchema, while opaque
-// mode does not. This is the LLM-facing visible difference.
+// TestMetaSchema_FullModeAdvertisesOneOf verifies that ListTools in compact
+// and full mode emits the per-action conditionals in the meta-tool
+// InputSchema, while opaque mode does not. This is the LLM-facing visible
+// difference.
 func TestMetaSchema_FullModeAdvertisesOneOf(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
@@ -537,34 +538,38 @@ func TestMetaSchema_FullModeAdvertisesOneOf(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.mode, func(t *testing.T) {
-			session := metaSessionWithMode(t, c.mode, handler)
-			result, err := session.ListTools(context.Background(), nil)
-			if err != nil {
-				t.Fatalf("ListTools: %v", err)
+			schema := listedInputSchema(t, metaSessionWithMode(t, c.mode, handler), "gitlab_project")
+			_, hasConditionals := schema["allOf"]
+			if hasConditionals != c.wantOneOf {
+				t.Errorf("mode=%s: per-action conditionals present = %v, want %v", c.mode, hasConditionals, c.wantOneOf)
 			}
-			var found *mcp.Tool
-			for _, tool := range result.Tools {
-				if tool.Name == "gitlab_project" {
-					found = tool
-					break
-				}
-			}
-			if found == nil {
-				t.Fatal("gitlab_project not in tools list")
-			}
-			if found.InputSchema == nil {
-				t.Fatal("InputSchema is nil")
-			}
-			schema, ok := found.InputSchema.(map[string]any)
-			if !ok {
-				t.Fatalf("InputSchema is not a map: %T", found.InputSchema)
-			}
-			_, hasOneOf := schema["oneOf"]
-			if hasOneOf != c.wantOneOf {
-				t.Errorf("mode=%s: oneOf present = %v, want %v", c.mode, hasOneOf, c.wantOneOf)
+			if _, hasOneOf := schema["oneOf"]; hasOneOf {
+				t.Errorf("mode=%s: oneOf present, whose failure names no field", c.mode)
 			}
 		})
 	}
+}
+
+// listedInputSchema returns the input schema session lists for the tool
+// named name, as the map a client decodes it into.
+func listedInputSchema(t *testing.T, session *mcp.ClientSession, name string) map[string]any {
+	t.Helper()
+	result, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	for _, tool := range result.Tools {
+		if tool.Name != name {
+			continue
+		}
+		schema, ok := tool.InputSchema.(map[string]any)
+		if !ok {
+			t.Fatalf("%s InputSchema is not a map: %T", name, tool.InputSchema)
+		}
+		return schema
+	}
+	t.Fatalf("%s not in tools list", name)
+	return nil
 }
 
 // TestMetaParamSchema_ReportsTheSelectedMode verifies the package's reader

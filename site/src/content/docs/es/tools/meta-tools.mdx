@@ -217,10 +217,10 @@ Las entradas llevan además un `title` y una `description`. `required_params` no
 `GITLAB_MCP_META_PARAM_SCHEMA` decide cuánto del esquema de cada acción llega a `tools/list`:
 
 - **`opaque`** (predeterminado): el `inputSchema` de la herramienta es solo el sobre, un enum `action` y un objeto `params` abierto. El esquema exacto de cada acción se lee en `gitlab://tools/{id}`.
-- **`full`**: el sobre gana un `oneOf` con una rama por acción. Cada rama fija `action` al nombre de esa acción con `const`, exige `params` e incluye el esquema completo de parámetros de la acción, así que un cliente que valida contra `oneOf` elige la rama por `action`. En este modo los parámetros de cada acción están cerrados, así que un alias de parámetro que `opaque` y `compact` aceptan se rechaza antes de que la acción se ejecute.
-- **`compact`**: el mismo `oneOf`, con los parámetros de cada acción reducidos a sus nombres, tipos y valores de enum; se omiten las descripciones y la propia lista `required` de los parámetros.
+- **`full`**: el sobre gana un `allOf` con un `if`/`then` por acción. El `if` reconoce una llamada cuyo `action` es el nombre de esa acción, y el `then` exige `params` y lo somete al esquema completo de parámetros de la acción tal como lo sirve `gitlab://tools/{id}`, con `confirm` incluido en una acción destructiva, así que a una llamada que el esquema rechaza se le dice qué campo de qué acción falló. En este modo los parámetros de cada acción están cerrados.
+- **`compact`**: los mismos condicionales, con los parámetros de cada acción reducidos a sus nombres, tipos y valores de enum; se omiten las descripciones y la propia lista `required` de los parámetros, y los parámetros quedan abiertos.
 
-Mantén `opaque` salvo que tu cliente MCP no pueda leer recursos: la llamada se despacha igual en los tres modos, y solo cambia el esquema que se envía al modelo, salvo que `full` rechaza un alias de parámetro antes de que lo vea el handler.
+Mantén `opaque` salvo que tu cliente MCP no pueda leer recursos. La llamada se despacha igual en los tres modos, y lo que cambia además del esquema que se envía al modelo es por qué se rechaza una llamada antes de que la vea su handler. `compact` y `full` la someten al esquema que muestran: un número enviado como cadena (`"issue_iid": "5"`) y un nivel de acceso dado por su nombre (`"developer"`) los rechazan los dos, y un alias de parámetro o un campo obligatorio que falta solo `full`. `opaque` los deja todos al handler, que normaliza lo que puede. Una acción destructiva se confirma con `confirm` dentro de `params` en todos los modos.
 
 ## ¿Qué devuelve una meta-herramienta?
 

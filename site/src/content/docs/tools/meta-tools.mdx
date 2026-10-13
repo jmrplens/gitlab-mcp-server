@@ -217,10 +217,10 @@ The entries also carry a `title` and a `description`. `required_params` names on
 `GITLAB_MCP_META_PARAM_SCHEMA` decides how much of each action's schema reaches `tools/list`:
 
 - **`opaque`** (default): the tool's `inputSchema` is the envelope alone, an `action` enum and an open `params` object. The exact schema of each action is read from `gitlab://tools/{id}`.
-- **`full`**: the envelope gains a `oneOf` with one branch per action. Each branch fixes `action` to that action's name with `const`, requires `params`, and inlines the action's whole parameter schema, so a client that validates against `oneOf` picks the branch by `action`. Each action's parameters are closed in this mode, so a parameter alias that `opaque` and `compact` accept is refused before the action runs.
-- **`compact`**: the same `oneOf`, with each action's parameters cut down to their names, types and enum values; descriptions and the parameter's own `required` list are left out.
+- **`full`**: the envelope gains an `allOf` with one `if`/`then` per action. The `if` matches a call whose `action` is that action's name, and the `then` requires `params` and holds it to the action's whole parameter schema as `gitlab://tools/{id}` serves it, `confirm` included for a destructive action, so a call the schema refuses is told which field of which action failed. Each action's parameters are closed in this mode.
+- **`compact`**: the same conditionals, with each action's parameters cut down to their names, types and enum values; descriptions and the parameter's own `required` list are left out, and the parameters stay open.
 
-Keep `opaque` unless your MCP client cannot read resources: the call is dispatched the same way in all three modes, and only the schema sent to the model changes, except that `full` refuses a parameter alias before the handler sees it.
+Keep `opaque` unless your MCP client cannot read resources. The call is dispatched the same way in all three modes, and what changes besides the schema sent to the model is what a call is refused for before its handler sees it. `compact` and `full` hold the call to the schema they show: a number sent as a string (`"issue_iid": "5"`) and an access level given by name (`"developer"`) are refused by both, and a parameter alias or a missing required field by `full` alone. `opaque` leaves all of them to the handler, which normalizes what it can. A destructive action is confirmed with `confirm` inside `params` in every mode.
 
 ## What does a meta-tool return?
 

@@ -2396,10 +2396,12 @@ func metaSchemaCompileKey(name string, routes ActionMap) string {
 var metaEnvelopes OnceMap[string, map[string]any]
 
 // metaEnvelopeKey names a compact or full envelope by what it embeds: the
-// mode, and every action with the identity of its params schema. A schema
-// shared by a catalog cached per configuration has an address that is stable
-// for the process, which is identity enough; a routes map carrying any schema
-// nobody shared has no durable key, and reports false.
+// mode, and every action with the identity of its params schema, whether it
+// is destructive and the identity of its parameter guidance, the two things
+// [MetaActionSchema] adds to that schema. A schema shared by a catalog cached
+// per configuration has an address that is stable for the process, which is
+// identity enough; a routes map carrying any schema nobody shared has no
+// durable key, and reports false.
 func metaEnvelopeKey(routes ActionMap, mode string) (string, bool) {
 	actions := make([]string, 0, len(routes))
 	for actionName := range routes {
@@ -2409,16 +2411,16 @@ func metaEnvelopeKey(routes ActionMap, mode string) (string, bool) {
 	var key strings.Builder
 	key.WriteString("meta|" + mode)
 	for _, actionName := range actions {
-		schema := routes[actionName].InputSchema
-		if schema == nil {
-			key.WriteString("|" + actionName + "=nil")
-			continue
+		route := routes[actionName]
+		identity := "nil"
+		if route.InputSchema != nil {
+			schemaIdentity, shared := SharedSchemaIdentity(route.InputSchema)
+			if !shared {
+				return "", false
+			}
+			identity = schemaIdentity
 		}
-		identity, shared := SharedSchemaIdentity(schema)
-		if !shared {
-			return "", false
-		}
-		key.WriteString("|" + actionName + "=" + identity)
+		key.WriteString("|" + actionName + "=" + identity + "|destructive=" + strconv.FormatBool(route.Destructive) + "|guidance=" + ParameterGuidanceIdentity(route.ParameterGuidance))
 	}
 	return key.String(), true
 }
@@ -2779,8 +2781,9 @@ const (
 // that callers cannot break the tools/list payload by passing a typo.
 //
 //   - opaque:  legacy {action, params:any} envelope (default).
-//   - full:    discriminated oneOf with full per-action params schemas.
-//   - compact: discriminated oneOf with descriptions and $defs stripped.
+//   - full:    one if/then per action under allOf, with the full params
+//     schema [MetaActionSchema] serves.
+//   - compact: the same conditionals, with descriptions and $defs stripped.
 func BuildMetaToolSchema(routes ActionMap, mode string) map[string]any {
 	actions := make([]string, 0, len(routes))
 	for name := range routes {
@@ -2808,9 +2811,9 @@ func BuildMetaToolSchema(routes ActionMap, mode string) map[string]any {
 
 	switch mode {
 	case MetaParamSchemaFull:
-		base["oneOf"] = buildMetaOneOf(routes, actions, false)
+		base["allOf"] = buildMetaActionConditionals(routes, actions, false)
 	case MetaParamSchemaCompact:
-		base["oneOf"] = buildMetaOneOf(routes, actions, true)
+		base["allOf"] = buildMetaActionConditionals(routes, actions, true)
 	default:
 		// MetaParamSchemaOpaque or unknown — return the envelope unchanged.
 	}
@@ -2949,37 +2952,45 @@ func StripMetaToolDescriptionPrefix(description string) string {
 	return strings.Join(lines[start:], "\n")
 }
 
-// buildMetaOneOf constructs the oneOf branch list for full/compact modes.
-// Each branch pins `action` to a const and replaces `params` with the captured
-// per-action InputSchema (optionally compacted).
-func buildMetaOneOf(routes ActionMap, sortedActions []string, compact bool) []any {
-	branches := make([]any, 0, len(sortedActions))
+// buildMetaActionConditionals constructs the allOf list for full/compact
+// modes: one conditional per action whose if pins `action` to that action and
+// whose then holds `params` to the action's schema, the one
+// [MetaActionSchema] serves (optionally compacted).
+//
+// The params schema is MetaActionSchema's rather than the route's own because
+// the route's is closed and carries no confirm property, and a destructive
+// meta action is confirmed through params.confirm by a client that cannot
+// answer an elicitation. Inlining the route's schema refused that call on
+// every destructive action in full mode, which left such a client no way to
+// run one (issue 1324).
+//
+// It is a conditional per action rather than a oneOf branch per action
+// because jsonschema-go reports a failed oneOf as "did not validate against
+// any of [<anonymous schema> ...]", naming neither the action nor the field,
+// while a failed then is reported as it is. The if requires `action`: without
+// it every if would hold for a call that omits the action and every then
+// would apply at once. The then requires `params`, so the per-action schema
+// is checked even when a caller leaves params out; an action that needs no
+// arguments still accepts `{}`.
+func buildMetaActionConditionals(routes ActionMap, sortedActions []string, compact bool) []any {
+	conditionals := make([]any, 0, len(sortedActions))
 	for _, action := range sortedActions {
-		route := routes[action]
-		params := route.InputSchema
-		if compact && params != nil {
+		params := MetaActionSchema(routes[action])
+		if compact {
 			params = compactParamsSchema(params)
 		}
-		if params == nil {
-			params = map[string]any{
-				"type":                 "object",
-				"additionalProperties": true,
-			}
-		}
-		branches = append(branches, map[string]any{
-			"properties": map[string]any{
-				"action": map[string]any{"const": action},
-				"params": params,
+		conditionals = append(conditionals, map[string]any{
+			"if": map[string]any{
+				"properties": map[string]any{"action": map[string]any{"const": action}},
+				"required":   []any{"action"},
 			},
-			// Require both `action` and `params`. Without `params` in the
-			// required list, the per-action params schema is only checked
-			// when callers happen to include it, which silently bypasses
-			// per-action required-field validation. Actions that need no
-			// arguments still accept `{}` as a valid params value.
-			"required": []any{"action", "params"},
+			"then": map[string]any{
+				"properties": map[string]any{"params": params},
+				"required":   []any{"params"},
+			},
 		})
 	}
-	return branches
+	return conditionals
 }
 
 // compactParamsSchema returns a reduced copy of a per-action params schema

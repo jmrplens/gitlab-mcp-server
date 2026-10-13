@@ -166,6 +166,49 @@ func TestLockdownSchemaNode_NestedObjects(t *testing.T) {
 	}
 }
 
+// TestLockdownSchemaNode_Conditionals_LockWhatTheyNameAndStayOpen verifies the
+// walk reaches the properties an if, then or else names and locks them down,
+// and leaves the conditional itself open. A conditional applies to the same
+// instance as the schema it sits in: the meta envelope's if names `action`
+// and its then names `params`, so closing either would refuse the property
+// the other names and no call would pass.
+func TestLockdownSchemaNode_Conditionals_LockWhatTheyNameAndStayOpen(t *testing.T) {
+	t.Parallel()
+	for _, key := range []string{"if", "then", "else"} {
+		t.Run(key, func(t *testing.T) {
+			t.Parallel()
+			params := map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string"}}}
+			conditional := map[string]any{"properties": map[string]any{"params": params}, "required": []any{"params"}}
+			node := map[string]any{"allOf": []any{map[string]any{key: conditional}}}
+
+			lockdownSchemaNode(node)
+
+			if params["additionalProperties"] != false {
+				t.Errorf("%s params additionalProperties = %v, want false", key, params["additionalProperties"])
+			}
+			if _, has := conditional["additionalProperties"]; has {
+				t.Errorf("%s itself was closed: %#v", key, conditional)
+			}
+		})
+	}
+	t.Run("a conditional without properties is left as it is", func(t *testing.T) {
+		t.Parallel()
+		conditional := map[string]any{"required": []any{"action"}}
+		lockdownSchemaNode(map[string]any{"if": conditional})
+		if len(conditional) != 1 {
+			t.Errorf("conditional = %#v, want it unchanged", conditional)
+		}
+	})
+	t.Run("a property written as a bare boolean is left as it is", func(t *testing.T) {
+		t.Parallel()
+		conditional := map[string]any{"properties": map[string]any{"anything": true}}
+		lockdownSchemaNode(map[string]any{"then": conditional})
+		if conditional["properties"].(map[string]any)["anything"] != true {
+			t.Error("boolean property schema under a conditional was rewritten")
+		}
+	})
+}
+
 // TestLockdownSchemaNode_BooleanSchemas_AreLeftAsTheyAre verifies a property
 // schema or a combinator branch written as a bare boolean is kept as it is,
 // and that the walk goes on to lock down the object beside it.
