@@ -133,6 +133,46 @@ func TestMergeRequest_Lifecycle_GetListUpdateCloseDelete(t *testing.T) {
 	})
 }
 
+// TestMergeRequest_Update_EmptyListsRemoveAssigneesReviewersAndLabels gives a
+// request of its own on every surface an assignee, a reviewer and a label
+// through the update action, then sends each list empty and holds the answer
+// and a fresh read to a request with none of the three. The update used to
+// forward a list only when it held something, so the empty one never left and
+// the call reported success with the request unchanged (issue 1300).
+func TestMergeRequest_Update_EmptyListsRemoveAssigneesReviewersAndLabels(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("mrclear"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		f := newMergeRequestIn(e, project, "mrclear")
+		params := f.params()
+		self := e.Runtime().UserID
+
+		set := harness.Do[mergerequests.Output](s, actionMergeRequestUpdate, withParams(params, map[string]any{
+			"assignee_ids": []int64{self}, "reviewer_ids": []int64{self}, "labels": []string{"mrclear"},
+		}))
+		if len(set.Assignees) != 1 || len(set.Reviewers) != 1 || len(set.Labels) != 1 {
+			e.T.Fatalf("merge_request update answered assignees %v, reviewers %v, labels %v; want one of each to clear",
+				set.Assignees, set.Reviewers, set.Labels)
+		}
+
+		cleared := harness.Do[mergerequests.Output](s, actionMergeRequestUpdate, withParams(params, map[string]any{
+			"assignee_ids": []int64{}, "reviewer_ids": []int64{}, "labels": []string{},
+		}))
+		if len(cleared.Assignees) != 0 || len(cleared.Reviewers) != 0 || len(cleared.Labels) != 0 {
+			e.T.Errorf("merge_request update with empty lists answered assignees %v, reviewers %v, labels %v; want none",
+				cleared.Assignees, cleared.Reviewers, cleared.Labels)
+		}
+		read := harness.Do[mergerequests.Output](s, actionMergeRequestGet, params)
+		if len(read.Assignees) != 0 || len(read.Reviewers) != 0 || len(read.Labels) != 0 {
+			e.T.Errorf("merge_request get after the clear reads assignees %v, reviewers %v, labels %v; want none",
+				read.Assignees, read.Reviewers, read.Labels)
+		}
+	})
+}
+
 // commitListed reports whether a request's commits hold the given SHA.
 func commitListed(out mergerequests.CommitsOutput, sha string) bool {
 	for _, commit := range out.Commits {

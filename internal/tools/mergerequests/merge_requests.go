@@ -372,9 +372,9 @@ type UpdateInput struct {
 	Description        string               `json:"description,omitempty"         jsonschema:"New description"`
 	TargetBranch       string               `json:"target_branch,omitempty"       jsonschema:"New target branch"`
 	AssigneeID         int64                `json:"assignee_id,omitempty"          jsonschema:"Single user ID to assign (use assignee_ids for multiple)"`
-	AssigneeIDs        []int64              `json:"assignee_ids,omitempty"         jsonschema:"User IDs to assign as merge request assignees"`
-	ReviewerIDs        []int64              `json:"reviewer_ids,omitempty"         jsonschema:"User IDs to add as reviewers"`
-	Labels             []string             `json:"labels,omitempty"               jsonschema:"Label names to replace all labels on the merge request"`
+	AssigneeIDs        []int64              `json:"assignee_ids,omitempty"         jsonschema:"User IDs that replace the merge request's assignees. Pass [] to remove every assignee. Omit the field to leave them untouched"`
+	ReviewerIDs        []int64              `json:"reviewer_ids,omitempty"         jsonschema:"User IDs that replace the merge request's reviewers. Pass [] to remove every reviewer. Omit the field to leave them untouched"`
+	Labels             []string             `json:"labels,omitempty"               jsonschema:"Label names that replace all labels on the merge request. Pass [] to remove every label. Omit the field to leave them untouched"`
 	AddLabels          []string             `json:"add_labels,omitempty"          jsonschema:"Label names to add without removing existing"`
 	RemoveLabels       []string             `json:"remove_labels,omitempty"       jsonschema:"Label names to remove"`
 	MilestoneID        *int64               `json:"milestone_id,omitempty"        jsonschema:"Milestone ID (0 to unset)"`
@@ -758,14 +758,19 @@ func buildUpdateOpts(input UpdateInput) *gl.UpdateMergeRequestOptions {
 	if input.AssigneeID != 0 {
 		opts.AssigneeID = new(input.AssigneeID)
 	}
-	if len(input.AssigneeIDs) > 0 {
+	// The three lists replace what the merge request holds, so an empty one is
+	// a value of its own: [] removes every assignee or reviewer and labels ""
+	// every label. Presence is decided by nil, which is what a field the
+	// caller left out decodes to, and never by length (issue 1300).
+	if input.AssigneeIDs != nil {
 		opts.AssigneeIDs = &input.AssigneeIDs
 	}
-	if len(input.ReviewerIDs) > 0 {
+	if input.ReviewerIDs != nil {
 		opts.ReviewerIDs = &input.ReviewerIDs
 	}
-	if labels := labelOptions(input.Labels); labels != nil {
-		opts.Labels = labels
+	if input.Labels != nil {
+		labels := gl.LabelOptions(input.Labels)
+		opts.Labels = &labels
 	}
 	if labels := labelOptions(input.AddLabels); labels != nil {
 		opts.AddLabels = labels

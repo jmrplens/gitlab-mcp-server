@@ -7077,6 +7077,51 @@ func TestUpdate_OptionalFields_ReachTheBody(t *testing.T) {
 	}
 }
 
+// TestUpdate_EmptyLists_ReplaceWithNothing holds an explicit empty list of
+// assignees, reviewers or labels to the body: GitLab reads each as the list
+// that replaces the current one, so [] removes every assignee or reviewer and
+// labels "" removes every label. The handler used to forward a list only when
+// it held something, so the one value that empties it never left, and the
+// update reported success with the merge request unchanged (issue 1300).
+// add_labels and remove_labels are changes rather than replacements, so an
+// empty one still sends nothing.
+func TestUpdate_EmptyLists_ReplaceWithNothing(t *testing.T) {
+	tests := []struct {
+		name  string
+		input UpdateInput
+		want  map[string]string
+	}{
+		{"assignee_ids", UpdateInput{AssigneeIDs: []int64{}}, map[string]string{"assignee_ids": "[]"}},
+		{"reviewer_ids", UpdateInput{ReviewerIDs: []int64{}}, map[string]string{"reviewer_ids": "[]"}},
+		{"labels", UpdateInput{Labels: []string{}}, map[string]string{"labels": `""`}},
+		{
+			"all three",
+			UpdateInput{AssigneeIDs: []int64{}, ReviewerIDs: []int64{}, Labels: []string{}},
+			map[string]string{"assignee_ids": "[]", "reviewer_ids": "[]", "labels": `""`},
+		},
+		{"add and remove labels empty", UpdateInput{AddLabels: []string{}, RemoveLabels: []string{}}, map[string]string{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertBodyKeys(t, updateBody(t, tt.input), tt.want)
+		})
+	}
+}
+
+// TestUpdate_EmptyListsThroughTheMetaDecoder_ReachTheBody drives the same
+// empty lists through toolutil.UnmarshalParams, the decoder the meta and
+// dynamic routes hand their arguments to, so a [] a model writes is held to
+// the request and not only one a Go caller builds.
+func TestUpdate_EmptyListsThroughTheMetaDecoder_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
+		"assignee_ids": []any{}, "reviewer_ids": []any{}, "labels": []any{},
+	})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	assertBodyKeys(t, updateBody(t, input), map[string]string{"assignee_ids": "[]", "reviewer_ids": "[]", "labels": `""`})
+}
+
 // TestUpdate_EachFlagAlone_ReachesOnlyItsOwnKey drives the four boolean options
 // of an update one at a time and holds the body to that one key.
 func TestUpdate_EachFlagAlone_ReachesOnlyItsOwnKey(t *testing.T) {
