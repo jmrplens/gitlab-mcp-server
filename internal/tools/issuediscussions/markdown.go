@@ -11,7 +11,7 @@ import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 func FormatListMarkdownString(out ListOutput) string {
 	return toolutil.FormatRESTDiscussionListMarkdown(
 		out.Discussions, out.Pagination, toMarkdownDiscussion, "Issue Discussions", "No issue discussions found.\n",
-		toolutil.HintAction(actionDiscussionGet, "see a full discussion"),
+		toolutil.HintAction(actionDiscussionGet, "see a full discussion, given its discussion_id"),
 		toolutil.HintAction(actionDiscussionAddNote, "reply to a discussion"),
 	)
 }
@@ -21,7 +21,7 @@ func FormatMarkdownString(out Output) string {
 	return toolutil.FormatDiscussionMarkdown(
 		toMarkdownDiscussion(out),
 		toolutil.HintAction(actionDiscussionAddNote, "reply to this discussion"),
-		toolutil.HintAction(actionDiscussionUpdateNote, "edit one of its notes"),
+		toolutil.HintAction(actionDiscussionUpdateNote, "edit a note, given its note_id"),
 	)
 }
 
@@ -31,8 +31,8 @@ func FormatNoteMarkdownString(out NoteOutput) string {
 		Title:             "Discussion Note",
 		IncludeResolvable: true,
 		Hints: []string{
-			toolutil.HintAction(actionDiscussionUpdateNote, "edit this note"),
-			toolutil.HintAction(actionDiscussionDeleteNote, "remove this note"),
+			toolutil.HintAction(actionDiscussionUpdateNote, "edit this note, given its note_id"),
+			toolutil.HintAction(actionDiscussionDeleteNote, "remove this note, given its note_id"),
 		},
 	})
 }

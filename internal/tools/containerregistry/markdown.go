@@ -34,8 +34,8 @@ func FormatRepositoryMarkdown(out RepositoryOutput) string {
 	c.Field("Status", string(out.Status))
 	c.Time("Created At", out.CreatedAt)
 	c.End(
-		"Use action 'registry_tag_list' to list tags in this repository",
-		"Use action 'registry_delete' to delete this repository",
+		toolutil.HintAction("package.registry_tag_list", "list tags in this repository"),
+		toolutil.HintAction("package.registry_delete", "delete this repository"),
 	)
 	return b.String()
 }
@@ -69,7 +69,7 @@ func FormatRepositoryListMarkdown(out RepositoryListOutput) string {
 	// The table carries no link, so the footer carries no instruction to keep
 	// the links of a table that has none.
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		"Use action 'registry_get' with repository_id for full details")
+		toolutil.HintAction("package.registry_get", "see a repository's full details, given its repository_id"))
 	return b.String()
 }
 
@@ -98,7 +98,7 @@ func FormatTagMarkdown(out TagOutput) string {
 	c.Code("Short Revision", out.ShortRevision)
 	c.Field("Total Size", fmt.Sprintf("%d bytes", out.TotalSize))
 	c.Time("Created At", out.CreatedAt)
-	c.End("Use action 'registry_tag_delete' to remove this tag")
+	c.End(toolutil.HintAction("package.registry_tag_delete", "remove this tag"))
 	return b.String()
 }
 
@@ -127,8 +127,8 @@ func FormatTagListMarkdown(out TagListOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		"Use action 'registry_tag_get' with tag name for full details",
-		"Use action 'registry_tag_delete_bulk' to clean up old tags")
+		toolutil.HintAction("package.registry_tag_get", "see a tag's full details, given its tag name"),
+		toolutil.HintAction("package.registry_tag_delete_bulk", "clean up old tags"))
 	return b.String()
 }
 
@@ -144,8 +144,8 @@ func FormatProtectionRuleMarkdown(out ProtectionRuleOutput) string {
 	c.Field("Min Access Level (Push)", string(out.MinimumAccessLevelForPush))
 	c.Field("Min Access Level (Delete)", string(out.MinimumAccessLevelForDelete))
 	c.End(
-		"Use action 'registry_rule_update' to modify access levels",
-		"Use action 'registry_rule_delete' to remove this rule",
+		toolutil.HintAction("package.registry_rule_update", "modify access levels"),
+		toolutil.HintAction("package.registry_rule_delete", "remove this rule"),
 	)
 	return b.String()
 }
@@ -179,7 +179,7 @@ func FormatProtectionRuleListMarkdown(out ProtectionRuleListOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		"Use action 'registry_rule_create' to add a new rule")
+		toolutil.HintAction("package.registry_rule_create", "add a new rule"))
 	return b.String()
 }
 
@@ -195,8 +195,8 @@ func FormatTagProtectionRuleMarkdown(out TagProtectionRuleOutput) string {
 	c.Field("Min Access Level (Push)", protectionAccessLabel(out.MinimumAccessLevelForPush))
 	c.Field("Min Access Level (Delete)", protectionAccessLabel(out.MinimumAccessLevelForDelete))
 	c.End(
-		"Use action 'registry_tag_rule_update' to modify access levels",
-		"Use action 'registry_tag_rule_delete' to remove this rule",
+		toolutil.HintAction("package.registry_tag_rule_update", "modify access levels"),
+		toolutil.HintAction("package.registry_tag_rule_delete", "remove this rule"),
 	)
 	return b.String()
 }
@@ -218,8 +218,8 @@ func FormatTagProtectionRuleListMarkdown(out TagProtectionRuleListOutput) string
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		"Use action 'registry_tag_rule_create' to add a new rule",
-		"These rules protect image *tags*; use action 'registry_rule_list' for repository-path protection rules")
+		toolutil.HintAction("package.registry_tag_rule_create", "add a new rule"),
+		toolutil.HintAction("package.registry_rule_list", "see the repository-path protection rules; these rules protect image *tags*"))
 	return b.String()
 }
 

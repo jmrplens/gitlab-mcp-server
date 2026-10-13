@@ -1505,11 +1505,11 @@ func TestDelete(t *testing.T) {
 // below can pin the whole rendered document.
 const (
 	noteHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'epic_note_update' with note_id to edit this note\n" +
-		"- Use action 'epic_note_delete' with note_id to remove this note\n"
+		"- Use action 'group.epic_note_update' to edit this note, given its note_id\n" +
+		"- Use action 'group.epic_note_delete' to remove this note, given its note_id\n"
 	listHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'epic_note_get' with note_id to read a specific note\n" +
-		"- Use action 'epic_note_create' to add a new note to this epic\n"
+		"- Use action 'group.epic_note_get' to read a specific note, given its note_id\n" +
+		"- Use action 'group.epic_note_create' to add a new note to this epic\n"
 )
 
 // TestFormatOutputMarkdown uses table-driven subtests to pin the whole note

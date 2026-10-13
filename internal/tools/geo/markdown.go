@@ -26,6 +26,9 @@ const (
 // parses, not which characters its path holds. Every value below therefore
 // goes through the card, which escapes each one for the row it writes.
 func FormatOutputMarkdown(o Output) string {
+	if o.emptyAnswer {
+		return formatEmptyRepairMarkdown(o)
+	}
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Geo Site: "+o.Name)
 	c.Int("ID", o.ID)
@@ -54,6 +57,19 @@ func FormatOutputMarkdown(o Output) string {
 		toolutil.HintAction(actionEdit, "change this site's capacities or selective sync"),
 		toolutil.HintAction(actionListSites, "see every Geo site on the instance"),
 	)
+	return b.String()
+}
+
+// formatEmptyRepairMarkdown renders a repair GitLab accepted and answered
+// with an empty body: the site's ID and that notice, and none of the site's
+// own fields, which the answer did not carry and whose zero values would
+// misstate the site. The one step left is reading the site.
+func formatEmptyRepairMarkdown(o Output) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Geo Site Repair")
+	c.Int("ID", o.ID)
+	c.Note("GitLab accepted the repair and answered with an empty body, so this card carries only the site's ID.")
+	c.End(toolutil.HintAction(actionGet, "read the repaired site"))
 	return b.String()
 }
 

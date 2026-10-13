@@ -10,8 +10,8 @@ func FormatOutputMarkdown(n Output) string {
 	return toolutil.FormatNoteMarkdown(toNoteMarkdown(n), toolutil.NoteMarkdownOptions{
 		Title: "Snippet Note",
 		Hints: []string{
-			toolutil.HintAction(actionSnippetNoteUpdate, "edit this note"),
-			toolutil.HintAction(actionSnippetNoteDelete, "remove this note"),
+			toolutil.HintAction(actionSnippetNoteUpdate, "edit this note, given its note_id"),
+			toolutil.HintAction(actionSnippetNoteDelete, "remove this note, given its note_id"),
 		},
 	})
 }
@@ -22,7 +22,7 @@ func FormatListMarkdown(out ListOutput) string {
 		Title:        "Snippet Notes",
 		EmptyMessage: "No snippet notes found.\n",
 		Hints: toolutil.ListHints(
-			toolutil.HintAction(actionSnippetNoteGet, "read one of these notes in full"),
+			toolutil.HintAction(actionSnippetNoteGet, "read a specific note, given its note_id"),
 			toolutil.HintAction(actionSnippetNoteCreate, "add a new note to this snippet"),
 		),
 	})

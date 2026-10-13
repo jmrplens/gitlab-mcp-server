@@ -317,6 +317,134 @@ func TestHintAction_Composition_NamesTheCanonicalID(t *testing.T) {
 	}
 }
 
+// resolveIssueUpdate is the resolver the next-step tests serve: the meta
+// surface's call for issue.update, and no answer for any other ID.
+func resolveIssueUpdate(id string) (string, bool) {
+	if id == "issue.update" {
+		return "gitlab_issue with action 'update'", true
+	}
+	return "", false
+}
+
+// hintsSectionText writes body and then the server's guidance section
+// carrying hints, the way a formatter ends a result.
+func hintsSectionText(body string, hints ...string) string {
+	var b strings.Builder
+	b.WriteString(body)
+	WriteHints(&b, hints...)
+	return b.String()
+}
+
+// TestWithResolvedNextSteps_RewritesEachHintTheSurfaceServes verifies that a
+// formatter wrapped by WithResolvedNextSteps hands back its text with every
+// canonical ID its next steps name resolved into the serving surface's own
+// call (issue 1325), on every text block: the call HintAction writes, an ID a
+// step quotes in backticks and one it spells as a plain word alike. An ID the
+// surface does not serve, a dotted word that is no ID, a bare action name and
+// a non-text block are left as they were.
+//
+// The hints are what a model follows next, and on the meta and individual
+// surfaces the canonical ID they were written in is not something either can
+// call: meta's action argument refuses it and no individual tool is named by
+// it. A nil resolver is the dynamic surface, whose tool takes the ID.
+func TestWithResolvedNextSteps_RewritesEachHintTheSurfaceServes(t *testing.T) {
+	image := &mcp.ImageContent{MIMEType: "image/png"}
+	format := func(any) *mcp.CallToolResult {
+		return &mcp.CallToolResult{Content: []mcp.Content{
+			&mcp.TextContent{Text: hintsSectionText("## Issue\n",
+				HintAction("issue.update", "change this issue"),
+				HintAction("issue.missing", "x"),
+				"Use `issue.update` or `issue.missing` to edit it, and action 'list' to browse",
+				"Use issue.update or issue.missing, as README.md says",
+				"Read it first; then use action 'issue.update', or 'issue.update' again")},
+			image,
+			&mcp.TextContent{Text: hintsSectionText("", HintAction("issue.update", "edit it"))},
+		}}
+	}
+
+	got := WithResolvedNextSteps(format, resolveIssueUpdate)(nil)
+	want := hintsSectionText("## Issue\n",
+		"Use gitlab_issue with action 'update' to change this issue",
+		"Use action 'issue.missing' to x",
+		"Use gitlab_issue with action 'update' or `issue.missing` to edit it, and action 'list' to browse",
+		"Use gitlab_issue with action 'update' or issue.missing, as README.md says",
+		"Read it first; then use gitlab_issue with action 'update', or gitlab_issue with action 'update' again")
+	if text := got.Content[0].(*mcp.TextContent).Text; text != want {
+		t.Errorf("first block = %q\nwant %q", text, want)
+	}
+	if got.Content[1] != image {
+		t.Errorf("the image block = %#v, want it untouched", got.Content[1])
+	}
+	if text := got.Content[2].(*mcp.TextContent).Text; text != hintsSectionText("", "Use gitlab_issue with action 'update' to edit it") {
+		t.Errorf("second text block = %q", text)
+	}
+
+	t.Run("a nil resolver returns the formatter as it is", func(t *testing.T) {
+		if text := WithResolvedNextSteps(format, nil)(nil).Content[0].(*mcp.TextContent).Text; !strings.Contains(text, "Use action 'issue.update'") {
+			t.Errorf("text = %q, want the canonical ID kept", text)
+		}
+	})
+	t.Run("a formatter answering nil answers nil", func(t *testing.T) {
+		if result := WithResolvedNextSteps(func(any) *mcp.CallToolResult { return nil }, resolveIssueUpdate)(nil); result != nil {
+			t.Errorf("result = %#v, want nil", result)
+		}
+	})
+}
+
+// TestResolveNextSteps_RewritesOnlyTheSectionTheServerWrote verifies that the
+// rewrite reaches the guidance section the server wrote and nothing else
+// (issue 1325). A result carries GitLab's bytes too, a repository file, an
+// issue body, a job log, and a call spelled in one of them is that content:
+// rewriting it would hand the caller a file that is not the one in the
+// repository. The section is the one [ExtractHints] reads, so what is
+// rewritten is exactly what reaches next_steps.
+func TestResolveNextSteps_RewritesOnlyTheSectionTheServerWrote(t *testing.T) {
+	content := "Use action 'issue.update' and `issue.update` here.\n"
+	cases := []struct {
+		name string
+		text string
+		want string
+	}{
+		{
+			name: "content with no section is left byte for byte",
+			text: content,
+			want: content,
+		},
+		{
+			name: "a closing section is rewritten and the content above it is not",
+			text: hintsSectionText(content, HintAction("issue.update", "edit it")),
+			want: hintsSectionText(content, "Use gitlab_issue with action 'update' to edit it"),
+		},
+		{
+			name: "an opening section is rewritten and the content below it is not",
+			text: hintsSectionText("", HintAction("issue.update", "edit it")) + "\n" + content,
+			want: hintsSectionText("", "Use gitlab_issue with action 'update' to edit it") + "\n" + content,
+		},
+		{
+			name: "an opening section of several bullets is rewritten to the end of its last one",
+			text: hintsSectionText("", "first step", "second step", "`issue.update`") + "\n" + content,
+			want: hintsSectionText("", "first step", "second step", "gitlab_issue with action 'update'") + "\n" + content,
+		},
+		{
+			name: "a section followed by more text is content, not the server's",
+			text: "intro\n\n" + hintsBlockOpening + "- " + HintAction("issue.update", "edit it") + "\n\nmore text\n",
+			want: "intro\n\n" + hintsBlockOpening + "- " + HintAction("issue.update", "edit it") + "\n\nmore text\n",
+		},
+		{
+			name: "a section with a final line and no newline is rewritten to its end",
+			text: "intro\n\n" + hintsBlockOpening + "- `issue.update`",
+			want: "intro\n\n" + hintsBlockOpening + "- gitlab_issue with action 'update'",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ResolveNextSteps(tc.text, resolveIssueUpdate); got != tc.want {
+				t.Errorf("ResolveNextSteps() = %q\nwant %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestWriteHookSecretKeys_Cases_WholeOutput verifies the two redacted key
 // tables a webhook card shares: each written under its own H3 after a blank
 // line, every value redacted, and an empty list writing no table.
@@ -760,16 +888,18 @@ func TestFormatCICDVariableMarkdown_HiddenWithoutMaskedStillHidesTheValue(t *tes
 
 // TestCICDVariableMarkdownHelpers verifies the constructor and the two
 // exported renderers project, group and instance variables call: the card
-// with the shared update and delete hints, and the collection with the
-// list heading, the footer and the caller's hint, without a link hint since
-// the table has no links.
+// closed with the hints its caller names, since the update and delete
+// actions differ by scope, and the collection with the list heading, the
+// footer and the caller's hint, without a link hint since the table has no
+// links.
 func TestCICDVariableMarkdownHelpers(t *testing.T) {
 	variable := NewCICDVariableMarkdown("TOKEN", "secret", "file", CICDVariableFlags{Protected: true, Raw: true}, "*", "deploy token")
 	if variable.Key != "TOKEN" || !variable.Protected || !variable.Raw || variable.EnvironmentScope != "*" {
 		t.Fatalf("unexpected variable: %+v", variable)
 	}
 
-	detail := FormatCICDVariableDetailMarkdown(variable, "Variable", true)
+	detail := FormatCICDVariableDetailMarkdown(variable, "Variable", true,
+		HintAction("ci_variable.update", "change this variable"), HintAction("ci_variable.delete", "remove this variable"))
 	wantDetail := "## Variable: TOKEN\n\n" +
 		"- **Type**: file\n" +
 		"- **Protected**: " + EmojiSuccess + "\n" +
@@ -778,7 +908,7 @@ func TestCICDVariableMarkdownHelpers(t *testing.T) {
 		"- **Environment Scope**: *\n" +
 		"- **Description**: deploy token\n" +
 		"- **Value**: secret\n" +
-		hintsSection("Use action 'update' to change this variable", "Use action 'delete' to remove this variable")
+		hintsSection("Use action 'ci_variable.update' to change this variable", "Use action 'ci_variable.delete' to remove this variable")
 	if detail != wantDetail {
 		t.Errorf("detail card:\n got %q\nwant %q", detail, wantDetail)
 	}

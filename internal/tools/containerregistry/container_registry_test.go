@@ -605,8 +605,8 @@ func TestConvertTag_NilCreatedAt(t *testing.T) {
 
 // repositoryCardHints is the guidance a registry repository card closes with.
 const repositoryCardHints = "\n---\n💡 **Next steps:**\n" +
-	"- Use action 'registry_tag_list' to list tags in this repository\n" +
-	"- Use action 'registry_delete' to delete this repository\n"
+	"- Use action 'package.registry_tag_list' to list tags in this repository\n" +
+	"- Use action 'package.registry_delete' to delete this repository\n"
 
 // TestFormatRepositoryMarkdown_Full verifies the whole card of a fully
 // populated registry repository. The ID row is what the audit found missing:
@@ -685,7 +685,7 @@ func TestFormatRepositoryListMarkdown_WithItems(t *testing.T) {
 		"| 1 | a | x/a | 2 |\n" +
 		"| 2 | b | x/b | - |\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- Use action 'registry_get' with repository_id for full details\n"
+		"- Use action 'package.registry_get' to see a repository's full details, given its repository_id\n"
 	if got != want {
 		t.Errorf("FormatRepositoryListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
@@ -707,7 +707,7 @@ func TestFormatRepositoryListMarkdown_Empty(t *testing.T) {
 
 // tagCardHints is the guidance a registry tag card closes with.
 const tagCardHints = "\n---\n💡 **Next steps:**\n" +
-	"- Use action 'registry_tag_delete' to remove this tag\n"
+	"- Use action 'package.registry_tag_delete' to remove this tag\n"
 
 // TestFormatTagMarkdown_Full verifies the whole card of a fully populated
 // tag, with the digest and revision as code spans and the size carrying its
@@ -782,8 +782,8 @@ func TestFormatTagListMarkdown_WithItems(t *testing.T) {
 		"| v1 | p |\n" +
 		"| v2 | p |\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- Use action 'registry_tag_get' with tag name for full details\n" +
-		"- Use action 'registry_tag_delete_bulk' to clean up old tags\n"
+		"- Use action 'package.registry_tag_get' to see a tag's full details, given its tag name\n" +
+		"- Use action 'package.registry_tag_delete_bulk' to clean up old tags\n"
 	if got != want {
 		t.Errorf("FormatTagListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
@@ -1471,7 +1471,7 @@ func TestFormatProtectionRuleListMarkdown_WithItems(t *testing.T) {
 		"| 1 | `" + testProdPattern + "` | maintainer | admin |\n" +
 		"| 2 | `" + testStagingPattern + "` | owner | owner |\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- Use action 'registry_rule_create' to add a new rule\n"
+		"- Use action 'package.registry_rule_create' to add a new rule\n"
 	if got != want {
 		t.Errorf("FormatProtectionRuleListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}

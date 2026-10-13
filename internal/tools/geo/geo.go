@@ -100,6 +100,12 @@ type Output struct {
 	BlobDownloadTimeout                     int64   `json:"blob_download_timeout"`
 	ChecksumMismatchReportThreshold         int64   `json:"checksum_mismatch_report_threshold"`
 	ChecksumMismatchSelfHealCooldownMinutes int64   `json:"checksum_mismatch_self_heal_cooldown_minutes"`
+
+	// emptyAnswer marks a repair GitLab accepted and answered with an empty
+	// body, so the card says that instead of showing the zero values of a
+	// site nobody described. Unexported, because it is the server's account
+	// of the answer and not a field GitLab sends.
+	emptyAnswer bool
 }
 
 // Links mirrors gl.GeoSiteLinks: navigation links for a Geo site.
@@ -515,12 +521,7 @@ func Repair(ctx context.Context, client *gitlabclient.Client, in IDInput) (Outpu
 			"verify id with geo.list; repair re-creates the OAuth application for the secondary site. Must be run from the primary")
 	}
 	if site == nil {
-		return Output{
-			NextSteps: []string{
-				"Geo repair was accepted but GitLab returned an empty response; call action 'get' to refresh the Geo site.",
-			},
-			ID: in.ID,
-		}, nil
+		return Output{ID: in.ID, emptyAnswer: true}, nil
 	}
 	// No captured read here, unlike the other four site handlers: GitLab's
 	// repair route is annotated `success Entities::GeoSiteStatus` and presents

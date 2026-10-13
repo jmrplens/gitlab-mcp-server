@@ -407,12 +407,16 @@ func TestFormatListMarkdown(t *testing.T) {
 		"| 1 | S1 | public | @u1 | 0 |\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
-		"- Use action 'get' with snippet_id for full details\n" +
-		"- Use action 'create' to add a new snippet\n"
+		"- Use action 'snippet.get' to see a snippet's full details, given its snippet_id\n" +
+		"- Use action 'snippet.create' to add a new snippet\n"
 	if got != want {
 		t.Errorf("personal snippet list:\n got %q\nwant %q", got, want)
 	}
 }
+
+// snippetUpdateHint is the update step both content cards end with, written
+// out here rather than read from the package so the pin is the served text.
+const snippetUpdateHint = "Use action 'snippet.update' to modify a personal snippet; a project snippet is modified with snippet.project_update"
 
 // TestFormatContentMarkdown verifies the whole render of a snippet's content:
 // the heading, the content in a fence and the two next steps.
@@ -421,8 +425,8 @@ func TestFormatContentMarkdown(t *testing.T) {
 	want := "## Snippet #42 Content\n\n" +
 		"```\nhello world\n```\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'file_content' to get content of a specific file\n" +
-		"- " + hintUpdateSnippet + "\n"
+		"- Use action 'snippet.file_content' to get the content of one file\n" +
+		"- " + snippetUpdateHint + "\n"
 	if got != want {
 		t.Errorf("snippet content:\n got %q\nwant %q", got, want)
 	}
@@ -588,8 +592,8 @@ func TestFormatFileContentMarkdown(t *testing.T) {
 	want := "## Snippet #42 File: test.go (ref: main)\n\n" +
 		"```\npackage main\n```\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'content' to get the full snippet content\n" +
-		"- " + hintUpdateSnippet + "\n"
+		"- Use action 'snippet.content' to get the whole snippet's content\n" +
+		"- " + snippetUpdateHint + "\n"
 	if got != want {
 		t.Errorf("snippet file content:\n got %q\nwant %q", got, want)
 	}

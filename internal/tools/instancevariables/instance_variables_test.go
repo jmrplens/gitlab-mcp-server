@@ -361,8 +361,8 @@ func TestFormatOutputMarkdown(t *testing.T) {
 // variableCardHints is the guidance section every CI/CD variable card ends
 // with, shared by the whole-output expectations in this file.
 const variableCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
-	"- Use action 'update' to change this variable\n" +
-	"- Use action 'delete' to remove this variable\n"
+	"- Use action 'ci_variable.instance_update' to change this variable\n" +
+	"- Use action 'ci_variable.instance_delete' to remove this variable\n"
 
 // TestFormatOutputMarkdown_MaskedValue verifies that a masked variable has its
 // value withheld from the card and the flag reported, comparing the whole
@@ -424,8 +424,8 @@ func TestFormatListMarkdown(t *testing.T) {
 // variableListHints is the guidance section the instance variable list closes
 // with.
 const variableListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
-	"- Use action 'get' with key for full details\n" +
-	"- Use action 'create' to add a new instance variable\n"
+	"- Use action 'ci_variable.instance_get' to see a variable's full details, given its key\n" +
+	"- Use action 'ci_variable.instance_create' to add a new instance variable\n"
 
 // TestFormatOutputMarkdown_NamesTheEnvironmentScope verifies that the scope
 // GitLab sends reaches the card. The view model used to receive an empty

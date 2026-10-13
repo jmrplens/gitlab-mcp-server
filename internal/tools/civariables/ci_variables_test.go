@@ -803,8 +803,8 @@ func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 // variableCardHints is the guidance section every CI/CD variable card ends
 // with, shared by the whole-output expectations below.
 const variableCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
-	"- Use action 'update' to change this variable\n" +
-	"- Use action 'delete' to remove this variable\n"
+	"- Use action 'ci_variable.update' to change this variable\n" +
+	"- Use action 'ci_variable.delete' to remove this variable\n"
 
 // TestFormatOutputMarkdown_MaskedValue verifies the OutputMarkdown_MaskedValue Markdown formatter for a representative output_maskedvalue input.
 // The test exercises the GET path of the underlying GitLab API call.
@@ -903,8 +903,8 @@ func TestFormatListMarkdown_WithVariables(t *testing.T) {
 		"| API_KEY | env_var | " + toolutil.EmojiSuccess + " | " + toolutil.EmojiSuccess + " | " + testEnvScope + " |\n" +
 		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'get' with a key to see variable details\n" +
-		"- Use action 'create' to add a new CI/CD variable\n"
+		"- Use action 'ci_variable.get' to see a variable's details, given its key\n" +
+		"- Use action 'ci_variable.create' to add a new CI/CD variable\n"
 	if md := FormatListMarkdown(out); md != want {
 		t.Errorf("FormatListMarkdown()\n got %q\nwant %q", md, want)
 	}

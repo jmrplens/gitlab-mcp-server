@@ -234,6 +234,91 @@ func TestRegisterIndividualCatalogTools_ReadOnlyAndSafeModePolicies(t *testing.T
 	}
 }
 
+// TestRegisterIndividualCatalogTools_NextSteps_NameTheIndividualTool verifies
+// that a next step an individual tool serves names the action by the
+// individual tool it is registered as, and that a step naming an action this
+// registration left out, or one no catalog holds, is left as it was written
+// (issue 1325).
+//
+// No individual tool is named by a canonical ID and no rule derives the name
+// from one, so the hint the formatter wrote, "Use action '<id>'", named
+// nothing the model could call. Excluding the target tool is what proves the
+// rewrite asks what was registered rather than what the catalog declares.
+func TestRegisterIndividualCatalogTools_NextSteps_NameTheIndividualTool(t *testing.T) {
+	tests := []struct {
+		name    string
+		exclude []string
+		want    string
+	}{
+		{name: "a registered target", want: "- Use gitlab_test_hints_get to read one"},
+		{name: "an excluded target", exclude: []string{"gitlab_test_hints_get"}, want: "- Use action 'test_hints.get' to read one"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			catalog := hintProbeCatalog(t)
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
+			RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{ExcludeToolNames: tt.exclude})
+
+			text := callForText(t, server, "gitlab_test_hints_list", map[string]any{})
+			want := strings.ReplaceAll(tt.want, "test_hints.get", metaProbeGetID(t, catalog))
+			for _, fragment := range []string{want, "- Use action 'other.missing' to do something else"} {
+				t.Run(fragment, func(t *testing.T) {
+					if !strings.Contains(text, fragment) {
+						t.Errorf("text = %q, want it to contain %q", text, fragment)
+					}
+				})
+			}
+		})
+	}
+}
+
+// metaProbeGetID returns the canonical ID of the get action of
+// [hintProbeCatalog].
+func metaProbeGetID(t *testing.T, catalog *actioncatalog.Catalog) string {
+	t.Helper()
+	for _, action := range catalog.Actions() {
+		if action.Name == "get" {
+			return string(action.ID)
+		}
+	}
+	t.Fatal("the probe catalog holds no get action")
+	return ""
+}
+
+// TestIndividualActionCalls_FirstActionOwnsASharedName verifies that a tool
+// name two actions declare resolves for the first of them in registration
+// order, which is the one registration binds it to, and for no other, and that
+// an action declaring no name is not answered (issue 1325). Resolving the
+// second would send a model to a tool that runs a different action.
+func TestIndividualActionCalls_FirstActionOwnsASharedName(t *testing.T) {
+	route := toolutil.RouteAction(nil, func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (struct{}, error) {
+		return struct{}{}, nil
+	})
+	spec := func(action, tool string) toolutil.ActionSpec {
+		return toolutil.NewActionSpec(action, route, toolutil.ActionSpecOptions{
+			ReadOnly: true, OwnerPackage: "tools",
+			IndividualTool: toolutil.IndividualToolSpec{Name: tool, Title: "T", Description: "Probe."},
+		})
+	}
+	catalog := testIndividualCatalog(t, spec("first", "gitlab_test_shared"), spec("second", "gitlab_test_shared"), spec("nameless", ""))
+	ids := map[string]string{}
+	for _, action := range catalog.Actions() {
+		ids[action.Name] = string(action.ID)
+	}
+
+	calls := IndividualActionCalls(catalog)
+	if name, ok := calls(ids["first"]); !ok || name != "gitlab_test_shared" {
+		t.Errorf("calls(first) = %q, %t, want gitlab_test_shared, true", name, ok)
+	}
+	for _, action := range []string{"second", "nameless"} {
+		t.Run(action, func(t *testing.T) {
+			if name, ok := calls(ids[action]); ok {
+				t.Errorf("calls(%s) = %q, true, want it unanswered", action, name)
+			}
+		})
+	}
+}
+
 // TestRegisterIndividualCatalogTools_EditionFilters covers RegisterIndividualCatalogTools with table-driven subtests for edition filters.
 func TestRegisterIndividualCatalogTools_EditionFilters(t *testing.T) {
 	newSpec := func(name string, opts toolutil.ActionSpecOptions) toolutil.ActionSpec {

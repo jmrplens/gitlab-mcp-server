@@ -304,8 +304,8 @@ func TestFormatOutputMarkdown(t *testing.T) {
 // on the group surface those resolve to the group_update and group_delete
 // actions, which the hints do not spell.
 const groupVariableCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
-	"- Use action 'update' to change this variable\n" +
-	"- Use action 'delete' to remove this variable\n"
+	"- Use action 'ci_variable.group_update' to change this variable\n" +
+	"- Use action 'ci_variable.group_delete' to remove this variable\n"
 
 // TestFormatOutputMarkdown_Masked verifies the OutputMarkdown_Masked Markdown formatter for a representative output_masked input.
 // The test exercises the GET path of the underlying GitLab API call.
@@ -364,8 +364,8 @@ func TestFormatListMarkdown(t *testing.T) {
 // groupVariableListHints is the guidance section the group variable list
 // closes with.
 const groupVariableListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
-	"- Use action 'get' with key for full details\n" +
-	"- Use action 'create' to add a new group variable\n"
+	"- Use action 'ci_variable.group_get' to see a variable's full details, given its key\n" +
+	"- Use action 'ci_variable.group_create' to add a new group variable\n"
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
@@ -854,8 +854,8 @@ func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 // variableCardHints is the guidance section every CI/CD variable card ends
 // with, shared by the whole-output expectations below.
 const variableCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
-	"- Use action 'update' to change this variable\n" +
-	"- Use action 'delete' to remove this variable\n"
+	"- Use action 'ci_variable.group_update' to change this variable\n" +
+	"- Use action 'ci_variable.group_delete' to remove this variable\n"
 
 // TestFormatOutputMarkdown_MaskedValue verifies the OutputMarkdown_MaskedValue Markdown formatter for a representative output_maskedvalue input.
 // The test exercises the GET path of the underlying GitLab API call.

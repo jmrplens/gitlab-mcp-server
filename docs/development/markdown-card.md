@@ -336,7 +336,7 @@ c.Bool("Confidential", false)
 c.Time("Created", "2026-03-20T15:45:00Z")
 c.Link("Author", "@alice", "https://gitlab.example.com/alice")
 c.URL("https://gitlab.example.com/g/p/-/issues/42")
-c.End("Use action 'update' to change this issue")
+c.End(toolutil.HintAction("issue.update", "change this issue"))
 ```
 
 ```markdown
@@ -351,8 +351,10 @@ c.End("Use action 'update' to change this issue")
 
 ---
 💡 **Next steps:**
-- Use action 'update' to change this issue
+- Use action 'issue.update' to change this issue
 ```
+
+A hint names the action by its canonical ID, through `toolutil.HintAction`, and never by a bare meta action name: the meta and individual surfaces rewrite the ID into the call they take (`toolutil.WithResolvedNextSteps`), and a bare name resolves on the meta surface alone, and there only when it is the domain tool's own.
 
 A card with a nested object (Sub), a long text, a large nested object
 (Section) and a nested collection (Table):

@@ -61,6 +61,7 @@ type individualCatalogRegisterState struct {
 	allowed    map[string]struct{}
 	excluded   map[string]struct{}
 	registered map[string]struct{}
+	calls      toolutil.ActionCallResolver
 }
 
 // RegisterIndividualCatalogTools registers individual MCP tools by
@@ -75,8 +76,44 @@ func RegisterIndividualCatalogTools(server *mcp.Server, catalog *actioncatalog.C
 		return
 	}
 	state := individualCatalogRegisterState{opts: opts, allowed: stringSet(opts.AllowedToolNames), excluded: stringSet(opts.ExcludeToolNames), registered: make(map[string]struct{})}
+	// The handlers resolve their next steps only once every tool is
+	// registered, so a step can name a tool registered after the one that
+	// writes it, and one this registration left out is not answered.
+	names := IndividualActionCalls(catalog)
+	state.calls = func(actionID string) (string, bool) {
+		name, ok := names(actionID)
+		if !ok {
+			return "", false
+		}
+		_, registered := state.registered[name]
+		return name, registered
+	}
 	for _, group := range catalog.Groups() {
 		registerIndividualCatalogGroup(server, group, state)
+	}
+}
+
+// IndividualActionCalls answers how the individual surface calls each action
+// of catalog: by the individual tool name the action declares,
+// gitlab_issue_update for issue.update (issue 1325). No rule derives that name
+// from the ID, so a next step written as the ID named no tool the model could
+// call. A name declared by more than one action belongs to the first in
+// registration order, as registration binds it, and the others are not
+// answered.
+func IndividualActionCalls(catalog *actioncatalog.Catalog) toolutil.ActionCallResolver {
+	calls := make(map[string]string)
+	bound := make(map[string]struct{})
+	for _, action := range individualRegistrationOrder(catalog) {
+		name := strings.TrimSpace(action.IndividualTool.Name)
+		if _, taken := bound[name]; name == "" || taken {
+			continue
+		}
+		bound[name] = struct{}{}
+		calls[string(action.ID)] = name
+	}
+	return func(actionID string) (string, bool) {
+		name, ok := calls[actionID]
+		return name, ok
 	}
 }
 
@@ -115,6 +152,7 @@ func registerIndividualCatalogGroup(server *mcp.Server, group actioncatalog.Grou
 	if formatResult == nil {
 		formatResult = markdownForResult
 	}
+	formatResult = toolutil.WithResolvedNextSteps(formatResult, state.calls)
 	for _, action := range group.ActionsInOrder() {
 		registerIndividualCatalogAction(server, group, action, formatResult, state)
 	}

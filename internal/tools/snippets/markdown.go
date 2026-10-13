@@ -22,7 +22,9 @@ func formatSnippetNotFound(out snippetNotFoundOutput) *mcp.CallToolResult {
 	)
 }
 
-const hintUpdateSnippet = "Use action 'update' to modify a personal snippet; for project snippets use action 'project_update'"
+// hintUpdateSnippet names the update of a personal snippet and, for a project
+// snippet, the project action that updates one instead.
+var hintUpdateSnippet = toolutil.HintAction("snippet.update", "modify a personal snippet; a project snippet is modified with snippet.project_update")
 
 // authorCell renders a snippet author as the name and the handle, or nothing
 // when GitLab sent no author.
@@ -90,15 +92,15 @@ func snippetHints(out Output) []string {
 	var hints []string
 	if out.ProjectID != 0 {
 		hints = []string{
-			"Use action 'project_get' with project_id and snippet_id; do not use personal action 'get'",
-			"Use action 'project_update' with files[] to modify project snippet content; include files[].action set to 'update' and use the Path value as files[].file_path",
-			"Use action 'project_delete' to remove this project snippet",
+			toolutil.HintAction("snippet.project_get", "read it, given project_id and snippet_id; the personal snippet.get does not reach a project snippet"),
+			toolutil.HintAction("snippet.project_update", "modify its content with files[]: set files[].action to 'update' and use the Path value as files[].file_path"),
+			toolutil.HintAction("snippet.project_delete", "remove this project snippet"),
 		}
 	} else {
 		hints = []string{
-			"Use action 'content' to read snippet content",
+			toolutil.HintAction("snippet.content", "read the snippet's content"),
 			hintUpdateSnippet,
-			"Use action 'delete' to remove this snippet",
+			toolutil.HintAction("snippet.delete", "remove this snippet"),
 		}
 	}
 	if snippetHasLink(out) {
@@ -139,18 +141,18 @@ func FormatListMarkdown(out ListOutput) string {
 }
 
 // listHints names the actions a reader of the list can take next. A page of
-// project snippets is served by the project actions: the personal 'get' and
-// 'create' it used to name answer 404 for every row on it.
+// project snippets is served by the project actions: the personal get and
+// create it used to name answer 404 for every row on it.
 func listHints(withProject bool) []string {
 	if withProject {
 		return []string{
-			"Use action 'project_get' with project_id and snippet_id for full details",
-			"Use action 'project_create' to add a new project snippet",
+			toolutil.HintAction("snippet.project_get", "see a snippet's full details, given project_id and snippet_id"),
+			toolutil.HintAction("snippet.project_create", "add a new project snippet"),
 		}
 	}
 	return []string{
-		"Use action 'get' with snippet_id for full details",
-		"Use action 'create' to add a new snippet",
+		toolutil.HintAction("snippet.get", "see a snippet's full details, given its snippet_id"),
+		toolutil.HintAction("snippet.create", "add a new snippet"),
 	}
 }
 
@@ -162,7 +164,7 @@ func FormatContentMarkdown(out ContentOutput) string {
 	c := toolutil.NewCard(&b, fmt.Sprintf("Snippet #%d Content", out.SnippetID))
 	c.Fence("", "", out.Content)
 	c.End(
-		"Use action 'file_content' to get content of a specific file",
+		toolutil.HintAction("snippet.file_content", "get the content of one file"),
 		hintUpdateSnippet,
 	)
 	return b.String()
@@ -176,7 +178,7 @@ func FormatFileContentMarkdown(out FileContentOutput) string {
 	c := toolutil.NewCard(&b, fmt.Sprintf("Snippet #%d File: %s (ref: %s)", out.SnippetID, out.FileName, out.Ref))
 	c.Fence("", "", out.Content)
 	c.End(
-		"Use action 'content' to get the full snippet content",
+		toolutil.HintAction("snippet.content", "get the whole snippet's content"),
 		hintUpdateSnippet,
 	)
 	return b.String()

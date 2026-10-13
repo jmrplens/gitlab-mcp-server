@@ -115,3 +115,94 @@ func TestRegisterMetaCatalog_GroupFormatterRendersTheResult(t *testing.T) {
 		t.Errorf("content = %q, want the group's declared formatter to have rendered it", text.Text)
 	}
 }
+
+// hintProbeCatalog builds a catalog of one group, gitlab_test_hints, whose
+// list action's formatter writes two next steps through HintAction: one to the
+// group's own get action and one to an ID no catalog holds. The individual
+// tools are gitlab_test_hints_list and gitlab_test_hints_get.
+func hintProbeCatalog(t *testing.T) *actioncatalog.Catalog {
+	t.Helper()
+	var getID string
+	route := toolutil.RouteAction(nil, func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (struct{}, error) {
+		return struct{}{}, nil
+	})
+	spec := func(name string) toolutil.ActionSpec {
+		return toolutil.NewActionSpec(name, route, toolutil.ActionSpecOptions{
+			ReadOnly:       true,
+			OwnerPackage:   "tools",
+			IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_hints_" + name, Title: "Hints " + name, Description: "Hint probe."},
+		})
+	}
+	group, err := actioncatalog.GroupFromSpecs(actioncatalog.GroupOptions{
+		ToolName:     "gitlab_test_hints",
+		Title:        "Hint probe",
+		Description:  "Hint probe group.",
+		OwnerPackage: "tools",
+		SurfaceKind:  actioncatalog.SurfaceKindMetaGroup,
+		ReadOnly:     true,
+		FormatResult: func(any) *mcp.CallToolResult {
+			var b strings.Builder
+			b.WriteString("## Probe\n")
+			toolutil.WriteHints(&b, toolutil.HintAction(getID, "read one"), toolutil.HintAction("other.missing", "do something else"))
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: b.String()}}}
+		},
+	}, []toolutil.ActionSpec{spec("list"), spec("get")})
+	if err != nil {
+		t.Fatalf("GroupFromSpecs() error = %v", err)
+	}
+	catalog := actioncatalog.NewCatalog()
+	if addErr := catalog.AddGroup(group); addErr != nil {
+		t.Fatalf("AddGroup() error = %v", addErr)
+	}
+	for _, action := range catalog.Actions() {
+		if action.Name == "get" {
+			getID = string(action.ID)
+		}
+	}
+	if getID == "" {
+		t.Fatal("the probe catalog holds no get action")
+	}
+	return catalog
+}
+
+// callForText calls tool on server with arguments and returns the text of the
+// first content block.
+func callForText(t *testing.T, server *mcp.Server, tool string, arguments map[string]any) string {
+	t.Helper()
+	result, err := connectServerForTools(t, server).CallTool(context.Background(), &mcp.CallToolParams{Name: tool, Arguments: arguments})
+	if err != nil {
+		t.Fatalf("CallTool(%s) error = %v", tool, err)
+	}
+	if result.IsError || len(result.Content) == 0 {
+		t.Fatalf("CallTool(%s) = %#v, want a result", tool, result)
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content[0] = %T, want TextContent", result.Content[0])
+	}
+	return text.Text
+}
+
+// TestRegisterMetaCatalog_NextSteps_NameTheMetaCall verifies that a next step
+// a meta tool serves names the action the way the meta surface calls it, the
+// group's tool with the action's name within it, and that a step naming an
+// action the catalog does not hold is left as it was written (issue 1325).
+//
+// A meta tool's action argument refuses a canonical ID, so the hint the
+// formatter wrote, "Use action '<id>'", was a call the model could not make.
+func TestRegisterMetaCatalog_NextSteps_NameTheMetaCall(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
+	RegisterMetaCatalog(server, hintProbeCatalog(t))
+
+	text := callForText(t, server, "gitlab_test_hints", map[string]any{"action": "list"})
+	for _, want := range []string{
+		"- Use gitlab_test_hints with action 'get' to read one",
+		"- Use action 'other.missing' to do something else",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("text = %q, want it to contain %q", text, want)
+			}
+		})
+	}
+}

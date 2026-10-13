@@ -703,8 +703,8 @@ const tokenCardHints = "- Use `access.token_project_revoke`, `access.token_group
 // tokenListHints is the guidance section every access-token list ends with.
 // The table carries no link, so the preserve-links reminder is not written.
 const tokenListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
-	"- Use action 'get' with token_id for full details\n" +
-	"- Use action 'create' to generate a new access token\n"
+	"- Use `access.token_project_get`, `access.token_group_get` or `access.token_personal_get`, matching the token's scope, to read one in full given its token_id\n" +
+	"- Use `access.token_project_create` or `access.token_group_create` to generate a new project or group access token\n"
 
 // hintsHeading opens the guidance section of a card that carries hints.
 const hintsHeading = "\n---\n\U0001F4A1 **Next steps:**\n"

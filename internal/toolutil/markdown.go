@@ -2,6 +2,7 @@ package toolutil
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -278,13 +279,94 @@ func MdUserLink(username, webURL string) string {
 }
 
 // HintAction composes a next-step hint that names an action by its canonical
-// catalog ID, "Use action 'issue.update' to change this issue". The ID is the
-// one form every surface accepts: the dynamic surface executes it directly,
-// and the meta and individual surfaces resolve it to their own tool names, so
-// a hint written this way is never a name the serving surface does not
-// register.
+// catalog ID, "Use action 'issue.update' to change this issue". The dynamic
+// surface executes that ID as it is written. The meta and individual surfaces
+// do not accept it: a meta tool's action argument takes the action's name
+// within that tool, and an individual tool is named by its own declared name,
+// which no rule derives from the ID (issue 1325). Those two surfaces register
+// their dispatchers' formatters through [WithResolvedNextSteps], which
+// rewrites the hint into the call they accept before the result leaves the
+// server, so a hint is written once, here, in the one form every surface can
+// be resolved from.
 func HintAction(actionID, purpose string) string {
 	return "Use action '" + actionID + "' to " + purpose
+}
+
+// nextStepIDPattern matches the ways a next step names an action by its
+// canonical ID: the call [HintAction] writes, "Use action '<id>'", with the
+// case of its first letter as the first submatch and the ID as the second, a
+// sentence's own "use action '<id>'" included; an ID in single quotes, as the
+// third; an ID in backticks, as the fourth; and an ID spelled as a plain word,
+// as the fifth. The quotes are part of the match so that a quoted ID is
+// rewritten whole rather than inside them. A dotted word that is no ID (a file
+// name, a version, a host) matches the last form too, and is left as it was
+// because no resolver answers for it. A bare action name carries no dot and is
+// not matched: it names an action within a meta tool, and no resolver could
+// say which tool.
+var nextStepIDPattern = regexp.MustCompile(strings.Join([]string{
+	`([Uu])se action '([a-z0-9_]+\.[a-z0-9_]+)'`,
+	`'([a-z0-9_]+\.[a-z0-9_]+)'`,
+	"`([a-z0-9_]+\\.[a-z0-9_]+)`",
+	`([a-z0-9_]+\.[a-z0-9_]+)`,
+}, "|"))
+
+// ActionCallResolver answers how the serving surface calls the action a
+// canonical ID names, as the words that follow "Use" in a next step, and
+// whether that surface serves the action at all.
+type ActionCallResolver func(actionID string) (call string, ok bool)
+
+// WithResolvedNextSteps returns format with every canonical ID the next steps
+// of its result name rewritten by resolve: "Use action 'issue.update' to
+// change this issue" becomes "Use gitlab_issue with action 'update' to ..."
+// on the meta surface and "Use gitlab_issue_update to ..." on the individual
+// one (issue 1325), and an ID a step quotes in backticks becomes the same
+// call. Because [FinishToolResult] reads the next_steps of the structured
+// output from that text, both carry the rewritten call. A step naming an
+// action the surface does not serve is left as it was written, and a nil
+// resolve returns format unchanged, which is what the dynamic surface, whose
+// tool takes the canonical ID, registers.
+func WithResolvedNextSteps(format FormatResultFunc, resolve ActionCallResolver) FormatResultFunc {
+	if resolve == nil {
+		return format
+	}
+	return func(result any) *mcp.CallToolResult {
+		callResult := format(result)
+		if callResult == nil {
+			return nil
+		}
+		for _, content := range callResult.Content {
+			if text, ok := content.(*mcp.TextContent); ok {
+				text.Text = ResolveNextSteps(text.Text, resolve)
+			}
+		}
+		return callResult
+	}
+}
+
+// ResolveNextSteps rewrites by resolve every canonical ID the guidance section
+// of text names, leaving an ID resolve does not answer as it was.
+//
+// Only the section the server wrote is rewritten, the one [ExtractHints]
+// reads. A result carries GitLab's bytes as well, a repository file, an issue
+// body, a job log, and a call spelled in one of them is that content:
+// rewriting it would hand the caller text that is not what GitLab holds.
+func ResolveNextSteps(text string, resolve ActionCallResolver) string {
+	start, end, ok := serverHintsBullets(text)
+	if !ok {
+		return text
+	}
+	bullets := nextStepIDPattern.ReplaceAllStringFunc(text[start:end], func(mention string) string {
+		match := nextStepIDPattern.FindStringSubmatch(mention)
+		prefix, id := "", match[3]+match[4]+match[5]
+		if match[2] != "" {
+			prefix, id = match[1]+"se ", match[2]
+		}
+		if call, served := resolve(id); served {
+			return prefix + call
+		}
+		return mention
+	})
+	return text[:start] + bullets + text[end:]
 }
 
 // WriteHookSecretKeys writes the tables of a webhook's URL variables and
@@ -600,16 +682,17 @@ func formatCICDVariableMarkdown(v CICDVariableMarkdown, opts cicdVariableMarkdow
 	return b.String()
 }
 
-// FormatCICDVariableDetailMarkdown renders a CI/CD variable with standard
-// update/delete next-step hints shared by project and group variables.
-func FormatCICDVariableDetailMarkdown(v CICDVariableMarkdown, title string, includeEnvironmentScope bool) string {
+// FormatCICDVariableDetailMarkdown renders a CI/CD variable as the card the
+// project, group and instance variables share, closed with the next steps the
+// caller names. The hints are the caller's because the actions that update
+// and delete a variable differ by scope (ci_variable.update,
+// ci_variable.group_update, ci_variable.instance_update), and a card shared
+// by all three cannot name one of them for the other two.
+func FormatCICDVariableDetailMarkdown(v CICDVariableMarkdown, title string, includeEnvironmentScope bool, hints ...string) string {
 	return formatCICDVariableMarkdown(v, cicdVariableMarkdownOptions{
 		Title:                   title,
 		IncludeEnvironmentScope: includeEnvironmentScope,
-		Hints: []string{
-			"Use action 'update' to change this variable",
-			"Use action 'delete' to remove this variable",
-		},
+		Hints:                   hints,
 	})
 }
 

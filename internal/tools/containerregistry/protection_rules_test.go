@@ -242,8 +242,8 @@ func TestDeleteProtectionRule_MissingRuleID(t *testing.T) {
 // protectionRuleCardHints is the guidance a repository-path protection rule
 // card closes with.
 const protectionRuleCardHints = "\n---\n💡 **Next steps:**\n" +
-	"- Use action 'registry_rule_update' to modify access levels\n" +
-	"- Use action 'registry_rule_delete' to remove this rule\n"
+	"- Use action 'package.registry_rule_update' to modify access levels\n" +
+	"- Use action 'package.registry_rule_delete' to remove this rule\n"
 
 // TestFormatProtectionRuleMarkdown verifies the whole card of a
 // repository-path protection rule.
@@ -425,7 +425,7 @@ func TestFormatProtectionRuleListMarkdown(t *testing.T) {
 		"| --- | --- | --- | --- |\n" +
 		"| 1 | `" + testProdPattern + "` | maintainer | admin |\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- Use action 'registry_rule_create' to add a new rule\n"
+		"- Use action 'package.registry_rule_create' to add a new rule\n"
 	if got != want {
 		t.Errorf("FormatProtectionRuleListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}

@@ -677,14 +677,14 @@ func snippetCardHints(project, linked bool) string {
 	}
 	if project {
 		return out +
-			"- Use action 'project_get' with project_id and snippet_id; do not use personal action 'get'\n" +
-			"- Use action 'project_update' with files[] to modify project snippet content; include files[].action set to 'update' and use the Path value as files[].file_path\n" +
-			"- Use action 'project_delete' to remove this project snippet\n"
+			"- Use action 'snippet.project_get' to read it, given project_id and snippet_id; the personal snippet.get does not reach a project snippet\n" +
+			"- Use action 'snippet.project_update' to modify its content with files[]: set files[].action to 'update' and use the Path value as files[].file_path\n" +
+			"- Use action 'snippet.project_delete' to remove this project snippet\n"
 	}
 	return out +
-		"- Use action 'content' to read snippet content\n" +
-		"- " + hintUpdateSnippet + "\n" +
-		"- Use action 'delete' to remove this snippet\n"
+		"- Use action 'snippet.content' to read the snippet's content\n" +
+		"- Use action 'snippet.update' to modify a personal snippet; a project snippet is modified with snippet.project_update\n" +
+		"- Use action 'snippet.delete' to remove this snippet\n"
 }
 
 // TestFormatMarkdown_AllFields verifies the whole card of a snippet GitLab
@@ -846,8 +846,8 @@ func TestFormatListMarkdown_WithProjectColumn(t *testing.T) {
 		"| 2 | [PS2](https://short-url) | 20 | private | @u2 | 0 |\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
-		"- Use action 'project_get' with project_id and snippet_id for full details\n" +
-		"- Use action 'project_create' to add a new project snippet\n"
+		"- Use action 'snippet.project_get' to see a snippet's full details, given project_id and snippet_id\n" +
+		"- Use action 'snippet.project_create' to add a new project snippet\n"
 	if got != want {
 		t.Errorf("project snippet list:\n got %q\nwant %q", got, want)
 	}
@@ -866,8 +866,8 @@ func TestFormatListMarkdown_NoProjectColumn(t *testing.T) {
 		"| 1 | Personal | private | @u1 | 0 |\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
-		"- Use action 'get' with snippet_id for full details\n" +
-		"- Use action 'create' to add a new snippet\n"
+		"- Use action 'snippet.get' to see a snippet's full details, given its snippet_id\n" +
+		"- Use action 'snippet.create' to add a new snippet\n"
 	if got != want {
 		t.Errorf("personal snippet list:\n got %q\nwant %q", got, want)
 	}

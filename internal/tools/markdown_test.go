@@ -1139,8 +1139,8 @@ func TestFormatLabel_ListMarkdown(t *testing.T) {
 			"| bug | #ff0000 | group | 5 | 2 | 1 |\n" +
 			"\nPage 1 of 1 | 1 items total | 20 per page\n" +
 			"\n---\n\U0001F4A1 **Next steps:**\n" +
-			"- Use action 'label_get' with a label_id to see label details\n" +
-			"- Use action 'label_create' to create a new label\n"
+			"- Use action 'project.label_get' to see a label's details, given its label_id\n" +
+			"- Use action 'project.label_create' to create a new label\n"
 		if md != want {
 			t.Errorf("label list:\n got %q\nwant %q", md, want)
 		}

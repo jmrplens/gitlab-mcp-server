@@ -7,7 +7,10 @@ import (
 // FormatOutputMarkdown renders a single group CI/CD variable as Markdown.
 func FormatOutputMarkdown(v Output) string {
 	variable := toMarkdownVariable(v)
-	return toolutil.FormatCICDVariableDetailMarkdown(variable, "Group Variable", true)
+	return toolutil.FormatCICDVariableDetailMarkdown(variable, "Group Variable", true,
+		toolutil.HintAction("ci_variable.group_update", "change this variable"),
+		toolutil.HintAction("ci_variable.group_delete", "remove this variable"),
+	)
 }
 
 // FormatListMarkdown renders a paginated list of group CI/CD variables as a Markdown table.
@@ -15,8 +18,8 @@ func FormatListMarkdown(out ListOutput) string {
 	variables := out.Variables
 	return toolutil.FormatCICDVariableCollectionMarkdown(
 		variables, out.Pagination, toMarkdownVariable, "Group CI/CD Variables", "No group CI/CD variables found.\n", true,
-		"Use action 'get' with key for full details",
-		"Use action 'create' to add a new group variable",
+		toolutil.HintAction("ci_variable.group_get", "see a variable's full details, given its key"),
+		toolutil.HintAction("ci_variable.group_create", "add a new group variable"),
 	)
 }
 

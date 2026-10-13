@@ -269,11 +269,11 @@ func TestDeleteTagProtectionRule_MissingRuleID(t *testing.T) {
 // and tagRuleListHints the guidance the list closes with.
 const (
 	tagRuleCardHints = "\n---\n💡 **Next steps:**\n" +
-		"- Use action 'registry_tag_rule_update' to modify access levels\n" +
-		"- Use action 'registry_tag_rule_delete' to remove this rule\n"
+		"- Use action 'package.registry_tag_rule_update' to modify access levels\n" +
+		"- Use action 'package.registry_tag_rule_delete' to remove this rule\n"
 	tagRuleListHints = "\n---\n💡 **Next steps:**\n" +
-		"- Use action 'registry_tag_rule_create' to add a new rule\n" +
-		"- These rules protect image *tags*; use action 'registry_rule_list' for repository-path protection rules\n"
+		"- Use action 'package.registry_tag_rule_create' to add a new rule\n" +
+		"- Use action 'package.registry_rule_list' to see the repository-path protection rules; these rules protect image *tags*\n"
 )
 
 // TestFormatTagProtectionRuleMarkdown verifies the whole card of a tag

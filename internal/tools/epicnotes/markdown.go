@@ -73,8 +73,8 @@ func FormatOutputMarkdown(n Output) string {
 		)
 	}
 	hints := []string{
-		"Use action 'epic_note_update' with note_id to edit this note",
-		"Use action 'epic_note_delete' with note_id to remove this note",
+		toolutil.HintAction("group.epic_note_update", "edit this note, given its note_id"),
+		toolutil.HintAction("group.epic_note_delete", "remove this note, given its note_id"),
 	}
 	if n.ResourceEvent {
 		hints = []string{toolutil.HintAction(actionEpicGet, "read the epic the event changed")}
@@ -119,8 +119,8 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	toolutil.WriteHints(
 		&b,
-		"Use action 'epic_note_get' with note_id to read a specific note",
-		"Use action 'epic_note_create' to add a new note to this epic",
+		toolutil.HintAction("group.epic_note_get", "read a specific note, given its note_id"),
+		toolutil.HintAction("group.epic_note_create", "add a new note to this epic"),
 	)
 	return b.String()
 }

@@ -23,12 +23,12 @@ import (
 // repeated in every expectation.
 const (
 	publishHints = "\n---\n💡 **Next steps:**\n" +
-		"- Use action 'publish_and_link' to also create a release asset link in one step\n" +
-		"- Use action 'publish_directory' to batch-upload all files from a directory\n" +
-		"- Use action 'list' to see all packages in this project\n"
+		"- Use action 'package.publish_and_link' to also create a release asset link in one step\n" +
+		"- Use action 'package.publish_directory' to batch-upload all files from a directory\n" +
+		"- Use action 'package.list' to see all packages in this project\n"
 	downloadHints = "\n---\n💡 **Next steps:**\n" +
-		"- Use action 'file_list' to see all files in this package\n" +
-		"- Use action 'list' to browse other packages in the project\n"
+		"- Use action 'package.file_list' to see all files in this package\n" +
+		"- Use action 'package.list' to browse other packages in the project\n"
 	publishAndLinkHints = "\n---\n💡 **Next steps:**\n" +
 		"- Use action 'package.publish_directory' to batch-upload a directory instead of repeating this for each file\n" +
 		"- Use action 'release.get' to verify the release links\n"
@@ -38,18 +38,19 @@ const (
 		"- Use action 'package.list' to verify the uploaded packages\n"
 	listHints = "\n---\n💡 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
-		"- Use action 'file_list' with a package_id to see individual files\n" +
-		"- Use action 'delete' to remove a package\n" +
-		"- Use action 'publish' or 'publish_directory' to upload new packages\n"
+		"- Use action 'package.file_list' to see the individual files of a package_id\n" +
+		"- Use action 'package.delete' to remove a package\n" +
+		"- Use action 'package.publish' to upload a new package file\n" +
+		"- Use action 'package.publish_directory' to upload every file of a directory\n"
 	// The group table's last column is the owning project's path, not a link,
 	// so its guidance carries no instruction to preserve links.
 	groupListHints = "\n---\n💡 **Next steps:**\n" +
-		"- Use action 'list' to scope packages to a single project\n" +
-		"- Use action 'file_list' with a package_id to see individual files\n" +
-		"- Use action 'delete' to remove a package\n"
+		"- Use action 'package.list' to scope packages to a single project\n" +
+		"- Use action 'package.file_list' to see the individual files of a package_id\n" +
+		"- Use action 'package.delete' to remove a package\n"
 	fileListHints = "\n---\n💡 **Next steps:**\n" +
-		"- Use action 'download' to retrieve a specific file\n" +
-		"- Use action 'file_delete' to remove a single file\n"
+		"- Use action 'package.download' to retrieve a specific file\n" +
+		"- Use action 'package.file_delete' to remove a single file\n"
 	packageTableHeader = "| ID | Name | Version | Type | Status | Creator | Pipeline |\n" +
 		"| --- | --- | --- | --- | --- | --- | --- |\n"
 	groupTableHeader = "| ID | Name | Version | Type | Status | Creator | Project |\n" +

@@ -365,7 +365,14 @@ func TestRepair_Success(t *testing.T) {
 }
 
 // TestRepair_NullResponse verifies that Repair handles GitLab returning HTTP
-// 200 with a null body, which can happen after accepting the repair request.
+// 200 with a null body, which can happen after accepting the repair request,
+// and that the card a caller reads says so.
+//
+// The notice used to travel as a next step on the output, where
+// FinishToolResult replaced it with the hints the card wrote, so a caller was
+// shown an empty site card and never told why it was empty. The card is what
+// reaches every surface, so the notice is written there, as the server's own
+// prose, and the one step it leaves is reading the site.
 func TestRepair_NullResponse(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/geo_sites/1/repair" {
@@ -382,8 +389,36 @@ func TestRepair_NullResponse(t *testing.T) {
 	if out.ID != 1 {
 		t.Errorf("expected ID 1, got %d", out.ID)
 	}
-	if len(out.NextSteps) == 0 {
-		t.Fatal("expected next steps for null repair response")
+	md := FormatOutputMarkdown(out)
+	for _, want := range []string{
+		"GitLab accepted the repair and answered with an empty body",
+		toolutil.HintAction(actionGet, "read the repaired site"),
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatOutputMarkdown() =\n%s\nwant it to contain %q", md, want)
+			}
+		})
+	}
+	if strings.Contains(md, toolutil.HintAction(actionEdit, "change this site's capacities or selective sync")) {
+		t.Errorf("FormatOutputMarkdown() =\n%s\nwant no hint built on fields the empty answer did not carry", md)
+	}
+}
+
+// TestRepair_SiteAnswered_CardCarriesNoEmptyNotice verifies that a repair
+// GitLab answered with the site is rendered as the site's card, with no
+// notice of an empty answer.
+func TestRepair_SiteAnswered_CardCarriesNoEmptyNotice(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, geoSiteJSON)
+	}))
+
+	out, err := Repair(context.Background(), client, IDInput{ID: 1})
+	if err != nil {
+		t.Fatalf("Repair() error: %v", err)
+	}
+	if md := FormatOutputMarkdown(out); strings.Contains(md, "empty body") {
+		t.Errorf("FormatOutputMarkdown() =\n%s\nwant no empty-answer notice", md)
 	}
 }
 

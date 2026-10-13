@@ -338,11 +338,11 @@ func TestFormatMarkdown_ProjectLabel_CarriesTheProjectCopy(t *testing.T) {
 	if !strings.HasPrefix(got, "## Label: bug\n") {
 		t.Errorf("FormatMarkdown(project label) heading = %q, want it to open \"## Label: bug\"", firstLine(got))
 	}
-	if !strings.Contains(got, "'label_delete'") {
+	if !strings.Contains(got, "'project.label_delete'") {
 		t.Errorf("FormatMarkdown(project label) = %q, want the project label actions in its hints", got)
 	}
-	if strings.Contains(got, "group-label") {
-		t.Errorf("FormatMarkdown(project label) = %q, want no group-label action named", got)
+	if strings.Contains(got, "group.group_label") {
+		t.Errorf("FormatMarkdown(project label) = %q, want no group label action named", got)
 	}
 }
 
@@ -351,19 +351,20 @@ func TestFormatMarkdown_ProjectLabel_CarriesTheProjectCopy(t *testing.T) {
 //
 // This is the half that decides whether the shared formatter was worth having:
 // a project's label list carries the group labels the project inherits, so a
-// card that titled one of those "Label" and pointed at `label_delete` would
-// name an action that cannot touch it, and that is exactly what this package
-// serves whenever the group package's init happens to lose the registry race.
+// card that titled one of those "Label" and pointed at project.label_delete
+// would name an action that cannot touch it, and that is exactly what this
+// package serves whenever the group package's init happens to lose the
+// registry race.
 func TestFormatMarkdown_GroupLabel_CarriesTheGroupCopy(t *testing.T) {
 	got := FormatMarkdown(Output{ID: 3, Name: "bug", Color: "#d9534f"})
 
 	if !strings.HasPrefix(got, "## Group Label: bug\n") {
 		t.Errorf("FormatMarkdown(group label) heading = %q, want it to open \"## Group Label: bug\"", firstLine(got))
 	}
-	if !strings.Contains(got, "group-label delete") {
-		t.Errorf("FormatMarkdown(group label) = %q, want the group-label actions in its hints", got)
+	if !strings.Contains(got, "'group.group_label_delete'") {
+		t.Errorf("FormatMarkdown(group label) = %q, want the group label actions in its hints", got)
 	}
-	if strings.Contains(got, "'label_delete'") {
+	if strings.Contains(got, "'project.label_") {
 		t.Errorf("FormatMarkdown(group label) = %q, want no project label action named", got)
 	}
 }

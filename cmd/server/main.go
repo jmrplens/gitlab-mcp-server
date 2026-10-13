@@ -2597,7 +2597,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 			}
 		}
 		gitlabtools.RegisterMetaCatalog(server, filteredCatalog)
-		gitlabtools.RegisterMetaStandaloneTools(server, client)
+		gitlabtools.RegisterMetaStandaloneToolsFor(server, client, gitlabtools.MetaActionCalls(filteredCatalog))
 		return serverSurfaceRegistration{
 			metaSchemaRoutes: filteredCatalog.ActionMaps(),
 			surfaceCatalog:   filteredCatalog,
@@ -2641,7 +2641,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 			// changing any surviving tool's schema.
 			SchemaCacheKey: gitlabtools.IndividualSchemaCacheKey(cfg.Tier),
 		})
-		gitlabtools.RegisterMetaStandaloneTools(server, client)
+		gitlabtools.RegisterMetaStandaloneToolsFor(server, client, gitlabtools.IndividualActionCalls(individualCatalog))
 		return serverSurfaceRegistration{
 			surfaceCatalog:  individualCatalog,
 			excludedActions: individualExcluded,

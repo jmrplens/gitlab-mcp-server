@@ -134,7 +134,7 @@ func DefuseHintsHeading(s string) string {
 // WriteHints appends the server's guidance section to the Markdown builder: a
 // horizontal rule, the "💡 Next steps" heading, and one bullet per hint. Each
 // hint is a short string describing a related action the model can take
-// (e.g. "Use action 'delete' to remove this package"). If no hints are
+// (e.g. "Use action 'package.delete' to remove this package"). If no hints are
 // provided, no section is written.
 //
 // The section separates itself from whatever precedes it. The rule is written
@@ -291,4 +291,36 @@ func lastHintsBlock(md string) (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+// serverHintsBullets returns the bounds of the bullets of the guidance section
+// the server wrote into md, the one [ExtractHints] reads, and whether there is
+// one. An opening section's bullets end at the first line that is neither a
+// bullet nor blank, where the body begins; a closing section has to run to the
+// end of the response, so a line of any other kind after its bullets means it
+// is content and there is none.
+func serverHintsBullets(md string) (start, end int, ok bool) {
+	if start, ok = leadingHintsBlock(md); ok {
+		length, _ := hintsBulletsLength(md[start:])
+		return start, start + length, true
+	}
+	if start, ok = lastHintsBlock(md); !ok {
+		return 0, 0, false
+	}
+	if _, closes := hintsBulletsLength(md[start:]); !closes {
+		return 0, 0, false
+	}
+	return start, len(md), true
+}
+
+// hintsBulletsLength returns how many bytes of section are its bullet list,
+// blank lines included, and whether that list runs to the end of section.
+func hintsBulletsLength(section string) (length int, closes bool) {
+	for line := range strings.SplitSeq(section, "\n") {
+		if line != "" && !strings.HasPrefix(line, "- ") {
+			return length, false
+		}
+		length += len(line) + 1
+	}
+	return len(section), true
 }

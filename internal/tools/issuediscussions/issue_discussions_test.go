@@ -561,7 +561,7 @@ func TestFormatListMarkdownString_Populated(t *testing.T) {
 // hint is a string literal no gate reads: the two could trade places, or one
 // could be the thread card's, and every mutant would still die.
 const discussionListHints = "\n\n---\n\U0001F4A1 **Next steps:**\n" +
-	"- Use action 'issue.discussion_get' to see a full discussion\n" +
+	"- Use action 'issue.discussion_get' to see a full discussion, given its discussion_id\n" +
 	"- Use action 'issue.discussion_add_note' to reply to a discussion\n"
 
 // discussionCardHints is the same for the single-thread card, whose two hints
@@ -569,7 +569,7 @@ const discussionListHints = "\n\n---\n\U0001F4A1 **Next steps:**\n" +
 // reply to it and how to edit a note in it, not how to fetch it again.
 const discussionCardHints = "\n\n---\n\U0001F4A1 **Next steps:**\n" +
 	"- Use action 'issue.discussion_add_note' to reply to this discussion\n" +
-	"- Use action 'issue.discussion_update_note' to edit one of its notes\n"
+	"- Use action 'issue.discussion_update_note' to edit a note, given its note_id\n"
 
 // TestFormatMarkdownString_Populated renders one thread and asserts its
 // heading, both authors, both bodies and both timestamps reach the card, and
@@ -638,8 +638,8 @@ func TestFormatNoteMarkdownString_Populated(t *testing.T) {
 // discussionNoteCardHints is the guidance section every issue discussion
 // note card ends with.
 const discussionNoteCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
-	"- Use action 'issue.discussion_update_note' to edit this note\n" +
-	"- Use action 'issue.discussion_delete_note' to remove this note\n"
+	"- Use action 'issue.discussion_update_note' to edit this note, given its note_id\n" +
+	"- Use action 'issue.discussion_delete_note' to remove this note, given its note_id\n"
 
 // TestFormatNoteMarkdownString_Empty verifies that a zero note renders the
 // heading and the hints alone: no author, time or body row is written for a

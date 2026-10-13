@@ -181,13 +181,13 @@ var (
 		ListTitle:     "Labels",
 		EmptyListText: toolutil.EmptyMessage("labels"),
 		DetailHints: []string{
-			"Use action 'label_update' to change label name, color, or description",
-			"Use action 'label_delete' to remove this label",
+			toolutil.HintAction("project.label_update", "change the label's name, color, or description"),
+			toolutil.HintAction("project.label_delete", "remove this label"),
 		},
 		ListHints: []string{
 			toolutil.HintPreserveLinks,
-			"Use action 'label_get' with a label_id to see label details",
-			"Use action 'label_create' to create a new label",
+			toolutil.HintAction("project.label_get", "see a label's details, given its label_id"),
+			toolutil.HintAction("project.label_create", "create a new label"),
 		},
 	}
 
@@ -197,15 +197,16 @@ var (
 		ListTitle:     "Group Labels",
 		EmptyListText: toolutil.EmptyMessage("group labels"),
 		DetailHints: []string{
-			"If the workflow asks to fetch/get before update or delete, use the selected tool surface's group-label get action with the same group_id and this label_id next",
-			"Use the selected tool surface's group-label update action with the same group_id and this label_id to modify this label",
-			"Use the selected tool surface's group-label delete action with the same group_id, this label_id, and explicit confirm=true to remove this label",
-			"Use the selected tool surface's group-label subscribe or unsubscribe actions with the same group_id and this label_id to follow or unfollow",
+			toolutil.HintAction("group.group_label_get", "read this label again with the same group_id and this label_id, when a workflow asks to fetch it before an update or a delete"),
+			toolutil.HintAction("group.group_label_update", "modify this label, with the same group_id and this label_id"),
+			toolutil.HintAction("group.group_label_delete", "remove this label, with the same group_id, this label_id, and explicit confirm=true"),
+			toolutil.HintAction("group.group_label_subscribe", "follow this label, with the same group_id and this label_id"),
+			toolutil.HintAction("group.group_label_unsubscribe", "stop following it"),
 		},
 		ListHints: []string{
 			toolutil.HintPreserveLinks,
-			"Use the selected tool surface's group-label get action with the same group_id and label_id for full details before update/delete workflows",
-			"Use the selected tool surface's group-label create action with group_id to add a new group label",
+			toolutil.HintAction("group.group_label_get", "see a label's full details before an update or a delete, with the same group_id and its label_id"),
+			toolutil.HintAction("group.group_label_create", "add a new group label to group_id"),
 		},
 	}
 )

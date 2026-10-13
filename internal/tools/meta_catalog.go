@@ -24,15 +24,35 @@ func RegisterMetaCatalog(server *mcp.Server, catalog *actioncatalog.Catalog) {
 	// combinations, so the day one of those refusals goes away it fails there
 	// rather than passing here. Its sibling in RegisterIndividualCatalogTools
 	// keeps its guard, since mcp.AddTool dereferences the server it is given.
+	calls := MetaActionCalls(catalog)
 	for _, group := range catalog.Groups() {
 		formatResult := group.FormatResult
 		if formatResult == nil {
 			formatResult = markdownForResult
 		}
+		formatResult = toolutil.WithResolvedNextSteps(formatResult, calls)
 		if group.ReadOnly {
 			toolutil.AddReadOnlyMetaTool(server, group.ToolName, group.Description, group.ActionMap(), group.Icons, formatResult)
 			continue
 		}
 		toolutil.AddMetaTool(server, group.ToolName, group.Description, group.ActionMap(), group.Icons, formatResult)
+	}
+}
+
+// MetaActionCalls answers how the meta surface calls each action of catalog:
+// the meta tool of the action's group with the action's name within it,
+// "gitlab_issue with action 'update'" for issue.update (issue 1325). The meta
+// tool's action argument refuses a canonical ID, so a next step written as one
+// was a call the model could not make as written. An action catalog does not
+// hold, which the surface therefore does not serve, is not answered, and the
+// step that names it is left as it was written.
+func MetaActionCalls(catalog *actioncatalog.Catalog) toolutil.ActionCallResolver {
+	calls := make(map[string]string)
+	for _, action := range catalog.Actions() {
+		calls[string(action.ID)] = action.ToolName + " with action '" + action.Name + "'"
+	}
+	return func(actionID string) (string, bool) {
+		call, ok := calls[actionID]
+		return call, ok
 	}
 }

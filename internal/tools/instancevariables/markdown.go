@@ -17,15 +17,18 @@ import (
 // project and group cards have always shown it. The list table leaves it out,
 // where a column repeating the same scope on every row says nothing.
 func FormatOutputMarkdown(v Output) string {
-	return toolutil.FormatCICDVariableDetailMarkdown(toMarkdownVariable(v), "Instance Variable", true)
+	return toolutil.FormatCICDVariableDetailMarkdown(toMarkdownVariable(v), "Instance Variable", true,
+		toolutil.HintAction("ci_variable.instance_update", "change this variable"),
+		toolutil.HintAction("ci_variable.instance_delete", "remove this variable"),
+	)
 }
 
 // FormatListMarkdown renders a paginated list of instance CI/CD variables as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
 	return toolutil.FormatCICDVariableCollectionMarkdown(
 		out.Variables, out.Pagination, toMarkdownVariable, "Instance CI/CD Variables", "No instance CI/CD variables found.\n", false,
-		"Use action 'get' with key for full details",
-		"Use action 'create' to add a new instance variable",
+		toolutil.HintAction("ci_variable.instance_get", "see a variable's full details, given its key"),
+		toolutil.HintAction("ci_variable.instance_create", "add a new instance variable"),
 	)
 }
 

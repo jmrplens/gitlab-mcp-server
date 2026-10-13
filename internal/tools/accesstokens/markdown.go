@@ -88,8 +88,8 @@ func FormatListMarkdown(out ListOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		"Use action 'get' with token_id for full details",
-		"Use action 'create' to generate a new access token",
+		"Use `access.token_project_get`, `access.token_group_get` or `access.token_personal_get`, matching the token's scope, to read one in full given its token_id",
+		"Use `access.token_project_create` or `access.token_group_create` to generate a new project or group access token",
 	)
 	return b.String()
 }

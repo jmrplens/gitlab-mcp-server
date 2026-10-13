@@ -23,6 +23,17 @@ const packageTypeGeneric = "generic"
 // file list and in the package section of the publish-and-link card.
 const labelFileName = "File Name"
 
+// Canonical action IDs the hints name that the action specs do not already
+// declare, the one form every surface resolves: the dynamic surface executes
+// them, and the meta and individual surfaces resolve them to their own tool
+// names.
+const (
+	actionPackageDownload    = "package.download"
+	actionPackageFileDelete  = "package.file_delete"
+	actionPackagePublishDir  = "package.publish_directory"
+	actionPackagePublishLink = "package.publish_and_link"
+)
+
 // packageNotFoundOutput is the answer to a package GitLab answered 404 for,
 // naming the package and its project as the caller gave them.
 type packageNotFoundOutput struct {
@@ -73,7 +84,7 @@ func FormatGetMarkdown(out GetOutput) string {
 	writeVersionsTable(c, p.Versions)
 	hints := []string{toolutil.HintAction(actionPackageFileList, "list the files inside this package")}
 	if p.PackageType == packageTypeGeneric {
-		hints = append(hints, toolutil.HintAction("package.download", "download one of its files"))
+		hints = append(hints, toolutil.HintAction(actionPackageDownload, "download one of its files"))
 	}
 	hints = append(hints, toolutil.HintAction(actionPackageDelete, "delete this version of the package"))
 	c.End(hints...)
@@ -127,9 +138,9 @@ func FormatPublishMarkdown(out PublishOutput) string {
 	c.Code("SHA256", out.SHA256)
 	c.URL(out.URL)
 	c.End(
-		"Use action 'publish_and_link' to also create a release asset link in one step",
-		"Use action 'publish_directory' to batch-upload all files from a directory",
-		"Use action 'list' to see all packages in this project",
+		toolutil.HintAction(actionPackagePublishLink, "also create a release asset link in one step"),
+		toolutil.HintAction(actionPackagePublishDir, "batch-upload all files from a directory"),
+		toolutil.HintAction(actionPackageList, "see all packages in this project"),
 	)
 	return b.String()
 }
@@ -145,8 +156,8 @@ func FormatDownloadMarkdown(out DownloadOutput) string {
 	c.Field("Size", fmt.Sprintf("%d bytes", out.Size))
 	c.Code("SHA256", out.SHA256)
 	c.End(
-		"Use action 'file_list' to see all files in this package",
-		"Use action 'list' to browse other packages in the project",
+		toolutil.HintAction(actionPackageFileList, "see all files in this package"),
+		toolutil.HintAction(actionPackageList, "browse other packages in the project"),
 	)
 	return b.String()
 }
@@ -165,9 +176,10 @@ func FormatListMarkdown(out ListOutput) string {
 	// The pipeline column carries a link, so the footer keeps the instruction
 	// to preserve it.
 	toolutil.WriteListFooter(&b, out.Pagination, true,
-		"Use action 'file_list' with a package_id to see individual files",
-		"Use action 'delete' to remove a package",
-		"Use action 'publish' or 'publish_directory' to upload new packages",
+		toolutil.HintAction(actionPackageFileList, "see the individual files of a package_id"),
+		toolutil.HintAction(actionPackageDelete, "remove a package"),
+		toolutil.HintAction(actionPackagePublish, "upload a new package file"),
+		toolutil.HintAction(actionPackagePublishDir, "upload every file of a directory"),
 	)
 	return b.String()
 }
@@ -231,9 +243,9 @@ func FormatGroupListMarkdown(out GroupListOutput) string {
 	// path rather than a pipeline link, so no column here carries one and the
 	// footer drops the instruction to preserve them.
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		"Use action 'list' to scope packages to a single project",
-		"Use action 'file_list' with a package_id to see individual files",
-		"Use action 'delete' to remove a package",
+		toolutil.HintAction(actionPackageList, "scope packages to a single project"),
+		toolutil.HintAction(actionPackageFileList, "see the individual files of a package_id"),
+		toolutil.HintAction(actionPackageDelete, "remove a package"),
 	)
 	return b.String()
 }
@@ -276,8 +288,8 @@ func FormatFileListMarkdown(out FileListOutput) string {
 	// The instruction to keep the table's links is written only when a
 	// pipeline cell carries one, which is the one column that can.
 	toolutil.WriteListFooter(&b, out.Pagination, linked,
-		"Use action 'download' to retrieve a specific file",
-		"Use action 'file_delete' to remove a single file",
+		toolutil.HintAction(actionPackageDownload, "retrieve a specific file"),
+		toolutil.HintAction(actionPackageFileDelete, "remove a single file"),
 	)
 	return b.String()
 }
@@ -307,7 +319,7 @@ func FormatPublishAndLinkMarkdown(out PublishAndLinkOutput) string {
 	link.Field("Name", out.ReleaseLink.Name)
 	link.URL(out.ReleaseLink.URL)
 	c.End(
-		toolutil.HintAction("package.publish_directory", "batch-upload a directory instead of repeating this for each file"),
+		toolutil.HintAction(actionPackagePublishDir, "batch-upload a directory instead of repeating this for each file"),
 		toolutil.HintAction("release.get", "verify the release links"),
 	)
 	return b.String()
@@ -346,9 +358,9 @@ func FormatPublishDirMarkdown(out PublishDirOutput) string {
 		}
 	}
 	c.End(
-		toolutil.HintAction("package.publish_and_link", "also create a release asset link for each file"),
+		toolutil.HintAction(actionPackagePublishLink, "also create a release asset link for each file"),
 		toolutil.HintAction("release.link_create_batch", "link these packages to a release"),
-		toolutil.HintAction("package.list", "verify the uploaded packages"),
+		toolutil.HintAction(actionPackageList, "verify the uploaded packages"),
 	)
 	return b.String()
 }

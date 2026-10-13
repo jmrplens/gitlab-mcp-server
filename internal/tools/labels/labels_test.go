@@ -1398,8 +1398,8 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 		"- **Issues**: 5 open, 2 closed\n" +
 		"- **Open MRs**: 1\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'label_update' to change label name, color, or description\n" +
-		"- Use action 'label_delete' to remove this label\n"
+		"- Use action 'project.label_update' to change the label's name, color, or description\n" +
+		"- Use action 'project.label_delete' to remove this label\n"
 	if md != want {
 		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
 	}
@@ -1416,8 +1416,8 @@ func TestFormatMarkdown_Minimal(t *testing.T) {
 		"- **Project label**: " + toolutil.EmojiSuccess + "\n" +
 		"- **Subscribed**: " + toolutil.EmojiCross + "\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'label_update' to change label name, color, or description\n" +
-		"- Use action 'label_delete' to remove this label\n"
+		"- Use action 'project.label_update' to change the label's name, color, or description\n" +
+		"- Use action 'project.label_delete' to remove this label\n"
 	if md != want {
 		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
 	}
@@ -1437,10 +1437,11 @@ func TestFormatMarkdown_InheritedGroupLabelKeepsItsScope(t *testing.T) {
 		"- **Project label**: " + toolutil.EmojiCross + "\n" +
 		"- **Subscribed**: " + toolutil.EmojiCross + "\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- If the workflow asks to fetch/get before update or delete, use the selected tool surface's group-label get action with the same group_id and this label_id next\n" +
-		"- Use the selected tool surface's group-label update action with the same group_id and this label_id to modify this label\n" +
-		"- Use the selected tool surface's group-label delete action with the same group_id, this label_id, and explicit confirm=true to remove this label\n" +
-		"- Use the selected tool surface's group-label subscribe or unsubscribe actions with the same group_id and this label_id to follow or unfollow\n"
+		"- Use action 'group.group_label_get' to read this label again with the same group_id and this label_id, when a workflow asks to fetch it before an update or a delete\n" +
+		"- Use action 'group.group_label_update' to modify this label, with the same group_id and this label_id\n" +
+		"- Use action 'group.group_label_delete' to remove this label, with the same group_id, this label_id, and explicit confirm=true\n" +
+		"- Use action 'group.group_label_subscribe' to follow this label, with the same group_id and this label_id\n" +
+		"- Use action 'group.group_label_unsubscribe' to stop following it\n"
 	if md != want {
 		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
 	}
@@ -1476,8 +1477,8 @@ func TestFormatListMarkdownString_WithLabels(t *testing.T) {
 		"| " + toolutil.EmojiArchived + " stale | #cccccc | group | 0 | 0 | 0 |\n" +
 		"\n2 items total\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'label_get' with a label_id to see label details\n" +
-		"- Use action 'label_create' to create a new label\n"
+		"- Use action 'project.label_get' to see a label's details, given its label_id\n" +
+		"- Use action 'project.label_create' to create a new label\n"
 	if md != want {
 		t.Errorf("FormatListMarkdownString()\n got %q\nwant %q", md, want)
 	}
