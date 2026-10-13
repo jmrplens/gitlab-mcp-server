@@ -64,10 +64,11 @@ func requestIDFromBody(r *http.Request) json.RawMessage {
 	if err := decoder.Decode(&rest); !errors.Is(err, io.EOF) {
 		return nil
 	}
-	// The same rule the stdio filter applies in [refuseUnreadable]: an object
-	// that does not announce itself as JSON-RPC 2.0 is not a message, so there
-	// is no request to correlate a refusal with. Stopping here rather than also
-	// requiring "method" is deliberate. A body carrying jsonrpc and an id but
+	// An object that does not announce itself as JSON-RPC 2.0 is not a
+	// message, so there is no request to correlate a refusal with. The stdio
+	// filter answers by a rule of its own ([refusalID]), since its refusal is a
+	// line on the stream both sides write to rather than the answer to one
+	// POST. Stopping here rather than also requiring "method" is deliberate. A body carrying jsonrpc and an id but
 	// no method is a malformed request, and the specification's own exception
 	// covers exactly that case; refusing to echo would be defensible too, but
 	// it would refuse an id the sender can still match.

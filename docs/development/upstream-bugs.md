@@ -6714,15 +6714,32 @@ The test hung instead of failing, which is how the header-flush half surfaced.
 - **Merged**: no.
 - **Blocking**: it was, on stdio. One client lost its session and its
   accumulated context to a single unparseable line; there was no cross-tenant
-  effect, since stdio is one process per client.
+  effect, since stdio is one process per client. Over HTTP the frames the
+  decoder refuses end nothing, since every POST is decoded on its own, but the
+  answer is not JSON-RPC: measured on 2026-10-13 against this server's binary,
+  stateless on 2025-11-25 and 2026-07-28 and stateful on 2025-11-25, the SDK
+  answers each of them with HTTP 400 and a plain-text body
+  (`malformed payload: ...`), which
+  `TestRobust_FramesTheSDKDecoderRefuses_AreAnsweredInPlainText` in
+  `test/e2e/http` holds. Nothing here works around that half.
 - **Workaround**: yes. `resilientStdio` in `cmd/server/stdio.go` filters stdin
   ahead of the SDK, answering a line the read loop would choke on and dropping
   it. This entry first said no workaround was available, on the reasoning that
   the decision sits inside the SDK's read loop; that was wrong. The SDK exposes
   `mcp.IOTransport`, which takes any `Reader` and `Writer`, so the loop can be
-  fed a stream that never contains the input it cannot handle. Anything parsing
-  as a JSON object with `"jsonrpc":"2.0"` is passed through untouched, since
-  deciding what a valid message means is the SDK's job.
+  fed a stream that never contains the input it cannot handle. A line holding
+  one JSON value is put to the SDK's own decoder, `jsonrpc.DecodeMessage`, and
+  a frame it rejects is answered `-32600` and dropped, so the SDK still decides
+  what a valid message is. The answer carries the sender's `id` only when the
+  frame is a request and the SDK can hold that `id`: a frame with no `method`
+  is a response, whose `id` is one this server gave a request of its own. A
+  line the filter passes loses the whitespace after its message, since the
+  read loop ends the session on any byte after a value but a line break.
+  Until 2026-10-13 (issue 1358) every object carrying `"jsonrpc":"2.0"` was
+  passed through untouched, and five shapes of line ended the session: an `id`
+  that is a boolean, an object or an array, a `method` that is not a string, an
+  object carrying only `"jsonrpc":"2.0"`, the version key spelled in another
+  case, and a valid message followed by spaces or tabs on its line.
 
 **What**: `internal/jsonrpc2/conn.go`'s `readIncoming` breaks its loop on *any*
 error from `reader.Read`, so a message that fails to parse is treated exactly

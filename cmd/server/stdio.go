@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -31,11 +32,15 @@ import (
 // resynchronizing costs nothing. This filter does that on the SDK's behalf: a
 // line it would choke on is answered and dropped, and the SDK never sees it.
 //
-// It deliberately does the least it can. Anything that parses as a JSON object
-// carrying "jsonrpc":"2.0" is passed through untouched, whatever else is wrong
-// with it, because deciding what a valid message means is the SDK's job and a
-// filter that second-guessed it would be a second, divergent implementation of
-// the protocol.
+// It deliberately does the least it can. A line holding one JSON value is put
+// to the SDK's own decoder, jsonrpc.DecodeMessage, which is the function the
+// read loop decodes a single message with: a frame it accepts is passed
+// through, whatever else is wrong with it, and a frame it rejects is answered
+// here, because that rejection is what would end the session. Deciding what a
+// valid message means stays the SDK's job, and a filter that wrote down its own
+// rules would be a second, divergent implementation of the protocol. The one
+// thing a passed line loses is the whitespace after its message, which the
+// read loop refuses too (see [frameFor]).
 func resilientStdio(in io.Reader, out io.Writer) (*sanitizedInput, io.WriteCloser) {
 	return resilientStdioWith(in, out, stdioLimitsFromEnv())
 }
@@ -181,12 +186,28 @@ func (s *sanitizedInput) Read(p []byte) (int, error) {
 func (s *sanitizedInput) accept(line string) {
 	refusal, refused := refuseUnreadable(line, s.limits.maxDepth)
 	if !refused {
-		s.pending = []byte(line)
+		s.pending = frameFor(line)
 		return
 	}
 	if refusal != nil {
 		_, _ = s.out.Write(refusal)
 	}
+}
+
+// frameFor returns a line the filter passes as the SDK is handed it: with the
+// whitespace after its message removed, and the newline that ended it kept.
+//
+// The SDK's read loop reads one JSON value and then the byte after it, and ends
+// the session unless that byte is a line break, so a message followed by a
+// space or a tab on its line ended the session though the line is valid JSON
+// carrying a valid message. Whitespace before the message is skipped by the
+// same read and stays.
+func frameFor(line string) []byte {
+	frame := []byte(strings.TrimRight(line, " \t\r\n"))
+	if strings.HasSuffix(line, "\n") {
+		frame = append(frame, '\n')
+	}
+	return frame
 }
 
 // maxLineBytes is the configured ceiling, or the default for a value built
@@ -251,16 +272,20 @@ func (s *sanitizedInput) Close() error { return nil }
 // not a message, and answering one would be noise on a stream that is otherwise
 // well behaved.
 //
-// # The pre-parse below is load-bearing, and not only as a filter
+// # The checks before the decoder are load-bearing
 //
-// It is the standard library's, whose nesting cap is 10000, and it is the only
-// thing that has ever bounded the SDK's decode on this transport: the SDK's
-// JSON package has no depth guard and is quadratic in nesting depth, so the
-// accidental effect of parsing here first was a ceiling of about two CPU
-// seconds per message. Do not remove it as redundant work. maxDepth makes that
-// bound deliberate and puts it where a legitimate message never reaches it,
-// and it is checked before the parse so the parse is not what pays for a
-// hostile line.
+// The depth check comes first so that nothing decodes a hostile line. go-sdk
+// caps its own decode at 1000 levels from v1.8.0 on; before that it had no cap
+// and decoded in time quadratic in the depth, and the standard library's parse
+// that stood here, with its cap of 10000, was the only bound on this
+// transport, about two CPU seconds a message. maxDepth makes the bound
+// deliberate and puts it where a legitimate message never reaches it.
+//
+// json.Valid then holds the line to being exactly one JSON value, which the
+// SDK's decoder does not: it reads the first value of what it is handed and
+// ignores the rest, while the read loop ends the session on anything after a
+// value but a line break. Without it a message followed by more text would
+// pass the decoder here and still end the session.
 func refuseUnreadable(line string, maxDepth int) (refusal []byte, refuse bool) {
 	trimmed := trimSpace(line)
 	if trimmed == "" {
@@ -276,38 +301,60 @@ func refuseUnreadable(line string, maxDepth int) (refusal []byte, refuse bool) {
 		)), true
 	}
 
-	var probe struct {
-		JSONRPC string          `json:"jsonrpc"`
-		ID      json.RawMessage `json:"id"`
-	}
-	if err := json.Unmarshal([]byte(trimmed), &probe); err != nil {
-		// Unmarshal into a struct also fails for well-formed JSON that is not
-		// an object — an array, a bare string, a number — and those are not
-		// parse errors. -32700 means the server could not parse JSON at all;
-		// telling a client that about valid JSON sends it looking for a
-		// syntax problem it does not have.
-		if json.Valid([]byte(trimmed)) {
-			return errorLine(nil, -32600, "Invalid Request"), true
-		}
-		// Genuinely not JSON. The id is unknowable, so it is null, which is
-		// what JSON-RPC 2.0 prescribes for a parse error.
+	frame := []byte(trimmed)
+	if !json.Valid(frame) {
+		// Not JSON, or more than one value. The id is unknowable, so it is
+		// null, which is what JSON-RPC 2.0 prescribes for a parse error.
 		return errorLine(nil, -32700, "Parse error"), true
 	}
-	if probe.JSONRPC != "2.0" {
-		// Structurally JSON and not a JSON-RPC message. The id, if it carried
-		// one, is worth echoing so the sender can match the refusal — but only
-		// a scalar one: JSON-RPC allows string, number or null there, and
-		// echoing an object or array id would make the refusal itself an
-		// invalid response.
-		return errorLine(scalarID(probe.ID), -32600, "Invalid Request"), true
+	if _, err := jsonrpc.DecodeMessage(frame); err != nil {
+		// A frame the SDK's own decoder rejects ends the session as surely
+		// as one that is not JSON, since the read loop breaks on any error
+		// from that decode: JSON that is not an object, an object without
+		// "jsonrpc":"2.0" (the SDK matches the key's case, so a key spelled
+		// in another case does not carry it), an id that is a boolean, an
+		// object or an array, a method that is not a string, an object
+		// carrying nothing but the version tag. Asking that function rather
+		// than repeating its rules keeps the SDK the one judge of what a
+		// valid message is, and covers what a later SDK rejects with no
+		// change here. It is valid JSON, so the answer is -32600 rather than
+		// -32700: telling a client it sent no JSON sends it looking for a
+		// syntax problem it does not have.
+		return errorLine(refusalID(frame), -32600, "Invalid Request"), true
 	}
 	return nil, false
 }
 
+// refusalID returns the id a refusal of frame carries: the sender's own when
+// frame is a request whose id the SDK can hold, and nothing otherwise.
+//
+// A frame with no method member is a response, and its id is one this server
+// chose for a request of its own, so answering with it would fail that request
+// with a refusal of something else. The members are read by their exact names,
+// as the SDK reads them.
+func refusalID(frame []byte) json.RawMessage {
+	var members map[string]json.RawMessage
+	if json.Unmarshal(frame, &members) != nil {
+		return nil
+	}
+	if _, isRequest := members["method"]; !isRequest {
+		return nil
+	}
+	return scalarID(members["id"])
+}
+
 // scalarID returns the id if JSON-RPC may echo it, or nothing.
+//
+// JSON-RPC allows a string, a number or null, and the SDK's own rule for what
+// an id can be (jsonrpc.MakeID over the value encoding/json decodes) decides
+// it: an object, an array or a boolean is dropped, and so is a number no
+// float64 holds, which the SDK cannot read back. The answer then carries null.
 func scalarID(id json.RawMessage) json.RawMessage {
-	trimmed := bytes.TrimSpace(id)
-	if len(trimmed) == 0 || trimmed[0] == '{' || trimmed[0] == '[' {
+	var value any
+	if json.Unmarshal(id, &value) != nil {
+		return nil
+	}
+	if _, err := jsonrpc.MakeID(value); err != nil {
 		return nil
 	}
 	return id

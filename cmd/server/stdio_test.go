@@ -9,6 +9,11 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestResilientStdio_PassesValidMessagesThroughUnchanged is the property that
@@ -25,7 +30,10 @@ func TestResilientStdio_PassesValidMessagesThroughUnchanged(t *testing.T) {
 		`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
 		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"x","arguments":{"content_base64":"` + big + `"}}}`,
 		`{"jsonrpc":"2.0","method":"notifications/initialized"}`,
-		// Padded and re-indented by a client that formats its output.
+		// Padded and re-indented by a client that formats its output. The
+		// whitespace after the message is not handed on, since the SDK's read
+		// loop ends the session on anything after a value but a line break;
+		// the message itself is.
 		`  {"jsonrpc":"2.0","id":3,"method":"ping"}  `,
 	}
 
@@ -37,7 +45,11 @@ func TestResilientStdio_PassesValidMessagesThroughUnchanged(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading the filtered stream: %v", err)
 	}
-	if want := strings.Join(messages, "\n") + "\n"; string(got) != want {
+	framed := make([]string, len(messages))
+	for i, message := range messages {
+		framed[i] = strings.TrimRight(message, " ")
+	}
+	if want := strings.Join(framed, "\n") + "\n"; string(got) != want {
 		if len(got) != len(want) {
 			t.Fatalf("the filtered stream is %d bytes, want %d: a valid message was altered or truncated", len(got), len(want))
 		}
@@ -105,6 +117,99 @@ func TestResilientStdio_AnswersUnreadableInput(t *testing.T) {
 			wantCode: -32600,
 			wantID:   "7",
 		},
+		{
+			// With no method it is no request, and its id may be one this
+			// server gave a request of its own.
+			name:     "JSON with the wrong version tag and no method answers null",
+			line:     `{"jsonrpc":"1.0","id":5}`,
+			wantCode: -32600,
+			wantID:   "null",
+		},
+		{
+			// A boolean is no id JSON-RPC allows, so it is not echoed: a
+			// refusal carrying it would itself be an invalid response.
+			name:     "JSON with the wrong version tag and a boolean id answers null",
+			line:     `{"jsonrpc":"1.0","id":true}`,
+			wantCode: -32600,
+			wantID:   "null",
+		},
+		// The frames below carry "jsonrpc":"2.0" and are still ones the SDK's
+		// decoder rejects, which ends a stdio session as surely as a line that
+		// is not JSON: its read loop breaks on any error from the decode.
+		{
+			name:     "a boolean id",
+			line:     `{"jsonrpc":"2.0","id":true,"method":"ping"}`,
+			wantCode: -32600,
+			wantID:   "null",
+		},
+		{
+			name:     "an object id",
+			line:     `{"jsonrpc":"2.0","id":{"a":1},"method":"ping"}`,
+			wantCode: -32600,
+			wantID:   "null",
+		},
+		{
+			name:     "an array id",
+			line:     `{"jsonrpc":"2.0","id":[1],"method":"ping"}`,
+			wantCode: -32600,
+			wantID:   "null",
+		},
+		{
+			name:     "a method that is not a string keeps its id",
+			line:     `{"jsonrpc":"2.0","id":1,"method":5}`,
+			wantCode: -32600,
+			wantID:   "1",
+		},
+		{
+			// Neither a request, having no method, nor a response, having no
+			// id to answer.
+			name:     "an object carrying only the version tag",
+			line:     `{"jsonrpc":"2.0"}`,
+			wantCode: -32600,
+			wantID:   "null",
+		},
+		{
+			// encoding/json matches keys without regard to case and the SDK's
+			// decoder does not, so this reads as version 2.0 to the probe and
+			// as no version at all to the SDK.
+			name:     "the version key spelled in another case keeps its id",
+			line:     `{"JSONRPC":"2.0","id":5,"method":"ping"}`,
+			wantCode: -32600,
+			wantID:   "5",
+		},
+		// A frame with no method is a response, and its id is one this
+		// server chose for a request of its own. Echoing it would answer
+		// that request with this refusal and fail a call that has nothing to
+		// do with the bad frame, so the refusal carries null.
+		{
+			name:     "a response whose error is not an object answers null",
+			line:     `{"jsonrpc":"2.0","id":3,"error":"oops"}`,
+			wantCode: -32600,
+			wantID:   "null",
+		},
+		{
+			name:     "a response whose error code is not a number answers null",
+			line:     `{"jsonrpc":"2.0","id":3,"result":{},"error":{"code":"x","message":"m"}}`,
+			wantCode: -32600,
+			wantID:   "null",
+		},
+		{
+			// The SDK's decoder refuses this frame for its id, a number no
+			// float64 holds, so that id is not one to answer with either.
+			name:     "an id no number can hold answers null",
+			line:     `{"jsonrpc":"2.0","id":1e400,"method":"ping"}`,
+			wantCode: -32600,
+			wantID:   "null",
+		},
+		{
+			// JSON on the line after the message is no message of its own:
+			// the SDK's read loop ends the session on whatever follows a
+			// value other than a line break.
+			name:     "a message followed by more text on its line",
+			line:     `{"jsonrpc":"2.0","id":4,"method":"ping"} trailing`,
+			wantCode: -32700,
+			wantID:   "null",
+		},
 	}
 
 	for _, tt := range tests {
@@ -142,6 +247,42 @@ func TestResilientStdio_AnswersUnreadableInput(t *testing.T) {
 			}
 			if !strings.HasSuffix(out.String(), "\n") {
 				t.Error("the refusal is not newline-terminated, so it runs into the next message")
+			}
+		})
+	}
+}
+
+// TestResilientStdio_PassesWhatTheSDKDecoderAccepts pins the other half of
+// asking the SDK's decoder: a frame it accepts is the SDK's to answer, however
+// odd, so the filter hands it over byte for byte and says nothing. Each of
+// these survives the SDK's read and is answered or ignored by the SDK itself:
+// params of the wrong type are answered -32602, a string id is answered, a
+// null id is a notification, and an id with no method is a response nobody is
+// waiting for. The last repeats the version key in another case, which
+// encoding/json reads as the later value and the SDK's decoder, matching case,
+// does not read at all: the filter's own reading of a frame is never what
+// decides whether it passes.
+func TestResilientStdio_PassesWhatTheSDKDecoderAccepts(t *testing.T) {
+	for _, line := range []string{
+		`{"jsonrpc":"2.0","id":1,"method":"ping","params":"x"}`,
+		`{"jsonrpc":"2.0","id":"abc","method":"ping"}`,
+		`{"jsonrpc":"2.0","id":null,"method":"ping"}`,
+		`{"jsonrpc":"2.0","id":1}`,
+		`{"jsonrpc":"2.0","JSONRPC":"1.0","id":1,"method":"ping"}`,
+	} {
+		t.Run(line, func(t *testing.T) {
+			var out bytes.Buffer
+			reader, _ := resilientStdio(strings.NewReader(line+"\n"), &out)
+
+			got, err := io.ReadAll(reader)
+			if err != nil {
+				t.Fatalf("reading: %v", err)
+			}
+			if string(got) != line+"\n" {
+				t.Errorf("forwarded %q, want the line unchanged", got)
+			}
+			if out.Len() != 0 {
+				t.Errorf("a frame the SDK decodes was answered by the filter: %q", out.String())
 			}
 		})
 	}
@@ -242,18 +383,26 @@ func TestLockedWriter_SerializesConcurrentWrites(t *testing.T) {
 }
 
 // TestScalarID_ObjectsAndArraysAreNotEchoed pins the response's own validity:
-// JSON-RPC allows a string, number or null id, so a refusal echoing an object
-// id would itself be an invalid response.
+// JSON-RPC allows a string, number or null id, so a refusal echoing an object,
+// array or boolean id would itself be an invalid response. A number no float64
+// holds is no id the SDK can read back either, and an absent id is nothing to
+// echo.
 func TestScalarID_ObjectsAndArraysAreNotEchoed(t *testing.T) {
 	t.Parallel()
 
 	for raw, want := range map[string]string{
 		`7`:        `7`,
+		`1.5`:      `1.5`,
 		`"seven"`:  `"seven"`,
 		`null`:     `null`,
 		`{"a":1}`:  ``,
 		`[1,2]`:    ``,
 		` {"a":1}`: ``,
+		`true`:     ``,
+		`false`:    ``,
+		` true`:    ``,
+		`1e400`:    ``,
+		``:         ``,
 	} {
 		t.Run(raw, func(t *testing.T) {
 			t.Parallel()
@@ -450,12 +599,13 @@ func TestSanitizedInput_UnterminatedLineIsBounded(t *testing.T) {
 // TestRefuseUnreadable_RefusesOverNestedLines verifies that a line whose JSON
 // nests past the ceiling is refused before it is parsed.
 //
-// stdio's accidental protection is the standard library's nesting cap of
-// 10000, reached only by the pre-parse this function performs: below it, a
-// tools/call nested 9000 deep still cost 1.57 seconds of CPU in the SDK's
-// decode. The explicit ceiling is what makes the bound deliberate, and it also
-// covers params._meta, which the SDK decodes into a map for every method
-// before any middleware could refuse it.
+// Until go-sdk v1.8.0 capped its own decode at 1000 levels, stdio's only
+// protection was the standard library's nesting cap of 10000, reached only by
+// the parse this function performs first: below it, a tools/call nested 9000
+// deep cost 1.57 seconds of CPU in the SDK's decode. The explicit ceiling is
+// what makes the bound deliberate, and it also covers params._meta, which the
+// SDK decodes into a map for every method before any middleware could refuse
+// it.
 func TestRefuseUnreadable_RefusesOverNestedLines(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
@@ -585,5 +735,198 @@ func TestErrorLine_AnIDThatIsNotJSON_WritesNothing(t *testing.T) {
 	}
 	if got := errorLine(json.RawMessage(`7`), -32600, "refused"); !strings.HasSuffix(string(got), "\n") || !strings.Contains(string(got), `"id":7`) {
 		t.Errorf("errorLine with a valid id wrote %q, want a newline-terminated answer carrying the id", got)
+	}
+}
+
+// TestResilientStdio_WhatItPassesTheSDKReads hands the filtered stream to the
+// SDK's own stdio connection, which is the judge that matters: an error from
+// its read ends the session, whatever the filter made of the line.
+//
+// A message with whitespace after it on its line is valid JSON and a valid
+// message, and it still ended the session, because the read loop takes the
+// byte after the value and accepts nothing there but a line break. The filter
+// hands such a line on without that whitespace.
+func TestResilientStdio_WhatItPassesTheSDKReads(t *testing.T) {
+	for _, line := range []string{
+		`{"jsonrpc":"2.0","id":1,"method":"ping"}`,
+		`  {"jsonrpc":"2.0","id":1,"method":"ping"}`,
+		`{"jsonrpc":"2.0","id":1,"method":"ping"}  `,
+		"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\t\r",
+		`{"jsonrpc":"2.0","JSONRPC":"1.0","id":1,"method":"ping"}`,
+	} {
+		t.Run(strconv.Quote(line), func(t *testing.T) {
+			var out bytes.Buffer
+			reader, _ := resilientStdio(strings.NewReader(line+"\n"), &out)
+
+			msgs, err := readThroughSDK(t, reader)
+			if err != nil {
+				t.Fatalf("the filter passed %q and the SDK's reader refused it, which ends a stdio session: %v", line, err)
+			}
+			if len(msgs) != 1 {
+				t.Fatalf("the SDK read %d messages from %q, want the one ping", len(msgs), line)
+			}
+			if req, ok := msgs[0].(*jsonrpc.Request); !ok || req.Method != "ping" {
+				t.Errorf("the SDK read %#v, want the ping", msgs[0])
+			}
+			if out.Len() != 0 {
+				t.Errorf("a message the SDK reads was answered by the filter: %q", out.String())
+			}
+		})
+	}
+}
+
+// FuzzRefuseUnreadable holds the stdio filter to the reader behind it, for any
+// one line, in both directions.
+//
+// What the filter passes, the SDK's stdio connection reads as one message and
+// nothing else, since an error there ends the session. What it drops, it
+// answers with one JSON-RPC error whose id is null or the sender's own, and
+// never the id of a response, which is the id of a request this server sent.
+// And it drops no line that connection would have read as one message, with
+// two exceptions that are the filter's own: a line nested past its depth
+// ceiling, and a JSON-RPC batch, which it refuses whatever revision was
+// negotiated because it cannot see which one was, and the SDK ends the session
+// on a batch from 2025-06-18 on. A line holding several values is no frame of
+// this transport, and the SDK's own check for one is not dependable: it looks
+// at the byte after a value only when its decoder already holds it, so the
+// next value can be read as a message of its own or end the session one read
+// later.
+func FuzzRefuseUnreadable(f *testing.F) {
+	for _, seed := range []string{
+		``,
+		`   `,
+		`{not json`,
+		`{"jsonrpc":"2.0","id":1,"meth`,
+		`["jsonrpc","2.0"]`,
+		`"hello"`,
+		`42`,
+		`null`,
+		`{"hello":"world"}`,
+		`{"jsonrpc":"1.0","id":7,"method":"tools/list"}`,
+		`{"jsonrpc":"1.0","id":true}`,
+		`{"jsonrpc":"2.0","id":1,"method":"ping"}`,
+		`  {"jsonrpc":"2.0","id":1,"method":"ping"}  `,
+		"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\t\r",
+		`{"jsonrpc":"2.0","id":1,"method":"ping"} trailing`,
+		`{"jsonrpc":"2.0","id":1,"method":"ping"}{"jsonrpc":"2.0","id":2,"method":"ping"}`,
+		// Found by this fuzzer: the SDK reads the object as a message and
+		// ends the session on the 0 at its next read.
+		`{"jsonrpc":"2.0","id":0,"":{},"00000000000":"","00000000000":""}0`,
+		`{"jsonrpc":"2.0","id":true,"method":"ping"}`,
+		`{"jsonrpc":"2.0","id":{"a":1},"method":"ping"}`,
+		`{"jsonrpc":"2.0","id":[1],"method":"ping"}`,
+		`{"jsonrpc":"2.0","id":1e400,"method":"ping"}`,
+		`{"jsonrpc":"2.0","id":1,"method":5}`,
+		`{"jsonrpc":"2.0"}`,
+		`{"JSONRPC":"2.0","id":5,"method":"ping"}`,
+		`{"jsonrpc":"2.0","JSONRPC":"1.0","id":1,"method":"ping"}`,
+		`{"jsonrpc":"2.0","id":1,"method":"ping","params":"x"}`,
+		`{"jsonrpc":"2.0","id":null,"method":"ping"}`,
+		`{"jsonrpc":"2.0","id":1}`,
+		`{"jsonrpc":"2.0","id":3,"error":"oops"}`,
+		`{"jsonrpc":"2.0","id":3,"result":{},"error":{"code":"x","message":"m"}}`,
+		`[{"jsonrpc":"2.0","id":1,"method":"ping"}]`,
+		`{"jsonrpc":"2.0","id":1,"method":"ping","params":{"_meta":` + strings.Repeat("[", 120) + strings.Repeat("]", 120) + `}}`,
+	} {
+		f.Add(seed)
+	}
+
+	f.Fuzz(func(t *testing.T, line string) {
+		if strings.ContainsRune(line, '\n') {
+			t.Skip("one line at a time: the newline is the framing")
+		}
+		var out bytes.Buffer
+		reader, _ := resilientStdioWith(strings.NewReader(line+"\n"), &out, stdioLimits{maxDepth: maxInboundJSONDepth})
+
+		msgs, err := readThroughSDK(t, reader)
+		if err != nil {
+			t.Fatalf("the filter passed %q and the SDK's reader refused it, which ends a stdio session: %v", line, err)
+		}
+		if len(msgs) > 1 {
+			t.Fatalf("the filter passed %q, which the SDK reads as %d messages", line, len(msgs))
+		}
+		if len(msgs) == 1 {
+			if out.Len() != 0 {
+				t.Errorf("the filter both passed %q and answered it: %q", line, out.String())
+			}
+			return
+		}
+
+		frame := []byte(trimSpace(line))
+		if len(frame) == 0 {
+			if out.Len() != 0 {
+				t.Errorf("a blank line was answered: %q", out.String())
+			}
+			return
+		}
+		assertAnswersWithoutTakingAResponseID(t, frame, out.Bytes())
+
+		if frame[0] == '[' || toolutil.ExceedsJSONDepth(frame, maxInboundJSONDepth) {
+			return
+		}
+		if raw, rawErr := readThroughSDK(t, io.NopCloser(strings.NewReader(line+"\n"))); rawErr == nil && len(raw) == 1 {
+			t.Errorf("the filter refused %q, which the SDK reads as the one message %#v", line, raw[0])
+		}
+	})
+}
+
+// readThroughSDK reads everything in holds through the SDK's own stdio
+// connection, the code a stdio session's read loop runs, and returns the
+// messages it read and the error it stopped on, nil when it reached the end of
+// the input. Any other error is what ends a session.
+func readThroughSDK(t *testing.T, in io.ReadCloser) ([]jsonrpc.Message, error) {
+	t.Helper()
+	conn, err := (&mcp.IOTransport{Reader: in, Writer: &lockedWriter{w: io.Discard}}).Connect(t.Context())
+	if err != nil {
+		t.Fatalf("connecting the SDK's stdio transport: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	var msgs []jsonrpc.Message
+	for {
+		msg, readErr := conn.Read(t.Context())
+		if errors.Is(readErr, io.EOF) {
+			return msgs, nil
+		}
+		if readErr != nil {
+			return msgs, readErr
+		}
+		msgs = append(msgs, msg)
+	}
+}
+
+// assertAnswersWithoutTakingAResponseID checks that refusal is one JSON-RPC
+// error answering frame: version 2.0, a parse or invalid request code, and an
+// id that is null unless frame is a request, in which case the SDK itself can
+// read the refusal back, which no id it cannot hold would let it do.
+func assertAnswersWithoutTakingAResponseID(t *testing.T, frame, refusal []byte) {
+	t.Helper()
+	if bytes.Count(refusal, []byte("\n")) != 1 || !bytes.HasSuffix(refusal, []byte("\n")) {
+		t.Fatalf("the refusal of %q is not one newline-terminated line: %q", frame, refusal)
+	}
+	var answer struct {
+		JSONRPC string          `json:"jsonrpc"`
+		ID      json.RawMessage `json:"id"`
+		Error   struct {
+			Code int `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(refusal, &answer); err != nil {
+		t.Fatalf("the refusal of %q is not JSON: %q (%v)", frame, refusal, err)
+	}
+	if answer.JSONRPC != "2.0" || (answer.Error.Code != -32700 && answer.Error.Code != -32600) {
+		t.Errorf("the refusal of %q is not a JSON-RPC parse or invalid request error: %q", frame, refusal)
+	}
+	if string(answer.ID) == "null" {
+		return
+	}
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(frame, &members); err != nil {
+		t.Fatalf("the refusal of %q, which is no JSON object, carries the id %s", frame, answer.ID)
+	}
+	if _, isRequest := members["method"]; !isRequest {
+		t.Errorf("the refusal of %q, which is no request, carries the id %s of a request of this server's", frame, answer.ID)
+	}
+	if _, err := jsonrpc.DecodeMessage(refusal); err != nil {
+		t.Errorf("the refusal of %q carries an id the SDK cannot read back: %q (%v)", frame, refusal, err)
 	}
 }

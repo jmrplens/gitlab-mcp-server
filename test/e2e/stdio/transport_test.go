@@ -298,16 +298,37 @@ func TestMalformedInput_IsAnsweredAndTheSessionSurvives(t *testing.T) {
 		// wantCode is the JSON-RPC error code the sender must receive, or 0
 		// when the input is dropped without an answer.
 		wantCode int
+		// wantID is the id the answer carries, as JSON. Only a string or a
+		// number may be echoed; anything else is answered null.
+		wantID string
 	}{
-		{name: "an unknown method", body: `{"jsonrpc":"2.0","id":1,"method":"no/such/method","params":{}}`, wantCode: -32601},
-		{name: "a tool that does not exist", body: `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"not_a_tool","arguments":{}}}`, wantCode: -32602},
-		{name: "not JSON at all", body: `{not json`, wantCode: -32700},
-		{name: "a truncated message", body: `{"jsonrpc":"2.0","id":1,"meth`, wantCode: -32700},
-		{name: "JSON carrying no jsonrpc version", body: `{"hello":"world"}`, wantCode: -32600},
+		{name: "an unknown method", body: `{"jsonrpc":"2.0","id":1,"method":"no/such/method","params":{}}`, wantCode: -32601, wantID: "1"},
+		{name: "a tool that does not exist", body: `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"not_a_tool","arguments":{}}}`, wantCode: -32602, wantID: "1"},
+		{name: "not JSON at all", body: `{not json`, wantCode: -32700, wantID: "null"},
+		{name: "a truncated message", body: `{"jsonrpc":"2.0","id":1,"meth`, wantCode: -32700, wantID: "null"},
+		{name: "JSON carrying no jsonrpc version", body: `{"hello":"world"}`, wantCode: -32600, wantID: "null"},
 		// Valid JSON of the wrong shape: the server parsed it, so -32700 would
 		// send the client looking for a syntax error it does not have.
-		{name: "a JSON array, which is not a message", body: `["jsonrpc","2.0"]`, wantCode: -32600},
+		{name: "a JSON array, which is not a message", body: `["jsonrpc","2.0"]`, wantCode: -32600, wantID: "null"},
 		{name: "a blank line is framing, not a message", body: ``, wantCode: 0},
+		// Frames carrying "jsonrpc":"2.0" that the SDK's decoder rejects. Each
+		// of them used to reach that decoder and end the session, so the
+		// survival half of the check is the one that failed.
+		{name: "a boolean id", body: `{"jsonrpc":"2.0","id":true,"method":"ping"}`, wantCode: -32600, wantID: "null"},
+		{name: "an object id", body: `{"jsonrpc":"2.0","id":{"a":1},"method":"ping"}`, wantCode: -32600, wantID: "null"},
+		{name: "an array id", body: `{"jsonrpc":"2.0","id":[1],"method":"ping"}`, wantCode: -32600, wantID: "null"},
+		{name: "a method that is not a string", body: `{"jsonrpc":"2.0","id":1,"method":5}`, wantCode: -32600, wantID: "1"},
+		{name: "an object carrying only the version tag", body: `{"jsonrpc":"2.0"}`, wantCode: -32600, wantID: "null"},
+		{name: "the version key spelled in another case", body: `{"JSONRPC":"2.0","id":5,"method":"ping"}`, wantCode: -32600, wantID: "5"},
+		// A frame with no method is a response, whose id is one this server
+		// gave a request of its own, so the refusal carries null instead.
+		{name: "a response whose error is not an object", body: `{"jsonrpc":"2.0","id":3,"error":"oops"}`, wantCode: -32600, wantID: "null"},
+		{name: "an id no number can hold", body: `{"jsonrpc":"2.0","id":1e400,"method":"ping"}`, wantCode: -32600, wantID: "null"},
+		// A valid message with whitespace after it on its line: the SDK's
+		// read loop ended the session on the space, so the survival half is
+		// the one that failed. The SDK answers the ping, which the survival
+		// check reads past.
+		{name: "a message followed by spaces on its line", body: `{"jsonrpc":"2.0","id":9,"method":"ping"}  `, wantCode: 0},
 	}
 
 	for _, tt := range tests {
@@ -322,7 +343,7 @@ func TestMalformedInput_IsAnsweredAndTheSessionSurvives(t *testing.T) {
 			s.send(t, tt.body)
 
 			if tt.wantCode != 0 {
-				assertRefusedWith(t, s, tt.wantCode)
+				assertRefusedWith(t, s, tt.wantCode, tt.wantID)
 			}
 
 			// The session has to still be usable, which is the half the SDK
@@ -333,8 +354,8 @@ func TestMalformedInput_IsAnsweredAndTheSessionSurvives(t *testing.T) {
 }
 
 // assertRefusedWith checks that the server's next message is a refusal carrying
-// the given JSON-RPC error code.
-func assertRefusedWith(t *testing.T, s *session, want int) {
+// the given JSON-RPC error code and the given id, written as JSON.
+func assertRefusedWith(t *testing.T, s *session, want int, wantID string) {
 	t.Helper()
 
 	got := s.readMessage(t, 30*time.Second)
@@ -344,6 +365,13 @@ func assertRefusedWith(t *testing.T, s *session, want int) {
 	}
 	if code != want {
 		t.Errorf("error code = %d, want %d: %v", code, want, got)
+	}
+	id, err := json.Marshal(got["id"])
+	if err != nil {
+		t.Fatalf("re-encoding the answer's id: %v", err)
+	}
+	if string(id) != wantID {
+		t.Errorf("id = %s, want %s: %v", id, wantID, got)
 	}
 }
 

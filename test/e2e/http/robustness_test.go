@@ -66,6 +66,76 @@ func TestRobust_MalformedBodies(t *testing.T) {
 	}
 }
 
+// decoderRefusalFix is what a failure of the test below asks for: go-sdk
+// changed how its streamable HTTP handler answers a frame its decoder refuses.
+const decoderRefusalFix = "go-sdk changed how its streamable HTTP handler answers a frame its decoder refuses: " +
+	"update the HTTP half of row 9 of docs/development/upstream-bugs.md (its Blocking bullet) and this test, " +
+	"in this same pull request."
+
+// TestRobust_FramesTheSDKDecoderRefuses_AreAnsweredInPlainText pins what the
+// HTTP endpoint answers a POST whose body is a JSON-RPC 2.0 frame go-sdk's
+// decoder refuses, the frames that ended a stdio session until the stdio
+// filter began asking that decoder (issue 1358).
+//
+// Over HTTP they end nothing, since every POST is decoded on its own. The
+// answer is still not JSON-RPC: the SDK writes a 400 whose body is plain text
+// naming its decode error, so a client that reads the body as a JSON-RPC error
+// finds none. That half is upstream's and has no workaround here; row 9 of the
+// register records it, and this test is what makes the dependency bump that
+// changes it say so. A stateful handler refuses 2026-07-28 before it decodes
+// anything, so that revision is asked of the stateless one alone.
+func TestRobust_FramesTheSDKDecoderRefuses_AreAnsweredInPlainText(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+
+	frames := []struct{ name, body string }{
+		{"a boolean id", `{"jsonrpc":"2.0","id":true,"method":"ping"}`},
+		{"an object id", `{"jsonrpc":"2.0","id":{"a":1},"method":"ping"}`},
+		{"a method that is not a string", `{"jsonrpc":"2.0","id":1,"method":5}`},
+		{"an object carrying only the version tag", `{"jsonrpc":"2.0"}`},
+		{"an id no number can hold", `{"jsonrpc":"2.0","id":1e400,"method":"ping"}`},
+	}
+	for _, mode := range []struct {
+		name     string
+		flags    []string
+		versions []string
+	}{
+		{name: "stateless", versions: []string{"2025-11-25", "2026-07-28"}},
+		{name: "stateful", flags: []string{"--stateless=false"}, versions: []string{"2025-11-25"}},
+	} {
+		t.Run(mode.name, func(t *testing.T) {
+			srv := startServer(t, nil, append([]string{"--gitlab-url=" + gitlab.url}, mode.flags...)...)
+			for _, version := range mode.versions {
+				for _, frame := range frames {
+					t.Run(version+" "+frame.name, func(t *testing.T) {
+						got := srv.do(t, request{
+							method: http.MethodPost, path: "/mcp", body: frame.body,
+							headers: map[string]string{"PRIVATE-TOKEN": "glpat-x", "MCP-Protocol-Version": version},
+						})
+						assertPlainTextDecoderRefusal(t, got)
+						assertStillServing(t, srv, frame.name)
+					})
+				}
+			}
+		})
+	}
+}
+
+// assertPlainTextDecoderRefusal checks that got is the answer go-sdk's
+// streamable HTTP handler gives a frame its decoder refuses: a 400 whose body
+// is plain text naming the decode error.
+func assertPlainTextDecoderRefusal(t *testing.T, got response) {
+	t.Helper()
+	if got.status != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400. %s\nbody: %s", got.status, decoderRefusalFix, truncate(got.body))
+	}
+	if contentType := got.header.Get("Content-Type"); !strings.HasPrefix(contentType, "text/plain") {
+		t.Errorf("Content-Type = %q, want the SDK's plain text. %s\nbody: %s", contentType, decoderRefusalFix, truncate(got.body))
+	}
+	if !strings.HasPrefix(got.body, "malformed payload: ") {
+		t.Errorf("body = %q, want the SDK's \"malformed payload: \" text. %s", truncate(got.body), decoderRefusalFix)
+	}
+}
+
 // TestRobust_OversizedBodyIsRefusedNotBuffered verifies that a body larger than
 // the limit is cut off rather than read into memory, and that the server is
 // still healthy afterwards.
