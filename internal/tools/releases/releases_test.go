@@ -7,8 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1833,37 +1835,40 @@ func TestReleaseUpdate_SendsTheTitleAndNotesItWasGiven(t *testing.T) {
 	}
 }
 
-// TestReleaseUpdate_PartialUpdateSendsNullTitleAndNoMilestones records what an
-// update that changes only the release date puts on the wire, which is two
-// separate facts about the same body.
+// TestReleaseUpdate_PartialUpdate_SendsOnlyWhatTheCallerSet holds the body of
+// an update to the keys the caller set and no other.
 //
-// The milestones key is absent, and must stay absent: its guard is a length
-// comparison whose relaxation attaches a pointer to an empty slice, and GitLab
-// documents an empty milestones value as "remove every milestone".
-//
-// The title and the notes, by contrast, are sent as explicit nulls, because
-// client-go's UpdateReleaseOptions spells those two fields without
-// `omitempty`. That is recorded rather than endorsed: this test is what fails,
-// deliberately, on the day the SDK adds the tag and the nulls stop being sent.
-func TestReleaseUpdate_PartialUpdateSendsNullTitleAndNoMilestones(t *testing.T) {
-	client, body := capturedRequest(t, http.MethodPut, pathReleaseV120, http.StatusOK,
-		`{"tag_name":"v1.2.0","name":"Untouched","description":"untouched"}`)
-
-	if _, err := Update(context.Background(), client, UpdateInput{
-		ProjectID:  "42",
-		TagName:    testTagV120,
-		ReleasedAt: "2026-01-15T10:00:00Z",
-	}); err != nil {
-		t.Fatalf("Update() unexpected error: %v", err)
+// client-go's UpdateReleaseOptions spells the title and the notes without
+// `omitempty`, so an update that left them out sent both as null, and GitLab
+// stores what it is sent: the notes were erased and the title fell back to
+// the tag on every update of the release date or the milestones (issue 1305,
+// upstream register row 121). The milestones key stays absent too, since
+// GitLab documents an empty milestones value as "remove every milestone".
+func TestReleaseUpdate_PartialUpdate_SendsOnlyWhatTheCallerSet(t *testing.T) {
+	tests := []struct {
+		name  string
+		input UpdateInput
+		want  []string
+	}{
+		{"released_at alone", UpdateInput{ReleasedAt: "2026-01-15T10:00:00Z"}, []string{"released_at"}},
+		{"milestones alone", UpdateInput{Milestones: []string{"m1"}}, []string{"milestones"}},
+		{"name alone", UpdateInput{Name: "Renamed"}, []string{"name"}},
+		{"description alone", UpdateInput{Description: "rewritten"}, []string{"description"}},
 	}
-
-	if strings.Contains(string(*body), `"milestones"`) {
-		t.Errorf("request carries milestones although the caller gave none: %s", string(*body))
-	}
-	for _, key := range []string{"name", "description"} {
-		t.Run(key, func(t *testing.T) {
-			if !strings.Contains(string(*body), `"`+key+`":null`) {
-				t.Errorf("client-go no longer sends %q as null: %s", key, string(*body))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, body := capturedRequest(t, http.MethodPut, pathReleaseV120, http.StatusOK,
+				`{"tag_name":"v1.2.0","name":"Untouched","description":"untouched"}`)
+			tt.input.ProjectID, tt.input.TagName = "42", testTagV120
+			if _, err := Update(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("Update() unexpected error: %v", err)
+			}
+			var sent map[string]json.RawMessage
+			if err := json.Unmarshal(*body, &sent); err != nil {
+				t.Fatalf("unmarshal request body: %v; body=%q", err, string(*body))
+			}
+			if got := slices.Sorted(maps.Keys(sent)); !slices.Equal(got, tt.want) {
+				t.Errorf("update body keys = %v, want %v; body=%s", got, tt.want, string(*body))
 			}
 		})
 	}

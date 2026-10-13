@@ -89,6 +89,16 @@ func TestTemplatePath_Identifiers_CollapseToPlaceholders(t *testing.T) {
 		// The collection itself is not a member of it, so listing and creating
 		// keep their own row rather than folding onto the keyed one.
 		{"the variables collection itself", "/api/v4/projects/1/variables", "/projects/:project_id/variables"},
+		// A release is addressed by its tag, which no shape rule can read:
+		// v1.0.0 and v1.2.0 were two rows of one route, and the join to
+		// PUT /projects/:id/releases/:tag_name failed on the literal, so no
+		// check that reads the route reached the release update (issue 1305).
+		// The one literal GitLab mounts after releases, permalink, stays.
+		{"a release tag", "/api/v4/projects/1/releases/v1.0.0", "/projects/:project_id/releases/:tag_name"},
+		{"a release tag's links", "/api/v4/projects/1/releases/v1.2.0/assets/links/3", "/projects/:project_id/releases/:tag_name/assets/links/:link_id"},
+		{"a group release tag", "/api/v4/groups/2/releases/v1.0.0", "/groups/:group_id/releases/:tag_name"},
+		{"the release permalink", "/api/v4/projects/1/releases/permalink/latest", "/projects/:project_id/releases/permalink/latest"},
+		{"the releases collection itself", "/api/v4/projects/1/releases", "/projects/:project_id/releases"},
 		// The rule is the parent and nothing else: a word that merely contains
 		// one of the keyed names is not one, and a key-shaped segment under an
 		// ordinary parent is still left alone.

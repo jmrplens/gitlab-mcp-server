@@ -109,9 +109,22 @@ func TestRelease_Lifecycle_CreateGetUpdateListLinksDelete(t *testing.T) {
 			e.T.Errorf("release get answered %+v, want %q on %s with its description", got, title, tag.Name)
 		}
 		updated := harness.Do[releases.Output](s, actionReleaseUpdate, withParams(params, map[string]any{"description": "updated e2e release"}))
-		if updated.TagName != tag.Name || updated.Description != "updated e2e release" {
-			e.T.Errorf("release update answered %+v, want the release on %s with the new description", updated, tag.Name)
+		if updated.TagName != tag.Name || updated.Description != "updated e2e release" || updated.Name != title {
+			e.T.Errorf("release update answered %+v, want the release %q on %s with the new description", updated, title, tag.Name)
 		}
+		// An update of the release date alone used to send the title and the
+		// notes as null, which GitLab stores: the notes were erased and the
+		// title fell back to the tag (issue 1305).
+		redated := harness.Do[releases.Output](s, actionReleaseUpdate, withParams(params, map[string]any{"released_at": "2026-01-15T10:00:00Z"}))
+		reread := harness.Do[releases.Output](s, actionReleaseGet, params)
+		assertKept := func(call string, out releases.Output) {
+			if out.Name != title || out.Description != "updated e2e release" {
+				e.T.Errorf("release %s after a date-only update reads name %q and notes %q, want %q and %q",
+					call, out.Name, out.Description, title, "updated e2e release")
+			}
+		}
+		assertKept("update", redated)
+		assertKept("get", reread)
 		listed := harness.Do[releases.ListOutput](s, actionReleaseList, map[string]any{"project_id": project.IDParam()})
 		if !slices.Contains(releaseTagNames(listed.Releases), tag.Name) {
 			e.T.Errorf("the release listing does not hold %s: %v", tag.Name, releaseTagNames(listed.Releases))

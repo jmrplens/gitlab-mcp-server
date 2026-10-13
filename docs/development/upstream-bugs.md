@@ -87,6 +87,7 @@ for the fork, branch, fix, test and MR workflow.
   - [Block, unblock and deactivate drop the answer that says whether anything changed](#block-unblock-and-deactivate-drop-the-answer-that-says-whether-anything-changed)
   - [UpdateWorkItemOptions cannot remove a reference, a date or the health status](#updateworkitemoptions-cannot-remove-a-reference-a-date-or-the-health-status)
   - [ListAuditEventsOptions models neither entity filter the instance list takes](#listauditeventsoptions-models-neither-entity-filter-the-instance-list-takes)
+  - [UpdateReleaseOptions sends the title and the notes as null on every partial update](#updatereleaseoptions-sends-the-title-and-the-notes-as-null-on-every-partial-update)
   - [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
@@ -352,6 +353,7 @@ readable without opening the tracker:
 | 118 | gitlab-org/gitlab | [The REST delete of a locked Terraform state answers 200 and deletes nothing](#the-rest-delete-of-a-locked-terraform-state-answers-200-and-deletes-nothing) | No | No | No | No | Yes, `admin.terraform_state_delete` reads the state first and refuses a locked one |
 | 119 | client-go | [UpdateWorkItemOptions cannot remove a reference, a date or the health status](#updateworkitemoptions-cannot-remove-a-reference-a-date-or-the-health-status) | No | No | No | No | Yes, `issue.work_item_update` and `group.epic_update` write null into the mutation input through a request option |
 | 120 | client-go | [ListAuditEventsOptions models neither entity filter the instance list takes](#listauditeventsoptions-models-neither-entity-filter-the-instance-list-takes) | No | No | No | No | Yes, `audit_event.list_instance` adds `entity_type` and `entity_id` to the query through a request option |
+| 121 | client-go | [UpdateReleaseOptions sends the title and the notes as null on every partial update](#updatereleaseoptions-sends-the-title-and-the-notes-as-null-on-every-partial-update) | No | No | No | No | Yes, `release.update` takes the two keys out of the body through a request option whenever the caller did not set them |
 | 126 | client-go | [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date) | No | No | No | No | Yes, `user.add_ssh_key`, `user.add_ssh_key_for_user`, `snippet.list_all` and the two changelog actions leave the field unset and write the instant given through a request option |
 | 127 | gitlab-org/gitlab | [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text) | No | No | No | No; GitLab's pages leave such a submodule unlinked | Yes, `repository.list_submodules` and `repository.read_submodule_file` resolve a sibling namespace and the other spellings of the instance's clone URLs |
 
@@ -6333,6 +6335,46 @@ which the tool could not do.
 
 **Effort**: small: two fields with `url` tags, and a test that each reaches
 the query.
+
+### UpdateReleaseOptions sends the title and the notes as null on every partial update
+
+- **Reported**: no. It belongs with the option struct commits of the joint
+  merge request,
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  and is not in it yet.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. `release.update` passes `toolutil.EditJSONBody`, a
+  request option that takes the `name` and `description` keys out of the
+  JSON body client-go encoded whenever the caller did not set them, so an
+  update of the release date or the milestones sends neither. It retires
+  when both fields carry `omitempty`.
+
+**Where**: `releases.go`, `UpdateReleaseOptions`, which `UpdateRelease`
+sends to `PUT /projects/:id/releases/:tag_name`. At v3.15.0 its `Name` and
+`Description` are tagged `json:"name"` and `json:"description"`, while
+`CreateReleaseOptions` beside it tags both `omitempty`.
+
+**What**: a nil pointer without `omitempty` is written as `null`, so every
+partial update carries `"name":null,"description":null`. The route hands
+`declared_params(include_missing: false)` to `Releases::UpdateService`,
+which keeps a parameter sent as null and runs `release.update(params)`, and
+`Release#name` reads `read_attribute(:name) || tag`. A caller who changes
+only `released_at` or the milestones therefore erases the release notes and
+renames the release to its tag, and is told the update succeeded. GitLab,
+called directly with only the date, leaves both untouched.
+
+**How we found it**: issue 1305, from a release whose notes vanished after
+an update of its date. The always-sent check of R-PATH did not report it,
+because the request inventory recorded the route with the fixture's tag in
+it (`/releases/v1.0.0`, `/releases/v1.2.0`), which joined nothing; the test
+recorder now names the segment after `releases` `:tag_name`, the way the
+live record does, so the check reaches the route once the inventory is
+regenerated.
+
+**Effort**: small: `omitempty` on both halves of two tags, and a test that a
+date-only update sends neither key.
 
 ### Three option structs carry a timestamp parameter as a date
 

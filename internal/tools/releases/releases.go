@@ -185,7 +185,13 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 }
 
 // Update modifies an existing release identified by project and tag name.
-// Only non-empty fields in the input are applied as updates.
+// Only the fields the caller set reach GitLab.
+//
+// client-go's UpdateReleaseOptions writes the title and the notes without
+// omitempty, so a field left nil goes out as null and GitLab stores it: the
+// notes are erased and the title falls back to the tag. The request option
+// takes those two keys out of the body whenever the caller did not set them
+// (issue 1305, upstream register row 121).
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -194,11 +200,16 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, errors.New("releaseUpdate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	opts := &gl.UpdateReleaseOptions{}
+	var unset []string
 	if input.Name != "" {
 		opts.Name = new(input.Name)
+	} else {
+		unset = append(unset, "name")
 	}
 	if input.Description != "" {
 		opts.Description = new(toolutil.NormalizeText(input.Description))
+	} else {
+		unset = append(unset, "description")
 	}
 	releasedAt, err := toolutil.ParseTimeField("released_at", input.ReleasedAt)
 	if err != nil {
@@ -208,7 +219,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if len(input.Milestones) > 0 {
 		opts.Milestones = &input.Milestones
 	}
-	r, _, err := client.GL().Releases.UpdateRelease(string(input.ProjectID), input.TagName, opts, gl.WithContext(ctx))
+	r, _, err := client.GL().Releases.UpdateRelease(string(input.ProjectID), input.TagName, opts, gl.WithContext(ctx),
+		toolutil.EditJSONBody(toolutil.BodyEdit{Drop: unset}))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("releaseUpdate", err, http.StatusNotFound,
 			"verify tag_name with release.list; updating releases requires Developer role or higher")

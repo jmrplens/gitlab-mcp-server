@@ -116,7 +116,7 @@ func templatePath(escaped string) (templated string, identifiers map[string][]st
 		if i > 0 {
 			parent = segments[i-1]
 		}
-		if !isIdentifierSegment(segment) && !keyedCollection(parent) {
+		if !isIdentifierSegment(segment) && !keyedMember(parent, segment) {
 			continue
 		}
 		name := placeholderFor(parent)
@@ -153,27 +153,44 @@ func templatePath(escaped string) (templated string, identifiers map[string][]st
 // /projects/:id/variables/:key, the pipeline schedule variables, and
 // url_variables under the three hook scopes. So a literal after one of these
 // is a shape GitLab does not have.
-var keyedCollections = map[string]string{
-	"variables":     "key",
-	"url_variables": "key",
+//
+// releases is the one collection keyed with an exception, and the exception is
+// the live record's too: a release is addressed by its tag, `:tag_name` on ten
+// routes, and the one literal GitLab mounts after releases is `permalink`
+// (`/projects/:id/releases/permalink/latest`). A tag reads like a word to the
+// shape rule, so v1.0.0 and v1.2.0 were two rows of one route and no check
+// that joins on the route reached the release update at all (issue 1305).
+var keyedCollections = map[string]keyedCollection{
+	"variables":     {placeholder: "key"},
+	"url_variables": {placeholder: "key"},
+	"releases":      {placeholder: "tag_name", literals: []string{"permalink"}},
 }
 
-// keyedCollection reports whether a segment is one of the collections whose
-// member [keyedCollections] names.
-func keyedCollection(parent string) bool {
-	_, keyed := keyedCollections[parent]
+// keyedCollection is what one keyed parent says about the segment after it:
+// the placeholder GitLab names it by, and the literals GitLab mounts in that
+// position instead of a member, which stay in the path.
+type keyedCollection struct {
+	placeholder string
+	literals    []string
+}
 
-	return keyed
+// keyedMember reports whether segment is a member of a keyed collection: its
+// parent is one of [keyedCollections] and the segment is none of the literals
+// that parent also mounts.
+func keyedMember(parent, segment string) bool {
+	keyed, ok := keyedCollections[parent]
+
+	return ok && !slices.Contains(keyed.literals, segment)
 }
 
 // placeholderFor names the identifier that follows one collection segment.
 //
-// A keyed collection is spelled the way GitLab spells it, `:key`, rather than
-// as the `:<singular>_id` every other collection produces: `:variable_id`
-// would promise an id, and the value there is a name.
+// A keyed collection is spelled the way GitLab spells it, `:key` or
+// `:tag_name`, rather than as the `:<singular>_id` every other collection
+// produces: `:variable_id` would promise an id, and the value there is a name.
 func placeholderFor(parent string) string {
 	if keyed, ok := keyedCollections[parent]; ok {
-		return ":" + keyed
+		return ":" + keyed.placeholder
 	}
 	name := singular(parent)
 	if name == "" {
