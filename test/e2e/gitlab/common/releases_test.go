@@ -8,6 +8,7 @@ package common
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/releaselinks"
@@ -62,14 +63,23 @@ func releaseLinkLifecycle(e *harness.Env, s *harness.Session, release map[string
 		e.T.Errorf("release link update answered %+v, want link %d renamed", linkUpdated, link.ID)
 	}
 
+	// The second batch link carries a direct asset path, which the dynamic
+	// surface used to delete from every batch entry before the handler saw
+	// it, so the link was created without its permalink (issue 1326).
 	batch := harness.Do[releaselinks.CreateBatchOutput](s, actionReleaseLinkCreateBatch, withParams(release, map[string]any{
 		"links": []map[string]any{
 			{"name": "batch-one", "url": "https://example.com/releases/" + tag + "/batch-one.zip"},
-			{"name": "batch-two", "url": "https://example.com/releases/" + tag + "/batch-two.zip"},
+			{"name": "batch-two", "url": "https://example.com/releases/" + tag + "/batch-two.zip", "direct_asset_path": "/batch-two.zip"},
 		},
 	}))
 	if len(batch.Created) != 2 {
 		e.T.Errorf("release link create batch answered %+v, want the two links created", batch)
+	}
+	permalink := "/-/releases/" + tag + "/downloads/batch-two.zip"
+	if !slices.ContainsFunc(batch.Created, func(link releaselinks.Output) bool {
+		return link.Name == "batch-two" && strings.HasSuffix(link.DirectAssetURL, permalink)
+	}) {
+		e.T.Errorf("release link create batch answered %+v, want batch-two with a direct asset URL ending in %s", batch.Created, permalink)
 	}
 
 	linkDeleted := harness.Do[releaselinks.Output](s, actionReleaseLinkDelete, byLink)

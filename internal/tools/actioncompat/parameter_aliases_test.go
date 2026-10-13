@@ -186,6 +186,10 @@ func TestNormalizeParamsWithExplanation_CompatibilityBranches(t *testing.T) {
 			wantParams:       map[string]any{"tag_name": "v1.0.0", "name": "v1.0.0", "description": "Release notes"},
 			wantAliases:      []string{"message->description"},
 		},
+		// The entry keeps its direct asset path and the deprecated filepath:
+		// the batch handler declares and sends both, and deleting them here
+		// left every link created in a batch on the dynamic surface without
+		// its /-/releases/<tag>/downloads/ permalink (issue 1326).
 		{
 			name:     "release link batch normalizes link entries",
 			actionID: "release.link_create_batch",
@@ -196,9 +200,9 @@ func TestNormalizeParamsWithExplanation_CompatibilityBranches(t *testing.T) {
 			schemaProperties: []string{"links"},
 			wantParams: map[string]any{"links": []any{
 				map[string]any{"name": "checksums.txt", "url": "https://example.com/checksums.txt"},
-				map[string]any{"name": "binary.txt", "url": "https://example.com/binary.txt"},
+				map[string]any{"name": "binary.txt", "url": "https://example.com/binary.txt", "filepath": "binary.txt", "direct_asset_path": "/binary.txt"},
 			}},
-			wantAliases: []string{"links.link_url->links.url", "links.filepath->links", "links.direct_asset_path->links"},
+			wantAliases: []string{"links.link_url->links.url"},
 		},
 		{
 			name:             "runner paused string boolean normalizes",

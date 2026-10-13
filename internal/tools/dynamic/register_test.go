@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"net/http"
 	"os"
 	"reflect"
 	"slices"
@@ -27,6 +28,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncompat"
@@ -2507,6 +2509,57 @@ func TestActionScopedParamAliases_CoversDocumentedActions(t *testing.T) {
 				t.Fatalf("ParameterAliases() = %+v, want action %s", aliases, actionID)
 			}
 		})
+	}
+}
+
+// TestExecute_ReleaseLinkBatch_DirectAssetPathReachesThePOSTBody executes
+// release.link_create_batch on the catalog the dynamic surface serves and
+// reads the body GitLab receives. The normalizer used to delete
+// direct_asset_path and filepath from every batch entry while the handler
+// declares and sends both, so a link created in a batch on this surface had no
+// /-/releases/<tag>/downloads/ permalink and the call reported success
+// (issue 1326).
+func TestExecute_ReleaseLinkBatch_DirectAssetPathReachesThePOSTBody(t *testing.T) {
+	var (
+		mu     sync.Mutex
+		bodies []map[string]any
+	)
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode the %s %s body: %v", r.Method, r.URL.Path, err)
+		}
+		mu.Lock()
+		bodies = append(bodies, body)
+		mu.Unlock()
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"name":"binary","url":"https://example.com/binary"}`)
+	}))
+	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Tier: edition.Free})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	registry := NewRegistryFromCatalog(catalog)
+
+	result, _, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "release.link_create_batch", Params: map[string]any{
+		"project_id": "42", "tag_name": "v1.0.0",
+		"links": []any{
+			map[string]any{"name": "binary", "url": "https://example.com/binary", "direct_asset_path": "/binary"},
+			map[string]any{"name": "legacy", "url": "https://example.com/legacy", "filepath": "/legacy"},
+		},
+	}})
+	if err != nil || result == nil || result.IsError {
+		t.Fatalf("Execute() = %+v, %v, want the batch created", result, err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(bodies) != 2 {
+		t.Fatalf("GitLab received %d bodies, want one per link: %v", len(bodies), bodies)
+	}
+	if bodies[0]["direct_asset_path"] != "/binary" {
+		t.Errorf("the first link's body is %v, want direct_asset_path /binary", bodies[0])
+	}
+	if bodies[1]["filepath"] != "/legacy" {
+		t.Errorf("the second link's body is %v, want filepath /legacy", bodies[1])
 	}
 }
 

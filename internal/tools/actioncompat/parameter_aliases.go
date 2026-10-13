@@ -23,7 +23,6 @@ const (
 	reasonReleaseCreateMessage           = "release creation uses description for release notes"
 	reasonReleaseLinkParentTagName       = "release link actions use tag_name for the parent release"
 	reasonReleaseLinkBatchURL            = "batch release link entries use url for the link target"
-	reasonReleaseLinkBatchUnsupported    = "batch release link entries do not accept direct asset path fields"
 	reasonIssueLinkSourceIssueIID        = "issue.link_create uses issue_iid for the source issue"
 	reasonIssueLinkTargetIssueIID        = "issue.link_create uses target_issue_iid for the linked issue"
 	reasonIssueLinkRelation              = "issue.link_create uses link_type for the link relationship"
@@ -222,8 +221,6 @@ func defaultParameterAliases() []ParameterAlias {
 		parameterAlias(actionReleaseCreate, "message", "description", reasonReleaseCreateMessage),
 		parameterAlias(actionReleaseLinkCreate, "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
 		parameterAlias(actionReleaseLinkCreateBatch, "links.link_url", "links.url", reasonReleaseLinkBatchURL),
-		normalizerOnlyParameterAlias(actionReleaseLinkCreateBatch, "links.filepath", "links", reasonReleaseLinkBatchUnsupported),
-		normalizerOnlyParameterAlias(actionReleaseLinkCreateBatch, "links.direct_asset_path", "links", reasonReleaseLinkBatchUnsupported),
 		parameterAlias(actionReleaseLinkDelete, "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
 		parameterAlias(actionReleaseLinkGet, "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
 		parameterAlias(actionReleaseLinkList, "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
@@ -598,13 +595,6 @@ func normalizeReleaseLinkBatchEntries(clone func() map[string]any, params map[st
 			delete(updatedLink, "link_url")
 			linkChanged = true
 			recordOnce("links.link_url", "links.url", reasonReleaseLinkBatchURL)
-		}
-		for _, unsupported := range []string{"filepath", "direct_asset_path"} {
-			if _, hasUnsupported := updatedLink[unsupported]; hasUnsupported {
-				delete(updatedLink, unsupported)
-				linkChanged = true
-				recordOnce("links."+unsupported, "links", reasonReleaseLinkBatchUnsupported)
-			}
 		}
 		if !linkChanged {
 			continue
