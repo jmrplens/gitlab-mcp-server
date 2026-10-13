@@ -814,7 +814,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	groups, resp, err := client.GL().Groups.ListGroups(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("List", err, http.StatusUnauthorized,
-			"verify GITLAB_TOKEN is valid; non-authenticated requests only return public groups")
+			"verify the token is valid; non-authenticated requests only return public groups")
 	}
 
 	return groupListOutput("List", groups, resp, captured)

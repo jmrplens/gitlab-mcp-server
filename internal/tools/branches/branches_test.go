@@ -309,6 +309,53 @@ func TestBranchCreate_AlreadyExists(t *testing.T) {
 	}
 }
 
+// TestBranchCreate_InvalidBranchName_BlamesTheBranchName verifies that a
+// branch name GitLab refuses is described as that, and not as a ref problem
+// (issue 1333).
+//
+// GitLab answers a name git's ref rules refuse with 400 "Branch name is
+// invalid". Every other 400 got the hint about the ref, so the caller was told
+// to check an existing branch, tag or commit while the name it chose was the
+// fault. The ref hint stays for the rest of the 400s.
+func TestBranchCreate_InvalidBranchName_BlamesTheBranchName(t *testing.T) {
+	tests := []struct {
+		name    string
+		message string
+		want    string
+		notWant string
+	}{
+		{
+			name:    "an invalid branch name",
+			message: "Branch name is invalid",
+			want:    "the branch name breaks git's rules for a ref name",
+			notWant: "the ref must be an existing branch name",
+		},
+		{
+			name:    "another bad request",
+			message: "something else went wrong",
+			want:    "the ref must be an existing branch name",
+			notWant: "the branch name breaks git's rules",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"`+tt.message+`"}`)
+			}))
+			_, err := Create(t.Context(), client, CreateInput{ProjectID: "42", BranchName: "feature..x", Ref: "main"})
+			if err == nil {
+				t.Fatal("Create() error = nil, want GitLab's refusal")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("Create() error = %q, want it to contain %q", err, tt.want)
+			}
+			if strings.Contains(err.Error(), tt.notWant) {
+				t.Errorf("Create() error = %q, must not contain %q", err, tt.notWant)
+			}
+		})
+	}
+}
+
 // TestBranchCreateRef_NotFound verifies that BranchCreateRef_NotFound returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.

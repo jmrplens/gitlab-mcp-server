@@ -118,6 +118,8 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("feature_flags.feature_flag_user_lists_list", actionFeatureFlagUserListList),
 		compatActionAlias("gitlab_issue.create", "issue.create"),
 		compatActionAlias("gitlab_issue.delete", "issue.delete"),
+		compatActionAlias("group.custom_emoji_create", "custom_emoji.create"),
+		compatActionAlias("group.custom_emoji_delete", "custom_emoji.delete"),
 		compatActionAlias("group.custom_emoji_list", "custom_emoji.list"),
 		compatActionAlias("group.custom_member_roles_list", "member_role.list_group"),
 		compatActionAlias("epic_discussion_note_update", actionGroupEpicDiscussionUpdateNote),

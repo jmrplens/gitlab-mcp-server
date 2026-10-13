@@ -752,7 +752,7 @@ func GetArtifacts(ctx context.Context, client *gitlabclient.Client, input Artifa
 type DownloadArtifactsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	RefName   string               `json:"ref_name"   jsonschema:"Branch or tag name,required"`
-	JobName   string               `json:"job"        jsonschema:"Job name to download artifacts from,required"`
+	JobName   string               `json:"job"        jsonschema:"Job name to download artifacts from, as the CI configuration names it and never its ID. To download one job's artifacts by its job_id use job.artifacts,required"`
 }
 
 // DownloadArtifacts downloads the artifacts archive for the latest

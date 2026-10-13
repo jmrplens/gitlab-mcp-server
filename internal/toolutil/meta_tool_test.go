@@ -4904,6 +4904,48 @@ func TestCoerceSchemaParamValue_ValueAlreadyMatchesDeclaredType_Unchanged(t *tes
 	}
 }
 
+// TestSchemaPropertyTakes_EachKindAndCoercion pins which values a parameter
+// takes, the question the dynamic surface asks before it offers an unknown
+// parameter's nearest name (issue 1333): one of the property's declared types,
+// the three JSON kinds valueMatchesDeclaredType leaves out among them, or one
+// the dispatchers coerce into a declared type, and anything at all when the
+// property declares no type to judge by.
+func TestSchemaPropertyTakes_EachKindAndCoercion(t *testing.T) {
+	integer := map[string]any{"type": "integer"}
+	text := map[string]any{"type": "string"}
+	nullableText := map[string]any{"type": []any{"string", "null"}}
+
+	cases := []struct {
+		name     string
+		param    string
+		value    any
+		property any
+		want     bool
+	}{
+		{"a property that is not an object takes anything", "job", float64(7), true, true},
+		{"a property that declares no type takes anything", "job", float64(7), map[string]any{"description": "x"}, true},
+		{"a string takes a string property", "job", "build", text, true},
+		{"a number does not take a name", "job", float64(7), text, false},
+		{"a whole number takes the string of an ID", "job_id", float64(7), text, true},
+		{"a number written as text takes an integer property", "job_id", "7", integer, true},
+		{"a name does not take an integer property", "job_id", "build", integer, false},
+		{"null takes a nullable property", "ref", nil, nullableText, true},
+		{"null does not take a plain string property", "ref", nil, text, false},
+		{"an array takes an array property", "labels", []any{"a"}, map[string]any{"type": "array"}, true},
+		{"an array does not take a string property", "labels", []any{"a"}, text, false},
+		{"an object takes an object property", "options", map[string]any{"a": 1}, map[string]any{"type": "object"}, true},
+		{"an object does not take a string property", "options", map[string]any{"a": 1}, text, false},
+		{"a bool does not take an integer property", "count", true, integer, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := SchemaPropertyTakes(tc.param, tc.value, tc.property); got != tc.want {
+				t.Errorf("SchemaPropertyTakes(%q, %#v, %#v) = %t, want %t", tc.param, tc.value, tc.property, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestValueMatchesDeclaredType_EachScalarKind pins the rule the coercion above
 // consults, which the coercion itself cannot show: whichever way this answers
 // for a number, the branch below returns the value unchanged, so every case

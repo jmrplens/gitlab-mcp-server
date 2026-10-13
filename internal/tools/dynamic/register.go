@@ -1028,7 +1028,7 @@ func validateDynamicExecuteParams(entry actionEntry, params map[string]any) *mcp
 	parts := []string{fmt.Sprintf("gitlab_execute_action/%s: invalid params.", entry.ID)}
 	if len(unknown) > 0 {
 		parts = append(parts, fmt.Sprintf("Unknown params: %s.", strings.Join(unknown, ", ")))
-		if suggestions := unknownParamSuggestions(unknown, validParams); len(suggestions) > 0 {
+		if suggestions := unknownParamSuggestions(unknown, params, actionSchemaProperties(entry.Route.InputSchema), validParams); len(suggestions) > 0 {
 			parts = append(parts, fmt.Sprintf("Did you mean %s?", strings.Join(suggestions, ", ")))
 		}
 	}
@@ -1120,21 +1120,41 @@ func missingParamNames(names []string, params map[string]any) []string {
 	return missing
 }
 
-func unknownParamSuggestions(unknown, validParams []string) []string {
+// unknownParamSuggestions pairs each unknown parameter the call sent with the
+// nearest valid name that takes its value, leaving out one that has none.
+func unknownParamSuggestions(unknown []string, params, properties map[string]any, validParams []string) []string {
 	suggestions := make([]string, 0, len(unknown))
 	for _, name := range unknown {
-		if suggestion := closestDynamicParamName(name, validParams); suggestion != "" {
+		if suggestion := closestDynamicParamName(name, params[name], properties, validParams); suggestion != "" {
 			suggestions = append(suggestions, fmt.Sprintf("%s -> %s", name, suggestion))
 		}
 	}
 	return suggestions
 }
 
-func closestDynamicParamName(name string, validParams []string) string {
+// closestDynamicParamName returns the valid name nearest to name whose
+// property takes value, or "" when none is near enough. A name the value
+// would not fit is passed over however near it is spelled, since the advice
+// is to send the same value under it: job_id is three edits from job, and job
+// is a job's name where job_id carried its number (issue 1333).
+//
+// The type cannot settle that alone, because an ID is as often sent as text
+// ("12345") and a name parameter takes text, so a name that carries an ID is
+// offered only a name that carries one too. The other direction needs no such
+// rule: a name sent where an ID belongs is refused by the ID's type unless it
+// is a path, which the ID parameters that take text accept.
+func closestDynamicParamName(name string, value any, properties map[string]any, validParams []string) string {
 	name = strings.ToLower(strings.TrimSpace(name))
+	carriesID := namesIdentifiers(name)
 	best := ""
 	bestDistance := 4
 	for _, candidate := range validParams {
+		if carriesID && !namesIdentifiers(candidate) {
+			continue
+		}
+		if !toolutil.SchemaPropertyTakes(candidate, value, properties[candidate]) {
+			continue
+		}
 		distance, ok := boundedLevenshtein(name, candidate, 3)
 		if ok && distance < bestDistance {
 			best = candidate
@@ -1146,6 +1166,13 @@ func closestDynamicParamName(name string, validParams []string) string {
 		}
 	}
 	return best
+}
+
+// namesIdentifiers reports whether a parameter name carries one identifier or
+// several: the names [identifierParam] recognizes, and their plurals
+// (label_ids, iids).
+func namesIdentifiers(name string) bool {
+	return identifierParam(strings.TrimSuffix(name, "s"))
 }
 
 func actionSchemaProperties(schema map[string]any) map[string]any {
@@ -3045,6 +3072,7 @@ func (r *Registry) suggestActionIDs(query string, limit int) []string {
 	if len(terms) == 0 {
 		return nil
 	}
+	nounVerb, isNounVerb := nounVerbActionName(query)
 	type scoredEntry struct {
 		id    string
 		score int
@@ -3058,6 +3086,9 @@ func (r *Registry) suggestActionIDs(query string, limit int) []string {
 				best = max(best, scoreSearchAlternative(entry, term.Raw, alternative))
 			}
 			score += best
+		}
+		if isNounVerb && namesNounVerb(entry.ID, nounVerb) {
+			score += scoreCanonicalExact
 		}
 		if score > 0 {
 			scored = append(scored, scoredEntry{id: entry.ID, score: score})
@@ -3073,6 +3104,32 @@ func (r *Registry) suggestActionIDs(query string, limit int) []string {
 		suggestions = append(suggestions, backtickString(entry.id))
 	}
 	return suggestions
+}
+
+// nounVerbActionName reads an unknown action written <noun>.<verb>, as
+// label.create, and returns the action name that spells the same two words
+// under a domain, label_create, with true; anything else returns false.
+//
+// The generic scoring weighs the verb as heavily as the noun, so label.create
+// was answered with branch.create, pipeline.create, release.create and
+// tag.create, while project.label_create and group.group_label_create, the
+// two actions it can mean, were left out (issue 1333). A caller who guessed
+// the noun as the domain has written the action's own words, and the catalog
+// spells them as one action name.
+func nounVerbActionName(query string) (string, bool) {
+	noun, verb, found := strings.Cut(strings.ToLower(strings.TrimSpace(query)), ".")
+	if !found || noun == "" || verb == "" || strings.Contains(verb, ".") {
+		return "", false
+	}
+	return noun + "_" + verb, true
+}
+
+// namesNounVerb reports whether the action of a canonical ID is nounVerb, or
+// ends with it after a qualifier of its own, as group.group_label_create
+// does for label_create.
+func namesNounVerb(id, nounVerb string) bool {
+	_, action, _ := strings.Cut(id, ".")
+	return action == nounVerb || strings.HasSuffix(action, "_"+nounVerb)
 }
 
 func backtickStrings(values []string) []string {

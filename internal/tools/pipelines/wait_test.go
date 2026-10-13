@@ -93,6 +93,154 @@ func TestWait_FailedPipeline_FailOnError(t *testing.T) {
 	}
 }
 
+// TestWait_FailedPipeline_NamesTheFailedJobs verifies that a wait answering a
+// failed pipeline names the jobs that failed, with the stage and the
+// failure_reason GitLab gives each, and the next step that reads a job's log
+// (issue 1333).
+//
+// The status alone gave a caller nothing to act on. The jobs are asked for with
+// scope failed, which the mock holds the request to, and a list GitLab cannot
+// give leaves the status sentence on its own, since the wait already knows the
+// outcome it was asked for, and so does a list that names no failed job. A
+// canceled pipeline asks for nothing: no job of it failed. A page with a next
+// one says there are more and how to list them, and a job GitLab gives no
+// failure_reason is named without one.
+func TestWait_FailedPipeline_NamesTheFailedJobs(t *testing.T) {
+	const failedJobs = `[` +
+		`{"id":101,"name":"unit","stage":"test","status":"failed","failure_reason":"script_failure"},` +
+		`{"id":102,"name":"deploy","stage":"deploy","status":"failed","failure_reason":""}` +
+		`]`
+	tests := []struct {
+		name       string
+		status     string
+		jobsStatus int
+		nextPage   string
+		jobs       string
+		want       []string
+		notWant    []string
+		wantJobs   bool
+	}{
+		{
+			name:       "the failed jobs and the next step",
+			status:     "failed",
+			jobsStatus: http.StatusOK,
+			want: []string{
+				`pipelineWait: pipeline #10 finished with status "failed". Failed jobs: ` +
+					`unit (job 101, stage test, failure_reason script_failure); deploy (job 102, stage deploy). ` +
+					`Read a failed job's log with job.trace, passing its job_id`,
+			},
+			notWant:  []string{"and more"},
+			wantJobs: true,
+		},
+		{
+			name:       "more failed jobs than one page",
+			status:     "failed",
+			jobsStatus: http.StatusOK,
+			nextPage:   "2",
+			want:       []string{"deploy (job 102, stage deploy), and more: list them with job.list and scope failed. "},
+			wantJobs:   true,
+		},
+		{
+			name:       "a list GitLab does not give",
+			status:     "failed",
+			jobsStatus: http.StatusForbidden,
+			want:       []string{`pipelineWait: pipeline #10 finished with status "failed"`},
+			notWant:    []string{"Failed jobs", "job.trace"},
+			wantJobs:   true,
+		},
+		{
+			name:       "a list that names no failed job",
+			status:     "failed",
+			jobsStatus: http.StatusOK,
+			jobs:       `[]`,
+			want:       []string{`pipelineWait: pipeline #10 finished with status "failed"`},
+			notWant:    []string{"Failed jobs", "job.trace"},
+			wantJobs:   true,
+		},
+		{
+			name:     "a canceled pipeline",
+			status:   "canceled",
+			want:     []string{`pipelineWait: pipeline #10 finished with status "canceled"`},
+			notWant:  []string{"Failed jobs", "job.trace"},
+			wantJobs: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var jobsAsked atomic.Bool
+			jobs := tt.jobs
+			if jobs == "" {
+				jobs = failedJobs
+			}
+			client := testutil.NewTestClient(t, failedJobsServer(t, failedJobsAnswer{
+				status: tt.status, jobsStatus: tt.jobsStatus, nextPage: tt.nextPage, jobs: jobs,
+			}, &jobsAsked))
+
+			_, err := Wait(t.Context(), nil, client, WaitInput{ProjectID: "42", PipelineID: 10, IntervalSeconds: 5, TimeoutSeconds: 30})
+			if err == nil {
+				t.Fatal("Wait() error = nil, want the pipeline's failure")
+			}
+			assertErrorText(t, err, tt.want, tt.notWant)
+			if jobsAsked.Load() != tt.wantJobs {
+				t.Errorf("failed jobs asked = %t, want %t", jobsAsked.Load(), tt.wantJobs)
+			}
+		})
+	}
+}
+
+// failedJobsAnswer is what failedJobsServer answers: the pipeline's status,
+// and the status, next page and body of its failed jobs list.
+type failedJobsAnswer struct {
+	status     string
+	jobsStatus int
+	nextPage   string
+	jobs       string
+}
+
+// failedJobsServer answers the pipeline read with answer's status and the
+// failed jobs list as answer says, recording in asked that the list was read
+// and holding its request to scope failed.
+func failedJobsServer(t *testing.T, answer failedJobsAnswer, asked *atomic.Bool) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case pathWaitPipeline:
+			testutil.RespondJSON(w, http.StatusOK, pipelineJSON(answer.status))
+		case pathWaitPipeline + "/jobs":
+			asked.Store(true)
+			if got := r.URL.Query()["scope[]"]; len(got) != 1 || got[0] != "failed" {
+				t.Errorf("jobs scope[] = %v, want [failed]", got)
+			}
+			if answer.nextPage != "" {
+				w.Header().Set("X-Next-Page", answer.nextPage)
+			}
+			if answer.jobsStatus != http.StatusOK {
+				testutil.RespondJSON(w, answer.jobsStatus, `{"message":"403 Forbidden"}`)
+				return
+			}
+			testutil.RespondJSON(w, http.StatusOK, answer.jobs)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+}
+
+// assertErrorText holds err's text to containing every one of want and none
+// of notWant.
+func assertErrorText(t *testing.T, err error, want, notWant []string) {
+	t.Helper()
+	for _, fragment := range want {
+		if !strings.Contains(err.Error(), fragment) {
+			t.Errorf("error = %q, want it to contain %q", err, fragment)
+		}
+	}
+	for _, fragment := range notWant {
+		if strings.Contains(err.Error(), fragment) {
+			t.Errorf("error = %q, must not contain %q", err, fragment)
+		}
+	}
+}
+
 // TestWait_FailedPipeline_NoFailOnError verifies that Wait returns normally
 // (no error) when fail_on_error is false even if the pipeline failed.
 func TestWait_FailedPipeline_NoFailOnError(t *testing.T) {

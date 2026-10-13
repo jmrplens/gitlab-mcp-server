@@ -320,6 +320,12 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 			return Output{}, toolutil.WrapErrWithHint("branchCreate", err,
 				"a branch with this name already exists. Use branch.get to check it, or choose a different name")
 		}
+		// GitLab answers a name git refuses as a ref with 400 "Branch name is
+		// invalid", and the ref hint below blamed the ref for it (issue 1333).
+		if toolutil.ContainsAny(err, "Branch name is invalid") {
+			return Output{}, toolutil.WrapErrWithHint("branchCreate", err,
+				"the branch name breaks git's rules for a ref name: it cannot contain a space, ~, ^, :, ?, *, [, \\ or two dots in a row, cannot start with - or end with /, . or .lock, and no part between slashes can start with a dot. Choose a name without them")
+		}
 		return Output{}, toolutil.WrapErrWithStatusHint("branchCreate", err, http.StatusBadRequest,
 			"the ref must be an existing branch name, tag name, or commit SHA; creating branches requires Developer role or higher")
 	}

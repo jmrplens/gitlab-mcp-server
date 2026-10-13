@@ -1946,6 +1946,44 @@ func coerceSchemaArrayValue(value, property any) (any, bool) {
 	return out, changed
 }
 
+// SchemaPropertyTakes reports whether a parameter whose schema is property
+// takes value sent under name: the property declares no type, which leaves
+// nothing to judge it by; or it declares the value's JSON type; or the
+// dispatchers coerce the value into a type it declares, as they do a number
+// written as text into an integer or a number and a whole number into the
+// string of an ID parameter.
+//
+// The dynamic surface asks it before offering an unknown parameter's nearest
+// valid name, so that following the advice never moves a value to where the
+// schema refuses it: job_id is three edits from job, and job takes a job's
+// name where job_id carried its number (issue 1333).
+func SchemaPropertyTakes(name string, value, property any) bool {
+	prop, isObject := property.(map[string]any)
+	if !isObject || prop["type"] == nil {
+		return true
+	}
+	if valueMatchesDeclaredType(value, property) || compositeMatchesDeclaredType(value, property) {
+		return true
+	}
+	_, coerced := coerceSchemaParamValue(name, value, property)
+	return coerced
+}
+
+// compositeMatchesDeclaredType is [valueMatchesDeclaredType] for the three
+// JSON kinds that one leaves out, as encoding/json decodes them into an any:
+// null, an array and an object.
+func compositeMatchesDeclaredType(value, property any) bool {
+	switch value.(type) {
+	case nil:
+		return schemaPropertyHasType(property, "null")
+	case []any:
+		return schemaPropertyHasType(property, "array")
+	case map[string]any:
+		return schemaPropertyHasType(property, "object")
+	}
+	return false
+}
+
 // valueMatchesDeclaredType reports whether the value is already one of the
 // types the property declares.
 //

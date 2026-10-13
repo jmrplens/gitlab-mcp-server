@@ -152,6 +152,28 @@ func TestActionSpecs_Artifacts_FileTypeIsAnEnumOfGitLabsDownloadableTypes(t *tes
 	}
 }
 
+// TestActionSpecs_DownloadArtifacts_JobNamesTheActionThatTakesAJobID verifies
+// that job.download_artifacts describes its job parameter as a job's name and
+// points a caller holding a job_id at job.artifacts (issue 1333).
+//
+// A model with a job's ID in hand reached for this action, sent job_id, and
+// read job as the place the ID goes. The dispatcher no longer offers job for
+// job_id, so the schema every surface serves is where the caller learns which
+// action takes the ID instead.
+func TestActionSpecs_DownloadArtifacts_JobNamesTheActionThatTakesAJobID(t *testing.T) {
+	spec := newJobsRouteSpecs(t)["gitlab_job_download_artifacts"]
+	properties, _ := spec.Route.InputSchema["properties"].(map[string]any)
+	job, _ := properties["job"].(map[string]any)
+	description, _ := job["description"].(string)
+	for _, want := range []string{"name", "job_id", actionJobArtifacts} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(description, want) {
+				t.Errorf("job description = %q, want it to mention %q", description, want)
+			}
+		})
+	}
+}
+
 // TestActionSpecs_Artifacts_RouteSendsFileType verifies the canonical route
 // decodes file_type from the caller's arguments and puts it on the request, so
 // the schema a model reads and the query GitLab receives name the same value.

@@ -143,7 +143,6 @@ var acceptedMissingMethods = map[string]string{
 	"Commits.GetGPGSignature":                  "COVERED_RAW. gitlab_commit_signature",
 	"Deployments.GetProjectDeployment":         "COVERED_RAW. gitlab_deployment_get",
 	"Deployments.ListProjectDeployments":       "COVERED_RAW. gitlab_deployment_list",
-	"Jobs.ListPipelineJobs":                    "COVERED_RAW. gitlab_job_list",
 	"Jobs.ListProjectJobs":                     "COVERED_RAW. gitlab_job_list_project",
 	"MergeRequestApprovals.CreateApprovalRule": "COVERED_RAW. gitlab_mr_approval_rule_create",
 	"MergeRequestApprovals.GetApprovalRules":   "COVERED_RAW. gitlab_mr_approval_rules",

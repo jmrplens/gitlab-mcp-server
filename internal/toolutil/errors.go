@@ -323,7 +323,7 @@ func answeredStatus(glErr *gl.ErrorResponse) int {
 // same answer as a revoked token, or the reverse.
 func classifyGitLabResponse(glErr *gl.ErrorResponse, status int) string {
 	if status == http.StatusUnauthorized && gitlabclient.UnauthorizedNamesCredential(answeredRequest(glErr), glErr.Body) {
-		return rejectedTokenDescription
+		return rejectedTokenDescription()
 	}
 	return ClassifyHTTPStatus(status)
 }
@@ -351,13 +351,15 @@ func answeredRequest(glErr *gl.ErrorResponse) *http.Request {
 // the test a reader can run to tell which applies. It opens with
 // "unauthorized" rather than "authentication failed", because for the second
 // cause authentication succeeded, and a model told otherwise checked the
-// credential, found nothing wrong with it and stopped.
-const unauthorizedDescription = "unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal"
+// credential, found nothing wrong with it and stopped. The credential is
+// named by [credentialInUse].
+func unauthorizedDescription() string {
+	return "unauthorized: either " + credentialInUse() + " is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal"
+}
 
 // rejectedTokenDescription is what a 401 means when GitLab said the credential
 // itself was the problem, which [gitlabclient.UnauthorizedNamesCredential]
-// decides. The token is named in the parenthesis rather than as the subject
-// because in HTTP mode the credential is the caller's header, not the variable.
+// decides. The credential is named by [credentialInUse].
 //
 // The scope is named because the GraphQL endpoint authenticates a token only
 // when it carries api or read_api, and answers one without either with the
@@ -367,12 +369,33 @@ const unauthorizedDescription = "unauthorized: either the token (GITLAB_TOKEN) i
 // description names as a missing scope, so leaving the scope out here would
 // have the two surfaces describe one cause two ways. Replacing the token is the
 // remedy for all four causes.
-const rejectedTokenDescription = "authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired, revoked or without the api or read_api scope, so renew or replace it"
+func rejectedTokenDescription() string {
+	return "authentication failed: GitLab rejected " + credentialInUse() + " itself as invalid, expired, revoked or without the api or read_api scope, so renew or replace it"
+}
 
-// httpStatusDescriptions maps HTTP status codes to semantic descriptions.
+// credentialInUse names the credential a 401 is about, by the transport this
+// process serves (issue 1333).
+//
+// A stdio process authenticates every call with the token it was started with,
+// from GITLAB_TOKEN. Over HTTP each request brings its own, in a PRIVATE-TOKEN
+// header or as an Authorization bearer token (the OAuth access token in oauth
+// mode), and GITLAB_TOKEN is a setting of a process that caller cannot see:
+// naming it after a token was revoked mid-session sent a model to fix a
+// variable it has no access to. The transport is the one
+// [SetLocalFilesystemAccess] records, which the server settles from the
+// transport it actually serves before any handler runs.
+func credentialInUse() string {
+	if localFilesystemAllowed.Load() {
+		return "the token (GITLAB_TOKEN)"
+	}
+	return "the token this request presented (its PRIVATE-TOKEN or Authorization header)"
+}
+
+// httpStatusDescriptions maps HTTP status codes to semantic descriptions. A
+// 401 is not among them: its sentence names the credential, which depends on
+// the transport, so [ClassifyHTTPStatus] builds it when it is asked for.
 var httpStatusDescriptions = map[int]string{
 	400: "bad request: check your input parameters",
-	401: unauthorizedDescription,
 	403: "access denied: your token lacks the required permissions. This can mean: (1) missing API scope on the token, (2) insufficient project role (some operations require Maintainer or Owner), or (3) the feature is restricted by instance admin settings",
 	404: "not found: the requested resource does not exist, you lack access, or the feature requires a higher GitLab tier. Verify the ID/path is correct",
 	405: "method not allowed: the action cannot be performed on this resource in its current state",
@@ -560,6 +583,9 @@ func describeMissingPermissions(refusal gitlabclient.GranularRefusal) string {
 // It describes the status alone, so a 401 gets the sentence true of both of its
 // causes; [ClassifyError], which holds the whole response, can say which one.
 func ClassifyHTTPStatus(code int) string {
+	if code == http.StatusUnauthorized {
+		return unauthorizedDescription()
+	}
 	if desc, ok := httpStatusDescriptions[code]; ok {
 		return desc
 	}

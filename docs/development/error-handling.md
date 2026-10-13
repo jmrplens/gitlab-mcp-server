@@ -124,6 +124,15 @@ record of at all is answered through `unauthorized!` too, byte for byte like a
 permission refusal, so a REST 401 without the code keeps the sentence that
 names both causes.
 
+Both sentences name the credential through `credentialInUse`, by the
+transport the process serves: `the token (GITLAB_TOKEN)` on stdio, and `the
+token this request presented (its PRIVATE-TOKEN or Authorization header)` over
+HTTP, where every request brings its own token and `GITLAB_TOKEN` is a setting
+the caller cannot see (issue 1333). The transport is the one
+`SetLocalFilesystemAccess` records, which `cmd/server` settles from the flag it
+runs on, so the 401 description is built when it is asked for rather than
+held in the status table.
+
 The rule is not `ClassifyError`'s own. It is `UnauthorizedNamesCredential` in
 `internal/gitlab/credential_refusal.go`, and it has a second reader: in HTTP
 mode the client's innermost transport applies it to every 401 GitLab answers a

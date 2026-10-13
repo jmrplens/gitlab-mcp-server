@@ -48,6 +48,28 @@ func TestActionAliases_PublishedOrder_IsByCanonicalThenAlias(t *testing.T) {
 	}
 }
 
+// TestNormalizeActionAlias_GroupCustomEmoji_ResolvesEveryAction verifies that
+// the group-scoped spelling of the custom emoji actions resolves for each of
+// the three, not for the list alone (issue 1333).
+//
+// group.custom_emoji_list was an alias of custom_emoji.list while its siblings
+// had none, so a model that learned the spelling from the list read and wrote
+// group.custom_emoji_create next was answered "unknown action".
+func TestNormalizeActionAlias_GroupCustomEmoji_ResolvesEveryAction(t *testing.T) {
+	for alias, want := range map[string]string{
+		"group.custom_emoji_list":   "custom_emoji.list",
+		"group.custom_emoji_create": "custom_emoji.create",
+		"group.custom_emoji_delete": "custom_emoji.delete",
+	} {
+		t.Run(alias, func(t *testing.T) {
+			got, ok := NormalizeActionAlias(alias)
+			if !ok || got != want {
+				t.Errorf("NormalizeActionAlias(%q) = %q, %t, want %q, true", alias, got, ok, want)
+			}
+		})
+	}
+}
+
 // TestCloneActionAliases_CanonicalOutranksAlias_OrdersByCanonical pins the
 // precedence between the comparator's two keys with a table whose alias order
 // contradicts its canonical order. Every entry of the shipped table agrees on

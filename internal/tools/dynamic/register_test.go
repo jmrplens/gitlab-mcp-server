@@ -2662,6 +2662,171 @@ func TestExecute_InvalidParamsReportOnlyTheSectionsThatApply(t *testing.T) {
 	})
 }
 
+// TestExecute_UnknownParam_SuggestsOnlyANameThatTakesItsValue verifies that
+// the nearest valid name is offered for an unknown parameter only when that
+// parameter takes the value the call sent, and means what the unknown name
+// meant (issue 1333).
+//
+// job.download_artifacts names a job by its name, in job, and a call that sent
+// job_id with a job's number was told "Did you mean job_id -> job?": the names
+// are three edits apart, and following the advice sends a number where GitLab
+// expects a name. The type alone does not settle it, since a job's ID is as
+// often sent as text ("12345") and job takes text, so a name that carries an
+// ID (job_id, label_ids) is offered only a name that carries one too. The
+// other direction stays open, because the type already guards it: job with a
+// number is offered job_id, and an integer parameter is still offered for a
+// number written as text, since the dispatcher coerces that.
+func TestExecute_UnknownParam_SuggestsOnlyANameThatTakesItsValue(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_job": {
+			"download_artifacts": {
+				Handler: func(context.Context, map[string]any) (any, error) { return map[string]any{}, nil },
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "ref_name", "job"},
+					"properties": map[string]any{
+						"project_id": map[string]any{"type": "string"},
+						"ref_name":   map[string]any{"type": "string"},
+						"job":        map[string]any{"type": "string"},
+					},
+				},
+			},
+			"get": {
+				Handler: func(context.Context, map[string]any) (any, error) { return map[string]any{}, nil },
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "job_id"},
+					"properties": map[string]any{
+						"project_id": map[string]any{"type": "string"},
+						"job_id":     map[string]any{"type": "integer"},
+					},
+				},
+			},
+		},
+		"gitlab_issue": {
+			"create": {
+				Handler: func(context.Context, map[string]any) (any, error) { return map[string]any{}, nil },
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "title"},
+					"properties": map[string]any{
+						"project_id": map[string]any{"type": "string"},
+						"title":      map[string]any{"type": "string"},
+						"labels":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+					},
+				},
+			},
+		},
+	}
+	registry := NewRegistry(routes)
+
+	tests := []struct {
+		name       string
+		action     string
+		params     map[string]any
+		suggestion string
+		offered    bool
+	}{
+		{
+			name:       "a job's number is not offered the job name",
+			action:     "job.download_artifacts",
+			params:     map[string]any{"project_id": "42", "ref_name": "main", "job_id": float64(7)},
+			suggestion: "job_id -> job",
+		},
+		{
+			name:       "a job's number written as text is not offered the job name",
+			action:     "job.download_artifacts",
+			params:     map[string]any{"project_id": "42", "ref_name": "main", "job_id": "12345"},
+			suggestion: "job_id -> job",
+		},
+		{
+			name:       "a name sent as an ID is not offered a name parameter either",
+			action:     "job.download_artifacts",
+			params:     map[string]any{"project_id": "42", "ref_name": "main", "job_id": "build"},
+			suggestion: "job_id -> job",
+		},
+		{
+			name:       "label IDs are not offered the label names",
+			action:     "issue.create",
+			params:     map[string]any{"project_id": "42", "title": "t", "label_ids": []any{float64(3)}},
+			suggestion: "label_ids -> labels",
+		},
+		{
+			name:       "a job name parameter carrying a number is offered the job ID",
+			action:     "job.get",
+			params:     map[string]any{"project_id": "42", "job": float64(7)},
+			suggestion: "job -> job_id",
+			offered:    true,
+		},
+		{
+			name:       "a number written as text is offered an integer parameter",
+			action:     "job.get",
+			params:     map[string]any{"project_id": "42", "jobid": "7"},
+			suggestion: "jobid -> job_id",
+			offered:    true,
+		},
+		{
+			name:       "a name is not offered an integer parameter",
+			action:     "job.get",
+			params:     map[string]any{"project_id": "42", "jobid": "build"},
+			suggestion: "jobid -> job_id",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, _, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: tt.action, Params: tt.params})
+			if err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+			if result == nil || !result.IsError {
+				t.Fatalf("Execute() result = %+v, want the invalid-params refusal", result)
+			}
+			text := textContent(result)
+			if got := strings.Contains(text, "Did you mean "+tt.suggestion); got != tt.offered {
+				t.Errorf("Execute() error text = %q, offers %q = %t, want %t", text, tt.suggestion, got, tt.offered)
+			}
+		})
+	}
+}
+
+// TestExecute_UnknownNounVerbAction_SuggestsTheActionsNamedThatWay verifies
+// that an unknown action written <noun>.<verb> is answered with the actions
+// whose name is <noun>_<verb> under another domain, ahead of those that share
+// only the verb (issue 1333).
+//
+// label.create was answered with branch.create, pipeline.create, release.create
+// and tag.create, every one of them matching the verb and none the noun, while
+// project.label_create and group.group_label_create, the two actions it can
+// mean, were not offered at all. A caller who guessed the noun as the domain
+// has written the action's own words, and the catalog spells them that way.
+func TestExecute_UnknownNounVerbAction_SuggestsTheActionsNamedThatWay(t *testing.T) {
+	route := toolutil.ActionRoute{Handler: func(context.Context, map[string]any) (any, error) { return map[string]any{}, nil }}
+	registry := NewRegistry(map[string]toolutil.ActionMap{
+		"gitlab_project":  {"label_create": route, "label_list": route, "create": route},
+		"gitlab_group":    {"group_label_create": route, "create": route},
+		"gitlab_branch":   {"create": route},
+		"gitlab_pipeline": {"create": route},
+		"gitlab_release":  {"create": route},
+		"gitlab_tag":      {"create": route},
+	})
+
+	text := executeText(t, registry, "label.create")
+	_, suggestions, found := strings.Cut(text, "Did you mean ")
+	if !found {
+		t.Fatalf("Execute() error text = %q, want suggestions", text)
+	}
+	first := strings.Split(suggestions, ", ")
+	if len(first) < 2 {
+		t.Fatalf("suggestions = %q, want at least two", suggestions)
+	}
+	got := []string{first[0], first[1]}
+	slices.Sort(got)
+	want := []string{"`group.group_label_create`", "`project.label_create`"}
+	if !slices.Equal(got, want) {
+		t.Errorf("first two suggestions = %v, want %v, in %q", got, want, text)
+	}
+}
+
 // TestExecute_RejectsUnsupportedPipelineScheduleVariableSecurityFields verifies
 // dynamic execute does not silently drop user-supplied security intent.
 func TestExecute_RejectsUnsupportedPipelineScheduleVariableSecurityFields(t *testing.T) {
@@ -3262,6 +3427,48 @@ func TestExecute_UnknownActionSuggestsCanonicalIDs(t *testing.T) {
 	}
 	if !strings.Contains(textContent(result), "`project.delete`") {
 		t.Fatalf("Execute() error text = %q, want project.delete suggestion", textContent(result))
+	}
+}
+
+// TestNounVerbActionName_ReadsOnlyANounAndAVerb verifies which unknown actions
+// are read as <noun>.<verb> and spelled as the action name noun_verb, and that
+// an action name ending in it after a qualifier of its own counts as naming it
+// (issue 1333). Anything with no dot, an empty half or a second dot is not that
+// shape, and a name that merely contains the words is not one that ends in them.
+func TestNounVerbActionName_ReadsOnlyANounAndAVerb(t *testing.T) {
+	for _, tt := range []struct {
+		query string
+		want  string
+		ok    bool
+	}{
+		{query: " Label.Create ", want: "label_create", ok: true},
+		{query: "labelcreate"},
+		{query: ".create"},
+		{query: "label."},
+		{query: "label.create.now"},
+	} {
+		t.Run(tt.query, func(t *testing.T) {
+			got, ok := nounVerbActionName(tt.query)
+			if got != tt.want || ok != tt.ok {
+				t.Errorf("nounVerbActionName(%q) = %q, %t, want %q, %t", tt.query, got, ok, tt.want, tt.ok)
+			}
+		})
+	}
+	for _, tt := range []struct {
+		id   string
+		want bool
+	}{
+		{id: "project.label_create", want: true},
+		{id: "group.group_label_create", want: true},
+		{id: "project.label_create_bulk"},
+		{id: "project.prelabel_create"},
+		{id: "branch.create"},
+	} {
+		t.Run(tt.id, func(t *testing.T) {
+			if got := namesNounVerb(tt.id, "label_create"); got != tt.want {
+				t.Errorf("namesNounVerb(%q, label_create) = %t, want %t", tt.id, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -6667,7 +6874,7 @@ func TestDynamicParamValidation_DefensiveBranches(t *testing.T) {
 	if missing, alternatives := missingDynamicRequiredParams(nil, map[string]any{"project_id": 1}); len(missing) != 0 || alternatives != nil {
 		t.Fatalf("missingDynamicRequiredParams(nil) = %v and %v, want none", missing, alternatives)
 	}
-	if got := closestDynamicParamName("proj", []string{"project_id"}); got != "project_id" {
+	if got := closestDynamicParamName("proj", nil, nil, []string{"project_id"}); got != "project_id" {
 		t.Fatalf("closestDynamicParamName() = %q, want project_id", got)
 	}
 }
@@ -6681,10 +6888,10 @@ func TestDynamicParamValidation_DefensiveBranches(t *testing.T) {
 // typed. The tie case pins the first-wins rule, which is what makes the
 // suggestion stable for a caller who retries the same call.
 func TestClosestDynamicParamName_NearestWinsAndAFarNameGetsNoSuggestion(t *testing.T) {
-	if got := closestDynamicParamName("aaa", []string{"aab", "aac"}); got != "aab" {
+	if got := closestDynamicParamName("aaa", nil, nil, []string{"aab", "aac"}); got != "aab" {
 		t.Errorf("closestDynamicParamName(equally near candidates) = %q, want the first of them", got)
 	}
-	if got := closestDynamicParamName("zzzzzzzz", []string{"project_id"}); got != "" {
+	if got := closestDynamicParamName("zzzzzzzz", nil, nil, []string{"project_id"}); got != "" {
 		t.Errorf("closestDynamicParamName(nothing close) = %q, want no suggestion", got)
 	}
 }

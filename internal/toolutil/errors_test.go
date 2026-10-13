@@ -2978,6 +2978,57 @@ func TestClassifyError_CredentialRejected_NamesTheTokenAlone(t *testing.T) {
 	}
 }
 
+// The same two sentences as a process serving HTTP writes them: the credential
+// is the one the request carried, never the stdio setting GITLAB_TOKEN.
+const (
+	httpUnauthorizedSemantic = "unauthorized: either the token this request presented (its PRIVATE-TOKEN or Authorization header) " +
+		"is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer " +
+		"a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal"
+	httpRejectedTokenSemantic = "authentication failed: GitLab rejected the token this request presented (its PRIVATE-TOKEN " +
+		"or Authorization header) itself as invalid, expired, revoked or without the api or read_api scope, so renew or replace it"
+)
+
+// TestClassifyError_UnauthorizedOverHTTP_NamesTheTokenTheRequestPresented
+// verifies that a 401 described by a process serving HTTP names the token the
+// request carried, in its PRIVATE-TOKEN header or as an Authorization bearer
+// token, and never GITLAB_TOKEN (issue 1333).
+//
+// GITLAB_TOKEN is how a stdio process is given its credential. Over HTTP every
+// request brings its own, the OAuth access token in oauth mode among them, and
+// the caller has no access to the server's environment, so a revoked token
+// answered "GitLab rejected the token (GITLAB_TOKEN)" sent a model to fix a
+// variable it cannot see. Both of a 401's sentences are held, the one true of
+// every 401 and the verdict that GitLab refused the credential itself, and the
+// stdio rows hold that the switch is the transport and nothing else.
+func TestClassifyError_UnauthorizedOverHTTP_NamesTheTokenTheRequestPresented(t *testing.T) {
+	original := LocalFilesystemAccessAllowed()
+	t.Cleanup(func() { SetLocalFilesystemAccess(original) })
+
+	tests := []struct {
+		name     string
+		stdio    bool
+		rejected bool
+		want     string
+	}{
+		{name: "HTTP, the status alone", want: httpUnauthorizedSemantic},
+		{name: "HTTP, a credential GitLab rejected", rejected: true, want: httpRejectedTokenSemantic},
+		{name: "stdio, the status alone", stdio: true, want: unauthorizedSemantic},
+		{name: "stdio, a credential GitLab rejected", stdio: true, rejected: true, want: rejectedTokenSemantic},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			SetLocalFilesystemAccess(tt.stdio)
+			got := ClassifyHTTPStatus(http.StatusUnauthorized)
+			if tt.rejected {
+				got = ClassifyError(gitLabAnswer{status: http.StatusUnauthorized, body: expiredTokenBody}.err(t))
+			}
+			if got != tt.want {
+				t.Errorf("description = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestClassifyError_CredentialSignalOnAnotherStatus_KeepsThatStatus verifies
 // that the credential signals refine a 401 only: an invalid_token body or the
 // GraphQL endpoint on any other status is described by that status. The

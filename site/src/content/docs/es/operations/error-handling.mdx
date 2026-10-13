@@ -68,6 +68,8 @@ Toda respuesta que GitLab da con un estado de error, sobre REST o GraphQL, se cl
 | 503                  | `GitLab is under maintenance or overloaded (service unavailable): try again shortly`                                                                                                                                                                                                     | Espera y vuelve a intentarlo                                                                                                                                                                |
 | Cualquier otro       | `GitLab returned HTTP <status>`                                                                                                                                                                                                                                                          | Lee el mensaje de GitLab y la causa                                                                                                                                                         |
 
+Las dos frases del 401 nombran la credencial tal como el servidor la recibió. Un servidor stdio escribe `the token (GITLAB_TOKEN)`, el token con el que se arrancó. Un servidor al que se llega por HTTP escribe en su lugar `the token this request presented (its PRIVATE-TOKEN or Authorization header)`, porque allí cada petición trae su propio token, también un token de acceso OAuth, y `GITLAB_TOKEN` es un ajuste que quien llama no puede ver.
+
 Un error que GitLab notifica dentro de una respuesta `200` no tiene estado que clasificar; consulta [Errores de GraphQL](#errores-de-graphql).
 
 ### Peticiones que GitLab no respondió

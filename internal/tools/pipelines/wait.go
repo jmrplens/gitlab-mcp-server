@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -69,13 +70,63 @@ func Wait(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Cl
 		},
 		Status: func(detail DetailOutput) string { return detail.Status },
 		FailureError: func(detail DetailOutput) error {
-			return fmt.Errorf("pipelineWait: pipeline #%d finished with status %q", input.PipelineID, detail.Status)
+			return pipelineFailure(ctx, client, input, detail.Status)
 		},
 	})
 	if err != nil {
 		return waitOutputFromResult(result), err
 	}
 	return waitOutputFromResult(result), nil
+}
+
+// failedJobsListed is how many failed jobs a failed pipeline's error names:
+// one page, which keeps the answer one request long however large the
+// pipeline is, and says when there are more.
+const failedJobsListed = 20
+
+// pipelineFailure is the error a wait answers a pipeline that finished failed
+// or canceled with.
+//
+// A failed pipeline's error names the jobs that failed, each with its stage and
+// the failure_reason GitLab gives it, and the step that reads a job's log: the
+// status alone left a caller nothing to act on (issue 1333). The jobs are read
+// only when the pipeline failed, since a canceled one has none to name, and a
+// list GitLab does not give leaves the status sentence on its own, because the
+// wait already knows the outcome it was asked for.
+func pipelineFailure(ctx context.Context, client *gitlabclient.Client, input WaitInput, status string) error {
+	finished := fmt.Sprintf("pipelineWait: pipeline #%d finished with status %q", input.PipelineID, status)
+	if status != "failed" {
+		return errors.New(finished)
+	}
+	scope := []gl.BuildStateValue{gl.Failed}
+	//gitlab:request optional: the failed jobs are read only when the pipeline failed, and the wait answers without them when GitLab does not list them
+	jobs, resp, err := client.GL().Jobs.ListPipelineJobs(string(input.ProjectID), input.PipelineID, &gl.ListJobsOptions{
+		PerPage: failedJobsListed,
+		Scope:   &scope,
+	}, gl.WithContext(ctx))
+	if err != nil || len(jobs) == 0 {
+		return errors.New(finished)
+	}
+	named := make([]string, 0, len(jobs))
+	for _, job := range jobs {
+		named = append(named, failedJobName(job))
+	}
+	more := ""
+	if resp.NextPage > 0 {
+		more = ", and more: list them with job.list and scope failed"
+	}
+	return fmt.Errorf("%s. Failed jobs: %s%s. Read a failed job's log with job.trace, passing its job_id",
+		finished, strings.Join(named, "; "), more)
+}
+
+// failedJobName names a failed job by its name, its ID, its stage and the
+// failure_reason GitLab gives it, leaving the reason out when GitLab gives
+// none.
+func failedJobName(job *gl.Job) string {
+	if job.FailureReason == "" {
+		return fmt.Sprintf("%s (job %d, stage %s)", job.Name, job.ID, job.Stage)
+	}
+	return fmt.Sprintf("%s (job %d, stage %s, failure_reason %s)", job.Name, job.ID, job.Stage, job.FailureReason)
 }
 
 func waitOutputFromResult(result waitpoll.Result[DetailOutput]) WaitOutput {
