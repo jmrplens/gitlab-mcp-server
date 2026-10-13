@@ -6,7 +6,7 @@ faq:
   - q: "¿Qué es la elicitación MCP?"
     a: "La elicitación es una capacidad MCP que permite a GitLab MCP Server **pausar y solicitar información al usuario mediante formularios estructurados** renderizados por el cliente. Impulsa la creación tipo asistente de recursos complejos como issues, merge requests, releases y proyectos. En lugar de exigir todos los parámetros de antemano, el servidor recopila los campos de pregunta en pregunta, comprueba cada respuesta frente a lo que preguntó y confirma antes de crear el recurso."
   - q: "¿Qué herramientas de asistente interactivo están disponibles?"
-    a: "GitLab MCP Server proporciona cuatro asistentes de elicitación: `gitlab_interactive_issue_create` (título, descripción, etiquetas, confidencialidad), `gitlab_interactive_mr_create` (rama origen y destino, título, descripción, etiquetas, opciones de eliminar la rama origen y de squash), `gitlab_interactive_release_create` (nombre del tag, nombre de la release, descripción) y `gitlab_interactive_project_create` (nombre, descripción, visibilidad, inicialización del README, rama predeterminada). Los asistentes de issue, MR y release reciben el `project_id` de destino como parámetro de la herramienta, y cada uno confirma con el usuario antes de realizar la llamada final a la API de GitLab."
+    a: "GitLab MCP Server proporciona cuatro asistentes de elicitación: `gitlab_interactive_issue_create` (título, descripción, etiquetas, confidencialidad), `gitlab_interactive_mr_create` (rama origen y destino, título, descripción, etiquetas, opciones de eliminar la rama origen y de squash), `gitlab_interactive_release_create` (nombre del tag, nombre de la release, descripción) y `gitlab_interactive_project_create` (nombre, descripción, visibilidad, inicialización del README y, cuando se pide un README, la rama predeterminada). Los asistentes de issue, MR y release reciben el `project_id` de destino como parámetro de la herramienta, y cada uno confirma con el usuario antes de realizar la llamada final a la API de GitLab."
   - q: "¿Qué ocurre cuando un cliente no admite la elicitación?"
     a: "El asistente no se ejecuta, y su respuesta nombra la acción estándar que hace el mismo trabajo con todos los campos en una sola llamada: `issue.create` para el asistente de issues, `merge_request.create` para el de merge requests, `project.create` para el de proyectos y `release.create` para el de releases. Solo se pierde la experiencia paso a paso. En la superficie predeterminada el asistente de IA ejecuta esa acción mediante `gitlab_execute_action`; con `GITLAB_MCP_TOOL_SURFACE=meta` es la herramienta del dominio con `action: create`, como `gitlab_issue`."
   - q: "¿Qué clientes MCP admiten la elicitación?"
@@ -132,7 +132,7 @@ GitLab MCP Server proporciona cuatro herramientas de creación tipo asistente. C
 | `gitlab_interactive_issue_create`   | Creación de issues paso a paso: título, descripción, etiquetas, confidencialidad, confirmación                                          |
 | `gitlab_interactive_mr_create`      | Creación guiada de merge requests: ramas, título, descripción, etiquetas, opciones de eliminar la rama origen y de squash, confirmación |
 | `gitlab_interactive_release_create` | Asistente de creación de releases: nombre del tag, nombre de la release, descripción, confirmación                                      |
-| `gitlab_interactive_project_create` | Creación de proyectos: nombre, descripción, visibilidad, inicialización del README, rama predeterminada, confirmación                   |
+| `gitlab_interactive_project_create` | Creación de proyectos: nombre, descripción, visibilidad, inicialización del README, rama predeterminada con README, confirmación        |
 
 Los asistentes de issue, merge request y release reciben el `project_id` de destino como parámetro de la herramienta; los formularios recopilan el resto de campos. Estas cuatro herramientas se registran por nombre en las superficies meta e individual; en la superficie dinámica predeterminada se alcanzan mediante `gitlab_execute_action` con los IDs de catálogo `interactive.issue_create`, `interactive.mr_create`, `interactive.release_create` e `interactive.project_create`, que `gitlab_find_action` devuelve.
 
@@ -174,16 +174,16 @@ Las preguntas llegan en el orden de abajo. Rechazar una pregunta opcional contin
 
 #### Proyecto
 
-| Paso | Pregunta                                      | Respuesta | Obligatoria |
-| ---: | --------------------------------------------- | --------- | :---------: |
-|    1 | Nombre del proyecto                           | Texto     |     Sí      |
-|    2 | Descripción                                   | Texto     |     No      |
-|    3 | Visibilidad: private, internal o public       | Opción    |     Sí      |
-|    4 | ¿Inicializar el repositorio con un README?    | Sí/no     |     No      |
-|    5 | Rama predeterminada (vacía para la de GitLab) | Texto     |     No      |
-|    6 | ¿Crear el proyecto? (resumen)                 | Sí/no     |     Sí      |
+| Paso | Pregunta                                                                 | Respuesta | Obligatoria |
+| ---: | ------------------------------------------------------------------------ | --------- | :---------: |
+|    1 | Nombre del proyecto                                                      | Texto     |     Sí      |
+|    2 | Descripción                                                              | Texto     |     No      |
+|    3 | Visibilidad: private, internal o public                                  | Opción    |     Sí      |
+|    4 | ¿Inicializar el repositorio con un README?                               | Sí/no     |     No      |
+|    5 | Rama predeterminada, solo tras un README (vacía para la de la instancia) | Texto     |     No      |
+|    6 | ¿Crear el proyecto? (resumen)                                            | Sí/no     |     Sí      |
 
-El nombre de la release hay que responderlo, aunque la respuesta puede estar vacía. Rechazar la pregunta del README significa que no habrá README.
+El nombre de la release hay que responderlo, aunque la respuesta puede estar vacía. Rechazar la pregunta del README significa que no habrá README, y tampoco pregunta por la rama predeterminada: GitLab aplica una rama predeterminada al crear el proyecto solo junto con un README, y un proyecto creado vacío toma el nombre de rama predeterminada de la instancia, así que el asistente se salta el paso 5 y pasa directamente al resumen.
 
 ### ¿Por qué usar un asistente en lugar de una única llamada?
 

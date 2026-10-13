@@ -7,6 +7,7 @@ package elicitationtools
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -506,8 +507,7 @@ func TestProjectCreate_UserDeclinesConfirmation(t *testing.T) {
 		{action: actionAccept, content: map[string]any{"name": testNewProjectName}},
 		{action: actionAccept, content: map[string]any{"description": ""}},
 		{action: actionAccept, content: map[string]any{"selection": "private"}},
-		{action: actionAccept, content: map[string]any{keyConfirmed: false}}, // no README
-		{action: actionAccept, content: map[string]any{"default_branch": ""}},
+		{action: actionAccept, content: map[string]any{keyConfirmed: false}}, // no README, so no branch prompt
 		{action: actionAccept, content: map[string]any{keyConfirmed: false}}, // decline final confirmation
 	}
 
@@ -1403,7 +1403,7 @@ func TestProjectCreate_CancelAtVariousSteps(t *testing.T) {
 				{action: actionAccept, content: map[string]any{"name": "proj"}},
 				{action: "decline", content: nil},                                       // decline description
 				{action: actionAccept, content: map[string]any{"selection": "private"}}, // visibility
-				{action: actionAccept, content: map[string]any{keyConfirmed: false}},    // explicit no for readme
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},     // a README, so the branch is asked
 				{action: "cancel", content: nil},                                        // cancel default branch
 			},
 			wantError: "default branch",
@@ -1414,8 +1414,7 @@ func TestProjectCreate_CancelAtVariousSteps(t *testing.T) {
 				{action: actionAccept, content: map[string]any{"name": "proj"}},
 				{action: "decline", content: nil},                                       // decline description
 				{action: actionAccept, content: map[string]any{"selection": "private"}}, // visibility
-				{action: "decline", content: nil},                                       // decline readme
-				{action: "decline", content: nil},                                       // keep default branch
+				{action: "decline", content: nil},                                       // decline readme, so no branch prompt
 				{action: actionAccept, content: map[string]any{keyConfirmed: true}},     // final confirmation
 			},
 		},
@@ -1783,7 +1782,6 @@ func TestInteractiveCreate_FinalConfirmUnexpectedError(t *testing.T) {
 				{"description": ""},
 				{"selection": "private"},
 				{keyConfirmed: false},
-				{"default_branch": ""},
 			},
 			call: func(ctx context.Context, req *mcp.CallToolRequest) error {
 				_, err := ProjectCreate(ctx, req, nil, ProjectInput{})
@@ -1907,8 +1905,7 @@ func TestProjectCreate_FinalConfirmCancel(t *testing.T) {
 		{"name": testNewProjectName},
 		{"description": ""},
 		{"selection": "private"},
-		{keyConfirmed: false}, // no README
-		{"default_branch": ""},
+		{keyConfirmed: false}, // no README, so no branch prompt
 	}
 	_, ss, cleanup := setupElicitationSession(t, ctx, stepHandlerCancelOnConfirm(accepts))
 	defer cleanup()
@@ -2386,8 +2383,7 @@ func TestProjectCreate_ConsentSummary_ShowsTheOptionalSettingsOnlyWhenGiven(t *t
 				{action: actionAccept, content: map[string]any{"name": testNewProjectName}},
 				{action: actionAccept, content: map[string]any{"description": ""}},
 				{action: actionAccept, content: map[string]any{"selection": "private"}},
-				{action: actionAccept, content: map[string]any{keyConfirmed: false}}, // no README
-				{action: actionAccept, content: map[string]any{"default_branch": ""}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: false}}, // no README, so no branch prompt
 				{action: actionDecline},
 			},
 			want:    []string{"**Name**:", "**Visibility**:"},
@@ -2408,6 +2404,162 @@ func TestProjectCreate_ConsentSummary_ShowsTheOptionalSettingsOnlyWhenGiven(t *t
 			}
 			assertSummarySections(t, capture.confirmMessage(t), tt.want, tt.notWant)
 		})
+	}
+}
+
+// TestProjectCreate_DefaultBranch_IsAskedOnlyWithAREADME holds the wizard to
+// what GitLab does with a default branch on creation: it applies one only
+// together with initialize_with_readme. The wizard used to ask for a branch
+// whatever the README answer and confirm it, so a user who declined the README
+// approved a branch the project was never created on (issue 1316). Without a
+// README no branch is asked, shown or sent; with one, the prompt names the
+// instance's default branch as what an empty answer leaves, since main is only
+// GitLab's own default and an instance can configure another.
+func TestProjectCreate_DefaultBranch_IsAskedOnlyWithAREADME(t *testing.T) {
+	tests := []struct {
+		name        string
+		steps       []elicitationStep
+		wantPrompts int
+		wantBranch  any
+		wantReadme  any
+	}{
+		{
+			name: "no README asks for no branch",
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"name": testNewProjectName}},
+				{action: actionAccept, content: map[string]any{"description": ""}},
+				{action: actionAccept, content: map[string]any{"selection": "private"}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: false}}, // no README
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},  // final confirmation
+			},
+			wantPrompts: 5,
+		},
+		{
+			name: "a README and an empty branch leave the instance default",
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"name": testNewProjectName}},
+				{action: actionAccept, content: map[string]any{"description": ""}},
+				{action: actionAccept, content: map[string]any{"selection": "private"}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}}, // README
+				{action: actionAccept, content: map[string]any{"default_branch": ""}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},
+			},
+			wantPrompts: 6,
+			wantReadme:  true,
+		},
+		{
+			name: "a README and a branch send both",
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"name": testNewProjectName}},
+				{action: actionAccept, content: map[string]any{"description": ""}},
+				{action: actionAccept, content: map[string]any{"selection": "private"}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}}, // README
+				{action: actionAccept, content: map[string]any{"default_branch": "develop"}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},
+			},
+			wantPrompts: 6,
+			wantBranch:  "develop",
+			wantReadme:  true,
+		},
+		{
+			// A decline answers the optional branch question, so the
+			// wizard goes on to the confirmation and sends the README
+			// without a branch rather than failing the flow.
+			name: "a README with the branch question declined sends no branch",
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"name": testNewProjectName}},
+				{action: actionAccept, content: map[string]any{"description": ""}},
+				{action: actionAccept, content: map[string]any{"selection": "private"}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}}, // README
+				{action: actionDecline},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},
+			},
+			wantPrompts: 6,
+			wantReadme:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, sentBody := recordProjectCreateBody(t)
+
+			capture := &consentCapture{}
+			ctx := context.Background()
+			_, ss, cleanup := setupElicitationSession(t, ctx, capture.handler(tt.steps))
+			defer cleanup()
+
+			if _, err := ProjectCreate(ctx, &mcp.CallToolRequest{Session: ss}, client, ProjectInput{}); err != nil {
+				t.Fatalf("ProjectCreate() error = %v", err)
+			}
+
+			capture.mu.Lock()
+			prompts := append([]string(nil), capture.messages...)
+			capture.mu.Unlock()
+			if len(prompts) != tt.wantPrompts {
+				t.Fatalf("the wizard asked %d questions, want %d: %q", len(prompts), tt.wantPrompts, prompts)
+			}
+			assertBranchPrompts(t, prompts, tt.wantReadme != nil)
+
+			body := sentBody()
+			if got := body["default_branch"]; got != tt.wantBranch {
+				t.Errorf("the create sent default_branch %v, want %v (body %v)", got, tt.wantBranch, body)
+			}
+			if got := body["initialize_with_readme"]; got != tt.wantReadme {
+				t.Errorf("the create sent initialize_with_readme %v, want %v (body %v)", got, tt.wantReadme, body)
+			}
+		})
+	}
+}
+
+// recordProjectCreateBody returns a client whose project create answers a
+// created project, and a function returning the body the create sent.
+func recordProjectCreateBody(t *testing.T) (*gitlabclient.Client, func() map[string]any) {
+	t.Helper()
+	var (
+		mu   sync.Mutex
+		body map[string]any
+	)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects", func(w http.ResponseWriter, r *http.Request) {
+		var sent map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&sent); err != nil {
+			t.Errorf("decode the project create body: %v", err)
+		}
+		mu.Lock()
+		body = sent
+		mu.Unlock()
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":300,"name":"new-project","path_with_namespace":"alice/new-project","default_branch":"main"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	return client, func() map[string]any {
+		mu.Lock()
+		defer mu.Unlock()
+		return body
+	}
+}
+
+// assertBranchPrompts holds the wizard's questions to what it may say about a
+// default branch: no question before the confirmation names main, which is
+// only GitLab's own default; without a README none mentions a default branch
+// at all; with one, the fifth question asks for it and names the instance's
+// default as what an empty answer leaves.
+func assertBranchPrompts(t *testing.T, prompts []string, withReadme bool) {
+	t.Helper()
+	for _, prompt := range prompts[:len(prompts)-1] {
+		if strings.Contains(prompt, "'main'") {
+			t.Errorf("a prompt names main as the default branch, which is only GitLab's own default: %q", prompt)
+		}
+	}
+	if withReadme {
+		if branchPrompt := prompts[4]; !strings.Contains(branchPrompt, "the instance's default branch") {
+			t.Errorf("the branch prompt = %q, want it to name the instance's default branch as what an empty answer leaves", branchPrompt)
+		}
+		return
+	}
+	for _, prompt := range prompts {
+		if strings.Contains(strings.ToLower(prompt), "default branch") {
+			t.Errorf("without a README the wizard still mentions a default branch: %q", prompt)
+		}
 	}
 }
 
@@ -2486,8 +2638,7 @@ func TestInteractiveCreate_GitLabRefusesAfterConsent_TheWizardReturnsTheError(t 
 				{action: actionAccept, content: map[string]any{"name": testNewProjectName}},
 				{action: actionAccept, content: map[string]any{"description": "A new project"}},
 				{action: actionAccept, content: map[string]any{"selection": "private"}},
-				{action: actionAccept, content: map[string]any{keyConfirmed: false}},
-				{action: actionAccept, content: map[string]any{"default_branch": ""}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: false}}, // no README, so no branch prompt
 				{action: actionAccept, content: map[string]any{keyConfirmed: true}},
 			},
 			run: func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client) error {

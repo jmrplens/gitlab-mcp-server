@@ -6,7 +6,7 @@ faq:
   - q: "What is MCP elicitation?"
     a: "Elicitation is an MCP capability that lets GitLab MCP Server **pause and ask the user for input through structured forms** rendered by the client. It powers wizard-style creation of complex resources such as issues, merge requests, releases, and projects. Rather than requiring all parameters upfront, the server collects fields one question at a time, checks each answer against what it asked, and confirms before creating the resource."
   - q: "Which interactive wizard tools are available?"
-    a: "GitLab MCP Server provides four elicitation wizards: `gitlab_interactive_issue_create` (title, description, labels, confidentiality), `gitlab_interactive_mr_create` (source and target branch, title, description, labels, remove-source-branch and squash options), `gitlab_interactive_release_create` (tag name, release name, description), and `gitlab_interactive_project_create` (name, description, visibility, README initialization, default branch). The issue, MR and release wizards take the target `project_id` as a tool parameter, and each confirms with the user before performing the final GitLab API call."
+    a: "GitLab MCP Server provides four elicitation wizards: `gitlab_interactive_issue_create` (title, description, labels, confidentiality), `gitlab_interactive_mr_create` (source and target branch, title, description, labels, remove-source-branch and squash options), `gitlab_interactive_release_create` (tag name, release name, description), and `gitlab_interactive_project_create` (name, description, visibility, README initialization, and the default branch when a README is requested). The issue, MR and release wizards take the target `project_id` as a tool parameter, and each confirms with the user before performing the final GitLab API call."
   - q: "What happens when a client does not support elicitation?"
     a: "The wizard does not run, and its answer names the standard action that does the same work with every field passed in one call: `issue.create` for the issue wizard, `merge_request.create` for the merge request wizard, `project.create` for the project wizard and `release.create` for the release wizard. Only the step-by-step experience is lost. On the default surface the assistant runs that action through `gitlab_execute_action`; with `GITLAB_MCP_TOOL_SURFACE=meta` it is the domain tool with `action: create`, such as `gitlab_issue`."
   - q: "Which MCP clients support elicitation?"
@@ -132,7 +132,7 @@ GitLab MCP Server provides four wizard-style creation tools. Each guides the use
 | `gitlab_interactive_issue_create`   | Step-by-step issue creation: title, description, labels, confidentiality, confirmation                              |
 | `gitlab_interactive_mr_create`      | Guided merge request creation: branches, title, description, labels, remove-source and squash options, confirmation |
 | `gitlab_interactive_release_create` | Release creation wizard: tag name, release name, description, confirmation                                          |
-| `gitlab_interactive_project_create` | Project creation: name, description, visibility, README initialization, default branch, confirmation                |
+| `gitlab_interactive_project_create` | Project creation: name, description, visibility, README initialization, default branch with a README, confirmation  |
 
 The issue, merge request and release wizards take the target `project_id` as a tool parameter; the prompts collect the remaining fields. These four tools are registered by name on the meta and individual surfaces; on the default dynamic surface they are reached through `gitlab_execute_action` with the catalog IDs `interactive.issue_create`, `interactive.mr_create`, `interactive.release_create` and `interactive.project_create`, which `gitlab_find_action` returns.
 
@@ -174,16 +174,16 @@ The questions come in the order below. Declining an optional question continues 
 
 #### Project
 
-| Step | Question                                    | Answer | Required |
-| ---: | ------------------------------------------- | ------ | :------: |
-|    1 | Project name                                | Text   |   Yes    |
-|    2 | Description                                 | Text   |    No    |
-|    3 | Visibility: private, internal or public     | Choice |   Yes    |
-|    4 | Initialize the repository with a README?    | Yes/no |    No    |
-|    5 | Default branch (empty for GitLab's default) | Text   |    No    |
-|    6 | Create the project? (summary)               | Yes/no |   Yes    |
+| Step | Question                                                                     | Answer | Required |
+| ---: | ---------------------------------------------------------------------------- | ------ | :------: |
+|    1 | Project name                                                                 | Text   |   Yes    |
+|    2 | Description                                                                  | Text   |    No    |
+|    3 | Visibility: private, internal or public                                      | Choice |   Yes    |
+|    4 | Initialize the repository with a README?                                     | Yes/no |    No    |
+|    5 | Default branch, asked only after a README (empty for the instance's default) | Text   |    No    |
+|    6 | Create the project? (summary)                                                | Yes/no |   Yes    |
 
-The release name has to be answered, though the answer may be empty. A declined README question means no README.
+The release name has to be answered, though the answer may be empty. A declined README question means no README, and then no default branch question either: GitLab applies a default branch on creation only together with a README, and a project created empty takes the instance's default branch name, so the wizard skips step 5 and goes straight to the summary.
 
 ### Why use a wizard instead of a single tool call?
 

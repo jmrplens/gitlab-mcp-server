@@ -246,6 +246,37 @@ func TestCatalogSurface_DeclineRoundTrip_IsAlsoACancelledResult(t *testing.T) {
 	}
 }
 
+// TestProjectCreateDescription_AsksForTheBranchOnlyAfterAReadme holds the
+// description interactive.project_create is served with to the flow it runs:
+// the default branch is asked only after a yes to the README question, since
+// GitLab applies a default branch on creation only with
+// initialize_with_readme, and an empty answer takes the instance's default
+// branch name, which is not necessarily main (issue 1316). The flow and the
+// project.create schema had been corrected while this text still promised the
+// question on every run and named main.
+func TestProjectCreateDescription_AsksForTheBranchOnlyAfterAReadme(t *testing.T) {
+	desc := projectCreateDescription()
+	var branchLine string
+	for line := range strings.SplitSeq(desc, "\n") {
+		if strings.HasPrefix(line, "- default_branch") {
+			branchLine = line
+		}
+	}
+	if branchLine == "" {
+		t.Fatalf("description lists no default_branch prompt:\n%s", desc)
+	}
+	for _, want := range []string{"initialize_with_readme", "instance's default branch"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(branchLine, want) {
+				t.Errorf("default_branch line = %q, want it to mention %q", branchLine, want)
+			}
+		})
+	}
+	if strings.Contains(desc, "'main'") || strings.Contains(desc, " main ") || strings.Contains(desc, "(main)") {
+		t.Errorf("description still names main as the default branch:\n%s", desc)
+	}
+}
+
 func elicitationSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

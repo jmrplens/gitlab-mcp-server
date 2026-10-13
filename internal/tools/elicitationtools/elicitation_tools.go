@@ -507,7 +507,9 @@ func ReleaseCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 
 // ProjectCreate guides the user through creating a GitLab project
 // via step-by-step elicitation prompts for name, description, visibility,
-// README initialization, and default branch, then confirms before calling
+// README initialization and, only when a README is requested, the default
+// branch, which GitLab ignores on a project created empty. It then confirms
+// before calling
 // [projects.Create]. On multi round-trip sessions each prompt travels as an
 // input request and the handler is re-invoked with the accumulated answers.
 //
@@ -544,9 +546,16 @@ func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 	}
 	initReadme := initReadmeChoice.Value != nil && *initReadmeChoice.Value
 
-	defaultBranch, err := fl.PromptText(ctx, "default_branch", "Enter the default branch name (or leave empty for 'main')", "default_branch")
-	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
-		return projects.Output{}, flowError(fl, err, "collecting default branch")
+	// GitLab applies a default branch on creation only together with a
+	// README: without one the repository is empty and the project takes the
+	// instance's default branch name whatever was sent, so the branch is
+	// neither asked for, shown for consent nor sent unless a README is.
+	var defaultBranch string
+	if initReadme {
+		defaultBranch, err = fl.PromptText(ctx, "default_branch", "Enter the default branch name (or leave empty for the instance's default branch)", "default_branch")
+		if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
+			return projects.Output{}, flowError(fl, err, "collecting default branch")
+		}
 	}
 
 	tracker.Step(ctx, 3, 4, "Confirming project creation...")

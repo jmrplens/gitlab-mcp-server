@@ -58,7 +58,14 @@ type elicitScript struct {
 	mu      sync.Mutex
 	answers map[string]any
 	asked   []string
+	times   map[string]int
 }
+
+// elicitAnswers is a script answer that changes each time its property is
+// asked for: the nth ask takes the nth value, and the last value answers every
+// ask past the end. Two yes-or-no prompts share the property confirmed, so a
+// flow that declines one and accepts the other needs it.
+type elicitAnswers []any
 
 // newElicitScript returns a script that answers with the given values.
 func newElicitScript(answers map[string]any) *elicitScript {
@@ -78,6 +85,13 @@ func (s *elicitScript) respond(_ context.Context, req *mcp.ElicitRequest) (*mcp.
 		value, scripted := s.answers[property]
 		if !scripted {
 			return &mcp.ElicitResult{Action: "decline"}, nil
+		}
+		if sequence, ok := value.(elicitAnswers); ok && len(sequence) > 0 {
+			if s.times == nil {
+				s.times = map[string]int{}
+			}
+			value = sequence[min(s.times[property], len(sequence)-1)]
+			s.times[property]++
 		}
 		content[property] = value
 	}
@@ -267,6 +281,42 @@ func TestElicitation_ProjectCreate_TheAnswersReachTheProject(t *testing.T) {
 		if created.Name != name || created.Visibility != "private" || created.DefaultBranch != fixture.DefaultBranch {
 			e.T.Errorf("the flow created %q, %s, on %q, want %q, private, on %q",
 				created.Name, created.Visibility, created.DefaultBranch, name, fixture.DefaultBranch)
+		}
+	})
+}
+
+// TestElicitation_ProjectCreate_WithoutAREADME_AsksForNoBranch declines the
+// README and holds the flow to asking for no default branch. GitLab applies a
+// default branch on creation only together with a README, and the flow used to
+// ask for one anyway and show it for consent, so the user approved a branch
+// the project was never created on (issue 1316). The script carries no branch
+// answer, so a branch prompt would be declined and named by the assertion on
+// the sequence.
+func TestElicitation_ProjectCreate_WithoutAREADME_AsksForNoBranch(t *testing.T) {
+	e := harness.New(t)
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		name := e.Name("elicited-empty")
+		script := newElicitScript(map[string]any{
+			"name":        name,
+			"description": elicitedDescription,
+			"selection":   "private",
+			// No README, then yes to the final confirmation.
+			"confirmed": elicitAnswers{false, true},
+		})
+		s := scriptedSession(e, surface, script)
+
+		created := harness.Do[projects.Output](s, actionInteractiveProjectCreate, nil)
+		if created.ID == 0 {
+			e.T.Fatalf("the flow answered no project: %+v", created)
+		}
+		e.Defer("project "+created.PathWithNamespace, func(ctx context.Context) error {
+			return fixture.DeleteProject(ctx, e.Client(), created.ID, created.PathWithNamespace)
+		})
+
+		assertAsked(e, script, "name", "description", "selection", "confirmed", "confirmed")
+		if created.Name != name {
+			e.T.Errorf("the flow created %q, want %q", created.Name, name)
 		}
 	})
 }

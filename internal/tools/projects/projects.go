@@ -96,7 +96,7 @@ type CreateInput struct {
 	Description          string   `json:"description,omitempty" jsonschema:"Project description"`
 	Visibility           string   `json:"visibility,omitempty" jsonschema:"Visibility level (private, internal, public)"`
 	InitializeWithReadme bool     `json:"initialize_with_readme,omitempty" jsonschema:"Initialize with a README"`
-	DefaultBranch        string   `json:"default_branch,omitempty" jsonschema:"Default branch name"`
+	DefaultBranch        string   `json:"default_branch,omitempty" jsonschema:"Default branch name. GitLab applies it only together with initialize_with_readme. A project created without a README is empty and takes the instance's default branch name whatever is sent here"`
 	Topics               []string `json:"topics,omitempty" jsonschema:"Topic tags for the project"`
 	ImportURL            string   `json:"import_url,omitempty" jsonschema:"URL to import repository from"`
 	RepositoryStorage    string   `json:"repository_storage,omitempty" jsonschema:"Repository storage shard name (admin only)"`

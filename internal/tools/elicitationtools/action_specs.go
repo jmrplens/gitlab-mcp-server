@@ -207,7 +207,7 @@ func projectCreateDescription() string {
 		"- description (string, optional): leave empty to skip.\n" +
 		"- visibility (enum, required): one of private, internal, public.\n" +
 		"- initialize_with_readme (boolean, optional): yes/no confirmation. An explicit no or a decline continues with false. Canceling aborts the flow.\n" +
-		"- default_branch (string, optional): leave empty to use the GitLab default ('main').\n" +
+		"- default_branch (string, optional, asked only after a yes to initialize_with_readme, since GitLab applies a default branch on creation only with a README): leave empty to use the instance's default branch name.\n" +
 		descElicitConfirmPrompt +
 		"When to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation. Use project.create with all fields pre-supplied.\n\n" +
 		"Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent: re-running with the same project path/name can fail with 400/409. Canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues, with initialize_with_readme taking a decline as false. Side effects on success: GitLab may initialize a repository and notify project members.\n\n" +
