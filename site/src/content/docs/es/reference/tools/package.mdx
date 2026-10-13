@@ -494,13 +494,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Container Repository Protection Rule: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro                         | Tipo             | Requerido | Descripción                                                |
-| --------------------------------- | ---------------- | --------- | ---------------------------------------------------------- |
-| `project_id`                      | `string/integer` | sí        | Project ID or path                                         |
-| `rule_id`                         | `integer`        | sí        | Protection rule ID                                         |
-| `minimum_access_level_for_delete` | `string`         | no        | Minimum access level for delete (maintainer, owner, admin) |
-| `minimum_access_level_for_push`   | `string`         | no        | Minimum access level for push (maintainer, owner, admin)   |
-| `repository_path_pattern`         | `string`         | no        | Repository path pattern                                    |
+| Parámetro                         | Tipo             | Requerido | Descripción                                                                                                                                                                              |
+| --------------------------------- | ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`                      | `string/integer` | sí        | Project ID or path                                                                                                                                                                       |
+| `rule_id`                         | `integer`        | sí        | Protection rule ID                                                                                                                                                                       |
+| `minimum_access_level_for_delete` | `string`         | no        | Minimum access level for delete (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the push level stays set. Omit the field to leave it untouched |
+| `minimum_access_level_for_push`   | `string`         | no        | Minimum access level for push (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the delete level stays set. Omit the field to leave it untouched |
+| `repository_path_pattern`         | `string`         | no        | Repository path pattern                                                                                                                                                                  |
 
 ### `package.registry_tag_delete`
 
@@ -639,10 +639,10 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Container Registry Protection Tag Rule: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro                         | Tipo             | Requerido | Descripción                                                             |
-| --------------------------------- | ---------------- | --------- | ----------------------------------------------------------------------- |
-| `project_id`                      | `string/integer` | sí        | Project ID or path                                                      |
-| `rule_id`                         | `integer`        | sí        | Tag protection rule ID                                                  |
-| `minimum_access_level_for_delete` | `string`         | no        | Minimum access level to delete matching tags (maintainer, owner, admin) |
-| `minimum_access_level_for_push`   | `string`         | no        | Minimum access level to push matching tags (maintainer, owner, admin)   |
-| `tag_name_pattern`                | `string`         | no        | Tag name pattern as a RE2 regular expression                            |
+| Parámetro                         | Tipo             | Requerido | Descripción                                                                                                                                                                                           |
+| --------------------------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`                      | `string/integer` | sí        | Project ID or path                                                                                                                                                                                    |
+| `rule_id`                         | `integer`        | sí        | Tag protection rule ID                                                                                                                                                                                |
+| `minimum_access_level_for_delete` | `string`         | no        | Minimum access level to delete matching tags (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the push level stays set. Omit the field to leave it untouched |
+| `minimum_access_level_for_push`   | `string`         | no        | Minimum access level to push matching tags (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the delete level stays set. Omit the field to leave it untouched |
+| `tag_name_pattern`                | `string`         | no        | Tag name pattern as a RE2 regular expression                                                                                                                                                          |

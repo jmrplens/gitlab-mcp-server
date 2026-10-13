@@ -66,7 +66,7 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `job.artifacts`
 
-> Download the full artifact archive for a CI job, or one report named by file_type (GitLab 19.4 or later), base64-encoded and truncated at 1MB. Returns: size, content, and truncation flag. See also: [`job.download_single_artifact`](#jobdownload_single_artifact), [`job.keep_artifacts`](#jobkeep_artifacts), [`job.get`](#jobget).
+> Download the full artifact archive for a CI job, or one report named by file_type (GitLab 19.4 or later), base64-encoded when it is 1 MB or less. Returns: size, content, and a truncated flag set when the artifact was larger and no content came back. See also: [`job.download_single_artifact`](#jobdownload_single_artifact), [`job.keep_artifacts`](#jobkeep_artifacts), [`job.get`](#jobget).
 
 - **Meta-tool**: `gitlab_job`, action `artifacts`
 - **Individual tool**: `gitlab_job_artifacts`
@@ -131,7 +131,7 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `job.download_artifacts`
 
-> Download the latest successful artifacts archive for a ref and job name. Returns: archive size, content, and truncation flag. See also: [`job.artifacts`](#jobartifacts), [`job.download_single_artifact`](#jobdownload_single_artifact), [`job.get`](#jobget).
+> Download the latest successful artifacts archive for a ref and job name, base64-encoded when it is 1 MB or less. Returns: archive size, content, and a truncated flag set when the archive was larger and no content came back. See also: [`job.artifacts`](#jobartifacts), [`job.download_single_artifact`](#jobdownload_single_artifact), [`job.get`](#jobget).
 
 - **Meta-tool**: `gitlab_job`, action `download_artifacts`
 - **Individual tool**: `gitlab_job_download_artifacts`
@@ -140,15 +140,15 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Job Artifact: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#job))
 - **Behavior**: read-only, idempotent
 
-| Parameter    | Type             | Mandatory | Description                         |
-| ------------ | ---------------- | --------- | ----------------------------------- |
-| `job`        | `string`         | yes       | Job name to download artifacts from |
-| `project_id` | `string/integer` | yes       | Project ID or URL-encoded path      |
-| `ref_name`   | `string`         | yes       | Branch or tag name                  |
+| Parameter    | Type             | Mandatory | Description                                                                                                                                             |
+| ------------ | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `job`        | `string`         | yes       | Job name to download artifacts from, as the CI configuration names it and never its ID. To download one job's artifacts by its job_id use job.artifacts |
+| `project_id` | `string/integer` | yes       | Project ID or URL-encoded path                                                                                                                          |
+| `ref_name`   | `string`         | yes       | Branch or tag name                                                                                                                                      |
 
 ### `job.download_single_artifact`
 
-> Download one artifact file from a job by job_id and artifact_path. Returns: file size, raw content, and truncation flag. See also: [`job.artifacts`](#jobartifacts), [`job.download_artifacts`](#jobdownload_artifacts), [`job.get`](#jobget).
+> Download one artifact file from a job by job_id and artifact_path. Returns: file size, the encoding (text, or base64 for a file that is not text), the content, and a truncated flag. See also: [`job.artifacts`](#jobartifacts), [`job.download_artifacts`](#jobdownload_artifacts), [`job.get`](#jobget).
 
 - **Meta-tool**: `gitlab_job`, action `download_single_artifact`
 - **Individual tool**: `gitlab_job_download_single_artifact`
@@ -165,7 +165,7 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `job.download_single_artifact_by_ref`
 
-> Download one artifact file from the latest successful job on a ref by name and path. Returns: file size, raw content, and truncation flag. See also: [`job.download_artifacts`](#jobdownload_artifacts), [`job.download_single_artifact`](#jobdownload_single_artifact), [`job.get`](#jobget).
+> Download one artifact file from the latest successful job on a ref by name and path. Returns: file size, the encoding (text, or base64 for a file that is not text), the content, and a truncated flag. See also: [`job.download_artifacts`](#jobdownload_artifacts), [`job.download_single_artifact`](#jobdownload_single_artifact), [`job.get`](#jobget).
 
 - **Meta-tool**: `gitlab_job`, action `download_single_artifact_by_ref`
 - **Individual tool**: `gitlab_job_download_single_artifact_by_ref`
@@ -473,7 +473,7 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `job.trace`
 
-> Get CI job trace output. Returns: text log with truncation metadata when logs exceed limits. See also: [`job.get`](#jobget), [`job.retry`](#jobretry), [`job.cancel`](#jobcancel).
+> Get CI job trace output, the end of it when it is over 100 KB. Returns: the log text, a truncated flag and the bytes left out of its beginning. See also: [`job.get`](#jobget), [`job.retry`](#jobretry), [`job.cancel`](#jobcancel).
 
 - **Meta-tool**: `gitlab_job`, action `trace`
 - **Individual tool**: `gitlab_job_trace`
@@ -482,10 +482,11 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Job: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#job))
 - **Behavior**: read-only, idempotent
 
-| Parameter    | Type             | Mandatory | Description                    |
-| ------------ | ---------------- | --------- | ------------------------------ |
-| `job_id`     | `integer`        | yes       | Job ID to get trace log for    |
-| `project_id` | `string/integer` | yes       | Project ID or URL-encoded path |
+| Parameter    | Type             | Mandatory | Description                                                                                                    |
+| ------------ | ---------------- | --------- | -------------------------------------------------------------------------------------------------------------- |
+| `job_id`     | `integer`        | yes       | Job ID to get trace log for                                                                                    |
+| `project_id` | `string/integer` | yes       | Project ID or URL-encoded path                                                                                 |
+| `tail_lines` | `integer`        | no        | Return only the last N lines of the log, 1 to 10000. Either way at most the last 100 KB of the log is returned |
 
 ### `job.wait`
 

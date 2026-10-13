@@ -125,18 +125,18 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Repository: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro     | Tipo             | Requerido | Descripción                                                                  |
-| ------------- | ---------------- | --------- | ---------------------------------------------------------------------------- |
-| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path                                               |
-| `version`     | `string`         | sí        | Version string for the changelog                                             |
-| `branch`      | `string`         | no        | Branch to commit the changelog to (default: default branch)                  |
-| `config_file` | `string`         | no        | Path to the changelog config file in the project                             |
-| `date`        | `string`         | no        | Date and time of the release as an RFC3339 timestamp (default: current time) |
-| `file`        | `string`         | no        | Path to the changelog file (default: CHANGELOG.md)                           |
-| `from`        | `string`         | no        | Start of the range (commit SHA or tag)                                       |
-| `message`     | `string`         | no        | Commit message for the changelog update                                      |
-| `to`          | `string`         | no        | End of the range (commit SHA or tag, default: HEAD)                          |
-| `trailer`     | `string`         | no        | Git trailer to use for changelog generation (default: Changelog)             |
+| Parámetro     | Tipo             | Requerido | Descripción                                                                                                                                                     |
+| ------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                                  |
+| `version`     | `string`         | sí        | Version string for the changelog                                                                                                                                |
+| `branch`      | `string`         | no        | Branch to commit the changelog to (default: default branch)                                                                                                     |
+| `config_file` | `string`         | no        | Path to the changelog config file in the project                                                                                                                |
+| `date`        | `string`         | no        | Date and time of the release, an ISO 8601 timestamp such as 2026-03-01T10:00:00Z. A date such as 2026-03-01 is read as midnight UTC (default: the current time) |
+| `file`        | `string`         | no        | Path to the changelog file (default: CHANGELOG.md)                                                                                                              |
+| `from`        | `string`         | no        | Start of the range (commit SHA or tag)                                                                                                                          |
+| `message`     | `string`         | no        | Commit message for the changelog update                                                                                                                         |
+| `to`          | `string`         | no        | End of the range (commit SHA or tag, default: HEAD)                                                                                                             |
+| `trailer`     | `string`         | no        | Git trailer to use for changelog generation (default: Changelog)                                                                                                |
 
 ### `repository.changelog_generate`
 
@@ -149,15 +149,15 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
-| Parámetro     | Tipo             | Requerido | Descripción                                                                  |
-| ------------- | ---------------- | --------- | ---------------------------------------------------------------------------- |
-| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path                                               |
-| `version`     | `string`         | sí        | Version string                                                               |
-| `config_file` | `string`         | no        | Path to the changelog config file                                            |
-| `date`        | `string`         | no        | Date and time of the release as an RFC3339 timestamp (default: current time) |
-| `from`        | `string`         | no        | Start of the range (commit SHA or tag)                                       |
-| `to`          | `string`         | no        | End of the range (commit SHA or tag, default: HEAD)                          |
-| `trailer`     | `string`         | no        | Git trailer to use (default: Changelog)                                      |
+| Parámetro     | Tipo             | Requerido | Descripción                                                                                                                                                     |
+| ------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                                  |
+| `version`     | `string`         | sí        | Version string                                                                                                                                                  |
+| `config_file` | `string`         | no        | Path to the changelog config file                                                                                                                               |
+| `date`        | `string`         | no        | Date and time of the release, an ISO 8601 timestamp such as 2026-03-01T10:00:00Z. A date such as 2026-03-01 is read as midnight UTC (default: the current time) |
+| `from`        | `string`         | no        | Start of the range (commit SHA or tag)                                                                                                                          |
+| `to`          | `string`         | no        | End of the range (commit SHA or tag, default: HEAD)                                                                                                             |
+| `trailer`     | `string`         | no        | Git trailer to use (default: Changelog)                                                                                                                         |
 
 ### `repository.commit_cherry_pick`
 
@@ -607,13 +607,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
-| Parámetro     | Tipo             | Requerido | Descripción                       |
-| ------------- | ---------------- | --------- | --------------------------------- |
-| `file_path`   | `string`         | sí        | URL-encoded full path of the file |
-| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path    |
-| `ref`         | `string`         | sí        | Branch, tag, or commit SHA        |
-| `range_end`   | `integer`        | no        | End line number for blame range   |
-| `range_start` | `integer`        | no        | Start line number for blame range |
+| Parámetro     | Tipo             | Requerido | Descripción                                                            |
+| ------------- | ---------------- | --------- | ---------------------------------------------------------------------- |
+| `file_path`   | `string`         | sí        | Full path of the file in the repository, as written (e.g. src/main.go) |
+| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path                                         |
+| `ref`         | `string`         | sí        | Branch, tag, or commit SHA                                             |
+| `range_end`   | `integer`        | no        | End line number for blame range                                        |
+| `range_start` | `integer`        | no        | Start line number for blame range                                      |
 
 ### `repository.file_create`
 
@@ -626,18 +626,18 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Repository: Create en proyecto. Algunas llamadas también necesitan: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro          | Tipo                        | Requerido | Descripción                                                        |
-| ------------------ | --------------------------- | --------- | ------------------------------------------------------------------ |
-| `branch`           | `string`                    | sí        | Branch to create the file on                                       |
-| `commit_message`   | `string`                    | sí        | Commit message                                                     |
-| `content`          | `string`                    | sí        | File content                                                       |
-| `file_path`        | `string`                    | sí        | URL-encoded full path of the new file                              |
-| `project_id`       | `string/integer`            | sí        | Project ID or URL-encoded path                                     |
-| `author_email`     | `string`                    | no        | Commit author email                                                |
-| `author_name`      | `string`                    | no        | Commit author name                                                 |
-| `encoding`         | `string` (`text`, `base64`) | no        | Content encoding: text or base64 (default: text)                   |
-| `execute_filemode` | `boolean`                   | no        | Enable execute permission on the file                              |
-| `start_branch`     | `string`                    | no        | Branch to start from (creates new branch if different from branch) |
+| Parámetro          | Tipo                        | Requerido | Descripción                                                                |
+| ------------------ | --------------------------- | --------- | -------------------------------------------------------------------------- |
+| `branch`           | `string`                    | sí        | Branch to create the file on                                               |
+| `commit_message`   | `string`                    | sí        | Commit message                                                             |
+| `content`          | `string`                    | sí        | File content                                                               |
+| `file_path`        | `string`                    | sí        | Full path of the new file in the repository, as written (e.g. src/main.go) |
+| `project_id`       | `string/integer`            | sí        | Project ID or URL-encoded path                                             |
+| `author_email`     | `string`                    | no        | Commit author email                                                        |
+| `author_name`      | `string`                    | no        | Commit author name                                                         |
+| `encoding`         | `string` (`text`, `base64`) | no        | Content encoding: text or base64 (default: text)                           |
+| `execute_filemode` | `boolean`                   | no        | Enable execute permission on the file                                      |
+| `start_branch`     | `string`                    | no        | Branch to start from (creates new branch if different from branch)         |
 
 ### `repository.file_delete`
 
@@ -650,16 +650,16 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Repository: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
-| Parámetro        | Tipo             | Requerido | Descripción                                 |
-| ---------------- | ---------------- | --------- | ------------------------------------------- |
-| `branch`         | `string`         | sí        | Branch to delete the file from              |
-| `commit_message` | `string`         | sí        | Commit message                              |
-| `file_path`      | `string`         | sí        | URL-encoded full path of the file to delete |
-| `project_id`     | `string/integer` | sí        | Project ID or URL-encoded path              |
-| `author_email`   | `string`         | no        | Commit author email                         |
-| `author_name`    | `string`         | no        | Commit author name                          |
-| `last_commit_id` | `string`         | no        | Last known commit ID for optimistic locking |
-| `start_branch`   | `string`         | no        | Branch to start from                        |
+| Parámetro        | Tipo             | Requerido | Descripción                                                    |
+| ---------------- | ---------------- | --------- | -------------------------------------------------------------- |
+| `branch`         | `string`         | sí        | Branch to delete the file from                                 |
+| `commit_message` | `string`         | sí        | Commit message                                                 |
+| `file_path`      | `string`         | sí        | Full path of the file to delete, as written (e.g. src/main.go) |
+| `project_id`     | `string/integer` | sí        | Project ID or URL-encoded path                                 |
+| `author_email`   | `string`         | no        | Commit author email                                            |
+| `author_name`    | `string`         | no        | Commit author name                                             |
+| `last_commit_id` | `string`         | no        | Last known commit ID for optimistic locking                    |
+| `start_branch`   | `string`         | no        | Branch to start from                                           |
 
 ### `repository.file_get`
 
@@ -672,11 +672,11 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
-| Parámetro    | Tipo             | Requerido | Descripción                                                           |
-| ------------ | ---------------- | --------- | --------------------------------------------------------------------- |
-| `file_path`  | `string`         | sí        | URL-encoded full path of the file (e.g. src%2Fmain.go or src/main.go) |
-| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                        |
-| `ref`        | `string`         | sí        | Branch name, tag, or commit SHA                                       |
+| Parámetro    | Tipo             | Requerido | Descripción                                                            |
+| ------------ | ---------------- | --------- | ---------------------------------------------------------------------- |
+| `file_path`  | `string`         | sí        | Full path of the file in the repository, as written (e.g. src/main.go) |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                         |
+| `ref`        | `string`         | sí        | Branch name, tag, or commit SHA                                        |
 
 ### `repository.file_history`
 
@@ -719,11 +719,11 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
-| Parámetro    | Tipo             | Requerido | Descripción                       |
-| ------------ | ---------------- | --------- | --------------------------------- |
-| `file_path`  | `string`         | sí        | URL-encoded full path of the file |
-| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path    |
-| `ref`        | `string`         | sí        | Branch, tag, or commit SHA        |
+| Parámetro    | Tipo             | Requerido | Descripción                                                            |
+| ------------ | ---------------- | --------- | ---------------------------------------------------------------------- |
+| `file_path`  | `string`         | sí        | Full path of the file in the repository, as written (e.g. src/main.go) |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                         |
+| `ref`        | `string`         | sí        | Branch, tag, or commit SHA                                             |
 
 ### `repository.file_raw`
 
@@ -736,12 +736,12 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
-| Parámetro    | Tipo             | Requerido | Descripción                                                           |
-| ------------ | ---------------- | --------- | --------------------------------------------------------------------- |
-| `file_path`  | `string`         | sí        | URL-encoded full path of the file                                     |
-| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                        |
-| `lfs`        | `boolean`        | no        | Fetch the target of an LFS pointer instead of the pointer file itself |
-| `ref`        | `string`         | no        | Branch, tag, or commit SHA (defaults to default branch)               |
+| Parámetro    | Tipo             | Requerido | Descripción                                                            |
+| ------------ | ---------------- | --------- | ---------------------------------------------------------------------- |
+| `file_path`  | `string`         | sí        | Full path of the file in the repository, as written (e.g. src/main.go) |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                         |
+| `lfs`        | `boolean`        | no        | Fetch the target of an LFS pointer instead of the pointer file itself  |
+| `ref`        | `string`         | no        | Branch, tag, or commit SHA (defaults to default branch)                |
 
 ### `repository.file_raw_metadata`
 
@@ -754,12 +754,12 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
-| Parámetro    | Tipo             | Requerido | Descripción                                                           |
-| ------------ | ---------------- | --------- | --------------------------------------------------------------------- |
-| `file_path`  | `string`         | sí        | URL-encoded full path of the file                                     |
-| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                        |
-| `lfs`        | `boolean`        | no        | Fetch the target of an LFS pointer instead of the pointer file itself |
-| `ref`        | `string`         | no        | Branch, tag, or commit SHA (defaults to default branch)               |
+| Parámetro    | Tipo             | Requerido | Descripción                                                            |
+| ------------ | ---------------- | --------- | ---------------------------------------------------------------------- |
+| `file_path`  | `string`         | sí        | Full path of the file in the repository, as written (e.g. src/main.go) |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                         |
+| `lfs`        | `boolean`        | no        | Fetch the target of an LFS pointer instead of the pointer file itself  |
+| `ref`        | `string`         | no        | Branch, tag, or commit SHA (defaults to default branch)                |
 
 ### `repository.file_update`
 
@@ -772,29 +772,29 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Repository: Update en proyecto. Algunas llamadas también necesitan: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro          | Tipo                        | Requerido | Descripción                                      |
-| ------------------ | --------------------------- | --------- | ------------------------------------------------ |
-| `branch`           | `string`                    | sí        | Branch to update the file on                     |
-| `commit_message`   | `string`                    | sí        | Commit message                                   |
-| `content`          | `string`                    | sí        | New file content                                 |
-| `file_path`        | `string`                    | sí        | URL-encoded full path of the file to update      |
-| `project_id`       | `string/integer`            | sí        | Project ID or URL-encoded path                   |
-| `author_email`     | `string`                    | no        | Commit author email                              |
-| `author_name`      | `string`                    | no        | Commit author name                               |
-| `encoding`         | `string` (`text`, `base64`) | no        | Content encoding: text or base64 (default: text) |
-| `execute_filemode` | `boolean`                   | no        | Enable execute permission on the file            |
-| `last_commit_id`   | `string`                    | no        | Last known commit ID for optimistic locking      |
-| `start_branch`     | `string`                    | no        | Branch to start from                             |
+| Parámetro          | Tipo                        | Requerido | Descripción                                                    |
+| ------------------ | --------------------------- | --------- | -------------------------------------------------------------- |
+| `branch`           | `string`                    | sí        | Branch to update the file on                                   |
+| `commit_message`   | `string`                    | sí        | Commit message                                                 |
+| `content`          | `string`                    | sí        | New file content                                               |
+| `file_path`        | `string`                    | sí        | Full path of the file to update, as written (e.g. src/main.go) |
+| `project_id`       | `string/integer`            | sí        | Project ID or URL-encoded path                                 |
+| `author_email`     | `string`                    | no        | Commit author email                                            |
+| `author_name`      | `string`                    | no        | Commit author name                                             |
+| `encoding`         | `string` (`text`, `base64`) | no        | Content encoding: text or base64 (default: text)               |
+| `execute_filemode` | `boolean`                   | no        | Enable execute permission on the file                          |
+| `last_commit_id`   | `string`                    | no        | Last known commit ID for optimistic locking                    |
+| `start_branch`     | `string`                    | no        | Branch to start from                                           |
 
 ### `repository.list_submodules`
 
-> List the Git submodules defined in a repository's .gitmodules. Returns: each submodule's name, path, remote url, resolved_project, and pinned commit_sha, plus a count. See also: [`repository.read_submodule_file`](#repositoryread_submodule_file), [`repository.update_submodule`](#repositoryupdate_submodule), [`repository.tree`](#repositorytree).
+> List the Git submodules defined in a repository's .gitmodules. Returns: each submodule's name, path, remote url, resolved_project on this instance, or external for a remote on another host and unresolved for one naming no project here, and pinned commit_sha, plus a count. See also: [`repository.read_submodule_file`](#repositoryread_submodule_file), [`repository.update_submodule`](#repositoryupdate_submodule), [`repository.tree`](#repositorytree).
 
 - **Meta-herramienta**: `gitlab_repository`, acción `list_submodules`
 - **Herramienta individual**: `gitlab_list_repository_submodules`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Read en proyecto. Algunas llamadas también necesitan: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                  |
@@ -859,7 +859,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_read_repository_submodule_file`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Project: Read en proyecto; Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro        | Tipo             | Requerido | Descripción                                                             |
@@ -905,10 +905,10 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Repository Submodule: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro        | Tipo             | Requerido | Descripción                                |
-| ---------------- | ---------------- | --------- | ------------------------------------------ |
-| `branch`         | `string`         | sí        | Branch name to commit the update to        |
-| `commit_sha`     | `string`         | sí        | Full commit SHA to update the submodule to |
-| `project_id`     | `string/integer` | sí        | Project ID or URL-encoded path             |
-| `submodule`      | `string`         | sí        | URL-encoded full path to the submodule     |
-| `commit_message` | `string`         | no        | Custom commit message (optional)           |
+| Parámetro        | Tipo             | Requerido | Descripción                                                                            |
+| ---------------- | ---------------- | --------- | -------------------------------------------------------------------------------------- |
+| `branch`         | `string`         | sí        | Branch name to commit the update to                                                    |
+| `commit_sha`     | `string`         | sí        | Full commit SHA to update the submodule to                                             |
+| `project_id`     | `string/integer` | sí        | Project ID or URL-encoded path                                                         |
+| `submodule`      | `string`         | sí        | Full path of the submodule in the repository, as .gitmodules writes it (e.g. libs/dep) |
+| `commit_message` | `string`         | no        | Custom commit message (optional)                                                       |

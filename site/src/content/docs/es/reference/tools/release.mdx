@@ -223,16 +223,18 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Release Link: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro           | Tipo                                              | Requerido | Descripción                                                                                         |
-| ------------------- | ------------------------------------------------- | --------- | --------------------------------------------------------------------------------------------------- |
-| `link_id`           | `integer`                                         | sí        | ID of the release link to update                                                                    |
-| `project_id`        | `string/integer`                                  | sí        | Project ID or URL-encoded path                                                                      |
-| `tag_name`          | `string`                                          | sí        | Tag name of the release                                                                             |
-| `direct_asset_path` | `string`                                          | no        | New direct asset path for the link                                                                  |
-| `filepath`          | `string`                                          | no        | New filepath for a direct asset link                                                                |
-| `link_type`         | `string` (`other`, `runbook`, `image`, `package`) | no        | Type of the release link: other, runbook, image, or package.                                        |
-| `name`              | `string`                                          | no        | New name of the link                                                                                |
-| `url`               | `string`                                          | no        | Absolute http, https, or ftp URL of the link target. Do not use local file paths or relative paths. |
+| Parámetro           | Tipo                                              | Requerido | Descripción                                                                                                   |
+| ------------------- | ------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------- |
+| `link_id`           | `integer`                                         | sí        | ID of the release link to update                                                                              |
+| `project_id`        | `string/integer`                                  | sí        | Project ID or URL-encoded path                                                                                |
+| `tag_name`          | `string`                                          | sí        | Tag name of the release                                                                                       |
+| `direct_asset_path` | `string`                                          | no        | New direct asset path for the link. Pass an empty string to remove it. Omit the field to leave it untouched   |
+| `filepath`          | `string`                                          | no        | New filepath for a direct asset link. Pass an empty string to remove it. Omit the field to leave it untouched |
+| `link_type`         | `string` (`other`, `runbook`, `image`, `package`) | no        | Type of the release link: other, runbook, image, or package.                                                  |
+| `name`              | `string`                                          | no        | New name of the link                                                                                          |
+| `url`               | `string`                                          | no        | Absolute http, https, or ftp URL of the link target. Do not use local file paths or relative paths.           |
+
+Además necesita al menos uno de estos: `name`; `url`.
 
 ### `release.list`
 
@@ -267,11 +269,11 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Release: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro     | Tipo             | Requerido | Descripción                                    |
-| ------------- | ---------------- | --------- | ---------------------------------------------- |
-| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path                 |
-| `tag_name`    | `string`         | sí        | Tag name of the release                        |
-| `description` | `string`         | no        | Updated release notes                          |
-| `milestones`  | `string[]`       | no        | Milestone titles to associate with the release |
-| `name`        | `string`         | no        | New release title                              |
-| `released_at` | `string`         | no        | New release date in ISO 8601 format            |
+| Parámetro     | Tipo             | Requerido | Descripción                                                                                                                 |
+| ------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path                                                                                              |
+| `tag_name`    | `string`         | sí        | Tag name of the release                                                                                                     |
+| `description` | `string`         | no        | Updated release notes                                                                                                       |
+| `milestones`  | `string[]`       | no        | Milestone titles to associate with the release. Pass \[\] to detach every milestone. Omit the field to leave them untouched |
+| `name`        | `string`         | no        | New release title                                                                                                           |
+| `released_at` | `string`         | no        | New release date in ISO 8601 format                                                                                         |

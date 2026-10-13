@@ -37,7 +37,7 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `model_registry.download`
 
-> Download one artifact file from a project ML model registry package version by project, model version, path, and filename. Returns: the artifact bytes base64-encoded in content_base64, plus project, model version, path, filename, and decoded size_bytes. See also: [`package.list`](/gitlab-mcp-server/reference/tools/package/#packagelist), [`release.link_create`](/gitlab-mcp-server/reference/tools/release/#releaselink_create), [`repository.raw_blob`](/gitlab-mcp-server/reference/tools/repository/#repositoryraw_blob).
+> Download one artifact file from a project ML model registry package version by project, model version, path (empty for a file at the package root), and filename. Returns: the artifact bytes base64-encoded in content_base64, plus project, model version, path, filename, and decoded size_bytes. See also: [`package.list`](/gitlab-mcp-server/reference/tools/package/#packagelist), [`release.link_create`](/gitlab-mcp-server/reference/tools/release/#releaselink_create), [`repository.raw_blob`](/gitlab-mcp-server/reference/tools/repository/#repositoryraw_blob).
 
 - **Meta-tool**: `gitlab_model_registry`, action `download`
 - **Individual tool**: `gitlab_download_ml_model_package`
@@ -50,5 +50,5 @@ The description of each action, and of each of its parameters, is the text the s
 | ------------------ | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `filename`         | `string`         | yes       | Name of the file to download                                                                                                                  |
 | `model_version_id` | `string/integer` | yes       | Model version ID. Either the numeric version ID from the model version URL or a candidate run ID prefixed with candidate: such as candidate:5 |
-| `path`             | `string`         | yes       | Path within the model package                                                                                                                 |
 | `project_id`       | `string/integer` | yes       | Project ID or URL-encoded path                                                                                                                |
+| `path`             | `string`         | no        | Directory of the file within the model package (such as models or sub/dir). Leave it empty or pass . for a file at the package root           |

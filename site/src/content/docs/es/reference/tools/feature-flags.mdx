@@ -136,7 +136,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | `name`        | `string`         | sí        | Current feature flag name                                                                                                                                                                     |
 | `project_id`  | `string/integer` | sí        | Project ID or path                                                                                                                                                                            |
 | `active`      | `boolean`        | no        | Whether the flag is active                                                                                                                                                                    |
-| `description` | `string`         | no        | Feature flag description                                                                                                                                                                      |
+| `description` | `string`         | no        | Feature flag description. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                             |
 | `new_name`    | `string`         | no        | New feature flag name                                                                                                                                                                         |
 | `strategies`  | `object[]`       | no        | Activation strategies for the flag. Each has an optional id (to update an existing strategy), a name, optional parameters, and optional environment scopes carrying their own id and _destroy |
 

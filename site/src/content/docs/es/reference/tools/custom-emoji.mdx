@@ -50,11 +50,11 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `CustomEmoji` en la respuesta, así que la escritura se confirma y su respuesta se pierde ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#custom_emoji))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro    | Tipo     | Requerido | Descripción                                              |
-| ------------ | -------- | --------- | -------------------------------------------------------- |
-| `group_path` | `string` | sí        | required,Group full path (e.g. my-group)                 |
-| `name`       | `string` | sí        | required,Emoji name without colons (e.g. party_parrot)   |
-| `url`        | `string` | sí        | required,URL to the emoji image (PNG or GIF recommended) |
+| Parámetro    | Tipo     | Requerido | Descripción                                     |
+| ------------ | -------- | --------- | ----------------------------------------------- |
+| `group_path` | `string` | sí        | Group full path (e.g. my-group)                 |
+| `name`       | `string` | sí        | Emoji name without colons (e.g. party_parrot)   |
+| `url`        | `string` | sí        | URL to the emoji image (PNG or GIF recommended) |
 
 ### `custom_emoji.delete`
 
@@ -67,13 +67,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `CustomEmoji` en la respuesta, así que la escritura se confirma y su respuesta se pierde ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#custom_emoji))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
-| Parámetro | Tipo     | Requerido | Descripción                                                   |
-| --------- | -------- | --------- | ------------------------------------------------------------- |
-| `id`      | `string` | sí        | required,Custom emoji GID (e.g. `gid://gitlab/CustomEmoji/1`) |
+| Parámetro | Tipo     | Requerido | Descripción                                          |
+| --------- | -------- | --------- | ---------------------------------------------------- |
+| `id`      | `string` | sí        | Custom emoji GID (e.g. `gid://gitlab/CustomEmoji/1`) |
 
 ### `custom_emoji.list`
 
-> List group-level custom emoji using GraphQL-backed routes.
+> List group-level custom emoji using GraphQL-backed routes. A subgroup is listed with its own emoji only, as GitLab defaults. Set include_ancestor_groups to true to add the emoji of its ancestor groups, which it can use as well.
 
 - **Meta-herramienta**: `gitlab_custom_emoji`, acción `list`
 - **Herramienta individual**: `gitlab_list_custom_emoji`
@@ -82,10 +82,11 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `CustomEmoji`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#custom_emoji))
 - **Comportamiento**: solo lectura, idempotente
 
-| Parámetro    | Tipo      | Requerido | Descripción                                                                                                                             |
-| ------------ | --------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `group_path` | `string`  | sí        | required,Group full path (e.g. my-group)                                                                                                |
-| `after`      | `string`  | no        | Cursor for forward pagination (from previous response end_cursor)                                                                       |
-| `before`     | `string`  | no        | Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted |
-| `first`      | `integer` | no        | Number of items to return (default 20, max 100)                                                                                         |
-| `last`       | `integer` | no        | Number of items to return from the end of the range (backward pagination). Cannot be combined with first                                |
+| Parámetro                 | Tipo      | Requerido | Descripción                                                                                                                                                                |
+| ------------------------- | --------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `group_path`              | `string`  | sí        | Group full path (e.g. my-group)                                                                                                                                            |
+| `after`                   | `string`  | no        | Cursor for forward pagination (from previous response end_cursor)                                                                                                          |
+| `before`                  | `string`  | no        | Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted                                    |
+| `first`                   | `integer` | no        | Number of items to return (default 20, max 100)                                                                                                                            |
+| `include_ancestor_groups` | `boolean` | no        | Also list the custom emoji of every ancestor group, which a subgroup can use as well. Default false, as GitLab defaults: a subgroup is then listed with its own emoji only |
+| `last`                    | `integer` | no        | Number of items to return from the end of the range (backward pagination). Cannot be combined with first                                                                   |

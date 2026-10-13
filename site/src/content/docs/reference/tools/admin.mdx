@@ -424,19 +424,19 @@ No parameters.
 - **Fine-grained token**: Broadcast Message: Update at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Behavior**: writes, idempotent
 
-| Parameter              | Type                                                                                                                   | Mandatory | Description                                                                                                                                             |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                   | `integer`                                                                                                              | yes       | Broadcast message ID                                                                                                                                    |
-| `broadcast_type`       | `string` (`banner`, `notification`)                                                                                    | no        | Type: banner or notification                                                                                                                            |
-| `color`                | `string`                                                                                                               | no        | Background color as a hex code such as \#E75E40. GitLab deprecates it in favor of theme and still accepts it                                            |
-| `dismissable`          | `boolean`                                                                                                              | no        | Whether message can be dismissed                                                                                                                        |
-| `ends_at`              | `string`                                                                                                               | no        | End time in ISO 8601 format                                                                                                                             |
-| `font`                 | `string`                                                                                                               | no        | Font for the message                                                                                                                                    |
-| `message`              | `string`                                                                                                               | no        | Message text. Supports Markdown.                                                                                                                        |
-| `starts_at`            | `string`                                                                                                               | no        | Start time in ISO 8601 format                                                                                                                           |
-| `target_access_levels` | `integer[]`                                                                                                            | no        | Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner) |
-| `target_path`          | `string`                                                                                                               | no        | Target path to show message on                                                                                                                          |
-| `theme`                | `string` (`indigo`, `light-indigo`, `blue`, `light-blue`, `green`, `light-green`, `red`, `light-red`, `dark`, `light`) | no        | Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light.                        |
+| Parameter              | Type                                                                                                                   | Mandatory | Description                                                                                                                                                                                                                                  |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                   | `integer`                                                                                                              | yes       | Broadcast message ID                                                                                                                                                                                                                         |
+| `broadcast_type`       | `string` (`banner`, `notification`)                                                                                    | no        | Type: banner or notification                                                                                                                                                                                                                 |
+| `color`                | `string`                                                                                                               | no        | Background color as a hex code such as \#E75E40. GitLab deprecates it in favor of theme and still accepts it                                                                                                                                 |
+| `dismissable`          | `boolean`                                                                                                              | no        | Whether message can be dismissed                                                                                                                                                                                                             |
+| `ends_at`              | `string`                                                                                                               | no        | End time in ISO 8601 format                                                                                                                                                                                                                  |
+| `font`                 | `string`                                                                                                               | no        | Font for the message                                                                                                                                                                                                                         |
+| `message`              | `string`                                                                                                               | no        | Message text. Supports Markdown.                                                                                                                                                                                                             |
+| `starts_at`            | `string`                                                                                                               | no        | Start time in ISO 8601 format                                                                                                                                                                                                                |
+| `target_access_levels` | `integer[]`                                                                                                            | no        | Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner). Pass \[\] to show the message to every role. Omit the field to leave them untouched |
+| `target_path`          | `string`                                                                                                               | no        | Target path to show message on. Pass an empty string to remove it, so the message shows on every page. Omit the field to leave it untouched                                                                                                  |
+| `theme`                | `string` (`indigo`, `light-indigo`, `blue`, `light-blue`, `green`, `light-green`, `red`, `light-red`, `dark`, `light`) | no        | Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light.                                                                                                             |
 
 ### `admin.bulk_import_cancel`
 
@@ -1356,22 +1356,22 @@ No parameters.
 - **Fine-grained token**: Webhook: Update at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Behavior**: writes, idempotent
 
-| Parameter                   | Type      | Mandatory | Description                                                                     |
-| --------------------------- | --------- | --------- | ------------------------------------------------------------------------------- |
-| `id`                        | `integer` | yes       | System hook ID to edit                                                          |
-| `branch_filter_strategy`    | `string`  | no        | Branch filter strategy: wildcard, regex, or all_branches                        |
-| `custom_webhook_template`   | `string`  | no        | Updated custom payload template (JSON) sent instead of the default webhook body |
-| `description`               | `string`  | no        | Updated hook description                                                        |
-| `enable_ssl_verification`   | `boolean` | no        | Enable SSL verification for the hook URL                                        |
-| `merge_requests_events`     | `boolean` | no        | Trigger on merge request events                                                 |
-| `name`                      | `string`  | no        | Updated hook name                                                               |
-| `push_events`               | `boolean` | no        | Trigger on push events                                                          |
-| `push_events_branch_filter` | `string`  | no        | Branch filter for push events (wildcard, regex, or branch name)                 |
-| `repository_update_events`  | `boolean` | no        | Trigger on repository update events                                             |
-| `signing_token`             | `string`  | no        | Updated write-only signing token for webhook signature validation               |
-| `tag_push_events`           | `boolean` | no        | Trigger on tag push events                                                      |
-| `token`                     | `string`  | no        | Updated secret token for payload validation                                     |
-| `url`                       | `string`  | no        | Updated hook URL                                                                |
+| Parameter                   | Type      | Mandatory | Description                                                                                                                                              |
+| --------------------------- | --------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                        | `integer` | yes       | System hook ID to edit                                                                                                                                   |
+| `branch_filter_strategy`    | `string`  | no        | Branch filter strategy: wildcard, regex, or all_branches                                                                                                 |
+| `custom_webhook_template`   | `string`  | no        | Updated custom payload template (JSON) sent instead of the default webhook body. Pass an empty string to remove it. Omit the field to leave it untouched |
+| `description`               | `string`  | no        | Updated hook description. Pass an empty string to remove it. Omit the field to leave it untouched                                                        |
+| `enable_ssl_verification`   | `boolean` | no        | Enable SSL verification for the hook URL                                                                                                                 |
+| `merge_requests_events`     | `boolean` | no        | Trigger on merge request events                                                                                                                          |
+| `name`                      | `string`  | no        | Updated hook name                                                                                                                                        |
+| `push_events`               | `boolean` | no        | Trigger on push events                                                                                                                                   |
+| `push_events_branch_filter` | `string`  | no        | Branch filter for push events (wildcard, regex, or branch name). Pass an empty string to remove it. Omit the field to leave it untouched                 |
+| `repository_update_events`  | `boolean` | no        | Trigger on repository update events                                                                                                                      |
+| `signing_token`             | `string`  | no        | Updated write-only signing token for webhook signature validation                                                                                        |
+| `tag_push_events`           | `boolean` | no        | Trigger on tag push events                                                                                                                               |
+| `token`                     | `string`  | no        | Updated secret token for payload validation                                                                                                              |
+| `url`                       | `string`  | no        | Updated hook URL                                                                                                                                         |
 
 ### `admin.system_hook_get`
 
@@ -1444,7 +1444,7 @@ No parameters.
 - **Individual tool**: `gitlab_delete_terraform_state`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`; this server lists the group only to a token that also carries `admin_mode`
-- **Fine-grained token**: Terraform State: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
+- **Fine-grained token**: Project: Read at project; Terraform State: Read at project; Terraform State: Delete at project; served empty: `project { terraformState { latestVersion } }` (without Terraform State: Read at project) ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -1479,9 +1479,11 @@ No parameters.
 - **Fine-grained token**: Project: Read at project; Terraform State: Read at project; served empty: `project { terraformStates { nodes { latestVersion } } }` (without Terraform State: Read at project) ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Behavior**: read-only, idempotent
 
-| Parameter      | Type     | Mandatory | Description                            |
-| -------------- | -------- | --------- | -------------------------------------- |
-| `project_path` | `string` | yes       | Full project path (e.g. group/project) |
+| Parameter      | Type      | Mandatory | Description                                                       |
+| -------------- | --------- | --------- | ----------------------------------------------------------------- |
+| `project_path` | `string`  | yes       | Full project path (e.g. group/project)                            |
+| `after`        | `string`  | no        | Cursor for forward pagination (from previous response end_cursor) |
+| `first`        | `integer` | no        | Number of items to return (default 20, max 100)                   |
 
 ### `admin.terraform_state_lock`
 
@@ -1611,12 +1613,12 @@ No parameters.
 - **Fine-grained token**: Topic: Update at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Behavior**: writes, idempotent
 
-| Parameter     | Type      | Mandatory | Description           |
-| ------------- | --------- | --------- | --------------------- |
-| `topic_id`    | `integer` | yes       | Topic ID              |
-| `description` | `string`  | no        | New topic description |
-| `name`        | `string`  | no        | New topic name        |
-| `title`       | `string`  | no        | New topic title       |
+| Parameter     | Type      | Mandatory | Description                                                                                    |
+| ------------- | --------- | --------- | ---------------------------------------------------------------------------------------------- |
+| `topic_id`    | `integer` | yes       | Topic ID                                                                                       |
+| `description` | `string`  | no        | New topic description. Pass an empty string to remove it. Omit the field to leave it untouched |
+| `name`        | `string`  | no        | New topic name                                                                                 |
+| `title`       | `string`  | no        | New topic title                                                                                |
 
 ### `admin.usage_data_metric_definitions`
 

@@ -203,18 +203,18 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Variable: Update at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: writes, idempotent
 
-| Parameter           | Type                         | Mandatory | Description                                                                                   |
-| ------------------- | ---------------------------- | --------- | --------------------------------------------------------------------------------------------- |
-| `group_id`          | `string/integer`             | yes       | Group ID or URL-encoded path                                                                  |
-| `key`               | `string`                     | yes       | Variable key name                                                                             |
-| `description`       | `string`                     | no        | Updated variable description                                                                  |
-| `environment_scope` | `string`                     | no        | Filter by environment scope (shorthand for filter.environment_scope)                          |
-| `filter`            | `object`                     | no        | Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object |
-| `masked`            | `boolean`                    | no        | Mask variable value in job logs                                                               |
-| `protected`         | `boolean`                    | no        | Only expose in protected branches/tags                                                        |
-| `raw`               | `boolean`                    | no        | Treat variable value as raw string                                                            |
-| `value`             | `string`                     | no        | Updated variable value                                                                        |
-| `variable_type`     | `string` (`env_var`, `file`) | no        | Variable type: env_var or file                                                                |
+| Parameter           | Type                         | Mandatory | Description                                                                                           |
+| ------------------- | ---------------------------- | --------- | ----------------------------------------------------------------------------------------------------- |
+| `group_id`          | `string/integer`             | yes       | Group ID or URL-encoded path                                                                          |
+| `key`               | `string`                     | yes       | Variable key name                                                                                     |
+| `description`       | `string`                     | no        | Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched |
+| `environment_scope` | `string`                     | no        | Filter by environment scope (shorthand for filter.environment_scope)                                  |
+| `filter`            | `object`                     | no        | Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object         |
+| `masked`            | `boolean`                    | no        | Mask variable value in job logs                                                                       |
+| `protected`         | `boolean`                    | no        | Only expose in protected branches/tags                                                                |
+| `raw`               | `boolean`                    | no        | Treat variable value as raw string                                                                    |
+| `value`             | `string`                     | no        | Updated variable value. Pass an empty string to empty it. Omit the field to leave it untouched        |
+| `variable_type`     | `string` (`env_var`, `file`) | no        | Variable type: env_var or file                                                                        |
 
 ### `ci_variable.instance_create`
 
@@ -298,15 +298,15 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Variable: Update at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: writes, idempotent
 
-| Parameter       | Type                         | Mandatory | Description                            |
-| --------------- | ---------------------------- | --------- | -------------------------------------- |
-| `key`           | `string`                     | yes       | Variable key name                      |
-| `description`   | `string`                     | no        | Updated variable description           |
-| `masked`        | `boolean`                    | no        | Mask variable value in job logs        |
-| `protected`     | `boolean`                    | no        | Only expose in protected branches/tags |
-| `raw`           | `boolean`                    | no        | Treat variable value as raw string     |
-| `value`         | `string`                     | no        | Updated variable value                 |
-| `variable_type` | `string` (`env_var`, `file`) | no        | Variable type: env_var or file         |
+| Parameter       | Type                         | Mandatory | Description                                                                                           |
+| --------------- | ---------------------------- | --------- | ----------------------------------------------------------------------------------------------------- |
+| `key`           | `string`                     | yes       | Variable key name                                                                                     |
+| `description`   | `string`                     | no        | Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched |
+| `masked`        | `boolean`                    | no        | Mask variable value in job logs                                                                       |
+| `protected`     | `boolean`                    | no        | Only expose in protected branches/tags                                                                |
+| `raw`           | `boolean`                    | no        | Treat variable value as raw string                                                                    |
+| `value`         | `string`                     | no        | Updated variable value. Pass an empty string to empty it. Omit the field to leave it untouched        |
+| `variable_type` | `string` (`env_var`, `file`) | no        | Variable type: env_var or file                                                                        |
 
 ### `ci_variable.list`
 
@@ -340,15 +340,15 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Variable: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: writes, idempotent
 
-| Parameter           | Type                         | Mandatory | Description                                                                                   |
-| ------------------- | ---------------------------- | --------- | --------------------------------------------------------------------------------------------- |
-| `key`               | `string`                     | yes       | Variable key name                                                                             |
-| `project_id`        | `string/integer`             | yes       | Project ID or URL-encoded path                                                                |
-| `description`       | `string`                     | no        | Updated variable description                                                                  |
-| `environment_scope` | `string`                     | no        | Filter by environment scope (shorthand for filter.environment_scope)                          |
-| `filter`            | `object`                     | no        | Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object |
-| `masked`            | `boolean`                    | no        | Mask variable value in job logs                                                               |
-| `protected`         | `boolean`                    | no        | Only expose in protected branches/tags                                                        |
-| `raw`               | `boolean`                    | no        | Treat variable value as raw string                                                            |
-| `value`             | `string`                     | no        | Updated variable value                                                                        |
-| `variable_type`     | `string` (`env_var`, `file`) | no        | Variable type: env_var or file                                                                |
+| Parameter           | Type                         | Mandatory | Description                                                                                           |
+| ------------------- | ---------------------------- | --------- | ----------------------------------------------------------------------------------------------------- |
+| `key`               | `string`                     | yes       | Variable key name                                                                                     |
+| `project_id`        | `string/integer`             | yes       | Project ID or URL-encoded path                                                                        |
+| `description`       | `string`                     | no        | Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched |
+| `environment_scope` | `string`                     | no        | Filter by environment scope (shorthand for filter.environment_scope)                                  |
+| `filter`            | `object`                     | no        | Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object         |
+| `masked`            | `boolean`                    | no        | Mask variable value in job logs                                                                       |
+| `protected`         | `boolean`                    | no        | Only expose in protected branches/tags                                                                |
+| `raw`               | `boolean`                    | no        | Treat variable value as raw string                                                                    |
+| `value`             | `string`                     | no        | Updated variable value. Pass an empty string to empty it. Omit the field to leave it untouched        |
+| `variable_type`     | `string` (`env_var`, `file`) | no        | Variable type: env_var or file                                                                        |

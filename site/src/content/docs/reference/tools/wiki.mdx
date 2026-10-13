@@ -71,10 +71,10 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Wiki: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#wiki))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
-| Parameter    | Type             | Mandatory | Description                                 |
-| ------------ | ---------------- | --------- | ------------------------------------------- |
-| `project_id` | `string/integer` | yes       | Project ID or URL-encoded path              |
-| `slug`       | `string`         | yes       | URL-encoded slug of the wiki page to delete |
+| Parameter    | Type             | Mandatory | Description                                                               |
+| ------------ | ---------------- | --------- | ------------------------------------------------------------------------- |
+| `project_id` | `string/integer` | yes       | Project ID or URL-encoded path                                            |
+| `slug`       | `string`         | yes       | Slug of the wiki page to delete as wiki.list returns it (e.g. 'dir/page') |
 
 ### `wiki.get`
 
@@ -87,12 +87,12 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Wiki: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#wiki))
 - **Behavior**: read-only, idempotent
 
-| Parameter     | Type             | Mandatory | Description                                           |
-| ------------- | ---------------- | --------- | ----------------------------------------------------- |
-| `project_id`  | `string/integer` | yes       | Project ID or URL-encoded path                        |
-| `slug`        | `string`         | yes       | URL-encoded slug of the wiki page (e.g. 'my-page')    |
-| `render_html` | `boolean`        | no        | Return HTML-rendered content instead of raw format    |
-| `version`     | `string`         | no        | Wiki page version SHA to retrieve a specific revision |
+| Parameter     | Type             | Mandatory | Description                                                                                            |
+| ------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------ |
+| `project_id`  | `string/integer` | yes       | Project ID or URL-encoded path                                                                         |
+| `slug`        | `string`         | yes       | Slug of the wiki page as wiki.list returns it, a subpage with its slash (e.g. 'my-page' or 'dir/page') |
+| `render_html` | `boolean`        | no        | Return HTML-rendered content instead of raw format                                                     |
+| `version`     | `string`         | no        | Wiki page version SHA to retrieve a specific revision                                                  |
 
 ### `wiki.list`
 
@@ -121,13 +121,13 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Wiki: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#wiki))
 - **Behavior**: writes, idempotent
 
-| Parameter    | Type                                             | Mandatory | Description                                      |
-| ------------ | ------------------------------------------------ | --------- | ------------------------------------------------ |
-| `project_id` | `string/integer`                                 | yes       | Project ID or URL-encoded path                   |
-| `slug`       | `string`                                         | yes       | URL-encoded slug of the wiki page to update      |
-| `content`    | `string`                                         | no        | New content for the wiki page                    |
-| `format`     | `string` (`markdown`, `rdoc`, `asciidoc`, `org`) | no        | Content format: markdown, rdoc, asciidoc, or org |
-| `title`      | `string`                                         | no        | New title for the wiki page                      |
+| Parameter    | Type                                             | Mandatory | Description                                                               |
+| ------------ | ------------------------------------------------ | --------- | ------------------------------------------------------------------------- |
+| `project_id` | `string/integer`                                 | yes       | Project ID or URL-encoded path                                            |
+| `slug`       | `string`                                         | yes       | Slug of the wiki page to update as wiki.list returns it (e.g. 'dir/page') |
+| `content`    | `string`                                         | no        | New content for the wiki page                                             |
+| `format`     | `string` (`markdown`, `rdoc`, `asciidoc`, `org`) | no        | Content format: markdown, rdoc, asciidoc, or org                          |
+| `title`      | `string`                                         | no        | New title for the wiki page                                               |
 
 ### `wiki.upload_attachment`
 

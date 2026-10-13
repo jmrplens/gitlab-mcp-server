@@ -647,7 +647,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 - gitlab_download_attestation: Download the raw in-toto attestation bundle for one attestation by IID (Ultimate).
 - gitlab_download_dependency_list_export: Download a completed dependency list export (CycloneDX SBOM JSON).
 - gitlab_download_group_export: Download a group's finished export archive.
-- gitlab_download_ml_model_package: Download one artifact file from a project ML model registry package version by project, model version, path, and filename.
+- gitlab_download_ml_model_package: Download one artifact file from a project ML model registry package version by project, model version, path (empty for a file at the package root), and filename...
 - gitlab_download_project_export: Download a finished project export archive as base64.
 - gitlab_edit_geo_site: Edit a Geo site's settings.
 - gitlab_edit_group_badge: Edit a group badge's name, link_url, or image_url.
@@ -968,11 +968,11 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 - gitlab_issue_unsubscribe: Unsubscribe from an issue's notifications.
 - gitlab_issue_update: Update a GitLab issue.
 - gitlab_issue_weight_event_list: List weight events for an issue (Premium/Ultimate).
-- gitlab_job_artifacts: Download the full artifact archive for a CI job, or one report named by file_type (GitLab 19.4 or later), base64-encoded and truncated at 1MB.
+- gitlab_job_artifacts: Download the full artifact archive for a CI job, or one report named by file_type (GitLab 19.4 or later), base64-encoded when it is 1 MB or less.
 - gitlab_job_cancel: Cancel a CI job.
 - gitlab_job_delete_artifacts: Delete the artifacts for one CI job (destructive).
 - gitlab_job_delete_project_artifacts: Delete every eligible artifact across a project (destructive, irreversible).
-- gitlab_job_download_artifacts: Download the latest successful artifacts archive for a ref and job name.
+- gitlab_job_download_artifacts: Download the latest successful artifacts archive for a ref and job name, base64-encoded when it is 1 MB or less.
 - gitlab_job_download_single_artifact: Download one artifact file from a job by job_id and artifact_path.
 - gitlab_job_download_single_artifact_by_ref: Download one artifact file from the latest successful job on a ref by name and path.
 - gitlab_job_erase: Erase a finished CI job's trace log and artifacts (destructive).
@@ -983,7 +983,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 - gitlab_job_list_project: List CI jobs in one project with filters, keyset pagination, and ordering.
 - gitlab_job_play: Run a manual CI job with optional variable overrides.
 - gitlab_job_retry: Retry a failed or canceled CI job.
-- gitlab_job_trace: Get CI job trace output.
+- gitlab_job_trace: Get CI job trace output, the end of it when it is over 100 KB.
 - gitlab_job_wait: Wait for a CI job to finish, polling until terminal state or timeout.
 - gitlab_label_create: Create a project label with required name and hex color, plus optional description, priority, and archived state.
 - gitlab_label_delete: Delete a project label by ID or name.

@@ -65,6 +65,6 @@ No parameters.
 - **Fine-grained token**: Compliance Policy Setting: Update at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#compliance_policy))
 - **Behavior**: writes, idempotent
 
-| Parameter          | Type      | Mandatory | Description                                             |
-| ------------------ | --------- | --------- | ------------------------------------------------------- |
-| `csp_namespace_id` | `integer` | yes       | Namespace ID for the compliance security policy project |
+| Parameter          | Type      | Mandatory | Description                                                                                                                               |
+| ------------------ | --------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `csp_namespace_id` | `integer` | yes       | Namespace ID for the compliance security policy project. Pass 0 to remove the designation. Every change locks the setting for ten minutes |

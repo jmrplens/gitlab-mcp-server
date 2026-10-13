@@ -62,7 +62,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `dependency.export_download`
 
-> Download generated dependency list export content.
+> Download generated dependency list export content whole. An export over 32 MiB is refused with the GitLab route to fetch it directly, never cut short.
 
 - **Meta-herramienta**: `gitlab_dependency`, acción `export_download`
 - **Herramienta individual**: `gitlab_download_dependency_list_export`
@@ -77,7 +77,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `dependency.export_get`
 
-> Get dependency list export status and metadata.
+> Get a dependency list export's status (created, running, finished or failed), its type and its expiry. Poll it until the status is finished before fetching the content.
 
 - **Meta-herramienta**: `gitlab_dependency`, acción `export_get`
 - **Herramienta individual**: `gitlab_get_dependency_list_export`

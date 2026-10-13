@@ -65,6 +65,6 @@ Sin parámetros.
 - **Token de grano fino**: Compliance Policy Setting: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#compliance_policy))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro          | Tipo      | Requerido | Descripción                                             |
-| ------------------ | --------- | --------- | ------------------------------------------------------- |
-| `csp_namespace_id` | `integer` | sí        | Namespace ID for the compliance security policy project |
+| Parámetro          | Tipo      | Requerido | Descripción                                                                                                                               |
+| ------------------ | --------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `csp_namespace_id` | `integer` | sí        | Namespace ID for the compliance security policy project. Pass 0 to remove the designation. Every change locks the setting for ten minutes |

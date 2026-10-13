@@ -126,7 +126,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 > - description (string, optional): leave empty to skip.
 > - visibility (enum, required): one of private, internal, public.
 > - initialize_with_readme (boolean, optional): yes/no confirmation. An explicit no or a decline continues with false. Canceling aborts the flow.
-> - default_branch (string, optional): leave empty to use the GitLab default ('main').
+> - default_branch (string, optional, asked only after a yes to initialize_with_readme, since GitLab applies a default branch on creation only with a README): leave empty to use the instance's default branch name.
 > - confirm (boolean, required): final yes/no review of the assembled summary.
 >
 > When to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation. Use project.create with all fields pre-supplied.

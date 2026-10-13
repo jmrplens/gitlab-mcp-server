@@ -230,7 +230,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | ------------ | ------------------------------------------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `key`        | `string`                                         | sí        | The SSH public key content                                                                                                   |
 | `title`      | `string`                                         | sí        | A descriptive title for the SSH key                                                                                          |
-| `expires_at` | `string`                                         | no        | Expiration date in ISO 8601 format (YYYY-MM-DD)                                                                              |
+| `expires_at` | `string`                                         | no        | Expiry time, an ISO 8601 timestamp such as 2026-12-31T23:00:00Z. A date such as 2026-12-31 is read as midnight UTC           |
 | `usage_type` | `string` (`auth`, `signing`, `auth_and_signing`) | no        | SSH key usage scope: auth (authentication), signing (commit signing), or auth_and_signing (both). Default: auth_and_signing. |
 
 ### `user.add_ssh_key_for_user`
@@ -249,7 +249,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | `key`        | `string`                                         | sí        | The SSH public key content                                                                                                   |
 | `title`      | `string`                                         | sí        | A descriptive title for the SSH key                                                                                          |
 | `user_id`    | `integer`                                        | sí        | The ID of the user                                                                                                           |
-| `expires_at` | `string`                                         | no        | Expiration date in ISO 8601 format (YYYY-MM-DD)                                                                              |
+| `expires_at` | `string`                                         | no        | Expiry time, an ISO 8601 timestamp such as 2026-12-31T23:00:00Z. A date such as 2026-12-31 is read as midnight UTC           |
 | `usage_type` | `string` (`auth`, `signing`, `auth_and_signing`) | no        | SSH key usage scope: auth (authentication), signing (commit signing), or auth_and_signing (both). Default: auth_and_signing. |
 
 ### `user.approve`
@@ -1082,34 +1082,34 @@ Sin parámetros.
 - **Token de grano fino**: User: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro                 | Tipo      | Requerido | Descripción                                           |
-| ------------------------- | --------- | --------- | ----------------------------------------------------- |
-| `user_id`                 | `integer` | sí        | The ID of the user to modify                          |
-| `admin`                   | `boolean` | no        | Grant or revoke admin privileges                      |
-| `auditor` (Premium)       | `boolean` | no        | Grant or revoke auditor privileges (Premium/Ultimate) |
-| `bio`                     | `string`  | no        | New bio text                                          |
-| `can_create_group`        | `boolean` | no        | Allow user to create groups                           |
-| `commit_email`            | `string`  | no        | Email used for commits                                |
-| `email`                   | `string`  | no        | New email address                                     |
-| `extern_uid`              | `string`  | no        | External UID for the provider                         |
-| `external`                | `boolean` | no        | Mark or unmark as external                            |
-| `job_title`               | `string`  | no        | New job title                                         |
-| `linkedin`                | `string`  | no        | LinkedIn account                                      |
-| `location`                | `string`  | no        | New location                                          |
-| `name`                    | `string`  | no        | New display name                                      |
-| `note`                    | `string`  | no        | New admin note                                        |
-| `organization`            | `string`  | no        | New organization                                      |
-| `password`                | `string`  | no        | New password                                          |
-| `private_profile`         | `boolean` | no        | Set profile as private                                |
-| `projects_limit`          | `integer` | no        | New maximum projects limit                            |
-| `provider`                | `string`  | no        | External provider name (use with extern_uid)          |
-| `public_email`            | `string`  | no        | Publicly visible email address                        |
-| `skip_reconfirmation`     | `boolean` | no        | Skip reconfirmation on email change                   |
-| `theme_id`                | `integer` | no        | GitLab theme ID for the user's UI                     |
-| `twitter`                 | `string`  | no        | Twitter/X account                                     |
-| `username`                | `string`  | no        | New username                                          |
-| `view_diffs_file_by_file` | `boolean` | no        | Show whitespace changes in diffs file by file         |
-| `website_url`             | `string`  | no        | User website URL                                      |
+| Parámetro                 | Tipo      | Requerido | Descripción                                                                               |
+| ------------------------- | --------- | --------- | ----------------------------------------------------------------------------------------- |
+| `user_id`                 | `integer` | sí        | The ID of the user to modify                                                              |
+| `admin`                   | `boolean` | no        | Grant or revoke admin privileges                                                          |
+| `auditor` (Premium)       | `boolean` | no        | Grant or revoke auditor privileges (Premium/Ultimate)                                     |
+| `bio`                     | `string`  | no        | New bio text. Pass an empty string to remove it. Omit the field to leave it untouched     |
+| `can_create_group`        | `boolean` | no        | Allow user to create groups                                                               |
+| `commit_email`            | `string`  | no        | Email used for commits                                                                    |
+| `email`                   | `string`  | no        | New email address                                                                         |
+| `extern_uid`              | `string`  | no        | External UID for the provider                                                             |
+| `external`                | `boolean` | no        | Mark or unmark as external                                                                |
+| `job_title`               | `string`  | no        | New job title                                                                             |
+| `linkedin`                | `string`  | no        | LinkedIn account                                                                          |
+| `location`                | `string`  | no        | New location                                                                              |
+| `name`                    | `string`  | no        | New display name                                                                          |
+| `note`                    | `string`  | no        | New admin note                                                                            |
+| `organization`            | `string`  | no        | New organization                                                                          |
+| `password`                | `string`  | no        | New password                                                                              |
+| `private_profile`         | `boolean` | no        | Set profile as private                                                                    |
+| `projects_limit`          | `integer` | no        | New maximum projects limit                                                                |
+| `provider`                | `string`  | no        | External provider name (use with extern_uid)                                              |
+| `public_email`            | `string`  | no        | Publicly visible email address                                                            |
+| `skip_reconfirmation`     | `boolean` | no        | Skip reconfirmation on email change                                                       |
+| `theme_id`                | `integer` | no        | GitLab theme ID for the user's UI                                                         |
+| `twitter`                 | `string`  | no        | Twitter/X account                                                                         |
+| `username`                | `string`  | no        | New username                                                                              |
+| `view_diffs_file_by_file` | `boolean` | no        | Show whitespace changes in diffs file by file                                             |
+| `website_url`             | `string`  | no        | User website URL. Pass an empty string to remove it. Omit the field to leave it untouched |
 
 ### `user.namespace_exists`
 

@@ -316,11 +316,11 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Runner Controller: Update at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, idempotent
 
-| Parameter       | Type                                        | Mandatory | Description                              |
-| --------------- | ------------------------------------------- | --------- | ---------------------------------------- |
-| `controller_id` | `integer`                                   | yes       | Runner controller ID                     |
-| `description`   | `string`                                    | no        | New description                          |
-| `state`         | `string` (`disabled`, `enabled`, `dry_run`) | no        | New state: enabled, disabled, or dry_run |
+| Parameter       | Type                                        | Mandatory | Description                                                                              |
+| --------------- | ------------------------------------------- | --------- | ---------------------------------------------------------------------------------------- |
+| `controller_id` | `integer`                                   | yes       | Runner controller ID                                                                     |
+| `description`   | `string`                                    | no        | New description. Pass an empty string to remove it. Omit the field to leave it untouched |
+| `state`         | `string` (`disabled`, `enabled`, `dry_run`) | no        | New state: enabled, disabled, or dry_run                                                 |
 
 ### `runner.delete_by_token`
 

@@ -471,8 +471,8 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 
 | Parámetro                      | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
 | ------------------------------ | ------------------------ | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `created_after`                | `string`                 | no        | Filter snippets created after (ISO 8601)                                                                                                                                                                                                                                                                                |
-| `created_before`               | `string`                 | no        | Filter snippets created before (ISO 8601)                                                                                                                                                                                                                                                                               |
+| `created_after`                | `string`                 | no        | Filter snippets created after this time, an ISO 8601 timestamp such as 2026-01-01T08:30:00Z. A date such as 2026-01-01 is read as midnight UTC                                                                                                                                                                          |
+| `created_before`               | `string`                 | no        | Filter snippets created before this time, an ISO 8601 timestamp such as 2026-02-01T18:00:00Z. A date such as 2026-02-01 is read as midnight UTC                                                                                                                                                                         |
 | `order_by`                     | `string`                 | no        | Column to order results by for keyset pagination (e.g. id, created_at, updated_at)                                                                                                                                                                                                                                      |
 | `page`                         | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                                                                                                                                                                                                   |
 | `page_token`                   | `string`                 | no        | Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page. |
@@ -676,16 +676,16 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Token de grano fino**: Snippet: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro     | Tipo                                       | Requerido | Descripción                                               |
-| ------------- | ------------------------------------------ | --------- | --------------------------------------------------------- |
-| `project_id`  | `string/integer`                           | sí        | Project ID or path                                        |
-| `snippet_id`  | `integer`                                  | sí        | Snippet ID                                                |
-| `content`     | `string`                                   | no        | New content (single-file, deprecated in favor of files)   |
-| `description` | `string`                                   | no        | New description                                           |
-| `file_name`   | `string`                                   | no        | New file name (single-file, deprecated in favor of files) |
-| `files`       | `object[]`                                 | no        | File operations to apply                                  |
-| `title`       | `string`                                   | no        | New title                                                 |
-| `visibility`  | `string` (`private`, `internal`, `public`) | no        | New visibility: private, internal, or public              |
+| Parámetro     | Tipo                                       | Requerido | Descripción                                                                              |
+| ------------- | ------------------------------------------ | --------- | ---------------------------------------------------------------------------------------- |
+| `project_id`  | `string/integer`                           | sí        | Project ID or path                                                                       |
+| `snippet_id`  | `integer`                                  | sí        | Snippet ID                                                                               |
+| `content`     | `string`                                   | no        | New content (single-file, deprecated in favor of files)                                  |
+| `description` | `string`                                   | no        | New description. Pass an empty string to remove it. Omit the field to leave it untouched |
+| `file_name`   | `string`                                   | no        | New file name (single-file, deprecated in favor of files)                                |
+| `files`       | `object[]`                                 | no        | File operations to apply                                                                 |
+| `title`       | `string`                                   | no        | New title                                                                                |
+| `visibility`  | `string` (`private`, `internal`, `public`) | no        | New visibility: private, internal, or public                                             |
 
 ### `snippet.update`
 
@@ -698,12 +698,12 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Token de grano fino**: Snippet: Update en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro     | Tipo                                       | Requerido | Descripción                                               |
-| ------------- | ------------------------------------------ | --------- | --------------------------------------------------------- |
-| `snippet_id`  | `integer`                                  | sí        | Snippet ID                                                |
-| `content`     | `string`                                   | no        | New content (single-file, deprecated in favor of files)   |
-| `description` | `string`                                   | no        | New description                                           |
-| `file_name`   | `string`                                   | no        | New file name (single-file, deprecated in favor of files) |
-| `files`       | `object[]`                                 | no        | File operations to apply                                  |
-| `title`       | `string`                                   | no        | New title                                                 |
-| `visibility`  | `string` (`private`, `internal`, `public`) | no        | New visibility: private, internal, or public              |
+| Parámetro     | Tipo                                       | Requerido | Descripción                                                                              |
+| ------------- | ------------------------------------------ | --------- | ---------------------------------------------------------------------------------------- |
+| `snippet_id`  | `integer`                                  | sí        | Snippet ID                                                                               |
+| `content`     | `string`                                   | no        | New content (single-file, deprecated in favor of files)                                  |
+| `description` | `string`                                   | no        | New description. Pass an empty string to remove it. Omit the field to leave it untouched |
+| `file_name`   | `string`                                   | no        | New file name (single-file, deprecated in favor of files)                                |
+| `files`       | `object[]`                                 | no        | File operations to apply                                                                 |
+| `title`       | `string`                                   | no        | New title                                                                                |
+| `visibility`  | `string` (`private`, `internal`, `public`) | no        | New visibility: private, internal, or public                                             |

@@ -1992,8 +1992,11 @@
           "type": "string"
         },
         "description": {
-          "description": "New description. Omit to leave the current description unchanged",
-          "type": "string"
+          "description": "New description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "name": {
           "description": "New display name. Omit to leave the current name unchanged",
@@ -2554,6 +2557,9 @@
         "action": {
           "type": "string"
         },
+        "note": {
+          "type": "string"
+        },
         "success": {
           "type": "boolean"
         },
@@ -3069,6 +3075,9 @@
         "external_author": {
           "type": "string"
         },
+        "gid": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
         },
@@ -3152,6 +3161,9 @@
         },
         "resolved_by": {
           "type": "string"
+        },
+        "resource_event": {
+          "type": "boolean"
         },
         "system": {
           "type": "boolean"
@@ -4008,7 +4020,10 @@
                 "type": "string"
               },
               "duration": {
-                "type": "integer"
+                "type": [
+                  "null",
+                  "integer"
+                ]
               },
               "id": {
                 "type": "integer"
@@ -4140,7 +4155,10 @@
                     ]
                   },
                   "duration": {
-                    "type": "integer"
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
                   },
                   "finished_at": {
                     "type": "string"
@@ -4158,7 +4176,10 @@
                     "type": "integer"
                   },
                   "queued_duration": {
-                    "type": "integer"
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
                   },
                   "ref": {
                     "type": "string"
@@ -4238,8 +4259,6 @@
                   "before_sha",
                   "tag",
                   "yaml_errors",
-                  "duration",
-                  "queued_duration",
                   "coverage",
                   "web_url"
                 ],
@@ -4300,8 +4319,7 @@
               "id",
               "merge_request",
               "target_branch",
-              "status",
-              "duration"
+              "status"
             ],
             "type": "object"
           },
@@ -4969,8 +4987,8 @@
       "additionalProperties": false,
       "properties": {
         "expires_at": {
-          "description": "Expiration date in ISO 8601 format (YYYY-MM-DD)",
-          "format": "date",
+          "description": "Expiry time, an ISO 8601 timestamp such as 2026-12-31T23:00:00Z. A date such as 2026-12-31 is read as midnight UTC",
+          "format": "date-time",
           "type": "string"
         },
         "key": {
@@ -5043,8 +5061,8 @@
       "additionalProperties": false,
       "properties": {
         "expires_at": {
-          "description": "Expiration date in ISO 8601 format (YYYY-MM-DD)",
-          "format": "date",
+          "description": "Expiry time, an ISO 8601 timestamp such as 2026-12-31T23:00:00Z. A date such as 2026-12-31 is read as midnight UTC",
+          "format": "date-time",
           "type": "string"
         },
         "key": {
@@ -5351,6 +5369,9 @@
         "action": {
           "type": "string"
         },
+        "note": {
+          "type": "string"
+        },
         "success": {
           "type": "boolean"
         },
@@ -5497,6 +5518,9 @@
         "action": {
           "type": "string"
         },
+        "note": {
+          "type": "string"
+        },
         "success": {
           "type": "boolean"
         },
@@ -5512,7 +5536,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -5545,6 +5569,9 @@
         "action": {
           "type": "string"
         },
+        "note": {
+          "type": "string"
+        },
         "success": {
           "type": "boolean"
         },
@@ -5560,7 +5587,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -6023,7 +6050,10 @@
           ]
         },
         "weight": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -6559,7 +6589,10 @@
           ]
         },
         "weight": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -7064,7 +7097,10 @@
                 ]
               },
               "weight": {
-                "type": "integer"
+                "type": [
+                  "null",
+                  "integer"
+                ]
               }
             },
             "required": [
@@ -8209,8 +8245,11 @@
       "additionalProperties": false,
       "properties": {
         "assignee_id": {
-          "description": "User ID of the assignee the board is scoped to",
-          "type": "integer"
+          "description": "User ID of the assignee the board is scoped to. Pass 0 to remove the assignee from the scope. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "board_id": {
           "description": "Board ID",
@@ -8231,7 +8270,7 @@
           ]
         },
         "labels": {
-          "description": "Label names the board is scoped to",
+          "description": "Label names the board is scoped to. Pass [] to remove every label from the scope. Omit the field to leave it untouched",
           "items": {
             "type": "string"
           },
@@ -8241,8 +8280,11 @@
           ]
         },
         "milestone_id": {
-          "description": "Milestone ID the board is scoped to",
-          "type": "integer"
+          "description": "Milestone ID the board is scoped to: 0 for issues with no milestone, -1 to remove the milestone from the scope, -2 for upcoming and -3 for started milestones. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "name": {
           "description": "Board name",
@@ -8702,7 +8744,10 @@
           ]
         },
         "weight": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -11502,8 +11547,11 @@
       "additionalProperties": false,
       "properties": {
         "description": {
-          "description": "Updated variable description",
-          "type": "string"
+          "description": "Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "environment_scope": {
           "description": "Filter by environment scope (shorthand for filter.environment_scope)",
@@ -11556,8 +11604,11 @@
           ]
         },
         "value": {
-          "description": "Updated variable value",
-          "type": "string"
+          "description": "Updated variable value. Pass an empty string to empty it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "variable_type": {
           "description": "Variable type: env_var or file",
@@ -15780,15 +15831,15 @@
       "additionalProperties": false,
       "properties": {
         "group_path": {
-          "description": "required,Group full path (e.g. my-group)",
+          "description": "Group full path (e.g. my-group)",
           "type": "string"
         },
         "name": {
-          "description": "required,Emoji name without colons (e.g. party_parrot)",
+          "description": "Emoji name without colons (e.g. party_parrot)",
           "type": "string"
         },
         "url": {
-          "description": "required,URL to the emoji image (PNG or GIF recommended)",
+          "description": "URL to the emoji image (PNG or GIF recommended)",
           "format": "uri",
           "type": "string"
         }
@@ -15878,6 +15929,12 @@
         "download": {
           "type": "string"
         },
+        "expires_at": {
+          "type": "string"
+        },
+        "export_type": {
+          "type": "string"
+        },
         "has_finished": {
           "type": "boolean"
         },
@@ -15895,11 +15952,18 @@
         },
         "self": {
           "type": "string"
+        },
+        "send_email": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string"
         }
       },
       "required": [
         "id",
         "has_finished",
+        "send_email",
         "self",
         "download"
       ],
@@ -15967,6 +16031,9 @@
                 "type": "string"
               },
               "external_author": {
+                "type": "string"
+              },
+              "gid": {
                 "type": "string"
               },
               "id": {
@@ -16052,6 +16119,9 @@
               },
               "resolved_by": {
                 "type": "string"
+              },
+              "resource_event": {
+                "type": "boolean"
               },
               "system": {
                 "type": "boolean"
@@ -21173,6 +21243,9 @@
         "action": {
           "type": "string"
         },
+        "note": {
+          "type": "string"
+        },
         "success": {
           "type": "boolean"
         },
@@ -21188,7 +21261,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -21577,7 +21650,7 @@
           "type": "boolean"
         },
         "id": {
-          "description": "required,Custom emoji GID (e.g. gid://gitlab/CustomEmoji/1)",
+          "description": "Custom emoji GID (e.g. gid://gitlab/CustomEmoji/1)",
           "type": "string"
         }
       },
@@ -24061,7 +24134,7 @@
           ]
         },
         "expires_at": {
-          "description": "Expiry date (YYYY-MM-DD)",
+          "description": "Expiry, an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC",
           "format": "date-time",
           "type": "string"
         },
@@ -24229,7 +24302,7 @@
       "additionalProperties": false,
       "properties": {
         "expires_at": {
-          "description": "Expiry date (YYYY-MM-DD)",
+          "description": "Expiry, an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC",
           "format": "date-time",
           "type": "string"
         },
@@ -25668,7 +25741,7 @@
       "additionalProperties": false,
       "properties": {
         "expires_at": {
-          "description": "Expiry date (YYYY-MM-DD)",
+          "description": "Expiry, an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC",
           "format": "date-time",
           "type": "string"
         },
@@ -25772,7 +25845,7 @@
       "additionalProperties": false,
       "properties": {
         "expires_at": {
-          "description": "Expiry date (YYYY-MM-DD)",
+          "description": "Expiry, an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC",
           "format": "date-time",
           "type": "string"
         },
@@ -29277,7 +29350,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -29310,6 +29383,9 @@
         "action": {
           "type": "string"
         },
+        "note": {
+          "type": "string"
+        },
         "success": {
           "type": "boolean"
         },
@@ -29325,7 +29401,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -30144,7 +30220,7 @@
   },
   {
     "name": "gitlab_download_ml_model_package",
-    "description": "Download one artifact file from a project ML model registry package version by project, model version, path, and filename. Returns: the artifact bytes base64-encoded in content_base64, plus project, model version, path, filename, and decoded size_bytes. See also: gitlab_package_list, gitlab_release_link_create, gitlab_repository_raw_blob.",
+    "description": "Download one artifact file from a project ML model registry package version by project, model version, path (empty for a file at the package root), and filename. Returns: the artifact bytes base64-encoded in content_base64, plus project, model version, path, filename, and decoded size_bytes. See also: gitlab_package_list, gitlab_release_link_create, gitlab_repository_raw_blob.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -30160,7 +30236,7 @@
           ]
         },
         "path": {
-          "description": "Path within the model package",
+          "description": "Directory of the file within the model package (such as models or sub/dir). Leave it empty or pass . for a file at the package root",
           "type": "string"
         },
         "project_id": {
@@ -30174,7 +30250,6 @@
       "required": [
         "filename",
         "model_version_id",
-        "path",
         "project_id"
       ],
       "type": "object"
@@ -30952,12 +31027,18 @@
           "type": "string"
         },
         "custom_webhook_template": {
-          "description": "Updated custom payload template (JSON) sent instead of the default webhook body",
-          "type": "string"
+          "description": "Updated custom payload template (JSON) sent instead of the default webhook body. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "description": {
-          "description": "Updated hook description",
-          "type": "string"
+          "description": "Updated hook description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "enable_ssl_verification": {
           "description": "Enable SSL verification for the hook URL",
@@ -30989,8 +31070,11 @@
           ]
         },
         "push_events_branch_filter": {
-          "description": "Branch filter for push events (wildcard, regex, or branch name)",
-          "type": "string"
+          "description": "Branch filter for push events (wildcard, regex, or branch name). Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "repository_update_events": {
           "description": "Trigger on repository update events",
@@ -33864,7 +33948,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -33892,17 +33976,22 @@
           ]
         },
         "description": {
-          "description": "Updated description",
-          "type": "string"
+          "description": "Updated description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "environment_id": {
           "description": "Environment ID",
           "type": "integer"
         },
         "external_url": {
-          "description": "Updated external URL",
-          "format": "uri",
-          "type": "string"
+          "description": "Updated external URL. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "flux_resource_path": {
           "description": "Flux resource path used to track the environment's deployment status",
@@ -34552,7 +34641,7 @@
           "type": "string"
         },
         "created_at": {
-          "description": "Creation timestamp to record instead of now (ISO 8601, e.g. 2025-01-01T00:00:00Z). Honored for group owners and administrators only, and ignored when it cannot be parsed",
+          "description": "Creation timestamp to record instead of now (ISO 8601, e.g. 2025-01-01T00:00:00Z, or a date read as midnight UTC). Honored for group owners and administrators only. A value that does not parse is refused",
           "format": "date-time",
           "type": "string"
         },
@@ -36026,7 +36115,7 @@
   },
   {
     "name": "gitlab_epic_issue_remove",
-    "description": "Unlink a child issue from a group epic (destructive. Requires confirmation). Returns: the resolved epic and issue work item GIDs confirming the removal. See also: gitlab_epic_issue_list, gitlab_epic_issue_assign, gitlab_epic_get.",
+    "description": "Unlink a child issue from a group epic (destructive. Requires confirmation). An issue that is not a child of that epic is refused and left where it is. Returns: the resolved epic and issue work item GIDs confirming the removal. See also: gitlab_epic_issue_list, gitlab_epic_issue_assign, gitlab_epic_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -36094,7 +36183,7 @@
   },
   {
     "name": "gitlab_epic_issue_update",
-    "description": "Reorder an issue within a group epic by moving it before or after another linked issue. Returns: the epic's child issues in their updated order. See also: gitlab_epic_issue_list, gitlab_epic_issue_assign, gitlab_epic_issue_remove.",
+    "description": "Reorder an issue within a group epic by moving it before or after another linked issue. Both issues must already be children of that epic: one in another epic is refused, never moved. Returns: the epic's child issues in their updated order. See also: gitlab_epic_issue_list, gitlab_epic_issue_assign, gitlab_epic_issue_remove.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -37135,6 +37224,9 @@
         "external_author": {
           "type": "string"
         },
+        "gid": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
         },
@@ -37268,6 +37360,9 @@
             "null",
             "object"
           ]
+        },
+        "resource_event": {
+          "type": "boolean"
         },
         "system": {
           "type": "boolean"
@@ -37425,6 +37520,9 @@
         "external_author": {
           "type": "string"
         },
+        "gid": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
         },
@@ -37559,6 +37657,9 @@
             "object"
           ]
         },
+        "resource_event": {
+          "type": "boolean"
+        },
         "system": {
           "type": "boolean"
         },
@@ -37669,6 +37770,9 @@
                 "type": "string"
               },
               "external_author": {
+                "type": "string"
+              },
+              "gid": {
                 "type": "string"
               },
               "id": {
@@ -37805,6 +37909,9 @@
                   "object"
                 ]
               },
+              "resource_event": {
+                "type": "boolean"
+              },
               "system": {
                 "type": "boolean"
               },
@@ -37928,6 +38035,9 @@
           "type": "string"
         },
         "external_author": {
+          "type": "string"
+        },
+        "gid": {
           "type": "string"
         },
         "id": {
@@ -38064,6 +38174,9 @@
             "object"
           ]
         },
+        "resource_event": {
+          "type": "boolean"
+        },
         "system": {
           "type": "boolean"
         },
@@ -38122,13 +38235,18 @@
           "type": "string"
         },
         "description": {
-          "description": "Updated description (Markdown supported)",
-          "type": "string"
+          "description": "Updated description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "due_date": {
-          "description": "Due date (YYYY-MM-DD)",
-          "format": "date",
-          "type": "string"
+          "description": "Due date (YYYY-MM-DD). Pass an empty string to remove the due date. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "epic_iid": {
           "description": "Epic IID within the group",
@@ -38139,23 +38257,27 @@
           "type": "string"
         },
         "health_status": {
-          "description": "Health status (onTrack/needsAttention/atRisk)",
+          "description": "Health status (onTrack/needsAttention/atRisk). Pass an empty string to remove the health status. Omit the field to leave it untouched",
           "enum": [
             "onTrack",
             "needsAttention",
-            "atRisk"
+            "atRisk",
+            ""
           ],
-          "type": "string"
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "milestone_id": {
-          "description": "Global ID of the milestone to assign to the epic",
+          "description": "Global ID of the milestone to assign to the epic. Pass 0 to remove the epic from its milestone. Omit the field to leave it untouched",
           "type": [
             "null",
             "integer"
           ]
         },
         "parent_id": {
-          "description": "Global ID of the parent epic work item",
+          "description": "Global ID of the parent epic work item. Pass 0 to remove the parent. Omit the field to leave it untouched",
           "type": [
             "null",
             "integer"
@@ -38172,9 +38294,11 @@
           ]
         },
         "start_date": {
-          "description": "Start date (YYYY-MM-DD)",
-          "format": "date",
-          "type": "string"
+          "description": "Start date (YYYY-MM-DD). Pass an empty string to remove the start date. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "state_event": {
           "description": "State event: CLOSE or REOPEN",
@@ -39438,8 +39562,11 @@
           ]
         },
         "description": {
-          "description": "Feature flag description",
-          "type": "string"
+          "description": "Feature flag description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "name": {
           "description": "Current feature flag name",
@@ -40233,7 +40360,7 @@
       "additionalProperties": false,
       "properties": {
         "file_path": {
-          "description": "URL-encoded full path of the file",
+          "description": "Full path of the file in the repository, as written (e.g. src/main.go)",
           "type": "string"
         },
         "project_id": {
@@ -40389,7 +40516,7 @@
           ]
         },
         "file_path": {
-          "description": "URL-encoded full path of the new file",
+          "description": "Full path of the new file in the repository, as written (e.g. src/main.go)",
           "type": "string"
         },
         "project_id": {
@@ -40478,7 +40605,7 @@
           "type": "boolean"
         },
         "file_path": {
-          "description": "URL-encoded full path of the file to delete",
+          "description": "Full path of the file to delete, as written (e.g. src/main.go)",
           "type": "string"
         },
         "last_commit_id": {
@@ -40545,7 +40672,7 @@
       "additionalProperties": false,
       "properties": {
         "file_path": {
-          "description": "URL-encoded full path of the file (e.g. src%2Fmain.go or src/main.go)",
+          "description": "Full path of the file in the repository, as written (e.g. src/main.go)",
           "type": "string"
         },
         "project_id": {
@@ -40646,7 +40773,7 @@
       "additionalProperties": false,
       "properties": {
         "file_path": {
-          "description": "URL-encoded full path of the file",
+          "description": "Full path of the file in the repository, as written (e.g. src/main.go)",
           "type": "string"
         },
         "project_id": {
@@ -40742,7 +40869,7 @@
       "additionalProperties": false,
       "properties": {
         "file_path": {
-          "description": "URL-encoded full path of the file",
+          "description": "Full path of the file in the repository, as written (e.g. src/main.go)",
           "type": "string"
         },
         "lfs": {
@@ -40817,7 +40944,7 @@
       "additionalProperties": false,
       "properties": {
         "file_path": {
-          "description": "URL-encoded full path of the file",
+          "description": "Full path of the file in the repository, as written (e.g. src/main.go)",
           "type": "string"
         },
         "lfs": {
@@ -40954,7 +41081,7 @@
           ]
         },
         "file_path": {
-          "description": "URL-encoded full path of the file to update",
+          "description": "Full path of the file to update, as written (e.g. src/main.go)",
           "type": "string"
         },
         "last_commit_id": {
@@ -41075,7 +41202,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -42776,6 +42903,12 @@
         "download": {
           "type": "string"
         },
+        "expires_at": {
+          "type": "string"
+        },
+        "export_type": {
+          "type": "string"
+        },
         "has_finished": {
           "type": "boolean"
         },
@@ -42793,11 +42926,18 @@
         },
         "self": {
           "type": "string"
+        },
+        "send_email": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string"
         }
       },
       "required": [
         "id",
         "has_finished",
+        "send_email",
         "self",
         "download"
       ],
@@ -43287,6 +43427,9 @@
               "external_author": {
                 "type": "string"
               },
+              "gid": {
+                "type": "string"
+              },
               "id": {
                 "type": "integer"
               },
@@ -43370,6 +43513,9 @@
               },
               "resolved_by": {
                 "type": "string"
+              },
+              "resource_event": {
+                "type": "boolean"
               },
               "system": {
                 "type": "boolean"
@@ -44337,7 +44483,7 @@
       "additionalProperties": false,
       "properties": {
         "end_date": {
-          "description": "End date (YYYY-MM-DD)",
+          "description": "End date (YYYY-MM-DD). A timestamp is read for its date. GitLab defaults to today",
           "type": "string"
         },
         "environment_tiers": {
@@ -44377,7 +44523,7 @@
           "type": "string"
         },
         "start_date": {
-          "description": "Start date (YYYY-MM-DD)",
+          "description": "Start date (YYYY-MM-DD). A timestamp is read for its date. GitLab defaults to three months ago",
           "format": "date",
           "type": "string"
         }
@@ -44399,11 +44545,13 @@
                 "type": "string"
               },
               "value": {
-                "type": "number"
+                "type": [
+                  "null",
+                  "number"
+                ]
               }
             },
             "required": [
-              "date",
               "value"
             ],
             "type": "object"
@@ -44731,9 +44879,9 @@
       "additionalProperties": false,
       "properties": {
         "assignee_id": {
-          "description": "Filter by assignee user ID",
+          "description": "Filter by assignee: a user ID, None for issues nobody is assigned, or Any for issues somebody is",
           "type": [
-            "null",
+            "string",
             "integer"
           ]
         },
@@ -46122,9 +46270,9 @@
       "additionalProperties": false,
       "properties": {
         "assignee_id": {
-          "description": "Filter by assignee user ID",
+          "description": "Filter by assignee: a user ID, None for issues nobody is assigned, or Any for issues somebody is",
           "type": [
-            "null",
+            "string",
             "integer"
           ]
         },
@@ -46775,7 +46923,10 @@
           "type": "string"
         },
         "duration": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "id": {
           "type": "integer"
@@ -46907,7 +47058,10 @@
               ]
             },
             "duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "finished_at": {
               "type": "string"
@@ -46925,7 +47079,10 @@
               "type": "integer"
             },
             "queued_duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "ref": {
               "type": "string"
@@ -47005,8 +47162,6 @@
             "before_sha",
             "tag",
             "yaml_errors",
-            "duration",
-            "queued_duration",
             "coverage",
             "web_url"
           ],
@@ -47067,8 +47222,7 @@
         "id",
         "merge_request",
         "target_branch",
-        "status",
-        "duration"
+        "status"
       ],
       "type": "object"
     },
@@ -47296,16 +47450,12 @@
         "license_sha256",
         "license_id",
         "historical_max_users",
-        "licensee",
         "license_user_count",
         "license_starts_at",
         "license_expires_at",
         "license_plan",
-        "license_add_ons",
         "license_trial",
-        "license_subscription_id",
-        "license",
-        "settings"
+        "license_subscription_id"
       ],
       "type": "object"
     },
@@ -47845,7 +47995,7 @@
       "additionalProperties": false,
       "properties": {
         "end_date": {
-          "description": "End date (YYYY-MM-DD)",
+          "description": "End date (YYYY-MM-DD). A timestamp is read for its date. GitLab defaults to today",
           "type": "string"
         },
         "environment_tiers": {
@@ -47885,7 +48035,7 @@
           ]
         },
         "start_date": {
-          "description": "Start date (YYYY-MM-DD)",
+          "description": "Start date (YYYY-MM-DD). A timestamp is read for its date. GitLab defaults to three months ago",
           "format": "date",
           "type": "string"
         }
@@ -47907,11 +48057,13 @@
                 "type": "string"
               },
               "value": {
-                "type": "number"
+                "type": [
+                  "null",
+                  "number"
+                ]
               }
             },
             "required": [
-              "date",
               "value"
             ],
             "type": "object"
@@ -48160,9 +48312,9 @@
       "additionalProperties": false,
       "properties": {
         "assignee_id": {
-          "description": "Filter by assignee user ID",
+          "description": "Filter by assignee: a user ID, None for issues nobody is assigned, or Any for issues somebody is",
           "type": [
-            "null",
+            "string",
             "integer"
           ]
         },
@@ -49381,9 +49533,7 @@
         }
       },
       "required": [
-        "recorded_at",
-        "license",
-        "counts"
+        "recorded_at"
       ],
       "type": "object"
     },
@@ -49419,9 +49569,6 @@
           "type": "object"
         }
       },
-      "required": [
-        "settings"
-      ],
       "type": "object"
     },
     "annotations": {
@@ -51898,17 +52045,12 @@
         "license_sha256",
         "license_id",
         "historical_max_users",
-        "licensee",
         "license_user_count",
         "license_starts_at",
         "license_expires_at",
         "license_plan",
-        "license_add_ons",
         "license_trial",
-        "license_subscription_id",
-        "license",
-        "settings",
-        "counts"
+        "license_subscription_id"
       ],
       "type": "object"
     },
@@ -55101,7 +55243,10 @@
           ]
         },
         "weight": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -55562,7 +55707,10 @@
           ]
         },
         "weight": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -55992,7 +56140,10 @@
                 ]
               },
               "weight": {
-                "type": "integer"
+                "type": [
+                  "null",
+                  "integer"
+                ]
               }
             },
             "required": [
@@ -57126,8 +57277,11 @@
       "additionalProperties": false,
       "properties": {
         "assignee_id": {
-          "description": "User ID of the assignee the board is scoped to",
-          "type": "integer"
+          "description": "User ID of the assignee the board is scoped to. Pass 0 to remove the assignee from the scope. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "board_id": {
           "description": "Board ID",
@@ -57141,7 +57295,7 @@
           ]
         },
         "labels": {
-          "description": "Label names the board is scoped to",
+          "description": "Label names the board is scoped to. Pass [] to remove every label from the scope. Omit the field to leave it untouched",
           "items": {
             "type": "string"
           },
@@ -57151,8 +57305,11 @@
           ]
         },
         "milestone_id": {
-          "description": "Milestone ID the board is scoped to",
-          "type": "integer"
+          "description": "Milestone ID the board is scoped to: 0 for issues with no milestone, -1 to remove the milestone from the scope, -2 for upcoming and -3 for started milestones. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "name": {
           "description": "Board name",
@@ -57530,7 +57687,10 @@
           ]
         },
         "weight": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -60560,8 +60720,11 @@
           ]
         },
         "custom_webhook_template": {
-          "description": "Custom payload template (JSON) sent instead of the default webhook body",
-          "type": "string"
+          "description": "Custom payload template (JSON) sent instead of the default webhook body. On an edit, pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "deployment_events": {
           "description": "Trigger on deployment events",
@@ -60571,8 +60734,11 @@
           ]
         },
         "description": {
-          "description": "Hook description",
-          "type": "string"
+          "description": "Hook description. On an edit, pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "emoji_events": {
           "description": "Trigger on emoji events",
@@ -60670,8 +60836,11 @@
           ]
         },
         "push_events_branch_filter": {
-          "description": "Branch filter for push events (e.g. 'main')",
-          "type": "string"
+          "description": "Branch filter for push events (e.g. 'main'). On an edit, pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "releases_events": {
           "description": "Trigger on release events",
@@ -61188,8 +61357,11 @@
           ]
         },
         "custom_webhook_template": {
-          "description": "Custom payload template (JSON) sent instead of the default webhook body",
-          "type": "string"
+          "description": "Custom payload template (JSON) sent instead of the default webhook body. On an edit, pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "deployment_events": {
           "description": "Trigger on deployment events",
@@ -61199,8 +61371,11 @@
           ]
         },
         "description": {
-          "description": "Hook description",
-          "type": "string"
+          "description": "Hook description. On an edit, pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "emoji_events": {
           "description": "Trigger on emoji events",
@@ -61302,8 +61477,11 @@
           ]
         },
         "push_events_branch_filter": {
-          "description": "Branch filter for push events (e.g. 'main')",
-          "type": "string"
+          "description": "Branch filter for push events (e.g. 'main'). On an edit, pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "releases_events": {
           "description": "Trigger on release events",
@@ -63308,10 +63486,6 @@
         "name": {
           "description": "Label name",
           "type": "string"
-        },
-        "priority": {
-          "description": "Label priority (lower is higher priority, 0 means no priority)",
-          "type": "integer"
         }
       },
       "required": [
@@ -63997,8 +64171,11 @@
           "type": "string"
         },
         "description": {
-          "description": "New label description",
-          "type": "string"
+          "description": "New label description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "group_id": {
           "description": "Group ID or URL-encoded path",
@@ -64017,10 +64194,6 @@
         "new_name": {
           "description": "New label name",
           "type": "string"
-        },
-        "priority": {
-          "description": "New label priority (0 to remove)",
-          "type": "integer"
         }
       },
       "required": [
@@ -65909,8 +66082,11 @@
           ]
         },
         "member_role_id": {
-          "description": "Custom member role ID to assign. Ultimate only. The role's base access level must match access_level",
-          "type": "integer"
+          "description": "Custom member role ID to assign. Ultimate only. The role's base access level must match access_level. Pass 0 to remove the custom role, which GitLab requires before it changes the access level of a member that holds one. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "user_id": {
           "description": "User ID",
@@ -67259,12 +67435,14 @@
                 "type": "string"
               },
               "weight": {
-                "type": "integer"
+                "type": [
+                  "null",
+                  "integer"
+                ]
               }
             },
             "required": [
               "created_at",
-              "weight",
               "action"
             ],
             "type": "object"
@@ -68449,13 +68627,18 @@
       "additionalProperties": false,
       "properties": {
         "description": {
-          "description": "Milestone description",
-          "type": "string"
+          "description": "Milestone description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "due_date": {
-          "description": "Due date (YYYY-MM-DD)",
-          "format": "date",
-          "type": "string"
+          "description": "Due date (YYYY-MM-DD). Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "group_id": {
           "description": "Group ID or URL-encoded path",
@@ -68469,9 +68652,11 @@
           "type": "integer"
         },
         "start_date": {
-          "description": "Start date (YYYY-MM-DD)",
-          "format": "date",
-          "type": "string"
+          "description": "Start date (YYYY-MM-DD). Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "state_event": {
           "description": "State transition: activate or close",
@@ -78045,8 +78230,11 @@
           ]
         },
         "description": {
-          "description": "Group description",
-          "type": "string"
+          "description": "Group description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "duo_availability": {
           "description": "GitLab Duo availability (default_on, default_off, never_on)",
@@ -80558,8 +80746,11 @@
       "additionalProperties": false,
       "properties": {
         "description": {
-          "description": "Updated variable description",
-          "type": "string"
+          "description": "Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "environment_scope": {
           "description": "Filter by environment scope (shorthand for filter.environment_scope)",
@@ -80612,8 +80803,11 @@
           ]
         },
         "value": {
-          "description": "Updated variable value",
-          "type": "string"
+          "description": "Updated variable value. Pass an empty string to empty it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "variable_type": {
           "description": "Variable type: env_var or file",
@@ -80796,7 +80990,7 @@
           ]
         },
         "slug": {
-          "description": "URL-encoded slug of the wiki page to delete",
+          "description": "Slug of the wiki page to delete as group.wiki_list returns it (e.g. 'dir/page')",
           "type": "string"
         }
       },
@@ -80867,7 +81061,7 @@
           ]
         },
         "slug": {
-          "description": "URL-encoded slug of the wiki page to edit",
+          "description": "Slug of the wiki page to edit as group.wiki_list returns it (e.g. 'dir/page')",
           "type": "string"
         },
         "title": {
@@ -80948,7 +81142,7 @@
           "type": "boolean"
         },
         "slug": {
-          "description": "URL-encoded slug of the wiki page",
+          "description": "Slug of the wiki page as group.wiki_list returns it, a subpage with its slash (e.g. 'dir/page')",
           "type": "string"
         },
         "version": {
@@ -82164,8 +82358,11 @@
       "additionalProperties": false,
       "properties": {
         "description": {
-          "description": "Updated variable description",
-          "type": "string"
+          "description": "Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "key": {
           "description": "Variable key name",
@@ -82193,8 +82390,11 @@
           ]
         },
         "value": {
-          "description": "Updated variable value",
-          "type": "string"
+          "description": "Updated variable value. Pass an empty string to empty it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "variable_type": {
           "description": "Variable type: env_var or file",
@@ -83328,7 +83528,10 @@
               ]
             },
             "duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "finished_at": {
               "type": "string"
@@ -83346,7 +83549,10 @@
               "type": "integer"
             },
             "queued_duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "ref": {
               "type": "string"
@@ -83426,8 +83632,6 @@
             "before_sha",
             "tag",
             "yaml_errors",
-            "duration",
-            "queued_duration",
             "coverage",
             "web_url"
           ],
@@ -83947,7 +84151,7 @@
   },
   {
     "name": "gitlab_interactive_project_create",
-    "description": "Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the project. Declining an optional prompt continues with that field unset, except initialize_with_readme, where a decline continues with false.\n\nInput: no fields. Every project detail is elicited. Requires permission to create projects for the authenticated user.\n\nAfter invocation, the tool elicits in order:\n- name (string, required): project display name and (when path is omitted) URL slug.\n- description (string, optional): leave empty to skip.\n- visibility (enum, required): one of private, internal, public.\n- initialize_with_readme (boolean, optional): yes/no confirmation. An explicit no or a decline continues with false. Canceling aborts the flow.\n- default_branch (string, optional): leave empty to use the GitLab default ('main').\n- confirm (boolean, required): final yes/no review of the assembled summary.\n\nWhen to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation. Use project.create with all fields pre-supplied.\n\nBehavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent: re-running with the same project path/name can fail with 400/409. Canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues, with initialize_with_readme taking a decline as false. Side effects on success: GitLab may initialize a repository and notify project members.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming project.create as the alternative.\n\nReturns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).\n\nSee also: project.get, group.get.",
+    "description": "Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the project. Declining an optional prompt continues with that field unset, except initialize_with_readme, where a decline continues with false.\n\nInput: no fields. Every project detail is elicited. Requires permission to create projects for the authenticated user.\n\nAfter invocation, the tool elicits in order:\n- name (string, required): project display name and (when path is omitted) URL slug.\n- description (string, optional): leave empty to skip.\n- visibility (enum, required): one of private, internal, public.\n- initialize_with_readme (boolean, optional): yes/no confirmation. An explicit no or a decline continues with false. Canceling aborts the flow.\n- default_branch (string, optional, asked only after a yes to initialize_with_readme, since GitLab applies a default branch on creation only with a README): leave empty to use the instance's default branch name.\n- confirm (boolean, required): final yes/no review of the assembled summary.\n\nWhen to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation. Use project.create with all fields pre-supplied.\n\nBehavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent: re-running with the same project path/name can fail with 400/409. Canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues, with initialize_with_readme taking a decline as false. Side effects on success: GitLab may initialize a repository and notify project members.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming project.create as the alternative.\n\nReturns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).\n\nSee also: project.get, group.get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -85440,7 +85644,10 @@
         },
         "weight": {
           "description": "Issue weight, 0 or higher",
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -91268,9 +91475,9 @@
       "additionalProperties": false,
       "properties": {
         "assignee_id": {
-          "description": "Filter by assignee user ID",
+          "description": "Filter by assignee: a user ID, None for issues nobody is assigned, or Any for issues somebody is",
           "type": [
-            "null",
+            "string",
             "integer"
           ]
         },
@@ -91307,8 +91514,17 @@
           "type": "string"
         },
         "due_date": {
-          "description": "Filter by due date (0=no due date, overdue, week, month, next_month_and_previous_two_weeks)",
-          "format": "date",
+          "description": "Filter by due date keyword, not a date: 0 (no due date), any, overdue, today, tomorrow, week, month or next_month_and_previous_two_weeks",
+          "enum": [
+            "0",
+            "any",
+            "overdue",
+            "today",
+            "tomorrow",
+            "week",
+            "month",
+            "next_month_and_previous_two_weeks"
+          ],
           "type": "string"
         },
         "iids": {
@@ -92287,9 +92503,9 @@
       "additionalProperties": false,
       "properties": {
         "assignee_id": {
-          "description": "Filter by assignee user ID",
+          "description": "Filter by assignee: a user ID, None for issues nobody is assigned, or Any for issues somebody is",
           "type": [
-            "null",
+            "string",
             "integer"
           ]
         },
@@ -92326,8 +92542,17 @@
           "type": "string"
         },
         "due_date": {
-          "description": "Filter by due date (0, overdue, week, month, next_month_and_previous_two_weeks)",
-          "format": "date",
+          "description": "Filter by due date keyword, not a date: 0 (no due date), any, overdue, today, tomorrow, week, month or next_month_and_previous_two_weeks",
+          "enum": [
+            "0",
+            "any",
+            "overdue",
+            "today",
+            "tomorrow",
+            "week",
+            "month",
+            "next_month_and_previous_two_weeks"
+          ],
           "type": "string"
         },
         "iids": {
@@ -93312,9 +93537,9 @@
       "additionalProperties": false,
       "properties": {
         "assignee_id": {
-          "description": "Filter by assignee user ID",
+          "description": "Filter by assignee: a user ID, None for issues nobody is assigned, or Any for issues somebody is",
           "type": [
-            "null",
+            "string",
             "integer"
           ]
         },
@@ -93351,8 +93576,17 @@
           "type": "string"
         },
         "due_date": {
-          "description": "Filter by due date (0, overdue, week, month, next_month_and_previous_two_weeks)",
-          "format": "date",
+          "description": "Filter by due date keyword, not a date: 0 (no due date), any, overdue, today, tomorrow, week, month or next_month_and_previous_two_weeks",
+          "enum": [
+            "0",
+            "any",
+            "overdue",
+            "today",
+            "tomorrow",
+            "week",
+            "month",
+            "next_month_and_previous_two_weeks"
+          ],
           "type": "string"
         },
         "group_id": {
@@ -101968,11 +102202,14 @@
           ]
         },
         "assignee_id": {
-          "description": "Single user ID to assign (use assignee_ids for multiple)",
-          "type": "integer"
+          "description": "Single user ID to assign (use assignee_ids for multiple). Pass 0 to remove every assignee. Omit the field to leave them untouched",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "assignee_ids": {
-          "description": "New assignee user IDs",
+          "description": "User IDs that replace the issue's assignees. Pass [] to remove every assignee. Omit the field to leave them untouched",
           "items": {
             "type": "integer"
           },
@@ -101989,8 +102226,11 @@
           ]
         },
         "description": {
-          "description": "New description (Markdown supported)",
-          "type": "string"
+          "description": "New description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "discussion_locked": {
           "description": "Lock discussions on this issue",
@@ -102000,13 +102240,18 @@
           ]
         },
         "due_date": {
-          "description": "New due date in YYYY-MM-DD format",
-          "format": "date",
-          "type": "string"
+          "description": "New due date in YYYY-MM-DD format. Pass an empty string to remove the due date. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "epic_id": {
-          "description": "Epic ID to associate",
-          "type": "integer"
+          "description": "Epic ID to associate. Pass 0 to take the issue out of its epic. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "issue_iid": {
           "description": "Issue IID (project-scoped internal ID, not 'issue_id')",
@@ -102023,7 +102268,7 @@
           "type": "string"
         },
         "labels": {
-          "description": "Label names to replace all existing",
+          "description": "Label names that replace all labels on the issue. Pass [] to remove every label. Omit the field to leave them untouched",
           "items": {
             "type": "string"
           },
@@ -102073,8 +102318,11 @@
           "type": "string"
         },
         "weight": {
-          "description": "Issue weight, 0 or higher",
-          "type": "integer"
+          "description": "Issue weight, 0 or higher. 0 is a weight of its own. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -102899,7 +103147,10 @@
                 ]
               },
               "weight": {
-                "type": "integer"
+                "type": [
+                  "null",
+                  "integer"
+                ]
               }
             },
             "required": [
@@ -102979,7 +103230,7 @@
   },
   {
     "name": "gitlab_job_artifacts",
-    "description": "Download the full artifact archive for a CI job, or one report named by file_type (GitLab 19.4 or later), base64-encoded and truncated at 1MB. Returns: size, content, and truncation flag. See also: gitlab_job_download_single_artifact, gitlab_job_keep_artifacts, gitlab_job_get.",
+    "description": "Download the full artifact archive for a CI job, or one report named by file_type (GitLab 19.4 or later), base64-encoded when it is 1 MB or less. Returns: size, content, and a truncated flag set when the artifact was larger and no content came back. See also: gitlab_job_download_single_artifact, gitlab_job_keep_artifacts, gitlab_job_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -103196,13 +103447,19 @@
           ]
         },
         "coverage": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "created_at": {
           "type": "string"
         },
         "duration": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "erased_at": {
           "type": "string"
@@ -103275,7 +103532,10 @@
           ]
         },
         "queued_duration": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "ref": {
           "type": "string"
@@ -103462,8 +103722,6 @@
         "ref",
         "tag",
         "allow_failure",
-        "duration",
-        "queued_duration",
         "web_url",
         "created_at"
       ],
@@ -103595,12 +103853,12 @@
   },
   {
     "name": "gitlab_job_download_artifacts",
-    "description": "Download the latest successful artifacts archive for a ref and job name. Returns: archive size, content, and truncation flag. See also: gitlab_job_artifacts, gitlab_job_download_single_artifact, gitlab_job_get.",
+    "description": "Download the latest successful artifacts archive for a ref and job name, base64-encoded when it is 1 MB or less. Returns: archive size, content, and a truncated flag set when the archive was larger and no content came back. See also: gitlab_job_artifacts, gitlab_job_download_single_artifact, gitlab_job_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "job": {
-          "description": "Job name to download artifacts from",
+          "description": "Job name to download artifacts from, as the CI configuration names it and never its ID. To download one job's artifacts by its job_id use job.artifacts",
           "type": "string"
         },
         "project_id": {
@@ -103663,7 +103921,7 @@
   },
   {
     "name": "gitlab_job_download_single_artifact",
-    "description": "Download one artifact file from a job by job_id and artifact_path. Returns: file size, raw content, and truncation flag. See also: gitlab_job_artifacts, gitlab_job_download_artifacts, gitlab_job_get.",
+    "description": "Download one artifact file from a job by job_id and artifact_path. Returns: file size, the encoding (text, or base64 for a file that is not text), the content, and a truncated flag. See also: gitlab_job_artifacts, gitlab_job_download_artifacts, gitlab_job_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -103697,6 +103955,9 @@
           "type": "string"
         },
         "content": {
+          "type": "string"
+        },
+        "encoding": {
           "type": "string"
         },
         "job_id": {
@@ -103735,7 +103996,7 @@
   },
   {
     "name": "gitlab_job_download_single_artifact_by_ref",
-    "description": "Download one artifact file from the latest successful job on a ref by name and path. Returns: file size, raw content, and truncation flag. See also: gitlab_job_download_artifacts, gitlab_job_download_single_artifact, gitlab_job_get.",
+    "description": "Download one artifact file from the latest successful job on a ref by name and path. Returns: file size, the encoding (text, or base64 for a file that is not text), the content, and a truncated flag. See also: gitlab_job_download_artifacts, gitlab_job_download_single_artifact, gitlab_job_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -103774,6 +104035,9 @@
           "type": "string"
         },
         "content": {
+          "type": "string"
+        },
+        "encoding": {
           "type": "string"
         },
         "job_id": {
@@ -103937,13 +104201,19 @@
           ]
         },
         "coverage": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "created_at": {
           "type": "string"
         },
         "duration": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "erased_at": {
           "type": "string"
@@ -104016,7 +104286,10 @@
           ]
         },
         "queued_duration": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "ref": {
           "type": "string"
@@ -104203,8 +104476,6 @@
         "ref",
         "tag",
         "allow_failure",
-        "duration",
-        "queued_duration",
         "web_url",
         "created_at"
       ],
@@ -104339,13 +104610,19 @@
           ]
         },
         "coverage": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "created_at": {
           "type": "string"
         },
         "duration": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "erased_at": {
           "type": "string"
@@ -104418,7 +104695,10 @@
           ]
         },
         "queued_duration": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "ref": {
           "type": "string"
@@ -104605,8 +104885,6 @@
         "ref",
         "tag",
         "allow_failure",
-        "duration",
-        "queued_duration",
         "web_url",
         "created_at"
       ],
@@ -104741,13 +105019,19 @@
           ]
         },
         "coverage": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "created_at": {
           "type": "string"
         },
         "duration": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "erased_at": {
           "type": "string"
@@ -104820,7 +105104,10 @@
           ]
         },
         "queued_duration": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "ref": {
           "type": "string"
@@ -105007,8 +105294,6 @@
         "ref",
         "tag",
         "allow_failure",
-        "duration",
-        "queued_duration",
         "web_url",
         "created_at"
       ],
@@ -105192,13 +105477,19 @@
                 ]
               },
               "coverage": {
-                "type": "number"
+                "type": [
+                  "null",
+                  "number"
+                ]
               },
               "created_at": {
                 "type": "string"
               },
               "duration": {
-                "type": "number"
+                "type": [
+                  "null",
+                  "number"
+                ]
               },
               "erased_at": {
                 "type": "string"
@@ -105271,7 +105562,10 @@
                 ]
               },
               "queued_duration": {
-                "type": "number"
+                "type": [
+                  "null",
+                  "number"
+                ]
               },
               "ref": {
                 "type": "string"
@@ -105458,8 +105752,6 @@
               "ref",
               "tag",
               "allow_failure",
-              "duration",
-              "queued_duration",
               "web_url",
               "created_at"
             ],
@@ -105648,7 +105940,10 @@
                 ]
               },
               "coverage": {
-                "type": "number"
+                "type": [
+                  "null",
+                  "number"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -105694,7 +105989,10 @@
                 ]
               },
               "duration": {
-                "type": "number"
+                "type": [
+                  "null",
+                  "number"
+                ]
               },
               "erased_at": {
                 "type": "string"
@@ -105767,7 +106065,10 @@
                 ]
               },
               "queued_duration": {
-                "type": "number"
+                "type": [
+                  "null",
+                  "number"
+                ]
               },
               "ref": {
                 "type": "string"
@@ -105855,8 +106156,6 @@
               "ref",
               "tag",
               "allow_failure",
-              "duration",
-              "queued_duration",
               "web_url",
               "created_at"
             ],
@@ -106095,13 +106394,19 @@
                 ]
               },
               "coverage": {
-                "type": "number"
+                "type": [
+                  "null",
+                  "number"
+                ]
               },
               "created_at": {
                 "type": "string"
               },
               "duration": {
-                "type": "number"
+                "type": [
+                  "null",
+                  "number"
+                ]
               },
               "erased_at": {
                 "type": "string"
@@ -106174,7 +106479,10 @@
                 ]
               },
               "queued_duration": {
-                "type": "number"
+                "type": [
+                  "null",
+                  "number"
+                ]
               },
               "ref": {
                 "type": "string"
@@ -106361,8 +106669,6 @@
               "ref",
               "tag",
               "allow_failure",
-              "duration",
-              "queued_duration",
               "web_url",
               "created_at"
             ],
@@ -106614,13 +106920,19 @@
           ]
         },
         "coverage": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "created_at": {
           "type": "string"
         },
         "duration": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "erased_at": {
           "type": "string"
@@ -106693,7 +107005,10 @@
           ]
         },
         "queued_duration": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "ref": {
           "type": "string"
@@ -106880,8 +107195,6 @@
         "ref",
         "tag",
         "allow_failure",
-        "duration",
-        "queued_duration",
         "web_url",
         "created_at"
       ],
@@ -107016,13 +107329,19 @@
           ]
         },
         "coverage": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "created_at": {
           "type": "string"
         },
         "duration": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "erased_at": {
           "type": "string"
@@ -107095,7 +107414,10 @@
           ]
         },
         "queued_duration": {
-          "type": "number"
+          "type": [
+            "null",
+            "number"
+          ]
         },
         "ref": {
           "type": "string"
@@ -107282,8 +107604,6 @@
         "ref",
         "tag",
         "allow_failure",
-        "duration",
-        "queued_duration",
         "web_url",
         "created_at"
       ],
@@ -107298,7 +107618,7 @@
   },
   {
     "name": "gitlab_job_trace",
-    "description": "Get CI job trace output. Returns: text log with truncation metadata when logs exceed limits. See also: gitlab_job_get, gitlab_job_retry, gitlab_job_cancel.",
+    "description": "Get CI job trace output, the end of it when it is over 100 KB. Returns: the log text, a truncated flag and the bytes left out of its beginning. See also: gitlab_job_get, gitlab_job_retry, gitlab_job_cancel.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -107312,6 +107632,12 @@
             "string",
             "integer"
           ]
+        },
+        "tail_lines": {
+          "description": "Return only the last N lines of the log, 1 to 10000. Either way at most the last 100 KB of the log is returned",
+          "maximum": 10000,
+          "minimum": 1,
+          "type": "integer"
         }
       },
       "required": [
@@ -107334,6 +107660,9 @@
             "null",
             "array"
           ]
+        },
+        "omitted_bytes": {
+          "type": "integer"
         },
         "trace": {
           "type": "string"
@@ -107499,13 +107828,19 @@
               ]
             },
             "coverage": {
-              "type": "number"
+              "type": [
+                "null",
+                "number"
+              ]
             },
             "created_at": {
               "type": "string"
             },
             "duration": {
-              "type": "number"
+              "type": [
+                "null",
+                "number"
+              ]
             },
             "erased_at": {
               "type": "string"
@@ -107578,7 +107913,10 @@
               ]
             },
             "queued_duration": {
-              "type": "number"
+              "type": [
+                "null",
+                "number"
+              ]
             },
             "ref": {
               "type": "string"
@@ -107765,8 +108103,6 @@
             "ref",
             "tag",
             "allow_failure",
-            "duration",
-            "queued_duration",
             "web_url",
             "created_at"
           ],
@@ -108598,8 +108934,11 @@
           "type": "string"
         },
         "description": {
-          "description": "New label description",
-          "type": "string"
+          "description": "New label description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "label_id": {
           "description": "Label ID or name. Give this or name",
@@ -109580,7 +109919,7 @@
           ]
         },
         "project_path": {
-          "description": "required,Project full path (e.g. my-group/my-project)",
+          "description": "Project full path (e.g. my-group/my-project)",
           "type": "string"
         }
       },
@@ -112095,8 +112434,12 @@
           ]
         },
         "group_path": {
-          "description": "required,Group full path (e.g. my-group)",
+          "description": "Group full path (e.g. my-group)",
           "type": "string"
+        },
+        "include_ancestor_groups": {
+          "description": "Also list the custom emoji of every ancestor group, which a subgroup can use as well. Default false, as GitLab defaults: a subgroup is then listed with its own emoji only",
+          "type": "boolean"
         },
         "last": {
           "description": "Number of items to return from the end of the range (backward pagination). Cannot be combined with first",
@@ -112235,8 +112578,11 @@
           ]
         },
         "assignee_id": {
-          "description": "Filter by assignee user ID",
-          "type": "integer"
+          "description": "Filter by assignee: a user ID, None for merge requests nobody is assigned, or Any for those somebody is",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "author_id": {
           "description": "Filter by author user ID",
@@ -112351,8 +112697,11 @@
           ]
         },
         "reviewer_id": {
-          "description": "Filter by reviewer user ID",
-          "type": "integer"
+          "description": "Filter by reviewer: a user ID, None for merge requests with no reviewer, or Any for those with one",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "reviewer_username": {
           "description": "Filter by reviewer username",
@@ -112739,7 +113088,10 @@
                     ]
                   },
                   "duration": {
-                    "type": "integer"
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
                   },
                   "finished_at": {
                     "type": "string"
@@ -112757,7 +113109,10 @@
                     "type": "integer"
                   },
                   "queued_duration": {
-                    "type": "integer"
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
                   },
                   "ref": {
                     "type": "string"
@@ -112837,8 +113192,6 @@
                   "before_sha",
                   "tag",
                   "yaml_errors",
-                  "duration",
-                  "queued_duration",
                   "coverage",
                   "web_url"
                 ],
@@ -114317,6 +114670,9 @@
                     "external_author": {
                       "type": "string"
                     },
+                    "gid": {
+                      "type": "string"
+                    },
                     "id": {
                       "type": "integer"
                     },
@@ -114400,6 +114756,9 @@
                     },
                     "resolved_by": {
                       "type": "string"
+                    },
+                    "resource_event": {
+                      "type": "boolean"
                     },
                     "system": {
                       "type": "boolean"
@@ -115666,12 +116025,12 @@
       "additionalProperties": false,
       "properties": {
         "created_after": {
-          "description": "Return events created after this date (ISO 8601 YYYY-MM-DD)",
+          "description": "Return events created after this time: an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC",
           "format": "date-time",
           "type": "string"
         },
         "created_before": {
-          "description": "Return events created before this date (ISO 8601 YYYY-MM-DD)",
+          "description": "Return events created before this time: an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC",
           "format": "date-time",
           "type": "string"
         },
@@ -118550,13 +118909,27 @@
       "additionalProperties": false,
       "properties": {
         "created_after": {
-          "description": "Return events created after this date (ISO 8601 YYYY-MM-DD)",
+          "description": "Return events created after this time: an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC",
           "format": "date-time",
           "type": "string"
         },
         "created_before": {
-          "description": "Return events created before this date (ISO 8601 YYYY-MM-DD)",
+          "description": "Return events created before this time: an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC",
           "format": "date-time",
+          "type": "string"
+        },
+        "entity_id": {
+          "description": "Return only events of the entity with this ID. Requires entity_type",
+          "type": "integer"
+        },
+        "entity_type": {
+          "description": "Return only events of this entity type: Project, User, Group or Gitlab::Audit::InstanceScope",
+          "enum": [
+            "Project",
+            "User",
+            "Group",
+            "Gitlab::Audit::InstanceScope"
+          ],
           "type": "string"
         },
         "page": {
@@ -120512,7 +120885,10 @@
                 "type": "string"
               },
               "duration": {
-                "type": "integer"
+                "type": [
+                  "null",
+                  "integer"
+                ]
               },
               "id": {
                 "type": "integer"
@@ -120644,7 +121020,10 @@
                     ]
                   },
                   "duration": {
-                    "type": "integer"
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
                   },
                   "finished_at": {
                     "type": "string"
@@ -120662,7 +121041,10 @@
                     "type": "integer"
                   },
                   "queued_duration": {
-                    "type": "integer"
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
                   },
                   "ref": {
                     "type": "string"
@@ -120742,8 +121124,6 @@
                   "before_sha",
                   "tag",
                   "yaml_errors",
-                  "duration",
-                  "queued_duration",
                   "coverage",
                   "web_url"
                 ],
@@ -120804,8 +121184,7 @@
               "id",
               "merge_request",
               "target_branch",
-              "status",
-              "duration"
+              "status"
             ],
             "type": "object"
           },
@@ -121352,12 +121731,12 @@
       "additionalProperties": false,
       "properties": {
         "created_after": {
-          "description": "Return events created after this date (ISO 8601 YYYY-MM-DD)",
+          "description": "Return events created after this time: an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC",
           "format": "date-time",
           "type": "string"
         },
         "created_before": {
-          "description": "Return events created before this date (ISO 8601 YYYY-MM-DD)",
+          "description": "Return events created before this time: an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC",
           "format": "date-time",
           "type": "string"
         },
@@ -122459,7 +122838,10 @@
                 "type": "string"
               },
               "duration": {
-                "type": "integer"
+                "type": [
+                  "null",
+                  "integer"
+                ]
               },
               "id": {
                 "type": "integer"
@@ -122591,7 +122973,10 @@
                     ]
                   },
                   "duration": {
-                    "type": "integer"
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
                   },
                   "finished_at": {
                     "type": "string"
@@ -122609,7 +122994,10 @@
                     "type": "integer"
                   },
                   "queued_duration": {
-                    "type": "integer"
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
                   },
                   "ref": {
                     "type": "string"
@@ -122689,8 +123077,6 @@
                   "before_sha",
                   "tag",
                   "yaml_errors",
-                  "duration",
-                  "queued_duration",
                   "coverage",
                   "web_url"
                 ],
@@ -122751,8 +123137,7 @@
               "id",
               "merge_request",
               "target_branch",
-              "status",
-              "duration"
+              "status"
             ],
             "type": "object"
           },
@@ -123612,7 +123997,7 @@
   },
   {
     "name": "gitlab_list_repository_submodules",
-    "description": "List the Git submodules defined in a repository's .gitmodules. Returns: each submodule's name, path, remote url, resolved_project, and pinned commit_sha, plus a count. See also: gitlab_read_repository_submodule_file, gitlab_update_repository_submodule, gitlab_repository_tree.",
+    "description": "List the Git submodules defined in a repository's .gitmodules. Returns: each submodule's name, path, remote url, resolved_project on this instance, or external for a remote on another host and unresolved for one naming no project here, and pinned commit_sha, plus a count. See also: gitlab_read_repository_submodule_file, gitlab_update_repository_submodule, gitlab_repository_tree.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -123655,6 +124040,9 @@
               "commit_sha": {
                 "type": "string"
               },
+              "external": {
+                "type": "boolean"
+              },
               "name": {
                 "type": "string"
               },
@@ -123663,6 +124051,9 @@
               },
               "resolved_project": {
                 "type": "string"
+              },
+              "unresolved": {
+                "type": "boolean"
               },
               "url": {
                 "type": "string"
@@ -127090,6 +127481,17 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "after": {
+          "description": "Cursor for forward pagination (from previous response end_cursor)",
+          "type": "string"
+        },
+        "first": {
+          "description": "Number of items to return (default 20, max 100)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "project_path": {
           "description": "Full project path (e.g. group/project)",
           "type": "string"
@@ -127103,6 +127505,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "count": {
+          "type": "integer"
+        },
         "next_steps": {
           "items": {
             "type": "string"
@@ -127111,6 +127516,21 @@
             "null",
             "array"
           ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "end_cursor": {
+              "type": "string"
+            },
+            "has_next_page": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "has_next_page"
+          ],
+          "type": "object"
         },
         "states": {
           "items": {
@@ -127168,7 +127588,9 @@
         }
       },
       "required": [
-        "states"
+        "states",
+        "count",
+        "pagination"
       ],
       "type": "object"
     },
@@ -130067,7 +130489,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -131158,13 +131580,18 @@
       "additionalProperties": false,
       "properties": {
         "description": {
-          "description": "Milestone description",
-          "type": "string"
+          "description": "Milestone description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "due_date": {
-          "description": "Due date (YYYY-MM-DD)",
-          "format": "date",
-          "type": "string"
+          "description": "Due date (YYYY-MM-DD). Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "milestone_iid": {
           "description": "Milestone IID (project-scoped). Use project.milestone_list to find IIDs",
@@ -131178,9 +131605,11 @@
           ]
         },
         "start_date": {
-          "description": "Start date (YYYY-MM-DD)",
-          "format": "date",
-          "type": "string"
+          "description": "Start date (YYYY-MM-DD). Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "state_event": {
           "description": "State transition: activate or close",
@@ -131297,8 +131726,11 @@
           ]
         },
         "bio": {
-          "description": "New bio text",
-          "type": "string"
+          "description": "New bio text. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "can_create_group": {
           "description": "Allow user to create groups",
@@ -131410,8 +131842,11 @@
           ]
         },
         "website_url": {
-          "description": "User website URL",
-          "type": "string"
+          "description": "User website URL. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         }
       },
       "required": [
@@ -132304,7 +132739,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -135043,7 +135478,10 @@
               ]
             },
             "duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "finished_at": {
               "type": "string"
@@ -135061,7 +135499,10 @@
               "type": "integer"
             },
             "queued_duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "ref": {
               "type": "string"
@@ -135141,8 +135582,6 @@
             "before_sha",
             "tag",
             "yaml_errors",
-            "duration",
-            "queued_duration",
             "coverage",
             "web_url"
           ],
@@ -136522,7 +136961,10 @@
               ]
             },
             "duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "finished_at": {
               "type": "string"
@@ -136540,7 +136982,10 @@
               "type": "integer"
             },
             "queued_duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "ref": {
               "type": "string"
@@ -136620,8 +137065,6 @@
             "before_sha",
             "tag",
             "yaml_errors",
-            "duration",
-            "queued_duration",
             "coverage",
             "web_url"
           ],
@@ -137235,7 +137678,10 @@
           ]
         },
         "duration": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "finished_at": {
           "type": "string"
@@ -137262,7 +137708,10 @@
           "type": "integer"
         },
         "queued_duration": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "ref": {
           "type": "string"
@@ -145062,7 +145511,10 @@
               ]
             },
             "duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "finished_at": {
               "type": "string"
@@ -145080,7 +145532,10 @@
               "type": "integer"
             },
             "queued_duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "ref": {
               "type": "string"
@@ -145160,8 +145615,6 @@
             "before_sha",
             "tag",
             "yaml_errors",
-            "duration",
-            "queued_duration",
             "coverage",
             "web_url"
           ],
@@ -146617,8 +147070,11 @@
           ]
         },
         "assignee_id": {
-          "description": "Filter by assignee user ID",
-          "type": "integer"
+          "description": "Filter by assignee: a user ID, None for merge requests nobody is assigned, or Any for those somebody is",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "author_id": {
           "description": "Filter by author user ID",
@@ -146744,8 +147200,11 @@
           ]
         },
         "reviewer_id": {
-          "description": "Filter by reviewer user ID",
-          "type": "integer"
+          "description": "Filter by reviewer: a user ID, None for merge requests with no reviewer, or Any for those with one",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "reviewer_username": {
           "description": "Filter by reviewer username",
@@ -147156,7 +147615,10 @@
                     ]
                   },
                   "duration": {
-                    "type": "integer"
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
                   },
                   "finished_at": {
                     "type": "string"
@@ -147174,7 +147636,10 @@
                     "type": "integer"
                   },
                   "queued_duration": {
-                    "type": "integer"
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
                   },
                   "ref": {
                     "type": "string"
@@ -147254,8 +147719,6 @@
                   "before_sha",
                   "tag",
                   "yaml_errors",
-                  "duration",
-                  "queued_duration",
                   "coverage",
                   "web_url"
                 ],
@@ -147876,8 +148339,11 @@
           ]
         },
         "assignee_id": {
-          "description": "Filter by assignee user ID",
-          "type": "integer"
+          "description": "Filter by assignee: a user ID, None for merge requests nobody is assigned, or Any for those somebody is",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "author_id": {
           "description": "Filter by author user ID",
@@ -147975,8 +148441,11 @@
           "type": "integer"
         },
         "reviewer_id": {
-          "description": "Filter by reviewer user ID",
-          "type": "integer"
+          "description": "Filter by reviewer: a user ID, None for merge requests with no reviewer, or Any for those with one",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "reviewer_username": {
           "description": "Filter by reviewer username",
@@ -148384,7 +148853,10 @@
                     ]
                   },
                   "duration": {
-                    "type": "integer"
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
                   },
                   "finished_at": {
                     "type": "string"
@@ -148402,7 +148874,10 @@
                     "type": "integer"
                   },
                   "queued_duration": {
-                    "type": "integer"
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
                   },
                   "ref": {
                     "type": "string"
@@ -148482,8 +148957,6 @@
                   "before_sha",
                   "tag",
                   "yaml_errors",
-                  "duration",
-                  "queued_duration",
                   "coverage",
                   "web_url"
                 ],
@@ -149104,8 +149577,11 @@
           ]
         },
         "assignee_id": {
-          "description": "Filter by assignee user ID",
-          "type": "integer"
+          "description": "Filter by assignee: a user ID, None for merge requests nobody is assigned, or Any for those somebody is",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "author_id": {
           "description": "Filter by author user ID",
@@ -149210,8 +149686,11 @@
           "type": "integer"
         },
         "reviewer_id": {
-          "description": "Filter by reviewer user ID",
-          "type": "integer"
+          "description": "Filter by reviewer: a user ID, None for merge requests with no reviewer, or Any for those with one",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "reviewer_username": {
           "description": "Filter by reviewer username",
@@ -149622,7 +150101,10 @@
                     ]
                   },
                   "duration": {
-                    "type": "integer"
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
                   },
                   "finished_at": {
                     "type": "string"
@@ -149640,7 +150122,10 @@
                     "type": "integer"
                   },
                   "queued_duration": {
-                    "type": "integer"
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
                   },
                   "ref": {
                     "type": "string"
@@ -149720,8 +150205,6 @@
                   "before_sha",
                   "tag",
                   "yaml_errors",
-                  "duration",
-                  "queued_duration",
                   "coverage",
                   "web_url"
                 ],
@@ -150343,14 +150826,14 @@
           "type": "string"
         },
         "should_remove_source_branch": {
-          "description": "Delete source branch after merge. Only set if explicitly requested by the user. Omit to preserve repository defaults",
+          "description": "Delete source branch after merge. Only set if explicitly requested by the user. Omit to apply the merge request's own Delete source branch setting. Set false to keep the branch even when that setting is on",
           "type": [
             "null",
             "boolean"
           ]
         },
         "squash": {
-          "description": "Squash commits on merge. Only set if explicitly requested by the user. Omit to preserve repository defaults",
+          "description": "Squash commits on merge. Only set if explicitly requested by the user. Omit to apply the merge request's own squash setting. false is refused when the merge request squashes on merge, since GitLab ignores false on this route: turn its squash off first with merge_request.update",
           "type": [
             "null",
             "boolean"
@@ -150683,7 +151166,10 @@
               ]
             },
             "duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "finished_at": {
               "type": "string"
@@ -150701,7 +151187,10 @@
               "type": "integer"
             },
             "queued_duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "ref": {
               "type": "string"
@@ -150781,8 +151270,6 @@
             "before_sha",
             "tag",
             "yaml_errors",
-            "duration",
-            "queued_duration",
             "coverage",
             "web_url"
           ],
@@ -151294,7 +151781,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -154029,7 +154516,10 @@
                 ]
               },
               "duration": {
-                "type": "integer"
+                "type": [
+                  "null",
+                  "integer"
+                ]
               },
               "finished_at": {
                 "type": "string"
@@ -154056,7 +154546,10 @@
                 "type": "integer"
               },
               "queued_duration": {
-                "type": "integer"
+                "type": [
+                  "null",
+                  "integer"
+                ]
               },
               "ref": {
                 "type": "string"
@@ -155863,7 +156356,10 @@
               ]
             },
             "duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "finished_at": {
               "type": "string"
@@ -155881,7 +156377,10 @@
               "type": "integer"
             },
             "queued_duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "ref": {
               "type": "string"
@@ -155961,8 +156460,6 @@
             "before_sha",
             "tag",
             "yaml_errors",
-            "duration",
-            "queued_duration",
             "coverage",
             "web_url"
           ],
@@ -157000,7 +157497,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -157366,7 +157863,10 @@
               ]
             },
             "duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "finished_at": {
               "type": "string"
@@ -157384,7 +157884,10 @@
               "type": "integer"
             },
             "queued_duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "ref": {
               "type": "string"
@@ -157464,8 +157967,6 @@
             "before_sha",
             "tag",
             "yaml_errors",
-            "duration",
-            "queued_duration",
             "coverage",
             "web_url"
           ],
@@ -158007,11 +158508,14 @@
           ]
         },
         "assignee_id": {
-          "description": "Single user ID to assign (use assignee_ids for multiple)",
-          "type": "integer"
+          "description": "Single user ID to assign (use assignee_ids for multiple). Pass 0 to remove every assignee. Omit the field to leave them untouched",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "assignee_ids": {
-          "description": "User IDs to assign as merge request assignees",
+          "description": "User IDs that replace the merge request's assignees. Pass [] to remove every assignee. Omit the field to leave them untouched",
           "items": {
             "type": "integer"
           },
@@ -158021,8 +158525,11 @@
           ]
         },
         "description": {
-          "description": "New description",
-          "type": "string"
+          "description": "New description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "discussion_locked": {
           "description": "Lock discussions on the merge request",
@@ -158032,7 +158539,7 @@
           ]
         },
         "labels": {
-          "description": "Label names to replace all labels on the merge request",
+          "description": "Label names that replace all labels on the merge request. Pass [] to remove every label. Omit the field to leave them untouched",
           "items": {
             "type": "string"
           },
@@ -158077,7 +158584,7 @@
           ]
         },
         "reviewer_ids": {
-          "description": "User IDs to add as reviewers",
+          "description": "User IDs that replace the merge request's reviewers. Pass [] to remove every reviewer. Omit the field to leave them untouched",
           "items": {
             "type": "integer"
           },
@@ -158431,7 +158938,10 @@
               ]
             },
             "duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "finished_at": {
               "type": "string"
@@ -158449,7 +158959,10 @@
               "type": "integer"
             },
             "queued_duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "ref": {
               "type": "string"
@@ -158529,8 +159042,6 @@
             "before_sha",
             "tag",
             "yaml_errors",
-            "duration",
-            "queued_duration",
             "coverage",
             "web_url"
           ],
@@ -163565,8 +164076,11 @@
           ]
         },
         "pages_primary_domain": {
-          "description": "Primary domain for Pages",
-          "type": "string"
+          "description": "Primary domain for Pages. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "pages_unique_domain_enabled": {
           "description": "Enable unique domain for Pages",
@@ -164612,7 +165126,10 @@
           ]
         },
         "duration": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "finished_at": {
           "type": "string"
@@ -164639,7 +165156,10 @@
           "type": "integer"
         },
         "queued_duration": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "ref": {
           "type": "string"
@@ -164717,8 +165237,6 @@
         "sha",
         "tag",
         "archived",
-        "duration",
-        "queued_duration",
         "web_url",
         "created_at",
         "updated_at"
@@ -164885,7 +165403,10 @@
           ]
         },
         "duration": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "finished_at": {
           "type": "string"
@@ -164912,7 +165433,10 @@
           "type": "integer"
         },
         "queued_duration": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "ref": {
           "type": "string"
@@ -164990,8 +165514,6 @@
         "sha",
         "tag",
         "archived",
-        "duration",
-        "queued_duration",
         "web_url",
         "created_at",
         "updated_at"
@@ -165162,7 +165684,10 @@
           ]
         },
         "duration": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "finished_at": {
           "type": "string"
@@ -165189,7 +165714,10 @@
           "type": "integer"
         },
         "queued_duration": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "ref": {
           "type": "string"
@@ -165267,8 +165795,6 @@
         "sha",
         "tag",
         "archived",
-        "duration",
-        "queued_duration",
         "web_url",
         "created_at",
         "updated_at"
@@ -165500,7 +166026,10 @@
           ]
         },
         "duration": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "fallback_note": {
           "description": "Set only when the pipeline shown is not GitLab's latest pipeline of the ref, saying why",
@@ -165535,7 +166064,10 @@
           "type": "integer"
         },
         "queued_duration": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "ref": {
           "type": "string"
@@ -165613,8 +166145,6 @@
         "sha",
         "tag",
         "archived",
-        "duration",
-        "queued_duration",
         "web_url",
         "created_at",
         "updated_at"
@@ -165898,7 +166428,10 @@
                 ]
               },
               "duration": {
-                "type": "integer"
+                "type": [
+                  "null",
+                  "integer"
+                ]
               },
               "finished_at": {
                 "type": "string"
@@ -165925,7 +166458,10 @@
                 "type": "integer"
               },
               "queued_duration": {
-                "type": "integer"
+                "type": [
+                  "null",
+                  "integer"
+                ]
               },
               "ref": {
                 "type": "string"
@@ -166123,7 +166659,10 @@
           ]
         },
         "duration": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "finished_at": {
           "type": "string"
@@ -166150,7 +166689,10 @@
           "type": "integer"
         },
         "queued_duration": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "ref": {
           "type": "string"
@@ -166228,8 +166770,6 @@
         "sha",
         "tag",
         "archived",
-        "duration",
-        "queued_duration",
         "web_url",
         "created_at",
         "updated_at"
@@ -169708,7 +170248,10 @@
           ]
         },
         "duration": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "finished_at": {
           "type": "string"
@@ -169735,7 +170278,10 @@
           "type": "integer"
         },
         "queued_duration": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "ref": {
           "type": "string"
@@ -170037,7 +170583,10 @@
           ]
         },
         "duration": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "finished_at": {
           "type": "string"
@@ -170064,7 +170613,10 @@
           "type": "integer"
         },
         "queued_duration": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "ref": {
           "type": "string"
@@ -170142,8 +170694,6 @@
         "sha",
         "tag",
         "archived",
-        "duration",
-        "queued_duration",
         "web_url",
         "created_at",
         "updated_at"
@@ -170364,7 +170914,10 @@
               ]
             },
             "duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "finished_at": {
               "type": "string"
@@ -170391,7 +170944,10 @@
               "type": "integer"
             },
             "queued_duration": {
-              "type": "integer"
+              "type": [
+                "null",
+                "integer"
+              ]
             },
             "ref": {
               "type": "string"
@@ -170469,8 +171025,6 @@
             "sha",
             "tag",
             "archived",
-            "duration",
-            "queued_duration",
             "web_url",
             "created_at",
             "updated_at"
@@ -174656,12 +175210,18 @@
               ]
             },
             "name_regex_delete": {
-              "description": "Regex matching tag names to delete",
-              "type": "string"
+              "description": "Regex matching tag names to delete. On an update, pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "name_regex_keep": {
-              "description": "Regex matching tag names to always keep",
-              "type": "string"
+              "description": "Regex matching tag names to always keep. On an update, pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "older_than": {
               "description": "Only tags older than this duration are eligible for deletion (7d, 14d, 30d, 90d)",
@@ -174685,7 +175245,7 @@
           ]
         },
         "default_branch": {
-          "description": "Default branch name",
+          "description": "Default branch name. GitLab applies it only together with initialize_with_readme. A project created without a README is empty and takes the instance's default branch name whatever is sent here",
           "type": "string"
         },
         "description": {
@@ -176245,12 +176805,18 @@
               ]
             },
             "name_regex_delete": {
-              "description": "Regex matching tag names to delete",
-              "type": "string"
+              "description": "Regex matching tag names to delete. On an update, pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "name_regex_keep": {
-              "description": "Regex matching tag names to always keep",
-              "type": "string"
+              "description": "Regex matching tag names to always keep. On an update, pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "older_than": {
               "description": "Only tags older than this duration are eligible for deletion (7d, 14d, 30d, 90d)",
@@ -176274,7 +176840,7 @@
           ]
         },
         "default_branch": {
-          "description": "Default branch name",
+          "description": "Default branch name. GitLab applies it only together with initialize_with_readme. A project created without a README is empty and takes the instance's default branch name whatever is sent here",
           "type": "string"
         },
         "description": {
@@ -182145,8 +182711,11 @@
           ]
         },
         "custom_webhook_template": {
-          "description": "Custom webhook payload template",
-          "type": "string"
+          "description": "Custom webhook payload template. On an edit, pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "deployment_events": {
           "description": "Trigger on deployment events",
@@ -182156,8 +182725,11 @@
           ]
         },
         "description": {
-          "description": "Webhook description",
-          "type": "string"
+          "description": "Webhook description. On an edit, pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "emoji_events": {
           "description": "Trigger on emoji events",
@@ -182241,8 +182813,11 @@
           ]
         },
         "push_events_branch_filter": {
-          "description": "Branch filter for push events",
-          "type": "string"
+          "description": "Branch filter for push events. On an edit, pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "releases_events": {
           "description": "Trigger on release events",
@@ -182748,8 +183323,11 @@
           ]
         },
         "custom_webhook_template": {
-          "description": "Custom webhook payload template",
-          "type": "string"
+          "description": "Custom webhook payload template. On an edit, pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "deployment_events": {
           "description": "Trigger on deployment events",
@@ -182759,8 +183337,11 @@
           ]
         },
         "description": {
-          "description": "Webhook description",
-          "type": "string"
+          "description": "Webhook description. On an edit, pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "emoji_events": {
           "description": "Trigger on emoji events",
@@ -182848,8 +183429,11 @@
           ]
         },
         "push_events_branch_filter": {
-          "description": "Branch filter for push events",
-          "type": "string"
+          "description": "Branch filter for push events. On an edit, pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "releases_events": {
           "description": "Trigger on release events",
@@ -192898,8 +193482,11 @@
           "type": "string"
         },
         "member_role_id": {
-          "description": "Custom member role ID",
-          "type": "integer"
+          "description": "Custom member role ID. Pass 0 to remove the custom role, which GitLab requires before it changes the access level of a member that holds one. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
@@ -197495,8 +198082,11 @@
           "type": "string"
         },
         "description": {
-          "description": "New description",
-          "type": "string"
+          "description": "New description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "file_name": {
           "description": "New file name (single-file, deprecated in favor of files)",
@@ -202039,8 +202629,11 @@
           "type": "string"
         },
         "approvals_before_merge": {
-          "description": "Number of approvals required before merge",
-          "type": "integer"
+          "description": "Number of approvals required before merge. Pass 0 to require none. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "auto_cancel_pending_pipelines": {
           "description": "Auto-cancel redundant pending pipelines when a newer pipeline starts: enabled or disabled.",
@@ -202096,24 +202689,36 @@
           "type": "string"
         },
         "build_timeout": {
-          "description": "Build timeout in seconds",
-          "type": "integer"
+          "description": "Build timeout in seconds. GitLab accepts 10 minutes to one month",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "builds_access_level": {
           "description": "CI/CD builds access level (disabled, private, enabled)",
           "type": "string"
         },
         "ci_config_path": {
-          "description": "Custom CI/CD configuration file path",
-          "type": "string"
+          "description": "Custom CI/CD configuration file path. Pass an empty string to go back to the default .gitlab-ci.yml. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "ci_default_git_depth": {
-          "description": "Default Git clone depth for CI/CD",
-          "type": "integer"
+          "description": "Default Git clone depth for CI/CD, 0 to 1000. Pass 0 to fetch the whole history. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "ci_delete_pipelines_in_seconds": {
-          "description": "Auto-delete pipelines older than this many seconds",
-          "type": "integer"
+          "description": "Auto-delete pipelines older than this many seconds, at least a day. Pass 0 to stop deleting them. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "ci_display_pipeline_variables": {
           "description": "Display pipeline variables in the UI",
@@ -202209,12 +202814,18 @@
               ]
             },
             "name_regex_delete": {
-              "description": "Regex matching tag names to delete",
-              "type": "string"
+              "description": "Regex matching tag names to delete. On an update, pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "name_regex_keep": {
-              "description": "Regex matching tag names to always keep",
-              "type": "string"
+              "description": "Regex matching tag names to always keep. On an update, pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "older_than": {
               "description": "Only tags older than this duration are eligible for deletion (7d, 14d, 30d, 90d)",
@@ -202242,8 +202853,11 @@
           "type": "string"
         },
         "description": {
-          "description": "New description",
-          "type": "string"
+          "description": "New description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "emails_disabled": {
           "description": "Disable email notifications (deprecated: use emails_enabled)",
@@ -202271,8 +202885,11 @@
           "type": "string"
         },
         "external_authorization_classification_label": {
-          "description": "External authorization classification label",
-          "type": "string"
+          "description": "External authorization classification label. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "feature_flags_access_level": {
           "description": "Feature flags access level (disabled, private, enabled)",
@@ -202298,8 +202915,11 @@
           "type": "string"
         },
         "issue_branch_template": {
-          "description": "Template for branch names created from issues",
-          "type": "string"
+          "description": "Template for branch names created from issues. Pass an empty string to go back to the default template. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "issues_access_level": {
           "description": "Issues access level (disabled, private, enabled)",
@@ -202338,12 +202958,18 @@
           ]
         },
         "max_artifacts_size": {
-          "description": "Maximum artifacts size in MB",
-          "type": "integer"
+          "description": "Maximum artifacts size in MB. Pass 0 to go back to the instance's limit. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "merge_commit_template": {
-          "description": "Template for merge commit messages",
-          "type": "string"
+          "description": "Template for merge commit messages. Pass an empty string to go back to the default template. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "merge_method": {
           "description": "Merge method: merge (default merge commit), rebase_merge (rebase then merge commit), or ff (fast-forward, no merge commit).",
@@ -202362,12 +202988,18 @@
           ]
         },
         "merge_request_title_regex": {
-          "description": "Regex that MR titles must match",
-          "type": "string"
+          "description": "Regex that MR titles must match. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "merge_request_title_regex_description": {
-          "description": "Human-readable description for the MR title regex",
-          "type": "string"
+          "description": "Human-readable description for the MR title regex. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "merge_requests_access_level": {
           "description": "Merge requests access level (disabled, private, enabled)",
@@ -202425,7 +203057,10 @@
         },
         "mirror_user_id": {
           "description": "User ID used to run mirror updates (admin only)",
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "model_experiments_access_level": {
           "description": "Model experiments access level (disabled, private, enabled)",
@@ -202447,8 +203082,11 @@
           ]
         },
         "mr_default_title_template": {
-          "description": "Template for default merge request titles",
-          "type": "string"
+          "description": "Template for default merge request titles. Pass an empty string to go back to the default template. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "name": {
           "description": "New project name",
@@ -202642,8 +203280,11 @@
           ]
         },
         "squash_commit_template": {
-          "description": "Template for squash commit messages",
-          "type": "string"
+          "description": "Template for squash commit messages. Pass an empty string to go back to the default template. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "squash_option": {
           "description": "Squash commits on merge: never (not allowed), always (always squash), default_on (squash by default, overridable per MR), or default_off (no squash by default, overridable per MR).",
@@ -202656,11 +203297,14 @@
           "type": "string"
         },
         "suggestion_commit_message": {
-          "description": "Default commit message for suggestions",
-          "type": "string"
+          "description": "Default commit message for suggestions. Pass an empty string to go back to the default message. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "tag_list": {
-          "description": "Project tags (deprecated: use topics)",
+          "description": "Project tags (deprecated: use topics). Pass [] to remove every tag. Omit the field to leave them untouched",
           "items": {
             "type": "string"
           },
@@ -202670,7 +203314,7 @@
           ]
         },
         "topics": {
-          "description": "Topic tags for the project",
+          "description": "Topic tags for the project. Pass [] to remove every topic. Omit the field to leave them untouched",
           "items": {
             "type": "string"
           },
@@ -208121,45 +208765,20 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "created_at": {
-                "type": "string"
-              },
-              "digest": {
-                "type": "string"
-              },
               "location": {
                 "type": "string"
               },
               "name": {
                 "type": "string"
               },
-              "next_steps": {
-                "items": {
-                  "type": "string"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
-              },
               "path": {
                 "type": "string"
-              },
-              "revision": {
-                "type": "string"
-              },
-              "short_revision": {
-                "type": "string"
-              },
-              "total_size": {
-                "type": "integer"
               }
             },
             "required": [
               "name",
               "path",
-              "location",
-              "total_size"
+              "location"
             ],
             "type": "object"
           },
@@ -208453,12 +209072,18 @@
       "additionalProperties": false,
       "properties": {
         "minimum_access_level_for_delete": {
-          "description": "Minimum access level for delete (maintainer, owner, admin)",
-          "type": "string"
+          "description": "Minimum access level for delete (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the push level stays set. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "minimum_access_level_for_push": {
-          "description": "Minimum access level for push (maintainer, owner, admin)",
-          "type": "string"
+          "description": "Minimum access level for push (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the delete level stays set. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "project_id": {
           "description": "Project ID or path",
@@ -208799,12 +209424,18 @@
       "additionalProperties": false,
       "properties": {
         "minimum_access_level_for_delete": {
-          "description": "Minimum access level to delete matching tags (maintainer, owner, admin)",
-          "type": "string"
+          "description": "Minimum access level to delete matching tags (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the push level stays set. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "minimum_access_level_for_push": {
-          "description": "Minimum access level to push matching tags (maintainer, owner, admin)",
-          "type": "string"
+          "description": "Minimum access level to push matching tags (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the delete level stays set. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "project_id": {
           "description": "Project ID or path",
@@ -208897,6 +209528,9 @@
       "additionalProperties": false,
       "properties": {
         "action": {
+          "type": "string"
+        },
+        "note": {
           "type": "string"
         },
         "success": {
@@ -211040,14 +211674,32 @@
     "description": "Update an existing release asset link by link_id. Returns: the updated link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_get, gitlab_release_link_list, gitlab_release_link_delete.",
     "inputSchema": {
       "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "required": [
+            "url"
+          ]
+        }
+      ],
       "properties": {
         "direct_asset_path": {
-          "description": "New direct asset path for the link",
-          "type": "string"
+          "description": "New direct asset path for the link. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "filepath": {
-          "description": "New filepath for a direct asset link",
-          "type": "string"
+          "description": "New filepath for a direct asset link. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "link_id": {
           "description": "ID of the release link to update",
@@ -211616,7 +212268,7 @@
           "type": "string"
         },
         "milestones": {
-          "description": "Milestone titles to associate with the release",
+          "description": "Milestone titles to associate with the release. Pass [] to detach every milestone. Omit the field to leave them untouched",
           "items": {
             "type": "string"
           },
@@ -212675,7 +213327,8 @@
           "type": "string"
         },
         "date": {
-          "description": "Date and time of the release as an RFC3339 timestamp (default: current time)",
+          "description": "Date and time of the release, an ISO 8601 timestamp such as 2026-03-01T10:00:00Z. A date such as 2026-03-01 is read as midnight UTC (default: the current time)",
+          "format": "date-time",
           "type": "string"
         },
         "file": {
@@ -212759,7 +213412,8 @@
           "type": "string"
         },
         "date": {
-          "description": "Date and time of the release as an RFC3339 timestamp (default: current time)",
+          "description": "Date and time of the release, an ISO 8601 timestamp such as 2026-03-01T10:00:00Z. A date such as 2026-03-01 is read as midnight UTC (default: the current time)",
+          "format": "date-time",
           "type": "string"
         },
         "from": {
@@ -217520,8 +218174,11 @@
           "type": "integer"
         },
         "description": {
-          "description": "New description",
-          "type": "string"
+          "description": "New description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "state": {
           "description": "New state: enabled, disabled, or dry_run",
@@ -218280,13 +218937,19 @@
                 ]
               },
               "coverage": {
-                "type": "number"
+                "type": [
+                  "null",
+                  "number"
+                ]
               },
               "created_at": {
                 "type": "string"
               },
               "duration": {
-                "type": "number"
+                "type": [
+                  "null",
+                  "number"
+                ]
               },
               "erased_at": {
                 "type": "string"
@@ -218359,7 +219022,10 @@
                 ]
               },
               "queued_duration": {
-                "type": "number"
+                "type": [
+                  "null",
+                  "number"
+                ]
               },
               "ref": {
                 "type": "string"
@@ -218546,8 +219212,6 @@
               "ref",
               "tag",
               "allow_failure",
-              "duration",
-              "queued_duration",
               "web_url",
               "created_at"
             ],
@@ -222524,7 +223188,10 @@
                     ]
                   },
                   "duration": {
-                    "type": "integer"
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
                   },
                   "finished_at": {
                     "type": "string"
@@ -222542,7 +223209,10 @@
                     "type": "integer"
                   },
                   "queued_duration": {
-                    "type": "integer"
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
                   },
                   "ref": {
                     "type": "string"
@@ -222622,8 +223292,6 @@
                   "before_sha",
                   "tag",
                   "yaml_errors",
-                  "duration",
-                  "queued_duration",
                   "coverage",
                   "web_url"
                 ],
@@ -227366,12 +228034,12 @@
       "additionalProperties": false,
       "properties": {
         "created_after": {
-          "description": "Filter snippets created after (ISO 8601)",
+          "description": "Filter snippets created after this time, an ISO 8601 timestamp such as 2026-01-01T08:30:00Z. A date such as 2026-01-01 is read as midnight UTC",
           "format": "date-time",
           "type": "string"
         },
         "created_before": {
-          "description": "Filter snippets created before (ISO 8601)",
+          "description": "Filter snippets created before this time, an ISO 8601 timestamp such as 2026-02-01T18:00:00Z. A date such as 2026-02-01 is read as midnight UTC",
           "format": "date-time",
           "type": "string"
         },
@@ -229606,8 +230274,11 @@
           "type": "string"
         },
         "description": {
-          "description": "New description",
-          "type": "string"
+          "description": "New description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "file_name": {
           "description": "New file name (single-file, deprecated in favor of files)",
@@ -232901,6 +233572,9 @@
         "action": {
           "type": "string"
         },
+        "note": {
+          "type": "string"
+        },
         "success": {
           "type": "boolean"
         },
@@ -232942,6 +233616,9 @@
       "additionalProperties": false,
       "properties": {
         "action": {
+          "type": "string"
+        },
+        "note": {
           "type": "string"
         },
         "success": {
@@ -233020,7 +233697,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -233340,7 +234017,7 @@
           "type": "string"
         },
         "target_access_levels": {
-          "description": "Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)",
+          "description": "Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner). Pass [] to show the message to every role. Omit the field to leave them untouched",
           "items": {
             "type": "integer"
           },
@@ -233350,8 +234027,11 @@
           ]
         },
         "target_path": {
-          "description": "Target path to show message on",
-          "type": "string"
+          "description": "Target path to show message on. Pass an empty string to remove it, so the message shows on every page. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "theme": {
           "description": "Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light.",
@@ -233799,7 +234479,7 @@
       "additionalProperties": false,
       "properties": {
         "csp_namespace_id": {
-          "description": "Namespace ID for the compliance security policy project",
+          "description": "Namespace ID for the compliance security policy project. Pass 0 to remove the designation. Every change locks the setting for ten minutes",
           "type": [
             "null",
             "integer"
@@ -233888,6 +234568,9 @@
         "external_author": {
           "type": "string"
         },
+        "gid": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
         },
@@ -233971,6 +234654,9 @@
         },
         "resolved_by": {
           "type": "string"
+        },
+        "resource_event": {
+          "type": "boolean"
         },
         "system": {
           "type": "boolean"
@@ -235471,7 +236157,7 @@
           ]
         },
         "submodule": {
-          "description": "URL-encoded full path to the submodule",
+          "description": "Full path of the submodule in the repository, as .gitmodules writes it (e.g. libs/dep)",
           "type": "string"
         }
       },
@@ -235902,9 +236588,6 @@
           "type": "object"
         }
       },
-      "required": [
-        "settings"
-      ],
       "type": "object"
     },
     "annotations": {
@@ -236259,8 +236942,11 @@
       "additionalProperties": false,
       "properties": {
         "description": {
-          "description": "New topic description",
-          "type": "string"
+          "description": "New topic description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "name": {
           "description": "New topic name",
@@ -236385,43 +237071,52 @@
           ]
         },
         "description": {
-          "description": "New description",
-          "type": "string"
+          "description": "New description. Pass an empty string to remove the description. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "due_date": {
-          "description": "Due date (YYYY-MM-DD)",
-          "format": "date",
-          "type": "string"
+          "description": "Due date (YYYY-MM-DD). Pass an empty string to remove the due date. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "full_path": {
           "description": "Full path of the project or group (e.g. my-group/my-project)",
           "type": "string"
         },
         "health_status": {
-          "description": "Health status (onTrack/needsAttention/atRisk)",
+          "description": "Health status (onTrack/needsAttention/atRisk). Pass an empty string to remove the health status. Omit the field to leave it untouched",
           "enum": [
             "onTrack",
             "needsAttention",
-            "atRisk"
+            "atRisk",
+            ""
           ],
-          "type": "string"
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "iteration_id": {
-          "description": "Global ID of the iteration",
+          "description": "Global ID of the iteration. Pass 0 to remove the work item from its iteration. Omit the field to leave it untouched",
           "type": [
             "null",
             "integer"
           ]
         },
         "milestone_id": {
-          "description": "Global ID of the milestone",
+          "description": "Global ID of the milestone. Pass 0 to remove the work item from its milestone. Omit the field to leave it untouched",
           "type": [
             "null",
             "integer"
           ]
         },
         "parent_id": {
-          "description": "Global ID of the parent work item",
+          "description": "Global ID of the parent work item. Pass 0 to remove the parent. Omit the field to leave it untouched",
           "type": [
             "null",
             "integer"
@@ -236438,9 +237133,11 @@
           ]
         },
         "start_date": {
-          "description": "Start date (YYYY-MM-DD)",
-          "format": "date",
-          "type": "string"
+          "description": "Start date (YYYY-MM-DD). Pass an empty string to remove the start date. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "state_event": {
           "description": "State event: CLOSE or REOPEN",
@@ -238274,7 +238971,7 @@
           ]
         },
         "slug": {
-          "description": "URL-encoded slug of the wiki page to delete",
+          "description": "Slug of the wiki page to delete as wiki.list returns it (e.g. 'dir/page')",
           "type": "string"
         }
       },
@@ -238335,7 +239032,7 @@
           "type": "boolean"
         },
         "slug": {
-          "description": "URL-encoded slug of the wiki page (e.g. 'my-page')",
+          "description": "Slug of the wiki page as wiki.list returns it, a subpage with its slash (e.g. 'my-page' or 'dir/page')",
           "type": "string"
         },
         "version": {
@@ -238522,7 +239219,7 @@
           ]
         },
         "slug": {
-          "description": "URL-encoded slug of the wiki page to update",
+          "description": "Slug of the wiki page to update as wiki.list returns it (e.g. 'dir/page')",
           "type": "string"
         },
         "title": {

@@ -4017,6 +4017,44 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /projects/:id",
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "terraformstates.stateProjectPath"
+          ],
+          "sdk_methods": [
+            "Projects.GetProject"
+          ],
+          "directives": [
+            "mandatory: a numeric project_id is looked up on every call that names one, since the GraphQL project field takes no ID"
+          ]
+        },
+        {
+          "kind": "graphql",
+          "operation": "query project (TerraformStates.Get)",
+          "root_fields": [
+            "project"
+          ],
+          "positions": [
+            "project",
+            "project.terraformState",
+            "project.terraformState.latestVersion"
+          ],
+          "class": "mandatory",
+          "classic": "read_api",
+          "sites": [
+            "terraformstates.Delete"
+          ],
+          "sdk_methods": [
+            "TerraformStates.Get"
+          ],
+          "directives": [
+            "mandatory: the state is read before the delete on every call, since only its GraphQL fields say whether it is locked, and GitLab answers the delete of a locked state as done without doing it"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "DELETE /projects/:id/terraform/state/:name",
           "class": "mandatory",
           "classic": "api",
@@ -4025,12 +4063,16 @@
           ],
           "sdk_methods": [
             "TerraformStates.Delete"
+          ],
+          "directives": [
+            "mandatory: the delete itself, sent once the read found the state unlocked"
           ]
         }
       ],
       "paths": [
         [
-          0
+          1,
+          2
         ]
       ]
     },
@@ -4083,7 +4125,7 @@
       "requests": [
         {
           "kind": "graphql",
-          "operation": "query project (TerraformStates.List)",
+          "operation": "query project (listStatesQuery)",
           "root_fields": [
             "project"
           ],
@@ -4091,15 +4133,13 @@
             "project",
             "project.terraformStates",
             "project.terraformStates.nodes",
-            "project.terraformStates.nodes.latestVersion"
+            "project.terraformStates.nodes.latestVersion",
+            "project.terraformStates.pageInfo"
           ],
           "class": "mandatory",
           "classic": "read_api",
           "sites": [
             "terraformstates.List"
-          ],
-          "sdk_methods": [
-            "TerraformStates.List"
           ]
         }
       ],
@@ -8056,6 +8096,24 @@
       "requests": [
         {
           "kind": "graphql",
+          "operation": "query note (queryNoteOwner)",
+          "root_fields": [
+            "note"
+          ],
+          "positions": [
+            "note"
+          ],
+          "class": "mandatory",
+          "classic": "read_api",
+          "sites": [
+            "epicworkitems.CheckNoteOnEpic"
+          ],
+          "directives": [
+            "mandatory: a note write reads what the note is on and where GitLab serves it before it changes it, on every call"
+          ]
+        },
+        {
+          "kind": "graphql",
           "operation": "mutation destroyNote (mutationDestroyNote)",
           "root_fields": [
             "destroyNote"
@@ -8066,13 +8124,14 @@
           "class": "mandatory",
           "classic": "api",
           "sites": [
-            "epicdiscussions.DeleteNote"
+            "epicdiscussions.deleteNoteChecked"
           ]
         }
       ],
       "paths": [
         [
-          0
+          0,
+          1
         ]
       ]
     },
@@ -8165,6 +8224,24 @@
       "requests": [
         {
           "kind": "graphql",
+          "operation": "query note (queryNoteOwner)",
+          "root_fields": [
+            "note"
+          ],
+          "positions": [
+            "note"
+          ],
+          "class": "mandatory",
+          "classic": "read_api",
+          "sites": [
+            "epicworkitems.CheckNoteOnEpic"
+          ],
+          "directives": [
+            "mandatory: a note write reads what the note is on and where GitLab serves it before it changes it, on every call"
+          ]
+        },
+        {
+          "kind": "graphql",
           "operation": "mutation updateNote (mutationUpdateNote)",
           "root_fields": [
             "updateNote"
@@ -8186,7 +8263,8 @@
       ],
       "paths": [
         [
-          0
+          0,
+          1
         ]
       ]
     },
@@ -8393,6 +8471,26 @@
         },
         {
           "kind": "graphql",
+          "operation": "query workItem (queryItemParent)",
+          "root_fields": [
+            "workItem"
+          ],
+          "positions": [
+            "workItem",
+            "workItem.widgets",
+            "workItem.widgets.parent"
+          ],
+          "class": "mandatory",
+          "classic": "read_api",
+          "sites": [
+            "epicissues.checkChildOfEpic"
+          ],
+          "directives": [
+            "mandatory: removal and reordering read where each item they move sits before they write, on every call"
+          ]
+        },
+        {
+          "kind": "graphql",
           "operation": "mutation workItemUpdate (mutationRemoveParent)",
           "root_fields": [
             "workItemUpdate"
@@ -8411,7 +8509,8 @@
       "paths": [
         [
           0,
-          1
+          1,
+          2
         ]
       ]
     },
@@ -8439,6 +8538,26 @@
           ],
           "directives": [
             "mandatory: an epic action resolves the epic's work item ID here and then sends its own request with it, so both run on every call"
+          ]
+        },
+        {
+          "kind": "graphql",
+          "operation": "query workItem (queryItemParent)",
+          "root_fields": [
+            "workItem"
+          ],
+          "positions": [
+            "workItem",
+            "workItem.widgets",
+            "workItem.widgets.parent"
+          ],
+          "class": "mandatory",
+          "classic": "read_api",
+          "sites": [
+            "epicissues.checkChildOfEpic"
+          ],
+          "directives": [
+            "mandatory: removal and reordering read where each item they move sits before they write, on every call"
           ]
         },
         {
@@ -8490,7 +8609,8 @@
         [
           0,
           1,
-          2
+          2,
+          3
         ]
       ]
     },
@@ -8628,6 +8748,24 @@
       "requests": [
         {
           "kind": "graphql",
+          "operation": "query note (queryNoteOwner)",
+          "root_fields": [
+            "note"
+          ],
+          "positions": [
+            "note"
+          ],
+          "class": "mandatory",
+          "classic": "read_api",
+          "sites": [
+            "epicworkitems.CheckNoteOnEpic"
+          ],
+          "directives": [
+            "mandatory: a note write reads what the note is on and where GitLab serves it before it changes it, on every call"
+          ]
+        },
+        {
+          "kind": "graphql",
           "operation": "mutation destroyNote (mutationDestroyNote)",
           "root_fields": [
             "destroyNote"
@@ -8638,13 +8776,14 @@
           "class": "mandatory",
           "classic": "api",
           "sites": [
-            "epicnotes.Delete"
+            "epicnotes.deleteChecked"
           ]
         }
       ],
       "paths": [
         [
-          0
+          0,
+          1
         ]
       ]
     },
@@ -8735,6 +8874,24 @@
       "requests": [
         {
           "kind": "graphql",
+          "operation": "query note (queryNoteOwner)",
+          "root_fields": [
+            "note"
+          ],
+          "positions": [
+            "note"
+          ],
+          "class": "mandatory",
+          "classic": "read_api",
+          "sites": [
+            "epicworkitems.CheckNoteOnEpic"
+          ],
+          "directives": [
+            "mandatory: a note write reads what the note is on and where GitLab serves it before it changes it, on every call"
+          ]
+        },
+        {
+          "kind": "graphql",
           "operation": "mutation updateNote (mutationUpdateNote)",
           "root_fields": [
             "updateNote"
@@ -8756,7 +8913,8 @@
       ],
       "paths": [
         [
-          0
+          0,
+          1
         ]
       ]
     },
@@ -13623,6 +13781,9 @@
           ],
           "sdk_methods": [
             "IssuesStatistics.GetGroupIssuesStatistics"
+          ],
+          "directives": [
+            "mandatory: scopedStatistics sends this read on every call whose filters parse"
           ]
         }
       ],
@@ -13649,6 +13810,9 @@
           ],
           "sdk_methods": [
             "IssuesStatistics.GetProjectIssuesStatistics"
+          ],
+          "directives": [
+            "mandatory: scopedStatistics sends this read on every call whose filters parse"
           ]
         }
       ],
@@ -16967,10 +17131,19 @@
         {
           "kind": "rest",
           "route": "GET /projects/:id/packages/ml_models/:model_version_id/files/(*path/):file_name",
-          "class": "mandatory",
+          "class": "alternative",
           "classic": "read_api",
           "sites": [
-            "modelregistry.Download"
+            "modelregistry.downloadFromPackageRoot"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/packages/ml_models/:model_version_id/files/(*path/):file_name",
+          "class": "alternative",
+          "classic": "read_api",
+          "sites": [
+            "modelregistry.downloadModelFile"
           ],
           "sdk_methods": [
             "ModelRegistry.DownloadMachineLearningModelPackage"
@@ -16980,6 +17153,9 @@
       "paths": [
         [
           0
+        ],
+        [
+          1
         ]
       ]
     },
@@ -19492,6 +19668,21 @@
           ],
           "directives": [
             "mandatory: the wait reads the pipeline before it can report a status, so the read runs on every call that answers"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/pipelines/:pipeline_id/jobs",
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "pipelines.pipelineFailure"
+          ],
+          "sdk_methods": [
+            "Jobs.ListPipelineJobs"
+          ],
+          "directives": [
+            "optional: the failed jobs are read only when the pipeline failed, and the wait answers without them when GitLab does not list them"
           ]
         }
       ],
@@ -25360,6 +25551,21 @@
         },
         {
           "kind": "rest",
+          "route": "GET /projects/:id",
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "repositorysubmodules.newSubmoduleResolver"
+          ],
+          "sdk_methods": [
+            "Projects.GetProject"
+          ],
+          "directives": [
+            "mandatory: a submodule URL resolves against the superproject's path and its SSH clone URL, so the superproject is read on every call that finds a submodule"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "GET /projects/:id/repository/tree",
           "class": "optional",
           "classic": "read_api",
@@ -25478,6 +25684,21 @@
         },
         {
           "kind": "rest",
+          "route": "GET /projects/:id",
+          "class": "mandatory",
+          "classic": "read_api",
+          "sites": [
+            "repositorysubmodules.newSubmoduleResolver"
+          ],
+          "sdk_methods": [
+            "Projects.GetProject"
+          ],
+          "directives": [
+            "mandatory: a submodule URL resolves against the superproject's path and its SSH clone URL, so the superproject is read on every call that finds a submodule"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "GET /projects/:id/repository/tree",
           "class": "mandatory",
           "classic": "read_api",
@@ -25495,7 +25716,8 @@
       "paths": [
         [
           0,
-          1
+          1,
+          2
         ]
       ]
     },

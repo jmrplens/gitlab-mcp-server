@@ -164,13 +164,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Deploy Key: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro    | Tipo             | Requerido | Descripción                             |
-| ------------ | ---------------- | --------- | --------------------------------------- |
-| `key`        | `string`         | sí        | Public SSH key content                  |
-| `project_id` | `string/integer` | sí        | Project ID or path                      |
-| `title`      | `string`         | sí        | Deploy key title                        |
-| `can_push`   | `boolean`        | no        | Whether the key can push to the project |
-| `expires_at` | `string`         | no        | Expiry date (YYYY-MM-DD)                |
+| Parámetro    | Tipo             | Requerido | Descripción                                                                                                   |
+| ------------ | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------- |
+| `key`        | `string`         | sí        | Public SSH key content                                                                                        |
+| `project_id` | `string/integer` | sí        | Project ID or path                                                                                            |
+| `title`      | `string`         | sí        | Deploy key title                                                                                              |
+| `can_push`   | `boolean`        | no        | Whether the key can push to the project                                                                       |
+| `expires_at` | `string`         | no        | Expiry, an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC |
 
 ### `access.deploy_key_add_instance`
 
@@ -183,11 +183,11 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Deploy Key: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro    | Tipo     | Requerido | Descripción              |
-| ------------ | -------- | --------- | ------------------------ |
-| `key`        | `string` | sí        | Public SSH key content   |
-| `title`      | `string` | sí        | Deploy key title         |
-| `expires_at` | `string` | no        | Expiry date (YYYY-MM-DD) |
+| Parámetro    | Tipo     | Requerido | Descripción                                                                                                   |
+| ------------ | -------- | --------- | ------------------------------------------------------------------------------------------------------------- |
+| `key`        | `string` | sí        | Public SSH key content                                                                                        |
+| `title`      | `string` | sí        | Deploy key title                                                                                              |
+| `expires_at` | `string` | no        | Expiry, an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC |
 
 ### `access.deploy_key_delete`
 
@@ -334,7 +334,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | `group_id`   | `string/integer` | sí        | Group ID or URL-encoded path                                                                                    |
 | `name`       | `string`         | sí        | Deploy token name                                                                                               |
 | `scopes`     | `string[]`       | sí        | Array of scopes (read_repository, read_registry, write_registry, read_package_registry, write_package_registry) |
-| `expires_at` | `string`         | no        | Expiry date (YYYY-MM-DD)                                                                                        |
+| `expires_at` | `string`         | no        | Expiry, an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC   |
 | `username`   | `string`         | no        | Username for the deploy token                                                                                   |
 
 ### `access.deploy_token_create_project`
@@ -353,7 +353,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | `name`       | `string`         | sí        | Deploy token name                                                                                               |
 | `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                                                                  |
 | `scopes`     | `string[]`       | sí        | Array of scopes (read_repository, read_registry, write_registry, read_package_registry, write_package_registry) |
-| `expires_at` | `string`         | no        | Expiry date (YYYY-MM-DD)                                                                                        |
+| `expires_at` | `string`         | no        | Expiry, an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC   |
 | `username`   | `string`         | no        | Username for the deploy token                                                                                   |
 
 ### `access.deploy_token_delete_group`

@@ -572,24 +572,24 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Not reachable at this release: `WorkItem` is declared at a boundary the object the action reaches never resolves to, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, not idempotent
 
-| Parameter                  | Type                                             | Mandatory | Description                                                                                                                                                               |
-| -------------------------- | ------------------------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `full_path`                | `string`                                         | yes       | Full path of the group (e.g. my-group)                                                                                                                                    |
-| `title`                    | `string`                                         | yes       | Epic title                                                                                                                                                                |
-| `assignee_ids`             | `integer[]`                                      | no        | Global IDs of assignees                                                                                                                                                   |
-| `color`                    | `string`                                         | no        | Epic color (hex format, e.g. \#FF0000)                                                                                                                                    |
-| `confidential`             | `boolean`                                        | no        | Whether the epic is confidential                                                                                                                                          |
-| `create_source`            | `string`                                         | no        | Free-text label recording what triggered the creation. Used by GitLab for tracking only and never shown on the epic                                                       |
-| `created_at`               | `string`                                         | no        | Creation timestamp to record instead of now (ISO 8601, e.g. 2025-01-01T00:00:00Z). Honored for group owners and administrators only, and ignored when it cannot be parsed |
-| `description`              | `string`                                         | no        | Epic description (Markdown supported)                                                                                                                                     |
-| `due_date`                 | `string`                                         | no        | Due date (YYYY-MM-DD)                                                                                                                                                     |
-| `health_status` (Ultimate) | `string` (`onTrack`, `needsAttention`, `atRisk`) | no        | Health status (onTrack/needsAttention/atRisk)                                                                                                                             |
-| `label_ids`                | `integer[]`                                      | no        | Global IDs of labels                                                                                                                                                      |
-| `linked_items` (Ultimate)  | `object`                                         | no        | Epics to link to the new one, all with the same link type                                                                                                                 |
-| `milestone_id`             | `integer`                                        | no        | Global ID of the milestone to assign to the epic                                                                                                                          |
-| `parent_id` (Ultimate)     | `integer`                                        | no        | Global ID of the parent epic, which makes this one a sub-epic in the same call                                                                                            |
-| `start_date`               | `string`                                         | no        | Start date (YYYY-MM-DD)                                                                                                                                                   |
-| `weight`                   | `integer`                                        | no        | Weight of the epic                                                                                                                                                        |
+| Parameter                  | Type                                             | Mandatory | Description                                                                                                                                                                                                 |
+| -------------------------- | ------------------------------------------------ | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `full_path`                | `string`                                         | yes       | Full path of the group (e.g. my-group)                                                                                                                                                                      |
+| `title`                    | `string`                                         | yes       | Epic title                                                                                                                                                                                                  |
+| `assignee_ids`             | `integer[]`                                      | no        | Global IDs of assignees                                                                                                                                                                                     |
+| `color`                    | `string`                                         | no        | Epic color (hex format, e.g. \#FF0000)                                                                                                                                                                      |
+| `confidential`             | `boolean`                                        | no        | Whether the epic is confidential                                                                                                                                                                            |
+| `create_source`            | `string`                                         | no        | Free-text label recording what triggered the creation. Used by GitLab for tracking only and never shown on the epic                                                                                         |
+| `created_at`               | `string`                                         | no        | Creation timestamp to record instead of now (ISO 8601, e.g. 2025-01-01T00:00:00Z, or a date read as midnight UTC). Honored for group owners and administrators only. A value that does not parse is refused |
+| `description`              | `string`                                         | no        | Epic description (Markdown supported)                                                                                                                                                                       |
+| `due_date`                 | `string`                                         | no        | Due date (YYYY-MM-DD)                                                                                                                                                                                       |
+| `health_status` (Ultimate) | `string` (`onTrack`, `needsAttention`, `atRisk`) | no        | Health status (onTrack/needsAttention/atRisk)                                                                                                                                                               |
+| `label_ids`                | `integer[]`                                      | no        | Global IDs of labels                                                                                                                                                                                        |
+| `linked_items` (Ultimate)  | `object`                                         | no        | Epics to link to the new one, all with the same link type                                                                                                                                                   |
+| `milestone_id`             | `integer`                                        | no        | Global ID of the milestone to assign to the epic                                                                                                                                                            |
+| `parent_id` (Ultimate)     | `integer`                                        | no        | Global ID of the parent epic, which makes this one a sub-epic in the same call                                                                                                                              |
+| `start_date`               | `string`                                         | no        | Start date (YYYY-MM-DD)                                                                                                                                                                                     |
+| `weight`                   | `integer`                                        | no        | Weight of the epic                                                                                                                                                                                          |
 
 ### `group.epic_delete`
 
@@ -650,7 +650,7 @@ The description of each action, and of each of its parameters, is the text the s
 - **Individual tool**: `gitlab_delete_epic_discussion_note`
 - **Tier**: Premium
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Work Item: Delete at project or group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
+- **Fine-grained token**: Work Item: Read at project or group; Work Item: Delete at project or group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter   | Type      | Mandatory | Description                            |
@@ -702,7 +702,7 @@ The description of each action, and of each of its parameters, is the text the s
 - **Individual tool**: `gitlab_update_epic_discussion_note`
 - **Tier**: Premium
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Work Item: Update at project or group; Work Item: Read at project or group; served empty: `updateNote { quickActionsStatus }` (always), `updateNote { note { author } }` (without User: Read at user), `updateNote { note { lastEditedBy } }` (without User: Read at user), `updateNote { note { resolvedBy } }` (without User: Read at user) ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
+- **Fine-grained token**: Work Item: Read at project or group; Work Item: Update at project or group; served empty: `updateNote { quickActionsStatus }` (always), `updateNote { note { author } }` (without User: Read at user), `updateNote { note { lastEditedBy } }` (without User: Read at user), `updateNote { note { resolvedBy } }` (without User: Read at user) ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, idempotent
 
 | Parameter   | Type      | Mandatory | Description                            |
@@ -784,7 +784,7 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `group.epic_issue_remove`
 
-> Unlink a child issue from a group epic (destructive. Requires confirmation). Returns: the resolved epic and issue work item GIDs confirming the removal. See also: [`group.epic_issue_list`](#groupepic_issue_list), [`group.epic_issue_assign`](#groupepic_issue_assign), [`group.epic_get`](#groupepic_get).
+> Unlink a child issue from a group epic (destructive. Requires confirmation). An issue that is not a child of that epic is refused and left where it is. Returns: the resolved epic and issue work item GIDs confirming the removal. See also: [`group.epic_issue_list`](#groupepic_issue_list), [`group.epic_issue_assign`](#groupepic_issue_assign), [`group.epic_get`](#groupepic_get).
 
 - **Meta-tool**: `gitlab_group`, action `epic_issue_remove`
 - **Individual tool**: `gitlab_epic_issue_remove`
@@ -802,7 +802,7 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `group.epic_issue_update`
 
-> Reorder an issue within a group epic by moving it before or after another linked issue. Returns: the epic's child issues in their updated order. See also: [`group.epic_issue_list`](#groupepic_issue_list), [`group.epic_issue_assign`](#groupepic_issue_assign), [`group.epic_issue_remove`](#groupepic_issue_remove).
+> Reorder an issue within a group epic by moving it before or after another linked issue. Both issues must already be children of that epic: one in another epic is refused, never moved. Returns: the epic's child issues in their updated order. See also: [`group.epic_issue_list`](#groupepic_issue_list), [`group.epic_issue_assign`](#groupepic_issue_assign), [`group.epic_issue_remove`](#groupepic_issue_remove).
 
 - **Meta-tool**: `gitlab_group`, action `epic_issue_update`
 - **Individual tool**: `gitlab_epic_issue_update`
@@ -899,7 +899,7 @@ The description of each action, and of each of its parameters, is the text the s
 - **Individual tool**: `gitlab_epic_note_delete`
 - **Tier**: Premium
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Work Item: Delete at project or group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
+- **Fine-grained token**: Work Item: Read at project or group; Work Item: Delete at project or group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter   | Type      | Mandatory | Description                            |
@@ -951,7 +951,7 @@ The description of each action, and of each of its parameters, is the text the s
 - **Individual tool**: `gitlab_epic_note_update`
 - **Tier**: Premium
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Work Item: Update at project or group; Work Item: Read at project or group; served empty: `updateNote { quickActionsStatus }` (always), `updateNote { note { author } }` (without User: Read at user), `updateNote { note { lastEditedBy } }` (without User: Read at user), `updateNote { note { resolvedBy } }` (without User: Read at user) ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
+- **Fine-grained token**: Work Item: Read at project or group; Work Item: Update at project or group; served empty: `updateNote { quickActionsStatus }` (always), `updateNote { note { author } }` (without User: Read at user), `updateNote { note { lastEditedBy } }` (without User: Read at user), `updateNote { note { resolvedBy } }` (without User: Read at user) ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, idempotent
 
 | Parameter   | Type      | Mandatory | Description                            |
@@ -972,23 +972,23 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `Namespace`, which the answer is made of ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, idempotent
 
-| Parameter                  | Type                                             | Mandatory | Description                                         |
-| -------------------------- | ------------------------------------------------ | --------- | --------------------------------------------------- |
-| `epic_iid`                 | `integer`                                        | yes       | Epic IID within the group                           |
-| `full_path`                | `string`                                         | yes       | Full path of the group (e.g. my-group)              |
-| `add_label_ids`            | `integer[]`                                      | no        | Global IDs of labels to add                         |
-| `assignee_ids`             | `integer[]`                                      | no        | Global IDs of assignees (empty array to remove all) |
-| `color`                    | `string`                                         | no        | Epic color (hex format)                             |
-| `description`              | `string`                                         | no        | Updated description (Markdown supported)            |
-| `due_date`                 | `string`                                         | no        | Due date (YYYY-MM-DD)                               |
-| `health_status` (Ultimate) | `string` (`onTrack`, `needsAttention`, `atRisk`) | no        | Health status (onTrack/needsAttention/atRisk)       |
-| `milestone_id`             | `integer`                                        | no        | Global ID of the milestone to assign to the epic    |
-| `parent_id` (Ultimate)     | `integer`                                        | no        | Global ID of the parent epic work item              |
-| `remove_label_ids`         | `integer[]`                                      | no        | Global IDs of labels to remove                      |
-| `start_date`               | `string`                                         | no        | Start date (YYYY-MM-DD)                             |
-| `state_event`              | `string` (`CLOSE`, `REOPEN`)                     | no        | State event: CLOSE or REOPEN                        |
-| `title`                    | `string`                                         | no        | Updated epic title                                  |
-| `weight`                   | `integer`                                        | no        | Weight of the epic                                  |
+| Parameter                  | Type                                                   | Mandatory | Description                                                                                                                           |
+| -------------------------- | ------------------------------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `epic_iid`                 | `integer`                                              | yes       | Epic IID within the group                                                                                                             |
+| `full_path`                | `string`                                               | yes       | Full path of the group (e.g. my-group)                                                                                                |
+| `add_label_ids`            | `integer[]`                                            | no        | Global IDs of labels to add                                                                                                           |
+| `assignee_ids`             | `integer[]`                                            | no        | Global IDs of assignees (empty array to remove all)                                                                                   |
+| `color`                    | `string`                                               | no        | Epic color (hex format)                                                                                                               |
+| `description`              | `string`                                               | no        | Updated description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched        |
+| `due_date`                 | `string`                                               | no        | Due date (YYYY-MM-DD). Pass an empty string to remove the due date. Omit the field to leave it untouched                              |
+| `health_status` (Ultimate) | `string` (`onTrack`, `needsAttention`, `atRisk`, `""`) | no        | Health status (onTrack/needsAttention/atRisk). Pass an empty string to remove the health status. Omit the field to leave it untouched |
+| `milestone_id`             | `integer`                                              | no        | Global ID of the milestone to assign to the epic. Pass 0 to remove the epic from its milestone. Omit the field to leave it untouched  |
+| `parent_id` (Ultimate)     | `integer`                                              | no        | Global ID of the parent epic work item. Pass 0 to remove the parent. Omit the field to leave it untouched                             |
+| `remove_label_ids`         | `integer[]`                                            | no        | Global IDs of labels to remove                                                                                                        |
+| `start_date`               | `string`                                               | no        | Start date (YYYY-MM-DD). Pass an empty string to remove the start date. Omit the field to leave it untouched                          |
+| `state_event`              | `string` (`CLOSE`, `REOPEN`)                           | no        | State event: CLOSE or REOPEN                                                                                                          |
+| `title`                    | `string`                                               | no        | Updated epic title                                                                                                                    |
+| `weight`                   | `integer`                                              | no        | Weight of the epic                                                                                                                    |
 
 ### `group.event_epic_label_get`
 
@@ -1265,15 +1265,15 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Work Item: Update at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, idempotent
 
-| Parameter                | Type             | Mandatory | Description                                    |
-| ------------------------ | ---------------- | --------- | ---------------------------------------------- |
-| `board_id`               | `integer`        | yes       | Board ID                                       |
-| `group_id`               | `string/integer` | yes       | Group ID or path                               |
-| `assignee_id` (Premium)  | `integer`        | no        | User ID of the assignee the board is scoped to |
-| `labels` (Premium)       | `string[]`       | no        | Label names the board is scoped to             |
-| `milestone_id` (Premium) | `integer`        | no        | Milestone ID the board is scoped to            |
-| `name`                   | `string`         | no        | Board name                                     |
-| `weight` (Premium)       | `integer`        | no        | Weight from 0 to 9 the board is scoped to      |
+| Parameter                | Type             | Mandatory | Description                                                                                                                                                                                         |
+| ------------------------ | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `board_id`               | `integer`        | yes       | Board ID                                                                                                                                                                                            |
+| `group_id`               | `string/integer` | yes       | Group ID or path                                                                                                                                                                                    |
+| `assignee_id` (Premium)  | `integer`        | no        | User ID of the assignee the board is scoped to. Pass 0 to remove the assignee from the scope. Omit the field to leave it untouched                                                                  |
+| `labels` (Premium)       | `string[]`       | no        | Label names the board is scoped to. Pass \[\] to remove every label from the scope. Omit the field to leave it untouched                                                                            |
+| `milestone_id` (Premium) | `integer`        | no        | Milestone ID the board is scoped to: 0 for issues with no milestone, -1 to remove the milestone from the scope, -2 for upcoming and -3 for started milestones. Omit the field to leave it untouched |
+| `name`                   | `string`         | no        | Board name                                                                                                                                                                                          |
+| `weight` (Premium)       | `integer`        | no        | Weight from 0 to 9 the board is scoped to                                                                                                                                                           |
 
 ### `group.group_board_update_list`
 
@@ -1352,14 +1352,13 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Label: Create at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, not idempotent
 
-| Parameter     | Type             | Mandatory | Description                                                    |
-| ------------- | ---------------- | --------- | -------------------------------------------------------------- |
-| `color`       | `string`         | yes       | Label color in hex format (e.g. \#FF0000)                      |
-| `group_id`    | `string/integer` | yes       | Group ID or URL-encoded path                                   |
-| `name`        | `string`         | yes       | Label name                                                     |
-| `archived`    | `boolean`        | no        | Whether to create the label in archived state                  |
-| `description` | `string`         | no        | Label description                                              |
-| `priority`    | `integer`        | no        | Label priority (lower is higher priority, 0 means no priority) |
+| Parameter     | Type             | Mandatory | Description                                   |
+| ------------- | ---------------- | --------- | --------------------------------------------- |
+| `color`       | `string`         | yes       | Label color in hex format (e.g. \#FF0000)     |
+| `group_id`    | `string/integer` | yes       | Group ID or URL-encoded path                  |
+| `name`        | `string`         | yes       | Label name                                    |
+| `archived`    | `boolean`        | no        | Whether to create the label in archived state |
+| `description` | `string`         | no        | Label description                             |
 
 ### `group.group_label_delete`
 
@@ -1463,15 +1462,14 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Label: Update at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, idempotent
 
-| Parameter     | Type             | Mandatory | Description                             |
-| ------------- | ---------------- | --------- | --------------------------------------- |
-| `group_id`    | `string/integer` | yes       | Group ID or URL-encoded path            |
-| `label_id`    | `string/integer` | yes       | Label ID or name                        |
-| `archived`    | `boolean`        | no        | Set true to archive, false to unarchive |
-| `color`       | `string`         | no        | New label color in hex format           |
-| `description` | `string`         | no        | New label description                   |
-| `new_name`    | `string`         | no        | New label name                          |
-| `priority`    | `integer`        | no        | New label priority (0 to remove)        |
+| Parameter     | Type             | Mandatory | Description                                                                                    |
+| ------------- | ---------------- | --------- | ---------------------------------------------------------------------------------------------- |
+| `group_id`    | `string/integer` | yes       | Group ID or URL-encoded path                                                                   |
+| `label_id`    | `string/integer` | yes       | Label ID or name                                                                               |
+| `archived`    | `boolean`        | no        | Set true to archive, false to unarchive                                                        |
+| `color`       | `string`         | no        | New label color in hex format                                                                  |
+| `description` | `string`         | no        | New label description. Pass an empty string to remove it. Omit the field to leave it untouched |
+| `new_name`    | `string`         | no        | New label name                                                                                 |
 
 ### `group.group_member_add`
 
@@ -1506,13 +1504,13 @@ Also needs at least one of: `user_id`; `username`.
 - **Fine-grained token**: Member: Update at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, idempotent
 
-| Parameter        | Type             | Mandatory | Description                                                                                                                                                     |
-| ---------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `access_level`   | `integer`        | yes       | New access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner, 60=Admin) |
-| `group_id`       | `string/integer` | yes       | Group ID or URL-encoded path                                                                                                                                    |
-| `user_id`        | `integer`        | yes       | User ID                                                                                                                                                         |
-| `expires_at`     | `string`         | no        | New membership expiration date (YYYY-MM-DD)                                                                                                                     |
-| `member_role_id` | `integer`        | no        | Custom member role ID to assign. Ultimate only. The role's base access level must match access_level                                                            |
+| Parameter        | Type             | Mandatory | Description                                                                                                                                                                                                                                                       |
+| ---------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `access_level`   | `integer`        | yes       | New access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner, 60=Admin)                                                                                                   |
+| `group_id`       | `string/integer` | yes       | Group ID or URL-encoded path                                                                                                                                                                                                                                      |
+| `user_id`        | `integer`        | yes       | User ID                                                                                                                                                                                                                                                           |
+| `expires_at`     | `string`         | no        | New membership expiration date (YYYY-MM-DD)                                                                                                                                                                                                                       |
+| `member_role_id` | `integer`        | no        | Custom member role ID to assign. Ultimate only. The role's base access level must match access_level. Pass 0 to remove the custom role, which GitLab requires before it changes the access level of a member that holds one. Omit the field to leave it untouched |
 
 ### `group.group_member_get`
 
@@ -1761,15 +1759,15 @@ Also needs at least one of: `user_id`; `username`.
 - **Fine-grained token**: Work Item: Read at group; Work Item: Update at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, idempotent
 
-| Parameter       | Type                           | Mandatory | Description                                                               |
-| --------------- | ------------------------------ | --------- | ------------------------------------------------------------------------- |
-| `group_id`      | `string/integer`               | yes       | Group ID or URL-encoded path                                              |
-| `milestone_iid` | `integer`                      | yes       | Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs |
-| `description`   | `string`                       | no        | Milestone description                                                     |
-| `due_date`      | `string`                       | no        | Due date (YYYY-MM-DD)                                                     |
-| `start_date`    | `string`                       | no        | Start date (YYYY-MM-DD)                                                   |
-| `state_event`   | `string` (`close`, `activate`) | no        | State transition: activate or close                                       |
-| `title`         | `string`                       | no        | Milestone title                                                           |
+| Parameter       | Type                           | Mandatory | Description                                                                                      |
+| --------------- | ------------------------------ | --------- | ------------------------------------------------------------------------------------------------ |
+| `group_id`      | `string/integer`               | yes       | Group ID or URL-encoded path                                                                     |
+| `milestone_iid` | `integer`                      | yes       | Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs                        |
+| `description`   | `string`                       | no        | Milestone description. Pass an empty string to remove it. Omit the field to leave it untouched   |
+| `due_date`      | `string`                       | no        | Due date (YYYY-MM-DD). Pass an empty string to remove it. Omit the field to leave it untouched   |
+| `start_date`    | `string`                       | no        | Start date (YYYY-MM-DD). Pass an empty string to remove it. Omit the field to leave it untouched |
+| `state_event`   | `string` (`close`, `activate`) | no        | State transition: activate or close                                                              |
+| `title`         | `string`                       | no        | Milestone title                                                                                  |
 
 ### `group.group_relations_list_status`
 
@@ -1874,39 +1872,39 @@ Also needs at least one of: `user_id`; `username`.
 - **Fine-grained token**: Webhook: Create at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, not idempotent
 
-| Parameter                      | Type                                           | Mandatory | Description                                                             |
-| ------------------------------ | ---------------------------------------------- | --------- | ----------------------------------------------------------------------- |
-| `group_id`                     | `string/integer`                               | yes       | Group ID or URL-encoded path                                            |
-| `url`                          | `string`                                       | yes       | Webhook URL                                                             |
-| `branch_filter_strategy`       | `string` (`wildcard`, `regex`, `all_branches`) | no        | Branch filter strategy (wildcard, regex, all_branches)                  |
-| `confidential_issues_events`   | `boolean`                                      | no        | Trigger on confidential issue events                                    |
-| `confidential_note_events`     | `boolean`                                      | no        | Trigger on confidential note events                                     |
-| `custom_headers`               | `object[]`                                     | no        | Custom HTTP headers added to webhook requests                           |
-| `custom_webhook_template`      | `string`                                       | no        | Custom payload template (JSON) sent instead of the default webhook body |
-| `deployment_events`            | `boolean`                                      | no        | Trigger on deployment events                                            |
-| `description`                  | `string`                                       | no        | Hook description                                                        |
-| `emoji_events`                 | `boolean`                                      | no        | Trigger on emoji events                                                 |
-| `enable_ssl_verification`      | `boolean`                                      | no        | Enable SSL verification for the hook endpoint                           |
-| `feature_flag_events`          | `boolean`                                      | no        | Trigger on feature flag events                                          |
-| `issues_events`                | `boolean`                                      | no        | Trigger on issue events                                                 |
-| `job_events`                   | `boolean`                                      | no        | Trigger on job events                                                   |
-| `member_events`                | `boolean`                                      | no        | Trigger on member events                                                |
-| `merge_requests_events`        | `boolean`                                      | no        | Trigger on merge request events                                         |
-| `milestone_events`             | `boolean`                                      | no        | Trigger on milestone events                                             |
-| `name`                         | `string`                                       | no        | Hook name                                                               |
-| `note_events`                  | `boolean`                                      | no        | Trigger on comment events                                               |
-| `pipeline_events`              | `boolean`                                      | no        | Trigger on pipeline events                                              |
-| `project_events`               | `boolean`                                      | no        | Trigger on project events (group-level)                                 |
-| `push_events`                  | `boolean`                                      | no        | Trigger on push events                                                  |
-| `push_events_branch_filter`    | `string`                                       | no        | Branch filter for push events (e.g. 'main')                             |
-| `releases_events`              | `boolean`                                      | no        | Trigger on release events                                               |
-| `resource_access_token_events` | `boolean`                                      | no        | Trigger on resource access token events                                 |
-| `signing_token`                | `string`                                       | no        | Write-only signing token for webhook signature validation               |
-| `subgroup_events`              | `boolean`                                      | no        | Trigger on subgroup events                                              |
-| `tag_push_events`              | `boolean`                                      | no        | Trigger on tag push events                                              |
-| `token`                        | `string`                                       | no        | Secret token for payload validation                                     |
-| `vulnerability_events`         | `boolean`                                      | no        | Trigger on vulnerability events                                         |
-| `wiki_page_events`             | `boolean`                                      | no        | Trigger on wiki page events                                             |
+| Parameter                      | Type                                           | Mandatory | Description                                                                                                                                                  |
+| ------------------------------ | ---------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `group_id`                     | `string/integer`                               | yes       | Group ID or URL-encoded path                                                                                                                                 |
+| `url`                          | `string`                                       | yes       | Webhook URL                                                                                                                                                  |
+| `branch_filter_strategy`       | `string` (`wildcard`, `regex`, `all_branches`) | no        | Branch filter strategy (wildcard, regex, all_branches)                                                                                                       |
+| `confidential_issues_events`   | `boolean`                                      | no        | Trigger on confidential issue events                                                                                                                         |
+| `confidential_note_events`     | `boolean`                                      | no        | Trigger on confidential note events                                                                                                                          |
+| `custom_headers`               | `object[]`                                     | no        | Custom HTTP headers added to webhook requests                                                                                                                |
+| `custom_webhook_template`      | `string`                                       | no        | Custom payload template (JSON) sent instead of the default webhook body. On an edit, pass an empty string to remove it. Omit the field to leave it untouched |
+| `deployment_events`            | `boolean`                                      | no        | Trigger on deployment events                                                                                                                                 |
+| `description`                  | `string`                                       | no        | Hook description. On an edit, pass an empty string to remove it. Omit the field to leave it untouched                                                        |
+| `emoji_events`                 | `boolean`                                      | no        | Trigger on emoji events                                                                                                                                      |
+| `enable_ssl_verification`      | `boolean`                                      | no        | Enable SSL verification for the hook endpoint                                                                                                                |
+| `feature_flag_events`          | `boolean`                                      | no        | Trigger on feature flag events                                                                                                                               |
+| `issues_events`                | `boolean`                                      | no        | Trigger on issue events                                                                                                                                      |
+| `job_events`                   | `boolean`                                      | no        | Trigger on job events                                                                                                                                        |
+| `member_events`                | `boolean`                                      | no        | Trigger on member events                                                                                                                                     |
+| `merge_requests_events`        | `boolean`                                      | no        | Trigger on merge request events                                                                                                                              |
+| `milestone_events`             | `boolean`                                      | no        | Trigger on milestone events                                                                                                                                  |
+| `name`                         | `string`                                       | no        | Hook name                                                                                                                                                    |
+| `note_events`                  | `boolean`                                      | no        | Trigger on comment events                                                                                                                                    |
+| `pipeline_events`              | `boolean`                                      | no        | Trigger on pipeline events                                                                                                                                   |
+| `project_events`               | `boolean`                                      | no        | Trigger on project events (group-level)                                                                                                                      |
+| `push_events`                  | `boolean`                                      | no        | Trigger on push events                                                                                                                                       |
+| `push_events_branch_filter`    | `string`                                       | no        | Branch filter for push events (e.g. 'main'). On an edit, pass an empty string to remove it. Omit the field to leave it untouched                             |
+| `releases_events`              | `boolean`                                      | no        | Trigger on release events                                                                                                                                    |
+| `resource_access_token_events` | `boolean`                                      | no        | Trigger on resource access token events                                                                                                                      |
+| `signing_token`                | `string`                                       | no        | Write-only signing token for webhook signature validation                                                                                                    |
+| `subgroup_events`              | `boolean`                                      | no        | Trigger on subgroup events                                                                                                                                   |
+| `tag_push_events`              | `boolean`                                      | no        | Trigger on tag push events                                                                                                                                   |
+| `token`                        | `string`                                       | no        | Secret token for payload validation                                                                                                                          |
+| `vulnerability_events`         | `boolean`                                      | no        | Trigger on vulnerability events                                                                                                                              |
+| `wiki_page_events`             | `boolean`                                      | no        | Trigger on wiki page events                                                                                                                                  |
 
 ### `group.hook_delete`
 
@@ -1969,40 +1967,40 @@ Also needs at least one of: `user_id`; `username`.
 - **Fine-grained token**: Webhook: Update at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, idempotent
 
-| Parameter                      | Type                                           | Mandatory | Description                                                             |
-| ------------------------------ | ---------------------------------------------- | --------- | ----------------------------------------------------------------------- |
-| `group_id`                     | `string/integer`                               | yes       | Group ID or URL-encoded path                                            |
-| `hook_id`                      | `integer`                                      | yes       | Hook ID to edit                                                         |
-| `branch_filter_strategy`       | `string` (`wildcard`, `regex`, `all_branches`) | no        | Branch filter strategy (wildcard, regex, all_branches)                  |
-| `confidential_issues_events`   | `boolean`                                      | no        | Trigger on confidential issue events                                    |
-| `confidential_note_events`     | `boolean`                                      | no        | Trigger on confidential note events                                     |
-| `custom_headers`               | `object[]`                                     | no        | Custom HTTP headers added to webhook requests                           |
-| `custom_webhook_template`      | `string`                                       | no        | Custom payload template (JSON) sent instead of the default webhook body |
-| `deployment_events`            | `boolean`                                      | no        | Trigger on deployment events                                            |
-| `description`                  | `string`                                       | no        | Hook description                                                        |
-| `emoji_events`                 | `boolean`                                      | no        | Trigger on emoji events                                                 |
-| `enable_ssl_verification`      | `boolean`                                      | no        | Enable SSL verification for the hook endpoint                           |
-| `feature_flag_events`          | `boolean`                                      | no        | Trigger on feature flag events                                          |
-| `issues_events`                | `boolean`                                      | no        | Trigger on issue events                                                 |
-| `job_events`                   | `boolean`                                      | no        | Trigger on job events                                                   |
-| `member_events`                | `boolean`                                      | no        | Trigger on member events                                                |
-| `merge_requests_events`        | `boolean`                                      | no        | Trigger on merge request events                                         |
-| `milestone_events`             | `boolean`                                      | no        | Trigger on milestone events                                             |
-| `name`                         | `string`                                       | no        | Hook name                                                               |
-| `note_events`                  | `boolean`                                      | no        | Trigger on comment events                                               |
-| `pipeline_events`              | `boolean`                                      | no        | Trigger on pipeline events                                              |
-| `project_events`               | `boolean`                                      | no        | Trigger on project events (group-level)                                 |
-| `push_events`                  | `boolean`                                      | no        | Trigger on push events                                                  |
-| `push_events_branch_filter`    | `string`                                       | no        | Branch filter for push events (e.g. 'main')                             |
-| `releases_events`              | `boolean`                                      | no        | Trigger on release events                                               |
-| `resource_access_token_events` | `boolean`                                      | no        | Trigger on resource access token events                                 |
-| `signing_token`                | `string`                                       | no        | Write-only signing token for webhook signature validation               |
-| `subgroup_events`              | `boolean`                                      | no        | Trigger on subgroup events                                              |
-| `tag_push_events`              | `boolean`                                      | no        | Trigger on tag push events                                              |
-| `token`                        | `string`                                       | no        | Secret token for payload validation                                     |
-| `url`                          | `string`                                       | no        | New webhook URL                                                         |
-| `vulnerability_events`         | `boolean`                                      | no        | Trigger on vulnerability events                                         |
-| `wiki_page_events`             | `boolean`                                      | no        | Trigger on wiki page events                                             |
+| Parameter                      | Type                                           | Mandatory | Description                                                                                                                                                  |
+| ------------------------------ | ---------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `group_id`                     | `string/integer`                               | yes       | Group ID or URL-encoded path                                                                                                                                 |
+| `hook_id`                      | `integer`                                      | yes       | Hook ID to edit                                                                                                                                              |
+| `branch_filter_strategy`       | `string` (`wildcard`, `regex`, `all_branches`) | no        | Branch filter strategy (wildcard, regex, all_branches)                                                                                                       |
+| `confidential_issues_events`   | `boolean`                                      | no        | Trigger on confidential issue events                                                                                                                         |
+| `confidential_note_events`     | `boolean`                                      | no        | Trigger on confidential note events                                                                                                                          |
+| `custom_headers`               | `object[]`                                     | no        | Custom HTTP headers added to webhook requests                                                                                                                |
+| `custom_webhook_template`      | `string`                                       | no        | Custom payload template (JSON) sent instead of the default webhook body. On an edit, pass an empty string to remove it. Omit the field to leave it untouched |
+| `deployment_events`            | `boolean`                                      | no        | Trigger on deployment events                                                                                                                                 |
+| `description`                  | `string`                                       | no        | Hook description. On an edit, pass an empty string to remove it. Omit the field to leave it untouched                                                        |
+| `emoji_events`                 | `boolean`                                      | no        | Trigger on emoji events                                                                                                                                      |
+| `enable_ssl_verification`      | `boolean`                                      | no        | Enable SSL verification for the hook endpoint                                                                                                                |
+| `feature_flag_events`          | `boolean`                                      | no        | Trigger on feature flag events                                                                                                                               |
+| `issues_events`                | `boolean`                                      | no        | Trigger on issue events                                                                                                                                      |
+| `job_events`                   | `boolean`                                      | no        | Trigger on job events                                                                                                                                        |
+| `member_events`                | `boolean`                                      | no        | Trigger on member events                                                                                                                                     |
+| `merge_requests_events`        | `boolean`                                      | no        | Trigger on merge request events                                                                                                                              |
+| `milestone_events`             | `boolean`                                      | no        | Trigger on milestone events                                                                                                                                  |
+| `name`                         | `string`                                       | no        | Hook name                                                                                                                                                    |
+| `note_events`                  | `boolean`                                      | no        | Trigger on comment events                                                                                                                                    |
+| `pipeline_events`              | `boolean`                                      | no        | Trigger on pipeline events                                                                                                                                   |
+| `project_events`               | `boolean`                                      | no        | Trigger on project events (group-level)                                                                                                                      |
+| `push_events`                  | `boolean`                                      | no        | Trigger on push events                                                                                                                                       |
+| `push_events_branch_filter`    | `string`                                       | no        | Branch filter for push events (e.g. 'main'). On an edit, pass an empty string to remove it. Omit the field to leave it untouched                             |
+| `releases_events`              | `boolean`                                      | no        | Trigger on release events                                                                                                                                    |
+| `resource_access_token_events` | `boolean`                                      | no        | Trigger on resource access token events                                                                                                                      |
+| `signing_token`                | `string`                                       | no        | Write-only signing token for webhook signature validation                                                                                                    |
+| `subgroup_events`              | `boolean`                                      | no        | Trigger on subgroup events                                                                                                                                   |
+| `tag_push_events`              | `boolean`                                      | no        | Trigger on tag push events                                                                                                                                   |
+| `token`                        | `string`                                       | no        | Secret token for payload validation                                                                                                                          |
+| `url`                          | `string`                                       | no        | New webhook URL                                                                                                                                              |
+| `vulnerability_events`         | `boolean`                                      | no        | Trigger on vulnerability events                                                                                                                              |
+| `wiki_page_events`             | `boolean`                                      | no        | Trigger on wiki page events                                                                                                                                  |
 
 ### `group.hook_get`
 
@@ -2150,14 +2148,14 @@ Also needs at least one of: `user_id`; `username`.
 | Parameter                | Type                                                                                                                                                         | Mandatory | Description                                                                                                                                                                                                                                                                                                             |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `group_id`               | `string/integer`                                                                                                                                             | yes       | Group ID or URL-encoded path                                                                                                                                                                                                                                                                                            |
-| `assignee_id`            | `integer`                                                                                                                                                    | no        | Filter by assignee user ID                                                                                                                                                                                                                                                                                              |
+| `assignee_id`            | `string/integer`                                                                                                                                             | no        | Filter by assignee: a user ID, None for issues nobody is assigned, or Any for issues somebody is                                                                                                                                                                                                                        |
 | `assignee_username`      | `string`                                                                                                                                                     | no        | Filter by assignee username                                                                                                                                                                                                                                                                                             |
 | `author_id`              | `integer`                                                                                                                                                    | no        | Filter by author user ID                                                                                                                                                                                                                                                                                                |
 | `author_username`        | `string`                                                                                                                                                     | no        | Filter by author username                                                                                                                                                                                                                                                                                               |
 | `confidential`           | `boolean`                                                                                                                                                    | no        | Filter by confidential status                                                                                                                                                                                                                                                                                           |
 | `created_after`          | `string`                                                                                                                                                     | no        | Return issues created after date (ISO 8601)                                                                                                                                                                                                                                                                             |
 | `created_before`         | `string`                                                                                                                                                     | no        | Return issues created before date (ISO 8601)                                                                                                                                                                                                                                                                            |
-| `due_date`               | `string`                                                                                                                                                     | no        | Filter by due date (0, overdue, week, month, next_month_and_previous_two_weeks)                                                                                                                                                                                                                                         |
+| `due_date`               | `string` (`0`, `any`, `overdue`, `today`, `tomorrow`, `week`, `month`, `next_month_and_previous_two_weeks`)                                                  | no        | Filter by due date keyword, not a date: 0 (no due date), any, overdue, today, tomorrow, week, month or next_month_and_previous_two_weeks                                                                                                                                                                                |
 | `iids`                   | `integer[]`                                                                                                                                                  | no        | Filter by issue internal IDs                                                                                                                                                                                                                                                                                            |
 | `in`                     | `string` (`title`, `description`, `title,description`)                                                                                                       | no        | Fields the search query applies to (title, description, or title,description)                                                                                                                                                                                                                                           |
 | `issue_type`             | `string` (`issue`, `incident`, `test_case`, `task`)                                                                                                          | no        | Filter by issue type (issue, incident, test_case, task)                                                                                                                                                                                                                                                                 |
@@ -3285,7 +3283,7 @@ Also needs at least one of: `user_id`; `username`.
 | `default_branch`                                               | `string`                                                                       | no        | Default branch name                                                                                                                               |
 | `default_branch_protection`                                    | `integer`                                                                      | no        | Deprecated: default branch protection level (0=none,1=partial,2=full,3=initial push,4=fully protected). Prefer default_branch_protection_defaults |
 | `default_branch_protection_defaults`                           | `object`                                                                       | no        | Default branch protection settings object                                                                                                         |
-| `description`                                                  | `string`                                                                       | no        | Group description                                                                                                                                 |
+| `description`                                                  | `string`                                                                       | no        | Group description. Pass an empty string to remove it. Omit the field to leave it untouched                                                        |
 | `duo_availability`                                             | `string` (`default_on`, `default_off`, `never_on`)                             | no        | GitLab Duo availability (default_on, default_off, never_on)                                                                                       |
 | `duo_features_enabled`                                         | `boolean`                                                                      | no        | Enable GitLab Duo features                                                                                                                        |
 | `emails_disabled`                                              | `boolean`                                                                      | no        | Deprecated: disable email notifications. Prefer emails_enabled                                                                                    |
@@ -3372,10 +3370,10 @@ Also needs at least one of: `user_id`; `username`.
 - **Fine-grained token**: Wiki: Delete at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
-| Parameter  | Type             | Mandatory | Description                                 |
-| ---------- | ---------------- | --------- | ------------------------------------------- |
-| `group_id` | `string/integer` | yes       | Group ID or URL-encoded path                |
-| `slug`     | `string`         | yes       | URL-encoded slug of the wiki page to delete |
+| Parameter  | Type             | Mandatory | Description                                                                     |
+| ---------- | ---------------- | --------- | ------------------------------------------------------------------------------- |
+| `group_id` | `string/integer` | yes       | Group ID or URL-encoded path                                                    |
+| `slug`     | `string`         | yes       | Slug of the wiki page to delete as group.wiki_list returns it (e.g. 'dir/page') |
 
 ### `group.wiki_edit`
 
@@ -3388,13 +3386,13 @@ Also needs at least one of: `user_id`; `username`.
 - **Fine-grained token**: Wiki: Update at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, idempotent
 
-| Parameter  | Type                                             | Mandatory | Description                                      |
-| ---------- | ------------------------------------------------ | --------- | ------------------------------------------------ |
-| `group_id` | `string/integer`                                 | yes       | Group ID or URL-encoded path                     |
-| `slug`     | `string`                                         | yes       | URL-encoded slug of the wiki page to edit        |
-| `content`  | `string`                                         | no        | New content                                      |
-| `format`   | `string` (`markdown`, `rdoc`, `asciidoc`, `org`) | no        | Content format: markdown, rdoc, asciidoc, or org |
-| `title`    | `string`                                         | no        | New title                                        |
+| Parameter  | Type                                             | Mandatory | Description                                                                   |
+| ---------- | ------------------------------------------------ | --------- | ----------------------------------------------------------------------------- |
+| `group_id` | `string/integer`                                 | yes       | Group ID or URL-encoded path                                                  |
+| `slug`     | `string`                                         | yes       | Slug of the wiki page to edit as group.wiki_list returns it (e.g. 'dir/page') |
+| `content`  | `string`                                         | no        | New content                                                                   |
+| `format`   | `string` (`markdown`, `rdoc`, `asciidoc`, `org`) | no        | Content format: markdown, rdoc, asciidoc, or org                              |
+| `title`    | `string`                                         | no        | New title                                                                     |
 
 ### `group.wiki_get`
 
@@ -3407,12 +3405,12 @@ Also needs at least one of: `user_id`; `username`.
 - **Fine-grained token**: Wiki: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: read-only, idempotent
 
-| Parameter     | Type             | Mandatory | Description                       |
-| ------------- | ---------------- | --------- | --------------------------------- |
-| `group_id`    | `string/integer` | yes       | Group ID or URL-encoded path      |
-| `slug`        | `string`         | yes       | URL-encoded slug of the wiki page |
-| `render_html` | `boolean`        | no        | Return HTML-rendered content      |
-| `version`     | `string`         | no        | Wiki page version SHA             |
+| Parameter     | Type             | Mandatory | Description                                                                                     |
+| ------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------- |
+| `group_id`    | `string/integer` | yes       | Group ID or URL-encoded path                                                                    |
+| `slug`        | `string`         | yes       | Slug of the wiki page as group.wiki_list returns it, a subpage with its slash (e.g. 'dir/page') |
+| `render_html` | `boolean`        | no        | Return HTML-rendered content                                                                    |
+| `version`     | `string`         | no        | Wiki page version SHA                                                                           |
 
 ### `group.wiki_list`
 

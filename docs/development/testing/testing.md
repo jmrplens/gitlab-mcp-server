@@ -20,13 +20,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 21,222 |
-| Unit test functions                                   | 19,727 |
-| E2E test functions                                    |  1,495 |
-| cmd test functions                                    |  4,772 |
-| Test files (internal/)                                |    706 |
+| Total test functions                                  | 21,644 |
+| Unit test functions                                   | 20,108 |
+| E2E test functions                                    |  1,536 |
+| cmd test functions                                    |  4,794 |
+| Test files (internal/)                                |    713 |
 | Test files (cmd/)                                     |    334 |
-| Test files (test/e2e/)                                |    414 |
+| Test files (test/e2e/)                                |    416 |
 | Tool sub-packages tested                              |    180 |
 | Core packages tested                                  |     32 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 100.0% |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,276 | 62.6% |
-| `TestFunc` (no underscore)             |    909 |  4.3% |
-| `TestFunc_Scenario_Expected` (3+ part) |  7,037 | 33.2% |
+| `TestFunc_Scenario` (2-part)           | 13,341 | 61.6% |
+| `TestFunc` (no underscore)             |    908 |  4.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  7,395 | 34.2% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          3,888 |        229 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            403 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (180) |         10,664 |        461 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,495 |        414 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          4,772 |        334 | server entry point and developer command utilities                                              |
-| **Total**               |     **21,222** |  **1,454** |                                                                                                 |
+| Core packages           |          4,006 |        236 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Tools orchestration     |            413 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Tool sub-packages (180) |         10,895 |        461 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,536 |        416 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          4,794 |        334 | server entry point and developer command utilities                                              |
+| **Total**               |     **21,644** |  **1,463** |                                                                                                 |
 
 ### Core Packages
 
@@ -62,26 +62,26 @@
 | capguard                 |         5 |   100.0% | Package capguard keeps the methods this server answers in step with the capabilities it declares.                                                                                                                                                                                                                                   |
 | clientcompat             |        25 |   100.0% | Package clientcompat applies per-client response compatibility profiles to MCP results.                                                                                                                                                                                                                                             |
 | cmdutil                  |        11 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                                                                                                                                           |
-| completions              |       113 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                                                                                                                                            |
+| completions              |       129 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                                                                                                                                            |
 | config                   |       121 |   100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                                                                                    |
 | edition                  |         9 |   100.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                                                                                       |
 | elicitation              |       149 |    99.3% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                                                                                        |
-| finegrained              |        61 |   100.0% | Package finegrained holds what a fine-grained personal access token needs for each catalog action, and the decision this server takes on it.                                                                                                                                                                                        |
+| finegrained              |        62 |   100.0% | Package finegrained holds what a fine-grained personal access token needs for each catalog action, and the decision this server takes on it.                                                                                                                                                                                        |
 | freshness                |         7 |   100.0% | Package freshness reads the one harness setting that decides whether a test comparing a committed, generated artifact runs that comparison now or leaves it to the run where the artifact is refreshed.                                                                                                                             |
 | gatewaycompat            |        20 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions.                                                                  |
-| gitlab                   |       229 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                                                                                             |
+| gitlab                   |       239 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                                                                                             |
 | graphqlschema            |        21 |   100.0% | Package graphqlschema holds the pinned GitLab GraphQL schema and validates documents against it.                                                                                                                                                                                                                                    |
 | mcpotel                  |       116 |   100.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                                                                                                |
-| oauth                    |       109 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                                                                                             |
+| oauth                    |       111 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                                                                                             |
 | progress                 |        23 |   100.0% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                                                                                       |
-| prompts                  |       389 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                                                                                          |
-| resources                |       237 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                                                                                 |
+| prompts                  |       399 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                                                                                          |
+| resources                |       239 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                                                                                 |
 | serverpool               |       189 |   100.0% | Package serverpool manages a pool of credential entries keyed by GitLab token and URL.                                                                                                                                                                                                                                              |
 | sourcewalk               |         9 |   100.0% | Package sourcewalk answers one question for everything here that walks this repository's tree: which directories below a walk root are this repository's own source, and which are something else that merely lives inside the checkout.                                                                                            |
-| subscriptions            |       112 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                                                                                            |
+| subscriptions            |       114 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                                                                                            |
 | telemetry                |       145 |   100.0% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                                                                                  |
 | tenancy                  |       101 |   100.0% | Package tenancy is the register of every decision this server makes about who a caller is and what it may hold, spend or be told.                                                                                                                                                                                                   |
-| testutil                 |       166 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                                                                                       |
+| testutil                 |       176 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                                                                                       |
 | testutil/e2ecalls        |        24 |   100.0% | Package e2ecalls declares the record the end-to-end suite writes down while it runs, and the coverage audit reads back afterwards: what a test asked the server to do, what the server dispatched, and on which runtime, surface and mode.                                                                                          |
 | testutil/hints           |         7 |   100.0% | Package hints collects the canonical action IDs a package's Markdown invites a model to call, by rendering the package's own formatters rather than by reading its constants: a hint spelled as a literal at the call site is published exactly like one behind a constant, and a test that reads only the constants cannot see it. |
 | testutil/modelcorpus     |        58 |   100.0% | Package modelcorpus is the model evaluation corpus: for each case, the stimulus a model is given and the key that stimulus is scored against, held apart so that no code which produces a stimulus can read a key.                                                                                                                  |
@@ -89,38 +89,38 @@
 | testutil/modelscore      |        96 |   100.0% | Package modelscore turns one attempt's record into the verdict a published row is made of.                                                                                                                                                                                                                                          |
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil                 |     1,233 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **3,888** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil                 |     1,298 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**             | **4,006** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   486 |   100.0% |    57 |
-| mergerequests     |   323 |   100.0% |    30 |
-| groups            |   314 |   100.0% |    37 |
-| dynamic           |   304 |   100.0% |     2 |
-| issues            |   283 |   100.0% |    21 |
-| users             |   266 |   100.0% |    38 |
+| projects          |   492 |   100.0% |    57 |
+| mergerequests     |   332 |   100.0% |    30 |
+| groups            |   316 |   100.0% |    37 |
+| dynamic           |   308 |   100.0% |     2 |
+| issues            |   293 |   100.0% |    21 |
+| users             |   270 |   100.0% |    38 |
 | packages          |   177 |   100.0% |    10 |
-| commits           |   151 |   100.0% |    13 |
-| jobs              |   151 |   100.0% |    17 |
-| pipelines         |   145 |   100.0% |    12 |
-| search            |   136 |   100.0% |    10 |
-| workitems         |   134 |   100.0% |     6 |
+| jobs              |   171 |   100.0% |    17 |
+| commits           |   154 |   100.0% |    13 |
+| pipelines         |   149 |   100.0% |    12 |
+| search            |   139 |   100.0% |    10 |
+| workitems         |   136 |   100.0% |     6 |
+| resourceevents    |   131 |   100.0% |    17 |
+| runners           |   131 |   100.0% |    19 |
 | awardemoji        |   130 |   100.0% |    24 |
-| resourceevents    |   129 |   100.0% |    17 |
-| runners           |   129 |   100.0% |    19 |
-| containerregistry |   120 |   100.0% |    16 |
-| snippets          |   112 |   100.0% |    15 |
-| branches          |   111 |   100.0% |    10 |
+| containerregistry |   123 |   100.0% |    16 |
+| snippets          |   114 |   100.0% |    15 |
+| branches          |   112 |   100.0% |    10 |
 | accesstokens      |   108 |   100.0% |    18 |
+| groupmilestones   |   108 |   100.0% |     8 |
 | mrapprovals       |   108 |   100.0% |     7 |
 | pipelineschedules |   108 |   100.0% |    11 |
-| groupmilestones   |   105 |   100.0% |     8 |
-| groupmembers      |   104 |   100.0% |    10 |
-| files             |    98 |   100.0% |     8 |
-| vulnerabilities   |    92 |   100.0% |     8 |
+| groupmembers      |   107 |   100.0% |    10 |
+| files             |   100 |   100.0% |     8 |
+| vulnerabilities   |    96 |   100.0% |     8 |
 
 ### Complete Tool Sub-Package Test Counts
 
@@ -131,9 +131,9 @@
 | ----------------------- | ---------: | ---------: | -------: | --------: |
 | accessrequests          |         58 |          4 |   100.0% |         8 |
 | accesstokens            |        108 |          2 |   100.0% |        18 |
-| achievements            |         64 |          3 |   100.0% |        12 |
+| achievements            |         65 |          3 |   100.0% |        12 |
 | actioncatalog           |         71 |          8 |   100.0% |         0 |
-| actioncompat            |         60 |          3 |   100.0% |         1 |
+| actioncompat            |         61 |          3 |   100.0% |         1 |
 | actiongrants            |          6 |          1 |   100.0% |         0 |
 | adminspecs              |         17 |          1 |   100.0% |        92 |
 | alertmanagement         |         28 |          2 |   100.0% |         4 |
@@ -141,175 +141,175 @@
 | applications            |         18 |          1 |   100.0% |         4 |
 | appstatistics           |         14 |          1 |   100.0% |         1 |
 | attestations            |         25 |          2 |   100.0% |         2 |
-| auditevents             |         57 |          2 |   100.0% |         6 |
+| auditevents             |         63 |          2 |   100.0% |         6 |
 | avatar                  |         11 |          1 |   100.0% |         1 |
 | awardemoji              |        130 |          3 |   100.0% |        24 |
 | badges                  |         64 |          3 |   100.0% |        12 |
-| boards                  |         82 |          2 |   100.0% |        10 |
-| branches                |        111 |          1 |   100.0% |        10 |
+| boards                  |         85 |          2 |   100.0% |        10 |
+| branches                |        112 |          1 |   100.0% |        10 |
 | branchrules             |         35 |          1 |   100.0% |         1 |
-| broadcastmessages       |         36 |          1 |   100.0% |         5 |
+| broadcastmessages       |         38 |          1 |   100.0% |         5 |
 | bulkimports             |         27 |          1 |   100.0% |         7 |
 | cicatalog               |         49 |          3 |   100.0% |         2 |
 | cilint                  |         33 |          1 |   100.0% |         2 |
-| civariables             |         52 |          2 |   100.0% |         5 |
+| civariables             |         53 |          2 |   100.0% |         5 |
 | ciyamltemplates         |         26 |          1 |   100.0% |         2 |
 | clusteragents           |         38 |          4 |   100.0% |         8 |
-| commitdiscussions       |         51 |          3 |   100.0% |         6 |
-| commits                 |        151 |          3 |   100.0% |        13 |
-| compliancepolicy        |          7 |          1 |   100.0% |         2 |
-| containerregistry       |        120 |          4 |   100.0% |        16 |
+| commitdiscussions       |         52 |          3 |   100.0% |         6 |
+| commits                 |        154 |          3 |   100.0% |        13 |
+| compliancepolicy        |         10 |          1 |   100.0% |         2 |
+| containerregistry       |        123 |          4 |   100.0% |        16 |
 | customattributes        |         33 |          1 |   100.0% |         4 |
-| customemoji             |         33 |          3 |   100.0% |         3 |
+| customemoji             |         37 |          3 |   100.0% |         3 |
 | dbmigrations            |          7 |          1 |   100.0% |         1 |
-| dependencies            |         22 |          4 |   100.0% |         4 |
+| dependencies            |         26 |          4 |   100.0% |         4 |
 | dependencyfirewall      |         23 |          3 |   100.0% |         1 |
 | dependencyproxy         |          4 |          1 |   100.0% |         1 |
 | deploykeys              |         80 |          3 |   100.0% |         9 |
-| deploymentmergerequests |         38 |          3 |   100.0% |         1 |
-| deployments             |         86 |          4 |   100.0% |         6 |
+| deploymentmergerequests |         41 |          3 |   100.0% |         1 |
+| deployments             |         87 |          4 |   100.0% |         6 |
 | deploytokens            |         71 |          2 |   100.0% |         9 |
 | dockerfiletemplates     |         25 |          3 |   100.0% |         2 |
-| dorametrics             |         14 |          2 |   100.0% |         2 |
-| dynamic                 |        304 |          9 |   100.0% |         2 |
+| dorametrics             |         17 |          2 |   100.0% |         2 |
+| dynamic                 |        308 |          9 |   100.0% |         2 |
 | dynamiccatalog          |         13 |          1 |   100.0% |         0 |
-| elicitationtools        |         71 |          2 |   100.0% |         4 |
+| elicitationtools        |         73 |          2 |   100.0% |         4 |
 | enterpriseusers         |         41 |          3 |   100.0% |         4 |
-| environments            |         74 |          2 |   100.0% |         6 |
-| epicdiscussions         |         34 |          2 |   100.0% |         6 |
-| epicissues              |         23 |          2 |   100.0% |         4 |
-| epicnotes               |         24 |          2 |   100.0% |         5 |
-| epics                   |         84 |          3 |   100.0% |         6 |
-| epicworkitems           |          5 |          1 |   100.0% |         0 |
+| environments            |         75 |          2 |   100.0% |         6 |
+| epicdiscussions         |         35 |          2 |   100.0% |         6 |
+| epicissues              |         27 |          2 |   100.0% |         4 |
+| epicnotes               |         26 |          2 |   100.0% |         5 |
+| epics                   |         89 |          3 |   100.0% |         6 |
+| epicworkitems           |         14 |          1 |   100.0% |         0 |
 | errortracking           |         23 |          2 |   100.0% |         5 |
-| events                  |         66 |          2 |   100.0% |         2 |
+| events                  |         67 |          2 |   100.0% |         2 |
 | externalstatuschecks    |         63 |          3 |   100.0% |         8 |
-| featureflags            |         52 |          5 |   100.0% |         5 |
+| featureflags            |         53 |          5 |   100.0% |         5 |
 | features                |         21 |          2 |    97.7% |         4 |
 | ffuserlists             |         33 |          3 |   100.0% |         5 |
-| files                   |         98 |          2 |   100.0% |         8 |
+| files                   |        100 |          2 |   100.0% |         8 |
 | freezeperiods           |         43 |          3 |   100.0% |         5 |
-| geo                     |         62 |          3 |   100.0% |         8 |
+| geo                     |         63 |          3 |   100.0% |         8 |
 | gitignoretemplates      |         24 |          2 |   100.0% |         2 |
 | groupanalytics          |         10 |          2 |   100.0% |         3 |
-| groupboards             |         73 |          2 |   100.0% |        10 |
+| groupboards             |         76 |          2 |   100.0% |        10 |
 | groupcredentials        |         46 |          3 |   100.0% |         4 |
 | groupepicboards         |         19 |          3 |    98.3% |         2 |
 | groupimportexport       |         28 |          4 |   100.0% |         3 |
 | groupiterations         |         23 |          1 |   100.0% |         1 |
-| grouplabels             |         63 |          3 |   100.0% |         7 |
+| grouplabels             |         65 |          3 |   100.0% |         7 |
 | groupldap               |         17 |          2 |   100.0% |         5 |
 | groupmarkdownuploads    |         35 |          4 |   100.0% |         3 |
-| groupmembers            |        104 |          5 |   100.0% |        10 |
-| groupmilestones         |        105 |          3 |   100.0% |         8 |
+| groupmembers            |        107 |          5 |   100.0% |        10 |
+| groupmilestones         |        108 |          3 |   100.0% |         8 |
 | groupprotectedbranches  |         20 |          2 |   100.0% |         5 |
 | groupprotectedenvs      |         30 |          3 |   100.0% |         5 |
 | grouprelationsexport    |         30 |          3 |   100.0% |         2 |
 | groupreleases           |         24 |          3 |   100.0% |         1 |
-| groups                  |        314 |         10 |   100.0% |        37 |
-| groupsaml               |         38 |          3 |   100.0% |         5 |
+| groups                  |        316 |         10 |   100.0% |        37 |
+| groupsaml               |         39 |          3 |   100.0% |         5 |
 | groupscim               |         31 |          3 |   100.0% |         4 |
-| groupserviceaccounts    |         32 |          2 |   100.0% |         9 |
-| groupsshcerts           |         31 |          5 |   100.0% |         3 |
+| groupserviceaccounts    |         33 |          2 |   100.0% |         9 |
+| groupsshcerts           |         32 |          5 |   100.0% |         3 |
 | groupstoragemoves       |         38 |          2 |   100.0% |         6 |
-| groupvariables          |         60 |          4 |   100.0% |         5 |
-| groupwikis              |         42 |          3 |   100.0% |         5 |
+| groupvariables          |         61 |          4 |   100.0% |         5 |
+| groupwikis              |         44 |          3 |   100.0% |         5 |
 | health                  |         27 |          1 |   100.0% |         2 |
 | impersonationtokens     |         61 |          3 |   100.0% |         5 |
 | importservice           |         35 |          1 |   100.0% |         5 |
-| instancevariables       |         55 |          3 |   100.0% |         5 |
+| instancevariables       |         56 |          3 |   100.0% |         5 |
 | integrations            |         89 |          6 |   100.0% |        12 |
-| invites                 |         55 |          1 |   100.0% |         4 |
-| issuediscussions        |         34 |          2 |   100.0% |         6 |
+| invites                 |         57 |          1 |   100.0% |         4 |
+| issuediscussions        |         35 |          2 |   100.0% |         6 |
 | issuelinks              |         77 |          4 |   100.0% |         4 |
-| issuenotes              |         55 |          2 |   100.0% |         5 |
-| issues                  |        283 |          4 |   100.0% |        21 |
-| issuestatistics         |         52 |          2 |   100.0% |         3 |
-| iterationdata           |         11 |          1 |   100.0% |         0 |
-| jobs                    |        151 |          6 |   100.0% |        17 |
+| issuenotes              |         56 |          2 |   100.0% |         5 |
+| issues                  |        293 |          4 |   100.0% |        21 |
+| issuestatistics         |         54 |          2 |   100.0% |         3 |
+| iterationdata           |         12 |          1 |   100.0% |         0 |
+| jobs                    |        171 |          6 |   100.0% |        17 |
 | jobtokenscope           |         46 |          2 |   100.0% |         8 |
 | keys                    |         30 |          2 |   100.0% |         2 |
 | labeldata               |         17 |          1 |   100.0% |         0 |
-| labels                  |         77 |          3 |   100.0% |         8 |
+| labels                  |         78 |          3 |   100.0% |         8 |
 | license                 |         24 |          1 |   100.0% |         3 |
 | licensetemplates        |         31 |          2 |   100.0% |         2 |
 | markdown                |         10 |          1 |   100.0% |         1 |
-| memberroles             |         57 |          4 |   100.0% |         6 |
-| members                 |         75 |          3 |   100.0% |         6 |
-| mergerequests           |        323 |          5 |   100.0% |        30 |
-| mergetrains             |         25 |          2 |   100.0% |         4 |
+| memberroles             |         58 |          4 |   100.0% |         6 |
+| members                 |         77 |          3 |   100.0% |         6 |
+| mergerequests           |        332 |          5 |   100.0% |        30 |
+| mergetrains             |         27 |          2 |   100.0% |         4 |
 | metadata                |          9 |          1 |   100.0% |         1 |
-| milestones              |         81 |          2 |   100.0% |         7 |
-| modelregistry           |          7 |          3 |   100.0% |         1 |
+| milestones              |         82 |          2 |   100.0% |         7 |
+| modelregistry           |         13 |          3 |   100.0% |         1 |
 | mrapprovals             |        108 |          3 |   100.0% |         7 |
 | mrapprovalsettings      |         14 |          4 |   100.0% |         4 |
 | mrchanges               |         43 |          1 |   100.0% |         4 |
 | mrcontextcommits        |         40 |          3 |   100.0% |         3 |
-| mrdiscussions           |         66 |          1 |   100.0% |         7 |
+| mrdiscussions           |         67 |          1 |   100.0% |         7 |
 | mrdraftnotes            |         80 |          3 |   100.0% |         7 |
 | mrnotes                 |         52 |          4 |   100.0% |         5 |
 | namespaces              |         52 |          2 |   100.0% |         4 |
 | notifications           |         39 |          2 |   100.0% |         6 |
-| orbit                   |         70 |          3 |   100.0% |         6 |
+| orbit                   |         73 |          3 |   100.0% |         6 |
 | packages                |        177 |          6 |   100.0% |        10 |
-| pages                   |         64 |          2 |   100.0% |         9 |
-| pipelines               |        145 |          5 |   100.0% |        12 |
+| pages                   |         65 |          2 |   100.0% |         9 |
+| pipelines               |        149 |          5 |   100.0% |        12 |
 | pipelineschedules       |        108 |          4 |   100.0% |        11 |
-| pipelinetriggers        |         70 |          2 |   100.0% |         6 |
+| pipelinetriggers        |         71 |          2 |   100.0% |         6 |
 | planlimits              |         16 |          1 |   100.0% |         2 |
 | projectaliases          |         34 |          2 |   100.0% |         4 |
-| projectdiscovery        |         22 |          1 |   100.0% |         1 |
-| projectimportexport     |         51 |          2 |   100.0% |         5 |
+| projectdiscovery        |         23 |          1 |   100.0% |         1 |
+| projectimportexport     |         53 |          2 |   100.0% |         5 |
 | projectiterations       |         24 |          3 |   100.0% |         1 |
 | projectmirrors          |         76 |          2 |   100.0% |         7 |
-| projects                |        486 |          9 |   100.0% |        57 |
+| projects                |        492 |          9 |   100.0% |        57 |
 | projectserviceaccounts  |         25 |          2 |   100.0% |         9 |
 | projectstatistics       |         12 |          2 |   100.0% |         1 |
 | projectstoragemoves     |         21 |          2 |   100.0% |         6 |
 | projecttemplates        |         23 |          1 |   100.0% |         2 |
 | protectedenvs           |         47 |          2 |   100.0% |         5 |
 | protectedpackages       |         44 |          2 |   100.0% |         4 |
-| releaselinks            |         69 |          2 |   100.0% |         6 |
-| releases                |         84 |          2 |   100.0% |         6 |
-| repository              |         89 |          1 |   100.0% |         9 |
-| repositorysubmodules    |         74 |          5 |   100.0% |         3 |
-| resourceevents          |        129 |          5 |   100.0% |        17 |
+| releaselinks            |         72 |          2 |   100.0% |         6 |
+| releases                |         87 |          2 |   100.0% |         6 |
+| repository              |         91 |          1 |   100.0% |         9 |
+| repositorysubmodules    |         85 |          5 |   100.0% |         3 |
+| resourceevents          |        131 |          5 |   100.0% |        17 |
 | resourcegroups          |         23 |          1 |   100.0% |         4 |
-| runnercontrollers       |         39 |          2 |   100.0% |         5 |
+| runnercontrollers       |         40 |          2 |   100.0% |         5 |
 | runnercontrollerscopes  |         40 |          2 |   100.0% |         5 |
 | runnercontrollertokens  |         48 |          2 |   100.0% |         5 |
-| runners                 |        129 |          2 |   100.0% |        19 |
-| search                  |        136 |          2 |   100.0% |        10 |
+| runners                 |        131 |          2 |   100.0% |        19 |
+| search                  |        139 |          2 |   100.0% |        10 |
 | securefiles             |         33 |          1 |   100.0% |         4 |
 | securityattributes      |         39 |          1 |   100.0% |         5 |
 | securitycategories      |         29 |          1 |   100.0% |         3 |
-| securityfindings        |         29 |          1 |   100.0% |         1 |
+| securityfindings        |         31 |          1 |   100.0% |         1 |
 | securityscanprofiles    |         26 |          1 |   100.0% |         3 |
 | securitysettings        |         43 |          3 |   100.0% |         3 |
-| settings                |         36 |          1 |    98.3% |         2 |
+| settings                |         38 |          1 |   100.0% |         2 |
 | sidekiq                 |         18 |          1 |   100.0% |         4 |
-| snippetdiscussions      |         41 |          2 |   100.0% |         6 |
-| snippetnotes            |         56 |          2 |   100.0% |         5 |
-| snippets                |        112 |          3 |   100.0% |        15 |
+| snippetdiscussions      |         42 |          2 |   100.0% |         6 |
+| snippetnotes            |         57 |          2 |   100.0% |         5 |
+| snippets                |        114 |          3 |   100.0% |        15 |
 | snippetstoragemoves     |         48 |          2 |   100.0% |         6 |
 | surfaces                |         21 |          1 |   100.0% |         0 |
-| systemhooks             |         43 |          2 |   100.0% |         8 |
+| systemhooks             |         44 |          2 |   100.0% |         8 |
 | tags                    |         84 |          2 |   100.0% |         9 |
-| terraformstates         |         33 |          1 |   100.0% |         6 |
+| terraformstates         |         43 |          1 |   100.0% |         6 |
 | todos                   |         48 |          4 |   100.0% |         3 |
 | toolvisibility          |         24 |          2 |   100.0% |         0 |
-| topics                  |         23 |          2 |   100.0% |         5 |
+| topics                  |         24 |          2 |   100.0% |         5 |
 | uploads                 |         57 |          3 |   100.0% |         4 |
 | usagedata               |         37 |          1 |   100.0% |         6 |
 | useremails              |         32 |          2 |   100.0% |         6 |
 | usergpgkeys             |         56 |          2 |   100.0% |         8 |
-| users                   |        266 |          7 |   100.0% |        38 |
-| vulnerabilities         |         92 |          3 |   100.0% |         8 |
+| users                   |        270 |          7 |   100.0% |        38 |
+| vulnerabilities         |         96 |          3 |   100.0% |         8 |
 | waitpoll                |         34 |          3 |   100.0% |         0 |
-| wikis                   |         71 |          2 |   100.0% |         6 |
-| workitems               |        134 |          6 |   100.0% |         6 |
+| wikis                   |         74 |          2 |   100.0% |         6 |
+| workitems               |        136 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **10,664** |    **461** |          | **1,190** |
+| **Total**               | **10,895** |    **461** |          | **1,190** |
 
 </details>
 
@@ -595,7 +595,7 @@
 | securityfindings        |   100.0% |
 | securityscanprofiles    |   100.0% |
 | securitysettings        |   100.0% |
-| settings                |    98.3% |
+| settings                |   100.0% |
 | sidekiq                 |   100.0% |
 | snippetdiscussions      |   100.0% |
 | snippetnotes            |   100.0% |

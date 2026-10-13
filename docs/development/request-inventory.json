@@ -33,7 +33,8 @@
       "query": [
         "membership",
         "per_page",
-        "search"
+        "search",
+        "search_namespaces"
       ]
     },
     {
@@ -42,10 +43,34 @@
       "method": "GET",
       "path": "/projects/:project_id/issues",
       "query": [
+        "iids[]",
+        "order_by",
         "per_page",
-        "state"
+        "sort"
       ],
       "identifiers": {
+        ":project_id": 2
+      }
+    },
+    {
+      "package": "internal/completions",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs",
+      "query": [
+        "per_page"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/completions",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/:job_id",
+      "identifiers": {
+        ":job_id": 6,
         ":project_id": 2
       }
     },
@@ -68,8 +93,10 @@
       "method": "GET",
       "path": "/projects/:project_id/merge_requests",
       "query": [
+        "iids[]",
+        "order_by",
         "per_page",
-        "state"
+        "sort"
       ],
       "identifiers": {
         ":project_id": 2
@@ -100,7 +127,17 @@
         "sort"
       ],
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 2
+      }
+    },
+    {
+      "package": "internal/completions",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/pipelines/:pipeline_id",
+      "identifiers": {
+        ":pipeline_id": 6,
+        ":project_id": 2
       }
     },
     {
@@ -113,7 +150,7 @@
       ],
       "identifiers": {
         ":pipeline_id": 3,
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -136,6 +173,55 @@
       "path": "/projects/:project_id/repository/commits",
       "query": [
         "per_page"
+      ],
+      "identifiers": {
+        ":project_id": 2
+      }
+    },
+    {
+      "package": "internal/completions",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/repository/commits/:commit_id",
+      "query": [
+        "stats"
+      ],
+      "identifiers": {
+        ":commit_id": 3,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/completions",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/repository/commits/abcd",
+      "query": [
+        "stats"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/completions",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/repository/commits/beef",
+      "query": [
+        "stats"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/completions",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/repository/commits/ffff",
+      "query": [
+        "stats"
       ],
       "identifiers": {
         ":project_id": 1
@@ -819,10 +905,10 @@
       "package": "internal/resources",
       "kind": "rest",
       "method": "GET",
-      "path": "/projects/:project_id/releases/:release_id",
+      "path": "/projects/:project_id/releases/:tag_name",
       "identifiers": {
         ":project_id": 1,
-        ":release_id": 1
+        ":tag_name": 1
       }
     },
     {
@@ -1130,9 +1216,10 @@
       "package": "internal/subscriptions",
       "kind": "rest",
       "method": "GET",
-      "path": "/projects/:project_id/releases/name",
+      "path": "/projects/:project_id/releases/:tag_name",
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 1,
+        ":tag_name": 1
       }
     },
     {
@@ -2376,6 +2463,8 @@
         "created_after",
         "created_before",
         "cursor",
+        "entity_id",
+        "entity_type",
         "page",
         "pagination",
         "per_page"
@@ -3771,7 +3860,7 @@
       ],
       "identifiers": {
         ":key": 3,
-        ":project_id": 3
+        ":project_id": 4
       }
     },
     {
@@ -4472,6 +4561,15 @@
     {
       "package": "internal/tools/commits",
       "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/repository/commits/main",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/commits",
+      "kind": "rest",
       "method": "POST",
       "path": "/projects/:project_id/statuses/abc",
       "body": [
@@ -4635,7 +4733,7 @@
         "tag_name_pattern"
       ],
       "identifiers": {
-        ":project_id": 2,
+        ":project_id": 3,
         ":rule_id": 2
       }
     },
@@ -4998,6 +5096,7 @@
         "before",
         "first",
         "groupPath",
+        "includeAncestorGroups",
         "last"
       ]
     },
@@ -5019,7 +5118,7 @@
       "method": "GET",
       "path": "/dependency_list_exports/:dependency_list_export_id",
       "identifiers": {
-        ":dependency_list_export_id": 3
+        ":dependency_list_export_id": 4
       }
     },
     {
@@ -5028,7 +5127,7 @@
       "method": "GET",
       "path": "/dependency_list_exports/:dependency_list_export_id/download",
       "identifiers": {
-        ":dependency_list_export_id": 3
+        ":dependency_list_export_id": 4
       }
     },
     {
@@ -5040,7 +5139,7 @@
         "export_type"
       ],
       "identifiers": {
-        ":pipeline_id": 3
+        ":pipeline_id": 4
       }
     },
     {
@@ -5501,7 +5600,7 @@
         "start_date"
       ],
       "identifiers": {
-        ":group_id": 4
+        ":group_id": 5
       }
     },
     {
@@ -5518,6 +5617,22 @@
       ],
       "identifiers": {
         ":project_id": 3
+      }
+    },
+    {
+      "package": "internal/tools/dynamic",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/releases/:tag_name/assets/links",
+      "body": [
+        "direct_asset_path",
+        "filepath",
+        "name",
+        "url"
+      ],
+      "identifiers": {
+        ":project_id": 1,
+        ":tag_name": 1
       }
     },
     {
@@ -5786,6 +5901,16 @@
       ]
     },
     {
+      "package": "internal/tools/epicdiscussions",
+      "kind": "graphql",
+      "method": "POST",
+      "path": "/graphql",
+      "operation": "query note",
+      "variables": [
+        "id"
+      ]
+    },
+    {
       "package": "internal/tools/epicissues",
       "kind": "graphql",
       "method": "POST",
@@ -5812,6 +5937,16 @@
         "fullPath",
         "iid",
         "last"
+      ]
+    },
+    {
+      "package": "internal/tools/epicissues",
+      "kind": "graphql",
+      "method": "POST",
+      "path": "/graphql",
+      "operation": "query workItem",
+      "variables": [
+        "id"
       ]
     },
     {
@@ -5857,6 +5992,16 @@
         "first",
         "fullPath",
         "iid"
+      ]
+    },
+    {
+      "package": "internal/tools/epicnotes",
+      "kind": "graphql",
+      "method": "POST",
+      "path": "/graphql",
+      "operation": "query note",
+      "variables": [
+        "id"
       ]
     },
     {
@@ -6021,6 +6166,16 @@
       "variables": [
         "fullPath",
         "iid"
+      ]
+    },
+    {
+      "package": "internal/tools/epicworkitems",
+      "kind": "graphql",
+      "method": "POST",
+      "path": "/graphql",
+      "operation": "query note",
+      "variables": [
+        "id"
       ]
     },
     {
@@ -6323,6 +6478,18 @@
       "package": "internal/tools/featureflags",
       "kind": "rest",
       "method": "PUT",
+      "path": "/projects/:project_id/feature_flags/ff",
+      "body": [
+        "description"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/featureflags",
+      "kind": "rest",
+      "method": "PUT",
       "path": "/projects/:project_id/feature_flags/flag",
       "body": [
         "strategies"
@@ -6539,13 +6706,109 @@
     {
       "package": "internal/tools/files",
       "kind": "rest",
+      "method": "DELETE",
+      "path": "/projects/:project_id/repository/files/:file_id",
+      "query": [
+        "branch",
+        "commit_message"
+      ],
+      "identifiers": {
+        ":file_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/files",
+      "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/repository/files/:file_id",
       "query": [
         "ref"
       ],
       "identifiers": {
-        ":file_id": 3,
+        ":file_id": 4,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/files",
+      "kind": "rest",
+      "method": "HEAD",
+      "path": "/projects/:project_id/repository/files/:file_id",
+      "query": [
+        "ref"
+      ],
+      "identifiers": {
+        ":file_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/files",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/repository/files/:file_id",
+      "body": [
+        "branch",
+        "commit_message",
+        "content"
+      ],
+      "identifiers": {
+        ":file_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/files",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/projects/:project_id/repository/files/:file_id",
+      "body": [
+        "branch",
+        "commit_message",
+        "content"
+      ],
+      "identifiers": {
+        ":file_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/files",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/repository/files/:file_id/blame",
+      "query": [
+        "ref"
+      ],
+      "identifiers": {
+        ":file_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/files",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/repository/files/:file_id/raw",
+      "query": [
+        "ref"
+      ],
+      "identifiers": {
+        ":file_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/files",
+      "kind": "rest",
+      "method": "HEAD",
+      "path": "/projects/:project_id/repository/files/:file_id/raw",
+      "query": [
+        "ref"
+      ],
+      "identifiers": {
+        ":file_id": 1,
         ":project_id": 1
       }
     },
@@ -7267,7 +7530,7 @@
       ],
       "identifiers": {
         ":board_id": 1,
-        ":group_id": 1
+        ":group_id": 2
       }
     },
     {
@@ -7547,8 +7810,7 @@
         "archived",
         "color",
         "description",
-        "name",
-        "priority"
+        "name"
       ],
       "identifiers": {
         ":group_id": 1
@@ -7583,11 +7845,10 @@
         "archived",
         "color",
         "description",
-        "new_name",
-        "priority"
+        "new_name"
       ],
       "identifiers": {
-        ":group_id": 1,
+        ":group_id": 2,
         ":label_id": 1
       }
     },
@@ -7881,7 +8142,7 @@
       ],
       "identifiers": {
         ":group_id": 1,
-        ":member_id": 2
+        ":member_id": 3
       }
     },
     {
@@ -7946,7 +8207,7 @@
         "updated_before"
       ],
       "identifiers": {
-        ":group_id": 3
+        ":group_id": 4
       }
     },
     {
@@ -7997,8 +8258,8 @@
         "title"
       ],
       "identifiers": {
-        ":group_id": 2,
-        ":milestone_id": 1
+        ":group_id": 3,
+        ":milestone_id": 2
       }
     },
     {
@@ -8630,7 +8891,7 @@
         "wiki_page_events"
       ],
       "identifiers": {
-        ":group_id": 2,
+        ":group_id": 3,
         ":hook_id": 3
       }
     },
@@ -9360,7 +9621,7 @@
         "pagination"
       ],
       "identifiers": {
-        ":group_id": 2
+        ":group_id": 3
       }
     },
     {
@@ -9373,7 +9634,7 @@
         "title"
       ],
       "identifiers": {
-        ":group_id": 1
+        ":group_id": 2
       }
     },
     {
@@ -9382,8 +9643,8 @@
       "method": "DELETE",
       "path": "/groups/:group_id/ssh_certificates/:ssh_certificate_id",
       "identifiers": {
-        ":group_id": 1,
-        ":ssh_certificate_id": 1
+        ":group_id": 2,
+        ":ssh_certificate_id": 2
       }
     },
     {
@@ -9572,7 +9833,7 @@
         "variable_type"
       ],
       "identifiers": {
-        ":group_id": 1,
+        ":group_id": 2,
         ":key": 3
       }
     },
@@ -9656,6 +9917,36 @@
         "format",
         "title"
       ]
+    },
+    {
+      "package": "internal/tools/groupwikis",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/groups/mygroup/wikis/:wiki_id",
+      "identifiers": {
+        ":wiki_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groupwikis",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/groups/mygroup/wikis/:wiki_id",
+      "identifiers": {
+        ":wiki_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groupwikis",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/groups/mygroup/wikis/:wiki_id",
+      "body": [
+        "title"
+      ],
+      "identifiers": {
+        ":wiki_id": 1
+      }
     },
     {
       "package": "internal/tools/groupwikis",
@@ -10794,7 +11085,7 @@
         "with_labels_details"
       ],
       "identifiers": {
-        ":group_id": 3
+        ":group_id": 4
       }
     },
     {
@@ -10957,6 +11248,7 @@
       "body": [
         "add_labels",
         "assignee_id",
+        "assignee_ids",
         "confidential",
         "description",
         "discussion_locked",
@@ -11162,7 +11454,7 @@
         "updated_before"
       ],
       "identifiers": {
-        ":group_id": 3
+        ":group_id": 4
       }
     },
     {
@@ -11302,8 +11594,8 @@
     {
       "package": "internal/tools/jobs",
       "kind": "rest",
-      "method": "GET",
-      "path": "/projects/:project_id/jobs/:job_id/artifacts/big.bin",
+      "method": "POST",
+      "path": "/projects/:project_id/jobs/:job_id/artifacts/keep",
       "identifiers": {
         ":job_id": 1,
         ":project_id": 1
@@ -11312,8 +11604,8 @@
     {
       "package": "internal/tools/jobs",
       "kind": "rest",
-      "method": "POST",
-      "path": "/projects/:project_id/jobs/:job_id/artifacts/keep",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/:job_id/artifacts/out.bin",
       "identifiers": {
         ":job_id": 1,
         ":project_id": 1
@@ -11403,6 +11695,30 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/jobs/artifacts/main/raw/a.txt",
+      "query": [
+        "job"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/artifacts/main/raw/big.out",
+      "query": [
+        "job"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/artifacts/main/raw/out.bin",
       "query": [
         "job"
       ],
@@ -11642,6 +11958,19 @@
       "package": "internal/tools/labels",
       "kind": "rest",
       "method": "PUT",
+      "path": "/projects/:project_id/labels/:label_id",
+      "body": [
+        "description"
+      ],
+      "identifiers": {
+        ":label_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/labels",
+      "kind": "rest",
+      "method": "PUT",
       "path": "/projects/:project_id/labels/:label_id/promote",
       "identifiers": {
         ":label_id": 2,
@@ -11838,7 +12167,7 @@
       "method": "GET",
       "path": "/groups/:group_id/member_roles",
       "identifiers": {
-        ":group_id": 2
+        ":group_id": 3
       }
     },
     {
@@ -11975,7 +12304,7 @@
         "member_role_id"
       ],
       "identifiers": {
-        ":member_id": 3,
+        ":member_id": 4,
         ":project_id": 1
       }
     },
@@ -12051,7 +12380,7 @@
         "with_merge_status_recheck"
       ],
       "identifiers": {
-        ":group_id": 1
+        ":group_id": 2
       }
     },
     {
@@ -12665,7 +12994,7 @@
         "title"
       ],
       "identifiers": {
-        ":milestone_id": 1,
+        ":milestone_id": 2,
         ":project_id": 1
       }
     },
@@ -12709,7 +13038,28 @@
       "package": "internal/tools/modelregistry",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id/packages/ml_models/:ml_model_id/files/:file_id/weights.h5",
+      "identifiers": {
+        ":file_id": 1,
+        ":ml_model_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/modelregistry",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/packages/ml_models/:ml_model_id/files/empty/empty.bin",
+      "identifiers": {
+        ":ml_model_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/modelregistry",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/packages/ml_models/:ml_model_id/files/model.bin",
       "identifiers": {
         ":ml_model_id": 1,
         ":project_id": 1
@@ -13870,14 +14220,15 @@
       "package": "internal/tools/packages",
       "kind": "rest",
       "method": "POST",
-      "path": "/projects/:project_id/releases/v1.0.0/assets/links",
+      "path": "/projects/:project_id/releases/:tag_name/assets/links",
       "body": [
         "link_type",
         "name",
         "url"
       ],
       "identifiers": {
-        ":project_id": 2
+        ":project_id": 2,
+        ":tag_name": 1
       }
     },
     {
@@ -14084,6 +14435,20 @@
       "identifiers": {
         ":pipeline_id": 2,
         ":project_id": 2
+      }
+    },
+    {
+      "package": "internal/tools/pipelines",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/pipelines/:pipeline_id/jobs",
+      "query": [
+        "per_page",
+        "scope[]"
+      ],
+      "identifiers": {
+        ":pipeline_id": 1,
+        ":project_id": 1
       }
     },
     {
@@ -14497,7 +14862,7 @@
       "method": "GET",
       "path": "/projects/:project_id",
       "identifiers": {
-        ":project_id": 3
+        ":project_id": 5
       }
     },
     {
@@ -14822,8 +15187,27 @@
       "method": "PUT",
       "path": "/projects/:project_id",
       "body": [
+        "approvals_before_merge",
+        "build_timeout",
+        "ci_config_path",
+        "ci_default_git_depth",
+        "ci_delete_pipelines_in_seconds",
+        "container_expiration_policy_attributes",
+        "description",
+        "external_authorization_classification_label",
+        "issue_branch_template",
+        "max_artifacts_size",
+        "merge_commit_template",
+        "merge_request_title_regex",
+        "merge_request_title_regex_description",
+        "mirror_user_id",
+        "mr_default_title_template",
         "name",
         "reviewer_assignment_strategy",
+        "squash_commit_template",
+        "suggestion_commit_message",
+        "tag_list",
+        "topics",
         "visibility"
       ],
       "identifiers": {
@@ -16061,80 +16445,8 @@
     {
       "package": "internal/tools/releaselinks",
       "kind": "rest",
-      "method": "POST",
-      "path": "/projects/:project_id/releases/nonexistent/assets/links",
-      "body": [
-        "name",
-        "url"
-      ],
-      "identifiers": {
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/releaselinks",
-      "kind": "rest",
       "method": "GET",
-      "path": "/projects/:project_id/releases/v1.0.0/assets/links",
-      "identifiers": {
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/releaselinks",
-      "kind": "rest",
-      "method": "POST",
-      "path": "/projects/:project_id/releases/v1.0.0/assets/links",
-      "body": [
-        "name",
-        "url"
-      ],
-      "identifiers": {
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/releaselinks",
-      "kind": "rest",
-      "method": "DELETE",
-      "path": "/projects/:project_id/releases/v1.0.0/assets/links/:link_id",
-      "identifiers": {
-        ":link_id": 2,
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/releaselinks",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/projects/:project_id/releases/v1.0.0/assets/links/:link_id",
-      "identifiers": {
-        ":link_id": 3,
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/releaselinks",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/projects/:project_id/releases/v1.0.0/assets/links/:link_id",
-      "body": [
-        "direct_asset_path",
-        "filepath",
-        "link_type",
-        "name",
-        "url"
-      ],
-      "identifiers": {
-        ":link_id": 2,
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/releaselinks",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/projects/:project_id/releases/v1.2.0/assets/links",
+      "path": "/projects/:project_id/releases/:tag_name/assets/links",
       "query": [
         "order_by",
         "page",
@@ -16144,14 +16456,15 @@
         "sort"
       ],
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 1,
+        ":tag_name": 2
       }
     },
     {
       "package": "internal/tools/releaselinks",
       "kind": "rest",
       "method": "POST",
-      "path": "/projects/:project_id/releases/v1.2.0/assets/links",
+      "path": "/projects/:project_id/releases/:tag_name/assets/links",
       "body": [
         "direct_asset_path",
         "filepath",
@@ -16160,34 +16473,37 @@
         "url"
       ],
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 1,
+        ":tag_name": 3
       }
     },
     {
       "package": "internal/tools/releaselinks",
       "kind": "rest",
       "method": "DELETE",
-      "path": "/projects/:project_id/releases/v1.2.0/assets/links/:link_id",
+      "path": "/projects/:project_id/releases/:tag_name/assets/links/:link_id",
       "identifiers": {
-        ":link_id": 1,
-        ":project_id": 1
+        ":link_id": 2,
+        ":project_id": 1,
+        ":tag_name": 2
       }
     },
     {
       "package": "internal/tools/releaselinks",
       "kind": "rest",
       "method": "GET",
-      "path": "/projects/:project_id/releases/v1.2.0/assets/links/:link_id",
+      "path": "/projects/:project_id/releases/:tag_name/assets/links/:link_id",
       "identifiers": {
-        ":link_id": 2,
-        ":project_id": 1
+        ":link_id": 3,
+        ":project_id": 1,
+        ":tag_name": 2
       }
     },
     {
       "package": "internal/tools/releaselinks",
       "kind": "rest",
       "method": "PUT",
-      "path": "/projects/:project_id/releases/v1.2.0/assets/links/:link_id",
+      "path": "/projects/:project_id/releases/:tag_name/assets/links/:link_id",
       "body": [
         "direct_asset_path",
         "filepath",
@@ -16196,8 +16512,9 @@
         "url"
       ],
       "identifiers": {
-        ":link_id": 2,
-        ":project_id": 1
+        ":link_id": 4,
+        ":project_id": 1,
+        ":tag_name": 3
       }
     },
     {
@@ -16240,66 +16557,28 @@
     {
       "package": "internal/tools/releases",
       "kind": "rest",
-      "method": "GET",
-      "path": "/projects/:project_id/releases/permalink/latest",
-      "identifiers": {
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/releases",
-      "kind": "rest",
       "method": "DELETE",
-      "path": "/projects/:project_id/releases/v1.0.0",
+      "path": "/projects/:project_id/releases/:tag_name",
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 1,
+        ":tag_name": 2
       }
     },
     {
       "package": "internal/tools/releases",
       "kind": "rest",
       "method": "GET",
-      "path": "/projects/:project_id/releases/v1.0.0",
+      "path": "/projects/:project_id/releases/:tag_name",
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 2,
+        ":tag_name": 4
       }
     },
     {
       "package": "internal/tools/releases",
       "kind": "rest",
       "method": "PUT",
-      "path": "/projects/:project_id/releases/v1.0.0",
-      "body": [
-        "description",
-        "name"
-      ],
-      "identifiers": {
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/releases",
-      "kind": "rest",
-      "method": "DELETE",
-      "path": "/projects/:project_id/releases/v1.2.0",
-      "identifiers": {
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/releases",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/projects/:project_id/releases/v1.2.0",
-      "identifiers": {
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/releases",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/projects/:project_id/releases/v1.2.0",
+      "path": "/projects/:project_id/releases/:tag_name",
       "body": [
         "description",
         "milestones",
@@ -16307,23 +16586,15 @@
         "released_at"
       ],
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 1,
+        ":tag_name": 3
       }
     },
     {
       "package": "internal/tools/releases",
       "kind": "rest",
       "method": "GET",
-      "path": "/projects/:project_id/releases/v6.7.8",
-      "identifiers": {
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/releases",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/projects/:project_id/releases/v99.0.0",
+      "path": "/projects/:project_id/releases/permalink/latest",
       "identifiers": {
         ":project_id": 1
       }
@@ -16489,6 +16760,15 @@
       "package": "internal/tools/repositorysubmodules",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/repositorysubmodules",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/repository/files/.gitmodules",
       "query": [
         "ref"
@@ -16507,6 +16787,18 @@
       ],
       "identifiers": {
         ":file_id": 2,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/repositorysubmodules",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/repository/files/README",
+      "query": [
+        "ref"
+      ],
+      "identifiers": {
         ":project_id": 1
       }
     },
@@ -16558,7 +16850,7 @@
       ],
       "identifiers": {
         ":project_id": 1,
-        ":submodule_id": 2
+        ":submodule_id": 3
       }
     },
     {
@@ -18325,7 +18617,21 @@
       "kind": "graphql",
       "method": "POST",
       "path": "/graphql",
-      "operation": "query project"
+      "operation": "query project",
+      "variables": [
+        "after",
+        "first",
+        "fullPath"
+      ]
+    },
+    {
+      "package": "internal/tools/terraformstates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id",
+      "identifiers": {
+        ":project_id": 1
+      }
     },
     {
       "package": "internal/tools/terraformstates",
@@ -18333,7 +18639,7 @@
       "method": "DELETE",
       "path": "/projects/:project_id/terraform/state/state1",
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 3
       }
     },
     {
@@ -19365,6 +19671,39 @@
     {
       "package": "internal/tools/wikis",
       "kind": "rest",
+      "method": "DELETE",
+      "path": "/projects/:project_id/wikis/:wiki_id",
+      "identifiers": {
+        ":project_id": 1,
+        ":wiki_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/wikis",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/wikis/:wiki_id",
+      "identifiers": {
+        ":project_id": 1,
+        ":wiki_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/wikis",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/projects/:project_id/wikis/:wiki_id",
+      "body": [
+        "title"
+      ],
+      "identifiers": {
+        ":project_id": 1,
+        ":wiki_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/wikis",
+      "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/wikis/Home",
       "identifiers": {
@@ -19689,6 +20028,27 @@
         "fullPath",
         "id",
         "last"
+      ]
+    },
+    {
+      "package": "internal/toolutil",
+      "kind": "graphql",
+      "method": "POST",
+      "path": "/graphql",
+      "operation": "mutation UpdateWorkItem workItemUpdate",
+      "variables": [
+        "input"
+      ]
+    },
+    {
+      "package": "internal/toolutil",
+      "kind": "graphql",
+      "method": "POST",
+      "path": "/graphql",
+      "operation": "query GetWorkItemID namespace",
+      "variables": [
+        "fullPath",
+        "iid"
       ]
     },
     {
