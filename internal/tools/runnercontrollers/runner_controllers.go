@@ -180,9 +180,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 // UpdateInput defines parameters for updating a runner controller.
 type UpdateInput struct {
-	ControllerID int64  `json:"controller_id" jsonschema:"Runner controller ID,required"`
-	Description  string `json:"description,omitempty" jsonschema:"New description"`
-	State        string `json:"state,omitempty" jsonschema:"New state: enabled, disabled, or dry_run"`
+	ControllerID int64   `json:"controller_id" jsonschema:"Runner controller ID,required"`
+	Description  *string `json:"description,omitempty" jsonschema:"New description. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	State        string  `json:"state,omitempty" jsonschema:"New state: enabled, disabled, or dry_run"`
 }
 
 // Update modifies an existing runner controller (admin only).
@@ -194,10 +194,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
-	opts := &gl.UpdateRunnerControllerOptions{}
-	if input.Description != "" {
-		opts.Description = &input.Description
-	}
+	// Presence decides, never emptiness: an empty description is the caller
+	// removing it (issue 1306).
+	opts := &gl.UpdateRunnerControllerOptions{Description: input.Description}
 	if input.State != "" {
 		s := gl.RunnerControllerStateValue(input.State)
 		opts.State = &s

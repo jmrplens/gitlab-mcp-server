@@ -39,12 +39,12 @@ func accessLevelEnabled(v gl.AccessControlValue) bool {
 // [gl.ContainerExpirationPolicyAttributes] options for configuring the
 // container registry cleanup policy when creating or updating a project.
 type ContainerExpirationPolicyInput struct {
-	Cadence         string `json:"cadence,omitempty" jsonschema:"Cleanup cadence (1d, 7d, 14d, 1month, 3month)"`
-	KeepN           *int64 `json:"keep_n,omitempty" jsonschema:"Number of most recent tags to always keep per image name"`
-	OlderThan       string `json:"older_than,omitempty" jsonschema:"Only tags older than this duration are eligible for deletion (7d, 14d, 30d, 90d)"`
-	NameRegexDelete string `json:"name_regex_delete,omitempty" jsonschema:"Regex matching tag names to delete"`
-	NameRegexKeep   string `json:"name_regex_keep,omitempty" jsonschema:"Regex matching tag names to always keep"`
-	Enabled         *bool  `json:"enabled,omitempty" jsonschema:"Enable the container expiration policy"`
+	Cadence         string  `json:"cadence,omitempty" jsonschema:"Cleanup cadence (1d, 7d, 14d, 1month, 3month)"`
+	KeepN           *int64  `json:"keep_n,omitempty" jsonschema:"Number of most recent tags to always keep per image name"`
+	OlderThan       string  `json:"older_than,omitempty" jsonschema:"Only tags older than this duration are eligible for deletion (7d, 14d, 30d, 90d)"`
+	NameRegexDelete *string `json:"name_regex_delete,omitempty" jsonschema:"Regex matching tag names to delete. On an update, pass an empty string to remove it. Omit the field to leave it untouched"`
+	NameRegexKeep   *string `json:"name_regex_keep,omitempty" jsonschema:"Regex matching tag names to always keep. On an update, pass an empty string to remove it. Omit the field to leave it untouched"`
+	Enabled         *bool   `json:"enabled,omitempty" jsonschema:"Enable the container expiration policy"`
 }
 
 // toGL converts the input into the GitLab
@@ -68,12 +68,14 @@ func (c *ContainerExpirationPolicyInput) toGL() *gl.ContainerExpirationPolicyAtt
 		out.OlderThan = new(c.OlderThan)
 		set = true
 	}
-	if c.NameRegexDelete != "" {
-		out.NameRegexDelete = new(c.NameRegexDelete)
+	// The two regexes decide by presence, never by emptiness: an empty one is
+	// the caller removing it (issue 1306).
+	if c.NameRegexDelete != nil {
+		out.NameRegexDelete = c.NameRegexDelete
 		set = true
 	}
-	if c.NameRegexKeep != "" {
-		out.NameRegexKeep = new(c.NameRegexKeep)
+	if c.NameRegexKeep != nil {
+		out.NameRegexKeep = c.NameRegexKeep
 		set = true
 	}
 	if c.Enabled != nil {
@@ -508,11 +510,11 @@ type RestoreInput struct {
 type UpdateInput struct {
 	ProjectID                                 toolutil.StringOrInt `json:"project_id"     jsonschema:"Project ID or URL-encoded path,required"`
 	Name                                      string               `json:"name,omitempty"          jsonschema:"New project name"`
-	Description                               string               `json:"description,omitempty"   jsonschema:"New description"`
+	Description                               *string              `json:"description,omitempty"   jsonschema:"New description. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	Visibility                                string               `json:"visibility,omitempty"    jsonschema:"Visibility level (private, internal, public)"`
 	DefaultBranch                             string               `json:"default_branch,omitempty" jsonschema:"New default branch"`
 	MergeMethod                               string               `json:"merge_method,omitempty"  jsonschema:"Merge method (merge, rebase_merge, ff)"`
-	Topics                                    []string             `json:"topics,omitempty"        jsonschema:"Topic tags for the project"`
+	Topics                                    []string             `json:"topics,omitempty"        jsonschema:"Topic tags for the project. Pass [] to remove every topic. Omit the field to leave them untouched"`
 	SquashOption                              string               `json:"squash_option,omitempty" jsonschema:"Squash option (never, always, default_on, default_off)"`
 	AutomaticRebaseEnabled                    *bool                `json:"automatic_rebase_enabled,omitempty" jsonschema:"Rebase the source branch automatically before merge"`
 	OnlyAllowMergeIfPipelineSucceeds          *bool                `json:"only_allow_merge_if_pipeline_succeeds,omitempty" jsonschema:"Only allow merge when pipeline succeeds"`
@@ -530,51 +532,51 @@ type UpdateInput struct {
 	PagesAccessLevel                          string               `json:"pages_access_level,omitempty"       jsonschema:"Pages access level (disabled, private, enabled, public)"`
 	ContainerRegistryAccessLevel              string               `json:"container_registry_access_level,omitempty" jsonschema:"Container registry access level (disabled, private, enabled)"`
 	SnippetsAccessLevel                       string               `json:"snippets_access_level,omitempty"    jsonschema:"Snippets access level (disabled, private, enabled)"`
-	CIConfigPath                              string               `json:"ci_config_path,omitempty"           jsonschema:"Custom CI/CD configuration file path"`
+	CIConfigPath                              *string              `json:"ci_config_path,omitempty"           jsonschema:"Custom CI/CD configuration file path. Pass an empty string to go back to the default .gitlab-ci.yml. Omit the field to leave it untouched"`
 	AllowMergeOnSkippedPipeline               *bool                `json:"allow_merge_on_skipped_pipeline,omitempty" jsonschema:"Allow merge when pipeline is skipped"`
 	RemoveSourceBranchAfterMerge              *bool                `json:"remove_source_branch_after_merge,omitempty" jsonschema:"Remove source branch after merge by default"`
 	AutocloseReferencedIssues                 *bool                `json:"autoclose_referenced_issues,omitempty" jsonschema:"Auto-close referenced issues on merge"`
-	MergeCommitTemplate                       string               `json:"merge_commit_template,omitempty"    jsonschema:"Template for merge commit messages"`
-	SquashCommitTemplate                      string               `json:"squash_commit_template,omitempty"   jsonschema:"Template for squash commit messages"`
-	MRDefaultTitleTemplate                    string               `json:"mr_default_title_template,omitempty" jsonschema:"Template for default merge request titles"`
+	MergeCommitTemplate                       *string              `json:"merge_commit_template,omitempty"    jsonschema:"Template for merge commit messages. Pass an empty string to go back to the default template. Omit the field to leave it untouched"`
+	SquashCommitTemplate                      *string              `json:"squash_commit_template,omitempty"   jsonschema:"Template for squash commit messages. Pass an empty string to go back to the default template. Omit the field to leave it untouched"`
+	MRDefaultTitleTemplate                    *string              `json:"mr_default_title_template,omitempty" jsonschema:"Template for default merge request titles. Pass an empty string to go back to the default template. Omit the field to leave it untouched"`
 	MergePipelinesEnabled                     *bool                `json:"merge_pipelines_enabled,omitempty"  jsonschema:"Enable merged results pipelines"`
 	MergeTrainsEnabled                        *bool                `json:"merge_trains_enabled,omitempty"     jsonschema:"Enable merge trains"`
 	ProtectMergeRequestPipelines              *bool                `json:"protect_merge_request_pipelines,omitempty" jsonschema:"Prevent merge request pipeline settings from being modified by users with lower permissions"`
 	ResolveOutdatedDiffDiscussions            *bool                `json:"resolve_outdated_diff_discussions,omitempty" jsonschema:"Auto-resolve outdated diff discussions"`
-	ApprovalsBeforeMerge                      int64                `json:"approvals_before_merge,omitempty"   tier:"premium" jsonschema:"Number of approvals required before merge"`
-	MergeRequestTitleRegex                    string               `json:"merge_request_title_regex,omitempty" jsonschema:"Regex that MR titles must match"`
-	MergeRequestTitleRegexDescription         string               `json:"merge_request_title_regex_description,omitempty" jsonschema:"Human-readable description for the MR title regex"`
+	ApprovalsBeforeMerge                      *int64               `json:"approvals_before_merge,omitempty"   tier:"premium" jsonschema:"Number of approvals required before merge. Pass 0 to require none. Omit the field to leave it untouched"`
+	MergeRequestTitleRegex                    *string              `json:"merge_request_title_regex,omitempty" jsonschema:"Regex that MR titles must match. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	MergeRequestTitleRegexDescription         *string              `json:"merge_request_title_regex_description,omitempty" jsonschema:"Human-readable description for the MR title regex. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	ReviewerAssignmentStrategy                string               `json:"reviewer_assignment_strategy,omitempty" tier:"premium" jsonschema:"Strategy used to automatically assign reviewers to merge requests: disabled or code_owners. The former dap_powered value was removed in GitLab 19.4 and only appears in responses of projects configured before then"`
 
 	// Basic metadata (additive 1:1 SDK parity)
 	Path              string   `json:"path,omitempty" jsonschema:"New project path slug"`
 	ImportURL         string   `json:"import_url,omitempty" jsonschema:"URL to import/mirror repository from"`
 	RepositoryStorage string   `json:"repository_storage,omitempty" jsonschema:"Repository storage shard name (admin only)"`
-	TagList           []string `json:"tag_list,omitempty" jsonschema:"Project tags (deprecated: use topics)"`
+	TagList           []string `json:"tag_list,omitempty" jsonschema:"Project tags (deprecated: use topics). Pass [] to remove every tag. Omit the field to leave them untouched"`
 
 	// Merge settings (additive)
-	OnlyAllowMergeIfAllStatusChecksPassed *bool  `json:"only_allow_merge_if_all_status_checks_passed,omitempty" tier:"ultimate" jsonschema:"Only allow merge when all external status checks pass"`
-	AllowPipelineTriggerApproveDeployment *bool  `json:"allow_pipeline_trigger_approve_deployment,omitempty" jsonschema:"Allow pipeline triggerer to approve deployment"`
-	PreventMergeWithoutJiraIssue          *bool  `json:"prevent_merge_without_jira_issue,omitempty" jsonschema:"Require an associated Jira issue before merge"`
-	MergeRequestDefaultTargetSelf         *bool  `json:"mr_default_target_self,omitempty" jsonschema:"Default merge request target to the project itself (for forks)"`
-	MergeTrainsSkipTrainAllowed           *bool  `json:"merge_trains_skip_train_allowed,omitempty" jsonschema:"Allow skipping the merge train"`
-	PrintingMergeRequestLinkEnabled       *bool  `json:"printing_merge_request_link_enabled,omitempty" jsonschema:"Show the create-merge-request link after pushing"`
-	SuggestionCommitMessage               string `json:"suggestion_commit_message,omitempty" jsonschema:"Default commit message for suggestions"`
-	IssueBranchTemplate                   string `json:"issue_branch_template,omitempty" jsonschema:"Template for branch names created from issues"`
-	IssuesTemplate                        string `json:"issues_template,omitempty" jsonschema:"Default issue description template"`
-	MergeRequestsTemplate                 string `json:"merge_requests_template,omitempty" jsonschema:"Default merge request description template"`
+	OnlyAllowMergeIfAllStatusChecksPassed *bool   `json:"only_allow_merge_if_all_status_checks_passed,omitempty" tier:"ultimate" jsonschema:"Only allow merge when all external status checks pass"`
+	AllowPipelineTriggerApproveDeployment *bool   `json:"allow_pipeline_trigger_approve_deployment,omitempty" jsonschema:"Allow pipeline triggerer to approve deployment"`
+	PreventMergeWithoutJiraIssue          *bool   `json:"prevent_merge_without_jira_issue,omitempty" jsonschema:"Require an associated Jira issue before merge"`
+	MergeRequestDefaultTargetSelf         *bool   `json:"mr_default_target_self,omitempty" jsonschema:"Default merge request target to the project itself (for forks)"`
+	MergeTrainsSkipTrainAllowed           *bool   `json:"merge_trains_skip_train_allowed,omitempty" jsonschema:"Allow skipping the merge train"`
+	PrintingMergeRequestLinkEnabled       *bool   `json:"printing_merge_request_link_enabled,omitempty" jsonschema:"Show the create-merge-request link after pushing"`
+	SuggestionCommitMessage               *string `json:"suggestion_commit_message,omitempty" jsonschema:"Default commit message for suggestions. Pass an empty string to go back to the default message. Omit the field to leave it untouched"`
+	IssueBranchTemplate                   *string `json:"issue_branch_template,omitempty" jsonschema:"Template for branch names created from issues. Pass an empty string to go back to the default template. Omit the field to leave it untouched"`
+	IssuesTemplate                        string  `json:"issues_template,omitempty" jsonschema:"Default issue description template"`
+	MergeRequestsTemplate                 string  `json:"merge_requests_template,omitempty" jsonschema:"Default merge request description template"`
 
 	// Feature toggles (additive)
-	SnippetsEnabled          *bool `json:"snippets_enabled,omitempty" jsonschema:"Enable snippets feature (deprecated: use snippets_access_level)"`
-	ContainerRegistryEnabled *bool `json:"container_registry_enabled,omitempty" jsonschema:"Enable container registry (deprecated: use container_registry_access_level)"`
-	ServiceDeskEnabled       *bool `json:"service_desk_enabled,omitempty" jsonschema:"Enable Service Desk"`
-	EmailsEnabled            *bool `json:"emails_enabled,omitempty" jsonschema:"Enable email notifications"`
-	EmailsDisabled           *bool `json:"emails_disabled,omitempty" jsonschema:"Disable email notifications (deprecated: use emails_enabled)"`
-	ShowDefaultAwardEmojis   *bool `json:"show_default_award_emojis,omitempty" jsonschema:"Show default award emojis on issues/MRs"`
-	GroupRunnersEnabled      *bool `json:"group_runners_enabled,omitempty" jsonschema:"Enable group runners"`
-	KeepLatestArtifact       *bool `json:"keep_latest_artifact,omitempty" jsonschema:"Keep the latest artifact for each pipeline"`
-	BuildTimeout             int64 `json:"build_timeout,omitempty" jsonschema:"Build timeout in seconds"`
-	MaxArtifactsSize         int64 `json:"max_artifacts_size,omitempty" jsonschema:"Maximum artifacts size in MB"`
+	SnippetsEnabled          *bool  `json:"snippets_enabled,omitempty" jsonschema:"Enable snippets feature (deprecated: use snippets_access_level)"`
+	ContainerRegistryEnabled *bool  `json:"container_registry_enabled,omitempty" jsonschema:"Enable container registry (deprecated: use container_registry_access_level)"`
+	ServiceDeskEnabled       *bool  `json:"service_desk_enabled,omitempty" jsonschema:"Enable Service Desk"`
+	EmailsEnabled            *bool  `json:"emails_enabled,omitempty" jsonschema:"Enable email notifications"`
+	EmailsDisabled           *bool  `json:"emails_disabled,omitempty" jsonschema:"Disable email notifications (deprecated: use emails_enabled)"`
+	ShowDefaultAwardEmojis   *bool  `json:"show_default_award_emojis,omitempty" jsonschema:"Show default award emojis on issues/MRs"`
+	GroupRunnersEnabled      *bool  `json:"group_runners_enabled,omitempty" jsonschema:"Enable group runners"`
+	KeepLatestArtifact       *bool  `json:"keep_latest_artifact,omitempty" jsonschema:"Keep the latest artifact for each pipeline"`
+	BuildTimeout             *int64 `json:"build_timeout,omitempty" jsonschema:"Build timeout in seconds. GitLab accepts 10 minutes to one month"`
+	MaxArtifactsSize         int64  `json:"max_artifacts_size,omitempty" jsonschema:"Maximum artifacts size in MB"`
 
 	// Auto DevOps (additive)
 	AutoDevopsEnabled        *bool  `json:"auto_devops_enabled,omitempty" jsonschema:"Enable Auto DevOps for the project"`
@@ -585,7 +587,7 @@ type UpdateInput struct {
 	BuildGitStrategy                       string   `json:"build_git_strategy,omitempty" jsonschema:"Git strategy for builds (fetch, clone)"`
 	AutoCancelPendingPipelines             string   `json:"auto_cancel_pending_pipelines,omitempty" jsonschema:"Auto-cancel pending pipelines (enabled, disabled)"`
 	CICDCatalogEnabled                     *bool    `json:"cicd_catalog_enabled,omitempty" jsonschema:"Publish the project as a CI/CD catalog resource"`
-	CIDefaultGitDepth                      int64    `json:"ci_default_git_depth,omitempty" jsonschema:"Default Git clone depth for CI/CD"`
+	CIDefaultGitDepth                      *int64   `json:"ci_default_git_depth,omitempty" jsonschema:"Default Git clone depth for CI/CD, 0 to 1000. Pass 0 to fetch the whole history. Omit the field to leave it untouched"`
 	CIDeletePipelinesInSeconds             int64    `json:"ci_delete_pipelines_in_seconds,omitempty" jsonschema:"Auto-delete pipelines older than this many seconds"`
 	CIDisplayPipelineVariables             *bool    `json:"ci_display_pipeline_variables,omitempty" jsonschema:"Display pipeline variables in the UI"`
 	CIForwardDeploymentEnabled             *bool    `json:"ci_forward_deployment_enabled,omitempty" jsonschema:"Enable CI/CD forward deployment (skip outdated jobs)"`
@@ -604,15 +606,15 @@ type UpdateInput struct {
 	MirrorTriggerBuilds              *bool  `json:"mirror_trigger_builds,omitempty" jsonschema:"Trigger pipelines for mirror updates"`
 	MirrorBranchRegex                string `json:"mirror_branch_regex,omitempty" jsonschema:"Only mirror branches matching this regex"`
 	MirrorOverwritesDivergedBranches *bool  `json:"mirror_overwrites_diverged_branches,omitempty" jsonschema:"Overwrite diverged branches when mirroring"`
-	MirrorUserID                     int64  `json:"mirror_user_id,omitempty" jsonschema:"User ID used to run mirror updates (admin only)"`
+	MirrorUserID                     *int64 `json:"mirror_user_id,omitempty" jsonschema:"User ID used to run mirror updates (admin only)"`
 	OnlyMirrorProtectedBranches      *bool  `json:"only_mirror_protected_branches,omitempty" jsonschema:"Only mirror protected branches"`
 
 	// Container registry cleanup (additive)
 	ContainerExpirationPolicyAttributes *ContainerExpirationPolicyInput `json:"container_expiration_policy_attributes,omitempty" jsonschema:"Container registry cleanup policy attributes"`
 
 	// Compliance and security (additive)
-	EnforceAuthChecksOnUploads               *bool  `json:"enforce_auth_checks_on_uploads,omitempty" jsonschema:"Enforce authorization checks on uploads"`
-	ExternalAuthorizationClassificationLabel string `json:"external_authorization_classification_label,omitempty" jsonschema:"External authorization classification label"`
+	EnforceAuthChecksOnUploads               *bool   `json:"enforce_auth_checks_on_uploads,omitempty" jsonschema:"Enforce authorization checks on uploads"`
+	ExternalAuthorizationClassificationLabel *string `json:"external_authorization_classification_label,omitempty" jsonschema:"External authorization classification label. Pass an empty string to remove it. Omit the field to leave it untouched"`
 
 	// Access control (additive)
 	IssuesAccessLevel                string `json:"issues_access_level,omitempty" jsonschema:"Issues access level (disabled, private, enabled)"`
@@ -1438,8 +1440,11 @@ func buildUpdateOpts(input UpdateInput) *gl.EditProjectOptions {
 	if input.Name != "" {
 		opts.Name = new(input.Name)
 	}
-	if input.Description != "" {
-		opts.Description = new(toolutil.NormalizeText(input.Description))
+	// The settings an update can empty decide by presence, never by
+	// emptiness: an empty string or [] is the caller emptying the setting
+	// (issue 1306).
+	if input.Description != nil {
+		opts.Description = new(toolutil.NormalizeText(*input.Description))
 	}
 	if input.Visibility != "" {
 		opts.Visibility = new(gl.VisibilityValue(input.Visibility))
@@ -1450,7 +1455,7 @@ func buildUpdateOpts(input UpdateInput) *gl.EditProjectOptions {
 	if input.MergeMethod != "" {
 		opts.MergeMethod = new(gl.MergeMethodValue(input.MergeMethod))
 	}
-	if len(input.Topics) > 0 {
+	if input.Topics != nil {
 		opts.Topics = &input.Topics
 	}
 	if input.SquashOption != "" {
@@ -1490,15 +1495,11 @@ func applyUpdateMetadataOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	if input.RepositoryStorage != "" {
 		opts.RepositoryStorage = new(input.RepositoryStorage)
 	}
-	if len(input.TagList) > 0 {
+	if input.TagList != nil {
 		opts.TagList = &input.TagList //nolint:staticcheck // 1:1 SDK parity; prefer topics.
 	}
-	if input.SuggestionCommitMessage != "" {
-		opts.SuggestionCommitMessage = new(input.SuggestionCommitMessage)
-	}
-	if input.IssueBranchTemplate != "" {
-		opts.IssueBranchTemplate = new(input.IssueBranchTemplate)
-	}
+	opts.SuggestionCommitMessage = input.SuggestionCommitMessage
+	opts.IssueBranchTemplate = input.IssueBranchTemplate
 	if input.IssuesTemplate != "" {
 		opts.IssuesTemplate = new(input.IssuesTemplate)
 	}
@@ -1533,9 +1534,9 @@ func applyUpdateToggleOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	if input.KeepLatestArtifact != nil {
 		opts.KeepLatestArtifact = input.KeepLatestArtifact
 	}
-	if input.BuildTimeout > 0 {
-		opts.BuildTimeout = new(input.BuildTimeout)
-	}
+	// A timeout of 0 is GitLab's to refuse ("needs to be between 10 minutes
+	// and 1 month"), not this server's to drop (issue 1306).
+	opts.BuildTimeout = input.BuildTimeout
 	if input.MaxArtifactsSize > 0 {
 		opts.MaxArtifactsSize = new(input.MaxArtifactsSize)
 	}
@@ -1568,9 +1569,8 @@ func applyUpdatePipelineOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 
 // applyUpdateCIOpts applies advanced CI/CD transformations.
 func applyUpdateCIOpts(opts *gl.EditProjectOptions, input UpdateInput) {
-	if input.CIDefaultGitDepth > 0 {
-		opts.CIDefaultGitDepth = new(input.CIDefaultGitDepth)
-	}
+	// A depth of 0 fetches the whole history, a value of its own (issue 1306).
+	opts.CIDefaultGitDepth = input.CIDefaultGitDepth
 	if input.CICDCatalogEnabled != nil {
 		opts.CICDCatalogEnabled = input.CICDCatalogEnabled
 	}
@@ -1620,9 +1620,7 @@ func applyUpdateMirrorOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	if input.MirrorOverwritesDivergedBranches != nil {
 		opts.MirrorOverwritesDivergedBranches = input.MirrorOverwritesDivergedBranches
 	}
-	if input.MirrorUserID > 0 {
-		opts.MirrorUserID = new(input.MirrorUserID)
-	}
+	opts.MirrorUserID = input.MirrorUserID
 	if input.OnlyMirrorProtectedBranches != nil {
 		opts.OnlyMirrorProtectedBranches = input.OnlyMirrorProtectedBranches
 	}
@@ -1634,9 +1632,7 @@ func applyUpdateComplianceOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	if input.EnforceAuthChecksOnUploads != nil {
 		opts.EnforceAuthChecksOnUploads = input.EnforceAuthChecksOnUploads
 	}
-	if input.ExternalAuthorizationClassificationLabel != "" {
-		opts.ExternalAuthorizationClassificationLabel = new(input.ExternalAuthorizationClassificationLabel)
-	}
+	opts.ExternalAuthorizationClassificationLabel = input.ExternalAuthorizationClassificationLabel
 	opts.ContainerExpirationPolicyAttributes = input.ContainerExpirationPolicyAttributes.toGL()
 	if input.OnlyAllowMergeIfAllStatusChecksPassed != nil {
 		opts.OnlyAllowMergeIfAllStatusChecksPassed = input.OnlyAllowMergeIfAllStatusChecksPassed
@@ -1688,9 +1684,7 @@ func setAccessLevel(target **gl.AccessControlValue, level string) {
 }
 
 func applyUpdateMergeOpts(opts *gl.EditProjectOptions, input UpdateInput) {
-	if input.CIConfigPath != "" {
-		opts.CIConfigPath = new(input.CIConfigPath)
-	}
+	opts.CIConfigPath = input.CIConfigPath
 	if input.AllowMergeOnSkippedPipeline != nil {
 		opts.AllowMergeOnSkippedPipeline = input.AllowMergeOnSkippedPipeline
 	}
@@ -1703,15 +1697,9 @@ func applyUpdateMergeOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	if input.AutocloseReferencedIssues != nil {
 		opts.AutocloseReferencedIssues = input.AutocloseReferencedIssues
 	}
-	if input.MergeCommitTemplate != "" {
-		opts.MergeCommitTemplate = new(input.MergeCommitTemplate)
-	}
-	if input.SquashCommitTemplate != "" {
-		opts.SquashCommitTemplate = new(input.SquashCommitTemplate)
-	}
-	if input.MRDefaultTitleTemplate != "" {
-		opts.MRDefaultTitleTemplate = new(input.MRDefaultTitleTemplate)
-	}
+	opts.MergeCommitTemplate = input.MergeCommitTemplate
+	opts.SquashCommitTemplate = input.SquashCommitTemplate
+	opts.MRDefaultTitleTemplate = input.MRDefaultTitleTemplate
 	if input.MergePipelinesEnabled != nil {
 		opts.MergePipelinesEnabled = input.MergePipelinesEnabled
 	}
@@ -1724,9 +1712,8 @@ func applyUpdateMergeOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	if input.ResolveOutdatedDiffDiscussions != nil {
 		opts.ResolveOutdatedDiffDiscussions = input.ResolveOutdatedDiffDiscussions
 	}
-	if input.ApprovalsBeforeMerge > 0 {
-		opts.ApprovalsBeforeMerge = new(input.ApprovalsBeforeMerge) //nolint:staticcheck // SA1019: deprecated in client-go, still accepted by GitLab, mirrored for 1:1 fidelity; the replacement is the Merge Request Approvals API, not a field.
-	}
+	// 0 approvals before a merge is a value of its own (issue 1306).
+	opts.ApprovalsBeforeMerge = input.ApprovalsBeforeMerge //nolint:staticcheck // SA1019: deprecated in client-go, still accepted by GitLab, mirrored for 1:1 fidelity; the replacement is the Merge Request Approvals API, not a field.
 	if input.LFSEnabled != nil {
 		opts.LFSEnabled = input.LFSEnabled
 	}
@@ -1757,12 +1744,8 @@ func applyUpdateAccessOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	if input.SnippetsAccessLevel != "" {
 		opts.SnippetsAccessLevel = new(gl.AccessControlValue(input.SnippetsAccessLevel))
 	}
-	if input.MergeRequestTitleRegex != "" {
-		opts.MergeRequestTitleRegex = new(input.MergeRequestTitleRegex)
-	}
-	if input.MergeRequestTitleRegexDescription != "" {
-		opts.MergeRequestTitleRegexDescription = new(input.MergeRequestTitleRegexDescription)
-	}
+	opts.MergeRequestTitleRegex = input.MergeRequestTitleRegex
+	opts.MergeRequestTitleRegexDescription = input.MergeRequestTitleRegexDescription
 	if input.ReviewerAssignmentStrategy != "" {
 		opts.ReviewerAssignmentStrategy = new(gl.ReviewerAssignmentStrategyValue(input.ReviewerAssignmentStrategy))
 	}
@@ -2363,32 +2346,32 @@ func GetHook(ctx context.Context, client *gitlabclient.Client, input GetHookInpu
 
 // HookOptionsInput defines common project webhook settings shared by add and edit operations.
 type HookOptionsInput struct {
-	Name                      string `json:"name,omitempty" jsonschema:"Webhook name"`
-	Description               string `json:"description,omitempty" jsonschema:"Webhook description"`
-	Token                     string `json:"token,omitempty" jsonschema:"Secret token for validation"`
-	SigningToken              string `json:"signing_token,omitempty" jsonschema:"Write-only signing token for webhook signature validation"`
-	PushEventsBranchFilter    string `json:"push_events_branch_filter,omitempty" jsonschema:"Branch filter for push events"`
-	CustomWebhookTemplate     string `json:"custom_webhook_template,omitempty" jsonschema:"Custom webhook payload template"`
-	BranchFilterStrategy      string `json:"branch_filter_strategy,omitempty" jsonschema:"Branch filter strategy (wildcard, regex, all_branches)"`
-	PushEvents                *bool  `json:"push_events,omitempty" jsonschema:"Trigger on push events"`
-	IssuesEvents              *bool  `json:"issues_events,omitempty" jsonschema:"Trigger on issue events"`
-	ConfidentialIssuesEvents  *bool  `json:"confidential_issues_events,omitempty" jsonschema:"Trigger on confidential issue events"`
-	MergeRequestsEvents       *bool  `json:"merge_requests_events,omitempty" jsonschema:"Trigger on merge request events"`
-	TagPushEvents             *bool  `json:"tag_push_events,omitempty" jsonschema:"Trigger on tag push events"`
-	NoteEvents                *bool  `json:"note_events,omitempty" jsonschema:"Trigger on note/comment events"`
-	ConfidentialNoteEvents    *bool  `json:"confidential_note_events,omitempty" jsonschema:"Trigger on confidential note events"`
-	JobEvents                 *bool  `json:"job_events,omitempty" jsonschema:"Trigger on CI job events"`
-	PipelineEvents            *bool  `json:"pipeline_events,omitempty" jsonschema:"Trigger on pipeline events"`
-	WikiPageEvents            *bool  `json:"wiki_page_events,omitempty" jsonschema:"Trigger on wiki page events"`
-	DeploymentEvents          *bool  `json:"deployment_events,omitempty" jsonschema:"Trigger on deployment events"`
-	ReleasesEvents            *bool  `json:"releases_events,omitempty" jsonschema:"Trigger on release events"`
-	MilestoneEvents           *bool  `json:"milestone_events,omitempty" jsonschema:"Trigger on milestone events"`
-	FeatureFlagEvents         *bool  `json:"feature_flag_events,omitempty" jsonschema:"Trigger on feature flag events"`
-	EmojiEvents               *bool  `json:"emoji_events,omitempty" jsonschema:"Trigger on emoji events"`
-	ResourceAccessTokenEvents *bool  `json:"resource_access_token_events,omitempty" jsonschema:"Trigger on resource access token events"`
-	ResourceDeployTokenEvents *bool  `json:"resource_deploy_token_events,omitempty" jsonschema:"Trigger on resource deploy token events"`
-	VulnerabilityEvents       *bool  `json:"vulnerability_events,omitempty" jsonschema:"Trigger on vulnerability events"`
-	EnableSSLVerification     *bool  `json:"enable_ssl_verification,omitempty" jsonschema:"Enable SSL verification for webhook"`
+	Name                      string  `json:"name,omitempty" jsonschema:"Webhook name"`
+	Description               *string `json:"description,omitempty" jsonschema:"Webhook description. On an edit, pass an empty string to remove it. Omit the field to leave it untouched"`
+	Token                     string  `json:"token,omitempty" jsonschema:"Secret token for validation"`
+	SigningToken              string  `json:"signing_token,omitempty" jsonschema:"Write-only signing token for webhook signature validation"`
+	PushEventsBranchFilter    *string `json:"push_events_branch_filter,omitempty" jsonschema:"Branch filter for push events. On an edit, pass an empty string to remove it. Omit the field to leave it untouched"`
+	CustomWebhookTemplate     *string `json:"custom_webhook_template,omitempty" jsonschema:"Custom webhook payload template. On an edit, pass an empty string to remove it. Omit the field to leave it untouched"`
+	BranchFilterStrategy      string  `json:"branch_filter_strategy,omitempty" jsonschema:"Branch filter strategy (wildcard, regex, all_branches)"`
+	PushEvents                *bool   `json:"push_events,omitempty" jsonschema:"Trigger on push events"`
+	IssuesEvents              *bool   `json:"issues_events,omitempty" jsonschema:"Trigger on issue events"`
+	ConfidentialIssuesEvents  *bool   `json:"confidential_issues_events,omitempty" jsonschema:"Trigger on confidential issue events"`
+	MergeRequestsEvents       *bool   `json:"merge_requests_events,omitempty" jsonschema:"Trigger on merge request events"`
+	TagPushEvents             *bool   `json:"tag_push_events,omitempty" jsonschema:"Trigger on tag push events"`
+	NoteEvents                *bool   `json:"note_events,omitempty" jsonschema:"Trigger on note/comment events"`
+	ConfidentialNoteEvents    *bool   `json:"confidential_note_events,omitempty" jsonschema:"Trigger on confidential note events"`
+	JobEvents                 *bool   `json:"job_events,omitempty" jsonschema:"Trigger on CI job events"`
+	PipelineEvents            *bool   `json:"pipeline_events,omitempty" jsonschema:"Trigger on pipeline events"`
+	WikiPageEvents            *bool   `json:"wiki_page_events,omitempty" jsonschema:"Trigger on wiki page events"`
+	DeploymentEvents          *bool   `json:"deployment_events,omitempty" jsonschema:"Trigger on deployment events"`
+	ReleasesEvents            *bool   `json:"releases_events,omitempty" jsonschema:"Trigger on release events"`
+	MilestoneEvents           *bool   `json:"milestone_events,omitempty" jsonschema:"Trigger on milestone events"`
+	FeatureFlagEvents         *bool   `json:"feature_flag_events,omitempty" jsonschema:"Trigger on feature flag events"`
+	EmojiEvents               *bool   `json:"emoji_events,omitempty" jsonschema:"Trigger on emoji events"`
+	ResourceAccessTokenEvents *bool   `json:"resource_access_token_events,omitempty" jsonschema:"Trigger on resource access token events"`
+	ResourceDeployTokenEvents *bool   `json:"resource_deploy_token_events,omitempty" jsonschema:"Trigger on resource deploy token events"`
+	VulnerabilityEvents       *bool   `json:"vulnerability_events,omitempty" jsonschema:"Trigger on vulnerability events"`
+	EnableSSLVerification     *bool   `json:"enable_ssl_verification,omitempty" jsonschema:"Enable SSL verification for webhook"`
 
 	CustomHeaders []HookCustomHeaderInput `json:"custom_headers,omitempty" jsonschema:"Custom HTTP headers sent with each webhook request (key/value pairs)"`
 }
@@ -2437,20 +2420,16 @@ func applyProjectHookOptions(url string, input HookOptionsInput, opts *gl.AddPro
 	if input.Name != "" {
 		opts.Name = new(input.Name)
 	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
+	// The description, branch filter and custom template go through as given:
+	// on an edit an empty one is the caller removing it (issue 1306).
+	opts.Description = input.Description
+	opts.PushEventsBranchFilter = input.PushEventsBranchFilter
+	opts.CustomWebhookTemplate = input.CustomWebhookTemplate
 	if input.Token != "" {
 		opts.Token = new(input.Token)
 	}
 	if input.SigningToken != "" {
 		opts.SigningToken = new(input.SigningToken)
-	}
-	if input.PushEventsBranchFilter != "" {
-		opts.PushEventsBranchFilter = new(input.PushEventsBranchFilter)
-	}
-	if input.CustomWebhookTemplate != "" {
-		opts.CustomWebhookTemplate = new(input.CustomWebhookTemplate)
 	}
 	if input.BranchFilterStrategy != "" {
 		opts.BranchFilterStrategy = new(input.BranchFilterStrategy)

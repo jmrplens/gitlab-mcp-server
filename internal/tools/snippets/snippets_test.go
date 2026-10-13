@@ -23,6 +23,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdate_EmptyDescription_ReachesTheBody holds a personal snippet's
+// description to an empty value removing it. The handler used to drop it and
+// answer with the old description as an update (issue 1306).
+func TestUpdate_EmptyDescription_ReachesTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"snippet_id": 1, "description": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"id":1,"title":"s"}`)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"description": `""`})
+}
+
 // snippetJSON identifies the snippet JSON constant used by this package.
 const snippetJSON = `{"id":42,"title":"Test Snippet","file_name":"test.go","description":"A test","visibility":"private","author":{"id":1,"username":"admin","name":"Admin","email":"admin@example.com","state":"active"},"project_id":0,"web_url":"https://gitlab.example.com/snippets/42","raw_url":"https://gitlab.example.com/snippets/42/raw","files":[{"path":"test.go","raw_url":"https://gitlab.example.com/snippets/42/raw/main/test.go"}]}`
 
@@ -847,7 +862,7 @@ func TestSnippetVisibility_DefaultsToPrivate(t *testing.T) {
 // field keeps its current value rather than being cleared.
 func TestBuildUpdateOpts_SendsOnlyWhatTheCallerGave(t *testing.T) {
 	opts := buildUpdateOpts(UpdateInput{
-		SnippetID: 42, Title: "Renamed", FileName: "new.go", Description: "desc",
+		SnippetID: 42, Title: "Renamed", FileName: "new.go", Description: new("desc"),
 		ContentBody: "package main", Visibility: "public",
 		Files: []UpdateFileInput{{Action: "update", FilePath: "new.go", Content: "x", PreviousPath: "old.go"}},
 	})

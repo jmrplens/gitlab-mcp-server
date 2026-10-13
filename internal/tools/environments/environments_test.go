@@ -18,6 +18,24 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdate_EmptyValues_ReachTheBody holds the description and external URL
+// an empty value clears in GitLab (it nulls both when blank) to sending that
+// value. The handler used to drop both and answer with the old values as an
+// update (issue 1306).
+func TestUpdate_EmptyValues_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
+		"project_id": "42", "environment_id": 1, "description": "", "external_url": "",
+	})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"id":1,"name":"production"}`)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"description": `""`, "external_url": `""`})
+}
+
 const (
 	// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 	errExpCancelledCtx = "expected error for canceled context"
@@ -267,7 +285,7 @@ func TestEnvironmentUpdate_Success(t *testing.T) {
 		ProjectID:     "42",
 		EnvironmentID: 1,
 		Name:          "production-v2",
-		ExternalURL:   "https://v2.prod.example.com",
+		ExternalURL:   new("https://v2.prod.example.com"),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -739,8 +757,8 @@ func TestEnvironmentUpdate_AllOptionalFields(t *testing.T) {
 		ProjectID:     "1",
 		EnvironmentID: 5,
 		Name:          "staging-v2",
-		Description:   "Updated staging",
-		ExternalURL:   "https://staging-v2.example.com",
+		Description:   new("Updated staging"),
+		ExternalURL:   new("https://staging-v2.example.com"),
 		Tier:          "staging",
 	})
 	if err != nil {
@@ -778,7 +796,7 @@ func TestEnvironmentUpdate_SendsOnlyWhatTheCallerSet(t *testing.T) {
 	if _, err := Update(context.Background(), client, UpdateInput{
 		ProjectID:     "1",
 		EnvironmentID: 5,
-		Description:   "Only this one",
+		Description:   new("Only this one"),
 	}); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}

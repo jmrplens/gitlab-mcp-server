@@ -146,7 +146,7 @@ type ProjectUpdateInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	SnippetID   int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
 	Title       string               `json:"title,omitempty" jsonschema:"New title"`
-	Description string               `json:"description,omitempty" jsonschema:"New description"`
+	Description *string              `json:"description,omitempty" jsonschema:"New description. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	Visibility  string               `json:"visibility,omitempty" jsonschema:"New visibility: private, internal, or public"`
 	Files       []UpdateFileInput    `json:"files,omitempty" jsonschema:"File operations to apply"`
 	FileName    string               `json:"file_name,omitempty" jsonschema:"New file name (single-file, deprecated in favor of files)"`
@@ -202,9 +202,9 @@ func buildProjectUpdateOptions(input ProjectUpdateInput) *gl.UpdateProjectSnippe
 	if input.Title != "" {
 		opts.Title = new(input.Title)
 	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
+	// Presence decides, never emptiness: an empty description is the caller
+	// removing it (issue 1306).
+	opts.Description = input.Description
 	if input.Visibility != "" {
 		v := gl.VisibilityValue(input.Visibility)
 		opts.Visibility = &v

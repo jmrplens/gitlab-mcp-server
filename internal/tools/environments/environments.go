@@ -52,8 +52,8 @@ type UpdateInput struct {
 	ProjectID           toolutil.StringOrInt `json:"project_id"             jsonschema:"Project ID or URL-encoded path,required"`
 	EnvironmentID       int64                `json:"environment_id"         jsonschema:"Environment ID,required"`
 	Name                string               `json:"name,omitempty"         jsonschema:"New environment name"`
-	Description         string               `json:"description,omitempty"  jsonschema:"Updated description"`
-	ExternalURL         string               `json:"external_url,omitempty" jsonschema:"Updated external URL"`
+	Description         *string              `json:"description,omitempty"  jsonschema:"Updated description. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	ExternalURL         *string              `json:"external_url,omitempty" jsonschema:"Updated external URL. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	Tier                string               `json:"tier,omitempty"         jsonschema:"Updated tier: production, staging, testing, development, other"`
 	ClusterAgentID      *int64               `json:"cluster_agent_id,omitempty"      jsonschema:"ID of the cluster agent to associate with this environment"`
 	KubernetesNamespace string               `json:"kubernetes_namespace,omitempty"  jsonschema:"Kubernetes namespace for the cluster agent"`
@@ -265,12 +265,10 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Name != "" {
 		opts.Name = new(input.Name)
 	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
-	if input.ExternalURL != "" {
-		opts.ExternalURL = new(input.ExternalURL)
-	}
+	// Presence decides, never emptiness: an empty description or URL is the
+	// caller removing it (issue 1306).
+	opts.Description = input.Description
+	opts.ExternalURL = input.ExternalURL
 	if input.Tier != "" {
 		opts.Tier = new(input.Tier)
 	}

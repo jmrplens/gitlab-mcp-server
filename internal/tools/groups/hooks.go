@@ -19,7 +19,7 @@ import (
 type HookInput struct {
 	URL                       string                  `json:"url,omitempty"                        jsonschema:"New webhook URL"`
 	Name                      string                  `json:"name,omitempty"                       jsonschema:"Hook name"`
-	Description               string                  `json:"description,omitempty"                jsonschema:"Hook description"`
+	Description               *string                 `json:"description,omitempty"                jsonschema:"Hook description. On an edit, pass an empty string to remove it. Omit the field to leave it untouched"`
 	Token                     string                  `json:"token,omitempty"                      jsonschema:"Secret token for payload validation"`
 	SigningToken              string                  `json:"signing_token,omitempty"              jsonschema:"Write-only signing token for webhook signature validation"`
 	PushEvents                *bool                   `json:"push_events,omitempty"                jsonschema:"Trigger on push events"`
@@ -40,12 +40,12 @@ type HookInput struct {
 	ConfidentialIssuesEvents  *bool                   `json:"confidential_issues_events,omitempty" jsonschema:"Trigger on confidential issue events"`
 	ConfidentialNoteEvents    *bool                   `json:"confidential_note_events,omitempty"   jsonschema:"Trigger on confidential note events"`
 	EnableSSLVerification     *bool                   `json:"enable_ssl_verification,omitempty"    jsonschema:"Enable SSL verification for the hook endpoint"`
-	PushEventsBranchFilter    string                  `json:"push_events_branch_filter,omitempty"  jsonschema:"Branch filter for push events (e.g. 'main')"`
+	PushEventsBranchFilter    *string                 `json:"push_events_branch_filter,omitempty"  jsonschema:"Branch filter for push events (e.g. 'main'). On an edit, pass an empty string to remove it. Omit the field to leave it untouched"`
 	BranchFilterStrategy      string                  `json:"branch_filter_strategy,omitempty"      jsonschema:"Branch filter strategy (wildcard, regex, all_branches)"`
 	EmojiEvents               *bool                   `json:"emoji_events,omitempty"                jsonschema:"Trigger on emoji events"`
 	ResourceAccessTokenEvents *bool                   `json:"resource_access_token_events,omitempty" jsonschema:"Trigger on resource access token events"`
 	ProjectEvents             *bool                   `json:"project_events,omitempty"               jsonschema:"Trigger on project events (group-level)"`
-	CustomWebhookTemplate     string                  `json:"custom_webhook_template,omitempty"      jsonschema:"Custom payload template (JSON) sent instead of the default webhook body"`
+	CustomWebhookTemplate     *string                 `json:"custom_webhook_template,omitempty"      jsonschema:"Custom payload template (JSON) sent instead of the default webhook body. On an edit, pass an empty string to remove it. Omit the field to leave it untouched"`
 	CustomHeaders             []HookCustomHeaderInput `json:"custom_headers,omitempty"  jsonschema:"Custom HTTP headers added to webhook requests"`
 }
 
@@ -317,9 +317,11 @@ func applyGroupHookIdentityOptions(input HookInput, opts *gl.AddGroupHookOptions
 	if input.Name != "" {
 		opts.Name = new(input.Name)
 	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
+	// The description, branch filter and custom template go through as given:
+	// on an edit an empty one is the caller removing it (issue 1306).
+	opts.Description = input.Description
+	opts.PushEventsBranchFilter = input.PushEventsBranchFilter
+	opts.CustomWebhookTemplate = input.CustomWebhookTemplate
 	if input.Token != "" {
 		opts.Token = new(input.Token)
 	}
@@ -329,14 +331,8 @@ func applyGroupHookIdentityOptions(input HookInput, opts *gl.AddGroupHookOptions
 	if input.EnableSSLVerification != nil {
 		opts.EnableSSLVerification = input.EnableSSLVerification
 	}
-	if input.PushEventsBranchFilter != "" {
-		opts.PushEventsBranchFilter = new(input.PushEventsBranchFilter)
-	}
 	if input.BranchFilterStrategy != "" {
 		opts.BranchFilterStrategy = new(input.BranchFilterStrategy)
-	}
-	if input.CustomWebhookTemplate != "" {
-		opts.CustomWebhookTemplate = new(input.CustomWebhookTemplate)
 	}
 	if headers := customHeaderOptions(input.CustomHeaders); headers != nil {
 		opts.CustomHeaders = headers

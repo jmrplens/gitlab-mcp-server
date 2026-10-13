@@ -70,6 +70,22 @@ func ParseDateField(field, value string) (*gl.ISOTime, error) {
 	return nil, fmt.Errorf("%s must be a date in YYYY-MM-DD form such as 2025-01-31, got %q", field, value)
 }
 
+// ClearableDate reads one optional date input of an update, where a field
+// left out and a field set to an empty string mean different things: nil
+// leaves the stored date alone, and an empty string removes it. An empty
+// string returns a zero [gl.ISOTime], which client-go encodes as JSON null,
+// the value GitLab clears a date with. Anything else is read on the terms of
+// [ParseDateField].
+func ClearableDate(field string, value *string) (*gl.ISOTime, error) {
+	if value == nil {
+		return nil, nil //nolint:nilnil // a field left out is sent as nothing
+	}
+	if *value == "" {
+		return new(gl.ISOTime{}), nil
+	}
+	return ParseDateField(field, *value)
+}
+
 // ParseDateFieldString reads one date-only input on the terms of
 // [ParseDateField] and returns it as YYYY-MM-DD, for the client-go options
 // that carry a date as a plain string, the member expiries among them. Such a
@@ -124,6 +140,28 @@ func ParseDateInputs(inputs ...DateInput) error {
 		if parsed != nil {
 			*input.Dest = parsed
 		}
+	}
+	return nil
+}
+
+// ClearableDateInput names one optional date input of an update and where
+// its value goes.
+type ClearableDateInput struct {
+	Field string
+	Value *string
+	Dest  **gl.ISOTime
+}
+
+// ClearableDateInputs reads each update date into its destination on the
+// terms of [ClearableDate], refusing the call on the first value that does
+// not parse, before any later one is read.
+func ClearableDateInputs(inputs ...ClearableDateInput) error {
+	for _, input := range inputs {
+		parsed, err := ClearableDate(input.Field, input.Value)
+		if err != nil {
+			return err
+		}
+		*input.Dest = parsed
 	}
 	return nil
 }

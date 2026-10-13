@@ -17,6 +17,20 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestProjectUpdate_EmptyDescription_ReachesTheBody holds a project snippet's
+// description to an empty value removing it (issue 1306).
+func TestProjectUpdate_EmptyDescription_ReachesTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[ProjectUpdateInput](map[string]any{"project_id": "42", "snippet_id": 1, "description": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"id":1,"title":"s"}`)
+	if _, err = ProjectUpdate(t.Context(), client, input); err != nil {
+		t.Fatalf("ProjectUpdate() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"description": `""`})
+}
+
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
@@ -514,7 +528,7 @@ func TestUpdate_WithAllOptions(t *testing.T) {
 		SnippetID:   1,
 		Title:       "New",
 		FileName:    "new.rb",
-		Description: "new desc",
+		Description: new("new desc"),
 		ContentBody: "puts 'new'",
 		Visibility:  "public",
 		Files:       []UpdateFileInput{{Action: "update", FilePath: "new.rb", Content: "puts 'x'", PreviousPath: "old.rb"}},
@@ -613,7 +627,7 @@ func TestProjectUpdate_AllOptions(t *testing.T) {
 		ProjectID:   "42",
 		SnippetID:   1,
 		Title:       "New",
-		Description: "d",
+		Description: new("d"),
 		Visibility:  "public",
 		FileName:    "b.rb",
 		ContentBody: "y",
@@ -1062,7 +1076,7 @@ func TestProjectList_Ordering(t *testing.T) {
 // and that the files array wins over the deprecated single-file pair.
 func TestBuildProjectUpdateOptions_SendsOnlyWhatTheCallerGave(t *testing.T) {
 	opts := buildProjectUpdateOptions(ProjectUpdateInput{
-		ProjectID: "42", SnippetID: 7, Title: "Renamed", Description: "desc", Visibility: "public",
+		ProjectID: "42", SnippetID: 7, Title: "Renamed", Description: new("desc"), Visibility: "public",
 		Files:       []UpdateFileInput{{Action: "update", FilePath: "new.go", Content: "x", PreviousPath: "old.go"}},
 		FileName:    "ignored.go",
 		ContentBody: "ignored",

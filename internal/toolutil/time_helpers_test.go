@@ -197,6 +197,84 @@ func TestParseDateField_RefusesWhatDoesNotParse(t *testing.T) {
 	}
 }
 
+// TestClearableDate_TellsAbsentFromEmptyFromADate verifies the three answers
+// an update date takes: nothing for a field left out, an encoding of null for
+// an empty string, and the date for a date. The null is checked as client-go
+// would write it, since that is the value GitLab reads.
+func TestClearableDate_TellsAbsentFromEmptyFromADate(t *testing.T) {
+	cases := []struct {
+		name  string
+		value *string
+		want  string
+	}{
+		{name: "left out", value: nil, want: "absent"},
+		{name: "empty", value: new(""), want: "null"},
+		{name: "date", value: new("2026-03-01"), want: `"2026-03-01"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ClearableDate("due_date", tc.value)
+			if err != nil {
+				t.Fatalf("ClearableDate() error: %v", err)
+			}
+			encoded := "absent"
+			if got != nil {
+				raw, marshalErr := json.Marshal(got)
+				if marshalErr != nil {
+					t.Fatalf("json.Marshal() error: %v", marshalErr)
+				}
+				encoded = string(raw)
+			}
+			if encoded != tc.want {
+				t.Errorf("ClearableDate() encodes as %s, want %s", encoded, tc.want)
+			}
+		})
+	}
+}
+
+// TestClearableDate_RefusesWhatDoesNotParse verifies that a value that is
+// neither empty nor a date is refused naming the field.
+func TestClearableDate_RefusesWhatDoesNotParse(t *testing.T) {
+	got, err := ClearableDate("due_date", new("tomorrow"))
+	if err == nil || !strings.Contains(err.Error(), "due_date") {
+		t.Errorf("ClearableDate(tomorrow) = %v, %v, want an error naming due_date", got, err)
+	}
+}
+
+// TestClearableDateInputs_FillsEachDestinationAndStopsAtTheFirstRefusal
+// verifies that every input writes its destination, a field left out writing
+// nil over whatever was there, and that a refusal leaves the inputs after it
+// unread.
+func TestClearableDateInputs_FillsEachDestinationAndStopsAtTheFirstRefusal(t *testing.T) {
+	stale := gl.ISOTime(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+	start, due := &stale, &stale
+	err := ClearableDateInputs(
+		ClearableDateInput{Field: "start_date", Value: nil, Dest: &start},
+		ClearableDateInput{Field: "due_date", Value: new(""), Dest: &due},
+	)
+	if err != nil {
+		t.Fatalf("ClearableDateInputs() error: %v", err)
+	}
+	if start != nil {
+		t.Errorf("start = %v, want nil for a field left out", start)
+	}
+	if due == nil || !time.Time(*due).IsZero() {
+		t.Errorf("due = %v, want the zero date that encodes as null", due)
+	}
+
+	untouched := &stale
+	err = ClearableDateInputs(
+		ClearableDateInput{Field: "start_date", Value: new("soon"), Dest: &start},
+		ClearableDateInput{Field: "due_date", Value: new("2026-03-01"), Dest: &untouched},
+	)
+	if err == nil || !strings.Contains(err.Error(), "start_date") {
+		t.Fatalf("ClearableDateInputs() error = %v, want one naming start_date", err)
+	}
+	if untouched != &stale {
+		t.Errorf("due_date was read after the refusal, got %v", untouched)
+	}
+}
+
 // TestParseTimeInputs_FillsEachDestinationAndStopsAtTheFirstRefusal verifies
 // the batch form the list filters use: every non-empty input lands in its
 // destination, an empty one leaves its destination alone, and the first value

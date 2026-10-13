@@ -14,6 +14,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdateFeatureFlag_EmptyDescription_ReachesTheBody holds a flag's
+// description to an empty value removing it. The handler used to drop it and
+// report success while GitLab kept the old one (issue 1306).
+func TestUpdateFeatureFlag_EmptyDescription_ReachesTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"project_id": "42", "name": "ff", "description": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"name":"ff"}`)
+	if _, err = UpdateFeatureFlag(t.Context(), client, input); err != nil {
+		t.Fatalf("UpdateFeatureFlag() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"description": `""`})
+}
+
 // featureFlagJSON identifies the feature flag JSON constant used by this package.
 const featureFlagJSON = `{
 	"name": "my-flag",
@@ -290,7 +305,7 @@ func TestUpdateFeatureFlag_Success(t *testing.T) {
 	out, err := UpdateFeatureFlag(context.Background(), client, UpdateInput{
 		ProjectID:   "1",
 		Name:        "my-flag",
-		Description: "Updated desc",
+		Description: new("Updated desc"),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -576,7 +591,7 @@ func TestUpdateFeatureFlag_AllOptionalFields(t *testing.T) {
 		ProjectID:   "1",
 		Name:        "cov-flag",
 		NewName:     "cov-flag-renamed",
-		Description: "updated desc",
+		Description: new("updated desc"),
 		Active:      &active,
 		Strategies: []UpdateStrategyInput{
 			{
@@ -1171,7 +1186,7 @@ func TestUpdateFeatureFlag_OptionalFields_TravelAsGiven(t *testing.T) {
 			input: UpdateInput{
 				ProjectID:   "1",
 				Name:        "my-flag",
-				Description: "updated desc",
+				Description: new("updated desc"),
 				Active:      &inactive,
 			},
 			want: []string{`"description":"updated desc"`, `"active":false`},

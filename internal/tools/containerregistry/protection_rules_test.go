@@ -10,9 +10,27 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// TestUpdateProtectionRule_EmptyAccessLevels_ReachTheBody holds a rule's
+// minimum access levels to an empty value removing each, which GitLab accepts
+// while the other one stays set. The handler used to drop both and answer
+// with the old levels as an update (issue 1306).
+func TestUpdateProtectionRule_EmptyAccessLevels_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateProtectionRuleInput](map[string]any{"project_id": "42", "rule_id": 1, "minimum_access_level_for_push": "", "minimum_access_level_for_delete": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"id":1,"repository_path_pattern":"app*"}`)
+	if _, err = UpdateProtectionRule(t.Context(), client, input); err != nil {
+		t.Fatalf("UpdateProtectionRule() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"minimum_access_level_for_push": `""`, "minimum_access_level_for_delete": `""`})
+}
 
 // ---------------------------------------------------------------------------
 // ListProtectionRules
@@ -319,12 +337,12 @@ func TestUpdateProtectionRule_OneFieldAtATime_SendsThatFieldAndNothingElse(t *te
 		},
 		{
 			"minimum_access_level_for_push",
-			UpdateProtectionRuleInput{ProjectID: "10", RuleID: 5, MinimumAccessLevelForPush: "owner"},
+			UpdateProtectionRuleInput{ProjectID: "10", RuleID: 5, MinimumAccessLevelForPush: new(gl.ProtectionRuleAccessLevel("owner"))},
 			map[string]any{"minimum_access_level_for_push": "owner"},
 		},
 		{
 			"minimum_access_level_for_delete",
-			UpdateProtectionRuleInput{ProjectID: "10", RuleID: 5, MinimumAccessLevelForDelete: "admin"},
+			UpdateProtectionRuleInput{ProjectID: "10", RuleID: 5, MinimumAccessLevelForDelete: new(gl.ProtectionRuleAccessLevel("admin"))},
 			map[string]any{"minimum_access_level_for_delete": "admin"},
 		},
 	}

@@ -19,6 +19,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdate_EmptyDescription_ReachesTheBody holds a label's description to
+// an empty value removing it. The handler used to drop it, and GitLab refused
+// the update as naming no parameter (issue 1306).
+func TestUpdate_EmptyDescription_ReachesTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"project_id": "42", "label_id": "1", "description": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{"id":1,"name":"bug"}`, `{"id":1,"name":"bug"}`)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"description": `""`})
+}
+
 const (
 	// pathProjectLabels identifies the path project labels constant used by this package.
 	pathProjectLabels = "/api/v4/projects/42/labels"
@@ -648,7 +663,7 @@ func TestLabelUpdate_OptionalFields_ReachTheBodyOnlyWhenSupplied(t *testing.T) {
 			name: "every optional field supplied",
 			input: UpdateInput{
 				ProjectID: "42", LabelID: "bug", Name: "bug", NewName: "defect",
-				Color: "#00FF00", Description: "Bug report", Priority: new(int64(5)), Archived: &archived,
+				Color: "#00FF00", Description: new("Bug report"), Priority: new(int64(5)), Archived: &archived,
 			},
 			contains: []string{
 				`"name":"bug"`, `"new_name":"defect"`, `"color":"#00FF00"`,
@@ -1193,7 +1208,7 @@ func TestUpdate_WithDescAndPriority(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := Update(context.Background(), client, UpdateInput{
-		ProjectID: "42", LabelID: "bug", Description: "Critical", Priority: new(int64(5)),
+		ProjectID: "42", LabelID: "bug", Description: new("Critical"), Priority: new(int64(5)),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

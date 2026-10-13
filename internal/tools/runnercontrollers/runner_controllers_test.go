@@ -17,6 +17,20 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdate_EmptyDescription_ReachesTheBody holds a runner controller's
+// description to an empty value removing it (issue 1306).
+func TestUpdate_EmptyDescription_ReachesTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"controller_id": 1, "description": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"id":1,"state":"enabled"}`)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"description": `""`})
+}
+
 const (
 	sampleControllerJSON = `{"id":1,"description":"ctrl-1","state":"enabled","created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T12:00:00Z"}`
 	sampleDetailsJSON    = `{"id":1,"description":"ctrl-1","state":"enabled","connected":true,"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T12:00:00Z"}`
@@ -405,7 +419,7 @@ func TestUpdate_Success(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, sampleControllerJSON)
 	}))
 
-	out, err := Update(context.Background(), client, UpdateInput{ControllerID: 1, Description: "ctrl-1", State: "enabled"})
+	out, err := Update(context.Background(), client, UpdateInput{ControllerID: 1, Description: new("ctrl-1"), State: "enabled"})
 	if err != nil {
 		t.Fatalf(errUnexpected, err)
 	}
@@ -481,7 +495,11 @@ func TestUpdate_OptionalFields_SentOnlyWhenTheCallerSetThem(t *testing.T) {
 				testutil.RespondJSON(w, http.StatusOK, sampleControllerJSON)
 			}))
 
-			_, err := Update(t.Context(), client, UpdateInput{ControllerID: 77, Description: tc.description, State: tc.state})
+			input := UpdateInput{ControllerID: 77, State: tc.state}
+			if tc.description != "" {
+				input.Description = new(tc.description)
+			}
+			_, err := Update(t.Context(), client, input)
 			if err != nil {
 				t.Fatalf(errUnexpected, err)
 			}

@@ -110,20 +110,20 @@ type AddOutput struct {
 
 // EditInput is the input for editing a system hook.
 type EditInput struct {
-	ID                     int64  `json:"id"                        jsonschema:"System hook ID to edit,required"`
-	URL                    string `json:"url,omitempty"             jsonschema:"Updated hook URL"`
-	Name                   string `json:"name,omitempty"            jsonschema:"Updated hook name"`
-	Description            string `json:"description,omitempty"     jsonschema:"Updated hook description"`
-	Token                  string `json:"token,omitempty"           jsonschema:"Updated secret token for payload validation"`
-	SigningToken           string `json:"signing_token,omitempty"   jsonschema:"Updated write-only signing token for webhook signature validation"`
-	PushEvents             *bool  `json:"push_events,omitempty"             jsonschema:"Trigger on push events"`
-	PushEventsBranchFilter string `json:"push_events_branch_filter,omitempty" jsonschema:"Branch filter for push events (wildcard, regex, or branch name)"`
-	BranchFilterStrategy   string `json:"branch_filter_strategy,omitempty" jsonschema:"Branch filter strategy: wildcard, regex, or all_branches"`
-	CustomWebhookTemplate  string `json:"custom_webhook_template,omitempty" jsonschema:"Updated custom payload template (JSON) sent instead of the default webhook body"`
-	TagPushEvents          *bool  `json:"tag_push_events,omitempty"         jsonschema:"Trigger on tag push events"`
-	MergeRequestsEvents    *bool  `json:"merge_requests_events,omitempty"   jsonschema:"Trigger on merge request events"`
-	RepositoryUpdateEvents *bool  `json:"repository_update_events,omitempty" jsonschema:"Trigger on repository update events"`
-	EnableSSLVerification  *bool  `json:"enable_ssl_verification,omitempty" jsonschema:"Enable SSL verification for the hook URL"`
+	ID                     int64   `json:"id"                        jsonschema:"System hook ID to edit,required"`
+	URL                    string  `json:"url,omitempty"             jsonschema:"Updated hook URL"`
+	Name                   string  `json:"name,omitempty"            jsonschema:"Updated hook name"`
+	Description            *string `json:"description,omitempty"     jsonschema:"Updated hook description. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	Token                  string  `json:"token,omitempty"           jsonschema:"Updated secret token for payload validation"`
+	SigningToken           string  `json:"signing_token,omitempty"   jsonschema:"Updated write-only signing token for webhook signature validation"`
+	PushEvents             *bool   `json:"push_events,omitempty"             jsonschema:"Trigger on push events"`
+	PushEventsBranchFilter *string `json:"push_events_branch_filter,omitempty" jsonschema:"Branch filter for push events (wildcard, regex, or branch name). Pass an empty string to remove it. Omit the field to leave it untouched"`
+	BranchFilterStrategy   string  `json:"branch_filter_strategy,omitempty" jsonschema:"Branch filter strategy: wildcard, regex, or all_branches"`
+	CustomWebhookTemplate  *string `json:"custom_webhook_template,omitempty" jsonschema:"Updated custom payload template (JSON) sent instead of the default webhook body. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	TagPushEvents          *bool   `json:"tag_push_events,omitempty"         jsonschema:"Trigger on tag push events"`
+	MergeRequestsEvents    *bool   `json:"merge_requests_events,omitempty"   jsonschema:"Trigger on merge request events"`
+	RepositoryUpdateEvents *bool   `json:"repository_update_events,omitempty" jsonschema:"Trigger on repository update events"`
+	EnableSSLVerification  *bool   `json:"enable_ssl_verification,omitempty" jsonschema:"Enable SSL verification for the hook URL"`
 }
 
 // EditOutput wraps the edited hook.
@@ -241,13 +241,10 @@ func hookOptionsFromEdit(input EditInput) hookOptions {
 	return hookOptions{
 		URL:                    input.URL,
 		Name:                   input.Name,
-		Description:            input.Description,
 		Token:                  input.Token,
 		SigningToken:           input.SigningToken,
 		PushEvents:             input.PushEvents,
-		PushEventsBranchFilter: input.PushEventsBranchFilter,
 		BranchFilterStrategy:   input.BranchFilterStrategy,
-		CustomWebhookTemplate:  input.CustomWebhookTemplate,
 		TagPushEvents:          input.TagPushEvents,
 		MergeRequestsEvents:    input.MergeRequestsEvents,
 		RepositoryUpdateEvents: input.RepositoryUpdateEvents,
@@ -307,6 +304,11 @@ func hookEditOptions(input EditInput) *gl.EditHookOptions {
 	addOptions := &gl.AddHookOptions{}
 	applyHookOptions(hookOptionsFromEdit(input), addOptions)
 	editOptions := gl.EditHookOptions(*addOptions)
+	// The settings an edit can remove go through as given, since an empty one
+	// is the caller removing it (issue 1306).
+	editOptions.Description = input.Description
+	editOptions.PushEventsBranchFilter = input.PushEventsBranchFilter
+	editOptions.CustomWebhookTemplate = input.CustomWebhookTemplate
 	return &editOptions
 }
 

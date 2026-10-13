@@ -1198,8 +1198,8 @@ func TestUpdateProtectionRule_AllOptionalFields(t *testing.T) {
 		ProjectID:                   "42",
 		RuleID:                      77,
 		RepositoryPathPattern:       testStagingPattern,
-		MinimumAccessLevelForPush:   "owner",
-		MinimumAccessLevelForDelete: "admin",
+		MinimumAccessLevelForPush:   new(gl.ProtectionRuleAccessLevel("owner")),
+		MinimumAccessLevelForDelete: new(gl.ProtectionRuleAccessLevel("admin")),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

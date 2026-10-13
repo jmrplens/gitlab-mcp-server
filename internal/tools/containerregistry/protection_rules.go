@@ -124,11 +124,11 @@ func CreateProtectionRule(ctx context.Context, client *gitlabclient.Client, inpu
 
 // UpdateProtectionRuleInput identifies a registry protection rule and the fields to change.
 type UpdateProtectionRuleInput struct {
-	ProjectID                   toolutil.StringOrInt         `json:"project_id" jsonschema:"Project ID or path,required"`
-	RuleID                      int64                        `json:"rule_id" jsonschema:"Protection rule ID,required"`
-	RepositoryPathPattern       string                       `json:"repository_path_pattern,omitempty" jsonschema:"Repository path pattern"`
-	MinimumAccessLevelForPush   gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level for push (maintainer, owner, admin)"`
-	MinimumAccessLevelForDelete gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level for delete (maintainer, owner, admin)"`
+	ProjectID                   toolutil.StringOrInt          `json:"project_id" jsonschema:"Project ID or path,required"`
+	RuleID                      int64                         `json:"rule_id" jsonschema:"Protection rule ID,required"`
+	RepositoryPathPattern       string                        `json:"repository_path_pattern,omitempty" jsonschema:"Repository path pattern"`
+	MinimumAccessLevelForPush   *gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level for push (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the delete level stays set. Omit the field to leave it untouched"`
+	MinimumAccessLevelForDelete *gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level for delete (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the push level stays set. Omit the field to leave it untouched"`
 }
 
 // UpdateProtectionRule updates a container registry protection rule.
@@ -139,15 +139,14 @@ func UpdateProtectionRule(ctx context.Context, client *gitlabclient.Client, inpu
 	if input.RuleID == 0 {
 		return ProtectionRuleOutput{}, toolutil.ErrFieldRequired("rule_id")
 	}
-	opts := &gl.UpdateContainerRegistryProtectionRuleOptions{}
+	// Presence decides, never emptiness: an empty access level is the caller
+	// removing it (issue 1306).
+	opts := &gl.UpdateContainerRegistryProtectionRuleOptions{
+		MinimumAccessLevelForPush:   input.MinimumAccessLevelForPush,
+		MinimumAccessLevelForDelete: input.MinimumAccessLevelForDelete,
+	}
 	if input.RepositoryPathPattern != "" {
 		opts.RepositoryPathPattern = new(input.RepositoryPathPattern)
-	}
-	if input.MinimumAccessLevelForPush != "" {
-		opts.MinimumAccessLevelForPush = new(input.MinimumAccessLevelForPush)
-	}
-	if input.MinimumAccessLevelForDelete != "" {
-		opts.MinimumAccessLevelForDelete = new(input.MinimumAccessLevelForDelete)
 	}
 	rule, _, err := client.GL().ContainerRegistryProtectionRules.UpdateContainerRegistryProtectionRule(
 		string(input.ProjectID), input.RuleID, opts, gl.WithContext(ctx),

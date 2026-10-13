@@ -14,6 +14,20 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdate_EmptyValues_ReachTheBody holds a group variable's value and
+// description to an empty value emptying them (issue 1306).
+func TestUpdate_EmptyValues_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"group_id": "5", "key": "K", "value": "", "description": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"key":"K","value":""}`)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"value": `""`, "description": `""`})
+}
+
 const (
 	// pathGroupVars identifies the path group vars constant used by this package.
 	pathGroupVars = "/api/v4/groups/10/variables"
@@ -194,7 +208,7 @@ func TestUpdate_Success(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := Update(context.Background(), client, UpdateInput{GroupID: "10", Key: "MY_VAR", Value: "new-secret"})
+	out, err := Update(context.Background(), client, UpdateInput{GroupID: "10", Key: "MY_VAR", Value: new("new-secret")})
 	if err != nil {
 		t.Fatalf("Update() unexpected error: %v", err)
 	}
@@ -705,8 +719,8 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 	out, err := Update(context.Background(), client, UpdateInput{
 		GroupID:          "10",
 		Key:              "DB_HOST",
-		Value:            "db.prod",
-		Description:      "Updated",
+		Value:            new("db.prod"),
+		Description:      new("Updated"),
 		VariableType:     "file",
 		Protected:        &bTrue,
 		Masked:           &bTrue,
@@ -1054,7 +1068,7 @@ func TestUpdate_FilterObjectPrecedence(t *testing.T) {
 	_, err := Update(context.Background(), client, UpdateInput{
 		GroupID:          "10",
 		Key:              "MY_VAR",
-		Value:            "v",
+		Value:            new("v"),
 		EnvironmentScope: "staging",
 		Filter:           &Filter{EnvironmentScope: "production"},
 	})
@@ -1224,8 +1238,8 @@ func TestUpdate_OptionalFields_SentOnlyWhenTheCallerSuppliedThem(t *testing.T) {
 			input: UpdateInput{
 				GroupID:          "10",
 				Key:              "MY_VAR",
-				Value:            "db.prod",
-				Description:      "Updated",
+				Value:            new("db.prod"),
+				Description:      new("Updated"),
 				VariableType:     "file",
 				Protected:        &yes,
 				Masked:           &yes,

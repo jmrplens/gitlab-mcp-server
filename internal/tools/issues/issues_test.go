@@ -2496,7 +2496,7 @@ func TestBuildUpdateOpts_AllFields(t *testing.T) {
 		Confidential:     &conf,
 		IssueType:        "incident",
 		Weight:           new(int64(3)),
-		EpicID:           4,
+		EpicID:           new(int64(4)),
 		DiscussionLocked: &locked,
 	})
 	if err != nil {
@@ -4187,7 +4187,7 @@ func TestUpdate_AssigneeIDSingular(t *testing.T) {
 	out, err := Update(context.Background(), client, UpdateInput{
 		ProjectID:  "42",
 		IssueIID:   10,
-		AssigneeID: 28,
+		AssigneeID: new(int64(28)),
 	})
 	if err != nil {
 		t.Fatalf(fmtIssueUpdateErr, err)
@@ -4644,7 +4644,7 @@ func TestUpdate_ExtraBranches(t *testing.T) {
 		ProjectID: testProjectID, IssueIID: 10,
 		AddLabels: []string{"new-label"}, RemoveLabels: []string{"old-label"},
 		Confidential: &conf, IssueType: "incident", Weight: new(int64(5)),
-		EpicID: 42, DiscussionLocked: &locked,
+		EpicID: new(int64(42)), DiscussionLocked: &locked,
 	})
 	if err != nil {
 		t.Fatalf(fmtIssueUpdateErr, err)
@@ -5908,6 +5908,35 @@ func TestUpdate_ClearingValuesThroughTheMetaDecoder_ReachTheBody(t *testing.T) {
 		t.Run(key, func(t *testing.T) {
 			if got := encodedBodyValue(t, body, key); got != want {
 				t.Errorf("update body %q = %s, want %s", key, got, want)
+			}
+		})
+	}
+}
+
+// TestUpdate_ZeroReferences_ReachTheBody holds an assignee_id and an epic_id
+// of 0 to the body, through toolutil.UnmarshalParams as every surface's
+// arguments go. GitLab reads assignee_id 0 as unassigning everybody and an
+// epic_id of 0 as taking the issue out of its epic, and the handler forwarded
+// either only when it was not 0, so neither removal could be sent (issue
+// 1306).
+func TestUpdate_ZeroReferences_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
+		"project_id": testProjectID, "issue_iid": 10, "assignee_id": 0, "epic_id": 0,
+	})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, body := captureBody(t, http.MethodPut, pathIssue10, http.StatusOK, issueJSONMinimal)
+	if _, err = Update(context.Background(), client, input); err != nil {
+		t.Fatalf(fmtIssueUpdateErr, err)
+	}
+	if len(body) != 2 {
+		t.Errorf("update body = %v, want exactly assignee_id and epic_id", body)
+	}
+	for _, key := range []string{"assignee_id", "epic_id"} {
+		t.Run(key, func(t *testing.T) {
+			if got := encodedBodyValue(t, body, key); got != "0" {
+				t.Errorf("update body %q = %s, want 0", key, got)
 			}
 		})
 	}

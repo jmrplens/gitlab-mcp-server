@@ -21,6 +21,36 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdateGroupBoard_EmptyLabels_ReachTheBody holds a group board's label
+// scope to [] removing every label (issue 1306).
+func TestUpdateGroupBoard_EmptyLabels_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateGroupBoardInput](map[string]any{"group_id": "5", "board_id": 1, "labels": []any{}})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"id":1,"name":"b"}`)
+	if _, err = UpdateGroupBoard(t.Context(), client, input); err != nil {
+		t.Fatalf("UpdateGroupBoard() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"labels": `""`})
+}
+
+// TestUpdateGroupBoard_ZeroScopes_ReachTheBody holds an assignee_id and a
+// milestone_id of 0 to the body: 0 removes the assignee from the scope and is
+// the No Milestone scope for the milestone. The handler forwarded either only
+// when it was not 0 (issue 1306).
+func TestUpdateGroupBoard_ZeroScopes_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateGroupBoardInput](map[string]any{"group_id": "5", "board_id": 1, "assignee_id": 0, "milestone_id": 0})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"id":1,"name":"b"}`)
+	if _, err = UpdateGroupBoard(t.Context(), client, input); err != nil {
+		t.Fatalf("UpdateGroupBoard() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"assignee_id": "0", "milestone_id": "0"})
+}
+
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
@@ -240,7 +270,7 @@ func TestUpdateGroupBoard_Success(t *testing.T) {
 
 	out, err := UpdateGroupBoard(context.Background(), client, UpdateGroupBoardInput{
 		GroupID: toolutil.StringOrInt("42"), BoardID: 1, Name: "Updated",
-		Labels: []string{"bug"}, AssigneeID: 3, MilestoneID: 5, Weight: new(int64(2)),
+		Labels: []string{"bug"}, AssigneeID: new(int64(3)), MilestoneID: new(int64(5)), Weight: new(int64(2)),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -265,8 +295,8 @@ func TestUpdateGroupBoard_SendsOnlyTheFieldTheCallerSet(t *testing.T) {
 	}{
 		{"nothing optional", UpdateGroupBoardInput{}, map[string]any{}},
 		{"name", UpdateGroupBoardInput{Name: "Renamed"}, map[string]any{"name": "Renamed"}},
-		{"assignee", UpdateGroupBoardInput{AssigneeID: 7}, map[string]any{"assignee_id": float64(7)}},
-		{"milestone", UpdateGroupBoardInput{MilestoneID: 9}, map[string]any{"milestone_id": float64(9)}},
+		{"assignee", UpdateGroupBoardInput{AssigneeID: new(int64(7))}, map[string]any{"assignee_id": float64(7)}},
+		{"milestone", UpdateGroupBoardInput{MilestoneID: new(int64(9))}, map[string]any{"milestone_id": float64(9)}},
 		{"labels", UpdateGroupBoardInput{Labels: []string{"bug", "urgent"}}, map[string]any{"labels": "bug,urgent"}},
 		{"weight", UpdateGroupBoardInput{Weight: new(int64(3))}, map[string]any{"weight": float64(3)}},
 		// GitLab scopes a board to weight 0 as it does to any other weight
@@ -1865,7 +1895,7 @@ func TestGroupBoardWrites_Refused_RoleHintFollowsThePermissionRefusal(t *testing
 			return err
 		}},
 		{"board update", false, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := UpdateGroupBoard(ctx, c, UpdateGroupBoardInput{GroupID: "42", BoardID: 1, AssigneeID: 3})
+			_, err := UpdateGroupBoard(ctx, c, UpdateGroupBoardInput{GroupID: "42", BoardID: 1, AssigneeID: new(int64(3))})
 			return err
 		}},
 		{"board delete", true, func(ctx context.Context, c *gitlabclient.Client) error {

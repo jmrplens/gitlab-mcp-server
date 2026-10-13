@@ -124,11 +124,11 @@ func CreateTagProtectionRule(ctx context.Context, client *gitlabclient.Client, i
 
 // UpdateTagProtectionRuleInput identifies a registry tag protection rule and the fields to change.
 type UpdateTagProtectionRuleInput struct {
-	ProjectID                   toolutil.StringOrInt         `json:"project_id" jsonschema:"Project ID or path,required"`
-	RuleID                      int64                        `json:"rule_id" jsonschema:"Tag protection rule ID,required"`
-	TagNamePattern              string                       `json:"tag_name_pattern,omitempty" jsonschema:"Tag name pattern as a RE2 regular expression"`
-	MinimumAccessLevelForPush   gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level to push matching tags (maintainer, owner, admin)"`
-	MinimumAccessLevelForDelete gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level to delete matching tags (maintainer, owner, admin)"`
+	ProjectID                   toolutil.StringOrInt          `json:"project_id" jsonschema:"Project ID or path,required"`
+	RuleID                      int64                         `json:"rule_id" jsonschema:"Tag protection rule ID,required"`
+	TagNamePattern              string                        `json:"tag_name_pattern,omitempty" jsonschema:"Tag name pattern as a RE2 regular expression"`
+	MinimumAccessLevelForPush   *gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level to push matching tags (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the delete level stays set. Omit the field to leave it untouched"`
+	MinimumAccessLevelForDelete *gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level to delete matching tags (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the push level stays set. Omit the field to leave it untouched"`
 }
 
 // UpdateTagProtectionRule updates a container registry tag protection rule.
@@ -139,15 +139,14 @@ func UpdateTagProtectionRule(ctx context.Context, client *gitlabclient.Client, i
 	if input.RuleID == 0 {
 		return TagProtectionRuleOutput{}, toolutil.ErrFieldRequired("rule_id")
 	}
-	opts := &gl.UpdateContainerRegistryTagProtectionRuleOptions{}
+	// Presence decides, never emptiness: an empty access level is the caller
+	// removing it (issue 1306).
+	opts := &gl.UpdateContainerRegistryTagProtectionRuleOptions{
+		MinimumAccessLevelForPush:   input.MinimumAccessLevelForPush,
+		MinimumAccessLevelForDelete: input.MinimumAccessLevelForDelete,
+	}
 	if input.TagNamePattern != "" {
 		opts.TagNamePattern = new(input.TagNamePattern)
-	}
-	if input.MinimumAccessLevelForPush != "" {
-		opts.MinimumAccessLevelForPush = new(input.MinimumAccessLevelForPush)
-	}
-	if input.MinimumAccessLevelForDelete != "" {
-		opts.MinimumAccessLevelForDelete = new(input.MinimumAccessLevelForDelete)
 	}
 	rule, _, err := client.GL().ContainerRegistryTagProtectionRules.UpdateContainerRegistryTagProtectionRule(
 		string(input.ProjectID), input.RuleID, opts, gl.WithContext(ctx),

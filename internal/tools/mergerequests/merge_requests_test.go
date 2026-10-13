@@ -30,6 +30,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdate_EmptyDescription_ReachesTheBody holds a merge request's
+// description to an empty value removing it. The handler used to drop it and
+// answer with the old description as an update (issue 1306).
+func TestUpdate_EmptyDescription_ReachesTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"project_id": "42", "merge_request_iid": 1, "description": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"id":1,"iid":1,"title":"x"}`)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"description": `""`})
+}
+
 // Test constants for merge request endpoint paths and reusable values.
 const (
 	pathMRs                = "/api/v4/projects/42/merge_requests"
@@ -4670,7 +4685,7 @@ func TestUpdate_AssigneeIDSingular(t *testing.T) {
 	out, err := Update(context.Background(), client, UpdateInput{
 		ProjectID:  testProjectID,
 		MRIID:      1,
-		AssigneeID: 28,
+		AssigneeID: new(int64(28)),
 	})
 	if err != nil {
 		t.Fatalf("Update() unexpected error: %v", err)
@@ -7072,8 +7087,8 @@ func TestUpdate_OptionalFields_ReachTheBody(t *testing.T) {
 		want  map[string]string
 	}{
 		{"every optional field", UpdateInput{
-			Title: "Updated", Description: "New desc", TargetBranch: "develop", StateEvent: "close",
-			AssigneeID: 7, AssigneeIDs: []int64{8, 9}, ReviewerIDs: []int64{10},
+			Title: "Updated", Description: new("New desc"), TargetBranch: "develop", StateEvent: "close",
+			AssigneeID: new(int64(7)), AssigneeIDs: []int64{8, 9}, ReviewerIDs: []int64{10},
 			Labels: []string{testLabelBug}, AddLabels: []string{"security"}, RemoveLabels: []string{"stale"},
 			MilestoneID: new(int64(11)), RemoveSourceBranch: new(true), Squash: new(false),
 			DiscussionLocked: new(true), AllowCollaboration: new(false),
@@ -7137,6 +7152,20 @@ func TestUpdate_EmptyListsThroughTheMetaDecoder_ReachTheBody(t *testing.T) {
 		t.Fatalf("UnmarshalParams() error: %v", err)
 	}
 	assertBodyKeys(t, updateBody(t, input), map[string]string{"assignee_ids": "[]", "reviewer_ids": "[]", "labels": `""`})
+}
+
+// TestUpdate_AssigneeIDZero_RemovesEveryAssignee holds assignee_id 0 to the
+// body. GitLab documents 0 as the value of assignee_id that unassigns
+// everybody, and the handler forwarded the field only when it was not 0, so
+// the one value that removes the assignees never left and the update reported
+// success with the merge request unchanged (issue 1306). The arguments go
+// through toolutil.UnmarshalParams, as every surface's do.
+func TestUpdate_AssigneeIDZero_RemovesEveryAssignee(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"assignee_id": 0})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	assertBodyKeys(t, updateBody(t, input), map[string]string{"assignee_id": "0"})
 }
 
 // TestUpdate_EachFlagAlone_ReachesOnlyItsOwnKey drives the four boolean options

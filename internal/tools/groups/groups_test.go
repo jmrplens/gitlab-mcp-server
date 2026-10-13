@@ -21,6 +21,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdate_EmptyDescription_ReachesTheBody holds a group's description to
+// an empty value removing it. The handler used to drop it and answer with the
+// old description as an update (issue 1306).
+func TestUpdate_EmptyDescription_ReachesTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"group_id": "5", "description": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"id":5,"name":"g","path":"g"}`)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"description": `""`})
+}
+
 // Test endpoint paths, format strings, and fixture names for group operation tests.
 const (
 	pathGroups             = "/api/v4/groups"
@@ -493,7 +508,7 @@ func TestGroupWrites_OptionalSettingsReachTheRequestOnlyWhenGiven(t *testing.T) 
 			name: "update",
 			full: func(client *gitlabclient.Client) error {
 				_, err := Update(context.Background(), client, UpdateInput{
-					GroupID: "9", Name: "Team", Path: "team", Description: "the team", Visibility: "private",
+					GroupID: "9", Name: "Team", Path: "team", Description: new("the team"), Visibility: "private",
 					RequestAccessEnabled: new(true), LFSEnabled: new(true), DefaultBranch: "main",
 					UniqueProjectDownloadLimitAllowlist: []string{"alice"},
 					UniqueProjectDownloadLimitAlertlist: []int64{7},
@@ -1830,7 +1845,7 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 		GroupID:              "99",
 		Name:                 "updated",
 		Path:                 "updated-path",
-		Description:          "desc",
+		Description:          new("desc"),
 		Visibility:           "public",
 		RequestAccessEnabled: &boolTrue,
 		LFSEnabled:           &boolFalse,
@@ -2439,7 +2454,7 @@ func TestAddHook_AllOptionalFields(t *testing.T) {
 		GroupID:                  "99",
 		URL:                      "https://hooks.example.com/ci",
 		Name:                     "Full Hook",
-		Description:              "All events",
+		Description:              new("All events"),
 		Token:                    "secret-token",
 		PushEvents:               &bTrue,
 		TagPushEvents:            &bTrue,
@@ -2456,7 +2471,7 @@ func TestAddHook_AllOptionalFields(t *testing.T) {
 		ConfidentialIssuesEvents: &bTrue,
 		ConfidentialNoteEvents:   &bTrue,
 		EnableSSLVerification:    &bTrue,
-		PushEventsBranchFilter:   "main",
+		PushEventsBranchFilter:   new("main"),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -2530,7 +2545,7 @@ func TestEditHook_AllOptionalFields(t *testing.T) {
 		HookID:                   10,
 		URL:                      "https://hooks.example.com/updated",
 		Name:                     "Edited",
-		Description:              "Updated hook",
+		Description:              new("Updated hook"),
 		Token:                    "new-secret",
 		PushEvents:               &bFalse,
 		TagPushEvents:            &bTrue,
@@ -2547,7 +2562,7 @@ func TestEditHook_AllOptionalFields(t *testing.T) {
 		ConfidentialIssuesEvents: &bFalse,
 		ConfidentialNoteEvents:   &bTrue,
 		EnableSSLVerification:    &bFalse,
-		PushEventsBranchFilter:   "develop",
+		PushEventsBranchFilter:   new("develop"),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -4451,7 +4466,7 @@ type groupWriteSetting struct {
 func groupWriteSettings() []groupWriteSetting {
 	return []groupWriteSetting{
 		{"path", "path", "team", CreateInput{Path: "team"}, UpdateInput{Path: "team"}},
-		{"description", "description", "the team", CreateInput{Description: "the team"}, UpdateInput{Description: "the team"}},
+		{"description", "description", "the team", CreateInput{Description: "the team"}, UpdateInput{Description: new("the team")}},
 		{"visibility", "visibility", "internal", CreateInput{Visibility: "internal"}, UpdateInput{Visibility: "internal"}},
 		{"default_branch", "default_branch", "trunk", CreateInput{DefaultBranch: "trunk"}, UpdateInput{DefaultBranch: "trunk"}},
 		{"duo_availability", "duo_availability", "default_off", CreateInput{DuoAvailability: "default_off"}, UpdateInput{DuoAvailability: "default_off"}},

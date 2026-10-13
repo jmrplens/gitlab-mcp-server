@@ -160,9 +160,9 @@ type UpdateInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
 	MilestoneIID int64                `json:"milestone_iid"           jsonschema:"Milestone IID (project-scoped). Use project.milestone_list to find IIDs,required"`
 	Title        string               `json:"title,omitempty"         jsonschema:"Milestone title"`
-	Description  string               `json:"description,omitempty"   jsonschema:"Milestone description"`
-	StartDate    string               `json:"start_date,omitempty"    jsonschema:"Start date (YYYY-MM-DD)"`
-	DueDate      string               `json:"due_date,omitempty"      jsonschema:"Due date (YYYY-MM-DD)"`
+	Description  *string              `json:"description,omitempty"   jsonschema:"Milestone description. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	StartDate    *string              `json:"start_date,omitempty"    jsonschema:"Start date (YYYY-MM-DD). Pass an empty string to remove it. Omit the field to leave it untouched"`
+	DueDate      *string              `json:"due_date,omitempty"      jsonschema:"Due date (YYYY-MM-DD). Pass an empty string to remove it. Omit the field to leave it untouched"`
 	StateEvent   string               `json:"state_event,omitempty"   jsonschema:"State transition: activate or close"`
 }
 
@@ -355,7 +355,10 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	// The dates are read before the IID is resolved, so one that does not
 	// parse is refused without a request rather than after one.
 	opts := &gl.UpdateMilestoneOptions{}
-	if err := parseMilestoneDates(input.StartDate, input.DueDate, &opts.StartDate, &opts.DueDate); err != nil {
+	if err := toolutil.ClearableDateInputs(
+		toolutil.ClearableDateInput{Field: "start_date", Value: input.StartDate, Dest: &opts.StartDate},
+		toolutil.ClearableDateInput{Field: "due_date", Value: input.DueDate, Dest: &opts.DueDate},
+	); err != nil {
 		return Output{}, fmt.Errorf("milestoneUpdate: %w", err)
 	}
 
@@ -367,9 +370,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Title != "" {
 		opts.Title = new(input.Title)
 	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
+	// Presence decides, never emptiness: an empty description is the caller
+	// removing it (issue 1306).
+	opts.Description = input.Description
 	if input.StateEvent != "" {
 		opts.StateEvent = new(input.StateEvent)
 	}

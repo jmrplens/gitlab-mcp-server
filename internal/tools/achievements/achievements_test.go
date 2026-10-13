@@ -426,7 +426,7 @@ func TestUpdate_Success(t *testing.T) {
 		keyUpdate: respond(t, `{"data":{"achievementsUpdate":{"achievement":`+achievementNode+`,"errors":[]}}}`, &vars),
 	}))
 
-	out, err := Update(t.Context(), client, UpdateInput{AchievementID: 1, Name: "Renamed", Description: "New text"})
+	out, err := Update(t.Context(), client, UpdateInput{AchievementID: 1, Name: "Renamed", Description: new("New text")})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
@@ -463,6 +463,28 @@ func TestUpdate_OmitsUnsetFields(t *testing.T) {
 				t.Errorf("%s present in mutation input, want it omitted", field)
 			}
 		})
+	}
+}
+
+// TestUpdate_EmptyDescription_ReachesTheMutation holds an achievement's
+// description to an empty value removing it. The handler used to trim it away
+// and answer with the old description as an update (issue 1306).
+func TestUpdate_EmptyDescription_ReachesTheMutation(t *testing.T) {
+	var vars map[string]any
+	client := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		keyUpdate: respond(t, `{"data":{"achievementsUpdate":{"achievement":`+achievementNode+`,"errors":[]}}}`, &vars),
+	}))
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"achievement_id": 1, "description": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	mutationInput, _ := vars["input"].(map[string]any)
+	got, present := mutationInput["description"]
+	if !present || got != "" {
+		t.Errorf("description = %v (present %t), want an empty string", got, present)
 	}
 }
 

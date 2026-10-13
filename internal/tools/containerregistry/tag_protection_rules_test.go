@@ -10,9 +10,25 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// TestUpdateTagProtectionRule_EmptyAccessLevels_ReachTheBody holds a tag
+// rule's minimum access levels to an empty value removing each (issue 1306).
+func TestUpdateTagProtectionRule_EmptyAccessLevels_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateTagProtectionRuleInput](map[string]any{"project_id": "42", "rule_id": 1, "minimum_access_level_for_push": "", "minimum_access_level_for_delete": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"id":1,"tag_name_pattern":"v.*"}`)
+	if _, err = UpdateTagProtectionRule(t.Context(), client, input); err != nil {
+		t.Fatalf("UpdateTagProtectionRule() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"minimum_access_level_for_push": `""`, "minimum_access_level_for_delete": `""`})
+}
 
 const tagRulesPath = "/api/v4/projects/10/registry/protection/tag/rules"
 
@@ -397,8 +413,8 @@ func TestUpdateTagProtectionRule_AccessLevels(t *testing.T) {
 	out, err := UpdateTagProtectionRule(context.Background(), client, UpdateTagProtectionRuleInput{
 		ProjectID:                   toolutil.StringOrInt("10"),
 		RuleID:                      5,
-		MinimumAccessLevelForPush:   "owner",
-		MinimumAccessLevelForDelete: "admin",
+		MinimumAccessLevelForPush:   new(gl.ProtectionRuleAccessLevel("owner")),
+		MinimumAccessLevelForDelete: new(gl.ProtectionRuleAccessLevel("admin")),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -484,12 +500,12 @@ func TestUpdateTagProtectionRule_OneFieldAtATime_SendsThatFieldAndNothingElse(t 
 		},
 		{
 			"minimum_access_level_for_push",
-			UpdateTagProtectionRuleInput{ProjectID: "10", RuleID: 5, MinimumAccessLevelForPush: "owner"},
+			UpdateTagProtectionRuleInput{ProjectID: "10", RuleID: 5, MinimumAccessLevelForPush: new(gl.ProtectionRuleAccessLevel("owner"))},
 			map[string]any{"minimum_access_level_for_push": "owner"},
 		},
 		{
 			"minimum_access_level_for_delete",
-			UpdateTagProtectionRuleInput{ProjectID: "10", RuleID: 5, MinimumAccessLevelForDelete: "admin"},
+			UpdateTagProtectionRuleInput{ProjectID: "10", RuleID: 5, MinimumAccessLevelForDelete: new(gl.ProtectionRuleAccessLevel("admin"))},
 			map[string]any{"minimum_access_level_for_delete": "admin"},
 		},
 	}

@@ -16,6 +16,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdate_EmptyDescription_ReachesTheBody holds a group label's
+// description to an empty value removing it. The handler used to drop it and
+// answer with the old description as an update (issue 1306).
+func TestUpdate_EmptyDescription_ReachesTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"group_id": "5", "label_id": "1", "description": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{"id":1,"name":"bug"}`, `{"id":1,"name":"bug"}`)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"description": `""`})
+}
+
 // assertQueryParam fails the test when query parameter key does not equal want.
 func assertQueryParam(t *testing.T, q url.Values, key, want string) {
 	t.Helper()
@@ -834,7 +849,7 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 		LabelID:     "1",
 		NewName:     "critical-bug",
 		Color:       "#ff0000",
-		Description: "Critical bugs only",
+		Description: new("Critical bugs only"),
 		Priority:    5,
 	})
 	if err != nil {
@@ -1359,7 +1374,7 @@ func TestUpdate_OptionalFields_AreSentOnlyWhenTheInputCarriesThem(t *testing.T) 
 			name: "every optional field set",
 			input: UpdateInput{
 				GroupID: "10", LabelID: "1",
-				NewName: "critical-bug", Color: "#ff0000", Description: "Critical bugs only", Priority: 5,
+				NewName: "critical-bug", Color: "#ff0000", Description: new("Critical bugs only"), Priority: 5,
 			},
 			present: map[string]any{"new_name": "critical-bug", "color": "#ff0000", "description": "Critical bugs only", "priority": float64(5)},
 		},

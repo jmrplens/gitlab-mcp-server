@@ -64,8 +64,8 @@ type CreateInput struct {
 type UpdateInput struct {
 	GroupID          toolutil.StringOrInt `json:"group_id"                       jsonschema:"Group ID or URL-encoded path,required"`
 	Key              string               `json:"key"                            jsonschema:"Variable key name,required"`
-	Value            string               `json:"value,omitempty"                jsonschema:"Updated variable value"`
-	Description      string               `json:"description,omitempty"          jsonschema:"Updated variable description"`
+	Value            *string              `json:"value,omitempty"                jsonschema:"Updated variable value. Pass an empty string to empty it. Omit the field to leave it untouched"`
+	Description      *string              `json:"description,omitempty"          jsonschema:"Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	VariableType     string               `json:"variable_type,omitempty"        jsonschema:"Variable type: env_var or file"`
 	Protected        *bool                `json:"protected,omitempty"            jsonschema:"Only expose in protected branches/tags"`
 	Masked           *bool                `json:"masked,omitempty"               jsonschema:"Mask variable value in job logs"`
@@ -259,13 +259,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, toolutil.WrapErrWithMessage(opUpdateGroupVariable, err)
 	}
 
-	opts := &gl.UpdateGroupVariableOptions{}
-	if input.Value != "" {
-		opts.Value = &input.Value
-	}
-	if input.Description != "" {
-		opts.Description = &input.Description
-	}
+	// Presence decides, never emptiness: an empty value or description is the
+	// caller emptying it (issue 1306).
+	opts := &gl.UpdateGroupVariableOptions{Value: input.Value, Description: input.Description}
 	if input.VariableType != "" {
 		vt := gl.VariableTypeValue(input.VariableType)
 		opts.VariableType = &vt

@@ -311,14 +311,18 @@ func CreateBoard(ctx context.Context, client *gitlabclient.Client, input CreateB
 // so the Free schema does not offer them. Weight is a pointer because 0 is a
 // scope of its own: GitLab reads only nil and -1 as no weight scope
 // (EMPTY_SCOPE_STATE in ee/app/models/ee/board.rb), and an issue created on a
-// board scoped to 0 gets weight 0.
+// board scoped to 0 gets weight 0. MilestoneID is a pointer for the same
+// reason: 0 is the predefined No Milestone scope and -1 the empty one
+// (Timebox::None and Timebox::Any). AssigneeID is a pointer because GitLab
+// looks the assignee up by its ID and clears the scope when no user has it,
+// which 0 never matches (issue 1306).
 type UpdateBoardInput struct {
 	ProjectID       toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	BoardID         int64                `json:"board_id" jsonschema:"Board ID,required"`
 	Name            string               `json:"name,omitempty" jsonschema:"Board name"`
-	AssigneeID      int64                `json:"assignee_id,omitempty" tier:"premium" jsonschema:"User ID of the assignee the board is scoped to"`
-	MilestoneID     int64                `json:"milestone_id,omitempty" tier:"premium" jsonschema:"Milestone ID the board is scoped to"`
-	Labels          []string             `json:"labels,omitempty" tier:"premium" jsonschema:"Label names the board is scoped to"`
+	AssigneeID      *int64               `json:"assignee_id,omitempty" tier:"premium" jsonschema:"User ID of the assignee the board is scoped to. Pass 0 to remove the assignee from the scope. Omit the field to leave it untouched"`
+	MilestoneID     *int64               `json:"milestone_id,omitempty" tier:"premium" jsonschema:"Milestone ID the board is scoped to: 0 for issues with no milestone, -1 to remove the milestone from the scope, -2 for upcoming and -3 for started milestones. Omit the field to leave it untouched"`
+	Labels          []string             `json:"labels,omitempty" tier:"premium" jsonschema:"Label names the board is scoped to. Pass [] to remove every label from the scope. Omit the field to leave it untouched"`
 	Weight          *int64               `json:"weight,omitempty" tier:"premium" jsonschema:"Weight from 0 to 9 the board is scoped to"`
 	HideBacklogList *bool                `json:"hide_backlog_list,omitempty" jsonschema:"Hide the Open list"`
 	HideClosedList  *bool                `json:"hide_closed_list,omitempty" jsonschema:"Hide the Closed list"`
@@ -336,13 +340,11 @@ func UpdateBoard(ctx context.Context, client *gitlabclient.Client, input UpdateB
 	if input.Name != "" {
 		opts.Name = new(input.Name)
 	}
-	if input.AssigneeID != 0 {
-		opts.AssigneeID = new(input.AssigneeID)
-	}
-	if input.MilestoneID != 0 {
-		opts.MilestoneID = new(input.MilestoneID)
-	}
-	if len(input.Labels) > 0 {
+	opts.AssigneeID = input.AssigneeID
+	opts.MilestoneID = input.MilestoneID
+	// Presence decides, never emptiness: [] removes every label from the scope
+	// (issue 1306).
+	if input.Labels != nil {
 		lbls := gl.LabelOptions(input.Labels)
 		opts.Labels = &lbls
 	}

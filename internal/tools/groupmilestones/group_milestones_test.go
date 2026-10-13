@@ -20,6 +20,23 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdate_EmptyValues_ReachTheBody holds a group milestone's description
+// and dates to an empty value emptying them, the description as "" and each
+// date as null (issue 1306).
+func TestUpdate_EmptyValues_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
+		"group_id": "5", "milestone_iid": 1, "description": "", "start_date": "", "due_date": "",
+	})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `[{"id":7,"iid":1}]`, `{"id":7,"iid":1,"title":"v1"}`)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"description": `""`, "start_date": "null", "due_date": "null"})
+}
+
 // assertQueryParams fails the test for each expected query parameter whose
 // observed value does not match. It keeps multi-parameter forwarding tests flat
 // and within cognitive-complexity limits.
@@ -971,7 +988,7 @@ func TestUpdate_InvalidStartDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	_, err := Update(context.Background(), client, UpdateInput{GroupID: "10", MilestoneIID: 1, StartDate: "bad"})
+	_, err := Update(context.Background(), client, UpdateInput{GroupID: "10", MilestoneIID: 1, StartDate: new("bad")})
 	if err == nil {
 		t.Fatal("expected error for invalid start_date")
 	}
@@ -984,7 +1001,7 @@ func TestUpdate_InvalidDueDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	_, err := Update(context.Background(), client, UpdateInput{GroupID: "10", MilestoneIID: 1, DueDate: "bad"})
+	_, err := Update(context.Background(), client, UpdateInput{GroupID: "10", MilestoneIID: 1, DueDate: new("bad")})
 	if err == nil {
 		t.Fatal("expected error for invalid due_date")
 	}
@@ -1009,9 +1026,9 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 		GroupID:      "10",
 		MilestoneIID: 1,
 		Title:        "v1.0-final",
-		Description:  "Updated desc",
-		StartDate:    "2026-01-15",
-		DueDate:      "2026-07-31",
+		Description:  new("Updated desc"),
+		StartDate:    new("2026-01-15"),
+		DueDate:      new("2026-07-31"),
 		StateEvent:   "close",
 	})
 	if err != nil {
@@ -1647,7 +1664,7 @@ func TestParseMilestoneDates_Invalid(t *testing.T) {
 // used to cost a request for a call that was refused anyway.
 func TestUpdate_InvalidDate_IsRefusedBeforeTheIIDIsResolved(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	_, err := Update(context.Background(), client, UpdateInput{GroupID: "7", MilestoneIID: 3, StartDate: "2026-02-30"})
+	_, err := Update(context.Background(), client, UpdateInput{GroupID: "7", MilestoneIID: 3, StartDate: new("2026-02-30")})
 	if err == nil || !strings.Contains(err.Error(), "start_date must be a date") {
 		t.Fatalf("Update() error = %v, want the refusal of start_date", err)
 	}
@@ -1694,7 +1711,7 @@ func TestUpdate_BadStartDate(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 	_, err := Update(context.Background(), client, UpdateInput{
-		GroupID: testGroupID, MilestoneIID: 1, StartDate: "not-a-date",
+		GroupID: testGroupID, MilestoneIID: 1, StartDate: new("not-a-date"),
 	})
 	if err == nil {
 		t.Fatal("expected error for invalid start_date, got nil")
@@ -1711,7 +1728,7 @@ func TestUpdate_BadDueDate(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 	_, err := Update(context.Background(), client, UpdateInput{
-		GroupID: testGroupID, MilestoneIID: 1, DueDate: "not-a-date",
+		GroupID: testGroupID, MilestoneIID: 1, DueDate: new("not-a-date"),
 	})
 	if err == nil {
 		t.Fatal("expected error for invalid due_date, got nil")
@@ -2175,7 +2192,7 @@ func TestUpdate_OptionalFields_ReachTheRequestBodyOnlyWhenGiven(t *testing.T) {
 			name: "every optional field",
 			input: UpdateInput{
 				GroupID: testGroupID, MilestoneIID: 1,
-				Title: "v1.0-final", Description: "Updated desc", StateEvent: "close",
+				Title: "v1.0-final", Description: new("Updated desc"), StateEvent: "close",
 			},
 			want: map[string]any{"title": "v1.0-final", "description": "Updated desc", "state_event": "close"},
 		},

@@ -23,6 +23,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdate_EmptyMilestones_ReachTheBody holds a release's milestones to []
+// detaching every one. The handler used to drop an empty list and answer with
+// the milestones still attached (issue 1306).
+func TestUpdate_EmptyMilestones_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"project_id": "42", "tag_name": "v1", "milestones": []any{}})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"tag_name":"v1","name":"v1"}`)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"milestones": `[]`})
+}
+
 // Test constants for release API endpoint paths and expected values.
 const (
 	pathProjectReleases = "/api/v4/projects/42/releases"

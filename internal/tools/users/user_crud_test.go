@@ -14,7 +14,23 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// TestModify_EmptyValues_ReachTheBody holds a user's bio and website to an
+// empty value removing them. The handler used to drop both and answer with
+// the old ones as a modification (issue 1306).
+func TestModify_EmptyValues_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[ModifyInput](map[string]any{"user_id": 42, "bio": "", "website_url": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, userJSON)
+	if _, err = Modify(t.Context(), client, input); err != nil {
+		t.Fatalf("Modify() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"bio": `""`, "website_url": `""`})
+}
 
 const userJSON = `{
 	"id":42,"username":"testuser","email":"test@example.com",
@@ -67,7 +83,7 @@ func TestModifyUser_Success(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := Modify(context.Background(), client, ModifyInput{UserID: 42, Bio: "Updated bio"})
+	out, err := Modify(context.Background(), client, ModifyInput{UserID: 42, Bio: new("Updated bio")})
 	if err != nil {
 		t.Fatalf("Modify() unexpected error: %v", err)
 	}
@@ -248,7 +264,7 @@ func TestModifyUser_AllOptionalFields(t *testing.T) {
 		Admin:              &admin,
 		External:           &external,
 		SkipReconfirmation: &skipReconf,
-		Bio:                "Updated bio",
+		Bio:                new("Updated bio"),
 		Location:           "London",
 		JobTitle:           "Lead",
 		Organization:       "NewOrg",
@@ -484,14 +500,14 @@ func TestModify_EachOptionReachesTheRequest(t *testing.T) {
 		{"private_profile", ModifyInput{PrivateProfile: &yes}, map[string]any{"private_profile": true}},
 		{"can_create_group", ModifyInput{CanCreateGroup: &yes}, map[string]any{"can_create_group": true}},
 		{"view_diffs_file_by_file", ModifyInput{ViewDiffsFileByFile: &yes}, map[string]any{"view_diffs_file_by_file": true}},
-		{"bio", ModifyInput{Bio: "bio"}, map[string]any{"bio": "bio"}},
+		{"bio", ModifyInput{Bio: new("bio")}, map[string]any{"bio": "bio"}},
 		{"location", ModifyInput{Location: "location"}, map[string]any{"location": "location"}},
 		{"job_title", ModifyInput{JobTitle: "job title"}, map[string]any{"job_title": "job title"}},
 		{"organization", ModifyInput{Organization: "organization"}, map[string]any{"organization": "organization"}},
 		{"note", ModifyInput{Note: "admin note"}, map[string]any{"note": "admin note"}},
 		{"commit_email", ModifyInput{CommitEmail: "commit@x.test"}, map[string]any{"commit_email": "commit@x.test"}},
 		{"public_email", ModifyInput{PublicEmail: "public@x.test"}, map[string]any{"public_email": "public@x.test"}},
-		{"website_url", ModifyInput{WebsiteURL: "https://site.test"}, map[string]any{"website_url": "https://site.test"}},
+		{"website_url", ModifyInput{WebsiteURL: new("https://site.test")}, map[string]any{"website_url": "https://site.test"}},
 		{"linkedin", ModifyInput{Linkedin: "linkedin"}, map[string]any{"linkedin": "linkedin"}},
 		{"twitter", ModifyInput{Twitter: "twitter"}, map[string]any{"twitter": "twitter"}},
 		{"provider", ModifyInput{Provider: "ldapmain"}, map[string]any{"provider": "ldapmain"}},

@@ -4267,7 +4267,7 @@ func TestMRUpdate_AllOptionalParams(t *testing.T) {
 		ProjectID:    "42",
 		MRIID:        1,
 		Title:        "updated",
-		Description:  "new desc",
+		Description:  new("new desc"),
 		TargetBranch: "release",
 		StateEvent:   "close",
 		AssigneeIDs:  []int64{5},
@@ -4358,7 +4358,7 @@ func TestProjectUpdate_AllOptionalParams(t *testing.T) {
 	out, err := projects.Update(context.Background(), client, projects.UpdateInput{
 		ProjectID:     "42",
 		Name:          testNewName,
-		Description:   "new desc",
+		Description:   new("new desc"),
 		Visibility:    "public",
 		DefaultBranch: "develop",
 		MergeMethod:   "rebase_merge",

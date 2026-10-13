@@ -1098,7 +1098,7 @@ type UpdateInput struct {
 	GroupID                      toolutil.StringOrInt `json:"group_id"                jsonschema:"Group ID or URL-encoded path,required"`
 	Name                         string               `json:"name,omitempty"          jsonschema:"Group name"`
 	Path                         string               `json:"path,omitempty"          jsonschema:"Group URL path"`
-	Description                  string               `json:"description,omitempty"   jsonschema:"Group description"`
+	Description                  *string              `json:"description,omitempty"   jsonschema:"Group description. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	Visibility                   string               `json:"visibility,omitempty"    jsonschema:"Visibility level (private, internal, public)"`
 	RequestAccessEnabled         *bool                `json:"request_access_enabled,omitempty" jsonschema:"Allow users to request access"`
 	LFSEnabled                   *bool                `json:"lfs_enabled,omitempty"   jsonschema:"Enable Git LFS"`
@@ -1359,9 +1359,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Path != "" {
 		opts.Path = new(input.Path)
 	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
+	// Presence decides, never emptiness: an empty description is the caller
+	// removing it (issue 1306).
+	opts.Description = input.Description
 	if input.Visibility != "" {
 		opts.Visibility = new(gl.VisibilityValue(input.Visibility))
 	}

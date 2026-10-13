@@ -364,14 +364,16 @@ func setTime(field, value string, setter func(*time.Time)) error {
 // MilestoneID is a pointer, as on issues.UpdateInput, because GitLab reads
 // milestone_id=0 as "unassign" and a plain int64 cannot tell that zero from an
 // omitted field: the description promised "0 to unset" while the handler
-// dropped every zero on the floor.
+// dropped every zero on the floor. AssigneeID is a pointer for the same
+// reason: GitLab documents assignee_id=0 as unassigning everybody (issue
+// 1306).
 type UpdateInput struct {
 	ProjectID          toolutil.StringOrInt `json:"project_id"                    jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID              int64                `json:"merge_request_iid"                        jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	Title              string               `json:"title,omitempty"               jsonschema:"New title"`
-	Description        string               `json:"description,omitempty"         jsonschema:"New description"`
+	Description        *string              `json:"description,omitempty"         jsonschema:"New description. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	TargetBranch       string               `json:"target_branch,omitempty"       jsonschema:"New target branch"`
-	AssigneeID         int64                `json:"assignee_id,omitempty"          jsonschema:"Single user ID to assign (use assignee_ids for multiple)"`
+	AssigneeID         *int64               `json:"assignee_id,omitempty"          jsonschema:"Single user ID to assign (use assignee_ids for multiple). Pass 0 to remove every assignee. Omit the field to leave them untouched"`
 	AssigneeIDs        []int64              `json:"assignee_ids,omitempty"         jsonschema:"User IDs that replace the merge request's assignees. Pass [] to remove every assignee. Omit the field to leave them untouched"`
 	ReviewerIDs        []int64              `json:"reviewer_ids,omitempty"         jsonschema:"User IDs that replace the merge request's reviewers. Pass [] to remove every reviewer. Omit the field to leave them untouched"`
 	Labels             []string             `json:"labels,omitempty"               jsonschema:"Label names that replace all labels on the merge request. Pass [] to remove every label. Omit the field to leave them untouched"`
@@ -746,8 +748,10 @@ func buildUpdateOpts(input UpdateInput) *gl.UpdateMergeRequestOptions {
 	if input.Title != "" {
 		opts.Title = new(input.Title)
 	}
-	if input.Description != "" {
-		opts.Description = new(toolutil.NormalizeText(input.Description))
+	// Presence decides, never emptiness: an empty description is the caller
+	// removing it (issue 1306).
+	if input.Description != nil {
+		opts.Description = new(toolutil.NormalizeText(*input.Description))
 	}
 	if input.TargetBranch != "" {
 		opts.TargetBranch = new(input.TargetBranch)
@@ -755,8 +759,8 @@ func buildUpdateOpts(input UpdateInput) *gl.UpdateMergeRequestOptions {
 	if input.StateEvent != "" {
 		opts.StateEvent = new(input.StateEvent)
 	}
-	if input.AssigneeID != 0 {
-		opts.AssigneeID = new(input.AssigneeID)
+	if input.AssigneeID != nil {
+		opts.AssigneeID = input.AssigneeID
 	}
 	// The three lists replace what the merge request holds, so an empty one is
 	// a value of its own: [] removes every assignee or reviewer and labels ""

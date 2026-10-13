@@ -18,6 +18,20 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdate_EmptyDescription_ReachesTheBody holds a topic's description to
+// an empty value removing it (issue 1306).
+func TestUpdate_EmptyDescription_ReachesTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"topic_id": 1, "description": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"id":1,"name":"go"}`)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"description": `""`})
+}
+
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
@@ -442,7 +456,7 @@ func TestUpdate_WithAllOptionalFields(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := Update(t.Context(), client, UpdateInput{
-		TopicID: 1, Name: "golang", Title: "Golang", Description: "Updated desc",
+		TopicID: 1, Name: "golang", Title: "Golang", Description: new("Updated desc"),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -471,7 +485,7 @@ func TestUpdate_OmittedFieldsAreNotSent(t *testing.T) {
 	}{
 		{"name only", UpdateInput{TopicID: 1, Name: "golang"}, map[string]string{"name": "golang"}},
 		{"title only", UpdateInput{TopicID: 1, Title: "Golang"}, map[string]string{"title": "Golang"}},
-		{"description only", UpdateInput{TopicID: 1, Description: "Updated desc"}, map[string]string{"description": "Updated desc"}},
+		{"description only", UpdateInput{TopicID: 1, Description: new("Updated desc")}, map[string]string{"description": "Updated desc"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

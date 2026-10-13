@@ -18,6 +18,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestEdit_EmptyValues_ReachTheBody holds a system hook's description, branch
+// filter and custom template to an empty value removing each. The handler
+// used to drop all three and answer with the old values (issue 1306).
+func TestEdit_EmptyValues_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[EditInput](map[string]any{"id": 1, "description": "", "push_events_branch_filter": "", "custom_webhook_template": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"id":1,"url":"https://example.com"}`)
+	if _, err = Edit(t.Context(), client, input); err != nil {
+		t.Fatalf("Edit() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"description": `""`, "push_events_branch_filter": `""`, "custom_webhook_template": `""`})
+}
+
 // fmtUnexpPath identifies the fmt unexp path constant used by this package.
 const fmtUnexpPath = "unexpected path: %s"
 
@@ -311,13 +326,13 @@ func TestEdit_AllOptionalFields(t *testing.T) {
 		ID:                     2,
 		URL:                    "https://example.com/hook2",
 		Name:                   "Named Hook",
-		Description:            "Hook desc",
+		Description:            new("Hook desc"),
 		Token:                  "secret-token",
 		SigningToken:           "signing-secret",
 		PushEvents:             &f,
-		PushEventsBranchFilter: "main",
+		PushEventsBranchFilter: new("main"),
 		BranchFilterStrategy:   "wildcard",
-		CustomWebhookTemplate:  "edit-template",
+		CustomWebhookTemplate:  new("edit-template"),
 		TagPushEvents:          &tr,
 		MergeRequestsEvents:    &tr,
 		RepositoryUpdateEvents: &tr,
@@ -805,12 +820,12 @@ var hookRequestStrings = []struct {
 	setEdit func(*EditInput, string)
 }{
 	{"name", "named-hook", func(i *AddInput, v string) { i.Name = v }, func(i *EditInput, v string) { i.Name = v }},
-	{"description", "described-hook", func(i *AddInput, v string) { i.Description = v }, func(i *EditInput, v string) { i.Description = v }},
+	{"description", "described-hook", func(i *AddInput, v string) { i.Description = v }, func(i *EditInput, v string) { i.Description = new(v) }},
 	{"token", "token-value", func(i *AddInput, v string) { i.Token = v }, func(i *EditInput, v string) { i.Token = v }},
 	{"signing_token", "signing-value", func(i *AddInput, v string) { i.SigningToken = v }, func(i *EditInput, v string) { i.SigningToken = v }},
-	{"push_events_branch_filter", "release/*", func(i *AddInput, v string) { i.PushEventsBranchFilter = v }, func(i *EditInput, v string) { i.PushEventsBranchFilter = v }},
+	{"push_events_branch_filter", "release/*", func(i *AddInput, v string) { i.PushEventsBranchFilter = v }, func(i *EditInput, v string) { i.PushEventsBranchFilter = new(v) }},
 	{"branch_filter_strategy", "wildcard", func(i *AddInput, v string) { i.BranchFilterStrategy = v }, func(i *EditInput, v string) { i.BranchFilterStrategy = v }},
-	{"custom_webhook_template", "templated-body", func(i *AddInput, v string) { i.CustomWebhookTemplate = v }, func(i *EditInput, v string) { i.CustomWebhookTemplate = v }},
+	{"custom_webhook_template", "templated-body", func(i *AddInput, v string) { i.CustomWebhookTemplate = v }, func(i *EditInput, v string) { i.CustomWebhookTemplate = new(v) }},
 }
 
 // TestAddAndEdit_OneStringAtATime_SendThatKeyAndNoOther holds each string

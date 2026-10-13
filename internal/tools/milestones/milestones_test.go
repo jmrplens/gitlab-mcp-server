@@ -15,6 +15,25 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdate_EmptyValues_ReachTheBody holds a milestone's description and
+// dates to an empty value emptying them: the description goes as "" and each
+// date as null, which is how GitLab removes one. The handler used to drop all
+// three, so an update that only cleared them was refused as sending nothing
+// (issue 1306).
+func TestUpdate_EmptyValues_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
+		"project_id": "42", "milestone_iid": 1, "description": "", "start_date": "", "due_date": "",
+	})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `[{"id":7,"iid":1}]`, `{"id":7,"iid":1,"title":"v1"}`)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"description": `""`, "start_date": "null", "due_date": "null"})
+}
+
 const (
 	// errExpectedNil identifies the err expected nil constant used by this package.
 	errExpectedNil = "expected error, got nil"
@@ -350,7 +369,7 @@ func TestMilestoneUpdate_Success(t *testing.T) {
 		ProjectID:    "42",
 		MilestoneIID: 1,
 		Title:        "v1.1",
-		Description:  "Updated",
+		Description:  new("Updated"),
 	})
 	if err != nil {
 		t.Fatalf("milestoneUpdate() unexpected error: %v", err)
@@ -382,11 +401,11 @@ func TestMilestoneUpdate_InvalidDate(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 
-	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", MilestoneIID: 1, StartDate: "bad"})
+	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", MilestoneIID: 1, StartDate: new("bad")})
 	if err == nil {
 		t.Fatal("expected error for invalid start_date")
 	}
-	_, err = Update(context.Background(), client, UpdateInput{ProjectID: "42", MilestoneIID: 1, DueDate: "bad"})
+	_, err = Update(context.Background(), client, UpdateInput{ProjectID: "42", MilestoneIID: 1, DueDate: new("bad")})
 	if err == nil {
 		t.Fatal("expected error for invalid due_date")
 	}
@@ -430,7 +449,7 @@ func TestMilestoneUpdate_WithDates(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	_, err := Update(context.Background(), client, UpdateInput{
-		ProjectID: "42", MilestoneIID: 1, StartDate: "2026-01-01", DueDate: "2026-02-01",
+		ProjectID: "42", MilestoneIID: 1, StartDate: new("2026-01-01"), DueDate: new("2026-02-01"),
 	})
 	if err != nil {
 		t.Fatalf("milestoneUpdate() unexpected error: %v", err)
@@ -453,7 +472,7 @@ func TestMilestoneUpdate_OptionalFields_ReachGitLabOnlyWhenGiven(t *testing.T) {
 	}{
 		{"title given", UpdateInput{Title: "v1.1"}, "title", "v1.1", true},
 		{"title omitted", UpdateInput{}, "title", "", false},
-		{"description given", UpdateInput{Description: "Second release"}, "description", "Second release", true},
+		{"description given", UpdateInput{Description: new("Second release")}, "description", "Second release", true},
 		{"description omitted", UpdateInput{}, "description", "", false},
 		{"state_event given", UpdateInput{StateEvent: "close"}, "state_event", "close", true},
 		{"state_event omitted", UpdateInput{}, "state_event", "", false},

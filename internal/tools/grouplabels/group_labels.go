@@ -49,7 +49,7 @@ type UpdateInput struct {
 	LabelID     toolutil.StringOrInt `json:"label_id"              jsonschema:"Label ID or name,required"`
 	NewName     string               `json:"new_name,omitempty"    jsonschema:"New label name"`
 	Color       string               `json:"color,omitempty"       jsonschema:"New label color in hex format"`
-	Description string               `json:"description,omitempty" jsonschema:"New label description"`
+	Description *string              `json:"description,omitempty" jsonschema:"New label description. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	Priority    int64                `json:"priority,omitempty"    jsonschema:"New label priority (0 to remove)"`
 	Archived    *bool                `json:"archived,omitempty"    jsonschema:"Set true to archive, false to unarchive"`
 }
@@ -177,9 +177,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Color != "" {
 		opts.Color = new(input.Color)
 	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
+	// Presence decides, never emptiness: an empty description is the caller
+	// removing it (issue 1306).
+	opts.Description = input.Description
 	if input.Priority > 0 {
 		opts.Priority = gl.NewNullableWithValue(input.Priority)
 	}

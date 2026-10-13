@@ -152,9 +152,9 @@ type CreateInput struct {
 
 // UpdateInput defines the input for changing an existing achievement.
 type UpdateInput struct {
-	AchievementID int64  `json:"achievement_id" jsonschema:"Numeric ID of the achievement to change,required"`
-	Name          string `json:"name,omitempty" jsonschema:"New display name. Omit to leave the current name unchanged"`
-	Description   string `json:"description,omitempty" jsonschema:"New description. Omit to leave the current description unchanged"`
+	AchievementID int64   `json:"achievement_id" jsonschema:"Numeric ID of the achievement to change,required"`
+	Name          string  `json:"name,omitempty" jsonschema:"New display name. Omit to leave the current name unchanged"`
+	Description   *string `json:"description,omitempty" jsonschema:"New description. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	AvatarInput
 }
 
@@ -251,9 +251,10 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	return Output{Achievement: toAchievement(achievement)}, nil
 }
 
-// Update changes an existing achievement. Fields left empty keep their
-// current value, because the GraphQL mutation treats an absent input field as
-// "unchanged" rather than as "clear".
+// Update changes an existing achievement. A field left out keeps its current
+// value, because the GraphQL mutation treats an absent input field as
+// "unchanged"; a description given as an empty string is sent as one, which
+// removes it.
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -266,7 +267,10 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if name := strings.TrimSpace(input.Name); name != "" {
 		opts.Name = &name
 	}
-	if description := strings.TrimSpace(input.Description); description != "" {
+	// Presence decides, never emptiness: a description that trims to nothing
+	// is the caller removing it (issue 1306).
+	if input.Description != nil {
+		description := strings.TrimSpace(*input.Description)
 		opts.Description = &description
 	}
 	avatar, cleanup, err := input.upload(opUpdate)

@@ -22,6 +22,39 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdateBoard_EmptyLabels_ReachTheBody holds a board's label scope to []
+// removing every label. The handler used to drop an empty list and answer
+// with the board still scoped (issue 1306).
+func TestUpdateBoard_EmptyLabels_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateBoardInput](map[string]any{"project_id": "42", "board_id": 1, "labels": []any{}})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"id":1,"name":"b"}`)
+	if _, err = UpdateBoard(t.Context(), client, input); err != nil {
+		t.Fatalf("UpdateBoard() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"labels": `""`})
+}
+
+// TestUpdateBoard_ZeroScopes_ReachTheBody holds an assignee_id and a
+// milestone_id of 0 to the body. GitLab looks the assignee up by its ID and
+// clears the scope when no user has it, so 0 removes the assignee from the
+// scope; a milestone_id of 0 is the predefined No Milestone scope rather than
+// an absence (Timebox::None). The handler forwarded either only when it was
+// not 0, so neither could be sent (issue 1306).
+func TestUpdateBoard_ZeroScopes_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateBoardInput](map[string]any{"project_id": "42", "board_id": 1, "assignee_id": 0, "milestone_id": 0})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"id":1,"name":"b"}`)
+	if _, err = UpdateBoard(t.Context(), client, input); err != nil {
+		t.Fatalf("UpdateBoard() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"assignee_id": "0", "milestone_id": "0"})
+}
+
 // errProjectIDRequired identifies the err project ID required constant used by this package.
 const errProjectIDRequired = "project_id is required"
 
@@ -1111,8 +1144,8 @@ func TestUpdateBoard_AllOptionalFields(t *testing.T) {
 			ProjectID:       "10",
 			BoardID:         1,
 			Name:            "Updated",
-			AssigneeID:      3,
-			MilestoneID:     5,
+			AssigneeID:      new(int64(3)),
+			MilestoneID:     new(int64(5)),
 			Labels:          []string{"bug", "feature"},
 			Weight:          new(int64(2)),
 			HideBacklogList: &hideTrue,
@@ -1931,8 +1964,8 @@ func TestUpdateBoard_OneFieldAtATime_SendsOnlyThatKey(t *testing.T) {
 		want  map[string]any
 	}{
 		{"name", UpdateBoardInput{Name: "Renamed"}, map[string]any{"name": "Renamed"}},
-		{"assignee_id", UpdateBoardInput{AssigneeID: 3}, map[string]any{"assignee_id": float64(3)}},
-		{"milestone_id", UpdateBoardInput{MilestoneID: 5}, map[string]any{"milestone_id": float64(5)}},
+		{"assignee_id", UpdateBoardInput{AssigneeID: new(int64(3))}, map[string]any{"assignee_id": float64(3)}},
+		{"milestone_id", UpdateBoardInput{MilestoneID: new(int64(5))}, map[string]any{"milestone_id": float64(5)}},
 		{"labels", UpdateBoardInput{Labels: []string{"bug", "ux"}}, map[string]any{"labels": "bug,ux"}},
 		{"weight", UpdateBoardInput{Weight: new(int64(7))}, map[string]any{"weight": float64(7)}},
 		// GitLab scopes a board to weight 0 as it does to any other weight
@@ -2388,7 +2421,7 @@ func TestProjectBoardWrites_Refused_RoleHintFollowsThePermissionRefusal(t *testi
 			return err
 		}},
 		{"board update", func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := UpdateBoard(ctx, c, UpdateBoardInput{ProjectID: "10", BoardID: 1, AssigneeID: 3})
+			_, err := UpdateBoard(ctx, c, UpdateBoardInput{ProjectID: "10", BoardID: 1, AssigneeID: new(int64(3))})
 			return err
 		}},
 		{"board delete", func(ctx context.Context, c *gitlabclient.Client) error {

@@ -206,7 +206,7 @@ type UpdateInput struct {
 	EndsAt             string  `json:"ends_at,omitempty" jsonschema:"End time in ISO 8601 format"`
 	Font               string  `json:"font,omitempty" jsonschema:"Font for the message"`
 	TargetAccessLevels []int64 `json:"target_access_levels,omitempty" jsonschema:"Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)"`
-	TargetPath         string  `json:"target_path,omitempty" jsonschema:"Target path to show message on"`
+	TargetPath         *string `json:"target_path,omitempty" jsonschema:"Target path to show message on. Pass an empty string to remove it, so the message shows on every page. Omit the field to leave it untouched"`
 	BroadcastType      string  `json:"broadcast_type,omitempty" jsonschema:"Type: banner or notification"`
 	Dismissable        *bool   `json:"dismissable,omitempty" jsonschema:"Whether message can be dismissed"`
 	Theme              string  `json:"theme,omitempty" jsonschema:"Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light"`
@@ -265,9 +265,9 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateBroadcastMessageOptions, erro
 		opts.Font = new(input.Font)
 	}
 	opts.TargetAccessLevels = accessLevels(input.TargetAccessLevels)
-	if input.TargetPath != "" {
-		opts.TargetPath = new(input.TargetPath)
-	}
+	// Presence decides, never emptiness: an empty path is the caller removing
+	// it (issue 1306).
+	opts.TargetPath = input.TargetPath
 	if input.BroadcastType != "" {
 		opts.BroadcastType = new(input.BroadcastType)
 	}

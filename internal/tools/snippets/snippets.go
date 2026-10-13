@@ -492,7 +492,7 @@ type UpdateInput struct {
 	SnippetID   int64             `json:"snippet_id" jsonschema:"Snippet ID,required"`
 	Title       string            `json:"title,omitempty" jsonschema:"New title"`
 	FileName    string            `json:"file_name,omitempty" jsonschema:"New file name (single-file, deprecated in favor of files)"`
-	Description string            `json:"description,omitempty" jsonschema:"New description"`
+	Description *string           `json:"description,omitempty" jsonschema:"New description. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	ContentBody string            `json:"content,omitempty" jsonschema:"New content (single-file, deprecated in favor of files)"`
 	Visibility  string            `json:"visibility,omitempty" jsonschema:"New visibility: private, internal, or public"`
 	Files       []UpdateFileInput `json:"files,omitempty" jsonschema:"File operations to apply"`
@@ -521,9 +521,9 @@ func buildUpdateOpts(input UpdateInput) *gl.UpdateSnippetOptions {
 	if input.FileName != "" {
 		opts.FileName = new(input.FileName)
 	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
+	// Presence decides, never emptiness: an empty description is the caller
+	// removing it (issue 1306).
+	opts.Description = input.Description
 	if input.ContentBody != "" {
 		opts.Content = new(input.ContentBody)
 	}

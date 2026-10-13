@@ -158,7 +158,7 @@ type UpdateInput struct {
 	ProjectID   toolutil.StringOrInt  `json:"project_id" jsonschema:"Project ID or path,required"`
 	Name        string                `json:"name" jsonschema:"Current feature flag name,required"`
 	NewName     string                `json:"new_name,omitempty" jsonschema:"New feature flag name"`
-	Description string                `json:"description,omitempty" jsonschema:"Feature flag description"`
+	Description *string               `json:"description,omitempty" jsonschema:"Feature flag description. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	Active      *bool                 `json:"active,omitempty" jsonschema:"Whether the flag is active"`
 	Strategies  []UpdateStrategyInput `json:"strategies,omitempty" jsonschema:"Activation strategies for the flag. Each has an optional id (to update an existing strategy), a name, optional parameters, and optional environment scopes carrying their own id and _destroy"`
 }
@@ -283,9 +283,9 @@ func UpdateFeatureFlag(ctx context.Context, client *gitlabclient.Client, input U
 	if input.NewName != "" {
 		opts.Name = new(input.NewName)
 	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
+	// Presence decides, never emptiness: an empty description is the caller
+	// removing it (issue 1306).
+	opts.Description = input.Description
 	if input.Active != nil {
 		opts.Active = input.Active
 	}

@@ -144,10 +144,10 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 // UpdateInput is the input for updating a topic.
 type UpdateInput struct {
-	TopicID     int64  `json:"topic_id" jsonschema:"Topic ID,required"`
-	Name        string `json:"name,omitempty" jsonschema:"New topic name"`
-	Title       string `json:"title,omitempty" jsonschema:"New topic title"`
-	Description string `json:"description,omitempty" jsonschema:"New topic description"`
+	TopicID     int64   `json:"topic_id" jsonschema:"Topic ID,required"`
+	Name        string  `json:"name,omitempty" jsonschema:"New topic name"`
+	Title       string  `json:"title,omitempty" jsonschema:"New topic title"`
+	Description *string `json:"description,omitempty" jsonschema:"New topic description. Pass an empty string to remove it. Omit the field to leave it untouched"`
 }
 
 // UpdateOutput is the output after updating a topic.
@@ -168,9 +168,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Title != "" {
 		opts.Title = new(input.Title)
 	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
+	// Presence decides, never emptiness: an empty description is the caller
+	// removing it (issue 1306).
+	opts.Description = input.Description
 	topic, _, err := client.GL().Topics.UpdateTopic(input.TopicID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return UpdateOutput{}, toolutil.WrapErrWithStatusHint("update_topic", err, http.StatusForbidden,

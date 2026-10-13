@@ -71,7 +71,7 @@ type UpdateInput struct {
 	Name        string               `json:"name,omitempty"        jsonschema:"New release title"`
 	Description string               `json:"description,omitempty" jsonschema:"Updated release notes"`
 	ReleasedAt  string               `json:"released_at,omitempty" jsonschema:"New release date in ISO 8601 format"`
-	Milestones  []string             `json:"milestones,omitempty"  jsonschema:"Milestone titles to associate with the release"`
+	Milestones  []string             `json:"milestones,omitempty"  jsonschema:"Milestone titles to associate with the release. Pass [] to detach every milestone. Omit the field to leave them untouched"`
 }
 
 // DeleteInput defines parameters for deleting a release.
@@ -236,7 +236,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, fmt.Errorf("releaseUpdate: %w", err)
 	}
 	opts.ReleasedAt = releasedAt
-	if len(input.Milestones) > 0 {
+	// Presence decides, never emptiness: [] detaches every milestone (issue
+	// 1306).
+	if input.Milestones != nil {
 		opts.Milestones = &input.Milestones
 	}
 	r, _, err := client.GL().Releases.UpdateRelease(string(input.ProjectID), input.TagName, opts, gl.WithContext(ctx),

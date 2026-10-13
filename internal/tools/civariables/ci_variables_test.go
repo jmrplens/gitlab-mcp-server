@@ -19,6 +19,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdate_EmptyValues_ReachTheBody holds a variable's value and
+// description to an empty value emptying them. The handler used to drop both
+// and answer with the old ones as an update (issue 1306).
+func TestUpdate_EmptyValues_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"project_id": "42", "key": "K", "value": "", "description": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"key":"K","value":""}`)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"value": `""`, "description": `""`})
+}
+
 // errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
 
@@ -236,7 +251,7 @@ func TestCIVariableUpdate_Success(t *testing.T) {
 	out, err := Update(context.Background(), client, UpdateInput{
 		ProjectID: "123",
 		Key:       "DB_HOST",
-		Value:     "db.prod.internal",
+		Value:     new("db.prod.internal"),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -667,8 +682,8 @@ func TestCIVariableUpdate_AllOptionalFields(t *testing.T) {
 	out, err := Update(context.Background(), client, UpdateInput{
 		ProjectID:        "1",
 		Key:              "DB_HOST",
-		Value:            "db.prod",
-		Description:      "Updated",
+		Value:            new("db.prod"),
+		Description:      new("Updated"),
 		VariableType:     "file",
 		Protected:        &bTrue,
 		Masked:           &bTrue,
@@ -1162,7 +1177,7 @@ func TestCIVariableUpdate_FilterObject(t *testing.T) {
 	out, err := Update(context.Background(), client, UpdateInput{
 		ProjectID: "10",
 		Key:       "DB_URL",
-		Value:     "y",
+		Value:     new("y"),
 		Filter:    &Filter{EnvironmentScope: testEnvScope},
 	})
 	if err != nil {
@@ -1368,8 +1383,8 @@ func TestCIVariableUpdate_OptionalInputsSupplied_ReachTheRequestBody(t *testing.
 	if _, err := Update(context.Background(), client, UpdateInput{
 		ProjectID:        "1",
 		Key:              "DB_HOST",
-		Value:            "db.prod",
-		Description:      "Updated",
+		Value:            new("db.prod"),
+		Description:      new("Updated"),
 		VariableType:     "file",
 		Protected:        &bFalse,
 		Masked:           &bFalse,

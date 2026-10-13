@@ -89,32 +89,32 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 // ModifyInput holds parameters for modifying an existing GitLab user (admin only).
 type ModifyInput struct {
-	UserID              int64  `json:"user_id" jsonschema:"The ID of the user to modify,required"`
-	Email               string `json:"email,omitempty" jsonschema:"New email address"`
-	Name                string `json:"name,omitempty" jsonschema:"New display name"`
-	Username            string `json:"username,omitempty" jsonschema:"New username"`
-	Password            string `json:"password,omitempty" jsonschema:"New password"`
-	Admin               *bool  `json:"admin,omitempty" jsonschema:"Grant or revoke admin privileges"`
-	Auditor             *bool  `json:"auditor,omitempty" tier:"premium" jsonschema:"Grant or revoke auditor privileges (Premium/Ultimate)"`
-	External            *bool  `json:"external,omitempty" jsonschema:"Mark or unmark as external"`
-	SkipReconfirmation  *bool  `json:"skip_reconfirmation,omitempty" jsonschema:"Skip reconfirmation on email change"`
-	Bio                 string `json:"bio,omitempty" jsonschema:"New bio text"`
-	Location            string `json:"location,omitempty" jsonschema:"New location"`
-	JobTitle            string `json:"job_title,omitempty" jsonschema:"New job title"`
-	Organization        string `json:"organization,omitempty" jsonschema:"New organization"`
-	ProjectsLimit       *int64 `json:"projects_limit,omitempty" jsonschema:"New maximum projects limit"`
-	Note                string `json:"note,omitempty" jsonschema:"New admin note"`
-	PrivateProfile      *bool  `json:"private_profile,omitempty" jsonschema:"Set profile as private"`
-	CanCreateGroup      *bool  `json:"can_create_group,omitempty" jsonschema:"Allow user to create groups"`
-	ViewDiffsFileByFile *bool  `json:"view_diffs_file_by_file,omitempty" jsonschema:"Show whitespace changes in diffs file by file"`
-	CommitEmail         string `json:"commit_email,omitempty" jsonschema:"Email used for commits"`
-	PublicEmail         string `json:"public_email,omitempty" jsonschema:"Publicly visible email address"`
-	WebsiteURL          string `json:"website_url,omitempty" jsonschema:"User website URL"`
-	Linkedin            string `json:"linkedin,omitempty" jsonschema:"LinkedIn account"`
-	Twitter             string `json:"twitter,omitempty" jsonschema:"Twitter/X account"`
-	Provider            string `json:"provider,omitempty" jsonschema:"External provider name (use with extern_uid)"`
-	ExternUID           string `json:"extern_uid,omitempty" jsonschema:"External UID for the provider"`
-	ThemeID             *int64 `json:"theme_id,omitempty" jsonschema:"GitLab theme ID for the user's UI"`
+	UserID              int64   `json:"user_id" jsonschema:"The ID of the user to modify,required"`
+	Email               string  `json:"email,omitempty" jsonschema:"New email address"`
+	Name                string  `json:"name,omitempty" jsonschema:"New display name"`
+	Username            string  `json:"username,omitempty" jsonschema:"New username"`
+	Password            string  `json:"password,omitempty" jsonschema:"New password"`
+	Admin               *bool   `json:"admin,omitempty" jsonschema:"Grant or revoke admin privileges"`
+	Auditor             *bool   `json:"auditor,omitempty" tier:"premium" jsonschema:"Grant or revoke auditor privileges (Premium/Ultimate)"`
+	External            *bool   `json:"external,omitempty" jsonschema:"Mark or unmark as external"`
+	SkipReconfirmation  *bool   `json:"skip_reconfirmation,omitempty" jsonschema:"Skip reconfirmation on email change"`
+	Bio                 *string `json:"bio,omitempty" jsonschema:"New bio text. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	Location            string  `json:"location,omitempty" jsonschema:"New location"`
+	JobTitle            string  `json:"job_title,omitempty" jsonschema:"New job title"`
+	Organization        string  `json:"organization,omitempty" jsonschema:"New organization"`
+	ProjectsLimit       *int64  `json:"projects_limit,omitempty" jsonschema:"New maximum projects limit"`
+	Note                string  `json:"note,omitempty" jsonschema:"New admin note"`
+	PrivateProfile      *bool   `json:"private_profile,omitempty" jsonschema:"Set profile as private"`
+	CanCreateGroup      *bool   `json:"can_create_group,omitempty" jsonschema:"Allow user to create groups"`
+	ViewDiffsFileByFile *bool   `json:"view_diffs_file_by_file,omitempty" jsonschema:"Show whitespace changes in diffs file by file"`
+	CommitEmail         string  `json:"commit_email,omitempty" jsonschema:"Email used for commits"`
+	PublicEmail         string  `json:"public_email,omitempty" jsonschema:"Publicly visible email address"`
+	WebsiteURL          *string `json:"website_url,omitempty" jsonschema:"User website URL. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	Linkedin            string  `json:"linkedin,omitempty" jsonschema:"LinkedIn account"`
+	Twitter             string  `json:"twitter,omitempty" jsonschema:"Twitter/X account"`
+	Provider            string  `json:"provider,omitempty" jsonschema:"External provider name (use with extern_uid)"`
+	ExternUID           string  `json:"extern_uid,omitempty" jsonschema:"External UID for the provider"`
+	ThemeID             *int64  `json:"theme_id,omitempty" jsonschema:"GitLab theme ID for the user's UI"`
 	// There is deliberately no locked field. GitLab's PUT /users/:id declares
 	// no locked parameter and the instance publishes no lock or unlock route
 	// at all, so the one this input used to offer reached neither the SDK
@@ -238,15 +238,17 @@ func buildCreateUserOptions(input CreateInput) *gl.CreateUserOptions {
 // from the request.
 func buildModifyUserOptions(input ModifyInput) *gl.ModifyUserOptions {
 	return &gl.ModifyUserOptions{
-		Email:               strPtr(input.Email),
-		Name:                strPtr(input.Name),
-		Username:            strPtr(input.Username),
-		Password:            strPtr(input.Password),
-		Admin:               input.Admin,
-		Auditor:             input.Auditor,
-		External:            input.External,
-		SkipReconfirmation:  input.SkipReconfirmation,
-		Bio:                 strPtr(input.Bio),
+		Email:              strPtr(input.Email),
+		Name:               strPtr(input.Name),
+		Username:           strPtr(input.Username),
+		Password:           strPtr(input.Password),
+		Admin:              input.Admin,
+		Auditor:            input.Auditor,
+		External:           input.External,
+		SkipReconfirmation: input.SkipReconfirmation,
+		// Bio and WebsiteURL go through as given: an empty one is the caller
+		// removing it (issue 1306).
+		Bio:                 input.Bio,
 		Location:            strPtr(input.Location),
 		JobTitle:            strPtr(input.JobTitle),
 		Organization:        strPtr(input.Organization),
@@ -257,7 +259,7 @@ func buildModifyUserOptions(input ModifyInput) *gl.ModifyUserOptions {
 		ViewDiffsFileByFile: input.ViewDiffsFileByFile,
 		CommitEmail:         strPtr(input.CommitEmail),
 		PublicEmail:         strPtr(input.PublicEmail),
-		WebsiteURL:          strPtr(input.WebsiteURL),
+		WebsiteURL:          input.WebsiteURL,
 		Linkedin:            strPtr(input.Linkedin),
 		Twitter:             strPtr(input.Twitter),
 		Provider:            strPtr(input.Provider),

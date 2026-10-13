@@ -35,7 +35,7 @@ type UpdateInput struct {
 	Name        string               `json:"name,omitempty"        jsonschema:"Name of the label to update, used to select it when label_id is not given"`
 	NewName     string               `json:"new_name,omitempty"    jsonschema:"New label name"`
 	Color       string               `json:"color,omitempty"       jsonschema:"New label color in hex format"`
-	Description string               `json:"description,omitempty" jsonschema:"New label description"`
+	Description *string              `json:"description,omitempty" jsonschema:"New label description. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	// A pointer so that "not given" and "given as zero" are different
 	// requests. The schema has always promised that zero removes the priority,
 	// and with a plain int64 that promise could not be kept: encoding/json
@@ -204,9 +204,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Color != "" {
 		opts.Color = new(input.Color)
 	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
+	// Presence decides, never emptiness: an empty description is the caller
+	// removing it (issue 1306).
+	opts.Description = input.Description
 	if input.Priority != nil {
 		priority, err := updatedPriority(*input.Priority)
 		if err != nil {

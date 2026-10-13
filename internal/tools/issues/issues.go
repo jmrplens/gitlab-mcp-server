@@ -195,12 +195,12 @@ type UpdateInput struct {
 	Title            string               `json:"title,omitempty"         jsonschema:"New title"`
 	Description      *string              `json:"description,omitempty"   jsonschema:"New description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched"`
 	StateEvent       string               `json:"state_event,omitempty"   jsonschema:"State transition (close, reopen)"`
-	AssigneeID       int64                `json:"assignee_id,omitempty"       jsonschema:"Single user ID to assign (use assignee_ids for multiple)"`
+	AssigneeID       *int64               `json:"assignee_id,omitempty"       jsonschema:"Single user ID to assign (use assignee_ids for multiple). Pass 0 to remove every assignee. Omit the field to leave them untouched"`
 	AssigneeIDs      []int64              `json:"assignee_ids,omitempty"  jsonschema:"User IDs that replace the issue's assignees. Pass [] to remove every assignee. Omit the field to leave them untouched"`
 	Labels           []string             `json:"labels,omitempty"        jsonschema:"Label names that replace all labels on the issue. Pass [] to remove every label. Omit the field to leave them untouched"`
 	AddLabels        []string             `json:"add_labels,omitempty"    jsonschema:"Label names to add without removing existing"`
 	RemoveLabels     []string             `json:"remove_labels,omitempty" jsonschema:"Label names to remove"`
-	EpicID           int64                `json:"epic_id,omitempty"       tier:"premium" jsonschema:"Epic ID to associate"`
+	EpicID           *int64               `json:"epic_id,omitempty"       tier:"premium" jsonschema:"Epic ID to associate. Pass 0 to take the issue out of its epic. Omit the field to leave it untouched"`
 	MilestoneID      *int64               `json:"milestone_id,omitempty"  jsonschema:"New milestone ID (0 to unset. Omit to leave unchanged)"`
 	DueDate          *string              `json:"due_date,omitempty"      jsonschema:"New due date in YYYY-MM-DD format. Pass an empty string to remove the due date. Omit the field to leave it untouched"`
 	Confidential     *bool                `json:"confidential,omitempty"  jsonschema:"Update confidential flag"`
@@ -629,8 +629,11 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateIssueOptions, error) {
 	if input.StateEvent != "" {
 		opts.StateEvent = new(input.StateEvent)
 	}
-	if input.AssigneeID != 0 {
-		opts.AssigneeID = new(input.AssigneeID)
+	// assignee_id 0 unassigns everybody and epic_id 0 takes the issue out of
+	// its epic, so presence is decided by nil for both and never by the
+	// value (issue 1306).
+	if input.AssigneeID != nil {
+		opts.AssigneeID = input.AssigneeID
 	}
 	if input.AssigneeIDs != nil {
 		opts.AssigneeIDs = &input.AssigneeIDs
@@ -659,9 +662,7 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateIssueOptions, error) {
 		opts.IssueType = new(input.IssueType)
 	}
 	opts.Weight = input.Weight
-	if input.EpicID > 0 {
-		opts.EpicID = new(input.EpicID)
-	}
+	opts.EpicID = input.EpicID
 	if input.DiscussionLocked != nil {
 		opts.DiscussionLocked = input.DiscussionLocked
 	}

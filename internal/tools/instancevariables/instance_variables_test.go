@@ -18,6 +18,20 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestUpdate_EmptyValues_ReachTheBody holds an instance variable's value and
+// description to an empty value emptying them (issue 1306).
+func TestUpdate_EmptyValues_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"key": "K", "value": "", "description": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, recorder := testutil.RecordWrites(t, `{}`, `{"key":"K","value":""}`)
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"value": `""`, "description": `""`})
+}
+
 const (
 	// pathInstanceVars identifies the path instance vars constant used by this package.
 	pathInstanceVars = "/api/v4/admin/ci/variables"
@@ -250,7 +264,7 @@ func TestUpdate_Success(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := Update(context.Background(), client, UpdateInput{Key: "MY_VAR", Value: "secret"})
+	out, err := Update(context.Background(), client, UpdateInput{Key: "MY_VAR", Value: new("secret")})
 	if err != nil {
 		t.Fatalf("Update() unexpected error: %v", err)
 	}
@@ -818,8 +832,8 @@ func TestInstanceVariableUpdate_AllOptionalFields_ReachTheRequestBody(t *testing
 	bTrue := true
 	out, err := Update(context.Background(), client, UpdateInput{
 		Key:          "DB_HOST",
-		Value:        "db.prod",
-		Description:  "Updated",
+		Value:        new("db.prod"),
+		Description:  new("Updated"),
 		VariableType: "file",
 		Protected:    &bTrue,
 		Masked:       &bTrue,
@@ -1169,7 +1183,7 @@ func TestInstanceVariables_UnreadableCapturedHidden(t *testing.T) {
 		}},
 		{Name: "update", Call: func() error {
 			client := poisoned(`{"key":"TOKEN","value":"x","hidden":"maybe"}`)
-			_, err := Update(context.Background(), client, UpdateInput{Key: "TOKEN", Value: "y"})
+			_, err := Update(context.Background(), client, UpdateInput{Key: "TOKEN", Value: new("y")})
 			reported[opUpdateInstanceVariable] = err
 			return err
 		}},
@@ -1332,7 +1346,7 @@ func TestInstanceVariables_Refusals_NameTheirOwnOperationAndHint(t *testing.T) {
 		{
 			name: "update forbidden",
 			call: func() error {
-				_, err := Update(context.Background(), refuse(http.StatusForbidden, bodyForbidden), UpdateInput{Key: "K", Value: "V"})
+				_, err := Update(context.Background(), refuse(http.StatusForbidden, bodyForbidden), UpdateInput{Key: "K", Value: new("V")})
 				return err
 			},
 			wantOp:   "update instance variable",
