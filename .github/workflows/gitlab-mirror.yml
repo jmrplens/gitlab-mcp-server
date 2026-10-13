@@ -106,6 +106,10 @@ jobs:
       - name: Sync GitHub releases to GitLab links
         run: |
           set -euo pipefail
+          # Bash does not carry errexit into a command substitution unless
+          # told to, so a request failing inside $(...) would be read as an
+          # empty answer: a failed links page as the end of the list.
+          shopt -s inherit_errexit
 
           if [ -z "$GITLAB_API_TOKEN" ]; then
             echo "::error::GITLAB_API_TOKEN secret is empty or missing"
@@ -122,7 +126,12 @@ jobs:
             local url="$2"
             local payload="${3:-}"
             local response
-            local args=(--fail-with-body --show-error --silent --request "$method" --header "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}")
+            local args=(--fail-with-body --show-error --silent --connect-timeout 10 --max-time 60 --request "$method" --header "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}")
+            # Only reads are retried: a write GitLab committed before the
+            # connection dropped would be made twice.
+            if [ "$method" = GET ]; then
+              args+=(--retry 3 --retry-delay 5)
+            fi
             if [ -n "$payload" ]; then
               args+=(--header "Content-Type: application/json" --data "$payload")
             fi
@@ -149,7 +158,7 @@ jobs:
             local batch
             local all='[]'
             while :; do
-              batch=$(gitlab_request GET "${gitlab_api}/releases/${tag_encoded}/assets/links?per_page=100&page=${page}")
+              batch=$(gitlab_request GET "${gitlab_api}/releases/${tag_encoded}/assets/links?per_page=100&page=${page}") || return 1
               [ "$(jq 'length' <<<"$batch")" -gt 0 ] || break
               all=$(jq -c --argjson more "$batch" '. + $more' <<<"$all")
               page=$((page + 1))
@@ -164,6 +173,7 @@ jobs:
             local response
             local status
             response=$(curl --silent --show-error --write-out '\n%{http_code}' \
+              --connect-timeout 10 --max-time 60 --retry 3 --retry-delay 5 \
               --header "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" \
               "${gitlab_api}/releases/${tag_encoded}")
             status=${response##*$'\n'}
