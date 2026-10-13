@@ -2485,17 +2485,17 @@ func TestBuildUpdateOpts_AllFields(t *testing.T) {
 	milestoneID := int64(5)
 	opts, err := buildUpdateOpts(UpdateInput{
 		Title:            "New Title",
-		Description:      "New Description",
+		Description:      new("New Description"),
 		StateEvent:       "close",
 		AssigneeIDs:      []int64{1, 2},
 		Labels:           []string{"a"},
 		AddLabels:        []string{"b"},
 		RemoveLabels:     []string{"c"},
 		MilestoneID:      &milestoneID,
-		DueDate:          "2026-12-31",
+		DueDate:          new("2026-12-31"),
 		Confidential:     &conf,
 		IssueType:        "incident",
-		Weight:           3,
+		Weight:           new(int64(3)),
 		EpicID:           4,
 		DiscussionLocked: &locked,
 	})
@@ -2573,7 +2573,7 @@ func assertUpdateOptsMetadata(t *testing.T, opts *gl.UpdateIssueOptions, wantCon
 
 // TestBuildUpdateOpts_InvalidDueDate verifies BuildUpdateOpts when invalid due date.
 func TestBuildUpdateOpts_InvalidDueDate(t *testing.T) {
-	_, err := buildUpdateOpts(UpdateInput{DueDate: "bad-date"})
+	_, err := buildUpdateOpts(UpdateInput{DueDate: new("bad-date")})
 	if err == nil {
 		t.Fatal("buildUpdateOpts: expected error for invalid due date, got nil")
 	}
@@ -3497,7 +3497,7 @@ func TestCreate_SuccessCov(t *testing.T) {
 		Description: "desc", Labels: []string{"bug"},
 		AssigneeIDs: []int64{1}, MilestoneID: 5,
 		DueDate: testDueDateCov, Confidential: &conf,
-		IssueType: "issue", Weight: 3, EpicID: 10,
+		IssueType: "issue", Weight: new(int64(3)), EpicID: 10,
 	})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
@@ -3587,7 +3587,7 @@ func TestUpdate_SuccessCov(t *testing.T) {
 // TestUpdate_InvalidDueDateCov verifies Update when invalid due date cov.
 func TestUpdate_InvalidDueDateCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
-	_, err := Update(context.Background(), client, UpdateInput{ProjectID: testProjectID, IssueIID: 10, DueDate: "bad"})
+	_, err := Update(context.Background(), client, UpdateInput{ProjectID: testProjectID, IssueIID: 10, DueDate: new("bad")})
 	if err == nil {
 		t.Fatal("Update: expected error for invalid due_date")
 	}
@@ -4643,7 +4643,7 @@ func TestUpdate_ExtraBranches(t *testing.T) {
 	out, err := Update(context.Background(), client, UpdateInput{
 		ProjectID: testProjectID, IssueIID: 10,
 		AddLabels: []string{"new-label"}, RemoveLabels: []string{"old-label"},
-		Confidential: &conf, IssueType: "incident", Weight: 5,
+		Confidential: &conf, IssueType: "incident", Weight: new(int64(5)),
 		EpicID: 42, DiscussionLocked: &locked,
 	})
 	if err != nil {
@@ -5432,7 +5432,7 @@ func TestCreate_OptionalInputs_EachReachesItsOwnBodyKey(t *testing.T) {
 		AssigneeIDs:                        []int64{72, 73},
 		MilestoneID:                        74,
 		IssueType:                          "incident",
-		Weight:                             75,
+		Weight:                             new(int64(75)),
 		EpicID:                             76,
 		MergeRequestToResolveDiscussionsOf: 77,
 		DiscussionToResolve:                "d78",
@@ -5828,7 +5828,7 @@ func TestUpdate_LabelInputs_EachReachesItsOwnBodyKey(t *testing.T) {
 	_, err := Update(context.Background(), client, UpdateInput{
 		ProjectID: testProjectID, IssueIID: 10,
 		Labels: []string{"keep", "also"}, AddLabels: []string{"added"}, RemoveLabels: []string{"gone"},
-		Description: "what changed", DueDate: "2026-05-06",
+		Description: new("what changed"), DueDate: new("2026-05-06"),
 	})
 	if err != nil {
 		t.Fatalf(fmtIssueUpdateErr, err)
@@ -5845,6 +5845,100 @@ func TestUpdate_LabelInputs_EachReachesItsOwnBodyKey(t *testing.T) {
 				t.Errorf("update body %q = %s, want %s", tt.key, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestUpdate_ClearingValues_ReachTheBody holds each value that removes or
+// zeroes a field of an issue to the request body, alone, so the body carries
+// that key and no other. Each used to sit behind a guard that read "set" as
+// "non-empty" or "positive": a weight of 0 sent nothing, which GitLab answers
+// with "at least one parameter must be provided" when it is the only change,
+// and an empty description, due date, assignee list or label list could not
+// be sent at all, so the update reported success with the issue unchanged
+// (issue 1297).
+func TestUpdate_ClearingValues_ReachTheBody(t *testing.T) {
+	tests := []struct {
+		name  string
+		input UpdateInput
+		want  map[string]string
+	}{
+		{"weight 0", UpdateInput{Weight: new(int64(0))}, map[string]string{"weight": "0"}},
+		{"weight 3", UpdateInput{Weight: new(int64(3))}, map[string]string{"weight": "3"}},
+		{"description empty", UpdateInput{Description: new("")}, map[string]string{"description": `""`}},
+		{"due_date empty", UpdateInput{DueDate: new("")}, map[string]string{"due_date": "null"}},
+		{"assignee_ids empty", UpdateInput{AssigneeIDs: []int64{}}, map[string]string{"assignee_ids": "[]"}},
+		{"labels empty", UpdateInput{Labels: []string{}}, map[string]string{"labels": `""`}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, body := captureBody(t, http.MethodPut, pathIssue10, http.StatusOK, issueJSONMinimal)
+			tt.input.ProjectID, tt.input.IssueIID = testProjectID, 10
+			if _, err := Update(context.Background(), client, tt.input); err != nil {
+				t.Fatalf(fmtIssueUpdateErr, err)
+			}
+			if len(body) != len(tt.want) {
+				t.Errorf("update body = %v, want exactly the keys %v", body, tt.want)
+			}
+			for key, want := range tt.want {
+				if got := encodedBodyValue(t, body, key); got != want {
+					t.Errorf("update body %q = %s, want %s", key, got, want)
+				}
+			}
+		})
+	}
+}
+
+// TestUpdate_ClearingValuesThroughTheMetaDecoder_ReachTheBody drives the
+// clearing values through toolutil.UnmarshalParams, the decoder the meta and
+// dynamic routes use, so what a model writes reaches the body as well as what
+// a Go caller builds.
+func TestUpdate_ClearingValuesThroughTheMetaDecoder_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
+		"project_id": testProjectID, "issue_iid": 10,
+		"weight": 0, "description": "", "due_date": "", "assignee_ids": []any{}, "labels": []any{},
+	})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, body := captureBody(t, http.MethodPut, pathIssue10, http.StatusOK, issueJSONMinimal)
+	if _, err = Update(context.Background(), client, input); err != nil {
+		t.Fatalf(fmtIssueUpdateErr, err)
+	}
+	for key, want := range map[string]string{"weight": "0", "description": `""`, "due_date": "null", "assignee_ids": "[]", "labels": `""`} {
+		t.Run(key, func(t *testing.T) {
+			if got := encodedBodyValue(t, body, key); got != want {
+				t.Errorf("update body %q = %s, want %s", key, got, want)
+			}
+		})
+	}
+}
+
+// TestCreateAndUpdate_NegativeWeight_IsRefusedBeforeAnyRequest holds a weight
+// below 0 to a refusal naming the field, on create and on update, before any
+// request is made: GitLab refuses it as well, and saying so here costs no
+// round trip.
+func TestCreateAndUpdate_NegativeWeight_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, createErr := Create(context.Background(), client, CreateInput{ProjectID: testProjectID, Title: testIssueTitle, Weight: new(int64(-1))})
+	_, updateErr := Update(context.Background(), client, UpdateInput{ProjectID: testProjectID, IssueIID: 10, Weight: new(int64(-1))})
+	for name, err := range map[string]error{"create": createErr, "update": updateErr} {
+		t.Run(name, func(t *testing.T) {
+			if err == nil || !strings.Contains(err.Error(), "weight") || !strings.Contains(err.Error(), "-1") {
+				t.Errorf("%s error = %v, want a refusal naming weight and quoting -1", name, err)
+			}
+		})
+	}
+}
+
+// TestCreate_WeightZero_ReachesTheBody holds a weight of 0 on create to the
+// body, which a plain int64 behind a "> 0" guard could not send.
+func TestCreate_WeightZero_ReachesTheBody(t *testing.T) {
+	client, body := captureCreateBody(t)
+	if _, err := Create(context.Background(), client, CreateInput{ProjectID: testProjectID, Title: testIssueTitle, Weight: new(int64(0))}); err != nil {
+		t.Fatalf(fmtCreateErr, err)
+	}
+	if got := encodedBodyValue(t, body, "weight"); got != "0" {
+		t.Errorf("create body weight = %s, want 0", got)
 	}
 }
 

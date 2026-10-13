@@ -388,6 +388,8 @@ const actionMRReviewers harness.ActionID = "merge_request.reviewers"
 // The licensed reads of the issue tool.
 const (
 	actionIssueWeightEventList    harness.ActionID = "issue.event_issue_weight_list"
+	actionIssueUpdate             harness.ActionID = "issue.update"
+	actionIssueGet                harness.ActionID = "issue.get"
 	actionIterationListProject    harness.ActionID = "issue.iteration_list_project"
 	actionIterationListGroup      harness.ActionID = "issue.iteration_list_group"
 	actionIssueIterationEventList harness.ActionID = "issue.event_issue_iteration_list"

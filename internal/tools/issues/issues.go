@@ -36,7 +36,7 @@ type CreateInput struct {
 	Labels      []string `json:"labels,omitempty" jsonschema:"Label names to apply"`
 	MilestoneID int64    `json:"milestone_id,omitempty" jsonschema:"Milestone ID to associate"`
 	EpicID      int64    `json:"epic_id,omitempty" tier:"premium" jsonschema:"Epic ID to associate the issue with"`
-	Weight      int64    `json:"weight,omitempty" tier:"premium" jsonschema:"Issue weight, 0 or higher"`
+	Weight      *int64   `json:"weight,omitempty" tier:"premium" jsonschema:"Issue weight, 0 or higher"`
 	DueDate     string   `json:"due_date,omitempty" jsonschema:"Due date in YYYY-MM-DD format"`
 
 	// Behavior flags
@@ -193,19 +193,19 @@ type UpdateInput struct {
 	ProjectID        toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
 	IssueIID         int64                `json:"issue_iid"               jsonschema:"Issue IID (project-scoped internal ID, not 'issue_id'),required"`
 	Title            string               `json:"title,omitempty"         jsonschema:"New title"`
-	Description      string               `json:"description,omitempty"   jsonschema:"New description (Markdown supported)"`
+	Description      *string              `json:"description,omitempty"   jsonschema:"New description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched"`
 	StateEvent       string               `json:"state_event,omitempty"   jsonschema:"State transition (close, reopen)"`
 	AssigneeID       int64                `json:"assignee_id,omitempty"       jsonschema:"Single user ID to assign (use assignee_ids for multiple)"`
-	AssigneeIDs      []int64              `json:"assignee_ids,omitempty"  jsonschema:"New assignee user IDs"`
-	Labels           []string             `json:"labels,omitempty"        jsonschema:"Label names to replace all existing"`
+	AssigneeIDs      []int64              `json:"assignee_ids,omitempty"  jsonschema:"User IDs that replace the issue's assignees. Pass [] to remove every assignee. Omit the field to leave them untouched"`
+	Labels           []string             `json:"labels,omitempty"        jsonschema:"Label names that replace all labels on the issue. Pass [] to remove every label. Omit the field to leave them untouched"`
 	AddLabels        []string             `json:"add_labels,omitempty"    jsonschema:"Label names to add without removing existing"`
 	RemoveLabels     []string             `json:"remove_labels,omitempty" jsonschema:"Label names to remove"`
 	EpicID           int64                `json:"epic_id,omitempty"       tier:"premium" jsonschema:"Epic ID to associate"`
 	MilestoneID      *int64               `json:"milestone_id,omitempty"  jsonschema:"New milestone ID (0 to unset. Omit to leave unchanged)"`
-	DueDate          string               `json:"due_date,omitempty"      jsonschema:"New due date in YYYY-MM-DD format"`
+	DueDate          *string              `json:"due_date,omitempty"      jsonschema:"New due date in YYYY-MM-DD format. Pass an empty string to remove the due date. Omit the field to leave it untouched"`
 	Confidential     *bool                `json:"confidential,omitempty"  jsonschema:"Update confidential flag"`
 	IssueType        string               `json:"issue_type,omitempty"    jsonschema:"Issue type (issue, incident, test_case, task)"`
-	Weight           int64                `json:"weight,omitempty"        tier:"premium" jsonschema:"Issue weight, 0 or higher"`
+	Weight           *int64               `json:"weight,omitempty"        tier:"premium" jsonschema:"Issue weight, 0 or higher. 0 is a weight of its own. Omit the field to leave it untouched"`
 	DiscussionLocked *bool                `json:"discussion_locked,omitempty" jsonschema:"Lock discussions on this issue"`
 	UpdatedAt        string               `json:"updated_at,omitempty"    jsonschema:"Update timestamp override (ISO 8601/RFC 3339, requires admin permissions)"`
 }
@@ -418,6 +418,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 // buildCreateOpts maps CreateInput fields to the GitLab API create options.
 func buildCreateOpts(input CreateInput) (*gl.CreateIssueOptions, error) {
+	if err := checkWeight("issueCreate", input.Weight); err != nil {
+		return nil, err
+	}
 	opts := &gl.CreateIssueOptions{
 		Title: new(input.Title),
 	}
@@ -467,12 +470,20 @@ func applyCreateExtraOpts(opts *gl.CreateIssueOptions, input CreateInput) {
 	if input.IssueType != "" {
 		opts.IssueType = new(input.IssueType)
 	}
-	if input.Weight > 0 {
-		opts.Weight = new(input.Weight)
-	}
+	opts.Weight = input.Weight
 	if input.EpicID > 0 {
 		opts.EpicID = new(input.EpicID)
 	}
+}
+
+// checkWeight refuses a weight below 0 before any request, naming the field
+// and quoting the value. 0 is a weight of its own and is sent like any other,
+// which a plain int64 behind a "> 0" guard could not do (issue 1297).
+func checkWeight(op string, weight *int64) error {
+	if weight != nil && *weight < 0 {
+		return fmt.Errorf("%s: weight must be 0 or higher, got %d", op, *weight)
+	}
+	return nil
 }
 
 // Get retrieves a single issue by its internal ID from a GitLab project.
@@ -597,15 +608,23 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	return issueListOutput("issueList", issues, resp, captured)
 }
 
-// buildUpdateOpts maps UpdateInput fields to the GitLab API update
-// options, applying only non-zero values. Returns an error if due_date parsing fails.
+// buildUpdateOpts maps UpdateInput fields to the GitLab API update options.
+// A field the caller left out is left unset. The fields an update can empty
+// decide presence by nil rather than by their value, so the value that
+// empties each one reaches GitLab (issue 1297): a description of "" is sent
+// as "", a due date of "" as null through client-go's ResetDueDate, an empty
+// assignee list as [], an empty label list as "", and a weight of 0 as 0.
+// Returns an error if due_date does not parse or the weight is negative.
 func buildUpdateOpts(input UpdateInput) (*gl.UpdateIssueOptions, error) {
+	if err := checkWeight("issueUpdate", input.Weight); err != nil {
+		return nil, err
+	}
 	opts := &gl.UpdateIssueOptions{}
 	if input.Title != "" {
 		opts.Title = new(input.Title)
 	}
-	if input.Description != "" {
-		opts.Description = new(toolutil.NormalizeText(input.Description))
+	if input.Description != nil {
+		opts.Description = new(toolutil.NormalizeText(*input.Description))
 	}
 	if input.StateEvent != "" {
 		opts.StateEvent = new(input.StateEvent)
@@ -613,21 +632,25 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateIssueOptions, error) {
 	if input.AssigneeID != 0 {
 		opts.AssigneeID = new(input.AssigneeID)
 	}
-	if len(input.AssigneeIDs) > 0 {
+	if input.AssigneeIDs != nil {
 		opts.AssigneeIDs = &input.AssigneeIDs
 	}
-	opts.Labels = labelOptions(input.Labels)
+	if input.Labels != nil {
+		labels := gl.LabelOptions(input.Labels)
+		opts.Labels = &labels
+	}
 	opts.AddLabels = labelOptions(input.AddLabels)
 	opts.RemoveLabels = labelOptions(input.RemoveLabels)
 	if input.MilestoneID != nil {
 		opts.MilestoneID = input.MilestoneID
 	}
-	if input.DueDate != "" {
-		d, err := parseDueDate(input.DueDate)
+	if input.DueDate != nil {
+		d, err := parseDueDate(*input.DueDate)
 		if err != nil {
 			return nil, err
 		}
 		opts.DueDate = d
+		opts.ResetDueDate = d == nil
 	}
 	if input.Confidential != nil {
 		opts.Confidential = input.Confidential
@@ -635,9 +658,7 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateIssueOptions, error) {
 	if input.IssueType != "" {
 		opts.IssueType = new(input.IssueType)
 	}
-	if input.Weight > 0 {
-		opts.Weight = new(input.Weight)
-	}
+	opts.Weight = input.Weight
 	if input.EpicID > 0 {
 		opts.EpicID = new(input.EpicID)
 	}

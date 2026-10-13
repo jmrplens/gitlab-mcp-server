@@ -20,6 +20,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupiterations"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/iterationdata"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projectiterations"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/resourceevents"
@@ -89,6 +90,34 @@ func TestIssueWeightEvents_TwoChanges_ListTheFinalWeight(t *testing.T) {
 			if event.ID == 0 {
 				e.T.Errorf("a weight event has no ID: %+v", event)
 			}
+		}
+	})
+}
+
+// TestIssue_Update_WeightZeroIsAWeight gives an issue of its own on every
+// surface a weight of 3 through the update action, then sends a weight of 0
+// as the only change and reads 0 back. The weight was a plain integer behind
+// a "> 0" guard, so 0 sent an empty body, which GitLab refuses with "at least
+// one parameter must be provided", and beside other fields it was dropped in
+// silence (issue 1297).
+func TestIssue_Update_WeightZeroIsAWeight(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("weightzero"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		issue := fixture.NewIssue(e, project, e.Name("weightzero"))
+		params := map[string]any{"project_id": project.IDParam(), "issue_iid": issue.IID}
+
+		set := harness.Do[issues.Output](s, actionIssueUpdate, withParams(params, map[string]any{"weight": 3}))
+		if set.Weight != 3 {
+			e.T.Fatalf("issue update answered weight %d, want 3 before the zero", set.Weight)
+		}
+		zeroed := harness.Do[issues.Output](s, actionIssueUpdate, withParams(params, map[string]any{"weight": 0}))
+		read := harness.Do[issues.Output](s, actionIssueGet, params)
+		if zeroed.Weight != 0 || read.Weight != 0 {
+			e.T.Errorf("after a weight of 0 the update answered %d and the read %d, want 0", zeroed.Weight, read.Weight)
 		}
 	})
 }
