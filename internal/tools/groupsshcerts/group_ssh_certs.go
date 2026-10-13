@@ -105,7 +105,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 		toolutil.KeysetContinuation(in.KeysetPaginationInput),
 	)
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list group SSH certificates", err, http.StatusNotFound, "verify group_id. Requires Owner role or admin access")
+		return ListOutput{}, wrapSSHCertificateErr("list group SSH certificates", err, http.StatusNotFound, "verify group_id. Requires Owner role or admin access")
 	}
 	out := ListOutput{
 		Certificates: make([]Output, 0, len(certs)),
@@ -115,6 +115,32 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 		out.Certificates = append(out.Certificates, toOutput(c))
 	}
 	return out, nil
+}
+
+// subgroupRefusal is the message GitLab answers every SSH certificate route
+// of a subgroup with, by forbidden!('Group') in the helper all three routes
+// share (check_ssh_certificate_available_to_group, ee/lib/ee/api/groups.rb).
+// It runs only once the caller passed the owner check, so a caller who is not
+// an owner gets the plain "403 Forbidden" there instead, which a role
+// explains.
+const subgroupRefusal = "403 Forbidden - Group"
+
+// topLevelOnlyHint is what a subgroup refusal is described with (issue
+// 1333): the generic 403 hint sent an owner to check a role or scope that was
+// never the cause.
+const topLevelOnlyHint = "GitLab keeps SSH certificates only on top-level groups, and this group is a subgroup. Use group.get on it to read its full_path and pass the top-level group, the part before the first slash, as group_id"
+
+// wrapSSHCertificateErr wraps err from an SSH certificate route: a subgroup
+// refusal with topLevelOnlyHint, any other answer with hint when GitLab
+// answered status, as [toolutil.WrapErrWithStatusHint] does. The message is
+// read from the error's text rather than through
+// [toolutil.ExtractGitLabMessage], which leaves out a message that opens
+// with the status, as this one does.
+func wrapSSHCertificateErr(op string, err error, status int, hint string) error {
+	if toolutil.IsHTTPStatus(err, http.StatusForbidden) && toolutil.ContainsAny(err, subgroupRefusal) {
+		return toolutil.WrapErrWithHint(op, err, topLevelOnlyHint)
+	}
+	return toolutil.WrapErrWithStatusHint(op, err, status, hint)
 }
 
 // Create adds a new SSH certificate to a group.
@@ -137,7 +163,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, in CreateInput) (O
 	}
 	cert, _, err := client.GL().GroupSSHCertificates.CreateGroupSSHCertificate(in.GroupID.String(), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("create group SSH certificate", err, http.StatusBadRequest, "verify the SSH certificate key is valid PEM format")
+		return Output{}, wrapSSHCertificateErr("create group SSH certificate", err, http.StatusBadRequest, "verify the SSH certificate key is valid PEM format")
 	}
 	return toOutput(cert), nil
 }
@@ -155,7 +181,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, in DeleteInput) er
 	}
 	_, err := client.GL().GroupSSHCertificates.DeleteGroupSSHCertificate(in.GroupID.String(), in.CertificateID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("delete group SSH certificate", err, http.StatusNotFound, "verify cert_id with group.ssh_cert_list")
+		return wrapSSHCertificateErr("delete group SSH certificate", err, http.StatusNotFound, "verify cert_id with group.ssh_cert_list")
 	}
 	return nil
 }

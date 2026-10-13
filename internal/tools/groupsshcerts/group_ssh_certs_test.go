@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -522,4 +523,58 @@ func TestList_Continuation_IsAppliedRatherThanSentAsPageToken(t *testing.T) {
 		})
 		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Certificates)}, err
 	})
+}
+
+// TestSSHCertificateRoutes_SubgroupRefusal_SaysTheyLiveOnTheTopLevelGroup
+// verifies that GitLab's refusal of an SSH certificate route on a subgroup is
+// described as that, on all three routes (issue 1333).
+//
+// GitLab answers every SSH certificate route of a subgroup with 403 and the
+// message "403 Forbidden - Group", from forbidden!('Group') once the caller
+// passed the owner check (measured against GitLab EE 19.4 for the list, the
+// create and, through the same helper, the delete). The generic hint told an
+// owner to look at the token's scope or role, which was never the cause. The
+// plain "403 Forbidden" a caller who is not an owner gets keeps the generic
+// description, since there the role is the cause.
+func TestSSHCertificateRoutes_SubgroupRefusal_SaysTheyLiveOnTheTopLevelGroup(t *testing.T) {
+	routes := []struct {
+		name string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{name: "list", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := List(ctx, client, ListInput{GroupID: "19"})
+			return err
+		}},
+		{name: "create", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Create(ctx, client, CreateInput{GroupID: "19", Key: "ssh-ed25519 AAAA", Title: "ci"})
+			return err
+		}},
+		{name: "delete", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			return Delete(ctx, client, DeleteInput{GroupID: "19", CertificateID: 7})
+		}},
+	}
+	answers := []struct {
+		name     string
+		message  string
+		topLevel bool
+	}{
+		{name: "an owner on a subgroup", message: "403 Forbidden - Group", topLevel: true},
+		{name: "a caller who is not an owner", message: "403 Forbidden"},
+	}
+	for _, route := range routes {
+		for _, answer := range answers {
+			t.Run(route.name+", "+answer.name, func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusForbidden, `{"message":"`+answer.message+`"}`)
+				}))
+				err := route.call(t.Context(), client)
+				if err == nil {
+					t.Fatal("error = nil, want GitLab's refusal")
+				}
+				if got := strings.Contains(err.Error(), "only on top-level groups"); got != answer.topLevel {
+					t.Errorf("error = %q, names the top-level rule = %t, want %t", err, got, answer.topLevel)
+				}
+			})
+		}
+	}
 }
