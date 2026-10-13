@@ -4,15 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"maps"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/freshness"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -1167,4 +1174,754 @@ func TestPremiumDescribedActionsAreEditionGated(t *testing.T) {
 		t.Fatalf("%d premium-described action(s) have empty Edition and leak into the CE surface; gate them via the package's premium spec helper (e.g. groupPremiumSpec/projectPremiumSpec) or set opts.Edition:\n  %s",
 			len(leaks), strings.Join(leaks, "\n  "))
 	}
+}
+
+// clearingCategory names why an update field's empty value is not sent to
+// GitLab, for a field [TestUpdateActions_AnEmptyValueReachesGitLabOrIsDeclared]
+// would otherwise report.
+type clearingCategory string
+
+// The reasons an empty value may stay unsent. There is deliberately no
+// category for "GitLab clears it and we drop it": that is the finding.
+const (
+	// clearingRequired is a field GitLab requires a value for, so an empty
+	// one would be refused and the handler reads it as unset.
+	clearingRequired clearingCategory = "required"
+	// clearingNotStored is a field that names an operation, a credential, a
+	// file or a moment rather than a stored value an update can empty.
+	clearingNotStored clearingCategory = "not-stored"
+	// clearingOneOf is a field that takes one of a fixed set of values, of
+	// which the empty string is none.
+	clearingOneOf clearingCategory = "one-of"
+	// clearingUnexercised is a field of an action whose write the probe's
+	// generic answers cannot reach; its package's own tests hold its clears.
+	clearingUnexercised clearingCategory = "unexercised"
+	// clearingUnverified is a field whose handling of an empty value by GitLab
+	// has not been established. The guard stays until it is, and the entry is
+	// the record that the question is open.
+	clearingUnverified clearingCategory = "unverified"
+)
+
+// clearingDeclaration answers one field the clearing gate would report.
+type clearingDeclaration struct {
+	category clearingCategory
+	reason   string
+}
+
+// clearRequired declares a field GitLab requires a value for.
+func clearRequired(reason string) clearingDeclaration {
+	return clearingDeclaration{category: clearingRequired, reason: reason}
+}
+
+// clearNotStored declares a field that names something other than a stored
+// value.
+func clearNotStored(reason string) clearingDeclaration {
+	return clearingDeclaration{category: clearingNotStored, reason: reason}
+}
+
+// clearOneOf declares a field that takes one of a fixed set of values.
+func clearOneOf(reason string) clearingDeclaration {
+	return clearingDeclaration{category: clearingOneOf, reason: reason}
+}
+
+// clearUnexercised declares a field of an action the probe cannot drive to its
+// write.
+func clearUnexercised(reason string) clearingDeclaration {
+	return clearingDeclaration{category: clearingUnexercised, reason: reason}
+}
+
+// clearUnverified declares a field whose answer to an empty value nobody has
+// established against GitLab. Issue 1306 stays open for every field declared
+// so, and settling one, by GitLab's model and validators or by a probe of an
+// instance, moves it to another category or out of the table.
+var clearUnverified = clearingDeclaration{
+	category: clearingUnverified,
+	reason:   "whether GitLab empties this field when sent an empty value has not been checked against an instance, so the guard keeps reading an empty value as unset until it is; issue 1306 stays open for it",
+}
+
+// The reasons several declarations share.
+const (
+	reasonAccessLevelChoice = "one of disabled, private, enabled or public"
+	reasonAccessRuleEntries = "each entry adds, changes or removes one access rule, so an empty list changes nothing and is not a clear"
+	reasonAdminMoment       = "a moment only an administrator may set, not a value an update empties"
+	reasonAvatarUpload      = "part of an image upload, not a stored value"
+	reasonCommitMetadata    = "describes the commit the update makes, not a value stored on the object"
+	reasonHookSecret        = "a secret GitLab only ever replaces"
+	reasonLabelOperation    = "labels to add or remove, an operation rather than a stored list"
+	reasonEpicLookup        = "the handler reads the epic's global ID before it sends the mutation, which the probe's generic answer cannot give; the epics package's tests hold its clears (issue 1302)"
+	reasonWorkItemLookup    = "the handler reads the work item's global ID, or asks for confirmation, before it sends the mutation, which the probe cannot give; the workitems package's tests hold its clears (issue 1303)"
+	reasonWebhookURL        = "a webhook delivers to its URL, which GitLab requires"
+	reasonBadgeURL          = "GitLab validates a badge's link and image URLs as addresses and an empty one is not (app/models/badge.rb)"
+	reasonServiceAccount    = "a service account has a name and a username"
+)
+
+// clearingDeclarations answers, by "action.field", every optional update field
+// whose empty value does not reach GitLab. A field that starts reaching GitLab
+// makes its entry stale, and a stale entry fails the gate like a missing one.
+var clearingDeclarations = map[string]clearingDeclaration{
+	"access.deploy_key_update.title":                                 clearRequired("a deploy key has a title"),
+	"achievement.update.avatar_content_base64":                       clearNotStored(reasonAvatarUpload),
+	"achievement.update.avatar_content_type":                         clearNotStored(reasonAvatarUpload),
+	"achievement.update.avatar_file_path":                            clearNotStored(reasonAvatarUpload),
+	"achievement.update.avatar_filename":                             clearNotStored(reasonAvatarUpload),
+	"achievement.update.name":                                        clearRequired("an achievement has a name"),
+	"admin.appearance_update.description":                            clearUnverified,
+	"admin.appearance_update.favicon":                                clearNotStored(reasonAvatarUpload),
+	"admin.appearance_update.footer_message":                         clearUnverified,
+	"admin.appearance_update.header_logo":                            clearNotStored(reasonAvatarUpload),
+	"admin.appearance_update.header_message":                         clearUnverified,
+	"admin.appearance_update.logo":                                   clearNotStored(reasonAvatarUpload),
+	"admin.appearance_update.member_guidelines":                      clearUnverified,
+	"admin.appearance_update.message_background_color":               clearUnverified,
+	"admin.appearance_update.message_font_color":                     clearUnverified,
+	"admin.appearance_update.new_project_guidelines":                 clearUnverified,
+	"admin.appearance_update.profile_image_guidelines":               clearUnverified,
+	"admin.appearance_update.pwa_description":                        clearUnverified,
+	"admin.appearance_update.pwa_icon":                               clearNotStored(reasonAvatarUpload),
+	"admin.appearance_update.pwa_name":                               clearUnverified,
+	"admin.appearance_update.pwa_short_name":                         clearUnverified,
+	"admin.appearance_update.site_name":                              clearUnverified,
+	"admin.appearance_update.title":                                  clearUnverified,
+	"admin.appearance_update.url":                                    clearUnverified,
+	"admin.broadcast_message_update.color":                           clearUnverified,
+	"admin.broadcast_message_update.ends_at":                         clearUnverified,
+	"admin.broadcast_message_update.font":                            clearUnverified,
+	"admin.broadcast_message_update.message":                         clearRequired("a broadcast message has a message"),
+	"admin.broadcast_message_update.starts_at":                       clearUnverified,
+	"admin.system_hook_edit.branch_filter_strategy":                  clearOneOf("one of wildcard, regex or all_branches"),
+	"admin.system_hook_edit.name":                                    clearUnverified,
+	"admin.system_hook_edit.signing_token":                           clearNotStored(reasonHookSecret),
+	"admin.system_hook_edit.token":                                   clearNotStored(reasonHookSecret),
+	"admin.system_hook_edit.url":                                     clearRequired(reasonWebhookURL),
+	"admin.topic_update.name":                                        clearRequired("a topic has a name"),
+	"admin.topic_update.title":                                       clearRequired("a topic has a title"),
+	"branch.update_protected.allowed_to_merge":                       clearNotStored(reasonAccessRuleEntries),
+	"branch.update_protected.allowed_to_push":                        clearNotStored(reasonAccessRuleEntries),
+	"branch.update_protected.allowed_to_unprotect":                   clearNotStored(reasonAccessRuleEntries),
+	"branch.update_protected.name":                                   clearRequired("a protected branch rule names a branch or a wildcard"),
+	"ci_variable.group_update.environment_scope":                     clearRequired("a variable has an environment scope, * for every environment"),
+	"ci_variable.update.environment_scope":                           clearRequired("a variable has an environment scope, * for every environment"),
+	"environment.freeze_update.cron_timezone":                        clearUnverified,
+	"environment.freeze_update.freeze_end":                           clearRequired("a freeze period has a cron end"),
+	"environment.freeze_update.freeze_start":                         clearRequired("a freeze period has a cron start"),
+	"environment.protected_update.approval_rules":                    clearNotStored(reasonAccessRuleEntries),
+	"environment.protected_update.deploy_access_levels":              clearNotStored(reasonAccessRuleEntries),
+	"environment.protected_update.name":                              clearRequired("a protected environment names an environment"),
+	"environment.update.flux_resource_path":                          clearUnverified,
+	"environment.update.kubernetes_namespace":                        clearUnverified,
+	"environment.update.name":                                        clearRequired("an environment has a name"),
+	"external_status_check.update_project.external_url":              clearRequired("a status check calls its external URL"),
+	"external_status_check.update_project.name":                      clearRequired("a status check has a name"),
+	"external_status_check.update_project.protected_branch_ids":      clearUnverified,
+	"external_status_check.update_project.shared_secret":             clearNotStored(reasonHookSecret),
+	"feature_flags.feature_flag_update.new_name":                     clearRequired("a feature flag has a name"),
+	"feature_flags.feature_flag_update.strategies":                   clearNotStored("each entry changes or removes one strategy by its ID, so an empty list changes nothing"),
+	"feature_flags.ff_user_list_update.name":                         clearRequired("a user list has a name"),
+	"feature_flags.ff_user_list_update.user_xids":                    clearUnverified,
+	"group.badge_edit.image_url":                                     clearRequired(reasonBadgeURL),
+	"group.badge_edit.link_url":                                      clearRequired(reasonBadgeURL),
+	"group.badge_edit.name":                                          clearUnverified,
+	"group.epic_issue_update.adjacent_id":                            clearNotStored("the issue the moved one is placed beside, not a stored value"),
+	"group.epic_update.add_label_ids":                                clearNotStored(reasonLabelOperation),
+	"group.epic_update.assignee_ids":                                 clearUnexercised(reasonEpicLookup),
+	"group.epic_update.color":                                        clearUnexercised(reasonEpicLookup),
+	"group.epic_update.description":                                  clearUnexercised(reasonEpicLookup),
+	"group.epic_update.due_date":                                     clearUnexercised(reasonEpicLookup),
+	"group.epic_update.milestone_id":                                 clearUnexercised(reasonEpicLookup),
+	"group.epic_update.parent_id":                                    clearUnexercised(reasonEpicLookup),
+	"group.epic_update.remove_label_ids":                             clearNotStored(reasonLabelOperation),
+	"group.epic_update.start_date":                                   clearUnexercised(reasonEpicLookup),
+	"group.epic_update.title":                                        clearRequired("an epic has a title"),
+	"group.epic_update.weight":                                       clearUnexercised(reasonEpicLookup),
+	"group.group_board_update.name":                                  clearRequired("a board has a name"),
+	"group.group_label_update.color":                                 clearRequired("a label has a color"),
+	"group.group_label_update.new_name":                              clearRequired("a label has a name"),
+	"group.group_member_edit.expires_at":                             clearUnverified,
+	"group.group_milestone_update.title":                             clearRequired("a milestone has a title"),
+	"group.hook_edit.custom_headers":                                 clearUnverified,
+	"group.hook_edit.name":                                           clearUnverified,
+	"group.hook_edit.signing_token":                                  clearNotStored(reasonHookSecret),
+	"group.hook_edit.token":                                          clearNotStored(reasonHookSecret),
+	"group.hook_edit.url":                                            clearRequired(reasonWebhookURL),
+	"group.protected_branch_update.allowed_to_merge":                 clearNotStored(reasonAccessRuleEntries),
+	"group.protected_branch_update.allowed_to_push":                  clearNotStored(reasonAccessRuleEntries),
+	"group.protected_branch_update.allowed_to_unprotect":             clearNotStored(reasonAccessRuleEntries),
+	"group.protected_branch_update.name":                             clearRequired("a protected branch rule names a branch or a wildcard"),
+	"group.protected_env_update.approval_rules":                      clearNotStored(reasonAccessRuleEntries),
+	"group.protected_env_update.deploy_access_levels":                clearNotStored(reasonAccessRuleEntries),
+	"group.security_settings_update.projects_to_exclude":             clearUnverified,
+	"group.service_account_update.email":                             clearUnverified,
+	"group.service_account_update.name":                              clearRequired(reasonServiceAccount),
+	"group.service_account_update.username":                          clearRequired(reasonServiceAccount),
+	"group.update.allowed_email_domains_list":                        clearUnverified,
+	"group.update.default_branch":                                    clearUnverified,
+	"group.update.ip_restriction_ranges":                             clearUnverified,
+	"group.update.name":                                              clearRequired("a group has a name"),
+	"group.update.path":                                              clearRequired("a group has a path"),
+	"group.update.step_up_auth_required_oauth_provider":              clearUnverified,
+	"group.update.unique_project_download_limit_alertlist":           clearUnverified,
+	"group.update.unique_project_download_limit_allowlist":           clearUnverified,
+	"group.wiki_edit.content":                                        clearUnverified,
+	"group.wiki_edit.title":                                          clearRequired("a wiki page has a title"),
+	"issue.discussion_update_note.created_at":                        clearNotStored(reasonAdminMoment),
+	"issue.update.add_labels":                                        clearNotStored(reasonLabelOperation),
+	"issue.update.remove_labels":                                     clearNotStored(reasonLabelOperation),
+	"issue.update.title":                                             clearRequired("an issue has a title"),
+	"issue.update.updated_at":                                        clearNotStored(reasonAdminMoment),
+	"issue.work_item_saved_view_update.description":                  clearUnverified,
+	"issue.work_item_saved_view_update.name":                         clearRequired("a saved view has a name"),
+	"issue.work_item_update.add_label_ids":                           clearNotStored(reasonLabelOperation),
+	"issue.work_item_update.assignee_ids":                            clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.color":                                   clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.crm_contact_ids":                         clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.description":                             clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.due_date":                                clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.iteration_id":                            clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.milestone_id":                            clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.parent_id":                               clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.remove_label_ids":                        clearNotStored(reasonLabelOperation),
+	"issue.work_item_update.start_date":                              clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.title":                                   clearRequired("a work item has a title"),
+	"issue.work_item_update.weight":                                  clearUnexercised(reasonWorkItemLookup),
+	"merge_request.approval_rule_update.group_ids":                   clearUnverified,
+	"merge_request.approval_rule_update.name":                        clearRequired("an approval rule has a name"),
+	"merge_request.approval_rule_update.user_ids":                    clearUnverified,
+	"merge_request.update.add_labels":                                clearNotStored(reasonLabelOperation),
+	"merge_request.update.remove_labels":                             clearNotStored(reasonLabelOperation),
+	"merge_request.update.target_branch":                             clearRequired("a merge request targets a branch"),
+	"merge_request.update.title":                                     clearRequired("a merge request has a title"),
+	"mr_review.discussion_note_update.body":                          clearRequired("a note has a body"),
+	"mr_review.discussion_note_update.created_at":                    clearNotStored(reasonAdminMoment),
+	"mr_review.draft_note_update.note":                               clearRequired("a draft note has a body"),
+	"package.protection_rule_update.minimum_access_level_for_delete": clearUnverified,
+	"package.protection_rule_update.minimum_access_level_for_push":   clearUnverified,
+	"package.registry_rule_update.repository_path_pattern":           clearRequired("a protection rule matches a repository path pattern"),
+	"package.registry_tag_rule_update.tag_name_pattern":              clearRequired("a tag protection rule matches a tag name pattern"),
+	"pipeline.schedule_update.cron":                                  clearRequired("a schedule has a cron expression"),
+	"pipeline.schedule_update.cron_timezone":                         clearUnverified,
+	"pipeline.schedule_update.description":                           clearRequired("GitLab validates the presence of a schedule's description (app/models/ci/pipeline_schedule.rb)"),
+	"pipeline.schedule_update.inputs":                                clearUnverified,
+	"pipeline.schedule_update.ref":                                   clearRequired("a schedule runs on a ref"),
+	"pipeline.trigger_update.description":                            clearUnverified,
+	"project.approval_rule_update.group_ids":                         clearUnverified,
+	"project.approval_rule_update.name":                              clearRequired("an approval rule has a name"),
+	"project.approval_rule_update.protected_branch_ids":              clearUnverified,
+	"project.approval_rule_update.user_ids":                          clearUnverified,
+	"project.approval_rule_update.usernames":                         clearUnverified,
+	"project.badge_edit.image_url":                                   clearRequired(reasonBadgeURL),
+	"project.badge_edit.link_url":                                    clearRequired(reasonBadgeURL),
+	"project.badge_edit.name":                                        clearUnverified,
+	"project.board_update.name":                                      clearRequired("a board has a name"),
+	"project.hook_edit.branch_filter_strategy":                       clearOneOf("one of wildcard, regex or all_branches"),
+	"project.hook_edit.custom_headers":                               clearUnverified,
+	"project.hook_edit.name":                                         clearUnverified,
+	"project.hook_edit.signing_token":                                clearNotStored(reasonHookSecret),
+	"project.hook_edit.token":                                        clearNotStored(reasonHookSecret),
+	"project.hook_edit.url":                                          clearRequired(reasonWebhookURL),
+	"project.label_update.color":                                     clearRequired("a label has a color"),
+	"project.label_update.new_name":                                  clearRequired("a label has a name"),
+	"project.member_edit.expires_at":                                 clearUnverified,
+	"project.milestone_update.title":                                 clearRequired("a milestone has a title"),
+	"project.mirror_edit.host_keys":                                  clearUnverified,
+	"project.mirror_edit.mirror_branch_regex":                        clearUnverified,
+	"project.pages_domain_update.certificate":                        clearUnverified,
+	"project.pages_domain_update.key":                                clearUnverified,
+	"project.service_account_update.email":                           clearUnverified,
+	"project.service_account_update.name":                            clearRequired(reasonServiceAccount),
+	"project.service_account_update.username":                        clearRequired(reasonServiceAccount),
+	"project.update.analytics_access_level":                          clearOneOf(reasonAccessLevelChoice),
+	"project.update.builds_access_level":                             clearOneOf(reasonAccessLevelChoice),
+	"project.update.ci_id_token_sub_claim_components":                clearUnverified,
+	"project.update.container_registry_access_level":                 clearOneOf(reasonAccessLevelChoice),
+	"project.update.default_branch":                                  clearRequired("a project's default branch names a branch"),
+	"project.update.environments_access_level":                       clearOneOf(reasonAccessLevelChoice),
+	"project.update.feature_flags_access_level":                      clearOneOf(reasonAccessLevelChoice),
+	"project.update.forking_access_level":                            clearOneOf(reasonAccessLevelChoice),
+	"project.update.import_url":                                      clearNotStored("starts an import from the address, not a value an update empties"),
+	"project.update.infrastructure_access_level":                     clearOneOf(reasonAccessLevelChoice),
+	"project.update.issues_access_level":                             clearOneOf(reasonAccessLevelChoice),
+	"project.update.issues_template":                                 clearUnverified,
+	"project.update.merge_requests_access_level":                     clearOneOf(reasonAccessLevelChoice),
+	"project.update.merge_requests_template":                         clearUnverified,
+	"project.update.mirror_branch_regex":                             clearUnverified,
+	"project.update.model_experiments_access_level":                  clearOneOf(reasonAccessLevelChoice),
+	"project.update.model_registry_access_level":                     clearOneOf(reasonAccessLevelChoice),
+	"project.update.monitor_access_level":                            clearOneOf(reasonAccessLevelChoice),
+	"project.update.name":                                            clearRequired("a project has a name"),
+	"project.update.package_registry_access_level":                   clearOneOf(reasonAccessLevelChoice),
+	"project.update.pages_access_level":                              clearOneOf(reasonAccessLevelChoice),
+	"project.update.path":                                            clearRequired("a project has a path"),
+	"project.update.releases_access_level":                           clearOneOf(reasonAccessLevelChoice),
+	"project.update.repository_access_level":                         clearOneOf(reasonAccessLevelChoice),
+	"project.update.repository_storage":                              clearNotStored("moves the repository to another storage, not a value an update empties"),
+	"project.update.requirements_access_level":                       clearOneOf(reasonAccessLevelChoice),
+	"project.update.security_and_compliance_access_level":            clearOneOf(reasonAccessLevelChoice),
+	"project.update.snippets_access_level":                           clearOneOf(reasonAccessLevelChoice),
+	"project.update.wiki_access_level":                               clearOneOf(reasonAccessLevelChoice),
+	"release.link_update.name":                                       clearRequired("a release link has a name"),
+	"release.link_update.url":                                        clearRequired("a release link points at a URL"),
+	"release.update.description":                                     clearUnverified,
+	"release.update.name":                                            clearUnverified,
+	"release.update.released_at":                                     clearUnverified,
+	"repository.commit_discussion_update_note.created_at":            clearNotStored(reasonAdminMoment),
+	"repository.file_update.author_email":                            clearNotStored(reasonCommitMetadata),
+	"repository.file_update.author_name":                             clearNotStored(reasonCommitMetadata),
+	"repository.file_update.last_commit_id":                          clearNotStored(reasonCommitMetadata),
+	"repository.file_update.start_branch":                            clearNotStored(reasonCommitMetadata),
+	"repository.update_submodule.commit_message":                     clearNotStored(reasonCommitMetadata),
+	"runner.update.access_level":                                     clearOneOf("one of not_protected or ref_protected"),
+	"runner.update.description":                                      clearUnverified,
+	"runner.update.maintenance_note":                                 clearUnverified,
+	"runner.update.tag_list":                                         clearUnverified,
+	"snippet.discussion_update_note.created_at":                      clearNotStored(reasonAdminMoment),
+	"snippet.project_update.content":                                 clearUnverified,
+	"snippet.project_update.file_name":                               clearUnverified,
+	"snippet.project_update.files":                                   clearNotStored("each entry is a file action (create, update, delete or move), so an empty list changes nothing"),
+	"snippet.project_update.title":                                   clearRequired("a snippet has a title"),
+	"snippet.update.content":                                         clearUnverified,
+	"snippet.update.file_name":                                       clearUnverified,
+	"snippet.update.files":                                           clearNotStored("each entry is a file action (create, update, delete or move), so an empty list changes nothing"),
+	"snippet.update.title":                                           clearRequired("a snippet has a title"),
+	"user.modify.commit_email":                                       clearUnverified,
+	"user.modify.email":                                              clearRequired("a user has a primary email"),
+	"user.modify.extern_uid":                                         clearNotStored("links an external identity, an operation rather than a stored value"),
+	"user.modify.job_title":                                          clearUnverified,
+	"user.modify.linkedin":                                           clearUnverified,
+	"user.modify.location":                                           clearUnverified,
+	"user.modify.name":                                               clearRequired("a user has a name"),
+	"user.modify.note":                                               clearUnverified,
+	"user.modify.organization":                                       clearUnverified,
+	"user.modify.password":                                           clearNotStored(reasonHookSecret),
+	"user.modify.provider":                                           clearNotStored("links an external identity, an operation rather than a stored value"),
+	"user.modify.public_email":                                       clearUnverified,
+	"user.modify.twitter":                                            clearUnverified,
+	"user.modify.username":                                           clearRequired("a user has a username"),
+	"user.notification_global_update.notification_email":             clearUnverified,
+	"user.notification_group_update.notification_email":              clearUnverified,
+	"user.notification_project_update.notification_email":            clearUnverified,
+	"user.update_service_account.email":                              clearUnverified,
+	"user.update_service_account.name":                               clearRequired(reasonServiceAccount),
+	"user.update_service_account.username":                           clearRequired(reasonServiceAccount),
+	"wiki.update.content":                                            clearUnverified,
+	"wiki.update.title":                                              clearRequired("a wiki page has a title"),
+}
+
+// updateActionName selects the actions the clearing gate judges: the writes
+// that change an object that already exists.
+var updateActionName = regexp.MustCompile(`(^|_)(update|edit|modify)($|_)`)
+
+// graphQLMutation tells a GraphQL write from a read in a request body's query.
+var graphQLMutation = regexp.MustCompile(`\bmutation\b`)
+
+// TestUpdateActions_AnEmptyValueReachesGitLabOrIsDeclared is the gate issue
+// 1306 asked for. Update handlers across the catalog decided whether a field
+// was sent by testing it for emptiness, so the one value that empties a field
+// in GitLab was the one value that could never be sent: the caller was told
+// the update succeeded, or that it sent nothing, and the field kept its value.
+//
+// The gate calls every update action of the Ultimate catalog once per optional
+// text, list or integer field, with that field set to "", [] or 0 and the
+// required fields filled, against a stand-in GitLab that records what it is
+// sent. 0 is the integer's probe because it is the value that clears an ID
+// reference, and the one value a guard reading "set" as "positive" drops. A
+// field passes when some write carries it with that empty value or null, as a
+// member at the top of a REST body, anywhere in a GraphQL request's variables
+// (in camel case there), or as a query parameter
+// ([clearingWrite.carriesEmpty]). Any other field must be answered in
+// [clearingDeclarations], and an entry the probe no longer needs fails too.
+//
+// The stand-in answers with one generic object or list per request, so the
+// probe sees the first write each handler makes and nothing about GitLab's
+// answer. It is built by hand rather than with testutil.NewTestClient on
+// purpose: the requests carry the probe's fill values, which are not what this
+// server sends GitLab, and recording them would put every update route in the
+// request inventory under this package.
+func TestUpdateActions_AnEmptyValueReachesGitLabOrIsDeclared(t *testing.T) {
+	probe := newClearingProbe(t)
+	catalog, err := BuildActionCatalog(probe.client, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+
+	judged := make(map[string]bool)
+	var undeclared, stale []string
+	for _, action := range catalog.Actions() {
+		if action.ReadOnly || !updateActionName.MatchString(action.Name) {
+			continue
+		}
+		base, fields := clearingProbeInput(action.Route.InputSchema)
+		for _, field := range fields {
+			key := string(action.ID) + "." + field.name
+			judged[key] = true
+			outcome := probe.send(t, action.Route.Handler, base, field)
+			_, declared := clearingDeclarations[key]
+			switch {
+			case outcome.reached && declared:
+				stale = append(stale, key+": the empty value now reaches GitLab")
+			case !outcome.reached && !declared:
+				undeclared = append(undeclared, key+": "+outcome.String())
+			}
+		}
+	}
+	for key := range clearingDeclarations {
+		if !judged[key] {
+			stale = append(stale, key+": no update action of the catalog has this optional field")
+		}
+	}
+
+	sort.Strings(undeclared)
+	sort.Strings(stale)
+	if len(undeclared) > 0 {
+		t.Errorf("%d update field(s) drop the empty value a caller sets to clear them; send it (nil decides presence, never emptiness) or declare why in clearingDeclarations:\n  %s",
+			len(undeclared), strings.Join(undeclared, "\n  "))
+	}
+	if len(stale) > 0 {
+		t.Errorf("%d clearing declaration(s) answer nothing; delete them:\n  %s", len(stale), strings.Join(stale, "\n  "))
+	}
+}
+
+// TestClearingWrite_CarriesEmpty_HoldsTheValueAndThePlace pins what the gate
+// counts as a field reaching GitLab empty: the empty value or null, where a
+// field the caller sets lands. A write that re-sends the stored value, or that
+// carries another object's member of the same name, is not a clear, and the
+// gate counted both as one while it matched a key at any depth with any value.
+func TestClearingWrite_CarriesEmpty_HoldsTheValueAndThePlace(t *testing.T) {
+	text := clearingField{name: "description", empty: ""}
+	list := clearingField{name: "labels", empty: []any{}}
+	number := clearingField{name: "assignee_id", empty: 0}
+	for _, tc := range []struct {
+		name  string
+		write clearingWrite
+		field clearingField
+		want  bool
+	}{
+		{"empty text at the top of the body", clearingWrite{body: map[string]any{"description": ""}}, text, true},
+		{"null at the top of the body", clearingWrite{body: map[string]any{"description": nil}}, text, true},
+		{"the stored text sent back", clearingWrite{body: map[string]any{"description": "kept"}}, text, false},
+		{"another object's member of the same name", clearingWrite{body: map[string]any{"owner": map[string]any{"description": ""}}}, text, false},
+		{"empty list", clearingWrite{body: map[string]any{"labels": []any{}}}, list, true},
+		{"empty comma-separated list", clearingWrite{body: map[string]any{"labels": ""}}, list, true},
+		{"a list that still holds a label", clearingWrite{body: map[string]any{"labels": []any{"bug"}}}, list, false},
+		{"zero", clearingWrite{body: map[string]any{"assignee_id": float64(0)}}, number, true},
+		{"the stored number sent back", clearingWrite{body: map[string]any{"assignee_id": float64(7)}}, number, false},
+		{"zero in the query", clearingWrite{query: map[string][]string{"assignee_id": {"0"}}}, number, true},
+		{"empty list in the query", clearingWrite{query: map[string][]string{"labels[]": {""}}}, list, true},
+		{"a value in the query", clearingWrite{query: map[string][]string{"description": {"kept"}}}, text, false},
+		{"camel case in GraphQL variables", clearingWrite{graphQL: true, body: map[string]any{"variables": map[string]any{"input": map[string]any{"assigneeId": nil}}}}, number, true},
+		{"the stored value in GraphQL variables", clearingWrite{graphQL: true, body: map[string]any{"variables": map[string]any{"input": map[string]any{"description": "kept"}}}}, text, false},
+		{"a list of inputs in GraphQL variables", clearingWrite{graphQL: true, body: map[string]any{"variables": map[string]any{"inputs": []any{map[string]any{"labels": []any{}}}}}}, list, true},
+		{"a GraphQL member outside the variables", clearingWrite{graphQL: true, body: map[string]any{"description": ""}}, text, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.write.carriesEmpty(tc.field); got != tc.want {
+				t.Errorf("carriesEmpty(%s) = %t, want %t for %+v", tc.field.name, got, tc.want, tc.write)
+			}
+		})
+	}
+}
+
+// clearingField is one optional field the gate empties.
+type clearingField struct {
+	name  string
+	empty any
+}
+
+// clearingOutcome is what one probe call did with the empty value.
+type clearingOutcome struct {
+	reached bool
+	writes  int
+	err     error
+}
+
+// String describes an outcome the gate reports.
+func (o clearingOutcome) String() string {
+	switch {
+	case o.writes == 0 && o.err != nil:
+		return "no write was sent: " + o.err.Error()
+	case o.writes == 0:
+		return "no write was sent"
+	default:
+		return fmt.Sprintf("none of the %d write(s) carried it", o.writes)
+	}
+}
+
+// clearingProbeInput reads an input schema into the parameters every probe of
+// the action carries (its required fields and the first set of any
+// alternative identifiers, filled) and the optional fields to empty one at a
+// time: the text and integer fields with no enumeration, and the lists.
+func clearingProbeInput(schema map[string]any) (map[string]any, []clearingField) {
+	properties := asMap(schema["properties"])
+	required := schemaNames(schema["required"])
+	identifiers := map[string]bool{}
+	for _, keyword := range []string{"anyOf", "oneOf"} {
+		branches, _ := schema[keyword].([]any)
+		for index, branch := range branches {
+			names := schemaNames(asMap(branch)["required"])
+			for _, name := range names {
+				identifiers[name] = true
+			}
+			if index == 0 {
+				required = append(required, names...)
+			}
+		}
+	}
+	base := make(map[string]any, len(required))
+	for _, name := range required {
+		base[name] = clearingFill(asMap(properties[name]))
+		identifiers[name] = true
+	}
+	names := make([]string, 0, len(properties))
+	for name := range properties {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var fields []clearingField
+	for _, name := range names {
+		if identifiers[name] {
+			continue
+		}
+		property := asMap(properties[name])
+		switch schemaTypeName(property) {
+		case "string":
+			if property["enum"] == nil {
+				fields = append(fields, clearingField{name: name, empty: ""})
+			}
+		case "array":
+			fields = append(fields, clearingField{name: name, empty: []any{}})
+		case "integer":
+			if property["enum"] == nil {
+				fields = append(fields, clearingField{name: name, empty: 0})
+			}
+		}
+	}
+	return base, fields
+}
+
+// schemaNames reads a schema keyword holding a list of names, in either of the
+// two shapes the catalog's schemas carry it.
+func schemaNames(raw any) []string {
+	switch names := raw.(type) {
+	case []string:
+		return slices.Clone(names)
+	case []any:
+		out := make([]string, 0, len(names))
+		for _, name := range names {
+			out = append(out, fmt.Sprint(name))
+		}
+		return out
+	}
+	return nil
+}
+
+// asMap reads a schema node as an object, or as an empty one.
+func asMap(raw any) map[string]any {
+	node, _ := raw.(map[string]any)
+	return node
+}
+
+// schemaTypeName reads the JSON type of a schema property, skipping the null
+// a nullable property lists beside it.
+func schemaTypeName(property map[string]any) string {
+	switch kind := property["type"].(type) {
+	case string:
+		return kind
+	case []any:
+		for _, each := range kind {
+			if name, ok := each.(string); ok && name != "null" {
+				return name
+			}
+		}
+	}
+	return ""
+}
+
+// clearingFill is the value the probe gives a required field: the first value
+// of an enumeration, or a value of the field's type.
+func clearingFill(property map[string]any) any {
+	if values, ok := property["enum"].([]any); ok && len(values) > 0 {
+		return values[0]
+	}
+	switch schemaTypeName(property) {
+	case "integer", "number":
+		return 1
+	case "boolean":
+		return true
+	case "array":
+		return []any{"1"}
+	case "object":
+		return map[string]any{}
+	}
+	return "1"
+}
+
+// clearingProbe is the stand-in GitLab the gate drives every handler against,
+// and the record of the writes it received during one call.
+type clearingProbe struct {
+	client *gitlabclient.Client
+	mu     sync.Mutex
+	writes []clearingWrite
+}
+
+// clearingWrite is one write request as the probe judges it.
+type clearingWrite struct {
+	query   map[string][]string
+	body    any
+	graphQL bool
+}
+
+// carriesEmpty reports whether the write sends field with the value that
+// empties it, or null. The value is read where a field the caller sets can
+// land and nowhere else: a query parameter, a member at the top of a REST
+// body, or a member anywhere in a GraphQL request's variables, which nest
+// under an input object and spell the name in camel case. Holding the value
+// and the place is what keeps the gate from counting a write that re-sends
+// the stored value, or another object's member of the same name, as a clear.
+func (w clearingWrite) carriesEmpty(field clearingField) bool {
+	for _, key := range []string{field.name, field.name + "[]"} {
+		if values, ok := w.query[key]; ok && emptyQueryValues(values, field.empty) {
+			return true
+		}
+	}
+	body := asMap(w.body)
+	if !w.graphQL {
+		value, ok := body[field.name]
+		return ok && emptyJSONValue(value, field.empty)
+	}
+	return variablesCarryEmpty(body["variables"], field)
+}
+
+// variablesCarryEmpty reports whether a GraphQL request's variables hold the
+// field, under its own name or its camel-case spelling, with the value that
+// empties it, at any depth.
+func variablesCarryEmpty(node any, field clearingField) bool {
+	camel := camelCase(field.name)
+	switch value := node.(type) {
+	case map[string]any:
+		for key, member := range value {
+			if (key == field.name || key == camel) && emptyJSONValue(member, field.empty) {
+				return true
+			}
+			if variablesCarryEmpty(member, field) {
+				return true
+			}
+		}
+	case []any:
+		for _, member := range value {
+			if variablesCarryEmpty(member, field) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// emptyJSONValue reports whether a decoded JSON value is null or the empty
+// value the probe sent: "" for a text, 0 for an integer, and for a list [] or
+// the "" client-go writes for an empty comma-separated one.
+func emptyJSONValue(got, probe any) bool {
+	if got == nil {
+		return true
+	}
+	switch probe.(type) {
+	case string:
+		return got == ""
+	case int:
+		number, ok := got.(float64)
+		return ok && number == 0
+	default:
+		list, isList := got.([]any)
+		return got == "" || isList && len(list) == 0
+	}
+}
+
+// emptyQueryValues reports whether every value a query parameter carries is
+// the empty value the probe sent: "0" for an integer, "" otherwise.
+func emptyQueryValues(values []string, probe any) bool {
+	want := ""
+	if _, ok := probe.(int); ok {
+		want = "0"
+	}
+	for _, value := range values {
+		if value != want {
+			return false
+		}
+	}
+	return len(values) > 0
+}
+
+// newClearingProbe starts the stand-in and a client on it.
+func newClearingProbe(t *testing.T) *clearingProbe {
+	t.Helper()
+	probe := &clearingProbe{}
+	srv := httptest.NewServer(http.HandlerFunc(probe.serve))
+	t.Cleanup(srv.Close)
+	client, err := gitlabclient.NewClient(&config.Config{GitLabURL: srv.URL, GitLabToken: "test-token", DisableRetries: true})
+	if err != nil {
+		t.Fatalf("create the probe's GitLab client: %v", err)
+	}
+	probe.client = client
+	return probe
+}
+
+// serve records a write and answers every request with one generic object, or
+// a list of one for a read of a collection.
+func (p *clearingProbe) serve(w http.ResponseWriter, r *http.Request) {
+	raw, _ := io.ReadAll(r.Body)
+	var body any
+	_ = json.Unmarshal(raw, &body)
+	graphQL := r.URL.Path == "/api/graphql"
+	write := r.Method != http.MethodGet && r.Method != http.MethodHead
+	if graphQL {
+		query, _ := asMap(body)["query"].(string)
+		write = graphQLMutation.MatchString(query)
+	}
+	if write {
+		p.mu.Lock()
+		p.writes = append(p.writes, clearingWrite{query: r.URL.Query(), body: body, graphQL: graphQL})
+		p.mu.Unlock()
+	}
+	w.Header().Set("Content-Type", "application/json")
+	segments := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	last := segments[len(segments)-1]
+	switch {
+	case graphQL:
+		_, _ = io.WriteString(w, `{"data":{}}`)
+	case r.Method == http.MethodGet && strings.Trim(last, "0123456789") != "":
+		_, _ = io.WriteString(w, `[{"id":1,"iid":1,"name":"x","key":"K"}]`)
+	default:
+		_, _ = io.WriteString(w, `{"id":1,"iid":1,"name":"x"}`)
+	}
+}
+
+// send calls the handler with field emptied and reports whether a write
+// carried it.
+func (p *clearingProbe) send(t *testing.T, handler toolutil.ActionFunc, base map[string]any, field clearingField) clearingOutcome {
+	t.Helper()
+	params := make(map[string]any, len(base)+1)
+	maps.Copy(params, base)
+	params[field.name] = field.empty
+	p.mu.Lock()
+	p.writes = nil
+	p.mu.Unlock()
+	_, err := handler(t.Context(), params)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	outcome := clearingOutcome{writes: len(p.writes), err: err}
+	for _, write := range p.writes {
+		if write.carriesEmpty(field) {
+			outcome.reached = true
+		}
+	}
+	return outcome
+}
+
+// camelCase spells a snake-case member name the way a GraphQL input does.
+func camelCase(name string) string {
+	words := strings.Split(name, "_")
+	for index := 1; index < len(words); index++ {
+		if words[index] != "" {
+			words[index] = strings.ToUpper(words[index][:1]) + words[index][1:]
+		}
+	}
+	return strings.Join(words, "")
 }
