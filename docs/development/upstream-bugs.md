@@ -151,6 +151,7 @@ for the fork, branch, fix, test and MR workflow.
   - [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text)
   - [The REST delete of a locked Terraform state answers 200 and deletes nothing](#the-rest-delete-of-a-locked-terraform-state-answers-200-and-deletes-nothing)
   - [The vulnerability dismissal reason outlives the dismissal](#the-vulnerability-dismissal-reason-outlives-the-dismissal)
+  - [Issue move and clone, and transfer, are authorized at the source boundary only for a fine-grained token](#issue-move-and-clone-and-transfer-are-authorized-at-the-source-boundary-only-for-a-fine-grained-token)
 - [GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)](#gitlab-orbit-gitlab-orgorbitknowledge-graph)
   - [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types)
   - [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both)
@@ -359,6 +360,7 @@ readable without opening the tracker:
 | 121 | client-go | [UpdateReleaseOptions sends the title and the notes as null on every partial update](#updatereleaseoptions-sends-the-title-and-the-notes-as-null-on-every-partial-update) | No | No | No | No | Yes, `release.update` takes the two keys out of the body through a request option whenever the caller did not set them |
 | 122 | client-go | [Seven update option structs cannot send the null or the empty list that clears a field](#seven-update-option-structs-cannot-send-the-null-or-the-empty-list-that-clears-a-field) | No | No | No | No | Yes, the seven update actions write the null or the `[]` into the body through a request option, and the group label actions no longer offer the priority |
 | 123 | gitlab-org/gitlab | [The vulnerability dismissal reason outlives the dismissal](#the-vulnerability-dismissal-reason-outlives-the-dismissal) | No | No | No | No; a confirmed, resolved or redetected vulnerability answered the reason it was dismissed with | Yes, `vulnerabilities` publishes the reason only while the state is `DISMISSED` |
+| 124 | gitlab-org/gitlab | [Issue move and clone, and transfer, are authorized at the source boundary only for a fine-grained token](#issue-move-and-clone-and-transfer-are-authorized-at-the-source-boundary-only-for-a-fine-grained-token) | No public issue | No | No | No | None; the fine-grained tokens page warns that a grant does not bound where these actions write |
 | 125 | client-go | [The issue statistics options type assignee_id as an integer](#the-issue-statistics-options-type-assignee_id-as-an-integer) | No | No | No | No | Yes, the three statistics actions write `None` or `Any` into the query through a request option |
 | 126 | client-go | [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date) | No | No | No | No | Yes, `user.add_ssh_key`, `user.add_ssh_key_for_user`, `snippet.list_all` and the two changelog actions leave the field unset and write the instant given through a request option |
 | 127 | gitlab-org/gitlab | [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text) | No | No | No | No; GitLab's pages leave such a submodule unlinked | Yes, `repository.list_submodules` and `repository.read_submodule_file` resolve a sibling namespace and the other spellings of the instance's clone URLs |
@@ -12635,6 +12637,48 @@ without one.
 [issue 1310](https://github.com/jmrplens/gitlab-mcp-server/issues/1310), a
 dismiss and confirm round trip on the `test/e2e` Docker stack (EE Ultimate),
 then traced in the 19.4.1-ee source.
+
+### Issue move and clone, and transfer, are authorized at the source boundary only for a fine-grained token
+
+- **Reported**: no public issue.
+- **In review**: no.
+- **Merged**: no. Read in 19.4.1 and in the 19.5.0-pre source, which carry the
+  same declarations, and seen on a 19.4.2 instance.
+- **Blocking**: no.
+- **Workaround**: none taken. Holding a move to its target would need the
+  namespaces each scope of the grant names and the target's ancestry, and the
+  authority this server builds from a grant deliberately keeps no namespace
+  ([ADR-0024](adr/adr-0024-fine-grained-token-authority-per-action.md)), so a
+  guard here needs that decision amended first. The
+  [fine-grained tokens page](https://jmrp.io/docs/gitlab-mcp-server/operations/fine-grained-tokens/)
+  warns that a grant does not bound where these actions write. A fix upstream
+  makes the warning history.
+
+**Where**: `lib/api/issues.rb`, where the move and clone routes declare their
+fine-grained permission with `boundary_type: :project` on `:id`, the project
+the issue comes from; the target project reaches
+`WorkItems::DataSync::MoveService` and `CloneService`, whose checks are the
+user's own abilities and never the token's grant. The project and group
+transfer routes (`lib/api/projects.rb`, `lib/api/groups.rb`) declare their
+permission at the source in the same way.
+
+**What**: a fine-grained token's grant scoped to selected projects decides
+which projects the token may act on, and GitLab enforces it at every route by
+the boundary the route declares. These routes write somewhere other than the
+boundary they declare, so the place they write to is judged by the user's role
+alone: a grant that names only one project does not stop an issue being moved
+or cloned into another project its user can write to, although the same token
+is refused on that project when it calls it directly. Transfer follows the same
+pattern, which GitLab may intend; the entry asks about the class.
+
+**What it costs this server**: what an operator is told a grant bounds. The
+generated fine-grained table copies GitLab's declarations, so `issue.move`,
+`project.transfer` and `group.transfer` are listed and called by what their
+source needs, which is GitLab's rule; this server has no issue clone action.
+
+**How we found it**: [issue 1337](https://github.com/jmrplens/gitlab-mcp-server/issues/1337),
+read against the 19.4.1 source and checked on a 19.4.2 instance with a token
+whose grant named one project.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 
