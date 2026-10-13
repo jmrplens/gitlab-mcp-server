@@ -172,16 +172,36 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	opts.Assets = assetsOptions(input.Assets)
 	r, _, err := client.GL().Releases.CreateRelease(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		switch {
-		case toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusConflict):
-			return Output{}, toolutil.WrapErrWithHint("releaseCreate", err, "a release for this tag may already exist. Use release.update to modify it, or choose a different tag_name")
-		case toolutil.IsHTTPStatus(err, http.StatusForbidden):
-			return Output{}, toolutil.WrapErrWithHint("releaseCreate", err, "creating releases requires Developer role or higher")
-		default:
-			return Output{}, toolutil.WrapErrWithMessage("releaseCreate", err)
-		}
+		return Output{}, createError(err)
 	}
 	return ToOutput(r), nil
+}
+
+// createError gives a refused release create the hint that fits it. GitLab
+// answers 422 "Ref is not specified" when tag_name names no existing tag and
+// no ref was given to create it from, which is a missing tag rather than a
+// release that already exists. The role hint is keyed on
+// toolutil.IsPermissionRefusal rather than on 403, because GitLab answers a
+// missing permission with 401 at some routes (entry 55 of
+// docs/development/upstream-bugs.md), while a refusal of the token itself
+// names no role.
+//
+// The branches are separate ifs rather than the cases of one switch, because a
+// coverage profile puts no block over a case expression, so mutation testing
+// could not judge the conditions that decide which hint a refusal gets.
+func createError(err error) error {
+	const op = "releaseCreate"
+	unprocessable := toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity)
+	if unprocessable && toolutil.ContainsAny(err, "Ref is not specified") {
+		return toolutil.WrapErrWithHint(op, err, "the tag does not exist yet. Pass ref (a branch, tag or commit SHA) to create the tag with the release, or create the tag first with tag.create")
+	}
+	if unprocessable || toolutil.IsHTTPStatus(err, http.StatusConflict) {
+		return toolutil.WrapErrWithHint(op, err, "a release for this tag may already exist. Use release.update to modify it, or choose a different tag_name")
+	}
+	if toolutil.IsPermissionRefusal(err) {
+		return toolutil.WrapErrWithHint(op, err, "creating releases requires Developer role or higher")
+	}
+	return toolutil.WrapErrWithMessage(op, err)
 }
 
 // Update modifies an existing release identified by project and tag name.
