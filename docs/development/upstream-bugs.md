@@ -248,7 +248,7 @@ readable without opening the tracker:
 | 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | Yes, by another user, [modelcontextprotocol/go-sdk#1209](https://github.com/modelcontextprotocol/go-sdk/issues/1209) | Yes, theirs, [modelcontextprotocol/go-sdk#1210](https://github.com/modelcontextprotocol/go-sdk/pull/1210), open | No | Was yes | Yes |
 | 10 | go-sdk | [Cannot send `notifications/cancelled` for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream) | Yes, [modelcontextprotocol/go-sdk#1263](https://github.com/modelcontextprotocol/go-sdk/issues/1263) | No, proposal first | No | No | None possible |
 | 11 | go-sdk | [Declared, not negotiated, version selects MRTR](#the-declared-protocol-version-not-the-negotiated-one-selects-mrtr) | Yes, [modelcontextprotocol/go-sdk#1258](https://github.com/modelcontextprotocol/go-sdk/issues/1258) | Yes, [modelcontextprotocol/go-sdk#1266](https://github.com/modelcontextprotocol/go-sdk/pull/1266), open | No | No | None taken |
-| 12 | go-sdk | [A cancelled call is still answered](#a-cancelled-incoming-call-is-still-answered) | Yes, [modelcontextprotocol/go-sdk#1259](https://github.com/modelcontextprotocol/go-sdk/issues/1259) | Yes, [modelcontextprotocol/go-sdk#1267](https://github.com/modelcontextprotocol/go-sdk/pull/1267), open; a maintainer changed its approach in a commit of his own, and four defects found in that commit wait on his answer | No | No | Partial |
+| 12 | go-sdk | [A cancelled call is still answered](#a-cancelled-incoming-call-is-still-answered) | Yes, [modelcontextprotocol/go-sdk#1259](https://github.com/modelcontextprotocol/go-sdk/issues/1259) | Yes, [modelcontextprotocol/go-sdk#1267](https://github.com/modelcontextprotocol/go-sdk/pull/1267), open; on 2026-10-12 a maintainer narrowed it to stdio-style transports on protocol revision 2026-07-28 or later, we answered on 2026-10-13 with the one defect left, and his head since (`ffe0f812`) records the drop under the connection's lock and passes CI | No | No | Partial |
 | 13 | go-sdk | [The cancellation reason is discarded](#the-cancellation-reason-is-discarded-before-any-handler-sees-it) | Yes, [modelcontextprotocol/go-sdk#1254](https://github.com/modelcontextprotocol/go-sdk/issues/1254) | Yes, [modelcontextprotocol/go-sdk#1255](https://github.com/modelcontextprotocol/go-sdk/pull/1255), merged | **Yes, unreleased** | No | Yes, until it ships |
 | 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | Yes, by another user, [modelcontextprotocol/go-sdk#1234](https://github.com/modelcontextprotocol/go-sdk/issues/1234) | Yes, theirs, [modelcontextprotocol/go-sdk#1242](https://github.com/modelcontextprotocol/go-sdk/pull/1242), merged | **Yes, unreleased** | No | None taken |
 | 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | Yes, [modelcontextprotocol/go-sdk#1260](https://github.com/modelcontextprotocol/go-sdk/issues/1260) | Yes, [modelcontextprotocol/go-sdk#1268](https://github.com/modelcontextprotocol/go-sdk/pull/1268), merged | **Yes, unreleased** | No | None taken |
@@ -1179,6 +1179,25 @@ Row 83's example issue has a merge request of the maintainer's, ready for
 review, and row 86's section records a note of ours on GitLab's issue for
 the self route. The other rows were not read again that evening, and the
 morning's reading stands for them.
+
+Read on 2026-10-13 for the rows whose upstream is not gitlab.com, rows 8 to
+18, 21, 23, 48 to 50, 66 to 68, 73, 81 and 97, against GitHub, Gerrit and
+the tags, through GET requests only. go-sdk v1.8.0 is still its newest tag,
+with `main` 61 commits past it at `7cdd99f7`, and a maintainer put the next
+release about two months out. Row 12 moved the most: on 2026-10-12 a
+maintainer narrowed its pull request to stdio-style transports on protocol
+revision 2026-07-28 or later, we answered with the one defect left, and his
+head since, `ffe0f812`, records the drop under the connection's lock and
+passes every check. The pull request that changed the canceller, row 13's,
+merged that morning, and so did the client-side cancellation fix beside it.
+Row 9 gained another user's issue and pull request for an `id` that is
+neither a string nor a number, row 49 records that the pre-initialize
+refusal it moved now answers `-32600` on `main`, and row 17 that the Codex
+tag cut since its last published alpha was cut before the merge the row
+waits on. The open pull requests of rows 8, 9, 11, 48, 67 and 68 are further
+behind `main`, and rows 9 and 23 changed with the two fixes this reading
+came with. Rows 10, 14 to 16, 18, 21, 50, 66, 73, 81 and 97 were read; what
+each reading found is in its row, and none of it moved a row's state.
 
 ## GitLab client (`gitlab.com/gitlab-org/api/client-go`)
 
@@ -6604,6 +6623,17 @@ and
 [modelcontextprotocol/go-sdk#1293](https://github.com/modelcontextprotocol/go-sdk/pull/1293)
 open and the rest merged.
 
+Read on 2026-10-13, v1.8.0 is still the SDK's newest release and `main` is 61
+commits ahead of it (`7cdd99f7`). The next release is 1.9.0:
+`docs/mcpgodebug.md` on `main` already lists the compatibility switches added
+for it. When v1.8.0 was published the maintainer put the next release about
+two months out
+([comment](https://github.com/modelcontextprotocol/go-sdk/pull/1226#issuecomment-5660764066),
+2026-09-14), and the same page plans to remove the switches added in 1.7.0
+and 1.8.0 with it, `noprotocolerrorbody` and `customresnotfounderrcode` among
+them, which [row 68](#the-go-sdk-client-starts-no-new-session-after-a-404) and
+`internal/subscriptions/read_error.go` read.
+
 The three added on 2026-09-27 are not part of that batch. Each decides what a
 caller of this server sees when it is refused, and two of them were already
 reported upstream by other users when this server's specification found them,
@@ -6629,7 +6659,8 @@ was filed on 2026-09-25.
   since closed by the merge below). Read on 2026-10-05 the pull request still
   conflicts with `main`, 64 commits behind it, with no check run on its head;
   on 2026-10-08 it is 67 behind and otherwise the same, on 2026-10-09 68
-  behind, on 2026-10-10 71 behind, and on 2026-10-12 77 behind.
+  behind, on 2026-10-10 71 behind, on 2026-10-12 77 behind, and on
+  2026-10-13 83 behind, still conflicting and unreviewed.
 - **In review**: yes, theirs,
   [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232),
   merged on 2026-09-21. Ours is
@@ -6650,9 +6681,11 @@ was filed on 2026-09-25.
   `main`, still merges without conflicts, its nine checks green on
   `4bb3af60`, and still unreviewed; the status note on the index that day
   names it. Read on 2026-10-08 it is 15 commits behind `main` and otherwise
-  the same, on 2026-10-09 16 behind, on 2026-10-10 19 behind, and on
-  2026-10-12 25 behind, still merging without conflicts and still
-  unreviewed.
+  the same, on 2026-10-09 16 behind, on 2026-10-10 19 behind, on 2026-10-12
+  25 behind, and on 2026-10-13 31 behind (`main` at `7cdd99f7`), still
+  merging without conflicts and still unreviewed. Merged on 2026-10-12 with
+  `main` at `b5d319b0` in a scratch tree it passes `go vet ./...` and
+  `go test ./...`, so it needed no update to stay correct.
 - **Merged**: in part, and by somebody else:
   [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232)
   added `StreamableHTTPOptions.StreamKeepAlive` on 2026-09-21, in no tag yet,
@@ -6666,7 +6699,14 @@ was filed on 2026-09-25.
   `sseAwareWriter` in `cmd/server/main.go` emits a comment frame every 25s on
   **any** response that commits to `text/event-stream`, guarding its writes with
   the same mutex the handler's writes take. It stays now that the option has
-  merged, since that option covers the listen stream alone.
+  merged, since that option covers the listen stream alone. The option is on
+  by default, at 30 seconds when left at zero (`DefaultStreamKeepAlive`), and
+  only a negative value turns it off. The SDK writes its comment through
+  `sseAwareWriter`, which resets this server's idle clock, so once a release
+  carries the option a listen stream is kept alive by the SDK's comment every
+  30 seconds rather than by ours. Whether to keep that or pass a negative
+  value is decided at the bump that brings it, together with the HTTP server
+  page, which says the go-sdk emits no periodic ping of its own.
 
 **What**: the SDK emits keep-alives only on the standalone GET stream, not on
 streamed POST responses, and offers no option to configure the interval. An idle
@@ -6688,7 +6728,7 @@ The test hung instead of failing, which is how the header-flush half surfaced.
   open with no review and conflicting with `main` as of 2026-09-27, untouched
   since 2026-08-29, and so again on 2026-10-05, 56 commits behind `main`, and
   on 2026-10-08, 59 behind, on 2026-10-09, 60 behind, on 2026-10-10, 63
-  behind, and on 2026-10-12, 69 behind. A
+  behind, on 2026-10-12, 69 behind, and on 2026-10-13, 75 behind. A
   comment on the issue on 2026-09-27, not ours, confirms the
   defect in v1.8.0-pre.2 and reports that the pull request as it stands
   (`3906b01`) leaves part of it open: it answers a syntax error with `-32700`
@@ -6710,7 +6750,19 @@ The test hung instead of failing, which is how the header-flush half surfaced.
   JSON-RPC message) go on the pull request's thread as tests offered to its
   author; if the author does not answer within about two weeks, a pull request
   of ours that covers every case, credits the original one and closes the
-  issue replaces it.
+  issue replaces it. Apart from that issue and its pull request, another user
+  opened
+  [modelcontextprotocol/go-sdk#1391](https://github.com/modelcontextprotocol/go-sdk/issues/1391)
+  at 15:30 UTC on 2026-10-12, with
+  [modelcontextprotocol/go-sdk#1392](https://github.com/modelcontextprotocol/go-sdk/pull/1392)
+  a minute later: a request whose `id` is a boolean, an object or an array
+  also ends a stdio session, and over HTTP is refused as plain text rather
+  than a JSON-RPC error. Both name
+  [modelcontextprotocol/go-sdk#1209](https://github.com/modelcontextprotocol/go-sdk/issues/1209)
+  and
+  [modelcontextprotocol/go-sdk#1210](https://github.com/modelcontextprotocol/go-sdk/pull/1210)
+  as a separate path, and read on 2026-10-13 neither has a maintainer's
+  review.
 - **Merged**: no.
 - **Blocking**: it was, on stdio. One client lost its session and its
   accumulated context to a single unparseable line; there was no cross-tenant
@@ -6848,15 +6900,53 @@ passing if the SDK ever fixes this and the filter is removed.
   [modelcontextprotocol/go-sdk#1259](https://github.com/modelcontextprotocol/go-sdk/issues/1259):
   a response that already arrived is discarded when the caller's context is
   cancelled while it is decoded, and `notifications/cancelled` is sent for a
-  request that completed. Read on 2026-10-12, @guglielmo-san merged `main`
-  into the branch again at 09:32 UTC that day (`44527488`), so
-  it is up to date with `main` and merges without conflicts, and he has not
-  answered my comment of 2026-10-10. Nine of its ten checks passed on that
-  head; `race-test` stopped at its ten-minute limit with
-  `Example_resourceSubscription` waiting on a channel, an example that passed
-  on `436501f2` and on `main`'s head (`452ac5a8`). The client-side pull
-  request was force-pushed at 06:19 UTC that day and is five commits behind
-  `main`.
+  request that completed. At 09:32 UTC on 2026-10-12 @guglielmo-san merged
+  `main` into the branch again (`44527488`). At 13:07 UTC he answered
+  ([comment](https://github.com/modelcontextprotocol/go-sdk/pull/1267#issuecomment-6124884475))
+  that the change had grown large for a behaviour that, outside stdio, exists
+  only on versions before 2026-07-28, and at 13:12 UTC he pushed `746a4595`,
+  which scopes it to stdio-style transports on 2026-07-28 or later: it
+  removes every change to `mcp/streamable.go` and its tests, has
+  `ioConn.DropResponse` record a drop only when the negotiated version is
+  2026-07-28 or later, adds a `sessionUpdated` forwarder to `loggingConn`, and
+  has `docs/protocol.md` name the transports the rule holds for. At 13:13 UTC
+  he asked
+  ([comment](https://github.com/modelcontextprotocol/go-sdk/pull/1267#issuecomment-6125002647))
+  whether that is enough for our use case. The 2026-07-28 cancellation page
+  supports the scope: over streamable HTTP, closing the response stream is the
+  cancellation and no `notifications/cancelled` is expected. Three of the four
+  defects I reported went with the streamable code. The third,
+  `ioConn.dropped` keeping an entry for a call already answered, was still
+  there, and on 2026-07-28, which lets a client reuse an ID once its response
+  has arrived, it discards the answer to a later request that reuses the ID:
+  at `746a4595` a stress test on a 2026-07-28 session left 1 to 3 such entries
+  in 5 runs of 6, and a request reusing one of those IDs got no answer in 3
+  runs of 3, while with the `internal/jsonrpc2/conn.go` half of my fix both
+  pass in every run. I answered at 07:01 UTC on 2026-10-13
+  ([comment](https://github.com/modelcontextprotocol/go-sdk/pull/1267#issuecomment-6140166165))
+  that the scope works for us, reported that defect with a test that reuses
+  an ID, offered the fix as one commit on top of his, noted that
+  [modelcontextprotocol/go-sdk#1390](https://github.com/modelcontextprotocol/go-sdk/pull/1390),
+  opened by another contributor the day before, changes the same call in
+  `canceller.Preempt` and does not close that window on its own, and rewrote
+  the title and the description, which still described my first version, to
+  the current scope. That pull request merged at 07:58 UTC (`7cdd99f7`). At
+  08:34 UTC he pushed `d635fb67`, which calls `DropResponse` under the
+  connection's state lock in `cancelIncoming`, so that recording the drop is
+  atomic with `processResult` removing the request before it writes the
+  answer; by reading, that closes the window the stale entry came through,
+  which has not been measured here. At 08:41 UTC he merged `main` into the
+  branch (`ee33ff5e`), and on that head
+  `TestIOConnCancelledCallGetsNoResponse`, one of the pull request's own
+  tests, failed in the Go 1.25 test job and in the race job ("the cancelled
+  call got a response"), because `canceller.Preempt` as that pull request
+  merged it cancelled through `CancelCause`, which records no drop. At 08:58 UTC he
+  pushed `ffe0f812`, which has `Preempt` call `CancelFromPeer`, and all ten
+  checks pass on it; neither push carries a comment. The client-side pull
+  request,
+  [modelcontextprotocol/go-sdk#1370](https://github.com/modelcontextprotocol/go-sdk/pull/1370),
+  merged at 07:27 UTC on 2026-10-13 (`b04b49ed`) and closed
+  [modelcontextprotocol/go-sdk#1368](https://github.com/modelcontextprotocol/go-sdk/issues/1368).
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: partial and honest rather than a fix. The response cannot be
@@ -6864,6 +6954,9 @@ passing if the SDK ever fixes this and the filter is removed.
   "the request was cancelled by the client" instead of falling through to
   "unexpected error", and logged at INFO rather than ERROR. The client behaviour
   is documented in the HTTP guide so a client can expect the late response.
+  Once a release carries the narrowed pull request, a 2026-07-28 session over
+  stdio gets no response for a call it cancelled. HTTP and earlier versions
+  are unchanged, so the HTTP guide's note stays true.
 
 **What**: "Servers receiving cancellation notifications SHOULD ... not send a
 response for the cancelled request." `internal/jsonrpc2/conn.go` writes the
@@ -6896,6 +6989,11 @@ seconds into a hanging GitLab call: the client's `notifications/cancelled` at
   `params.RequestID`, calls `conn.Cancel(id)` and never looks at
   `params.Reason` (`mcp/transport.go`). The first release carrying it retires
   the note below.
+  [modelcontextprotocol/go-sdk#1390](https://github.com/modelcontextprotocol/go-sdk/pull/1390),
+  from another contributor and merged at 07:58 UTC on 2026-10-13
+  (`7cdd99f7`, in no tag yet), moves the `CancelCause` call
+  `canceller.Preempt` makes out of its goroutine and keeps the reason, so the
+  cause this entry waits for is unchanged by it.
 - **Blocking**: no.
 - **Workaround**: yes, until that release. The field is dropped inside the SDK
   and there is no seam to read it from, so we log what remains: that the call
@@ -6978,13 +7076,22 @@ the server's output.
   (open, "fix(mcp): upgrade go-sdk to v1.9.0 when it ships"), which names this
   pull request as the open fix for the issue above and plans a test of its own
   if the release after v1.8.0 carries it. Read on 2026-10-12 it is 25 commits
-  behind `main` and still merges without conflicts, with no review since
-  2026-09-15.
+  behind `main`, and on 2026-10-13 31, and still merges without conflicts,
+  with no review since 2026-09-15; merged with `main` at `b5d319b0` in a
+  scratch tree on 2026-10-12 it passes `go vet ./...` and `go test ./...`.
+  This repository's issue 1319, which reported the symptom, was closed as not
+  planned on 2026-10-12 and points at this row.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: none taken, deliberately. Disagreeing with the SDK here would
   be worse than matching it: our gate and `clientSupportsMultiRoundTrip` would
   choose differently for the same session, and the SDK labels the result.
+  That holds only while both read the same version:
+  [modelcontextprotocol/go-sdk#1266](https://github.com/modelcontextprotocol/go-sdk/pull/1266)
+  moves the SDK's own decision to the negotiated version and leaves the
+  exported `ServerRequest.ProtocolVersion`, which `FlowFromRequest` in
+  `internal/elicitation/flow.go` reads, on the declared one, so the bump that
+  carries it has to re-decide this rather than merely retire it.
 - **Pinned by**:
   `TestElicitation_InitializeAskingForNewRevision_IsServedTheMultiRoundTripShape`
   in `test/e2e/stdio/elicitation_declared_version_test.go`, against the real
@@ -7035,6 +7142,16 @@ so the behaviour is stated where someone writing a client would look.
   our `go.mod` does not carry the fix. What retires this entry is a release
   and a version bump, not the merge, and until then the three methods are
   still served before the handshake by the SDK this server compiles against.
+  The refusal it moved was a plain error, which reached the wire as JSON-RPC
+  error code 0.
+  [modelcontextprotocol/go-sdk#1393](https://github.com/modelcontextprotocol/go-sdk/pull/1393),
+  by another contributor and fixing
+  [modelcontextprotocol/go-sdk#1367](https://github.com/modelcontextprotocol/go-sdk/issues/1367),
+  merged on 2026-10-12 as `b5d319b0` and answers it with -32600 (Invalid
+  Request) instead, with `MCPGODEBUG=nopreinitinvalidrequest=1` restoring code
+  0, listed under 1.9.0 in go-sdk's `docs/mcpgodebug.md`. Nothing in this
+  repository reads that code, so the release carrying both changes needs
+  nothing here beyond this entry.
 - **Blocking**: no, but it reaches our surface: `resources/subscribe` is one
   of the three, and ADR-0015 makes the first read the authorization check, so
   the watcher a pre-handshake subscribe starts is one this server created.
@@ -7087,7 +7204,10 @@ dedicated path for it (`transport.go:261`).
   opened by another user on 2026-10-01, reports that `LoggingTransport`
   forwards no `sessionUpdated`, so the fix does not reach a stdio transport
   wrapped in it. This server serves stdio over `mcp.IOTransport` itself
-  (`cmd/server/main.go`) and wraps no transport, so it is not affected.
+  (`cmd/server/main.go`) and wraps no transport, so it is not affected. Read
+  on 2026-10-13 the issue is still open and unlabelled, and its author's
+  offer of a pull request, made on 2026-10-02 and waiting for a maintainer to
+  confirm, is unanswered.
 - **Blocking**: no, and the concrete failure is on the transport this server
   leads with. `ioConn.sessionUpdated` reads only `NegotiatedProtocolVersion`,
   so a SEP-2575 session over **stdio** is treated as `2025-03-26` and accepts
@@ -7132,7 +7252,10 @@ against the session's.
   SHOULD.
 - **In review**: no. Waiting on the maintainers to say which shape they want.
   Read on 2026-10-05 the issue has no comment, no label and no type; the
-  status note on the index that day asked again.
+  status note on the index that day asked again. Read on 2026-10-13 it is
+  unchanged, and `main` (`7cdd99f7`) still sends `notifications/cancelled`
+  only for calls it made itself (`call` and `cancelCall` in
+  `mcp/transport.go`).
 - **Merged**: no.
 - **Blocking**: no. The client still receives the completion result the SDK
   writes when the stream's handler returns, which tells a conforming client the
@@ -7238,17 +7361,29 @@ field on `RequestExtra`, would close it.
   implements it.
 - **In review**: no. Waiting on the maintainers to say which shape they want.
   Read on 2026-10-05 the issue has no comment, no label and no type; the
-  status note on the index that day asked again.
+  status note on the index that day asked again. Read on 2026-10-13 it is
+  unchanged.
 - **Merged**: no.
 - **Blocking**: no. One Conditionally Required attribute is omitted; the span is
   otherwise complete and the metric does not carry the attribute at all.
-- **Workaround**: none possible. Nothing in the public API exposes the value.
+- **Workaround**: none possible on v1.8.0. Nothing in its public API exposes
+  the value. On go-sdk's main,
+  [modelcontextprotocol/go-sdk#1101](https://github.com/modelcontextprotocol/go-sdk/pull/1101)
+  (merged 2026-09-22, in no tag yet) adds `StreamableHTTPOptions.OnRequestSummary`,
+  whose `StreamableHTTPRequestSummary.RequestID` carries the id of a POST that
+  holds one call, before dispatch. It is HTTP only, is not called for a batch,
+  reaches no receiving middleware and puts nothing on the handler's context, so
+  once released it is at most a partial seam for this server's HTTP spans; it
+  does not close this entry.
 
 ### A middleware cannot ask whether a request carries params
 
 - **Reported**: yes,
   [modelcontextprotocol/go-sdk#1261](https://github.com/modelcontextprotocol/go-sdk/issues/1261),
-  on 2026-09-13.
+  on 2026-09-13. The case was on record upstream before:
+  [modelcontextprotocol/go-sdk#1052](https://github.com/modelcontextprotocol/go-sdk/issues/1052),
+  opened 2026-07-07 by another user, was closed on 2026-09-14 as a duplicate
+  of this report.
 - **In review**: yes,
   [modelcontextprotocol/go-sdk#1269](https://github.com/modelcontextprotocol/go-sdk/pull/1269),
   merged:
@@ -7269,7 +7404,10 @@ field on `RequestExtra`, would close it.
   server now makes it in one place.
 - **Workaround**: `internal/mcpotel.paramsOf` returns `nil` for a `Params`
   interface holding a nil pointer, and the three consumers in that package ask
-  through it rather than calling `GetParams` themselves.
+  through it rather than calling `GetParams` themselves. The e2e harness makes
+  the same `reflect` check on the client side, in `stampTraceParent`
+  (`test/e2e/internal/harness/record.go`). Both become `mcp.HasParams` with the
+  first release that carries it.
 
 **What**: `Params` (mcp/shared.go) declares `GetMeta`, `SetMeta`, `isParams` and
 `isNil`. The last exists because a receiving middleware is handed a typed nil
@@ -7318,11 +7456,11 @@ guarantee, would keep the next middleware from writing the same line.
   in `cmd/server/stdio.go` is deliberately not that seam, since it exists to do
   the least it can and parsing `params._meta` there would be a second, divergent
   implementation of the protocol. Receiving middleware cannot serve either: the
-  initialization gate returns at `mcp/server.go:1901`, before `handleReceive`
-  runs the middleware chain at :1927.
+  initialization gate returns at `mcp/server.go:1991` in v1.8.0, before
+  `handleReceive` runs the middleware chain at :2038.
 
-**What**: `mcp/shared.go:549` decides whether a request is modern by comparing
-version strings with `<`. Anything sorting below `2026-07-28` is treated as a
+**What**: `mcp/shared.go:577` in v1.8.0 (549 in v1.7.0) decides whether a
+request is modern by comparing version strings with `<`. Anything sorting below `2026-07-28` is treated as a
 legacy handshake, so a request carrying an unrecognised version in per-request
 `_meta` is answered `method "tools/list" is invalid during session
 initialization` with wire code `0`, rather than the
@@ -7333,9 +7471,12 @@ holds `2026-01-01`, `2025-11-24`, `1900-01-01`, `1.0`, `0` and the empty string.
 `1900-01-01` is the versioning page's own worked example of this error, so the
 literal illustration in the specification is the case that comes back wrong.
 
-**How we found it**: the lifecycle specification audit, on stdio. HTTP cannot
-reach it: the header check rejects a `_meta`-only version with `-32020`, and
-`protocolVersionMiddleware` in this repository answers the header case itself.
+**How we found it**: the lifecycle specification audit, on stdio. This
+server's HTTP endpoint did not reproduce it: the SDK's header check refuses a
+`_meta`-only version with `-32020`, and `protocolVersionMiddleware` in this
+repository answers any `MCP-Protocol-Version` outside its supported list
+itself. The SDK's own transports can reach it, as the In review bullet
+records.
 
 ### A resource update cannot be delivered to one session
 
@@ -7346,8 +7487,8 @@ reach it: the header check rejects a `_meta`-only version with `-32020`, and
   out with the rest of the batch, since a complete workaround is a reason not
   to be blocked and not a reason to keep the gap to ourselves. Its only
   triage since is the issue type Enhancement, which @guglielmo-san set on
-  2026-09-14; read on 2026-10-05 it has no comment and no label, and go-sdk
-  has no `proposal` label to give it.
+  2026-09-14; read on 2026-10-13 it still has no comment and no label, and
+  go-sdk has no `proposal` label to give it.
 - **In review**: no. Waiting on the maintainers to say which shape they want;
   the status note on the index on 2026-10-05 asked again.
 - **Merged**: no.
@@ -7451,8 +7592,9 @@ The delivery end was the only part of the design with no per-credential seam.
   [modelcontextprotocol/go-sdk#1359](https://github.com/modelcontextprotocol/go-sdk/issues/1359)
   stays open on the shape for two listens held open on one URI, with no
   comment there yet. v1.8.0 is still the SDK's newest release, so no release
-  carries it; read on 2026-10-10, `main` is 49 commits ahead of v1.8.0, and
-  on 2026-10-12 55, with the issue still open and uncommented.
+  carries it; read on 2026-10-10, `main` is 49 commits ahead of v1.8.0, on
+  2026-10-12 55, and on 2026-10-13 61, with the issue still open, unlabelled
+  and uncommented.
 - **Blocking**: no. It needs a client that opens two `subscriptions/listen`
   covering one URI, or mixes a legacy `resources/subscribe` with a listen, on
   stdio. Neither HTTP mode reaches it: v1.8.0's stateful handler refuses every
@@ -7515,7 +7657,10 @@ neither, and the ADR now says so.
 - **Merged**: **yes, unreleased.** The merge landed thirteen minutes before
   v1.8.0 was published, but v1.8.0 is tagged on the commit v1.8.0-pre.2 was,
   3f3b699, four commits before it, so the v1.8.0 pin does not carry it. No later
-  tag exists as of 2026-10-01, nor as of 2026-10-05.
+  tag exists as of 2026-10-01, 2026-10-05 or 2026-10-13. When it merged, the
+  maintainer said the change would ship in the next release, about two months
+  after v1.8.0
+  ([comment](https://github.com/modelcontextprotocol/go-sdk/pull/1226#issuecomment-5660764066)).
 - **Blocking**: no client is known to refuse it, and with the workaround below
   none meets it; without it this server breaks a MUST. The 2026-07-28 schema
   says a server implementing that revision MUST include `resultType`
@@ -7643,7 +7788,7 @@ second beside a call the same fine-grained credential is served.
   an optional handler, which he said can be extended to the list-changed
   listen. That proposal is what is left of this entry upstream, and read on
   2026-10-06 it is open, with no comment on it and no label, and so again on
-  2026-10-08.
+  2026-10-08 and 2026-10-13.
 - **In review**: yes, theirs,
   [modelcontextprotocol/go-sdk#1170](https://github.com/modelcontextprotocol/go-sdk/pull/1170),
   open since 2026-08-13 and conflicting with `main`. Its one review, on
@@ -7682,7 +7827,7 @@ second beside a call the same fine-grained credential is served.
   not ours: @guglielmo-san merged it at 13:51 UTC on 2026-10-06 (merge commit
   `6737e73d2d`). No release carries it: v1.8.0, of 2026-09-14, is still the
   newest tag, and `main` is 45 commits ahead of it on 2026-10-08, 49 on
-  2026-10-10 and 55 on 2026-10-12. It retires
+  2026-10-10, 55 on 2026-10-12 and 61 on 2026-10-13. It retires
   the half about
   a second `Subscribe`, on the release that carries it, and not the half
   about seeing a refusal; What changes on the next go-sdk release, below,
@@ -7803,8 +7948,10 @@ bump that brings that release in.
   the author has not answered the review of 2026-10-02, whose reading of
   `reinitialize()` holds against `3e21beb4`, and no maintainer has reviewed
   it. Read on 2026-10-08 it is 21 commits behind `main` and otherwise the
-  same, on 2026-10-09 22 behind, on 2026-10-10 25 behind, and on 2026-10-12
-  31 behind.
+  same, on 2026-10-09 22 behind, on 2026-10-10 25 behind, on 2026-10-12 31
+  behind, and on 2026-10-13 37 behind, still conflicting with `main`, with no
+  check run on `3e21beb4`, no answer from the author to that review and no
+  maintainer review.
 - **Merged**: no.
 - **Blocking**: no, and only under `--stateless=false`, the one mode that mints
   session IDs. There the gate answers 404 (row ADM-007) to any request carrying
@@ -7986,7 +8133,11 @@ three paths that was not kept.
   `e02efbfc` and carries it. No Codex release is built on it yet:
   `rust-v0.162.1` is still the newest stable release and pins 3.3.0, and the
   newest prerelease, `rust-v0.163.0-alpha.5`, was published that morning,
-  before the merge. `rmcp-v3.5.1` is still rmcp's newest tag. No Codex
+  before the merge. `rmcp-v3.5.1` is still rmcp's newest tag. Read again on
+  2026-10-13, nothing has been published since `rust-v0.163.0-alpha.5`: the
+  tag `rust-v0.163.0-alpha.6` (01:27 UTC on 2026-10-10), for which no release
+  was published, points at `3d7fd84b`, cut before the merge, and pins 3.3.0
+  as well. `4048ac40` is two commits past the `rmcp-v3.5.1` tag. No Codex
   maintainer has commented on the issue since it was opened on 2026-08-17.
 - **Blocking**: it was. Every tool call failed with "Unexpected response type",
   so the server was unusable from Codex rather than degraded.
@@ -13072,8 +13223,10 @@ branch nor a merged results pipeline.
   [creativeprojects/go-selfupdate#57](https://github.com/creativeprojects/go-selfupdate/issues/57).
 - **In review**: yes,
   [creativeprojects/go-selfupdate#58](https://github.com/creativeprojects/go-selfupdate/pull/58),
-  still open, mergeable, and unreviewed on 2026-09-27. Its last activity is
-  the maintainer's answer of 2026-08-05: the change is breaking by Go's
+  still open, mergeable, and unreviewed when read on 2026-10-13, one commit
+  behind `main` (a change to the project's workflow file alone), and no check
+  has ever run on it. Its last activity is the maintainer's answer of
+  2026-08-05: the change is breaking by Go's
   convention and needs a v2 of the module, which they have not had time to
   prepare. It went unanswered, and deliberately: there is no form of it that
   breaks nothing, since the type of `PGPValidator.KeyRing` is the import
@@ -13089,9 +13242,11 @@ branch nor a merged results pipeline.
   of 3.0.0 and 3.1.0, through the HKDF import in `internal/telemetry`, and a
   scanner that reads a binary's module list rather than its symbols
   (`govulncheck -mode binary -scan module`, and every directory working from
-  an SBOM) still reported the advisory against both. The release after 3.1.0
-  derives those keys with the standard library's `crypto/hkdf` and names no
-  `golang.org/x/crypto` module in its build information, and
+  an SBOM) still reported the advisory against both. 3.2.0 (2026-10-09), the
+  release after 3.1.0, derives those keys with the standard library's
+  `crypto/hkdf` and names no `golang.org/x/crypto` module in its build
+  information (read on 2026-10-13 from the published
+  `gitlab-mcp-server-linux-amd64` with `go version -m`, and from its SBOM), and
   `make check-binary-vulns` holds every release binary to the database at
   that grain. The upstream PR stays worth merging for the module's other
   users.
@@ -13104,8 +13259,9 @@ branch nor a merged results pipeline.
 - **In review**: yes,
   [rillig/gobco#41](https://github.com/rillig/gobco/pull/41), opened the same
   day from a fork: two commits, one per half of the fix, each with its tests.
-  The project's CI has not run on it, which for a first contribution waits on
-  the maintainer's approval.
+  The project's CI has not run on it: its Go workflow run (36452317634,
+  2026-09-28) still reads `action_required` on 2026-10-13, waiting on the
+  maintainer's approval, as a first contribution's does.
 - **Merged**: no. Up to 2024 the maintainer fixed an issue that carried a
   reproduction directly, within days, with a commit of his own, and one pull
   request has ever been merged as sent, in 2019, so the fix may well arrive
@@ -13121,9 +13277,9 @@ branch nor a merged results pipeline.
   as this entry. No release has been tagged since v1.3.4 (2024-03-08),
   `master` being 9 commits ahead of it when read on 2026-10-05, when this
   entry's issue and pull request still had no response. Read again on
-  2026-10-07, nothing has moved: v1.3.4 is still the newest tag, `master` is
-  still 9 commits ahead at `7a099954`, and the issue and the pull request are
-  open with no comment. Either way the entry retires on the release that
+  2026-10-07 and on 2026-10-13, nothing has moved: v1.3.4 is still the newest
+  tag, `master` is still 9 commits ahead at `7a099954`, and the issue and the
+  pull request are open with no comment, review, label or assignee. Either way the entry retires on the release that
   carries the fix, and it is re-read at each gobco tag.
 - **Blocking**: no for the server. It blocked the condition gate on three
   packages: `cmd/server` and `internal/toolutil` panicked before anything was
@@ -13243,9 +13399,11 @@ which had no entry until then and is
   decided to open them before any release, with entry 73's pull request
   still unreviewed. The fix is independent of that pull request: both touch
   `instrumenter.go`, `instrumenter_test.go` and `main_test.go`, and git
-  merges the two branches without a conflict. Read on 2026-10-09 its Go
-  workflow run waits on a maintainer's approval to run, as entry 73's has
-  since 2026-09-28, and it has no review.
+  merges the two branches without a conflict. Read on 2026-10-09 and again on
+  2026-10-13, its Go workflow run (37855282392) waits on a maintainer's
+  approval to run, as entry 73's (36452317634) has since 2026-09-28, it has
+  no review, and both pull requests still merge onto `master` without a
+  conflict.
 - **Merged**: no.
 - **Blocking**: no for the server. It keeps the condition gate from measuring
   a package it reaches. `scripts/check-spec-conditions.sh` reports such a
@@ -13253,7 +13411,7 @@ which had no entry until then and is
   `docs/development/testing/README.md` says the same; both count 25 of the
   169 packages carrying an `action_specs.go` as in that state, a figure from
   when they were written and not measured again since (read from the tree on
-  2026-10-07, 22 of the 150 `action_specs.go` files sit beside an
+  2026-10-07 and again on 2026-10-13, 22 of the 150 `action_specs.go` files sit beside an
   `export_test.go` whose package also has an external test package).
   `internal/clientcompat` is held by mutation testing instead (pull request
   1047), and `internal/tools/issues` was measured once, 368 of 368
@@ -13294,9 +13452,10 @@ entry 73's adoption until that issue closed on 2026-10-07.
 - **Reported**: yes, by another user, as
   [golang/go#81122](https://github.com/golang/go/issues/81122) on 2026-08-26.
   Read on 2026-09-29 it was open, labelled NeedsInvestigation, with no
-  milestone, and read on 2026-10-05 it still is, with no assignee; its
-  reporter added that it reproduces with every package loaded from source
-  too. Our
+  milestone, and read on 2026-10-05 and again on 2026-10-13 it still is, with
+  no assignee and no comment from a Go team member since 2026-08-26 (the one
+  since is gopherbot's link to the change below); its reporter added that it
+  reproduces with every package loaded from source too. Our
   [comment of 2026-09-30](https://github.com/golang/go/issues/81122#issuecomment-5901488429)
   adds a reproducer that needs no x/tools, the go1.26 read, and the change
   below with the source-loaded case it also covers. Two other projects keep
@@ -13317,9 +13476,12 @@ entry 73's adoption until that issue closed on 2026-10-07.
   copy, so its reviewers are Robert Griesemer and Mark Freeman. On 2026-09-30
   Mark Freeman asked for a shorter commit message, patch set 3 of the same
   day carries it with the code unchanged, and that
-  thread is resolved; no vote yet. Read on 2026-10-05 through Gerrit's REST
-  API, nothing has moved since patch set 3: both reviewers are in the
-  attention set, no label carries a vote, and no TryBot has run, which takes
+  thread is resolved; no vote yet. Read on 2026-10-05 and again on 2026-10-13
+  through Gerrit's REST API, nothing has moved since patch set 3, and Gerrit
+  still reports it mergeable into `master`, after CL 834626 and CL 834705
+  (2026-10-01) edited both `issues_test.go` files its test is appended to:
+  both reviewers are in the attention set, no label carries a vote, and no
+  TryBot has run, which takes
   a maintainer's `Commit-Queue+1`. Three submit requirements are unmet:
   `Code-Review` wants a `+2` from someone other than the uploader,
   `Review-Enforcement` wants two trusted contributors to approve, and the
@@ -13328,8 +13490,10 @@ entry 73's adoption until that issue closed on 2026-10-07.
   open on the head patch set 3 imports (`87fa66c4`). A reminder on the change
   is planned for no earlier than 2026-10-14, for the maintainer to post
   himself.
-- **Merged**: no. No Go release carries a fix, and `master` still reads the
-  field the same way.
+- **Merged**: no. No Go release carries a fix: go1.27.2 and go1.26.9,
+  released on 2026-10-08, change nothing in either `cycles.go` (from go1.27.1
+  to go1.27.2, go/types and types2 differ only in `named_test.go`, one line
+  each), and `master` still reads the field the same way.
 - **Blocking**: no for the server, which type-checks nothing. It failed the
   race gate of a release rehearsal, in
   `TestAccess_OnlyTheSanctionedPackagesReadTheKey` of
@@ -13352,7 +13516,10 @@ entry 73's adoption until that issue closed on 2026-10-07.
   written, on 2026-10-01; the six since are those of the fine-grained grant
   derivation, `cmd/audit_1to1/internal/grants`, `cmd/gen_action_grants` with
   its `internal/derive` and `internal/join`, `cmd/internal/actionrequests`
-  and `cmd/internal/sdkroutes`). In a race build its initializer sets
+  and `cmd/internal/sdkroutes`; 31 on 2026-10-13, the two since being
+  `cmd/audit_edition_tier` and `cmd/audit_1to1/internal/required`, which reach
+  go/packages through `cmd/internal/actionrequests` to read its committed
+  record and load no program). In a race build its initializer sets
   GOMAXPROCS to one before go/packages sizes the semaphore it type-checks
   under, so the checkers run one after another; in any other build it changes
   nothing. Its tests hold
@@ -13372,7 +13539,8 @@ entry 73's adoption until that issue closed on 2026-10-07.
   type, such as `type A[T any] B[T]`: a torn read of its instance
   dereferences a nil `*Named` and the command panics.
 
-**Where**: `go/types` in go1.27.1, and its copy
+**Where**: `go/types` in go1.27.1 and go1.27.2, the toolchain `go.mod` pins
+since 2026-10-09 (the file is the same in both), and its copy
 `cmd/compile/internal/types2`. `(*Checker).isComplete` reads `t.fromRHS` of a
 `*Named` without unpacking it (`cycles.go:122`), while `(*Named).unpack`
 expands an instance by writing `n.fromRHS = n.expandRHS()` (`named.go:244`).
