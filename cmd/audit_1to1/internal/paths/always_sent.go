@@ -3,9 +3,11 @@ package paths
 import (
 	"cmp"
 	"net/http"
+	"path"
 	"slices"
 	"strings"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
@@ -54,12 +56,30 @@ import (
 // The blind spot is stated rather than absorbed because a future SDK change
 // could open it silently.
 //
-// The join is the endpoint rather than the action: the inventory says which
-// package reached which route, the SDK says which option struct reaches that
-// route, and a route reached by two option structs is asked about under both.
-// That can name an option struct a given package never passes, which costs a
-// finding that is about the SDK rather than about that package's handler, and
-// the endpoint is on every finding so a reader can see which.
+// The join is the package rather than the action: the inventory says which
+// package reached which route, the action request record
+// (docs/development/action-requests.json) says which client-go methods that
+// package's handlers call, and the SDK says which option struct each of those
+// methods takes to that route. A route two methods reach with different
+// structs is asked about under the struct the package's own method takes. It
+// used to be asked about under both, and so charged a package with a struct
+// it never passes (issue 1104): POST /groups/:id/share is reached by
+// GroupMembers.ShareWithGroup and Groups.ShareGroupWithGroup, and the two
+// packages that call the second were reported for the first's expires_at.
+// Where the record names no method of the package that reaches the route (a
+// body the handler builds itself, a package that owns no action, or a call
+// the derivation missed) the endpoint is asked about under every struct the
+// route accepts, as it was, and listed in NotNarrowed so a reader can tell
+// which findings rest on that. The record names a package by its Go name and
+// the inventory by its directory, and the two meet on the directory's last
+// element, which every package here shares with its name. The join is still
+// the package, so a package two of whose handlers reach one route through two
+// methods is asked about under both structs on that route.
+//
+// The rule reads the struct's tags and nothing the handler does to the body
+// afterwards. A request option that edits the JSON client-go wrote
+// (toolutil.EditJSONBody) is invisible to it, so releases.Update, which drops
+// the name and the description a caller left out, is still reported for both.
 //
 // # It reports and does not gate
 //
@@ -75,6 +95,11 @@ type AlwaysSentCheck struct {
 	Ran bool `json:"ran"`
 	// Record names the artifact that answered about requiredness.
 	Record string `json:"record,omitempty"`
+	// Requests names the artifact that answered which client-go methods each
+	// package's handlers call. It is empty when that record could not be
+	// read, and then every endpoint is judged against every option struct
+	// its route accepts and listed in NotNarrowed.
+	Requests string `json:"requests_record,omitempty"`
 	// Endpoints counts the recorded body-carrying endpoints this was asked of.
 	Endpoints int `json:"endpoints"`
 	// OptionTypes counts the distinct client-go option structs those endpoints
@@ -94,6 +119,20 @@ type AlwaysSentCheck struct {
 	// Optional is the finding list: a param the SDK writes on every call that
 	// GitLab lets a caller leave out.
 	Optional []AlwaysSentField `json:"optional_but_always_sent,omitempty"`
+	// NotNarrowed lists the endpoints judged against every option struct
+	// their route accepts, because the action request record names no method
+	// of the package's handlers that reaches the route. A finding on one of
+	// them may be about a struct the package never passes.
+	NotNarrowed []AlwaysSentEndpoint `json:"not_narrowed_to_the_package,omitempty"`
+}
+
+// AlwaysSentEndpoint is one endpoint a package reached that was judged
+// against every option struct its route accepts.
+type AlwaysSentEndpoint struct {
+	Package     string   `json:"package"`
+	Method      string   `json:"method"`
+	Path        string   `json:"path"`
+	OptionTypes []string `json:"option_types"`
 }
 
 // AlwaysSentField is one param an option struct writes unconditionally on a
@@ -151,6 +190,11 @@ func alwaysSentCheck(root string, requests []requestinventory.Row) AlwaysSentChe
 	index := newOperationIndex(record)
 	byRoute := optionTypesByRoute(options)
 	check := AlwaysSentCheck{Ran: true, Record: apilive.FileName, Optional: []AlwaysSentField{}}
+	var calls map[string]map[string]bool
+	if derived, readErr := actionrequests.ReadRecord(root); readErr == nil {
+		check.Requests = actionrequests.RecordPath
+		calls = packageMethods(derived)
+	}
 
 	walked := map[string]bool{}
 	for _, endpoint := range bodyEndpoints(requests) {
@@ -158,11 +202,18 @@ func alwaysSentCheck(root string, requests []requestinventory.Row) AlwaysSentChe
 		if quality == matchNone || len(operation.Params) == 0 {
 			continue
 		}
-		types := byRoute[endpoint.method+" "+pathShape(endpoint.path)]
-		if len(types) == 0 {
+		takers := byRoute[endpoint.method+" "+pathShape(endpoint.path)]
+		if len(takers) == 0 {
 			continue
 		}
 		check.Endpoints++
+		types := takers.takenBy(calls[path.Base(endpoint.pkg)])
+		if len(types) == 0 {
+			types = takers.optionTypes()
+			check.NotNarrowed = append(check.NotNarrowed, AlwaysSentEndpoint{
+				Package: endpoint.pkg, Method: endpoint.method, Path: endpoint.path, OptionTypes: types,
+			})
+		}
 		for _, name := range types {
 			walked[name] = true
 			check.judge(endpoint, name, options.Types, operation.Params)
@@ -171,6 +222,37 @@ func alwaysSentCheck(root string, requests []requestinventory.Row) AlwaysSentChe
 	check.OptionTypes = len(walked)
 	slices.SortFunc(check.Optional, compareAlwaysSent)
 	return check
+}
+
+// packageMethods reads, from the action request record, the client-go methods
+// each package's handlers call, keyed by the Go package name the record
+// qualifies its symbols with.
+//
+// A request is credited to the package of every site that builds it and of
+// every handler of its action, because the inventory files a request under
+// the package whose test drove it, which is either: a guided flow in
+// elicitationtools that creates its issue through issues.Create is recorded
+// under elicitationtools, and a helper in toolutil tested on its own under
+// toolutil. Crediting a package with more requests than its own tests drove
+// holds it to more structs, never to fewer, except where it lifts an endpoint
+// off the not-narrowed list, and that takes a method the record says reaches
+// the route.
+func packageMethods(record actionrequests.Record) map[string]map[string]bool {
+	calls := map[string]map[string]bool{}
+	for _, action := range record.Actions {
+		for _, request := range action.Requests {
+			for _, symbol := range slices.Concat(action.Handlers, request.Sites) {
+				name, _, _ := strings.Cut(symbol, ".")
+				if calls[name] == nil {
+					calls[name] = map[string]bool{}
+				}
+				for _, method := range request.SDKMethods {
+					calls[name][method] = true
+				}
+			}
+		}
+	}
+	return calls
 }
 
 // judge walks one option struct against one route's declared params.

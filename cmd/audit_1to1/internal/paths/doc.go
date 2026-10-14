@@ -347,8 +347,11 @@
 // handler set, and the live record says which params GitLab declares optional
 // on the route receiving them. A key written unconditionally whose param GitLab
 // requires anyway is correct; one whose param GitLab lets a caller leave out is
-// a value nobody can decline to send. On the pinned record that separates 11
-// findings from 37 always-sent fields GitLab requires (and 2 whose route
+// a value nobody can decline to send. A package is held to the option structs
+// of the client-go methods its handlers call, read from the action request
+// record, so a route two methods reach with different structs charges each
+// package with its own (issue 1104). On the pinned record that separates 11
+// findings from 33 always-sent fields GitLab requires (and 2 whose route
 // declares nothing about them) with no declaration table doing any of the
 // work, and the 11 include the case it was built against:
 // package.protection_rule_update sends "package_name_pattern": null on a PATCH

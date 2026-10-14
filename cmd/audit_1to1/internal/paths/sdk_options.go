@@ -4,11 +4,11 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -76,13 +76,25 @@ type sdkOptionType struct {
 type sdkOptions struct {
 	// Types is every option struct the package declares, by name.
 	Types map[string]sdkOptionType
-	// Routes is, per option struct, the endpoints the methods taking it reach,
-	// in the spelling [sdkroutes.Route] carries.
-	Routes map[string][]sdkRoute
+	// Methods is every service method, keyed "Service.Method" the way
+	// [sdkroutes.Method.Key] spells it, which is also how the action request
+	// record names the methods a handler calls.
+	Methods map[string]sdkOptionMethod
+}
+
+// sdkOptionMethod is one client-go service method as the always-sent check
+// joins it: the option structs it takes and the endpoints it reaches.
+type sdkOptionMethod struct {
+	// Options names the option structs the method takes, each once.
+	Options []string
+	// Routes is every endpoint the method reaches, in the spelling
+	// [sdkroutes.Route] carries.
+	Routes []sdkRoute
 }
 
 // readSDKOptions parses the client-go source in dir and returns every option
-// struct it declares together with the endpoints the methods taking one reach.
+// struct it declares together with the service methods, each with the option
+// structs it takes and the endpoints it reaches.
 //
 // The option structs are read here, since what their fields write is this
 // check's question alone; which endpoints a method given one reaches is
@@ -98,11 +110,17 @@ func readSDKOptions(dir string) sdkOptions {
 		return sdkOptions{}
 	}
 
-	found := sdkOptions{Types: map[string]sdkOptionType{}}
+	found := sdkOptions{Types: map[string]sdkOptionType{}, Methods: map[string]sdkOptionMethod{}}
 	for _, file := range files {
 		collectOptionTypes(file, found.Types)
 	}
-	found.Routes = routesBy(sdkroutes.Read(dir), func(method sdkroutes.Method) []string { return method.Options }, false)
+	for _, method := range sdkroutes.Read(dir).Methods() {
+		routes := make([]sdkRoute, 0, len(method.Routes))
+		for _, route := range method.Routes {
+			routes = append(routes, sdkRoute{Method: route.Method, Path: route.Path})
+		}
+		found.Methods[method.Key()] = sdkOptionMethod{Options: method.Options, Routes: routes}
+	}
 	return found
 }
 
@@ -320,29 +338,51 @@ func walkOptionParams(types map[string]sdkOptionType, name, prefix string, ances
 	}
 }
 
+// routeTakers is, for one endpoint, the option structs whose methods reach it
+// and, under each, the methods that take that struct there.
+type routeTakers map[string]map[string]bool
+
 // optionTypesByRoute indexes the option structs whose methods reach each
-// endpoint, keyed the way an inventory row's method and path key it.
-func optionTypesByRoute(options sdkOptions) map[string][]string {
-	byRoute := map[string]map[string]bool{}
-	for name, routes := range options.Routes {
-		for _, route := range routes {
-			key := route.Method + " " + pathShape(route.Path)
-			types := byRoute[key]
-			if types == nil {
-				types = map[string]bool{}
-				byRoute[key] = types
+// endpoint, keyed the way an inventory row's method and path key it, with the
+// methods that take each one there, so a package can be held to the structs
+// of the methods its handlers call rather than to every struct the route
+// accepts.
+func optionTypesByRoute(options sdkOptions) map[string]routeTakers {
+	byRoute := map[string]routeTakers{}
+	for key, method := range options.Methods {
+		for _, route := range method.Routes {
+			endpoint := route.Method + " " + pathShape(route.Path)
+			for _, name := range method.Options {
+				takers := byRoute[endpoint]
+				if takers == nil {
+					takers = routeTakers{}
+					byRoute[endpoint] = takers
+				}
+				if takers[name] == nil {
+					takers[name] = map[string]bool{}
+				}
+				takers[name][key] = true
 			}
-			types[name] = true
 		}
 	}
-	out := make(map[string][]string, len(byRoute))
-	for key, types := range byRoute {
-		names := make([]string, 0, len(types))
-		for name := range types {
-			names = append(names, name)
+	return byRoute
+}
+
+// optionTypes names the option structs that reach the endpoint, sorted.
+func (t routeTakers) optionTypes() []string {
+	return slices.Sorted(maps.Keys(t))
+}
+
+// takenBy names the option structs that reach the endpoint through one of
+// the methods called, sorted, and none when no called method reaches it.
+func (t routeTakers) takenBy(called map[string]bool) []string {
+	taken := map[string]bool{}
+	for name, methods := range t {
+		for method := range methods {
+			if called[method] {
+				taken[name] = true
+			}
 		}
-		sort.Strings(names)
-		out[key] = names
 	}
-	return out
+	return slices.Sorted(maps.Keys(taken))
 }

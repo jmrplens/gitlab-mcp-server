@@ -43,7 +43,7 @@ func readSDKRoutes(dir string) map[string][]sdkRoute {
 			return nil
 		}
 		return []string{method.Answers}
-	}, true)
+	})
 }
 
 // readSDKMethodRoutes returns, for every client-go service method, the
@@ -64,11 +64,11 @@ func readSDKRoutes(dir string) map[string][]sdkRoute {
 func readSDKMethodRoutes(dir string) map[string][]sdkRoute {
 	return routesBy(sdkroutes.Read(dir), func(method sdkroutes.Method) []string {
 		return []string{method.Key()}
-	}, true)
+	})
 }
 
 // routesBy indexes every method's routes under the keys keysOf names for it,
-// with the method's Many flag when withMany is set.
+// each with the method's Many flag.
 //
 // The reading is [sdkroutes]', the one the action request derivation reads
 // too: it follows a method into the helper, the field and the generic function
@@ -79,12 +79,12 @@ func readSDKMethodRoutes(dir string) map[string][]sdkRoute {
 // collection a helper is handed into one placeholder; two readers of one fact
 // are how a check ends up answering a narrower question than the one it
 // prints.
-func routesBy(sdk *sdkroutes.SDK, keysOf func(sdkroutes.Method) []string, withMany bool) map[string][]sdkRoute {
+func routesBy(sdk *sdkroutes.SDK, keysOf func(sdkroutes.Method) []string) map[string][]sdkRoute {
 	found := map[string]map[sdkRoute]bool{}
 	for _, method := range sdk.Methods() {
 		for _, key := range keysOf(method) {
 			for _, route := range method.Routes {
-				addRoute(found, key, sdkRoute{Method: route.Method, Path: route.Path, Many: withMany && method.Many})
+				addRoute(found, key, sdkRoute{Method: route.Method, Path: route.Path, Many: method.Many})
 			}
 		}
 	}

@@ -93,11 +93,58 @@ func (s *ProtectedPackagesService) ListRules(pid any, options ...RequestOptionFu
 	if !reflect.DeepEqual(rules.Fields, want) {
 		t.Errorf("fields = %+v, want %+v", rules.Fields, want)
 	}
-	if routes := options.Routes["UpdateRulesOptions"]; len(routes) != 1 || routes[0].operation() != "PATCH /projects/:/packages/protection/rules/:" {
-		t.Errorf("routes = %+v, want the one PATCH the method sends", routes)
+	update := options.Methods["ProtectedPackages.UpdateRules"]
+	if !reflect.DeepEqual(update.Options, []string{"UpdateRulesOptions"}) {
+		t.Errorf("options = %v, want the one option struct the method takes and not the variadic tail", update.Options)
 	}
-	if routes, claimed := options.Routes["RequestOptionFunc"]; claimed {
-		t.Errorf("the transport's variadic tail claimed %+v, want no route at all", routes)
+	if len(update.Routes) != 1 || update.Routes[0].operation() != "PATCH /projects/:/packages/protection/rules/:" {
+		t.Errorf("routes = %+v, want the one PATCH the method sends", update.Routes)
+	}
+	if list := options.Methods["ProtectedPackages.ListRules"]; len(list.Options) != 0 || len(list.Routes) != 1 {
+		t.Errorf("list = %+v, want a method taking no option struct read with its route and no struct", list)
+	}
+	byRoute := optionTypesByRoute(options)
+	if takers := byRoute["PATCH /projects/:/packages/protection/rules/:"]; !reflect.DeepEqual(takers, routeTakers{"UpdateRulesOptions": {"ProtectedPackages.UpdateRules": true}}) {
+		t.Errorf("takers = %+v, want UpdateRulesOptions taken there by UpdateRules alone", takers)
+	}
+	if takers, claimed := byRoute["GET /projects/:/packages/protection/rules"]; claimed {
+		t.Errorf("a route no method reaches with an option struct claimed %+v, want no entry", takers)
+	}
+}
+
+// TestRouteTakers_TheStructsAPackageCanSend_AreTheOnesItsMethodsTake verifies
+// the narrowing issue 1104 asked for at its smallest: of the option structs a
+// route accepts, a package is held to those a method it calls takes there,
+// one method taking two structs and two methods taking one struct included,
+// and to none when it calls no method that reaches the route.
+func TestRouteTakers_TheStructsAPackageCanSend_AreTheOnesItsMethodsTake(t *testing.T) {
+	takers := routeTakers{
+		"AOptions": {"Svc.TakesAAndB": true},
+		"BOptions": {"Svc.TakesAAndB": true, "Svc.TakesB": true},
+		"COptions": {"Svc.TakesC": true},
+	}
+	if got := takers.optionTypes(); !reflect.DeepEqual(got, []string{"AOptions", "BOptions", "COptions"}) {
+		t.Errorf("optionTypes() = %v, want every struct the route accepts, sorted", got)
+	}
+
+	tests := []struct {
+		name   string
+		called map[string]bool
+		want   []string
+	}{
+		{name: "a method taking two structs", called: map[string]bool{"Svc.TakesAAndB": true}, want: []string{"AOptions", "BOptions"}},
+		{name: "one of two methods taking a struct", called: map[string]bool{"Svc.TakesB": true}, want: []string{"BOptions"}},
+		{name: "methods taking different structs", called: map[string]bool{"Svc.TakesB": true, "Svc.TakesC": true}, want: []string{"BOptions", "COptions"}},
+		{name: "a method recorded as not called", called: map[string]bool{"Svc.TakesC": false}},
+		{name: "a method that does not reach the route", called: map[string]bool{"Svc.Elsewhere": true}},
+		{name: "no method at all"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := takers.takenBy(tt.called); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("takenBy(%v) = %v, want %v", tt.called, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -227,7 +274,7 @@ func TestWalkOptionParams_AnUnknownType_VisitsNothing(t *testing.T) {
 func TestReadSDKOptions_AnUnreadableDirectory_ReadsNothing(t *testing.T) {
 	for _, dir := range []string{"", t.TempDir(), filepath.Join(t.TempDir(), "absent")} {
 		t.Run(dir, func(t *testing.T) {
-			if options := readSDKOptions(dir); len(options.Types) != 0 || len(options.Routes) != 0 {
+			if options := readSDKOptions(dir); len(options.Types) != 0 || len(options.Methods) != 0 {
 				t.Errorf("readSDKOptions(%q) = %+v, want nothing", dir, options)
 			}
 		})

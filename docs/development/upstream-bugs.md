@@ -4437,9 +4437,10 @@ version `go.mod` pins, and v3.16.0, tagged that day
 **What**: the same defect as entries 6 and 52, found systematically rather
 than one at a time. `audit_1to1 -scope=paths` compares the keys
 `encoding/json` writes whatever a handler set against the params GitLab's live
-record marks optional, and reports eleven rows over nine fields in eight option
-types. Two of the rows are entry 52. These are the other seven types, with the
-handler here that sends each:
+record marks optional. Read on 2026-10-14 it reports eleven rows over eleven
+fields in nine option types: two are entry 52, two are
+[entry 121](#updatereleaseoptions-sends-the-title-and-the-notes-as-null-on-every-partial-update),
+and these are the other seven types, with the handler here that sends each:
 
 | Option type                           | Field        | Param         | Endpoint                                                  | Handler here                       |
 | ------------------------------------- | ------------ | ------------- | --------------------------------------------------------- | ---------------------------------- |
@@ -4447,7 +4448,6 @@ handler here that sends each:
 | `CreateGroupIssueBoardListOptions`    | `LabelID`    | `label_id`    | `POST /groups/:id/boards/:id/lists`                       | `groupboards.CreateGroupBoardList` |
 | `AddGroupMemberOptions`               | `ExpiresAt`  | `expires_at`  | `POST /groups/:id/members`                                | `groupmembers.AddMember`           |
 | `AddProjectMemberOptions`             | `ExpiresAt`  | `expires_at`  | `POST /projects/:id/members`                              | `members.Add`                      |
-| `ShareWithGroupOptions`               | `ExpiresAt`  | `expires_at`  | `POST /groups/:id/share`                                  | none since issue 1027 (below)      |
 | `ShareWithGroupOptions`               | `ExpiresAt`  | `expires_at`  | `POST /projects/:id/share`                                | `projects.ShareProjectWithGroup`   |
 | `CreateIssueLinkOptions`              | `LinkType`   | `link_type`   | `POST /projects/:id/issues/:iid/links`                    | `issuelinks.Create`                |
 | `EditPipelineScheduleVariableOptions` | `Value`      | `value`       | `PUT /projects/:id/pipeline_schedules/:id/variables/:key` | `pipelineschedules.EditVariable`   |
@@ -4458,13 +4458,15 @@ what the tag adds when the caller did not; for `dependencies.CreateExport` it
 is not, because client-go fills in `"sbom"` when the pointer is nil, so no null
 is ever sent there. The other two, `groupboards.CreateGroupBoardList` and
 `pipelineschedules.EditVariable`, require the field and always set it. The
-`POST /groups/:id/share` row has no handler here any more: this table was
-written when `groupmembers.ShareGroup` sent `ShareWithGroupOptions`, and since
+table had an eighth row, `ShareWithGroupOptions` on `POST /groups/:id/share`,
+written when `groupmembers.ShareGroup` sent that struct. Since
 [issue 1027](https://github.com/jmrplens/gitlab-mcp-server/issues/1027),
 closed by pull request 1071 (`e30abf5cd`), it sends
 `ShareGroupWithGroupOptions` through `Groups.ShareGroupWithGroup`
 (`internal/tools/groupmembers/group_members.go:451-489`), whose fields all
-carry `omitempty`.
+carry `omitempty`, and since
+[issue 1104](https://github.com/jmrplens/gitlab-mcp-server/issues/1104) the
+check no longer reports it (below).
 `TestGroupMemberWrites_OptionalParametersReachTheRequestOnlyWhenGiven/share`
 pins that a share without an expiry carries no `expires_at` key.
 
@@ -4533,31 +4535,31 @@ The remaining five simply lack it.
 `EditPipelineScheduleVariableOptions` has the shape entry 52 has, one field
 with the tag and one without (`VariableType` carries it, `Value` does not).
 `CreateIssueLinkOptions` carries no `url` tags at all, so only the JSON body
-is affected. `ShareWithGroupOptions` is sent by one package today:
+is affected. `ShareWithGroupOptions` is sent by one package:
 `projects` passes it to `Projects.ShareProjectWithGroup`, and
 `TestShareProjectWithGroup_SendsExactlyWhatTheCallerSet` pins the
-`"expires_at":null` a share without an expiry carries. The audit lists it
-under `groupmembers` and under `groups` as well, and both are the join rather
-than callers: `group.share_with_group` (`internal/tools/groups`) has always
-sent `ShareGroupWithGroupOptions`, and `group.group_member_share` has sent the
-same since issue 1027, both to `POST /groups/:id/share`, the route
-`GroupMembers.ShareWithGroup` reaches with `ShareWithGroupOptions`; the check
-pairs option types with a recorded route (`optionTypesByRoute`) rather than
-with the handler that sent the request, and so asks about every option struct
-whose method reaches that route.
-[Issue 1104](https://github.com/jmrplens/gitlab-mcp-server/issues/1104), open,
-owns that limit of the check. Those two rows, and the `export_type` one
-above, which client-go never sends as null, are the rule's reading of a tag
-rather than a request this server sends wrongly; the two share rows leave the
-report with issue 1104 or with the `ShareWithGroupOptions` tag, whichever
-comes first, and the `export_type` row with its tag.
+`"expires_at":null` a share without an expiry carries. Until
+[issue 1104](https://github.com/jmrplens/gitlab-mcp-server/issues/1104) the
+audit listed it under `groupmembers` and under `groups` as well, and both
+were the join rather than callers: `group.share_with_group`
+(`internal/tools/groups`) has always sent `ShareGroupWithGroupOptions`, and
+`group.group_member_share` has sent the same since issue 1027, both to
+`POST /groups/:id/share`, the route `GroupMembers.ShareWithGroup` reaches with
+`ShareWithGroupOptions`. The check paired option types with a recorded route
+rather than with the methods the package's handlers call, and so asked about
+every option struct whose method reaches that route; it now reads those
+methods from `docs/development/action-requests.json` and asks each package
+about the structs its own methods take there. The `export_type` row above,
+which client-go never sends as null, is the rule's reading of a tag rather
+than a request this server sends wrongly, and leaves the report with its tag.
 
 **Why entry 6 is not in this list.** `SetFeatureFlagOptions` is the same
 defect and does not appear, because the audit reads the request this server
 **recorded** and `internal/tools/features.Set` builds its body by hand to
 avoid the bug. The workaround hides the defect from the check that would have
 found it, which is a property worth knowing before trusting the count: the
-eight are the ones we still send through the SDK, not the eight that exist.
+types it lists are the ones we still send through the SDK, not every one that
+exists.
 
 **Effort**: small, and one merge request covers all nine structs of entries 6,
 52 and these seven. Every case is a struct tag plus a test that the key is
@@ -4577,11 +4579,13 @@ commits 32 to 34 of the joint merge request, and the workarounds retiring
 with it. The measure is R-PATH's always-sent check,
 `go run ./cmd/audit_1to1/ -scope=paths -gaps-only`, whose
 `always_sent.optional_but_always_sent` listed 11 rows over nine fields in
-eight option types when read on 2026-10-07 (37 always-sent fields GitLab
-requires beside them, and two the route does not declare), and reads empty
-after that bump; the sentence of `CLAUDE.md`'s Request paths section that
-counts the 11 and the 37 moves with it. The bump layer does, beside what
-entries 6 and 52 list:
+eight option types when read on 2026-10-07, two of them the share rows issue
+1104 took out. Read on 2026-10-14 it lists 11 rows over eleven fields in nine
+option types (33 always-sent fields GitLab requires beside them, and two the
+route does not declare): the nine of entries 52 and 54, which leave it with
+that bump, and the two of entry 121, which leave it with that entry's tag. The
+sentence of `CLAUDE.md`'s Request paths section that counts the 11 and the 33
+moves with it. The bump layer does, beside what entries 6 and 52 list:
 
 - `pipelineschedules.EditVariable` makes `value` optional in the handler, in
   its check and in its schema, with the golden snapshots regenerated. No test
@@ -4595,7 +4599,7 @@ entries 6 and 52 list:
   [entry 96](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types)
   lands as well.
 
-Two open issues of this repository build on these nulls:
+Two issues of this repository built on these nulls, both closed:
 [issue 1100](https://github.com/jmrplens/gitlab-mcp-server/issues/1100), on
 which parameters of `issue.link_create` the individual tools and the catalog
 route schema call required, `link_type` among them, and

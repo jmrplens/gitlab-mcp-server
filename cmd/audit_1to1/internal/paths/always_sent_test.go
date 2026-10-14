@@ -3,10 +3,13 @@ package paths
 import (
 	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
@@ -107,6 +110,218 @@ func TestAlwaysSentCheck_AnOptionalParamWrittenOnEveryCall_IsAFinding(t *testing
 	}
 	if found.Package != "internal/tools/protectedpackages" || found.Method != http.MethodPatch {
 		t.Errorf("finding = %+v, want it attributed to the package the inventory recorded", found)
+	}
+}
+
+// shareSource is pretend client-go source in which two service methods reach
+// one route with different option structs, the shape issue 1104 was found on.
+// GroupMembers.ShareWithGroup writes expires_at on every call and
+// Groups.ShareGroupWithGroup omits every empty field, and both POST to
+// groups/:id/share.
+func shareSource(t *testing.T) string {
+	t.Helper()
+	return sdkSourceIn(t, map[string]string{
+		"routes.go": `package gitlab
+
+var routeGroupsIDShare = route("groups/%s/share")
+`,
+		"options.go": `package gitlab
+
+type ShareWithGroupOptions struct {
+	GroupID     *int64  ` + "`" + `json:"group_id"` + "`" + `
+	GroupAccess *int    ` + "`" + `json:"group_access"` + "`" + `
+	ExpiresAt   *string ` + "`" + `json:"expires_at"` + "`" + `
+}
+
+type ShareGroupWithGroupOptions struct {
+	GroupID     *int64  ` + "`" + `json:"group_id,omitempty"` + "`" + `
+	GroupAccess *int    ` + "`" + `json:"group_access,omitempty"` + "`" + `
+	ExpiresAt   *string ` + "`" + `json:"expires_at,omitempty"` + "`" + `
+}
+`,
+		"service.go": `package gitlab
+
+import "net/http"
+
+func (s *GroupMembersService) ShareWithGroup(gid any, opt *ShareWithGroupOptions, options ...RequestOptionFunc) (*Group, *Response, error) {
+	return do[*Group](s.client,
+		withMethod(http.MethodPost),
+		withPath(routeGroupsIDShare, GroupID{gid}),
+		withAPIOpts(opt),
+	)
+}
+
+func (s *GroupsService) ShareGroupWithGroup(gid any, opt *ShareGroupWithGroupOptions, options ...RequestOptionFunc) (*Group, *Response, error) {
+	return do[*Group](s.client,
+		withMethod(http.MethodPost),
+		withPath(routeGroupsIDShare, GroupID{gid}),
+		withAPIOpts(opt),
+	)
+}
+`,
+	})
+}
+
+// shareRecord is a live record holding the one route both methods reach,
+// with the two params GitLab requires and the one it lets a caller leave out.
+func shareRecord(t *testing.T) string {
+	t.Helper()
+	return recordIn(t, map[string]response{
+		"POST /groups/:id/share": {
+			Params:         []string{"expires_at"},
+			ParamsRequired: []string{"group_id", "group_access"},
+		},
+	})
+}
+
+// writeActionRequests commits an action request record under root, the way
+// cmd/gen_action_grants writes it.
+func writeActionRequests(t *testing.T, root string, actions []actionrequests.RecordAction) {
+	t.Helper()
+	target := filepath.Join(root, filepath.FromSlash(actionrequests.RecordPath))
+	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
+		t.Fatalf("prepare the action request record: %v", err)
+	}
+	if err := os.WriteFile(target, actionrequests.RenderRecord(actions), 0o600); err != nil {
+		t.Fatalf("write the action request record: %v", err)
+	}
+}
+
+// shareRequests are the inventory rows of three packages reaching the share
+// route: one whose handler calls Groups.ShareGroupWithGroup, one whose handler
+// calls GroupMembers.ShareWithGroup, and one the action request record says
+// nothing about, which stands for a body a handler builds itself.
+func shareRequests() []requestinventory.Row {
+	row := func(pkg string) requestinventory.Row {
+		return requestinventory.Row{
+			Package: pkg, Kind: "rest", Method: http.MethodPost,
+			Path: "/groups/:group_id/share", Body: []string{"group_id", "group_access"},
+		}
+	}
+	return []requestinventory.Row{
+		row("internal/tools/groups"),
+		row("internal/tools/groupmembers"),
+		row("internal/tools/handbuilt"),
+	}
+}
+
+// TestAlwaysSentCheck_TwoMethodsOnOneRoute_JudgeOnlyTheOptionsThePackageSends
+// verifies the join issue 1104 asked for: a package is held to the option
+// structs of the client-go methods its handlers call, not to every struct
+// whose method reaches the route it was recorded on.
+//
+// POST /groups/:id/share is reached by two methods. A package whose handler
+// calls Groups.ShareGroupWithGroup sends ShareGroupWithGroupOptions, whose
+// every field is omitempty, so it writes nothing on every call and is no
+// finding; the check used to charge it with the expires_at of
+// ShareWithGroupOptions as well, a request it never sends. A package whose
+// handler calls GroupMembers.ShareWithGroup keeps its finding. A package the
+// action request record names no method of reaching the route, which is what
+// a body built by hand looks like, is judged against both structs as before.
+func TestAlwaysSentCheck_TwoMethodsOnOneRoute_JudgeOnlyTheOptionsThePackageSends(t *testing.T) {
+	withSDKOptions(t, shareSource(t))
+	root := shareRecord(t)
+	writeActionRequests(t, root, []actionrequests.RecordAction{
+		{
+			ID:       "group.share_with_group",
+			Handlers: []string{"groups.ShareGroupWithGroup"},
+			Requests: []actionrequests.RecordRequest{{
+				Kind: actionrequests.KindREST, Route: "POST /groups/:id/share", Class: actionrequests.ClassMandatory,
+				Sites: []string{"groups.ShareGroupWithGroup"}, SDKMethods: []string{"Groups.ShareGroupWithGroup"},
+			}},
+			Paths: [][]int{{0}},
+		},
+		{
+			ID:       "group.group_member_share",
+			Handlers: []string{"groupmembers.ShareGroup"},
+			Requests: []actionrequests.RecordRequest{{
+				Kind: actionrequests.KindREST, Route: "POST /groups/:id/share", Class: actionrequests.ClassMandatory,
+				Sites: []string{"groupmembers.ShareGroup"}, SDKMethods: []string{"GroupMembers.ShareWithGroup"},
+			}},
+			Paths: [][]int{{0}},
+		},
+	})
+
+	check := alwaysSentCheck(root, shareRequests())
+
+	if !check.Ran || check.Endpoints != 3 || check.OptionTypes != 2 {
+		t.Fatalf("check = %+v, want three endpoints over the two option types", check)
+	}
+	if check.Fields != 6 || check.Required != 4 || check.Unmatched != 0 {
+		t.Errorf("fields = %d, required = %d, unmatched = %d, want 6, 4 and 0: three fields each for the two packages held to ShareWithGroupOptions",
+			check.Fields, check.Required, check.Unmatched)
+	}
+	want := []AlwaysSentField{
+		{Package: "internal/tools/groupmembers", Method: http.MethodPost, Path: "/groups/:group_id/share", OptionType: "ShareWithGroupOptions", Field: "ExpiresAt", Param: "expires_at", ParamType: "String"},
+		{Package: "internal/tools/handbuilt", Method: http.MethodPost, Path: "/groups/:group_id/share", OptionType: "ShareWithGroupOptions", Field: "ExpiresAt", Param: "expires_at", ParamType: "String"},
+	}
+	if !reflect.DeepEqual(check.Optional, want) {
+		t.Errorf("findings = %+v, want %+v: none for the package that sends ShareGroupWithGroupOptions", check.Optional, want)
+	}
+	if check.Requests != actionrequests.RecordPath {
+		t.Errorf("requests record = %q, want %q named as what narrowed the join", check.Requests, actionrequests.RecordPath)
+	}
+	wantUnnarrowed := []AlwaysSentEndpoint{{
+		Package: "internal/tools/handbuilt", Method: http.MethodPost, Path: "/groups/:group_id/share",
+		OptionTypes: []string{"ShareGroupWithGroupOptions", "ShareWithGroupOptions"},
+	}}
+	if !reflect.DeepEqual(check.NotNarrowed, wantUnnarrowed) {
+		t.Errorf("not narrowed = %+v, want %+v: only the package the record names no method of", check.NotNarrowed, wantUnnarrowed)
+	}
+}
+
+// TestAlwaysSentCheck_NoActionRequestRecord_JudgesEveryEndpointUnnarrowed
+// verifies that a tree whose action request record cannot be read still runs
+// the check, as it ran before the record was joined, and says on every
+// endpoint that it did: each is asked about under every struct its route
+// accepts, the phantom of issue 1104 included, and listed as not narrowed.
+func TestAlwaysSentCheck_NoActionRequestRecord_JudgesEveryEndpointUnnarrowed(t *testing.T) {
+	withSDKOptions(t, shareSource(t))
+
+	check := alwaysSentCheck(shareRecord(t), shareRequests())
+
+	if !check.Ran || check.Requests != "" {
+		t.Fatalf("check = %+v, want a run that names no requests record", check)
+	}
+	if len(check.Optional) != 3 || len(check.NotNarrowed) != 3 {
+		t.Errorf("findings = %+v, not narrowed = %+v, want three of each: every package held to both structs", check.Optional, check.NotNarrowed)
+	}
+}
+
+// TestPackageMethods_ARequest_IsCreditedToItsSitesAndItsHandlers verifies the
+// attribution the narrowing rests on. The inventory files a request under the
+// package whose test drove it, which is the handler's package when a guided
+// flow calls another domain's function and the site's package when a shared
+// helper is tested on its own, so a request's methods are credited to both;
+// a symbol with no qualifier is credited to a name no package has.
+func TestPackageMethods_ARequest_IsCreditedToItsSitesAndItsHandlers(t *testing.T) {
+	calls := packageMethods(actionrequests.Record{Actions: []actionrequests.RecordAction{
+		{
+			ID:       "interactive.issue_create",
+			Handlers: []string{"elicitationtools.IssueCreate"},
+			Requests: []actionrequests.RecordRequest{{
+				Kind: actionrequests.KindREST, Sites: []string{"issues.Create"}, SDKMethods: []string{"Issues.CreateIssue"},
+			}},
+		},
+		{
+			ID:       "merge_request.draft_note_publish",
+			Handlers: []string{"mrdraftnotes.Publish"},
+			Requests: []actionrequests.RecordRequest{
+				{Kind: actionrequests.KindREST, Sites: []string{"toolutil.Publish"}, SDKMethods: []string{"DraftNotes.PublishAllDraftNotes"}},
+				{Kind: actionrequests.KindREST, Sites: []string{"unqualified"}},
+			},
+		},
+	}})
+
+	want := map[string]map[string]bool{
+		"elicitationtools": {"Issues.CreateIssue": true},
+		"issues":           {"Issues.CreateIssue": true},
+		"mrdraftnotes":     {"DraftNotes.PublishAllDraftNotes": true},
+		"toolutil":         {"DraftNotes.PublishAllDraftNotes": true},
+		"unqualified":      {},
+	}
+	if !reflect.DeepEqual(calls, want) {
+		t.Errorf("packageMethods = %v, want %v", calls, want)
 	}
 }
 
