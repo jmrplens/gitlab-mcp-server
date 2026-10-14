@@ -30,7 +30,7 @@ GitLab MCP Server provides five distinct features, summarized below. Progress is
 | [Elicitation](/gitlab-mcp-server/capabilities/elicitation/)     | Server → Client (request; the client answers)                 | Four interactive wizards (issue, merge request, release, project): step-by-step forms for creating complex resources                                                                        |
 | [Completions](/gitlab-mcp-server/capabilities/completions/)     | Client → Server (request)                                     | Autocompletion of prompt and resource-template arguments: project paths, branches, users, and more                                                                                          |
 | [Subscriptions](/gitlab-mcp-server/capabilities/subscriptions/) | Client → Server (request; updates Server → Client)            | Live change notifications for 26 GitLab resource kinds, honored by polling (`GITLAB_MCP_CAPABILITY_SURFACE=full` only)                                                                      |
-| [Icons](/gitlab-mcp-server/capabilities/icons/) _(metadata)_    | Server → Client (in every listing and in the server identity) | 52 icons: 51 for tools, resources, and prompts, plus the brand mark that identifies the server itself. Each is an SVG entry plus light and dark WebP fallbacks, carried as base64 data URIs |
+| [Icons](/gitlab-mcp-server/reference/icons/) _(metadata)_       | Server → Client (in every listing and in the server identity) | 52 icons: 51 for tools, resources, and prompts, plus the brand mark that identifies the server itself. Each is an SVG entry plus light and dark WebP fallbacks, carried as base64 data URIs |
 
 ## How are MCP capabilities negotiated?
 
@@ -109,7 +109,8 @@ three entries gitlab-mcp-server attaches to every icon — a scalable SVG plus
 light/dark WebP fallbacks — not whether it supports every format. VS Code
 Copilot, for example, rejects the SVG entry (`image/svg+xml` is not in its
 MIME allowlist) but renders the theme-matched WebP fallback instead. See
-[Icons](/gitlab-mcp-server/capabilities/icons/) for the full client matrix.
+[Icons](/gitlab-mcp-server/reference/icons/) in the reference for the full
+client matrix.
 
 :::note
 Client support evolves rapidly. Check your MCP client's documentation for the latest capability support.

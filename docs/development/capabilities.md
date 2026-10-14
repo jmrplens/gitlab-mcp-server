@@ -9,10 +9,12 @@ how the icons are built and attached.
 What each capability does for a client, which clients support it, and the
 wire shapes are on the documentation site, under
 [Capabilities](https://docs.jmrp.io/gitlab-mcp-server/capabilities/overview/)
-and [Icons](https://docs.jmrp.io/gitlab-mcp-server/capabilities/icons/). This
-page is the Go side. Resource subscriptions have their decisions in
-[ADR-0015](adr/adr-0015-polled-resource-subscriptions.md) and their invariants
-in [CLAUDE.md](../../CLAUDE.md) under "Resource subscriptions".
+and, for the icons, which are presentation metadata rather than a capability,
+under [Icons](https://docs.jmrp.io/gitlab-mcp-server/reference/icons/) in the
+reference. This page is the Go side. Resource subscriptions have their
+decisions in [ADR-0015](adr/adr-0015-polled-resource-subscriptions.md) and
+their invariants in [CLAUDE.md](../../CLAUDE.md) under "Resource
+subscriptions".
 
 ---
 

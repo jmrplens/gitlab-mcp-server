@@ -176,7 +176,6 @@ const SECTIONS = [
 			"capabilities/completions",
 			"capabilities/subscriptions",
 			"capabilities/progress",
-			"capabilities/icons",
 		],
 	},
 	{
@@ -187,6 +186,7 @@ const SECTIONS = [
 			"reference/environment",
 			"reference/output-format",
 			"reference/fine-grained-permissions",
+			"reference/icons",
 		],
 		generated: "reference/tools",
 	},

@@ -390,15 +390,22 @@ const jsonLd = JSON.stringify({
 export default defineConfig({
 	site: siteUrl,
 	base: basePath,
-	// A page that moved out of the site keeps its published URL answering, so a
-	// bookmark or an inbound link lands where the content went instead of on 404.
+	// A page that moved, out of the site or within it, keeps its published URL
+	// answering, so a bookmark or an inbound link lands where the content went
+	// instead of on 404.
 	// The Docker end-to-end guide was contributor material and lives beside the
-	// suite it describes.
+	// suite it describes. The icons page is presentation metadata the server
+	// attaches to what it lists, not a capability a client negotiates, so it
+	// moved from the capabilities section to the reference. Astro puts the
+	// base in front of a redirect's source and not of its destination, so a
+	// destination on this site spells the base itself.
 	redirects: {
 		"/operations/docker-testing":
 			"https://github.com/jmrplens/gitlab-mcp-server/blob/main/test/e2e/README.md",
 		"/es/operations/docker-testing":
 			"https://github.com/jmrplens/gitlab-mcp-server/blob/main/test/e2e/README.md",
+		"/capabilities/icons": `${basePath}/reference/icons/`,
+		"/es/capabilities/icons": `${basePath}/es/reference/icons/`,
 	},
 	experimental: {
 		clientPrerender: true,
@@ -767,11 +774,6 @@ export default defineConfig({
 							label: "Progress",
 							translations: { es: "Progreso" },
 						},
-						{
-							slug: "capabilities/icons",
-							label: "Icons",
-							translations: { es: "Iconos" },
-						},
 					],
 				},
 				{
@@ -797,6 +799,11 @@ export default defineConfig({
 							slug: "reference/fine-grained-permissions",
 							label: "Fine-grained permissions",
 							translations: { es: "Permisos de grano fino" },
+						},
+						{
+							slug: "reference/icons",
+							label: "Icons",
+							translations: { es: "Iconos" },
 						},
 						// One page per catalog group, written by
 						// cmd/gen_tool_reference: listed from the directory so a

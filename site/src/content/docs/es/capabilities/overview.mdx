@@ -30,7 +30,7 @@ GitLab MCP Server proporciona cinco funciones diferenciadas, resumidas a continu
 | [Elicitación](/gitlab-mcp-server/es/capabilities/elicitation/)     | Servidor → Cliente (petición; el cliente responde)                  | Cuatro flujos guiados interactivos (issue, merge request, release, proyecto): formularios paso a paso para crear recursos complejos                                                                            |
 | [Autocompletado](/gitlab-mcp-server/es/capabilities/completions/)  | Cliente → Servidor (petición)                                       | Autocompletado de argumentos de prompts y plantillas de recurso: rutas de proyecto, ramas, usuarios y más                                                                                                      |
 | [Suscripciones](/gitlab-mcp-server/es/capabilities/subscriptions/) | Cliente → Servidor (petición; actualizaciones Servidor → Cliente)   | Notificaciones de cambio en vivo para 26 tipos de recurso de GitLab, atendidas mediante sondeo (solo `GITLAB_MCP_CAPABILITY_SURFACE=full`)                                                                     |
-| [Iconos](/gitlab-mcp-server/es/capabilities/icons/) _(metadatos)_  | Servidor → Cliente (en cada listado y en la identidad del servidor) | 52 iconos: 51 para herramientas, recursos y prompts, más la marca que identifica al propio servidor. Cada uno es una entrada SVG más variantes WebP clara y oscura, transportadas como URIs de datos en base64 |
+| [Iconos](/gitlab-mcp-server/es/reference/icons/) _(metadatos)_     | Servidor → Cliente (en cada listado y en la identidad del servidor) | 52 iconos: 51 para herramientas, recursos y prompts, más la marca que identifica al propio servidor. Cada uno es una entrada SVG más variantes WebP clara y oscura, transportadas como URIs de datos en base64 |
 
 ## ¿Cómo se negocian las capacidades MCP?
 
@@ -110,7 +110,8 @@ menos una de las tres entradas que gitlab-mcp-server adjunta a cada icono
 formatos. VS Code Copilot, por ejemplo, rechaza la entrada SVG
 (`image/svg+xml` no está en su lista de MIME permitidos) pero renderiza la
 variante WebP que coincide con su tema. Consulta
-[Iconos](/gitlab-mcp-server/es/capabilities/icons/) para la matriz completa.
+[Iconos](/gitlab-mcp-server/es/reference/icons/) en la referencia para la
+matriz completa.
 
 :::note
 El soporte de los clientes evoluciona rápidamente. Consulta la documentación de tu cliente MCP para el soporte de capacidades más actualizado.
