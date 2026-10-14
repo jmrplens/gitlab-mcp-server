@@ -675,8 +675,13 @@ func TestDrive_SpreadsEachPopulationAcrossOnePeriod(t *testing.T) {
 	for i, conn := range timed {
 		conns = append(conns, &clientConn{rpc: conn, label: "client " + strconv.Itoa(i)})
 	}
-	begin := time.Now()
+	// begin is taken inside the goroutine finishWithin starts, right before
+	// drive, so a goroutine scheduled late does not shift the whole schedule
+	// against the due times below. finishWithin returns only after that
+	// goroutine has ended, so reading begin afterwards is not a race.
+	var begin time.Time
 	finishWithin(t, 10*time.Second, "a 1.25 s phase", func() {
+		begin = time.Now()
 		drive(t.Context(), driveInput{plan: plan, conns: conns, call: call}, begin, plan.ticks, newFairTally(call, plan.Bound.Refusals))
 	})
 
