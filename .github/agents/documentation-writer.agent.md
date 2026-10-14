@@ -411,7 +411,7 @@ site/
 
 ### Key Rules
 
-- English (the root of `src/content/docs/`, not an `en/` folder) is the source of truth: write English first, then translate to Spanish in the same change. `pnpm run i18n:check` only proves that every page has a twin, not that the twin says the same thing
+- English (the root of `src/content/docs/`, not an `en/` folder) is the source of truth: write English first, then translate to Spanish in the same change. `pnpm run i18n:check` proves that every page has a twin and that every code block of the twin is byte-identical to the English one outside its comments (placeholders included; a `text` or `markdown` block holding prose is marked `translated` in both fences), not that the prose says the same thing
 - Use Starlight MDX components: `<Aside>`, `<Tabs>`, `<Card>`, `<Steps>`, `<FileTree>`
 - Every `.mdx` file needs frontmatter with `title` and `description`
 - Link a site page from another as `/gitlab-mcp-server/<slug>/` (`/gitlab-mcp-server/es/<slug>/` from a Spanish page), and from a file outside the site as `https://docs.jmrp.io/gitlab-mcp-server/<slug>/`

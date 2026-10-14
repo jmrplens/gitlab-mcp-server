@@ -101,7 +101,7 @@ A page's slug is its path without the extension: `operations/http-server.mdx` is
 
 ### 3. Edit corresponding ES pages
 
-Edit the twin at the same path under `site/src/content/docs/es/`, with translated content. `pnpm run i18n:check` fails when an English page has no Spanish twin or the reverse; it cannot tell whether the two say the same thing, so translating the change is your job.
+Edit the twin at the same path under `site/src/content/docs/es/`, with translated content. `pnpm run i18n:check` fails when an English page has no Spanish twin or the reverse, and when a Spanish code block differs from its English one outside its comments: commands, configuration and placeholders stay byte for byte as in English, and only comments are translated (a `text` or `markdown` block holding prose, which is translated whole, carries `translated` in both fences). It cannot tell whether the prose says the same thing, so translating the change is your job.
 
 ### 4. Frontmatter requirements
 

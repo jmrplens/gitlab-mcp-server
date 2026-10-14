@@ -175,7 +175,7 @@ go run ./cmd/format_md_tables/ --check
 - 3 analysis gates available: `golangci-lint` (v2; includes Go linters and formatters such as `goimports`, `gofumpt`, `gci`, `govet`, `modernize`, `gosec`, and `staticcheck`), `govulncheck`, and `markdownlint-cli2`
 - Configuration: `.golangci.yml` (Go linters/formatters), `.markdownlint-cli2.jsonc` (Markdown rules)
 - Markdown table formatting: when creating or editing pipe tables in `README.md`, `docs/` or `site/src/content/docs/`, use `go run ./cmd/format_md_tables/` to normalize column padding and alignment markers, then verify with `go run ./cmd/format_md_tables/ --check`
-- Documentation: user documentation lives only on the site (`site/src/content/docs/`), and an English page changes together with its Spanish twin under `es/`; `pnpm run i18n:check` fails on a page without its twin, and keeping the two in step is the author's job. `docs/development` is for contributors (ADR-0025)
+- Documentation: user documentation lives only on the site (`site/src/content/docs/`), and an English page changes together with its Spanish twin under `es/`; `pnpm run i18n:check` fails on a page without its twin and on a Spanish code block that differs from its English one outside comments, and keeping the prose in step is the author's job. `docs/development` is for contributors (ADR-0025)
 - Formatting: always run `make analyze-fix` before committing to apply configured Go formatters (`goimports`, `gofumpt`, `gci`) and Markdown fixes
 - Full project: `make analyze` (all analysis gates), `make analyze-fix` (auto-fix), `make analyze-report` (LLM report)
 - See `docs/development/static-analysis.md` for full documentation

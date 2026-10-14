@@ -1108,6 +1108,12 @@ jobs:
       # site, holding them to the published release in server.json rather
       # than VERSION, and to refusing the token in frontmatter or in the built
       # site and a release written by hand where the token belongs.
+      # scripts/site_check_i18n_code_test.py runs the site's code block gate,
+      # site/scripts/check-i18n-code.mjs, over a stand-in site, and holds it
+      # to letting a Spanish block differ from its English twin only in
+      # comments and to refusing a translated placeholder, a block one
+      # language lacks, a `translated` marker that excuses nothing and a
+      # translated block that changes the code it quotes (issue 1110).
       # scripts/release_order_sh_test.py holds the release's preflight
       # decision, scripts/release-order.sh, to refusing a prerelease tag and
       # to telling the newest release from a backport by version order, and
