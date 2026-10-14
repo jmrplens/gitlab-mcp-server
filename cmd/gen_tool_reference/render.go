@@ -77,13 +77,14 @@ func actionTargets(groups []*refGroup) map[string]string {
 	return targets
 }
 
-// link is where a page links an action to: the anchor of its heading, on
-// the page itself when the action is described there.
-func link(id, slug string, targets map[string]string) string {
+// link is where a page in lang links an action to: the anchor of its
+// heading, on the page itself when the action is described there, and
+// otherwise on the page of lang that describes it.
+func link(id, slug string, targets map[string]string, lang language) string {
 	if targets[id] == slug {
 		return "#" + anchor(id)
 	}
-	return pagePath + targets[id] + "/#" + anchor(id)
+	return lang.toolsPath() + targets[id] + "/#" + anchor(id)
 }
 
 // anchor is the fragment the site gives a heading that spells id. The site
@@ -141,7 +142,7 @@ func renderIndex(ref reference, data domains, lang language, order map[string]in
 		for _, tool := range tools {
 			d := data.Groups[tool]
 			if d.Category == c.ID {
-				entries = append(entries, fmt.Sprintf("- [%s](%s%s/): %s", d.Title[lang.code], pagePath, slugs[tool], d.Description[lang.code]))
+				entries = append(entries, fmt.Sprintf("- [%s](%s%s/): %s", d.Title[lang.code], lang.toolsPath(), slugs[tool], d.Description[lang.code]))
 			}
 		}
 		paragraph(&b, strings.Join(entries, "\n"))
@@ -174,7 +175,7 @@ func renderGroup(group *refGroup, d domain, lang language, order int, targets ma
 	paragraph(&b, actionsIntro(group, lang, version))
 	paragraph(&b, summaryTable(group, lang))
 	for _, action := range group.actions {
-		writeAction(&b, action, lang, func(id string) string { return link(id, group.slug, targets) })
+		writeAction(&b, action, lang, func(id string) string { return link(id, group.slug, targets, lang) })
 	}
 	return strings.TrimRight(b.String(), "\n") + "\n"
 }

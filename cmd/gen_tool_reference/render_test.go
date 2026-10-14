@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -16,6 +17,89 @@ func testPages(t *testing.T) map[string]string {
 		pages[p.path] = string(p.content)
 	}
 	return pages
+}
+
+// siteLinkTarget finds the target of a link to a page of the documentation
+// site, which every page of it is served under, in any of the forms
+// TestSiteLink_EveryFormOfALinkIntoTheSite_IsFound lists.
+var siteLinkTarget = regexp.MustCompile(`(?:(?:\]\(<?|\]:[ \t]*|<|href=["'])(?:https://docs\.jmrp\.io)?|https://docs\.jmrp\.io)(/gitlab-mcp-server/[^\s)"'>]*)`)
+
+// localeLinks splits the site links of the pages lang writes into the ones
+// that stay in lang and the ones that leave it. The Spanish pages are the ones
+// served under /gitlab-mcp-server/es/, and every other page is English; the
+// rule is written out here rather than read from the generator, so a language
+// whose links the generator spells wrong cannot pass by agreeing with itself.
+func localeLinks(pages map[string]string, lang language) (inside int, outside []string) {
+	for path, page := range pages {
+		if !strings.HasPrefix(path, lang.dir+"/") {
+			continue
+		}
+		for _, match := range siteLinkTarget.FindAllStringSubmatch(page, -1) {
+			spanish := strings.HasPrefix(match[1], "/gitlab-mcp-server/es/")
+			if spanish == (lang.code == "es") {
+				inside++
+				continue
+			}
+			outside = append(outside, path+": "+match[1])
+		}
+	}
+	return inside, outside
+}
+
+// TestRenderPages_EachLanguage_LinksOnlyThePagesOfItsLanguage holds every link
+// a page writes into the site to the pages of the page's own language (issue
+// 1285): the index entries, the permissions page each action line names, the
+// note on destructive actions and the client capability a group needs, all of
+// which the synthetic pages carry. The site would rewrite an English path on a
+// Spanish page at build time, so this is about what the page says rather than
+// where the built site sends a reader, and the source is what every other
+// reader of it, the link checks among them, reads.
+func TestRenderPages_EachLanguage_LinksOnlyThePagesOfItsLanguage(t *testing.T) {
+	pages := testPages(t)
+	for _, lang := range languages {
+		t.Run(lang.code, func(t *testing.T) {
+			inside, outside := localeLinks(pages, lang)
+			for _, link := range outside {
+				t.Errorf("a %s page links outside its language: %s", lang.code, link)
+			}
+			// Two index entries, a permissions link on each of the four
+			// action lines, the destructive note and the elicitation note.
+			if want := 2 + 4 + 1 + 1; inside+len(outside) != want {
+				t.Errorf("the %s pages carry %d site links, want %d", lang.code, inside+len(outside), want)
+			}
+		})
+	}
+	mustContain(t, pages[spanish.dir+"/widget.mdx"],
+		"([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#widget))",
+		"([Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas))")
+	mustContain(t, pages[spanish.dir+"/helper.mdx"], "[elicitación](/gitlab-mcp-server/es/capabilities/elicitation/)")
+	mustContain(t, pages[spanish.dir+"/index.mdx"], "- [Widgets ES](/gitlab-mcp-server/es/reference/tools/widget/): Widgets descrito.")
+}
+
+// TestRenderPages_RealCatalog_EachLanguageLinksOnlyThePagesOfItsLanguage is
+// the same rule over the pages the command writes, where the links to the
+// other groups' pages and the hand-written overviews of domains.json are read
+// too.
+func TestRenderPages_RealCatalog_EachLanguageLinksOnlyThePagesOfItsLanguage(t *testing.T) {
+	data, err := decodeDomains(domainsJSON)
+	if err != nil {
+		t.Fatalf("decodeDomains() error = %v", err)
+	}
+	pages := map[string]string{}
+	for _, p := range renderPages(mustRealReference(t), data) {
+		pages[p.path] = string(p.content)
+	}
+	for _, lang := range languages {
+		t.Run(lang.code, func(t *testing.T) {
+			inside, outside := localeLinks(pages, lang)
+			if len(outside) > 0 {
+				t.Errorf("%d links of the %s pages leave their language, the first %v", len(outside), lang.code, outside[:min(len(outside), 5)])
+			}
+			if inside < 1000 {
+				t.Errorf("the %s pages carry %d links into their language, want the real catalog's", lang.code, inside)
+			}
+		})
+	}
 }
 
 // mustContain fails the test for each of wants text does not contain.
@@ -124,7 +208,7 @@ func TestRenderGroup_SyntheticHelper_DescribesAStandaloneGroup(t *testing.T) {
 	mustContain(t, pages[spanish.dir+"/helper.mdx"],
 		"- **Meta-herramienta**: `gitlab_helper_resolve`, una herramienta propia\n",
 		"- **Token clásico u OAuth**: `read_api` (o `api`)\n",
-		"- **Token de grano fino**: Widget: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#helper))\n",
+		"- **Token de grano fino**: Widget: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#helper))\n",
 		"Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`.",
 		"Sin parámetros.")
 }
@@ -249,7 +333,7 @@ func TestFineGrainedText_NamesWhatIsServedEmptyAndLinksTheDomain(t *testing.T) {
 		{
 			name: "served whole", description: finegrained.Description{AnyOf: []finegrained.Way{{Needs: []finegrained.Need{read}}}},
 			en: "Issue: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))",
-			es: "Issue: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))",
+			es: "Issue: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))",
 		},
 		{
 			name: "served empty in part",
@@ -257,13 +341,13 @@ func TestFineGrainedText_NamesWhatIsServedEmptyAndLinksTheDomain(t *testing.T) {
 				AnyOf: []finegrained.Way{{Needs: []finegrained.Need{read}}}, AlwaysEmpty: []string{"issue { epic }"},
 			},
 			en: "Issue: Read at project; served empty: `issue { epic }` (always) ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))",
-			es: "Issue: Read en proyecto; se sirve vacío: `issue { epic }` (siempre) ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))",
+			es: "Issue: Read en proyecto; se sirve vacío: `issue { epic }` (siempre) ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))",
 		},
 		{
 			name:        "not reachable",
 			description: finegrained.Description{Denied: &finegrained.Denial{Cause: finegrained.CauseRESTUndeclared, Element: "GET /x"}},
 			en:          "Not reachable at this release: GitLab declares no fine-grained permission for `GET /x` ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))",
-			es:          "No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `GET /x` ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))",
+			es:          "No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `GET /x` ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))",
 		},
 	}
 	for _, tt := range tests {
@@ -365,11 +449,96 @@ func TestQuote_ListsAndClauses_AreSetApart(t *testing.T) {
 
 func TestLink_TargetPage_IsRelativeOnlyOnItsOwnPage(t *testing.T) {
 	targets := map[string]string{"widget.list": "widget"}
-	if got := link("widget.list", "widget", targets); got != "#widgetlist" {
-		t.Errorf("link() on the page = %q", got)
+	tests := []struct {
+		lang  language
+		other string
+	}{
+		{lang: english, other: "/gitlab-mcp-server/reference/tools/widget/#widgetlist"},
+		{lang: spanish, other: "/gitlab-mcp-server/es/reference/tools/widget/#widgetlist"},
 	}
-	if got := link("widget.list", "helper", targets); got != "/gitlab-mcp-server/reference/tools/widget/#widgetlist" {
-		t.Errorf("link() from another page = %q", got)
+	for _, tt := range tests {
+		t.Run(tt.lang.code, func(t *testing.T) {
+			if got := link("widget.list", "widget", targets, tt.lang); got != "#widgetlist" {
+				t.Errorf("link() on the page = %q", got)
+			}
+			if got := link("widget.list", "helper", targets, tt.lang); got != tt.other {
+				t.Errorf("link() from another page = %q, want %q", got, tt.other)
+			}
+		})
+	}
+}
+
+// TestSiteLink_LanguagePaths_AreUnderTheSiteRoot holds the literals the link
+// finder and the language table spell to siteRoot: every language serves its
+// pages below it, English at it, and the finder reads exactly the links that
+// begin with it.
+func TestSiteLink_LanguagePaths_AreUnderTheSiteRoot(t *testing.T) {
+	if english.site != siteRoot {
+		t.Errorf("english.site = %q, want the site root %q", english.site, siteRoot)
+	}
+	for _, lang := range languages {
+		t.Run(lang.code, func(t *testing.T) {
+			if !strings.HasPrefix(lang.site, siteRoot) || !strings.HasSuffix(lang.site, "/") {
+				t.Errorf("%s.site = %q, want a directory below %q", lang.code, lang.site, siteRoot)
+			}
+		})
+	}
+	text := "[a](" + siteRoot + "x/) [b](/elsewhere/) [c](https://example.com" + siteRoot + ")"
+	got := siteLink.FindAllStringSubmatch(text, -1)
+	if len(got) != 1 || got[0][1] != siteRoot+"x/" {
+		t.Errorf("siteLink found %q in %q, want only %q", got, text, siteRoot+"x/")
+	}
+}
+
+// TestSiteLink_EveryFormOfALinkIntoTheSite_IsFound verifies the link finder
+// reads every way a page can link into the site, root-relative or on the
+// site's host, and nothing that only names the path: a Markdown link with or
+// without a title, one in angle brackets, a reference definition, an
+// autolink, a bare URL the site's Markdown turns into a link, and an href.
+func TestSiteLink_EveryFormOfALinkIntoTheSite_IsFound(t *testing.T) {
+	text := strings.Join([]string{
+		"[a](/gitlab-mcp-server/a/)",
+		`[b](/gitlab-mcp-server/b/ "a title")`,
+		"[c](</gitlab-mcp-server/c/>)",
+		"[d](https://docs.jmrp.io/gitlab-mcp-server/d/)",
+		"[e]: /gitlab-mcp-server/e/",
+		"[f]:\thttps://docs.jmrp.io/gitlab-mcp-server/f/",
+		"<https://docs.jmrp.io/gitlab-mcp-server/g/>",
+		"see https://docs.jmrp.io/gitlab-mcp-server/h/ there",
+		`<a href="/gitlab-mcp-server/i/">i</a> <a href='https://docs.jmrp.io/gitlab-mcp-server/j/'>j</a>`,
+		"the site is served under `/gitlab-mcp-server/k/`, [l](https://example.com/gitlab-mcp-server/l/)",
+	}, "\n")
+	var got []string
+	for _, match := range siteLink.FindAllStringSubmatch(text, -1) {
+		got = append(got, match[1])
+	}
+	want := []string{
+		"/gitlab-mcp-server/a/", "/gitlab-mcp-server/b/", "/gitlab-mcp-server/c/", "/gitlab-mcp-server/d/",
+		"/gitlab-mcp-server/e/", "/gitlab-mcp-server/f/", "/gitlab-mcp-server/g/", "/gitlab-mcp-server/h/",
+		"/gitlab-mcp-server/i/", "/gitlab-mcp-server/j/",
+	}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("siteLink found\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestLanguageOf_SiteLinks_BelongToTheLanguageWhosePrefixTheyBegin verifies
+// a link into the site is English unless it begins with another language's
+// prefix, which the English root is a prefix of.
+func TestLanguageOf_SiteLinks_BelongToTheLanguageWhosePrefixTheyBegin(t *testing.T) {
+	tests := []struct{ target, want string }{
+		{target: "/gitlab-mcp-server/", want: "en"},
+		{target: "/gitlab-mcp-server/reference/tools/", want: "en"},
+		{target: "/gitlab-mcp-server/es/", want: "es"},
+		{target: "/gitlab-mcp-server/es/reference/tools/#x", want: "es"},
+		{target: "/gitlab-mcp-server/estimates/", want: "en"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.target, func(t *testing.T) {
+			if got := languageOf(tt.target).code; got != tt.want {
+				t.Errorf("languageOf(%q) = %s, want %s", tt.target, got, tt.want)
+			}
+		})
 	}
 }
 

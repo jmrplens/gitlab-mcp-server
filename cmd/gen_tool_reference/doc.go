@@ -24,6 +24,16 @@
 // catalog gains without an entry stops generation, and so does an entry for a
 // group that no longer exists.
 //
+// # Links stay in their language
+//
+// Every link a page writes into the site points at a page of its own
+// language, root-relative or on the site's host, as a Markdown link, a
+// reference definition, an autolink, a bare URL or an href, and the
+// hand-written texts of domains.json are held to it too: a Spanish page
+// spells the /es/ path itself rather than leaving an English one for the
+// site's build to rewrite, and a Spanish text in domains.json that links an
+// English page stops generation.
+//
 // # The directories are the generator's
 //
 // Every page under the two directories is written here, and a page there that

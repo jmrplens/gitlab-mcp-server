@@ -94,6 +94,52 @@ func TestDecodeDomains_InvalidFile_IsRefused(t *testing.T) {
 		{name: "blank question", edit: func(d map[string]any) {
 			widget(d)["questions"] = map[string]any{"en": []any{"One"}, "es": []any{""}}
 		}, want: "gitlab_widget questions has a blank es entry"},
+		{name: "Spanish overview links an English page", edit: func(d map[string]any) {
+			widget(d)["overview"] = map[string]any{
+				"en": []any{"See [Orbit](/gitlab-mcp-server/tools/orbit/)."},
+				"es": []any{"Mira [Orbit](/gitlab-mcp-server/tools/orbit/)."},
+			}
+		}, want: "gitlab_widget overview links /gitlab-mcp-server/tools/orbit/ from its es text, a page of another language"},
+		{name: "English description links a Spanish page", edit: func(d map[string]any) {
+			widget(d)["description"] = map[string]any{"en": "[x](/gitlab-mcp-server/es/x/)", "es": "[x](/gitlab-mcp-server/es/x/)"}
+		}, want: "gitlab_widget description links /gitlab-mcp-server/es/x/ from its en text, a page of another language"},
+		{name: "Spanish question links an English page", edit: func(d map[string]any) {
+			widget(d)["questions"] = map[string]any{"en": []any{"One"}, "es": []any{"[Una](/gitlab-mcp-server/x/)"}}
+		}, want: "gitlab_widget questions links /gitlab-mcp-server/x/ from its es text, a page of another language"},
+		{name: "Spanish title links an English page", edit: func(d map[string]any) {
+			widget(d)["title"] = map[string]any{"en": "Widgets", "es": "[W](/gitlab-mcp-server/x/)"}
+		}, want: "gitlab_widget title links /gitlab-mcp-server/x/ from its es text, a page of another language"},
+		{name: "every stray link of a text is named", edit: func(d map[string]any) {
+			widget(d)["overview"] = map[string]any{
+				"en": []any{"One."},
+				"es": []any{"[A](/gitlab-mcp-server/a/) y [B](/gitlab-mcp-server/b/)."},
+			}
+		}, want: "gitlab_widget overview links /gitlab-mcp-server/a/ from its es text, a page of another language; " +
+			"gitlab_widget overview links /gitlab-mcp-server/b/ from its es text, a page of another language"},
+		{name: "a link with a title", edit: func(d map[string]any) {
+			widget(d)["overview"] = map[string]any{"en": []any{"One."}, "es": []any{`[A](/gitlab-mcp-server/a/ "Título")`}}
+		}, want: "gitlab_widget overview links /gitlab-mcp-server/a/ from its es text"},
+		{name: "an absolute link on the site's host", edit: func(d map[string]any) {
+			widget(d)["overview"] = map[string]any{"en": []any{"One."}, "es": []any{"[A](https://docs.jmrp.io/gitlab-mcp-server/a/)"}}
+		}, want: "gitlab_widget overview links /gitlab-mcp-server/a/ from its es text"},
+		{name: "a bare URL on the site's host", edit: func(d map[string]any) {
+			widget(d)["overview"] = map[string]any{"en": []any{"One."}, "es": []any{"Ver https://docs.jmrp.io/gitlab-mcp-server/a/ ahora."}}
+		}, want: "gitlab_widget overview links /gitlab-mcp-server/a/ from its es text"},
+		{name: "an autolink", edit: func(d map[string]any) {
+			widget(d)["overview"] = map[string]any{"en": []any{"One."}, "es": []any{"<https://docs.jmrp.io/gitlab-mcp-server/a/>"}}
+		}, want: "gitlab_widget overview links /gitlab-mcp-server/a/ from its es text"},
+		{name: "a reference definition", edit: func(d map[string]any) {
+			widget(d)["overview"] = map[string]any{"en": []any{"One."}, "es": []any{"[A][a]\n\n[a]: /gitlab-mcp-server/a/"}}
+		}, want: "gitlab_widget overview links /gitlab-mcp-server/a/ from its es text"},
+		{name: "an href", edit: func(d map[string]any) {
+			widget(d)["overview"] = map[string]any{"en": []any{"One."}, "es": []any{`<a href="/gitlab-mcp-server/a/">A</a>`}}
+		}, want: "gitlab_widget overview links /gitlab-mcp-server/a/ from its es text"},
+		{name: "an English link in angle brackets", edit: func(d map[string]any) {
+			widget(d)["overview"] = map[string]any{"en": []any{"[A](</gitlab-mcp-server/es/a/>)"}, "es": []any{"Uno."}}
+		}, want: "gitlab_widget overview links /gitlab-mcp-server/es/a/ from its en text"},
+		{name: "category title links another language", edit: func(d map[string]any) {
+			d["categories"].([]any)[0].(map[string]any)["title"] = map[string]any{"en": "Work", "es": "[T](/gitlab-mcp-server/x/)"}
+		}, want: "category work title links /gitlab-mcp-server/x/ from its es text, a page of another language"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -110,6 +156,21 @@ func TestDecodeDomains_InvalidFile_IsRefused(t *testing.T) {
 				t.Errorf("decodeDomains() error = %v, want it to contain %q", err, tt.want)
 			}
 		})
+	}
+}
+
+// TestDecodeDomains_LinksIntoTheirOwnLanguage_AreAccepted verifies a text that
+// links the pages of its own language decodes: an English one the site's
+// root, a Spanish one the pages under /gitlab-mcp-server/es/, and both may
+// link outside the site.
+func TestDecodeDomains_LinksIntoTheirOwnLanguage_AreAccepted(t *testing.T) {
+	d := testDomains()
+	d["groups"].(map[string]any)["gitlab_widget"].(map[string]any)["overview"] = map[string]any{
+		"en": []any{"See [Orbit](/gitlab-mcp-server/tools/orbit/ \"Orbit\"), https://docs.jmrp.io/gitlab-mcp-server/ and [GitLab](https://docs.gitlab.com/)."},
+		"es": []any{"Mira [Orbit](/gitlab-mcp-server/es/tools/orbit/ \"Orbit\"), https://docs.jmrp.io/gitlab-mcp-server/es/ y [GitLab](https://docs.gitlab.com/)."},
+	}
+	if _, err := decodeDomains(encode(t, d)); err != nil {
+		t.Errorf("decodeDomains() error = %v, want links into their own language accepted", err)
 	}
 }
 

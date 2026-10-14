@@ -25,7 +25,7 @@
 				],
 				"es": [
 					"Las credenciales que dan acceso a un proyecto o a un grupo a alguien o a algo: tokens de acceso de proyecto, de grupo y personales (listar, leer, rotar y revocar, y crear para proyectos y grupos), tokens de despliegue, claves de despliegue, las solicitudes de acceso que presentan los usuarios para unirse y las invitaciones que se les envían. Rotar un token emite un valor nuevo y revoca el anterior en una sola llamada: el token conserva su nombre, sus scopes y su rol, pero lo que guarde el valor anterior, una variable de CI/CD por ejemplo, tiene que actualizarse con el token que devuelve la llamada. Revocar o borrar una credencial es destructivo.",
-					"Crear un token de acceso personal es una acción de usuario y no una de estas (consulta [Usuarios](/gitlab-mcp-server/reference/tools/user/)), igual que las claves SSH y los tokens de suplantación. Los miembros de proyectos y grupos se gestionan en las páginas de [Proyectos](/gitlab-mcp-server/reference/tools/project/) y [Grupos](/gitlab-mcp-server/reference/tools/group/), y el ámbito del token de job de CI/CD en [Jobs](/gitlab-mcp-server/reference/tools/job/)."
+					"Crear un token de acceso personal es una acción de usuario y no una de estas (consulta [Usuarios](/gitlab-mcp-server/es/reference/tools/user/)), igual que las claves SSH y los tokens de suplantación. Los miembros de proyectos y grupos se gestionan en las páginas de [Proyectos](/gitlab-mcp-server/es/reference/tools/project/) y [Grupos](/gitlab-mcp-server/es/reference/tools/group/), y el ámbito del token de job de CI/CD en [Jobs](/gitlab-mcp-server/es/reference/tools/job/)."
 				]
 			},
 			"questions": {
@@ -289,7 +289,7 @@
 					"A group's custom emoji are images it adds to the emoji its projects can react with and write in Markdown. These actions list, add and delete them. Reacting to an issue, a merge request or a snippet with an emoji is not one of them: those are actions of the [issue](/gitlab-mcp-server/reference/tools/issue/), [merge request](/gitlab-mcp-server/reference/tools/merge-request/) and [snippet](/gitlab-mcp-server/reference/tools/snippet/) groups. Deleting an emoji leaves the reactions that used it in place, shown as its `:name:`."
 				],
 				"es": [
-					"Los emoji personalizados de un grupo son imágenes que añade a los emoji con los que sus proyectos pueden reaccionar y escribir en Markdown. Estas acciones los listan, los añaden y los borran. Reaccionar con un emoji a un issue, a un merge request o a un snippet no es una de ellas: son acciones de los grupos de [issues](/gitlab-mcp-server/reference/tools/issue/), [merge requests](/gitlab-mcp-server/reference/tools/merge-request/) y [snippets](/gitlab-mcp-server/reference/tools/snippet/). Borrar un emoji deja en su sitio las reacciones que lo usaban, mostradas como su `:name:`."
+					"Los emoji personalizados de un grupo son imágenes que añade a los emoji con los que sus proyectos pueden reaccionar y escribir en Markdown. Estas acciones los listan, los añaden y los borran. Reaccionar con un emoji a un issue, a un merge request o a un snippet no es una de ellas: son acciones de los grupos de [issues](/gitlab-mcp-server/es/reference/tools/issue/), [merge requests](/gitlab-mcp-server/es/reference/tools/merge-request/) y [snippets](/gitlab-mcp-server/es/reference/tools/snippet/). Borrar un emoji deja en su sitio las reacciones que lo usaban, mostradas como su `:name:`."
 				]
 			},
 			"questions": {
@@ -487,7 +487,7 @@
 					"Feature flags a project's application reads to switch a feature on gradually: each flag carries strategies (all users, a percentage of users or of rollout, chosen user IDs or a user list), scoped to environments. These actions manage the flags and the user lists a strategy can target. Turning a flag inactive keeps its history; deleting it does not. The instance's own GitLab feature flags are administration actions instead (see [Administration](/gitlab-mcp-server/reference/tools/admin/))."
 				],
 				"es": [
-					"Feature flags que lee la aplicación de un proyecto para activar una función de forma gradual: cada flag tiene estrategias (todos los usuarios, un porcentaje de usuarios o de despliegue, unos IDs de usuario o una lista de usuarios), limitadas a entornos. Estas acciones gestionan los flags y las listas de usuarios a las que puede apuntar una estrategia. Desactivar un flag conserva su historial; borrarlo no. Los feature flags propios de GitLab en la instancia son acciones de administración (consulta [Administración](/gitlab-mcp-server/reference/tools/admin/))."
+					"Feature flags que lee la aplicación de un proyecto para activar una función de forma gradual: cada flag tiene estrategias (todos los usuarios, un porcentaje de usuarios o de despliegue, unos IDs de usuario o una lista de usuarios), limitadas a entornos. Estas acciones gestionan los flags y las listas de usuarios a las que puede apuntar una estrategia. Desactivar un flag conserva su historial; borrarlo no. Los feature flags propios de GitLab en la instancia son acciones de administración (consulta [Administración](/gitlab-mcp-server/es/reference/tools/admin/))."
 				]
 			},
 			"questions": {
@@ -729,7 +729,7 @@
 				],
 				"es": [
 					"La vida de un merge request: crearlo, leerlo, listarlo (en un proyecto, en un grupo o en todas partes), actualizarlo, fusionarlo, cancelar una fusión automática, rebasarlo y borrarlo; aprobarlo y retirar la aprobación, leer su configuración de aprobación y restablecer sus aprobaciones; sus commits, commits de contexto, pipelines (listarlos o lanzar uno), participantes, revisores, issues relacionados y los issues que cierra; suscripciones, tareas pendientes, estimaciones y tiempo dedicado; los emoji de reacción en él y en sus notas; y los eventos de etiqueta, hito y estado de su historial.",
-					"Las reglas de aprobación, el estado de aprobación, los ajustes de aprobación de proyecto y de grupo y las dependencias entre merge requests se sirven a partir de Premium. Los comentarios, las discusiones, los diffs y las notas en borrador están en [Revisión de merge requests](/gitlab-mcp-server/reference/tools/mr-review/)."
+					"Las reglas de aprobación, el estado de aprobación, los ajustes de aprobación de proyecto y de grupo y las dependencias entre merge requests se sirven a partir de Premium. Los comentarios, las discusiones, los diffs y las notas en borrador están en [Revisión de merge requests](/gitlab-mcp-server/es/reference/tools/mr-review/)."
 				]
 			},
 			"questions": {
@@ -813,7 +813,7 @@
 				],
 				"es": [
 					"Lo que hace una revisión con un merge request: leer sus cambios, sus versiones del diff y sus diffs en bruto; leer y escribir sus notas; abrir, responder y resolver discusiones en hilo, en línea sobre una línea del diff o generales; y encolar notas en borrador que siguen siendo privadas hasta que se publican, una a una o todas juntas como una sola revisión.",
-					"Aprobar, fusionar y el resto del ciclo de vida del merge request están en [Merge requests](/gitlab-mcp-server/reference/tools/merge-request/), igual que los emoji de reacción en sus notas."
+					"Aprobar, fusionar y el resto del ciclo de vida del merge request están en [Merge requests](/gitlab-mcp-server/es/reference/tools/merge-request/), igual que los emoji de reacción en sus notas."
 				]
 			},
 			"questions": {
@@ -843,7 +843,7 @@
 					"Orbit is GitLab.com's experimental knowledge graph of code and project data. Its six actions are served only to a session connected to GitLab.com at Premium or Ultimate, and all of them read: `orbit.status` checks the service, `orbit.schema` describes the graph, `orbit.dsl` serves the query language, `orbit.query` runs a query, `orbit.tools` lists Orbit's own MCP tools, and `orbit.graph_status` reports the indexing of a namespace or a project. GitLab answers 404 while its `knowledge_graph` feature flag is off for the caller. The [Orbit page](/gitlab-mcp-server/tools/orbit/) explains the workflow."
 				],
 				"es": [
-					"Orbit es el grafo de conocimiento experimental de GitLab.com sobre el código y los datos de los proyectos. Sus seis acciones solo se sirven a una sesión conectada a GitLab.com con Premium o Ultimate, y todas leen: `orbit.status` comprueba el servicio, `orbit.schema` describe el grafo, `orbit.dsl` sirve el lenguaje de consulta, `orbit.query` ejecuta una consulta, `orbit.tools` lista las herramientas MCP propias de Orbit y `orbit.graph_status` informa de la indexación de un espacio de nombres o de un proyecto. GitLab responde 404 mientras su feature flag `knowledge_graph` está desactivado para quien llama. La [página de Orbit](/gitlab-mcp-server/tools/orbit/) explica el flujo de trabajo."
+					"Orbit es el grafo de conocimiento experimental de GitLab.com sobre el código y los datos de los proyectos. Sus seis acciones solo se sirven a una sesión conectada a GitLab.com con Premium o Ultimate, y todas leen: `orbit.status` comprueba el servicio, `orbit.schema` describe el grafo, `orbit.dsl` sirve el lenguaje de consulta, `orbit.query` ejecuta una consulta, `orbit.tools` lista las herramientas MCP propias de Orbit y `orbit.graph_status` informa de la indexación de un espacio de nombres o de un proyecto. GitLab responde 404 mientras su feature flag `knowledge_graph` está desactivado para quien llama. La [página de Orbit](/gitlab-mcp-server/es/tools/orbit/) explica el flujo de trabajo."
 				]
 			},
 			"questions": {
@@ -1123,7 +1123,7 @@
 					"A security attribute is a label from a [security category](/gitlab-mcp-server/reference/tools/security-category/) that classifies a group or a project, such as its business impact. These actions create, update and delete attributes, apply and remove them on one project, and add, remove or replace them across several groups and projects at once. They are classification metadata, apart from the scanner output on [Vulnerabilities](/gitlab-mcp-server/reference/tools/vulnerability/)."
 				],
 				"es": [
-					"Un atributo de seguridad es una etiqueta de una [categoría de seguridad](/gitlab-mcp-server/reference/tools/security-category/) que clasifica un grupo o un proyecto, por ejemplo por su impacto en el negocio. Estas acciones crean, actualizan y borran atributos, los aplican y los quitan en un proyecto, y los añaden, quitan o sustituyen en varios grupos y proyectos a la vez. Son metadatos de clasificación, aparte de los resultados de los analizadores que están en [Vulnerabilidades](/gitlab-mcp-server/reference/tools/vulnerability/)."
+					"Un atributo de seguridad es una etiqueta de una [categoría de seguridad](/gitlab-mcp-server/es/reference/tools/security-category/) que clasifica un grupo o un proyecto, por ejemplo por su impacto en el negocio. Estas acciones crean, actualizan y borran atributos, los aplican y los quitan en un proyecto, y los añaden, quitan o sustituyen en varios grupos y proyectos a la vez. Son metadatos de clasificación, aparte de los resultados de los analizadores que están en [Vulnerabilidades](/gitlab-mcp-server/es/reference/tools/vulnerability/)."
 				]
 			},
 			"questions": {
@@ -1151,7 +1151,7 @@
 					"A security category groups the [security attributes](/gitlab-mcp-server/reference/tools/security-attribute/) of a namespace and decides whether more than one of them can be applied to the same group or project. These actions create, update and delete categories. Deleting a category deletes its attributes too."
 				],
 				"es": [
-					"Una categoría de seguridad agrupa los [atributos de seguridad](/gitlab-mcp-server/reference/tools/security-attribute/) de un espacio de nombres y decide si se puede aplicar más de uno de ellos al mismo grupo o proyecto. Estas acciones crean, actualizan y borran categorías. Borrar una categoría borra también sus atributos."
+					"Una categoría de seguridad agrupa los [atributos de seguridad](/gitlab-mcp-server/es/reference/tools/security-attribute/) de un espacio de nombres y decide si se puede aplicar más de uno de ellos al mismo grupo o proyecto. Estas acciones crean, actualizan y borran categorías. Borrar una categoría borra también sus atributos."
 				]
 			},
 			"questions": {
@@ -1179,7 +1179,7 @@
 					"A finding is what one scanner reported in one pipeline; a [vulnerability](/gitlab-mcp-server/reference/tools/vulnerability/) is the tracked record GitLab keeps of a finding across pipelines. `security_finding.list` lists the findings of one pipeline, filtered by severity, report type, scanner or state, which is what a pipeline's security report showed."
 				],
 				"es": [
-					"Un hallazgo es lo que notificó un analizador en un pipeline; una [vulnerabilidad](/gitlab-mcp-server/reference/tools/vulnerability/) es el registro que GitLab mantiene de un hallazgo entre pipelines. `security_finding.list` lista los hallazgos de un pipeline, filtrados por gravedad, tipo de informe, analizador o estado, que es lo que mostró el informe de seguridad de ese pipeline."
+					"Un hallazgo es lo que notificó un analizador en un pipeline; una [vulnerabilidad](/gitlab-mcp-server/es/reference/tools/vulnerability/) es el registro que GitLab mantiene de un hallazgo entre pipelines. `security_finding.list` lista los hallazgos de un pipeline, filtrados por gravedad, tipo de informe, analizador o estado, que es lo que mostró el informe de seguridad de ese pipeline."
 				]
 			},
 			"questions": {
@@ -1379,7 +1379,7 @@
 				],
 				"es": [
 					"El usuario actual y cada usuario que gestiona un administrador: leer y listar usuarios, crear, modificar y borrar cuentas, y bloquear, desbloquear, vetar, levantar el veto, activar, desactivar, aprobar o rechazar una; claves SSH y GPG y correos, del usuario actual o de otro; tokens de acceso personales y tokens de suplantación; el estado y el avatar del usuario; actividades, pertenencias y eventos de contribución y de proyecto; tareas pendientes; ajustes de notificación; espacios de nombres; cuentas de servicio de la instancia; y runners creados para el usuario.",
-					"Los tokens de acceso de proyecto y de grupo, los tokens de despliegue y las claves de despliegue están en [Tokens de acceso y credenciales](/gitlab-mcp-server/reference/tools/access/)."
+					"Los tokens de acceso de proyecto y de grupo, los tokens de despliegue y las claves de despliegue están en [Tokens de acceso y credenciales](/gitlab-mcp-server/es/reference/tools/access/)."
 				]
 			},
 			"questions": {
@@ -1409,7 +1409,7 @@
 					"Vulnerabilities are the records GitLab keeps of what its security scanners found, tracked across pipelines. These actions list a project's vulnerabilities with filters, read one, triage it (confirm, dismiss, resolve, or revert it to detected), count a project's vulnerabilities by severity, and summarize the security reports of one pipeline. What a single pipeline's scanners reported is on [Security findings](/gitlab-mcp-server/reference/tools/security-finding/)."
 				],
 				"es": [
-					"Las vulnerabilidades son los registros que GitLab mantiene de lo que encontraron sus analizadores de seguridad, con seguimiento entre pipelines. Estas acciones listan las vulnerabilidades de un proyecto con filtros, leen una, la clasifican (confirmarla, descartarla, resolverla o devolverla a detectada), cuentan las vulnerabilidades de un proyecto por gravedad y resumen los informes de seguridad de un pipeline. Lo que notificaron los analizadores de un solo pipeline está en [Hallazgos de seguridad](/gitlab-mcp-server/reference/tools/security-finding/)."
+					"Las vulnerabilidades son los registros que GitLab mantiene de lo que encontraron sus analizadores de seguridad, con seguimiento entre pipelines. Estas acciones listan las vulnerabilidades de un proyecto con filtros, leen una, la clasifican (confirmarla, descartarla, resolverla o devolverla a detectada), cuentan las vulnerabilidades de un proyecto por gravedad y resumen los informes de seguridad de un pipeline. Lo que notificaron los analizadores de un solo pipeline está en [Hallazgos de seguridad](/gitlab-mcp-server/es/reference/tools/security-finding/)."
 				]
 			},
 			"questions": {
@@ -1439,7 +1439,7 @@
 					"A project's wiki: list its pages, read one, create, update and delete one, and upload a file attachment that a page can reference. Group wikis are actions of [Groups](/gitlab-mcp-server/reference/tools/group/), served from Premium."
 				],
 				"es": [
-					"La wiki de un proyecto: listar sus páginas, leer una, crear, actualizar y borrar una, y subir un archivo adjunto que una página puede referenciar. Las wikis de grupo son acciones de [Grupos](/gitlab-mcp-server/reference/tools/group/), que se sirven a partir de Premium."
+					"La wiki de un proyecto: listar sus páginas, leer una, crear, actualizar y borrar una, y subir un archivo adjunto que una página puede referenciar. Las wikis de grupo son acciones de [Grupos](/gitlab-mcp-server/es/reference/tools/group/), que se sirven a partir de Premium."
 				]
 			},
 			"questions": {

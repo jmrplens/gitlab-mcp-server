@@ -2107,6 +2107,8 @@ Beside its tier, each action carries two token lines, both read from the action 
 
 What the catalog cannot say is hand-written in `cmd/gen_tool_reference/domains.json`, embedded in the binary: each group's category on the index, its title, a one-line description, an overview and sample questions, in English and Spanish. The file has to describe exactly the groups the catalog builds, so a group the catalog gains stops generation until it has an entry, and an entry for a group that no longer exists does too. The served descriptions are quoted rather than translated, and the Spanish pages say so.
 
+Every link a page writes into the site points at a page of its own language, whichever form it takes (a Markdown link with or without a title, a reference definition, an autolink, a bare URL or an `href`, root-relative or on `docs.jmrp.io`): a Spanish page spells `/gitlab-mcp-server/es/...` itself, as the fine-grained permissions page that [gen_action_grants](#gen_action_grants) writes does, rather than leaving an English path for the site's build to rewrite (`remarkLocaleLinks` in `site/astro.config.mjs`, issue 1285). The hand-written texts of `domains.json` are held to the same rule, so a Spanish overview that links an English page stops generation, and the tests hold every site link of the pages the command writes to the language of its page.
+
 Every table is built to measure the same in both languages, because the site decides per locale whether a table stacks on a narrow screen and `facts:check` fails when the two disagree: a translated header has the length of its English twin, and a translated cell is never longer than its header. The tests hold that by comparing the column measures of every table in the two languages.
 
 #### Usage
