@@ -31,7 +31,7 @@ Acciones de solo lectura: 6 de 15, las que conserva un despliegue en modo de sol
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas)).
 
 | Acción                                                       | Individual                        |
 | ------------------------------------------------------------ | --------------------------------- |
@@ -59,7 +59,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_ci_variable_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Variable: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
+- **Token de grano fino**: Variable: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro           | Tipo                         | Requerido | Descripción                            |
@@ -83,7 +83,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_ci_variable_delete`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Variable: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
+- **Token de grano fino**: Variable: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                                                   |
@@ -101,7 +101,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_ci_variable_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Variable: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
+- **Token de grano fino**: Variable: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                                                   |
@@ -119,7 +119,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_group_variable_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Variable: Create en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
+- **Token de grano fino**: Variable: Create en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro           | Tipo                         | Requerido | Descripción                            |
@@ -143,7 +143,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_group_variable_delete`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Variable: Delete en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
+- **Token de grano fino**: Variable: Delete en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                                                   |
@@ -161,7 +161,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_group_variable_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Variable: Read en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
+- **Token de grano fino**: Variable: Read en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                                                   |
@@ -179,7 +179,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_group_variable_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Variable: Read en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
+- **Token de grano fino**: Variable: Read en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -200,7 +200,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_group_variable_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Variable: Update en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
+- **Token de grano fino**: Variable: Update en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro           | Tipo                         | Requerido | Descripción                                                                                           |
@@ -224,7 +224,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_instance_variable_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Variable: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
+- **Token de grano fino**: Variable: Create en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro       | Tipo                         | Requerido | Descripción                            |
@@ -245,7 +245,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_instance_variable_delete`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Variable: Delete en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
+- **Token de grano fino**: Variable: Delete en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción       |
@@ -260,7 +260,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_instance_variable_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Variable: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
+- **Token de grano fino**: Variable: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción       |
@@ -275,7 +275,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_instance_variable_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Variable: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
+- **Token de grano fino**: Variable: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -295,7 +295,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_instance_variable_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Variable: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
+- **Token de grano fino**: Variable: Update en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro       | Tipo                         | Requerido | Descripción                                                                                           |
@@ -316,7 +316,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_ci_variable_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Variable: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
+- **Token de grano fino**: Variable: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -337,7 +337,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_ci_variable_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Variable: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
+- **Token de grano fino**: Variable: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro           | Tipo                         | Requerido | Descripción                                                                                           |

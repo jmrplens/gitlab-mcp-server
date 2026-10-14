@@ -45,13 +45,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `attestation.download`
 
-> Download the raw in-toto attestation bundle for one attestation by IID (Ultimate). Returns: the attestation_iid, the bundle size in bytes, and the base64-encoded content_base64 bundle payload. See also: [`attestation.list`](#attestationlist), [`package.list`](/gitlab-mcp-server/reference/tools/package/#packagelist), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget).
+> Download the raw in-toto attestation bundle for one attestation by IID (Ultimate). Returns: the attestation_iid, the bundle size in bytes, and the base64-encoded content_base64 bundle payload. See also: [`attestation.list`](#attestationlist), [`package.list`](/gitlab-mcp-server/es/reference/tools/package/#packagelist), [`project.get`](/gitlab-mcp-server/es/reference/tools/project/#projectget).
 
 - **Meta-herramienta**: `gitlab_attestation`, acción `download`
 - **Herramienta individual**: `gitlab_download_attestation`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Attestation: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#attestation))
+- **Token de grano fino**: Attestation: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#attestation))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro         | Tipo             | Requerido | Descripción                      |
@@ -61,13 +61,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `attestation.list`
 
-> List SLSA build provenance attestations for a project artifact by subject digest (Ultimate). Returns: each attestation's id, iid, project_id, build_id, status, predicate_kind, predicate_type, subject_digest, download_url, and created/updated/expire timestamps, with pagination metadata. See also: [`attestation.download`](#attestationdownload), [`package.list`](/gitlab-mcp-server/reference/tools/package/#packagelist), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget).
+> List SLSA build provenance attestations for a project artifact by subject digest (Ultimate). Returns: each attestation's id, iid, project_id, build_id, status, predicate_kind, predicate_type, subject_digest, download_url, and created/updated/expire timestamps, with pagination metadata. See also: [`attestation.download`](#attestationdownload), [`package.list`](/gitlab-mcp-server/es/reference/tools/package/#packagelist), [`project.get`](/gitlab-mcp-server/es/reference/tools/project/#projectget).
 
 - **Meta-herramienta**: `gitlab_attestation`, acción `list`
 - **Herramienta individual**: `gitlab_list_attestations`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Attestation: Read en proyecto. Algunas llamadas también necesitan: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#attestation))
+- **Token de grano fino**: Attestation: Read en proyecto. Algunas llamadas también necesitan: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#attestation))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro        | Tipo             | Requerido | Descripción                                                                                                                                                                               |

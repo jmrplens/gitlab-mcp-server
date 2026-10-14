@@ -9,7 +9,7 @@ tableOfContents:
 
 {/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
 
-Un hallazgo es lo que notificó un analizador en un pipeline; una [vulnerabilidad](/gitlab-mcp-server/reference/tools/vulnerability/) es el registro que GitLab mantiene de un hallazgo entre pipelines. `security_finding.list` lista los hallazgos de un pipeline, filtrados por gravedad, tipo de informe, analizador o estado, que es lo que mostró el informe de seguridad de ese pipeline.
+Un hallazgo es lo que notificó un analizador en un pipeline; una [vulnerabilidad](/gitlab-mcp-server/es/reference/tools/vulnerability/) es el registro que GitLab mantiene de un hallazgo entre pipelines. `security_finding.list` lista los hallazgos de un pipeline, filtrados por gravedad, tipo de informe, analizador o estado, que es lo que mostró el informe de seguridad de ese pipeline.
 
 ## Preguntas de ejemplo
 
@@ -43,13 +43,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `security_finding.list`
 
-> List a pipeline's security report findings with severity, scanner, report-type and state filters, severity sorting and keyset pagination. Returns: matching findings with UUID, title, severity and original severity, report type, scanner, identifiers (CVE, CWE, OWASP), location, state, who dismissed it and why, evidence with the recorded HTTP exchange, proposed remediations, report links, and linked vulnerability state. See also: [`vulnerability.list`](/gitlab-mcp-server/reference/tools/vulnerability/#vulnerabilitylist), [`vulnerability.pipeline_security_summary`](/gitlab-mcp-server/reference/tools/vulnerability/#vulnerabilitypipeline_security_summary), [`vulnerability.severity_count`](/gitlab-mcp-server/reference/tools/vulnerability/#vulnerabilityseverity_count).
+> List a pipeline's security report findings with severity, scanner, report-type and state filters, severity sorting and keyset pagination. Returns: matching findings with UUID, title, severity and original severity, report type, scanner, identifiers (CVE, CWE, OWASP), location, state, who dismissed it and why, evidence with the recorded HTTP exchange, proposed remediations, report links, and linked vulnerability state. See also: [`vulnerability.list`](/gitlab-mcp-server/es/reference/tools/vulnerability/#vulnerabilitylist), [`vulnerability.pipeline_security_summary`](/gitlab-mcp-server/es/reference/tools/vulnerability/#vulnerabilitypipeline_security_summary), [`vulnerability.severity_count`](/gitlab-mcp-server/es/reference/tools/vulnerability/#vulnerabilityseverity_count).
 
 - **Meta-herramienta**: `gitlab_security_finding`, acción `list`
 - **Herramienta individual**: `gitlab_list_security_findings`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `PipelineSecurityReportFinding`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#security_finding))
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `PipelineSecurityReportFinding`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#security_finding))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro      | Tipo                                                          | Requerido | Descripción                                                                                                                                                                                                                                     |

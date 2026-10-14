@@ -43,26 +43,26 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `compliance_policy.get`
 
-> Get the instance compliance policy settings. Returns: the centralized compliance security policy (CSP) namespace ID, or unset when no namespace hosts the compliance policy project. See also: [`compliance_policy.update`](#compliance_policyupdate), [`group.get`](/gitlab-mcp-server/reference/tools/group/#groupget).
+> Get the instance compliance policy settings. Returns: the centralized compliance security policy (CSP) namespace ID, or unset when no namespace hosts the compliance policy project. See also: [`compliance_policy.update`](#compliance_policyupdate), [`group.get`](/gitlab-mcp-server/es/reference/tools/group/#groupget).
 
 - **Meta-herramienta**: `gitlab_compliance_policy`, acción `get`
 - **Herramienta individual**: `gitlab_get_compliance_policy_settings`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Compliance Policy Setting: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#compliance_policy))
+- **Token de grano fino**: Compliance Policy Setting: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#compliance_policy))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
 
 ### `compliance_policy.update`
 
-> Update the instance compliance policy settings. Returns: the compliance policy settings with the newly bound centralized compliance security policy (CSP) namespace ID. See also: [`compliance_policy.get`](#compliance_policyget), [`group.get`](/gitlab-mcp-server/reference/tools/group/#groupget).
+> Update the instance compliance policy settings. Returns: the compliance policy settings with the newly bound centralized compliance security policy (CSP) namespace ID. See also: [`compliance_policy.get`](#compliance_policyget), [`group.get`](/gitlab-mcp-server/es/reference/tools/group/#groupget).
 
 - **Meta-herramienta**: `gitlab_compliance_policy`, acción `update`
 - **Herramienta individual**: `gitlab_update_compliance_policy_settings`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Compliance Policy Setting: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#compliance_policy))
+- **Token de grano fino**: Compliance Policy Setting: Update en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#compliance_policy))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro          | Tipo      | Requerido | Descripción                                                                                                                               |

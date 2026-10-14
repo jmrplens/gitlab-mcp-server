@@ -37,7 +37,7 @@ Acciones de solo lectura: 1 de 3, las que conserva un despliegue en modo de solo
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas)).
 
 | Acción                                                                                       | Individual                                  |
 | -------------------------------------------------------------------------------------------- | ------------------------------------------- |
@@ -47,13 +47,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `security_scan_profile.attach`
 
-> Attach a GitLab security scan profile to one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: attach confirmation with the resolved profile and targets. See also: [`security_scan_profile.detach`](#security_scan_profiledetach), [`security_scan_profile.list_project_statuses`](#security_scan_profilelist_project_statuses), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget). API docs: [`https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofileattach`](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofileattach)
+> Attach a GitLab security scan profile to one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: attach confirmation with the resolved profile and targets. See also: [`security_scan_profile.detach`](#security_scan_profiledetach), [`security_scan_profile.list_project_statuses`](#security_scan_profilelist_project_statuses), [`project.get`](/gitlab-mcp-server/es/reference/tools/project/#projectget). API docs: [`https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofileattach`](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofileattach)
 
 - **Meta-herramienta**: `gitlab_security_scan_profile`, acción `attach`
 - **Herramienta individual**: `gitlab_attach_security_scan_profile`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para la mutación `securityScanProfileAttach`, y la rechaza ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#security_scan_profile))
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para la mutación `securityScanProfileAttach`, y la rechaza ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#security_scan_profile))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                  | Tipo        | Requerido | Descripción                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -66,13 +66,13 @@ Además necesita al menos uno de estos: `project_ids`; `group_ids`.
 
 ### `security_scan_profile.detach`
 
-> Detach a GitLab security scan profile from one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: detach confirmation with the resolved profile and targets. See also: [`security_scan_profile.attach`](#security_scan_profileattach), [`security_scan_profile.list_project_statuses`](#security_scan_profilelist_project_statuses), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget). API docs: [`https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofiledetach`](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofiledetach)
+> Detach a GitLab security scan profile from one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: detach confirmation with the resolved profile and targets. See also: [`security_scan_profile.attach`](#security_scan_profileattach), [`security_scan_profile.list_project_statuses`](#security_scan_profilelist_project_statuses), [`project.get`](/gitlab-mcp-server/es/reference/tools/project/#projectget). API docs: [`https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofiledetach`](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofiledetach)
 
 - **Meta-herramienta**: `gitlab_security_scan_profile`, acción `detach`
 - **Herramienta individual**: `gitlab_detach_security_scan_profile`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para la mutación `securityScanProfileDetach`, y la rechaza ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#security_scan_profile))
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para la mutación `securityScanProfileDetach`, y la rechaza ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#security_scan_profile))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro                  | Tipo        | Requerido | Descripción                                                                                                                                                                                                                              |
@@ -85,13 +85,13 @@ Además necesita al menos uno de estos: `project_ids`; `group_ids`.
 
 ### `security_scan_profile.list_project_statuses`
 
-> List the security scan profile statuses for a GitLab project via GraphQL. Requires Ultimate. Returns: per-scan-type profile status (NOT_CONFIGURED, PENDING, ACTIVE, WARNING, FAILED, or STALE). See also: [`security_scan_profile.attach`](#security_scan_profileattach), [`security_scan_profile.detach`](#security_scan_profiledetach), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget). API docs: [`https://docs.gitlab.com/api/graphql/reference/#project-scanprofilestatuses`](https://docs.gitlab.com/api/graphql/reference/#project-scanprofilestatuses)
+> List the security scan profile statuses for a GitLab project via GraphQL. Requires Ultimate. Returns: per-scan-type profile status (NOT_CONFIGURED, PENDING, ACTIVE, WARNING, FAILED, or STALE). See also: [`security_scan_profile.attach`](#security_scan_profileattach), [`security_scan_profile.detach`](#security_scan_profiledetach), [`project.get`](/gitlab-mcp-server/es/reference/tools/project/#projectget). API docs: [`https://docs.gitlab.com/api/graphql/reference/#project-scanprofilestatuses`](https://docs.gitlab.com/api/graphql/reference/#project-scanprofilestatuses)
 
 - **Meta-herramienta**: `gitlab_security_scan_profile`, acción `list_project_statuses`
 - **Herramienta individual**: `gitlab_list_project_scan_profile_statuses`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `ScanProfileProjectStatus`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#security_scan_profile))
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `ScanProfileProjectStatus`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#security_scan_profile))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo     | Requerido | Descripción                                                                                                         |

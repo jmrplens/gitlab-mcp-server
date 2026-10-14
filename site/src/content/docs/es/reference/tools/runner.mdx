@@ -38,7 +38,7 @@ Acciones de solo lectura: 13 de 34, las que conserva un despliegue en modo de so
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas)).
 
 | Acción                                                                               | Nivel    | Individual                                       |
 | ------------------------------------------------------------------------------------ | -------- | ------------------------------------------------ |
@@ -85,7 +85,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_controller_create`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner Controller: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Controller: Create en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro     | Tipo                                        | Requerido | Descripción                          |
@@ -101,7 +101,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_controller_delete`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner Controller: Delete en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Controller: Delete en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro       | Tipo      | Requerido | Descripción          |
@@ -116,7 +116,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_controller_get`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Runner Controller: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Controller: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo      | Requerido | Descripción          |
@@ -131,7 +131,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_controller_list`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Runner Controller: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Controller: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -151,7 +151,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_controller_scope_add_instance`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner Controller: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Controller: Update en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro       | Tipo      | Requerido | Descripción          |
@@ -166,7 +166,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_controller_scope_add_runner`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner Controller: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Controller: Update en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro       | Tipo      | Requerido | Descripción                       |
@@ -182,7 +182,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_controller_scope_list`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Runner Controller: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Controller: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo      | Requerido | Descripción          |
@@ -197,7 +197,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_controller_scope_remove_instance`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner Controller: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Controller: Update en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro       | Tipo      | Requerido | Descripción          |
@@ -212,7 +212,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_controller_scope_remove_runner`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner Controller: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Controller: Update en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro       | Tipo      | Requerido | Descripción                    |
@@ -228,7 +228,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_controller_token_create`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner Controller Token: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Controller Token: Create en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro       | Tipo      | Requerido | Descripción              |
@@ -244,7 +244,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_controller_token_get`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Runner Controller Token: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Controller Token: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo      | Requerido | Descripción          |
@@ -260,7 +260,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_controller_token_list`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Runner Controller Token: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Controller Token: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -281,7 +281,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_controller_token_revoke`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner Controller Token: Revoke en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Controller Token: Revoke en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro       | Tipo      | Requerido | Descripción          |
@@ -297,7 +297,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_controller_token_rotate`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner Controller Token: Rotate en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Controller Token: Rotate en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro       | Tipo      | Requerido | Descripción          |
@@ -313,7 +313,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_controller_update`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner Controller: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Controller: Update en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro       | Tipo                                        | Requerido | Descripción                                                                              |
@@ -330,7 +330,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_delete_by_token`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`); GitLab autentica el token que esta acción envía como parámetro y no juzga el scope de este
-- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción                 |
@@ -345,7 +345,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_delete_registered`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner: Delete en proyecto o grupo o instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner: Delete en proyecto o grupo o instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro   | Tipo      | Requerido | Descripción         |
@@ -360,7 +360,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_disable_project`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner: Assign en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner: Assign en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                      |
@@ -376,7 +376,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_enable_project`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner: Assign en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner: Assign en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -392,7 +392,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Runner: Read en proyecto o grupo o instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner: Read en proyecto o grupo o instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro   | Tipo      | Requerido | Descripción |
@@ -401,13 +401,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `runner.jobs`
 
-> List jobs processed by a runner, with status/order/sort filters and pagination. Returns: jobs with id, name, status, stage, ref, and duration, plus pagination metadata. See also: [`runner.get`](#runnerget), [`job.get`](/gitlab-mcp-server/reference/tools/job/#jobget).
+> List jobs processed by a runner, with status/order/sort filters and pagination. Returns: jobs with id, name, status, stage, ref, and duration, plus pagination metadata. See also: [`runner.get`](#runnerget), [`job.get`](/gitlab-mcp-server/es/reference/tools/job/#jobget).
 
 - **Meta-herramienta**: `gitlab_runner`, acción `jobs`
 - **Herramienta individual**: `gitlab_runner_jobs`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Runner: Read en proyecto o grupo o instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner: Read en proyecto o grupo o instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                                                                                                                                                                                    | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -429,7 +429,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Runner: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                                                       | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -454,7 +454,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_list_all`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Runner: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                                                                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -479,7 +479,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_list_group`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Runner: Read en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner: Read en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                                                       | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -503,7 +503,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_list_managers`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Runner: Read en proyecto o grupo o instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner: Read en proyecto o grupo o instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro   | Tipo      | Requerido | Descripción |
@@ -518,7 +518,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_list_project`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Runner: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                                                       | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -544,7 +544,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_register`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`); GitLab autentica el token que esta acción envía como parámetro y no juzga el scope de este
-- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro          | Tipo       | Requerido | Descripción                                                                   |
@@ -569,7 +569,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_remove`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner: Delete en proyecto o grupo o instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner: Delete en proyecto o grupo o instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro   | Tipo      | Requerido | Descripción         |
@@ -584,7 +584,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_reset_group_reg_token`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner Registration Token: Reset en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Registration Token: Reset en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro  | Tipo             | Requerido | Descripción                  |
@@ -599,7 +599,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_runner_reset_instance_reg_token`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner Registration Token: Reset en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Registration Token: Reset en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, idempotente
 
 Sin parámetros.
@@ -612,7 +612,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_runner_reset_project_reg_token`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner Registration Token: Reset en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner Registration Token: Reset en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -627,7 +627,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_runner_reset_token`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner: Update en proyecto o grupo o instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner: Update en proyecto o grupo o instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro   | Tipo      | Requerido | Descripción |
@@ -642,7 +642,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_runner_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner: Update en proyecto o grupo o instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: Runner: Update en proyecto o grupo o instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro          | Tipo       | Requerido | Descripción                                            |
@@ -666,7 +666,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_runner_verify`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`); GitLab autentica el token que esta acción envía como parámetro y no juzga el scope de este
-- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción                           |

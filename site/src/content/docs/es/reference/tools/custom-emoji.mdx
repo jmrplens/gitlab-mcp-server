@@ -9,7 +9,7 @@ tableOfContents:
 
 {/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
 
-Los emoji personalizados de un grupo son imágenes que añade a los emoji con los que sus proyectos pueden reaccionar y escribir en Markdown. Estas acciones los listan, los añaden y los borran. Reaccionar con un emoji a un issue, a un merge request o a un snippet no es una de ellas: son acciones de los grupos de [issues](/gitlab-mcp-server/reference/tools/issue/), [merge requests](/gitlab-mcp-server/reference/tools/merge-request/) y [snippets](/gitlab-mcp-server/reference/tools/snippet/). Borrar un emoji deja en su sitio las reacciones que lo usaban, mostradas como su `:name:`.
+Los emoji personalizados de un grupo son imágenes que añade a los emoji con los que sus proyectos pueden reaccionar y escribir en Markdown. Estas acciones los listan, los añaden y los borran. Reaccionar con un emoji a un issue, a un merge request o a un snippet no es una de ellas: son acciones de los grupos de [issues](/gitlab-mcp-server/es/reference/tools/issue/), [merge requests](/gitlab-mcp-server/es/reference/tools/merge-request/) y [snippets](/gitlab-mcp-server/es/reference/tools/snippet/). Borrar un emoji deja en su sitio las reacciones que lo usaban, mostradas como su `:name:`.
 
 ## Preguntas de ejemplo
 
@@ -31,7 +31,7 @@ Acciones de solo lectura: 1 de 3, las que conserva un despliegue en modo de solo
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas)).
 
 | Acción                                       | Individual                   |
 | -------------------------------------------- | ---------------------------- |
@@ -47,7 +47,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_create_custom_emoji`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `CustomEmoji` en la respuesta, así que la escritura se confirma y su respuesta se pierde ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#custom_emoji))
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `CustomEmoji` en la respuesta, así que la escritura se confirma y su respuesta se pierde ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#custom_emoji))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo     | Requerido | Descripción                                     |
@@ -64,7 +64,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_delete_custom_emoji`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `CustomEmoji` en la respuesta, así que la escritura se confirma y su respuesta se pierde ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#custom_emoji))
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `CustomEmoji` en la respuesta, así que la escritura se confirma y su respuesta se pierde ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#custom_emoji))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción                                          |
@@ -79,7 +79,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_list_custom_emoji`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `CustomEmoji`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#custom_emoji))
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `CustomEmoji`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#custom_emoji))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                 | Tipo      | Requerido | Descripción                                                                                                                                                                |

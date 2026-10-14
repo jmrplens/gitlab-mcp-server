@@ -31,7 +31,7 @@ Acciones de solo lectura: 5 de 9, las que conserva un despliegue en modo de solo
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas)).
 
 | Acción                                     | Individual                  |
 | ------------------------------------------ | --------------------------- |
@@ -47,13 +47,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `tag.create`
 
-> Create a new tag in a project pointing at a ref. Returns: the created tag with target, message, protection flag, and the associated commit object. See also: [`tag.get`](#tagget), [`tag.delete`](#tagdelete), [`release.create`](/gitlab-mcp-server/reference/tools/release/#releasecreate).
+> Create a new tag in a project pointing at a ref. Returns: the created tag with target, message, protection flag, and the associated commit object. See also: [`tag.get`](#tagget), [`tag.delete`](#tagdelete), [`release.create`](/gitlab-mcp-server/es/reference/tools/release/#releasecreate).
 
 - **Meta-herramienta**: `gitlab_tag`, acción `create`
 - **Herramienta individual**: `gitlab_tag_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Repository Tag: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
+- **Token de grano fino**: Repository Tag: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                    |
@@ -71,7 +71,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_tag_delete`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Repository Tag: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
+- **Token de grano fino**: Repository Tag: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -81,13 +81,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `tag.get`
 
-> Get a single tag from a project by name. Returns: the tag with target, message, protection flag, the full associated commit object, release note, and creation time. See also: [`tag.list`](#taglist), [`tag.get_signature`](#tagget_signature), [`release.get`](/gitlab-mcp-server/reference/tools/release/#releaseget).
+> Get a single tag from a project by name. Returns: the tag with target, message, protection flag, the full associated commit object, release note, and creation time. See also: [`tag.list`](#taglist), [`tag.get_signature`](#tagget_signature), [`release.get`](/gitlab-mcp-server/es/reference/tools/release/#releaseget).
 
 - **Meta-herramienta**: `gitlab_tag`, acción `get`
 - **Herramienta individual**: `gitlab_tag_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository Tag: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
+- **Token de grano fino**: Repository Tag: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -103,7 +103,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_tag_get_protected`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Protected Tag: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
+- **Token de grano fino**: Protected Tag: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -119,7 +119,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_tag_get_signature`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository Tag: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
+- **Token de grano fino**: Repository Tag: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                        |
@@ -129,13 +129,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `tag.list`
 
-> List tags in one project with optional search and offset or keyset pagination. Returns: matching tags with target, message, protection flag, the associated commit object, release note, and pagination metadata. See also: [`tag.get`](#tagget), [`tag.create`](#tagcreate), [`release.list`](/gitlab-mcp-server/reference/tools/release/#releaselist).
+> List tags in one project with optional search and offset or keyset pagination. Returns: matching tags with target, message, protection flag, the associated commit object, release note, and pagination metadata. See also: [`tag.get`](#tagget), [`tag.create`](#tagcreate), [`release.list`](/gitlab-mcp-server/es/reference/tools/release/#releaselist).
 
 - **Meta-herramienta**: `gitlab_tag`, acción `list`
 - **Herramienta individual**: `gitlab_tag_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository Tag: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
+- **Token de grano fino**: Repository Tag: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -157,7 +157,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_tag_list_protected`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Protected Tag: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
+- **Token de grano fino**: Protected Tag: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -178,7 +178,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_tag_protect`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Tag: Protect en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
+- **Token de grano fino**: Tag: Protect en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro             | Tipo             | Requerido | Descripción                                                                  |
@@ -196,7 +196,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_tag_unprotect`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Tag: Protect en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
+- **Token de grano fino**: Tag: Protect en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                            |

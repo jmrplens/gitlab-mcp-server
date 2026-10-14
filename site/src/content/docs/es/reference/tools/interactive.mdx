@@ -26,7 +26,7 @@ Cuatro flujos que crean algo en GitLab preguntando al usuario cada campo mediant
 
 Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
 
-Necesita un cliente que admita la [elicitación](/gitlab-mcp-server/capabilities/elicitation/) de MCP, por la que cada acción hace sus preguntas.
+Necesita un cliente que admita la [elicitación](/gitlab-mcp-server/es/capabilities/elicitation/) de MCP, por la que cada acción hace sus preguntas.
 
 Acciones de solo lectura: 0 de 4, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 0 de las 4.
 
@@ -63,13 +63,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 >
 > Returns: JSON with the created issue (id, issue_iid, web_url, title, state). issue_iid corresponds to GitLab's iid field.
 >
-> See also: [`issue.create`](/gitlab-mcp-server/reference/tools/issue/#issuecreate), [`issue.get`](/gitlab-mcp-server/reference/tools/issue/#issueget).
+> See also: [`issue.create`](/gitlab-mcp-server/es/reference/tools/issue/#issuecreate), [`issue.get`](/gitlab-mcp-server/es/reference/tools/issue/#issueget).
 
 - **Meta-herramienta**: `gitlab_interactive_issue_create`, una herramienta propia
 - **Herramienta individual**: `gitlab_interactive_issue_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#interactive))
+- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#interactive))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                    |
@@ -101,13 +101,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 >
 > Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state). merge_request_iid corresponds to GitLab's iid field.
 >
-> See also: [`merge_request.create`](/gitlab-mcp-server/reference/tools/merge-request/#merge_requestcreate), [`branch.create`](/gitlab-mcp-server/reference/tools/branch/#branchcreate).
+> See also: [`merge_request.create`](/gitlab-mcp-server/es/reference/tools/merge-request/#merge_requestcreate), [`branch.create`](/gitlab-mcp-server/es/reference/tools/branch/#branchcreate).
 
 - **Meta-herramienta**: `gitlab_interactive_mr_create`, una herramienta propia
 - **Herramienta individual**: `gitlab_interactive_mr_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#interactive))
+- **Token de grano fino**: Merge Request: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#interactive))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                 |
@@ -137,13 +137,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 >
 > Returns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).
 >
-> See also: [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget), [`group.get`](/gitlab-mcp-server/reference/tools/group/#groupget).
+> See also: [`project.get`](/gitlab-mcp-server/es/reference/tools/project/#projectget), [`group.get`](/gitlab-mcp-server/es/reference/tools/group/#groupget).
 
 - **Meta-herramienta**: `gitlab_interactive_project_create`, una herramienta propia
 - **Herramienta individual**: `gitlab_interactive_project_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Project: Create en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#interactive))
+- **Token de grano fino**: Project: Create en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#interactive))
 - **Comportamiento**: escribe, no idempotente
 
 Sin parámetros.
@@ -169,13 +169,13 @@ Sin parámetros.
 >
 > Returns: JSON with the created release (tag_name, name, description, web_url).
 >
-> See also: [`release.create`](/gitlab-mcp-server/reference/tools/release/#releasecreate), [`tag.create`](/gitlab-mcp-server/reference/tools/tag/#tagcreate).
+> See also: [`release.create`](/gitlab-mcp-server/es/reference/tools/release/#releasecreate), [`tag.create`](/gitlab-mcp-server/es/reference/tools/tag/#tagcreate).
 
 - **Meta-herramienta**: `gitlab_interactive_release_create`, una herramienta propia
 - **Herramienta individual**: `gitlab_interactive_release_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Release: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#interactive))
+- **Token de grano fino**: Release: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#interactive))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                      |

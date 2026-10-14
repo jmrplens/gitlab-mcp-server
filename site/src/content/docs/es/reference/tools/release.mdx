@@ -31,7 +31,7 @@ Acciones de solo lectura: 5 de 12, las que conserva un despliegue en modo de sol
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas)).
 
 | Acción                                                   | Individual                         |
 | -------------------------------------------------------- | ---------------------------------- |
@@ -50,13 +50,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `release.create`
 
-> Create a release for a tag, optionally creating the tag from a ref and attaching asset links. Returns: the created release with author, commit, assets, milestones, and _links. See also: [`release.update`](#releaseupdate), [`release.link_create`](#releaselink_create), [`tag.create`](/gitlab-mcp-server/reference/tools/tag/#tagcreate).
+> Create a release for a tag, optionally creating the tag from a ref and attaching asset links. Returns: the created release with author, commit, assets, milestones, and _links. See also: [`release.update`](#releaseupdate), [`release.link_create`](#releaselink_create), [`tag.create`](/gitlab-mcp-server/es/reference/tools/tag/#tagcreate).
 
 - **Meta-herramienta**: `gitlab_release`, acción `create`
 - **Herramienta individual**: `gitlab_release_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Release: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
+- **Token de grano fino**: Release: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#release))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                                                                                                          |
@@ -73,13 +73,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `release.delete`
 
-> Delete a release by tag_name (the Git tag itself is preserved). Returns: the deleted release details. See also: [`release.get`](#releaseget), [`release.list`](#releaselist), [`tag.delete`](/gitlab-mcp-server/reference/tools/tag/#tagdelete).
+> Delete a release by tag_name (the Git tag itself is preserved). Returns: the deleted release details. See also: [`release.get`](#releaseget), [`release.list`](#releaselist), [`tag.delete`](/gitlab-mcp-server/es/reference/tools/tag/#tagdelete).
 
 - **Meta-herramienta**: `gitlab_release`, acción `delete`
 - **Herramienta individual**: `gitlab_release_delete`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Release: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
+- **Token de grano fino**: Release: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#release))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                       |
@@ -95,7 +95,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_release_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Release: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
+- **Token de grano fino**: Release: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#release))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -111,7 +111,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_release_latest`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Release: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
+- **Token de grano fino**: Release: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#release))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -126,7 +126,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_release_link_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Release Link: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
+- **Token de grano fino**: Release Link: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#release))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro           | Tipo                                              | Requerido | Descripción                                                                                                              |
@@ -141,13 +141,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `release.link_create_batch`
 
-> Create multiple release asset links in one call. Returns: the created links (id, name, url, direct_asset_url, link_type) and any failed entries. See also: [`release.link_create`](#releaselink_create), [`release.link_list`](#releaselink_list), [`package.publish`](/gitlab-mcp-server/reference/tools/package/#packagepublish).
+> Create multiple release asset links in one call. Returns: the created links (id, name, url, direct_asset_url, link_type) and any failed entries. See also: [`release.link_create`](#releaselink_create), [`release.link_list`](#releaselink_list), [`package.publish`](/gitlab-mcp-server/es/reference/tools/package/#packagepublish).
 
 - **Meta-herramienta**: `gitlab_release`, acción `link_create_batch`
 - **Herramienta individual**: `gitlab_release_link_create_batch`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Release Link: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
+- **Token de grano fino**: Release Link: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#release))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                                                            |
@@ -164,7 +164,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_release_link_delete`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Release Link: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
+- **Token de grano fino**: Release Link: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#release))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                      |
@@ -181,7 +181,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_release_link_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Release Link: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
+- **Token de grano fino**: Release Link: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#release))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -198,7 +198,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_release_link_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Release Link: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
+- **Token de grano fino**: Release Link: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#release))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -220,7 +220,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_release_link_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Release Link: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
+- **Token de grano fino**: Release Link: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#release))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro           | Tipo                                              | Requerido | Descripción                                                                                                   |
@@ -238,13 +238,13 @@ Además necesita al menos uno de estos: `name`; `url`.
 
 ### `release.list`
 
-> List releases in a project with pagination. Returns: tag names, release names, release dates, and summary metadata. See also: [`release.get`](#releaseget), [`tag.list`](/gitlab-mcp-server/reference/tools/tag/#taglist), [`release.link_list`](#releaselink_list).
+> List releases in a project with pagination. Returns: tag names, release names, release dates, and summary metadata. See also: [`release.get`](#releaseget), [`tag.list`](/gitlab-mcp-server/es/reference/tools/tag/#taglist), [`release.link_list`](#releaselink_list).
 
 - **Meta-herramienta**: `gitlab_release`, acción `list`
 - **Herramienta individual**: `gitlab_release_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Release: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
+- **Token de grano fino**: Release: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#release))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                  | Tipo                                   | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -266,7 +266,7 @@ Además necesita al menos uno de estos: `name`; `url`.
 - **Herramienta individual**: `gitlab_release_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Release: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#release))
+- **Token de grano fino**: Release: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#release))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                                                                                                                 |

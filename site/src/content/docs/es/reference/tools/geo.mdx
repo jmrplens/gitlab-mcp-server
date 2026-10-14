@@ -37,7 +37,7 @@ Acciones de solo lectura: 4 de 8, las que conserva un despliegue en modo de solo
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas)).
 
 | Acción                               | Individual                         |
 | ------------------------------------ | ---------------------------------- |
@@ -58,7 +58,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_create_geo_site`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: Geo Site: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#geo))
+- **Token de grano fino**: Geo Site: Create en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#geo))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                             | Tipo        | Requerido | Descripción                                                 |
@@ -86,7 +86,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_delete_geo_site`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: Geo Site: Delete en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#geo))
+- **Token de grano fino**: Geo Site: Delete en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#geo))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                |
@@ -101,7 +101,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_edit_geo_site`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: Geo Site: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#geo))
+- **Token de grano fino**: Geo Site: Update en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#geo))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                             | Tipo        | Requerido | Descripción                                         |
@@ -128,7 +128,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_get_geo_site`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: Geo Site: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#geo))
+- **Token de grano fino**: Geo Site: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#geo))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                |
@@ -143,7 +143,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_get_status_geo_site`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: Geo Site: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#geo))
+- **Token de grano fino**: Geo Site: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#geo))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                |
@@ -158,7 +158,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_list_geo_sites`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: Geo Site: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#geo))
+- **Token de grano fino**: Geo Site: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#geo))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -178,7 +178,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_list_status_all_geo_sites`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: Geo Site: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#geo))
+- **Token de grano fino**: Geo Site: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#geo))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -198,7 +198,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_repair_geo_site`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: Geo Site: Repair en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#geo))
+- **Token de grano fino**: Geo Site: Repair en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#geo))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                |

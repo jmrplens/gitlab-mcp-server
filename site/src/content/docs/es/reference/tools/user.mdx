@@ -11,7 +11,7 @@ tableOfContents:
 
 El usuario actual y cada usuario que gestiona un administrador: leer y listar usuarios, crear, modificar y borrar cuentas, y bloquear, desbloquear, vetar, levantar el veto, activar, desactivar, aprobar o rechazar una; claves SSH y GPG y correos, del usuario actual o de otro; tokens de acceso personales y tokens de suplantación; el estado y el avatar del usuario; actividades, pertenencias y eventos de contribución y de proyecto; tareas pendientes; ajustes de notificación; espacios de nombres; cuentas de servicio de la instancia; y runners creados para el usuario.
 
-Los tokens de acceso de proyecto y de grupo, los tokens de despliegue y las claves de despliegue están en [Tokens de acceso y credenciales](/gitlab-mcp-server/reference/tools/access/).
+Los tokens de acceso de proyecto y de grupo, los tokens de despliegue y las claves de despliegue están en [Tokens de acceso y credenciales](/gitlab-mcp-server/es/reference/tools/access/).
 
 ## Preguntas de ejemplo
 
@@ -34,7 +34,7 @@ Acciones de solo lectura: 37 de 76, las que conserva un despliegue en modo de so
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)). Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas)). Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.
 
 | Acción                                                                   | Individual                               |
 | ------------------------------------------------------------------------ | ---------------------------------------- |
@@ -123,7 +123,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_activate_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: User: Activate en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: User: Activate en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción        |
@@ -138,7 +138,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_get_user_activities`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Activity: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Activity: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -159,7 +159,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_add_email`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Email: Create en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Email: Create en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro           | Tipo      | Requerido | Descripción                          |
@@ -175,7 +175,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_add_email_for_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Email: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Email: Create en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro           | Tipo      | Requerido | Descripción                          |
@@ -192,7 +192,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_add_gpg_key`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: GPG Key: Create en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: GPG Key: Create en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción                        |
@@ -207,7 +207,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_add_gpg_key_for_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: GPG Key: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: GPG Key: Create en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                        |
@@ -223,7 +223,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_add_ssh_key`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: SSH Key: Create en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: SSH Key: Create en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo                                             | Requerido | Descripción                                                                                                                  |
@@ -241,7 +241,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_add_ssh_key_for_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: SSH Key: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: SSH Key: Create en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo                                             | Requerido | Descripción                                                                                                                  |
@@ -260,7 +260,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_approve_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: User: Approve en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: User: Approve en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción        |
@@ -275,7 +275,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_get_user_associations_count`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Association: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Association: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción        |
@@ -290,7 +290,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_get_avatar`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Avatar: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Avatar: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                         |
@@ -306,7 +306,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_ban_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: User: Ban en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: User: Ban en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción        |
@@ -321,7 +321,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_block_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: User: Block en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: User: Block en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción        |
@@ -336,7 +336,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_list_user_contribution_events`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Event: Read en usuario. Algunas llamadas también necesitan: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Event: Read en usuario. Algunas llamadas también necesitan: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                                                                                                                                        | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -362,7 +362,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_create_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: User: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: User: Create en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                                      | Tipo      | Requerido | Descripción                                                                        |
@@ -410,7 +410,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_create_current_user_pat`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Personal Access Token: Create en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Personal Access Token: Create en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro     | Tipo       | Requerido | Descripción                        |
@@ -428,7 +428,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_create_impersonation_token`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Impersonation Token: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Impersonation Token: Create en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo       | Requerido | Descripción                                                                                                                                                              |
@@ -440,13 +440,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `user.create_personal_access_token`
 
-> Create a personal access token for a user with the given scopes, optional description, and optional expiry. Returns: the new token's id, name, active flag, scopes, revoked flag, description, user_id, created_at, expires_at, and the secret token value (shown once). See also: [`access.token_personal_list`](/gitlab-mcp-server/reference/tools/access/#accesstoken_personal_list), [`access.token_personal_revoke`](/gitlab-mcp-server/reference/tools/access/#accesstoken_personal_revoke), [`user.create_impersonation_token`](#usercreate_impersonation_token).
+> Create a personal access token for a user with the given scopes, optional description, and optional expiry. Returns: the new token's id, name, active flag, scopes, revoked flag, description, user_id, created_at, expires_at, and the secret token value (shown once). See also: [`access.token_personal_list`](/gitlab-mcp-server/es/reference/tools/access/#accesstoken_personal_list), [`access.token_personal_revoke`](/gitlab-mcp-server/es/reference/tools/access/#accesstoken_personal_revoke), [`user.create_impersonation_token`](#usercreate_impersonation_token).
 
 - **Meta-herramienta**: `gitlab_user`, acción `create_personal_access_token`
 - **Herramienta individual**: `gitlab_create_personal_access_token`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Personal Access Token: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Personal Access Token: Create en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro     | Tipo       | Requerido | Descripción                        |
@@ -465,7 +465,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_create_user_runner`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Runner: Create en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Runner: Create en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro          | Tipo                                                     | Requerido | Descripción                                                                                                  |
@@ -490,7 +490,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_create_service_account`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Service Account: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Service Account: Create en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro  | Tipo     | Requerido | Descripción                      |
@@ -507,7 +507,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_user_current`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: User: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: User: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -520,7 +520,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_current_user_status`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Status: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Status: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -533,7 +533,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_deactivate_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: User: Deactivate en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: User: Deactivate en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción        |
@@ -548,7 +548,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_delete_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: User: Delete en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: User: Delete en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                  |
@@ -563,7 +563,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_delete_email`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Email: Delete en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Email: Delete en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro  | Tipo      | Requerido | Descripción        |
@@ -578,7 +578,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_delete_email_for_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Email: Delete en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Email: Delete en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro  | Tipo      | Requerido | Descripción        |
@@ -594,7 +594,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_delete_gpg_key`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: GPG Key: Delete en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: GPG Key: Delete en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                     |
@@ -609,7 +609,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_delete_gpg_key_for_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: GPG Key: Delete en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: GPG Key: Delete en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                     |
@@ -625,7 +625,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_delete_user_identity`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Identity: Delete en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Identity: Delete en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro  | Tipo      | Requerido | Descripción                                    |
@@ -641,7 +641,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_delete_ssh_key`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: SSH Key: Delete en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: SSH Key: Delete en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                     |
@@ -656,7 +656,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_delete_ssh_key_for_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: SSH Key: Delete en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: SSH Key: Delete en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                     |
@@ -672,7 +672,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_disable_two_factor`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: User: Disable Two Factor en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: User: Disable Two Factor en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción        |
@@ -687,7 +687,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_list_emails`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Email: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Email: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo      | Requerido | Descripción                                                                                                           |
@@ -703,7 +703,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_list_emails_for_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Email: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Email: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -724,7 +724,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_user_contribution_event_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Event: Read en usuario. Algunas llamadas también necesitan: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Event: Read en usuario. Algunas llamadas también necesitan: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                                                                                                                                        | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -743,13 +743,13 @@ Sin parámetros.
 
 ### `user.event_list_project`
 
-> List a project's visible activity events. Returns: each event with action_name, target type and IID, push_data, embedded note with author, data (ref, commits, repository), author object, created timestamp, and pagination metadata. See also: [`user.event_list_contributions`](#userevent_list_contributions), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget).
+> List a project's visible activity events. Returns: each event with action_name, target type and IID, push_data, embedded note with author, data (ref, commits, repository), author object, created timestamp, and pagination metadata. See also: [`user.event_list_contributions`](#userevent_list_contributions), [`project.get`](/gitlab-mcp-server/es/reference/tools/project/#projectget).
 
 - **Meta-herramienta**: `gitlab_user`, acción `event_list_project`
 - **Herramienta individual**: `gitlab_project_event_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Event: Read en proyecto. Algunas llamadas también necesitan: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Event: Read en proyecto. Algunas llamadas también necesitan: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                                                                                                                                        | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -774,7 +774,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_get_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: User: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: User: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                | Tipo      | Requerido | Descripción                                            |
@@ -790,7 +790,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_get_email`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Email: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Email: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo      | Requerido | Descripción          |
@@ -805,7 +805,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_get_gpg_key`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: GPG Key: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: GPG Key: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción           |
@@ -820,7 +820,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_get_gpg_key_for_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: GPG Key: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: GPG Key: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción           |
@@ -836,7 +836,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_get_impersonation_token`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Impersonation Token: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Impersonation Token: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo      | Requerido | Descripción            |
@@ -852,7 +852,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_get_ssh_key`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: SSH Key: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: SSH Key: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción           |
@@ -867,7 +867,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_get_ssh_key_for_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: SSH Key: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: SSH Key: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción           |
@@ -883,7 +883,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_get_user_status`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Status: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Status: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                                 |
@@ -898,7 +898,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_list_gpg_keys`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: GPG Key: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: GPG Key: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo      | Requerido | Descripción                                                                                                           |
@@ -914,7 +914,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_list_gpg_keys_for_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: GPG Key: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: GPG Key: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo      | Requerido | Descripción                                                                                                           |
@@ -931,7 +931,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_get_key_by_fingerprint`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: SSH Key: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: SSH Key: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo     | Requerido | Descripción                                                                                                                        |
@@ -946,7 +946,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_get_key_with_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: SSH Key: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: SSH Key: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción |
@@ -961,7 +961,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_list_users`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: User: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: User: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                | Tipo                                                            | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -1002,7 +1002,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_list_impersonation_tokens`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Impersonation Token: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Impersonation Token: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                                   | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -1024,7 +1024,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_list_service_accounts`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Service Account: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Service Account: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                        | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -1044,7 +1044,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_user_current`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: User: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: User: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -1057,7 +1057,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_get_user_memberships`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: User: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: User: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                              | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -1079,7 +1079,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_modify_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: User: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: User: Update en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                 | Tipo      | Requerido | Descripción                                                                               |
@@ -1119,7 +1119,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_namespace_exists`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Namespace: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Namespace: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro   | Tipo      | Requerido | Descripción                            |
@@ -1135,7 +1135,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_namespace_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Namespace: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Namespace: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción          |
@@ -1144,13 +1144,13 @@ Sin parámetros.
 
 ### `user.namespace_list`
 
-> List namespaces visible to the authenticated user. Returns: matching namespaces with id, name, path, kind, plan, seat usage, and pagination metadata. See also: [`user.namespace_get`](#usernamespace_get), [`user.namespace_search`](#usernamespace_search), [`group.list`](/gitlab-mcp-server/reference/tools/group/#grouplist).
+> List namespaces visible to the authenticated user. Returns: matching namespaces with id, name, path, kind, plan, seat usage, and pagination metadata. See also: [`user.namespace_get`](#usernamespace_get), [`user.namespace_search`](#usernamespace_search), [`group.list`](/gitlab-mcp-server/es/reference/tools/group/#grouplist).
 
 - **Meta-herramienta**: `gitlab_user`, acción `namespace_list`
 - **Herramienta individual**: `gitlab_namespace_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Namespace: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Namespace: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro        | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -1173,7 +1173,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_namespace_search`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Namespace: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Namespace: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción                        |
@@ -1188,7 +1188,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_notification_global_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Notification Setting: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Notification Setting: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
@@ -1201,7 +1201,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_notification_global_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Notification Setting: Update en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Notification Setting: Update en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                      | Tipo                                                                 | Requerido | Descripción                                                         |
@@ -1235,7 +1235,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_notification_group_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Notification Setting: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Notification Setting: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo             | Requerido | Descripción                  |
@@ -1250,7 +1250,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_notification_group_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Notification Setting: Update en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Notification Setting: Update en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                      | Tipo                                                                           | Requerido | Descripción                                                                 |
@@ -1285,7 +1285,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_notification_project_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Notification Setting: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Notification Setting: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1300,7 +1300,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_notification_project_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Notification Setting: Update en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Notification Setting: Update en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                      | Tipo                                                                           | Requerido | Descripción                                                                 |
@@ -1335,7 +1335,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_reject_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: User: Reject en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: User: Reject en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción        |
@@ -1350,7 +1350,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_revoke_impersonation_token`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Impersonation Token: Revoke en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Impersonation Token: Revoke en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro  | Tipo      | Requerido | Descripción                      |
@@ -1366,7 +1366,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_set_user_status`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Status: Update en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Status: Update en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro            | Tipo                                                                                  | Requerido | Descripción                                                                                                   |
@@ -1384,7 +1384,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_list_ssh_keys`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: SSH Key: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: SSH Key: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -1404,7 +1404,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_list_ssh_keys_for_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: SSH Key: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: SSH Key: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -1425,7 +1425,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_todo_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Todo: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Todo: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                                                                                                                                                                                                                                                                                                                                                                                                                                            | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -1451,7 +1451,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_todo_mark_all_done`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Todo: Update en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Todo: Update en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, idempotente
 
 Sin parámetros.
@@ -1464,7 +1464,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_todo_mark_done`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Todo: Update en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Todo: Update en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                          |
@@ -1479,7 +1479,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_unban_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: User: Unban en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: User: Unban en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción        |
@@ -1494,7 +1494,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_unblock_user`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: User: Unblock en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: User: Unblock en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción        |
@@ -1509,7 +1509,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_update_instance_service_account`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Service Account: Update en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Service Account: Update en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro            | Tipo      | Requerido | Descripción                          |
@@ -1527,7 +1527,7 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_upload_user_avatar`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Avatar: Update en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
+- **Token de grano fino**: Avatar: Update en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro        | Tipo     | Requerido | Descripción                                                                                                                                                                                       |

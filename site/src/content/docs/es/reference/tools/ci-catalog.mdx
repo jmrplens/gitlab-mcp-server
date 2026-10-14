@@ -40,13 +40,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `ci_catalog.get`
 
-> Get a single CI/CD Catalog resource by GID or full path. Returns: the resource with description, the latest version's README as Markdown and as HTML, latest-version components with their 30-day usage and their typed inputs (default, options, regex and conditional rules), the last ten versions with author and commit, star count, starrers path, and web path. See also: [`ci_catalog.list`](#ci_cataloglist), [`template.lint`](/gitlab-mcp-server/reference/tools/template/#templatelint), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget).
+> Get a single CI/CD Catalog resource by GID or full path. Returns: the resource with description, the latest version's README as Markdown and as HTML, latest-version components with their 30-day usage and their typed inputs (default, options, regex and conditional rules), the last ten versions with author and commit, star count, starrers path, and web path. See also: [`ci_catalog.list`](#ci_cataloglist), [`template.lint`](/gitlab-mcp-server/es/reference/tools/template/#templatelint), [`project.get`](/gitlab-mcp-server/es/reference/tools/project/#projectget).
 
 - **Meta-herramienta**: `gitlab_ci_catalog`, acción `get`
 - **Herramienta individual**: `gitlab_get_catalog_resource`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `CiCatalogResource`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_catalog))
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `CiCatalogResource`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_catalog))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro   | Tipo     | Requerido | Descripción                                                                                                                                |
@@ -56,13 +56,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `ci_catalog.list`
 
-> List published CI/CD Catalog resources (component projects) with optional search, scope, and sort. Returns: catalog resources with id, name, full path, description, icon, latest version and release date, star count, starrers path, 30-day usage count, archived flag, topics, verification and visibility levels, web path, and keyset pagination metadata. See also: [`ci_catalog.get`](#ci_catalogget), [`template.lint`](/gitlab-mcp-server/reference/tools/template/#templatelint), [`pipeline.create`](/gitlab-mcp-server/reference/tools/pipeline/#pipelinecreate).
+> List published CI/CD Catalog resources (component projects) with optional search, scope, and sort. Returns: catalog resources with id, name, full path, description, icon, latest version and release date, star count, starrers path, 30-day usage count, archived flag, topics, verification and visibility levels, web path, and keyset pagination metadata. See also: [`ci_catalog.get`](#ci_catalogget), [`template.lint`](/gitlab-mcp-server/es/reference/tools/template/#templatelint), [`pipeline.create`](/gitlab-mcp-server/es/reference/tools/pipeline/#pipelinecreate).
 
 - **Meta-herramienta**: `gitlab_ci_catalog`, acción `list`
 - **Herramienta individual**: `gitlab_list_catalog_resources`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `CiCatalogResource`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_catalog))
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `CiCatalogResource`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_catalog))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo                                                                                                                                                                                               | Requerido | Descripción                                                                                                                                                                               |

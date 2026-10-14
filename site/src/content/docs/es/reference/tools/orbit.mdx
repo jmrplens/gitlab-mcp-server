@@ -9,7 +9,7 @@ tableOfContents:
 
 {/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
 
-Orbit es el grafo de conocimiento experimental de GitLab.com sobre el código y los datos de los proyectos. Sus seis acciones solo se sirven a una sesión conectada a GitLab.com con Premium o Ultimate, y todas leen: `orbit.status` comprueba el servicio, `orbit.schema` describe el grafo, `orbit.dsl` sirve el lenguaje de consulta, `orbit.query` ejecuta una consulta, `orbit.tools` lista las herramientas MCP propias de Orbit y `orbit.graph_status` informa de la indexación de un espacio de nombres o de un proyecto. GitLab responde 404 mientras su feature flag `knowledge_graph` está desactivado para quien llama. La [página de Orbit](/gitlab-mcp-server/tools/orbit/) explica el flujo de trabajo.
+Orbit es el grafo de conocimiento experimental de GitLab.com sobre el código y los datos de los proyectos. Sus seis acciones solo se sirven a una sesión conectada a GitLab.com con Premium o Ultimate, y todas leen: `orbit.status` comprueba el servicio, `orbit.schema` describe el grafo, `orbit.dsl` sirve el lenguaje de consulta, `orbit.query` ejecuta una consulta, `orbit.tools` lista las herramientas MCP propias de Orbit y `orbit.graph_status` informa de la indexación de un espacio de nombres o de un proyecto. GitLab responde 404 mientras su feature flag `knowledge_graph` está desactivado para quien llama. La [página de Orbit](/gitlab-mcp-server/es/tools/orbit/) explica el flujo de trabajo.
 
 ## Preguntas de ejemplo
 
@@ -54,7 +54,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_orbit_dsl`
 - **Nivel**: Premium, solo GitLab.com
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Knowledge Graph: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
+- **Token de grano fino**: Knowledge Graph: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#orbit))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro         | Tipo     | Requerido | Descripción                                                                                        |
@@ -69,7 +69,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_orbit_graph_status`
 - **Nivel**: Premium, solo GitLab.com
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Knowledge Graph: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
+- **Token de grano fino**: Knowledge Graph: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#orbit))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro         | Tipo      | Requerido | Descripción                                                                                             |
@@ -87,7 +87,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_orbit_query`
 - **Nivel**: Premium, solo GitLab.com
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Knowledge Graph: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
+- **Token de grano fino**: Knowledge Graph: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#orbit))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro         | Tipo     | Requerido | Descripción                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -103,7 +103,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_orbit_schema`
 - **Nivel**: Premium, solo GitLab.com
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Knowledge Graph: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
+- **Token de grano fino**: Knowledge Graph: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#orbit))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro         | Tipo       | Requerido | Descripción                                                                                               |
@@ -120,7 +120,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_orbit_status`
 - **Nivel**: Premium, solo GitLab.com
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Knowledge Graph: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
+- **Token de grano fino**: Knowledge Graph: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#orbit))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro         | Tipo     | Requerido | Descripción                                                                                        |
@@ -135,7 +135,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_orbit_tools`
 - **Nivel**: Premium, solo GitLab.com
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Knowledge Graph: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
+- **Token de grano fino**: Knowledge Graph: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#orbit))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.

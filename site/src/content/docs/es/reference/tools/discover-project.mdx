@@ -50,13 +50,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 >
 > Returns: \{id, name, path, path_with_namespace, web_url, description, default_branch, visibility, http_url_to_repo, ssh_url_to_repo, extracted_path\}. Errors: 404 not found (hint: project may be private, so verify token permissions), 403 forbidden (hint: token lacks read_api scope).
 >
-> See also: [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget), [`server.status`](/gitlab-mcp-server/reference/tools/server/#serverstatus), [`search.projects`](/gitlab-mcp-server/reference/tools/search/#searchprojects).
+> See also: [`project.get`](/gitlab-mcp-server/es/reference/tools/project/#projectget), [`server.status`](/gitlab-mcp-server/es/reference/tools/server/#serverstatus), [`search.projects`](/gitlab-mcp-server/es/reference/tools/search/#searchprojects).
 
 - **Meta-herramienta**: `gitlab_discover_project`, una herramienta propia
 - **Herramienta individual**: `gitlab_discover_project`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#discover_project))
+- **Token de grano fino**: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#discover_project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo     | Requerido | Descripción                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

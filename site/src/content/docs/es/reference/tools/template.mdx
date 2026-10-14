@@ -50,13 +50,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `template.ci_yml_get`
 
-> Get a single GitLab CI/CD pipeline YAML template by key. Returns: the template name and full YAML content to copy into a .gitlab-ci.yml file. See also: [`template.ci_yml_list`](#templateci_yml_list), [`template.lint`](#templatelint), [`repository.file_create`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_create).
+> Get a single GitLab CI/CD pipeline YAML template by key. Returns: the template name and full YAML content to copy into a .gitlab-ci.yml file. See also: [`template.ci_yml_list`](#templateci_yml_list), [`template.lint`](#templatelint), [`repository.file_create`](/gitlab-mcp-server/es/reference/tools/repository/#repositoryfile_create).
 
 - **Meta-herramienta**: `gitlab_template`, acción `ci_yml_get`
 - **Herramienta individual**: `gitlab_get_ci_yml_template`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción                    |
@@ -65,13 +65,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `template.ci_yml_list`
 
-> List the GitLab-provided CI/CD pipeline YAML templates. Returns: available templates with key and name, plus pagination metadata. See also: [`template.ci_yml_get`](#templateci_yml_get), [`template.lint`](#templatelint), [`repository.file_create`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_create).
+> List the GitLab-provided CI/CD pipeline YAML templates. Returns: available templates with key and name, plus pagination metadata. See also: [`template.ci_yml_get`](#templateci_yml_get), [`template.lint`](#templatelint), [`repository.file_create`](/gitlab-mcp-server/es/reference/tools/repository/#repositoryfile_create).
 
 - **Meta-herramienta**: `gitlab_template`, acción `ci_yml_list`
 - **Herramienta individual**: `gitlab_list_ci_yml_templates`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -91,7 +91,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_get_dockerfile_template`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción  |
@@ -106,7 +106,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_list_dockerfile_templates`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -120,13 +120,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `template.gitignore_get`
 
-> Get one .gitignore template by key (e.g. Go, Python, Node). Returns: the template's name and full file content ready to copy into .gitignore. See also: [`template.gitignore_list`](#templategitignore_list), [`repository.file_create`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_create).
+> Get one .gitignore template by key (e.g. Go, Python, Node). Returns: the template's name and full file content ready to copy into .gitignore. See also: [`template.gitignore_list`](#templategitignore_list), [`repository.file_create`](/gitlab-mcp-server/es/reference/tools/repository/#repositoryfile_create).
 
 - **Meta-herramienta**: `gitlab_template`, acción `gitignore_get`
 - **Herramienta individual**: `gitlab_get_gitignore_template`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción                          |
@@ -135,13 +135,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `template.gitignore_list`
 
-> List available .gitignore templates with order_by, sort, and offset or keyset pagination. Returns: each template's key and name, plus pagination metadata. See also: [`template.gitignore_get`](#templategitignore_get), [`repository.file_create`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_create).
+> List available .gitignore templates with order_by, sort, and offset or keyset pagination. Returns: each template's key and name, plus pagination metadata. See also: [`template.gitignore_get`](#templategitignore_get), [`repository.file_create`](/gitlab-mcp-server/es/reference/tools/repository/#repositoryfile_create).
 
 - **Meta-herramienta**: `gitlab_template`, acción `gitignore_list`
 - **Herramienta individual**: `gitlab_list_gitignore_templates`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -155,13 +155,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `template.license_get`
 
-> Get a single license template by key, optionally substituting project and fullname placeholders. Returns: the license's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and rendered content. See also: [`template.license_list`](#templatelicense_list), [`repository.file_create`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_create).
+> Get a single license template by key, optionally substituting project and fullname placeholders. Returns: the license's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and rendered content. See also: [`template.license_list`](#templatelicense_list), [`repository.file_create`](/gitlab-mcp-server/es/reference/tools/repository/#repositoryfile_create).
 
 - **Meta-herramienta**: `gitlab_template`, acción `license_get`
 - **Herramienta individual**: `gitlab_get_license_template`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo     | Requerido | Descripción                                 |
@@ -172,13 +172,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `template.license_list`
 
-> List available license templates with an optional popular filter, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and content, with pagination metadata. See also: [`template.license_get`](#templatelicense_get), [`repository.file_create`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_create).
+> List available license templates with an optional popular filter, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and content, with pagination metadata. See also: [`template.license_get`](#templatelicense_get), [`repository.file_create`](/gitlab-mcp-server/es/reference/tools/repository/#repositoryfile_create).
 
 - **Meta-herramienta**: `gitlab_template`, acción `license_list`
 - **Herramienta individual**: `gitlab_list_license_templates`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -193,13 +193,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `template.lint`
 
-> Validate inline .gitlab-ci.yml content within a project namespace. Returns: validity flag, errors, warnings, the merged YAML, and resolved includes. See also: [`template.lint_project`](#templatelint_project), [`pipeline.create`](/gitlab-mcp-server/reference/tools/pipeline/#pipelinecreate), [`ci_catalog.list`](/gitlab-mcp-server/reference/tools/ci-catalog/#ci_cataloglist).
+> Validate inline .gitlab-ci.yml content within a project namespace. Returns: validity flag, errors, warnings, the merged YAML, and resolved includes. See also: [`template.lint_project`](#templatelint_project), [`pipeline.create`](/gitlab-mcp-server/es/reference/tools/pipeline/#pipelinecreate), [`ci_catalog.list`](/gitlab-mcp-server/es/reference/tools/ci-catalog/#ci_cataloglist).
 
 - **Meta-herramienta**: `gitlab_template`, acción `lint`
 - **Herramienta individual**: `gitlab_ci_lint`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: CI Config: Validate en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
+- **Token de grano fino**: CI Config: Validate en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro      | Tipo             | Requerido | Descripción                                        |
@@ -212,13 +212,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `template.lint_project`
 
-> Validate a project's committed .gitlab-ci.yml at a branch or tag. Returns: validity flag, errors, warnings, the merged YAML, and resolved includes. See also: [`template.lint`](#templatelint), [`pipeline.create`](/gitlab-mcp-server/reference/tools/pipeline/#pipelinecreate), [`repository.file_get`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_get).
+> Validate a project's committed .gitlab-ci.yml at a branch or tag. Returns: validity flag, errors, warnings, the merged YAML, and resolved includes. See also: [`template.lint`](#templatelint), [`pipeline.create`](/gitlab-mcp-server/es/reference/tools/pipeline/#pipelinecreate), [`repository.file_get`](/gitlab-mcp-server/es/reference/tools/repository/#repositoryfile_get).
 
 - **Meta-herramienta**: `gitlab_template`, acción `lint_project`
 - **Herramienta individual**: `gitlab_ci_lint_project`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: CI Config: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
+- **Token de grano fino**: CI Config: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro      | Tipo             | Requerido | Descripción                                           |
@@ -232,13 +232,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `template.project_template_get`
 
-> Returns: one project template's full content by template_type and key. See also: [`template.project_template_list`](#templateproject_template_list), [`project.create`](/gitlab-mcp-server/reference/tools/project/#projectcreate).
+> Returns: one project template's full content by template_type and key. See also: [`template.project_template_list`](#templateproject_template_list), [`project.create`](/gitlab-mcp-server/es/reference/tools/project/#projectcreate).
 
 - **Meta-herramienta**: `gitlab_template`, acción `project_template_get`
 - **Herramienta individual**: `gitlab_get_project_template`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Template: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
+- **Token de grano fino**: Template: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo                                                                                             | Requerido | Descripción                                                                                                    |
@@ -249,13 +249,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `template.project_template_list`
 
-> List project templates of a given template_type with optional id/type filters, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, popularity, and source/HTML URLs. See also: [`template.project_template_get`](#templateproject_template_get), [`project.create`](/gitlab-mcp-server/reference/tools/project/#projectcreate).
+> List project templates of a given template_type with optional id/type filters, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, popularity, and source/HTML URLs. See also: [`template.project_template_get`](#templateproject_template_get), [`project.create`](/gitlab-mcp-server/es/reference/tools/project/#projectcreate).
 
 - **Meta-herramienta**: `gitlab_template`, acción `project_template_list`
 - **Herramienta individual**: `gitlab_list_project_templates`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Template: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
+- **Token de grano fino**: Template: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo                                                                                             | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |

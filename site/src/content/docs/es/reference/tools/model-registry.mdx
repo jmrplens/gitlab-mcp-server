@@ -37,13 +37,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `model_registry.download`
 
-> Download one artifact file from a project ML model registry package version by project, model version, path (empty for a file at the package root), and filename. Returns: the artifact bytes base64-encoded in content_base64, plus project, model version, path, filename, and decoded size_bytes. See also: [`package.list`](/gitlab-mcp-server/reference/tools/package/#packagelist), [`release.link_create`](/gitlab-mcp-server/reference/tools/release/#releaselink_create), [`repository.raw_blob`](/gitlab-mcp-server/reference/tools/repository/#repositoryraw_blob).
+> Download one artifact file from a project ML model registry package version by project, model version, path (empty for a file at the package root), and filename. Returns: the artifact bytes base64-encoded in content_base64, plus project, model version, path, filename, and decoded size_bytes. See also: [`package.list`](/gitlab-mcp-server/es/reference/tools/package/#packagelist), [`release.link_create`](/gitlab-mcp-server/es/reference/tools/release/#releaselink_create), [`repository.raw_blob`](/gitlab-mcp-server/es/reference/tools/repository/#repositoryraw_blob).
 
 - **Meta-herramienta**: `gitlab_model_registry`, acción `download`
 - **Herramienta individual**: `gitlab_download_ml_model_package`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Model Version: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#model_registry))
+- **Token de grano fino**: Model Version: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#model_registry))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro          | Tipo             | Requerido | Descripción                                                                                                                                   |

@@ -48,13 +48,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `search.code`
 
-> Search code blobs across global, group, or project scope. Returns: matching blobs with file path, basename, ref, starting line, the surrounding snippet, project ID, and pagination metadata. See also: [`search.projects`](#searchprojects), [`repository.file_get`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_get), [`repository.tree`](/gitlab-mcp-server/reference/tools/repository/#repositorytree).
+> Search code blobs across global, group, or project scope. Returns: matching blobs with file path, basename, ref, starting line, the surrounding snippet, project ID, and pagination metadata. See also: [`search.projects`](#searchprojects), [`repository.file_get`](/gitlab-mcp-server/es/reference/tools/repository/#repositoryfile_get), [`repository.tree`](/gitlab-mcp-server/es/reference/tools/repository/#repositorytree).
 
 - **Meta-herramienta**: `gitlab_search`, acción `code`
 - **Herramienta individual**: `gitlab_search_code`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
+- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -69,13 +69,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `search.commits`
 
-> Search commit messages across global, group, or project scope. Returns: matching commits with short and full SHA, title, message, author, and committed date plus pagination metadata. See also: [`search.code`](#searchcode), [`repository.commit_get`](/gitlab-mcp-server/reference/tools/repository/#repositorycommit_get), [`repository.file_history`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_history).
+> Search commit messages across global, group, or project scope. Returns: matching commits with short and full SHA, title, message, author, and committed date plus pagination metadata. See also: [`search.code`](#searchcode), [`repository.commit_get`](/gitlab-mcp-server/es/reference/tools/repository/#repositorycommit_get), [`repository.file_history`](/gitlab-mcp-server/es/reference/tools/repository/#repositoryfile_history).
 
 - **Meta-herramienta**: `gitlab_search`, acción `commits`
 - **Herramienta individual**: `gitlab_search_commits`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
+- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -89,13 +89,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `search.issues`
 
-> Search issues across global, group, or project scope. Returns: matching issues with title, state, labels, assignees, author, and web URL plus pagination metadata. See also: [`search.merge_requests`](#searchmerge_requests), [`issue.list`](/gitlab-mcp-server/reference/tools/issue/#issuelist), [`issue.get`](/gitlab-mcp-server/reference/tools/issue/#issueget).
+> Search issues across global, group, or project scope. Returns: matching issues with title, state, labels, assignees, author, and web URL plus pagination metadata. See also: [`search.merge_requests`](#searchmerge_requests), [`issue.list`](/gitlab-mcp-server/es/reference/tools/issue/#issuelist), [`issue.get`](/gitlab-mcp-server/es/reference/tools/issue/#issueget).
 
 - **Meta-herramienta**: `gitlab_search`, acción `issues`
 - **Herramienta individual**: `gitlab_search_issues`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
+- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -109,13 +109,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `search.merge_requests`
 
-> Search merge requests across global, group, or project scope. Returns: matching merge requests with title, state, author, source and target branches, and web URL plus pagination metadata. See also: [`search.issues`](#searchissues), [`merge_request.list`](/gitlab-mcp-server/reference/tools/merge-request/#merge_requestlist), [`merge_request.get`](/gitlab-mcp-server/reference/tools/merge-request/#merge_requestget).
+> Search merge requests across global, group, or project scope. Returns: matching merge requests with title, state, author, source and target branches, and web URL plus pagination metadata. See also: [`search.issues`](#searchissues), [`merge_request.list`](/gitlab-mcp-server/es/reference/tools/merge-request/#merge_requestlist), [`merge_request.get`](/gitlab-mcp-server/es/reference/tools/merge-request/#merge_requestget).
 
 - **Meta-herramienta**: `gitlab_search`, acción `merge_requests`
 - **Herramienta individual**: `gitlab_search_merge_requests`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
+- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -129,13 +129,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `search.milestones`
 
-> Search milestones across global, group, or project scope. Returns: matching milestones with title, description, state, start and due dates, and web URL plus pagination metadata. See also: [`project.milestone_list`](/gitlab-mcp-server/reference/tools/project/#projectmilestone_list), [`project.milestone_get`](/gitlab-mcp-server/reference/tools/project/#projectmilestone_get), [`search.issues`](#searchissues).
+> Search milestones across global, group, or project scope. Returns: matching milestones with title, description, state, start and due dates, and web URL plus pagination metadata. See also: [`project.milestone_list`](/gitlab-mcp-server/es/reference/tools/project/#projectmilestone_list), [`project.milestone_get`](/gitlab-mcp-server/es/reference/tools/project/#projectmilestone_get), [`search.issues`](#searchissues).
 
 - **Meta-herramienta**: `gitlab_search`, acción `milestones`
 - **Herramienta individual**: `gitlab_search_milestones`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
+- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -149,13 +149,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `search.notes`
 
-> Search note bodies within one project. Returns: matching notes with body, author, noteable type and ID, system flag, and timestamps plus pagination metadata. See also: [`search.issues`](#searchissues), [`search.merge_requests`](#searchmerge_requests), [`issue.note_list`](/gitlab-mcp-server/reference/tools/issue/#issuenote_list).
+> Search note bodies within one project. Returns: matching notes with body, author, noteable type and ID, system flag, and timestamps plus pagination metadata. See also: [`search.issues`](#searchissues), [`search.merge_requests`](#searchmerge_requests), [`issue.note_list`](/gitlab-mcp-server/es/reference/tools/issue/#issuenote_list).
 
 - **Meta-herramienta**: `gitlab_search`, acción `notes`
 - **Herramienta individual**: `gitlab_search_notes`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Global Search: Use en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
+- **Token de grano fino**: Global Search: Use en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -168,13 +168,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `search.projects`
 
-> Search projects globally or within a group by name, path, or description. Returns: matching projects with namespace, visibility, default branch, and web URL plus pagination metadata. See also: [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget), [`project.list`](/gitlab-mcp-server/reference/tools/project/#projectlist), [`search.code`](#searchcode).
+> Search projects globally or within a group by name, path, or description. Returns: matching projects with namespace, visibility, default branch, and web URL plus pagination metadata. See also: [`project.get`](/gitlab-mcp-server/es/reference/tools/project/#projectget), [`project.list`](/gitlab-mcp-server/es/reference/tools/project/#projectlist), [`search.code`](#searchcode).
 
 - **Meta-herramienta**: `gitlab_search`, acción `projects`
 - **Herramienta individual**: `gitlab_search_projects`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: una de: Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
+- **Token de grano fino**: una de: Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -193,7 +193,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_search_snippets`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
+- **Token de grano fino**: Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -205,13 +205,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `search.users`
 
-> Search users across global, group, or project scope. Returns: matching users with ID, username, name, state, avatar URL, and web URL plus pagination metadata. See also: [`user.get`](/gitlab-mcp-server/reference/tools/user/#userget), [`user.list`](/gitlab-mcp-server/reference/tools/user/#userlist), [`project.members`](/gitlab-mcp-server/reference/tools/project/#projectmembers).
+> Search users across global, group, or project scope. Returns: matching users with ID, username, name, state, avatar URL, and web URL plus pagination metadata. See also: [`user.get`](/gitlab-mcp-server/es/reference/tools/user/#userget), [`user.list`](/gitlab-mcp-server/es/reference/tools/user/#userlist), [`project.members`](/gitlab-mcp-server/es/reference/tools/project/#projectmembers).
 
 - **Meta-herramienta**: `gitlab_search`, acción `users`
 - **Herramienta individual**: `gitlab_search_users`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
+- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
@@ -225,13 +225,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `search.wiki`
 
-> Search wiki blobs across global, group, or project scope. Returns: matching wiki pages with slug, title, content snippet, and format plus pagination metadata. See also: [`search.code`](#searchcode), [`wiki.list`](/gitlab-mcp-server/reference/tools/wiki/#wikilist), [`wiki.get`](/gitlab-mcp-server/reference/tools/wiki/#wikiget).
+> Search wiki blobs across global, group, or project scope. Returns: matching wiki pages with slug, title, content snippet, and format plus pagination metadata. See also: [`search.code`](#searchcode), [`wiki.list`](/gitlab-mcp-server/es/reference/tools/wiki/#wikilist), [`wiki.get`](/gitlab-mcp-server/es/reference/tools/wiki/#wikiget).
 
 - **Meta-herramienta**: `gitlab_search`, acción `wiki`
 - **Herramienta individual**: `gitlab_search_wiki`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
+- **Token de grano fino**: una de: Global Search: Use en proyecto **o** Global Search: Use en grupo **o** Global Search: Use en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#search))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |

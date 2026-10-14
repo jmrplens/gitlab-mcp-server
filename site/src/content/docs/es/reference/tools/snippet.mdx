@@ -31,7 +31,7 @@ Acciones de solo lectura: 17 de 34, las que conserva un despliegue en modo de so
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)). Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas)). Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.
 
 | Acción                                                                   | Individual                              |
 | ------------------------------------------------------------------------ | --------------------------------------- |
@@ -78,7 +78,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_snippet_content`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Snippet: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Snippet: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo      | Requerido | Descripción |
@@ -93,7 +93,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_snippet_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Snippet: Create en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Snippet: Create en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro     | Tipo                                       | Requerido | Descripción                                                                |
@@ -115,7 +115,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_delete`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Snippet: Delete en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Snippet: Delete en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo      | Requerido | Descripción |
@@ -130,7 +130,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_add_snippet_discussion_note`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro       | Tipo             | Requerido | Descripción                                                                                           |
@@ -149,7 +149,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_create_snippet_discussion`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                                                 |
@@ -167,7 +167,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_delete_snippet_discussion_note`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro       | Tipo             | Requerido | Descripción                    |
@@ -185,7 +185,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_get_snippet_discussion`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo             | Requerido | Descripción                    |
@@ -202,7 +202,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_list_snippet_discussions`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -224,7 +224,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_update_snippet_discussion_note`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro       | Tipo             | Requerido | Descripción                                                                                           |
@@ -244,7 +244,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_emoji_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                               |
@@ -261,7 +261,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_emoji_delete`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -278,7 +278,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_emoji_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -295,7 +295,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_emoji_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -317,7 +317,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_note_emoji_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                               |
@@ -335,7 +335,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_note_emoji_delete`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -353,7 +353,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_note_emoji_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -371,7 +371,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_note_emoji_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -394,7 +394,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_explore`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Snippet: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Snippet: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -414,7 +414,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_file_content`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Snippet: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Snippet: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo      | Requerido | Descripción                          |
@@ -431,7 +431,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Snippet: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Snippet: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo      | Requerido | Descripción |
@@ -446,7 +446,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Snippet: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Snippet: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -466,7 +466,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_list_all`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Snippet: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Snippet: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                      | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -489,7 +489,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_note_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                                                                                             |
@@ -507,7 +507,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_note_delete`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -524,7 +524,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_note_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -541,7 +541,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_note_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                                  | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -563,7 +563,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_note_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Work Item: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                            |
@@ -581,7 +581,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_project_snippet_content`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Snippet: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Snippet: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción        |
@@ -597,7 +597,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_project_snippet_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Snippet: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Snippet: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro     | Tipo                                       | Requerido | Descripción                                                                |
@@ -620,7 +620,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_project_snippet_delete`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Snippet: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Snippet: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción        |
@@ -636,7 +636,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_project_snippet_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Snippet: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Snippet: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción        |
@@ -652,7 +652,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_project_snippet_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Snippet: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Snippet: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -673,7 +673,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_project_snippet_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Snippet: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Snippet: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro     | Tipo                                       | Requerido | Descripción                                                                              |
@@ -695,7 +695,7 @@ Además necesita al menos uno de estos: `file_name` y `content`; `files`.
 - **Herramienta individual**: `gitlab_snippet_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Snippet: Update en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
+- **Token de grano fino**: Snippet: Update en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#snippet))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro     | Tipo                                       | Requerido | Descripción                                                                              |

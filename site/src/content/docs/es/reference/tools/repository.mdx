@@ -34,7 +34,7 @@ Acciones de solo lectura: 27 de 41, las que conserva un despliegue en modo de so
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas)).
 
 | Acción                                                                                 | Individual                              |
 | -------------------------------------------------------------------------------------- | --------------------------------------- |
@@ -82,13 +82,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `repository.archive`
 
-> Build the download URL for a repository archive. Returns: the project, ref/SHA, format, the subdirectory when one was asked for, and the archive download URL (binary content is not returned). See also: [`repository.tree`](#repositorytree), [`tag.list`](/gitlab-mcp-server/reference/tools/tag/#taglist).
+> Build the download URL for a repository archive. Returns: the project, ref/SHA, format, the subdirectory when one was asked for, and the archive download URL (binary content is not returned). See also: [`repository.tree`](#repositorytree), [`tag.list`](/gitlab-mcp-server/es/reference/tools/tag/#taglist).
 
 - **Meta-herramienta**: `gitlab_repository`, acción `archive`
 - **Herramienta individual**: `gitlab_repository_archive`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`); la acción no envía ninguna petición a GitLab
-- **Token de grano fino**: ningún permiso ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: ningún permiso ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                      |
@@ -106,7 +106,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_repository_blob`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                 |
@@ -116,13 +116,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `repository.changelog_add`
 
-> Add changelog data to a changelog file by committing the generated entries. Returns: a success confirmation with the version. See also: [`repository.changelog_generate`](#repositorychangelog_generate), [`release.create`](/gitlab-mcp-server/reference/tools/release/#releasecreate).
+> Add changelog data to a changelog file by committing the generated entries. Returns: a success confirmation with the version. See also: [`repository.changelog_generate`](#repositorychangelog_generate), [`release.create`](/gitlab-mcp-server/es/reference/tools/release/#releasecreate).
 
 - **Meta-herramienta**: `gitlab_repository`, acción `changelog_add`
 - **Herramienta individual**: `gitlab_repository_changelog_add`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Repository: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                                                                                                                                                     |
@@ -140,13 +140,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `repository.changelog_generate`
 
-> Generate changelog notes for a version range without committing. Returns: the rendered changelog notes (read-only preview). See also: [`repository.changelog_add`](#repositorychangelog_add), [`release.create`](/gitlab-mcp-server/reference/tools/release/#releasecreate).
+> Generate changelog notes for a version range without committing. Returns: the rendered changelog notes (read-only preview). See also: [`repository.changelog_add`](#repositorychangelog_add), [`release.create`](/gitlab-mcp-server/es/reference/tools/release/#releasecreate).
 
 - **Meta-herramienta**: `gitlab_repository`, acción `changelog_generate`
 - **Herramienta individual**: `gitlab_repository_changelog_generate`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                                                                                                                                                     |
@@ -161,13 +161,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `repository.commit_cherry_pick`
 
-> Cherry-pick a commit onto a target branch, optionally as a dry run. Returns: the newly created commit (SHA, title, author, dates, web URL) or a conflict error. See also: [`repository.commit_get`](#repositorycommit_get), [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist), [`repository.commit_revert`](#repositorycommit_revert).
+> Cherry-pick a commit onto a target branch, optionally as a dry run. Returns: the newly created commit (SHA, title, author, dates, web URL) or a conflict error. See also: [`repository.commit_get`](#repositorycommit_get), [`branch.list`](/gitlab-mcp-server/es/reference/tools/branch/#branchlist), [`repository.commit_revert`](#repositorycommit_revert).
 
 - **Meta-herramienta**: `gitlab_repository`, acción `commit_cherry_pick`
 - **Herramienta individual**: `gitlab_commit_cherry_pick`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Commit: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                  |
@@ -186,7 +186,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_commit_comment_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Commit: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo                    | Requerido | Descripción                                   |
@@ -206,7 +206,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_commit_comments`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -222,13 +222,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `repository.commit_create`
 
-> Create a commit with multiple file actions (create/update/delete/move/chmod) on a branch in one call. Returns: the created commit with SHA, title, author/committer, dates, parent IDs, stats, trailers, and web URL. See also: [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist), [`repository.tree`](#repositorytree), [`repository.commit_get`](#repositorycommit_get).
+> Create a commit with multiple file actions (create/update/delete/move/chmod) on a branch in one call. Returns: the created commit with SHA, title, author/committer, dates, parent IDs, stats, trailers, and web URL. See also: [`branch.list`](/gitlab-mcp-server/es/reference/tools/branch/#branchlist), [`repository.tree`](#repositorytree), [`repository.commit_get`](#repositorycommit_get).
 
 - **Meta-herramienta**: `gitlab_repository`, acción `commit_create`
 - **Herramienta individual**: `gitlab_commit_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Commit: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro        | Tipo             | Requerido | Descripción                                                                                   |
@@ -253,7 +253,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_commit_diff`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -276,7 +276,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_add_commit_discussion_note`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Commit: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro       | Tipo             | Requerido | Descripción                                                                                           |
@@ -295,7 +295,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_create_commit_discussion`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Commit: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                                                 |
@@ -314,7 +314,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_delete_commit_discussion_note`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Commit: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro       | Tipo             | Requerido | Descripción                    |
@@ -332,7 +332,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_get_commit_discussion`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo             | Requerido | Descripción                    |
@@ -349,7 +349,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_list_commit_discussions`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -371,7 +371,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_update_commit_discussion_note`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Commit: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro       | Tipo             | Requerido | Descripción                                                                                           |
@@ -391,7 +391,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_commit_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                    |
@@ -402,13 +402,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `repository.commit_list`
 
-> List repository commits for a project, optionally filtered by ref_name, since/until, path, or author. Returns: commit summaries (SHA, title, author, dates, parent IDs, stats, trailers, last pipeline) with pagination metadata. See also: [`repository.commit_get`](#repositorycommit_get), [`repository.commit_diff`](#repositorycommit_diff), [`repository.commit_statuses`](#repositorycommit_statuses), [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist).
+> List repository commits for a project, optionally filtered by ref_name, since/until, path, or author. Returns: commit summaries (SHA, title, author, dates, parent IDs, stats, trailers, last pipeline) with pagination metadata. See also: [`repository.commit_get`](#repositorycommit_get), [`repository.commit_diff`](#repositorycommit_diff), [`repository.commit_statuses`](#repositorycommit_statuses), [`branch.list`](/gitlab-mcp-server/es/reference/tools/branch/#branchlist).
 
 - **Meta-herramienta**: `gitlab_repository`, acción `commit_list`
 - **Herramienta individual**: `gitlab_commit_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro      | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -432,13 +432,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `repository.commit_merge_requests`
 
-> List merge requests associated with a commit. Returns: compact MR rows with IID, project, title, state, draft flag, source/target branches, merge commit SHA, labels, author, web URL, and created, updated, merged and closed times, with pagination metadata. See also: [`repository.commit_get`](#repositorycommit_get), [`merge_request.get`](/gitlab-mcp-server/reference/tools/merge-request/#merge_requestget), [`mr_review.changes_get`](/gitlab-mcp-server/reference/tools/mr-review/#mr_reviewchanges_get).
+> List merge requests associated with a commit. Returns: compact MR rows with IID, project, title, state, draft flag, source/target branches, merge commit SHA, labels, author, web URL, and created, updated, merged and closed times, with pagination metadata. See also: [`repository.commit_get`](#repositorycommit_get), [`merge_request.get`](/gitlab-mcp-server/es/reference/tools/merge-request/#merge_requestget), [`mr_review.changes_get`](/gitlab-mcp-server/es/reference/tools/mr-review/#mr_reviewchanges_get).
 
 - **Meta-herramienta**: `gitlab_repository`, acción `commit_merge_requests`
 - **Herramienta individual**: `gitlab_commit_merge_requests`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                                                           |
@@ -450,13 +450,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `repository.commit_refs`
 
-> List branches and tags that reference (contain) a commit, optionally filtered by ref type. Returns: ref entries with type and name plus pagination metadata. See also: [`repository.commit_get`](#repositorycommit_get), [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist), [`tag.list`](/gitlab-mcp-server/reference/tools/tag/#taglist).
+> List branches and tags that reference (contain) a commit, optionally filtered by ref type. Returns: ref entries with type and name plus pagination metadata. See also: [`repository.commit_get`](#repositorycommit_get), [`branch.list`](/gitlab-mcp-server/es/reference/tools/branch/#branchlist), [`tag.list`](/gitlab-mcp-server/es/reference/tools/tag/#taglist).
 
 - **Meta-herramienta**: `gitlab_repository`, acción `commit_refs`
 - **Herramienta individual**: `gitlab_commit_refs`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                              | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -473,13 +473,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `repository.commit_revert`
 
-> Revert a commit on a target branch, creating a new commit that undoes it. Returns: the newly created revert commit (SHA, title, author, dates, web URL) or a conflict error. See also: [`repository.commit_get`](#repositorycommit_get), [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist), [`repository.commit_cherry_pick`](#repositorycommit_cherry_pick).
+> Revert a commit on a target branch, creating a new commit that undoes it. Returns: the newly created revert commit (SHA, title, author, dates, web URL) or a conflict error. See also: [`repository.commit_get`](#repositorycommit_get), [`branch.list`](/gitlab-mcp-server/es/reference/tools/branch/#branchlist), [`repository.commit_cherry_pick`](#repositorycommit_cherry_pick).
 
 - **Meta-herramienta**: `gitlab_repository`, acción `commit_revert`
 - **Herramienta individual**: `gitlab_commit_revert`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Commit: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -496,7 +496,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_commit_signature`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -506,13 +506,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `repository.commit_status_set`
 
-> Set or update the pipeline status of a commit (used by external CI/reporting integrations). Returns: the resulting status with state, name, ref, coverage, pipeline ID, timestamps, and author user object. See also: [`repository.commit_statuses`](#repositorycommit_statuses), [`repository.commit_get`](#repositorycommit_get), [`pipeline.list`](/gitlab-mcp-server/reference/tools/pipeline/#pipelinelist).
+> Set or update the pipeline status of a commit (used by external CI/reporting integrations). Returns: the resulting status with state, name, ref, coverage, pipeline ID, timestamps, and author user object. See also: [`repository.commit_statuses`](#repositorycommit_statuses), [`repository.commit_get`](#repositorycommit_get), [`pipeline.list`](/gitlab-mcp-server/es/reference/tools/pipeline/#pipelinelist).
 
 - **Meta-herramienta**: `gitlab_repository`, acción `commit_status_set`
 - **Herramienta individual**: `gitlab_commit_status_set`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Commit Status: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit Status: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro     | Tipo                                                                        | Requerido | Descripción                                               |
@@ -530,13 +530,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `repository.commit_statuses`
 
-> List the statuses of a commit (CI jobs and external integrations), filtered by ref, stage, name, or pipeline. Returns: status entries with state, name, ref, coverage, pipeline ID, timestamps, and author user object, plus pagination metadata. See also: [`repository.commit_status_set`](#repositorycommit_status_set), [`repository.commit_get`](#repositorycommit_get), [`pipeline.list`](/gitlab-mcp-server/reference/tools/pipeline/#pipelinelist).
+> List the statuses of a commit (CI jobs and external integrations), filtered by ref, stage, name, or pipeline. Returns: status entries with state, name, ref, coverage, pipeline ID, timestamps, and author user object, plus pagination metadata. See also: [`repository.commit_status_set`](#repositorycommit_status_set), [`repository.commit_get`](#repositorycommit_get), [`pipeline.list`](/gitlab-mcp-server/es/reference/tools/pipeline/#pipelinelist).
 
 - **Meta-herramienta**: `gitlab_repository`, acción `commit_statuses`
 - **Herramienta individual**: `gitlab_commit_statuses`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -557,13 +557,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `repository.compare`
 
-> Compare two refs (branches, tags, or commits) in a project. Use from_project_id for cross-project comparison. Returns: commits, diffs, and comparison metadata. See also: [`repository.tree`](#repositorytree), [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist).
+> Compare two refs (branches, tags, or commits) in a project. Use from_project_id for cross-project comparison. Returns: commits, diffs, and comparison metadata. See also: [`repository.tree`](#repositorytree), [`branch.list`](/gitlab-mcp-server/es/reference/tools/branch/#branchlist).
 
 - **Meta-herramienta**: `gitlab_repository`, acción `compare`
 - **Herramienta individual**: `gitlab_repository_compare`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro         | Tipo             | Requerido | Descripción                                                          |
@@ -583,7 +583,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_repository_contributors`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                                  | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -604,7 +604,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_file_blame`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                                                            |
@@ -623,7 +623,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_file_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Repository: Create en proyecto. Algunas llamadas también necesitan: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Create en proyecto. Algunas llamadas también necesitan: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro          | Tipo                        | Requerido | Descripción                                                                |
@@ -647,7 +647,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_file_delete`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Repository: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro        | Tipo             | Requerido | Descripción                                                    |
@@ -669,7 +669,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_file_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                            |
@@ -680,13 +680,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `repository.file_history`
 
-> List repository commits for a project, optionally filtered by ref_name, since/until, path, or author. Returns: commit summaries (SHA, title, author, dates, parent IDs, stats, trailers, last pipeline) with pagination metadata. See also: [`repository.commit_get`](#repositorycommit_get), [`repository.commit_diff`](#repositorycommit_diff), [`repository.commit_statuses`](#repositorycommit_statuses), [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist).
+> List repository commits for a project, optionally filtered by ref_name, since/until, path, or author. Returns: commit summaries (SHA, title, author, dates, parent IDs, stats, trailers, last pipeline) with pagination metadata. See also: [`repository.commit_get`](#repositorycommit_get), [`repository.commit_diff`](#repositorycommit_diff), [`repository.commit_statuses`](#repositorycommit_statuses), [`branch.list`](/gitlab-mcp-server/es/reference/tools/branch/#branchlist).
 
 - **Meta-herramienta**: `gitlab_repository`, acción `file_history`
 - **Herramienta individual**: `gitlab_commit_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Commit: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro      | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -716,7 +716,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_file_metadata`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                            |
@@ -733,7 +733,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_file_raw`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                            |
@@ -751,7 +751,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_file_raw_metadata`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                            |
@@ -769,7 +769,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_file_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Repository: Update en proyecto. Algunas llamadas también necesitan: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Update en proyecto. Algunas llamadas también necesitan: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro          | Tipo                        | Requerido | Descripción                                                    |
@@ -794,7 +794,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_list_repository_submodules`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository: Read en proyecto. Algunas llamadas también necesitan: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Read en proyecto. Algunas llamadas también necesitan: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                  |
@@ -804,13 +804,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `repository.markdown_render`
 
-> Render arbitrary Markdown text to HTML using the GitLab Markdown API. Optionally apply GitLab Flavored Markdown and resolve references within a project's context. Returns: the rendered HTML string. See also: [`repository.file_get`](#repositoryfile_get), [`wiki.get`](/gitlab-mcp-server/reference/tools/wiki/#wikiget).
+> Render arbitrary Markdown text to HTML using the GitLab Markdown API. Optionally apply GitLab Flavored Markdown and resolve references within a project's context. Returns: the rendered HTML string. See also: [`repository.file_get`](#repositoryfile_get), [`wiki.get`](/gitlab-mcp-server/es/reference/tools/wiki/#wikiget).
 
 - **Meta-herramienta**: `gitlab_repository`, acción `markdown_render`
 - **Herramienta individual**: `gitlab_render_markdown`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Markdown: Render en proyecto o usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Markdown: Render en proyecto o usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                                                |
@@ -821,13 +821,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `repository.merge_base`
 
-> Find the common ancestor (merge base) of two or more refs. Returns: the merge-base commit with metadata and web URL. See also: [`repository.compare`](#repositorycompare), [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist).
+> Find the common ancestor (merge base) of two or more refs. Returns: the merge-base commit with metadata and web URL. See also: [`repository.compare`](#repositorycompare), [`branch.list`](/gitlab-mcp-server/es/reference/tools/branch/#branchlist).
 
 - **Meta-herramienta**: `gitlab_repository`, acción `merge_base`
 - **Herramienta individual**: `gitlab_repository_merge_base`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                              |
@@ -843,7 +843,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_repository_raw_blob`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                 |
@@ -859,7 +859,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_read_repository_submodule_file`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Project: Read en proyecto; Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Project: Read en proyecto; Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro        | Tipo             | Requerido | Descripción                                                             |
@@ -871,13 +871,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `repository.tree`
 
-> List repository tree items. Returns: paths, object IDs, entry types (blob/tree/commit), modes, each entry's last commit when with_last_commit is set, and pagination metadata. See also: [`repository.blob`](#repositoryblob), [`repository.raw_blob`](#repositoryraw_blob), [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist).
+> List repository tree items. Returns: paths, object IDs, entry types (blob/tree/commit), modes, each entry's last commit when with_last_commit is set, and pagination metadata. See also: [`repository.blob`](#repositoryblob), [`repository.raw_blob`](#repositoryraw_blob), [`branch.list`](/gitlab-mcp-server/es/reference/tools/branch/#branchlist).
 
 - **Meta-herramienta**: `gitlab_repository`, acción `tree`
 - **Herramienta individual**: `gitlab_repository_tree`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro          | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -902,7 +902,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_update_repository_submodule`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Repository Submodule: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
+- **Token de grano fino**: Repository Submodule: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#repository))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro        | Tipo             | Requerido | Descripción                                                                            |

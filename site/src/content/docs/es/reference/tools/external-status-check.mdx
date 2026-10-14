@@ -35,7 +35,7 @@ Acciones de solo lectura: 3 de 8, las que conserva un despliegue en modo de solo
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas)).
 
 | Acción                                                                                         | Individual                                                 |
 | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
@@ -56,7 +56,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_create_project_external_status_check`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: External Status Check Service: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#external_status_check))
+- **Token de grano fino**: External Status Check Service: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#external_status_check))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro              | Tipo             | Requerido | Descripción                                     |
@@ -75,7 +75,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_delete_project_external_status_check`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: External Status Check Service: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#external_status_check))
+- **Token de grano fino**: External Status Check Service: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#external_status_check))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                        |
@@ -91,7 +91,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_list_project_external_status_checks`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: External Status Check Service: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#external_status_check))
+- **Token de grano fino**: External Status Check Service: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#external_status_check))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -112,7 +112,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_list_project_status_checks`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: External Status Check Service: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#external_status_check))
+- **Token de grano fino**: External Status Check Service: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#external_status_check))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -133,7 +133,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_list_project_mr_external_status_checks`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: External Status Check: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#external_status_check))
+- **Token de grano fino**: External Status Check: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#external_status_check))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -155,7 +155,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_retry_failed_external_status_check_for_project_mr`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: External Status Check: Retry en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#external_status_check))
+- **Token de grano fino**: External Status Check: Retry en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#external_status_check))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                       |
@@ -172,7 +172,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_set_project_mr_external_status_check_status`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: External Status Check: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#external_status_check))
+- **Token de grano fino**: External Status Check: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#external_status_check))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                  | Tipo             | Requerido | Descripción                                 |
@@ -191,7 +191,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_update_project_external_status_check`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: External Status Check Service: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#external_status_check))
+- **Token de grano fino**: External Status Check Service: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#external_status_check))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro              | Tipo             | Requerido | Descripción                                 |

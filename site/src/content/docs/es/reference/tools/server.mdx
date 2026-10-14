@@ -46,20 +46,20 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: ninguna, la superficie individual no sirve esta acción
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Metadata: Read en instancia. Algunas llamadas también necesitan: User: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#server))
+- **Token de grano fino**: Metadata: Read en instancia. Algunas llamadas también necesitan: User: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#server))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.
 
 ### `server.status`
 
-> Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the server and GitLab health diagnostics, with the GitLab version, revision, edition and agent server, and the authenticated user. See also: [`admin.metadata_get`](/gitlab-mcp-server/reference/tools/admin/#adminmetadata_get), [`user.me`](/gitlab-mcp-server/reference/tools/user/#userme).
+> Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the server and GitLab health diagnostics, with the GitLab version, revision, edition and agent server, and the authenticated user. See also: [`admin.metadata_get`](/gitlab-mcp-server/es/reference/tools/admin/#adminmetadata_get), [`user.me`](/gitlab-mcp-server/es/reference/tools/user/#userme).
 
 - **Meta-herramienta**: `gitlab_server`, acción `status`
 - **Herramienta individual**: `gitlab_server_status`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Metadata: Read en instancia. Algunas llamadas también necesitan: User: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#server))
+- **Token de grano fino**: Metadata: Read en instancia. Algunas llamadas también necesitan: User: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#server))
 - **Comportamiento**: solo lectura, idempotente
 
 Sin parámetros.

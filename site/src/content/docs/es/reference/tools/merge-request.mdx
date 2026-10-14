@@ -11,7 +11,7 @@ tableOfContents:
 
 La vida de un merge request: crearlo, leerlo, listarlo (en un proyecto, en un grupo o en todas partes), actualizarlo, fusionarlo, cancelar una fusión automática, rebasarlo y borrarlo; aprobarlo y retirar la aprobación, leer su configuración de aprobación y restablecer sus aprobaciones; sus commits, commits de contexto, pipelines (listarlos o lanzar uno), participantes, revisores, issues relacionados y los issues que cierra; suscripciones, tareas pendientes, estimaciones y tiempo dedicado; los emoji de reacción en él y en sus notas; y los eventos de etiqueta, hito y estado de su historial.
 
-Las reglas de aprobación, el estado de aprobación, los ajustes de aprobación de proyecto y de grupo y las dependencias entre merge requests se sirven a partir de Premium. Los comentarios, las discusiones, los diffs y las notas en borrador están en [Revisión de merge requests](/gitlab-mcp-server/reference/tools/mr-review/).
+Las reglas de aprobación, el estado de aprobación, los ajustes de aprobación de proyecto y de grupo y las dependencias entre merge requests se sirven a partir de Premium. Los comentarios, las discusiones, los diffs y las notas en borrador están en [Revisión de merge requests](/gitlab-mcp-server/es/reference/tools/mr-review/).
 
 ## Preguntas de ejemplo
 
@@ -38,7 +38,7 @@ Acciones de solo lectura: 28 de 58, las que conserva un despliegue en modo de so
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)). Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas)). Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.
 
 | Acción                                                                                             | Nivel   | Individual                                   |
 | -------------------------------------------------------------------------------------------------- | ------- | -------------------------------------------- |
@@ -109,7 +109,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_approval_config`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                    |
@@ -125,7 +125,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_approval_reset`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Approve en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Approve en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                    |
@@ -141,7 +141,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_approval_rule_create`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request Approval Rule: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request Approval Rule: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                  | Tipo             | Requerido | Descripción                                    |
@@ -162,7 +162,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_approval_rule_delete`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request Approval Rule: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request Approval Rule: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                    |
@@ -179,7 +179,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_approval_rule_update`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request Approval Rule: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request Approval Rule: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro            | Tipo             | Requerido | Descripción                    |
@@ -200,7 +200,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_approval_rules`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Merge Request Approval Rule: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request Approval Rule: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                                                                           |
@@ -218,7 +218,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_get_group_mr_approval_settings`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Approval Setting: Read en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Approval Setting: Read en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo             | Requerido | Descripción                  |
@@ -233,7 +233,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_update_group_mr_approval_settings`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Approval Setting: Update en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Approval Setting: Update en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                                            | Tipo             | Requerido | Descripción                                          |
@@ -253,7 +253,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_get_project_mr_approval_settings`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Approval Setting: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Approval Setting: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -268,7 +268,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_update_project_mr_approval_settings`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Approval Setting: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Approval Setting: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                                            | Tipo             | Requerido | Descripción                                                       |
@@ -289,7 +289,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_approval_state`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                    |
@@ -305,7 +305,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_approve`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Approve en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Approve en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                                                         |
@@ -322,7 +322,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_cancel_auto_merge`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Merge en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Merge en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                        | Tipo             | Requerido | Descripción                                                                                         |
@@ -335,13 +335,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `merge_request.commits`
 
-> List the commits that make up a merge request. Returns: commit SHAs, titles, authors, and timestamps with pagination metadata. See also: [`merge_request.get`](#merge_requestget), [`repository.commit_get`](/gitlab-mcp-server/reference/tools/repository/#repositorycommit_get).
+> List the commits that make up a merge request. Returns: commit SHAs, titles, authors, and timestamps with pagination metadata. See also: [`merge_request.get`](#merge_requestget), [`repository.commit_get`](/gitlab-mcp-server/es/reference/tools/repository/#repositorycommit_get).
 
 - **Meta-herramienta**: `gitlab_merge_request`, acción `commits`
 - **Herramienta individual**: `gitlab_mr_commits`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -357,13 +357,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `merge_request.context_commits_create`
 
-> Attach existing repository commit SHAs to a merge request as context commits. Returns: each pinned commit's full and short SHA, title and message, author and committer with their dates, parents, trailers and web URL. See also: [`merge_request.context_commits_list`](#merge_requestcontext_commits_list), [`merge_request.context_commits_delete`](#merge_requestcontext_commits_delete), [`repository.commit_get`](/gitlab-mcp-server/reference/tools/repository/#repositorycommit_get).
+> Attach existing repository commit SHAs to a merge request as context commits. Returns: each pinned commit's full and short SHA, title and message, author and committer with their dates, parents, trailers and web URL. See also: [`merge_request.context_commits_list`](#merge_requestcontext_commits_list), [`merge_request.context_commits_delete`](#merge_requestcontext_commits_delete), [`repository.commit_get`](/gitlab-mcp-server/es/reference/tools/repository/#repositorycommit_get).
 
 - **Meta-herramienta**: `gitlab_merge_request`, acción `context_commits_create`
 - **Herramienta individual**: `gitlab_create_mr_context_commits`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                           |
@@ -380,7 +380,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_delete_mr_context_commits`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                |
@@ -397,7 +397,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_list_mr_context_commits`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                                                                           |
@@ -415,7 +415,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                          | Tipo             | Requerido | Descripción                                                                                                           |
@@ -438,13 +438,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `merge_request.create_pipeline`
 
-> Trigger a new CI/CD pipeline for a merge request. Returns: the created pipeline with id, status, ref, sha, and web URL. See also: [`merge_request.pipelines`](#merge_requestpipelines), [`pipeline.get`](/gitlab-mcp-server/reference/tools/pipeline/#pipelineget).
+> Trigger a new CI/CD pipeline for a merge request. Returns: the created pipeline with id, status, ref, sha, and web URL. See also: [`merge_request.pipelines`](#merge_requestpipelines), [`pipeline.get`](/gitlab-mcp-server/es/reference/tools/pipeline/#pipelineget).
 
 - **Meta-herramienta**: `gitlab_merge_request`, acción `create_pipeline`
 - **Herramienta individual**: `gitlab_mr_create_pipeline`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                |
@@ -460,7 +460,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_create_todo`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Todo: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Todo: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                |
@@ -476,7 +476,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_delete`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                          |
@@ -492,7 +492,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_dependencies_list`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                                                                           |
@@ -510,7 +510,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_dependency_create`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                   | Tipo             | Requerido | Descripción                                                |
@@ -527,7 +527,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_dependency_delete`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro                   | Tipo             | Requerido | Descripción                                                                                                  |
@@ -544,7 +544,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_emoji_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Create en proyecto. Algunas llamadas también necesitan: User: Read en usuario; Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Work Item: Create en proyecto. Algunas llamadas también necesitan: User: Read en usuario; Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                |
@@ -561,7 +561,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_emoji_delete`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Work Item: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                |
@@ -578,7 +578,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_emoji_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                |
@@ -595,7 +595,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_emoji_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -617,7 +617,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_note_emoji_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                |
@@ -635,7 +635,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_note_emoji_delete`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Work Item: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                |
@@ -653,7 +653,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_note_emoji_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                |
@@ -665,13 +665,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `merge_request.emoji_mr_note_list`
 
-> List all emoji reactions on a merge request note (comment). Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: [`merge_request.emoji_mr_note_get`](#merge_requestemoji_mr_note_get), [`merge_request.emoji_mr_note_create`](#merge_requestemoji_mr_note_create), [`mr_review.note_get`](/gitlab-mcp-server/reference/tools/mr-review/#mr_reviewnote_get).
+> List all emoji reactions on a merge request note (comment). Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: [`merge_request.emoji_mr_note_get`](#merge_requestemoji_mr_note_get), [`merge_request.emoji_mr_note_create`](#merge_requestemoji_mr_note_create), [`mr_review.note_get`](/gitlab-mcp-server/es/reference/tools/mr-review/#mr_reviewnote_get).
 
 - **Meta-herramienta**: `gitlab_merge_request`, acción `emoji_mr_note_list`
 - **Herramienta individual**: `gitlab_mr_note_emoji_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -694,7 +694,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_label_event_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                    |
@@ -711,7 +711,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_label_event_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -733,7 +733,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_milestone_event_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro            | Tipo             | Requerido | Descripción                    |
@@ -750,7 +750,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_milestone_event_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -772,7 +772,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_state_event_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                    |
@@ -789,7 +789,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_state_event_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -811,7 +811,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                        | Tipo             | Requerido | Descripción                                                                                         |
@@ -824,13 +824,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `merge_request.issues_closed`
 
-> List issues that will be closed when the merge request is merged. Returns: issues with state, labels, assignees, and web URL plus pagination metadata. See also: [`merge_request.related_issues`](#merge_requestrelated_issues), [`issue.get`](/gitlab-mcp-server/reference/tools/issue/#issueget).
+> List issues that will be closed when the merge request is merged. Returns: issues with state, labels, assignees, and web URL plus pagination metadata. See also: [`merge_request.related_issues`](#merge_requestrelated_issues), [`issue.get`](/gitlab-mcp-server/es/reference/tools/issue/#issueget).
 
 - **Meta-herramienta**: `gitlab_merge_request`, acción `issues_closed`
 - **Herramienta individual**: `gitlab_mr_issues_closed`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -852,7 +852,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                   | Tipo                                                                  | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -899,13 +899,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `merge_request.list_global`
 
-> List merge requests across projects: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every merge request the caller can see with scope=all. Returns: the matching MRs with project context, state, branches, and pagination metadata. See also: [`merge_request.list`](#merge_requestlist), [`merge_request.list_group`](#merge_requestlist_group), [`search.merge_requests`](/gitlab-mcp-server/reference/tools/search/#searchmerge_requests).
+> List merge requests across projects: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every merge request the caller can see with scope=all. Returns: the matching MRs with project context, state, branches, and pagination metadata. See also: [`merge_request.list`](#merge_requestlist), [`merge_request.list_group`](#merge_requestlist_group), [`search.merge_requests`](/gitlab-mcp-server/es/reference/tools/search/#searchmerge_requests).
 
 - **Meta-herramienta**: `gitlab_merge_request`, acción `list_global`
 - **Herramienta individual**: `gitlab_mr_list_global`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Merge Request: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                   | Tipo                                                                  | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -948,13 +948,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `merge_request.list_group`
 
-> List merge requests across a group and its projects. Returns: visible MRs with project context, state, branches, and pagination metadata. See also: [`merge_request.list`](#merge_requestlist), [`merge_request.list_global`](#merge_requestlist_global), [`group.get`](/gitlab-mcp-server/reference/tools/group/#groupget).
+> List merge requests across a group and its projects. Returns: visible MRs with project context, state, branches, and pagination metadata. See also: [`merge_request.list`](#merge_requestlist), [`merge_request.list_global`](#merge_requestlist_global), [`group.get`](/gitlab-mcp-server/es/reference/tools/group/#groupget).
 
 - **Meta-herramienta**: `gitlab_merge_request`, acción `list_group`
 - **Herramienta individual**: `gitlab_mr_list_group`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Merge Request: Read en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Read en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                   | Tipo                                                                  | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -1004,7 +1004,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_merge`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Merge en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Merge en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro                      | Tipo             | Requerido | Descripción                                                                                                                                                                                                                                                                           |
@@ -1027,7 +1027,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_participants`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                                                                           |
@@ -1039,13 +1039,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `merge_request.pipelines`
 
-> List the CI/CD pipelines attached to a merge request. Returns: pipelines with id, status, ref, sha, and web URL, with pagination metadata. See also: [`merge_request.create_pipeline`](#merge_requestcreate_pipeline), [`merge_request.merge`](#merge_requestmerge), [`pipeline.get`](/gitlab-mcp-server/reference/tools/pipeline/#pipelineget).
+> List the CI/CD pipelines attached to a merge request. Returns: pipelines with id, status, ref, sha, and web URL, with pagination metadata. See also: [`merge_request.create_pipeline`](#merge_requestcreate_pipeline), [`merge_request.merge`](#merge_requestmerge), [`pipeline.get`](/gitlab-mcp-server/es/reference/tools/pipeline/#pipelineget).
 
 - **Meta-herramienta**: `gitlab_merge_request`, acción `pipelines`
 - **Herramienta individual**: `gitlab_mr_pipelines`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                                                                           |
@@ -1063,7 +1063,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_rebase`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                          |
@@ -1074,13 +1074,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `merge_request.related_issues`
 
-> List issues related to a merge request. Returns: issues with state, labels, assignees, and web URL plus pagination metadata. See also: [`merge_request.issues_closed`](#merge_requestissues_closed), [`issue.get`](/gitlab-mcp-server/reference/tools/issue/#issueget).
+> List issues related to a merge request. Returns: issues with state, labels, assignees, and web URL plus pagination metadata. See also: [`merge_request.issues_closed`](#merge_requestissues_closed), [`issue.get`](/gitlab-mcp-server/es/reference/tools/issue/#issueget).
 
 - **Meta-herramienta**: `gitlab_merge_request`, acción `related_issues`
 - **Herramienta individual**: `gitlab_mr_related_issues`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                             |
@@ -1102,7 +1102,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_reviewers`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                                                                           |
@@ -1120,7 +1120,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_add_spent_time`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Work Item: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                |
@@ -1138,7 +1138,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_reset_spent_time`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Work Item: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                        | Tipo             | Requerido | Descripción                                                                                         |
@@ -1157,7 +1157,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_subscribe`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Subscribe en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Subscribe en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                        | Tipo             | Requerido | Descripción                                                                                         |
@@ -1176,7 +1176,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_reset_time_estimate`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Work Item: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                        | Tipo             | Requerido | Descripción                                                                                         |
@@ -1195,7 +1195,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_set_time_estimate`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Work Item: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Work Item: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                |
@@ -1212,7 +1212,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_time_stats`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                        | Tipo             | Requerido | Descripción                                                                                         |
@@ -1231,7 +1231,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_unapprove`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Approve en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Approve en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                                                         |
@@ -1248,7 +1248,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_unsubscribe`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Subscribe en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Subscribe en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                        | Tipo             | Requerido | Descripción                                                                                         |
@@ -1267,7 +1267,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_mr_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
+- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro              | Tipo                         | Requerido | Descripción                                                                                                                       |
