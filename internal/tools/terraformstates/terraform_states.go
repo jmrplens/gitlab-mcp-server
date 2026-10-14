@@ -123,15 +123,22 @@ query($fullPath: ID!, $first: Int, $after: String) {
 // not show the caller, which is client-go's not-found too.
 type listStatesResponse struct {
 	Data struct {
-		Project *struct {
-			TerraformStates struct {
-				Count    int                                `json:"count"`
-				Nodes    []stateNode                        `json:"nodes"`
-				PageInfo toolutil.GraphQLRawForwardPageInfo `json:"pageInfo"`
-			} `json:"terraformStates"`
-		} `json:"project"`
+		Project *statesProject `json:"project"`
 	} `json:"data"`
 	Errors []toolutil.GraphQLError `json:"errors"`
+}
+
+// statesProject is the project [listStatesQuery] reads the states of.
+type statesProject struct {
+	TerraformStates statesPage `json:"terraformStates"`
+}
+
+// statesPage is one page of a project's states as [listStatesQuery] selects
+// it, with how many states the project has in all.
+type statesPage struct {
+	Count    int                                `json:"count"`
+	Nodes    []stateNode                        `json:"nodes"`
+	PageInfo toolutil.GraphQLRawForwardPageInfo `json:"pageInfo"`
 }
 
 // stateNode is one state as [listStatesQuery] selects it. It mirrors client-go's
