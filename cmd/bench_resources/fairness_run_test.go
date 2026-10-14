@@ -649,11 +649,30 @@ func (c *timedConn) arrivals() []time.Time {
 //
 // A population whose credentials fired together would offer a burst per period
 // rather than a rate, and one whose ticks bunched up would offer the bound
-// something other than what the plan says it offers. Each request is held to
-// the instant it was due, never to the request before it: the driver keeps an
-// absolute schedule, so one late tick is followed by an early-looking gap, and
-// a gap check read the one Windows tick a loaded hosted runner delivered 92 ms
-// late (2026-10-13) as two errors.
+// something other than what the plan says it offers.
+//
+// The drive runs on the fake clock of a synctest bubble, where time moves only
+// once every goroutine of the drive is waiting, so a request reaches its
+// connection at the instant it was due and each one is held to that instant
+// exactly. On the wall clock the check needed a bound on lateness, and no
+// bound served both ends: it had to stay under half a period for a schedule
+// running half a period late to fail (every start shifted by half a period, or
+// a population firing as one burst at its second credential's start), and a
+// hosted runner that left the process unscheduled for longer than the bound
+// failed a right schedule, as the Windows runner did with one tick 90 ms late
+// against an 80 ms bound (issue 1356). Held to the instant, it also fails a
+// driver that sends every request late by less than such a bound, which the
+// bound let through.
+//
+// A drive that stops on a channel, a timer or a WaitGroup is a deadlock the
+// bubble reports at once, so this test keeps no limit of its own on how long
+// the phase may take. One that stops on a mutex is not what synctest counts as
+// durably blocked, and hangs until the test binary's timeout, which names this
+// test.
+//
+// T.Run may not be called inside a bubble, so the bubble only records when
+// each request arrived, measured from the window's start, and the subtests
+// judge those offsets once it has ended.
 func TestDrive_SpreadsEachPopulationAcrossOnePeriod(t *testing.T) {
 	bound, err := boundByID("tools-call-rps")
 	if err != nil {
@@ -670,43 +689,39 @@ func TestDrive_SpreadsEachPopulationAcrossOnePeriod(t *testing.T) {
 	if err != nil {
 		t.Fatalf("callFor: %v", err)
 	}
-	timed := []*timedConn{{}, {}, {}, {}}
-	conns := make([]*clientConn, 0, len(timed))
-	for i, conn := range timed {
-		conns = append(conns, &clientConn{rpc: conn, label: "client " + strconv.Itoa(i)})
-	}
-	// begin is taken inside the goroutine finishWithin starts, right before
-	// drive, so a goroutine scheduled late does not shift the whole schedule
-	// against the due times below. finishWithin returns only after that
-	// goroutine has ended, so reading begin afterwards is not a race.
-	var begin time.Time
-	finishWithin(t, 10*time.Second, "a 1.25 s phase", func() {
-		begin = time.Now()
+	// arrived holds, per credential, how far into the window each of its
+	// requests reached its connection on the bubble's clock.
+	var arrived [][]time.Duration
+	synctest.Test(t, func(t *testing.T) {
+		timed := []*timedConn{{}, {}, {}, {}}
+		conns := make([]*clientConn, 0, len(timed))
+		for i, conn := range timed {
+			conns = append(conns, &clientConn{rpc: conn, label: "client " + strconv.Itoa(i)})
+		}
+		begin := time.Now()
 		drive(t.Context(), driveInput{plan: plan, conns: conns, call: call}, begin, plan.ticks, newFairTally(call, plan.Bound.Refusals))
+		for _, conn := range timed {
+			var offsets []time.Duration
+			for _, at := range conn.arrivals() {
+				offsets = append(offsets, at.Sub(begin))
+			}
+			arrived = append(arrived, offsets)
+		}
 	})
 
-	// A request is due at begin plus its credential's offset plus one period
-	// per tick, and the driver never sends one before it is due. It may arrive
-	// up to lateness after that: under half a period, so a credential that
-	// fired with its neighbor, a burst, or a period off by half of one still
-	// fails, and well over the 92 ms a hosted runner was seen to add.
-	const period, half, lateness = 400 * time.Millisecond, 200 * time.Millisecond, 150 * time.Millisecond
+	// A credential's requests are due at its start plus one period per tick,
+	// three of them, which is what a 1.25 s phase at 2.5 a second holds.
+	const period, half = 400 * time.Millisecond, 200 * time.Millisecond
 	// Credentials 0 and 1 are the quiet population, 2 and 3 the noisy one.
-	offsets := []time.Duration{0, half, 0, half}
-	for i, conn := range timed {
-		got := conn.arrivals()
+	starts := []time.Duration{0, half, 0, half}
+	if len(arrived) != len(starts) {
+		t.Fatalf("recorded the requests of %d credentials, want the %d the plan holds", len(arrived), len(starts))
+	}
+	for i, got := range arrived {
 		t.Run("credential "+strconv.Itoa(i), func(t *testing.T) {
-			if len(got) != 3 {
-				t.Fatalf("made %d requests, want the 3 a 1.25 s phase at 2.5 a second holds", len(got))
-			}
-			for tick, at := range got {
-				due := begin.Add(offsets[i] + time.Duration(tick)*period)
-				switch late := at.Sub(due); {
-				case late < 0:
-					t.Errorf("request %d arrived %s before it was due, want it never early", tick, -late)
-				case late > lateness:
-					t.Errorf("request %d arrived %s after it was due, want at most %s", tick, late, lateness)
-				}
+			want := []time.Duration{starts[i], starts[i] + period, starts[i] + 2*period}
+			if !slices.Equal(got, want) {
+				t.Errorf("requests arrived %v into the window, want %v", got, want)
 			}
 		})
 	}
