@@ -1,6 +1,6 @@
 # GitLab MCP Server
 
-**Connect your AI assistant to GitLab so it can review merge requests, triage pipelines, manage issues, and draft releases, in plain language.** One self-contained binary (or this container), [~868 GitLab tools on Free/CE, up to ~1094 on GitLab.com Ultimate](https://jmrp.io/docs/gitlab-mcp-server/tools/overview/) over the full REST + GraphQL API, working with Claude, Cursor, VS Code, and any MCP client.
+**Connect your AI assistant to GitLab so it can review merge requests, triage pipelines, manage issues, and draft releases, in plain language.** One self-contained binary (or this container), [~868 GitLab tools on Free/CE, up to ~1094 on GitLab.com Ultimate](https://docs.jmrp.io/gitlab-mcp-server/tools/overview/) over the full REST + GraphQL API, working with Claude, Cursor, VS Code, and any MCP client.
 
 You talk to your AI assistant; it does the GitLab work. No project IDs, API endpoints, or JSON to remember.
 
@@ -54,7 +54,7 @@ A public instance runs at **`https://mcp.jmrp.io/gitlab`** — nothing to instal
 
 ## Documentation
 
-- [Documentation](https://jmrp.io/docs/gitlab-mcp-server)
+- [Documentation](https://docs.jmrp.io/gitlab-mcp-server)
 - [Source repository](https://github.com/jmrplens/gitlab-mcp-server)
 - [Releases and signed binaries](https://github.com/jmrplens/gitlab-mcp-server/releases)
 

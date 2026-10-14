@@ -127,7 +127,7 @@ dotnet tool install -g gitlab-mcp-server
 dnx gitlab-mcp-server
 ```
 
-Documentation: https://jmrp.io/docs/gitlab-mcp-server/
+Documentation: https://docs.jmrp.io/gitlab-mcp-server/
 """
 
 
@@ -153,7 +153,7 @@ def nuspec(pkg_id, version, description, package_types, readme=True, icon=False)
         # provide a better experience for older clients" (the 400 names
         # https://aka.ms/invalidNuGetLicenseUrl). The first push of 2.7.5 hit it.
         "    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>\n"
-        "    <projectUrl>https://jmrp.io/docs/gitlab-mcp-server/</projectUrl>\n"
+        "    <projectUrl>https://docs.jmrp.io/gitlab-mcp-server/</projectUrl>\n"
         '    <repository type="git" url="https://github.com/jmrplens/gitlab-mcp-server" />\n'
         "{optional}"
         "    <tags>mcp mcp-server model-context-protocol gitlab ai dotnet-tool</tags>\n"

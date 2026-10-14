@@ -7,7 +7,7 @@
 // table row and on every single-line list value, toolutil.EscapeMdHeading on
 // the one value a formatter puts in a heading, and toolutil.MdTitleLink on
 // both halves of a link. The security page names all three
-// (https://jmrp.io/docs/gitlab-mcp-server/operations/security/#content-written-by-other-people),
+// (https://docs.jmrp.io/gitlab-mcp-server/operations/security/#content-written-by-other-people),
 // and most of the packages that register a formatter call them. Until this audit
 // existed the rule was enforced by habit and by review, which is the kind of
 // rule that survives until someone writes a domain in one sitting: a whole

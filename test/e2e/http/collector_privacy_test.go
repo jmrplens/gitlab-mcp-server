@@ -379,7 +379,7 @@ func TestCollectorPrivacy_NothingPrivateReachesTheCollector(t *testing.T) {
 // carried the URL-encoded project path, the query string and GitLab's own
 // response text — under every identity policy, including the default that
 // records nobody. The telemetry page
-// (https://jmrp.io/docs/gitlab-mcp-server/operations/telemetry/#what-is-never-recorded)
+// (https://docs.jmrp.io/gitlab-mcp-server/operations/telemetry/#what-is-never-recorded)
 // promises the opposite, twice, and names a test as proof; this is that test.
 //
 // Two failure shapes, because they leak through different types: an API error

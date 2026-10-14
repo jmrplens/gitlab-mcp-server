@@ -16,7 +16,7 @@
 | `docs/development/adr`                              | Architectural Decision Records (catalog-first is ADR-0004)                          |
 | `site/src/content/docs/`                            | User documentation: one page per slug, each with its Spanish twin under `es/`       |
 
-That site, published at <https://jmrp.io/docs/gitlab-mcp-server/>, is the only
+That site, published at <https://docs.jmrp.io/gitlab-mcp-server/>, is the only
 home of the user documentation; `docs/` keeps `docs/development`, for
 contributors (ADR-0025).
 

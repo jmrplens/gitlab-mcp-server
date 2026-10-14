@@ -7123,7 +7123,7 @@ stdio: `initialize -> protocolVersion='2025-11-25'`, and the next `tools/call`
 answered `resultType: 'input_required'`.
 
 **Documented in**: the site's
-[elicitation page](https://jmrp.io/docs/gitlab-mcp-server/capabilities/elicitation/#which-protocol-version-decides),
+[elicitation page](https://docs.jmrp.io/gitlab-mcp-server/capabilities/elicitation/#which-protocol-version-decides),
 so the behaviour is stated where someone writing a client would look.
 
 ### Three methods are served on a legacy session before the initialize handshake
@@ -12834,7 +12834,7 @@ then traced in the 19.4.1-ee source.
   authority this server builds from a grant deliberately keeps no namespace
   ([ADR-0024](adr/adr-0024-fine-grained-token-authority-per-action.md)), so a
   guard here needs that decision amended first. The
-  [fine-grained tokens page](https://jmrp.io/docs/gitlab-mcp-server/operations/fine-grained-tokens/)
+  [fine-grained tokens page](https://docs.jmrp.io/gitlab-mcp-server/operations/fine-grained-tokens/)
   warns that a grant does not bound where these actions write. A fix upstream
   makes the warning history.
 

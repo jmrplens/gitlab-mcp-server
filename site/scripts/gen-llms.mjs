@@ -40,10 +40,11 @@ const repoRoot = join(here, "..", "..");
 const publicDir = join(here, "..", "public");
 const contentDir = join(here, "..", "src", "content", "docs");
 
-// The authorship domain, not the Pages origin: every documentation link in the
-// project resolves through jmrp.io/docs/gitlab-mcp-server, which is a
-// path-preserving redirect. Only the site's own canonicals stay on Pages.
-const DOCS_BASE = "https://jmrp.io/docs/gitlab-mcp-server/";
+// The address the site is served and canonicalized at: GitHub Pages serves it
+// under the custom domain docs.jmrp.io, the same origin as `site` in
+// astro.config.mjs, so every documentation link in the project and every
+// canonical name one URL.
+const DOCS_BASE = "https://docs.jmrp.io/gitlab-mcp-server/";
 const REPO_BASE = "https://github.com/jmrplens/gitlab-mcp-server/";
 
 // The repository's own machine-readable files, republished here under their own

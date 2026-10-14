@@ -284,17 +284,17 @@ func TestRun_WritesLLMSTxt(t *testing.T) {
 		"- GITLAB_MCP_TIER: Licensing tier (free/ce, premium, ultimate); unset detects it from the instance license, " +
 			"then from the plans of the namespaces the token administers, then on GitLab.com from the plans of the top-level groups " +
 			"the token is a member of, falling back to free.",
-		"## Documentation\n\n- [Documentation site index](https://jmrp.io/docs/gitlab-mcp-server/llms.txt): ",
-		"- [Spanish documentation index](https://jmrp.io/docs/gitlab-mcp-server/es/llms.txt): ",
-		"- [Getting started](https://jmrp.io/docs/gitlab-mcp-server/getting-started/): Installation and first-run guide\n",
-		"- [MCP clients](https://jmrp.io/docs/gitlab-mcp-server/install/clients/): Config-file path and entry for each MCP client",
-		"are on [the MCP clients page](https://jmrp.io/docs/gitlab-mcp-server/install/clients/).\n\n",
-		"- [All tools](https://jmrp.io/docs/gitlab-mcp-server/reference/tools/): Per-domain tool reference generated from the action catalog",
+		"## Documentation\n\n- [Documentation site index](https://docs.jmrp.io/gitlab-mcp-server/llms.txt): ",
+		"- [Spanish documentation index](https://docs.jmrp.io/gitlab-mcp-server/es/llms.txt): ",
+		"- [Getting started](https://docs.jmrp.io/gitlab-mcp-server/getting-started/): Installation and first-run guide\n",
+		"- [MCP clients](https://docs.jmrp.io/gitlab-mcp-server/install/clients/): Config-file path and entry for each MCP client",
+		"are on [the MCP clients page](https://docs.jmrp.io/gitlab-mcp-server/install/clients/).\n\n",
+		"- [All tools](https://docs.jmrp.io/gitlab-mcp-server/reference/tools/): Per-domain tool reference generated from the action catalog",
 		"- [Privacy policy](https://github.com/jmrplens/gitlab-mcp-server/blob/main/PRIVACY.md): ",
 		// The companion sizes are measured, not hard-coded: llms.txt is rendered
 		// after them precisely so it can quote what they actually came out as.
-		"## Optional\n\n- [Medium LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-medium.txt): 3 KB, ~1k tokens. Every tool and action",
-		"- [Full LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full.txt): 3 KB, ~1k tokens. The three splits above concatenated.",
+		"## Optional\n\n- [Medium LLM reference](https://docs.jmrp.io/gitlab-mcp-server/llms-medium.txt): 3 KB, ~1k tokens. Every tool and action",
+		"- [Full LLM reference](https://docs.jmrp.io/gitlab-mcp-server/llms-full.txt): 3 KB, ~1k tokens. The three splits above concatenated.",
 	})
 }
 

@@ -197,7 +197,7 @@ func TestNewProtectedResourceHandler_ResourceDocumentationIsConfigurable(t *test
 func TestDefaultResourceDocumentation_IsTheSitesOAuthApplicationPage(t *testing.T) {
 	t.Parallel()
 
-	const site = "https://jmrp.io/docs/gitlab-mcp-server/"
+	const site = "https://docs.jmrp.io/gitlab-mcp-server/"
 	slug, onSite := strings.CutPrefix(DefaultResourceDocumentation, site)
 	if !onSite {
 		t.Fatalf("DefaultResourceDocumentation = %q, want a page of %s", DefaultResourceDocumentation, site)

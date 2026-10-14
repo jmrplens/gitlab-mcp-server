@@ -704,7 +704,7 @@ func bothLegs(t *testing.T, identity *Redactor, write func(*slog.Logger)) (expor
 // URL-encoded project path, the query string and GitLab's own response text —
 // under every identity policy, including the default one that records nobody.
 // The telemetry page
-// (https://jmrp.io/docs/gitlab-mcp-server/operations/telemetry/#what-is-never-recorded)
+// (https://docs.jmrp.io/gitlab-mcp-server/operations/telemetry/#what-is-never-recorded)
 // states the opposite twice: "GitLab response bodies and error messages ...
 // never the text" and "Full URLs of GitLab calls".
 //

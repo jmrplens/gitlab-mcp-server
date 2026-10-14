@@ -49,7 +49,7 @@ without naming anyone. Full identity is available for an organization auditing
 its own users on its own collector.
 
 The full detail, including what each mode exports, is in
-[the telemetry guide](https://jmrp.io/docs/gitlab-mcp-server/operations/telemetry/).
+[the telemetry guide](https://docs.jmrp.io/gitlab-mcp-server/operations/telemetry/).
 
 ## Data flows
 

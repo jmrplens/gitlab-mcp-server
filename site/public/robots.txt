@@ -1,11 +1,11 @@
 # gitlab-mcp-server documentation — robots.txt
 # All crawlers are welcome, including AI / generative-engine crawlers.
 # Structured context for LLMs:
-#   https://jmrplens.github.io/gitlab-mcp-server/llms.txt         documentation index (English)
-#   https://jmrplens.github.io/gitlab-mcp-server/es/llms.txt      documentation index (Spanish)
-#   https://jmrplens.github.io/gitlab-mcp-server/llms-server.txt  the MCP server itself: install, config, catalog summary
-#   https://jmrplens.github.io/gitlab-mcp-server/llms-medium.txt  every tool and action, no per-action schemas
-#   https://jmrplens.github.io/gitlab-mcp-server/llms-full.txt    every per-action schema; retrieval only, not a context load
+#   https://docs.jmrp.io/gitlab-mcp-server/llms.txt         documentation index (English)
+#   https://docs.jmrp.io/gitlab-mcp-server/es/llms.txt      documentation index (Spanish)
+#   https://docs.jmrp.io/gitlab-mcp-server/llms-server.txt  the MCP server itself: install, config, catalog summary
+#   https://docs.jmrp.io/gitlab-mcp-server/llms-medium.txt  every tool and action, no per-action schemas
+#   https://docs.jmrp.io/gitlab-mcp-server/llms-full.txt    every per-action schema; retrieval only, not a context load
 
 User-agent: *
 Allow: /
@@ -55,4 +55,4 @@ Allow: /
 User-agent: Amazonbot
 Allow: /
 
-Sitemap: https://jmrplens.github.io/gitlab-mcp-server/sitemap-index.xml
+Sitemap: https://docs.jmrp.io/gitlab-mcp-server/sitemap-index.xml

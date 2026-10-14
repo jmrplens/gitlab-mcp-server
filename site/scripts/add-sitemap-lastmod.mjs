@@ -26,7 +26,7 @@ const repoRoot = join(siteRoot, "..");
 const distDir = join(siteRoot, "dist");
 const docsDir = join(siteRoot, "src", "content", "docs");
 
-const SITE = "https://jmrplens.github.io";
+const SITE = "https://docs.jmrp.io";
 const BASE = "/gitlab-mcp-server";
 const buildDate = new Date().toISOString().slice(0, 10);
 

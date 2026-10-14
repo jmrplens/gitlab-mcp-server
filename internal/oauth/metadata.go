@@ -28,7 +28,7 @@ import (
 // metadata every OAuth client fetches, and some of them show it on the consent
 // screen a person is being asked to trust. The test beside it holds the URL to
 // a page of the site.
-const DefaultResourceDocumentation = "https://jmrp.io/docs/gitlab-mcp-server/operations/oauth-app/"
+const DefaultResourceDocumentation = "https://docs.jmrp.io/gitlab-mcp-server/operations/oauth-app/"
 
 // ResourceLinks carries the RFC 9728 URL fields an operator can point at their
 // own pages.

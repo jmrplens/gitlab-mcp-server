@@ -176,7 +176,7 @@ function writePlatformPackage(plat, version, binariesDir, outDir, checksums) {
     license: "MIT",
     funding: "https://github.com/sponsors/jmrplens",
     author: "José M. Requena Plens",
-    homepage: "https://jmrp.io/docs/gitlab-mcp-server",
+    homepage: "https://docs.jmrp.io/gitlab-mcp-server",
     repository: mainRepository,
     os: [plat.os],
     cpu: [plat.cpu],

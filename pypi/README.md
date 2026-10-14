@@ -55,11 +55,11 @@ gh attestation verify "$(uvx --from jmrplens-gitlab-mcp-server python -c 'import
   -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 ```
 
-`--signer-workflow` holds the attestation to the release workflow, since `-R` alone accepts one any workflow of the repository minted; add `--source-ref refs/tags/v<version>` to hold it to the release you installed. On Windows, `(Get-Command gitlab-mcp-server).Source` gives the path for the first form. For a pinned `uvx`, name the same version in `--from` (`jmrplens-gitlab-mcp-server==<version>`). The wheels also carry PyPI's own publish attestation (PEP 740), shown on each file's page on PyPI. The release signature and the other channels are covered in [release integrity](https://jmrp.io/docs/gitlab-mcp-server/operations/security/#verifying-release-integrity).
+`--signer-workflow` holds the attestation to the release workflow, since `-R` alone accepts one any workflow of the repository minted; add `--source-ref refs/tags/v<version>` to hold it to the release you installed. On Windows, `(Get-Command gitlab-mcp-server).Source` gives the path for the first form. For a pinned `uvx`, name the same version in `--from` (`jmrplens-gitlab-mcp-server==<version>`). The wheels also carry PyPI's own publish attestation (PEP 740), shown on each file's page on PyPI. The release signature and the other channels are covered in [release integrity](https://docs.jmrp.io/gitlab-mcp-server/operations/security/#verifying-release-integrity).
 
 ## Configuration
 
-Everything is configured through environment variables: `GITLAB_MCP_TOOL_SURFACE` (dynamic, meta or individual tool catalogs), `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_TIER`, rate limiting, telemetry and more. See the [configuration guide](https://jmrp.io/docs/gitlab-mcp-server/configuration/) for the full reference.
+Everything is configured through environment variables: `GITLAB_MCP_TOOL_SURFACE` (dynamic, meta or individual tool catalogs), `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_TIER`, rate limiting, telemetry and more. See the [configuration guide](https://docs.jmrp.io/gitlab-mcp-server/configuration/) for the full reference.
 
 ## Platform support
 
@@ -67,7 +67,7 @@ Wheels are published for Linux (glibc), macOS and Windows on amd64 and arm64. On
 
 ## Links
 
-- [Documentation](https://jmrp.io/docs/gitlab-mcp-server/)
+- [Documentation](https://docs.jmrp.io/gitlab-mcp-server/)
 - [Source repository](https://github.com/jmrplens/gitlab-mcp-server)
 - [Changelog and releases](https://github.com/jmrplens/gitlab-mcp-server/releases)
 - [Security policy](https://github.com/jmrplens/gitlab-mcp-server/blob/main/SECURITY.md)

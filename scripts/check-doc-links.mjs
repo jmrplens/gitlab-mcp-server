@@ -98,15 +98,18 @@ const starlightDialect = {
 
 const siteContentRoot = path.join(repoRoot, "site", "src", "content") + path.sep;
 
-// The documentation site's own address, in both spellings: the GitHub Pages
-// origin it is served from and the path-preserving redirect every page here
-// links to. A link to it is a link into site/src/content/docs, which this
-// checker can read, so it is held to its page and its anchor like a relative
-// link rather than skipped as somebody else's server. Issue 1163 made the site
-// the one home of the user documentation; without this, every link the README
-// and the files that used to point into docs/ carry would go unchecked.
+// The documentation site's own address, docs.jmrp.io/gitlab-mcp-server, the
+// custom domain GitHub Pages serves it at and the address every page here
+// links to, and the two older spellings that still redirect to it, path
+// preserved: the github.io origin it was served from before and the jmrp.io
+// vanity redirect. A link to any of them is a link into
+// site/src/content/docs, which this checker can read, so it is held to its
+// page and its anchor like a relative link rather than skipped as somebody
+// else's server. Issue 1163 made the site the one home of the user
+// documentation; without this, every link the README and the files that used
+// to point into docs/ carry would go unchecked.
 const siteAddress =
-	/^https?:\/\/(?:jmrp\.io\/docs|jmrplens\.github\.io)\/gitlab-mcp-server(?=[/#?]|$)/i;
+	/^https?:\/\/(?:docs\.jmrp\.io|jmrp\.io\/docs|jmrplens\.github\.io)\/gitlab-mcp-server(?=[/#?]|$)/i;
 const siteDocsRoot = path.join(repoRoot, "site", "src", "content", "docs");
 const sitePublicRoot = path.join(repoRoot, "site", "public");
 

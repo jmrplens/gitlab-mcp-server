@@ -1386,8 +1386,8 @@ func TestFormatProtectedListMarkdown_Empty(t *testing.T) {
 //
 // The next step is pinned as the whole line toolutil.HintAction writes,
 // because the output format and error handling pages of the documentation
-// site (https://jmrp.io/docs/gitlab-mcp-server/reference/output-format/#not-found
-// and https://jmrp.io/docs/gitlab-mcp-server/operations/error-handling/#not-found-answers) quote
+// site (https://docs.jmrp.io/gitlab-mcp-server/reference/output-format/#not-found
+// and https://docs.jmrp.io/gitlab-mcp-server/operations/error-handling/#not-found-answers) quote
 // this formatter as their worked example of one.
 func TestMarkdownRegistry_BranchNotFound(t *testing.T) {
 	result := toolutil.MarkdownForResult(branchNotFoundOutput{Identifier: `"missing" in project 42`})

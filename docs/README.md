@@ -1,8 +1,8 @@
 # Documentation
 
 The documentation for people who install, configure and use gitlab-mcp-server is
-the documentation site, in [English](https://jmrp.io/docs/gitlab-mcp-server/) and
-[Spanish](https://jmrp.io/docs/gitlab-mcp-server/es/). Its source is
+the documentation site, in [English](https://docs.jmrp.io/gitlab-mcp-server/) and
+[Spanish](https://docs.jmrp.io/gitlab-mcp-server/es/). Its source is
 [`site/src/content/docs`](../site/src/content/docs), one page per slug with its
 Spanish twin under `es/`, and nothing in this directory repeats it.
 

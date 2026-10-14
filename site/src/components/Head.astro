@@ -25,7 +25,7 @@ const EXISTING_ROUTES = new Set(
 // Derive origin + base path from Astro config so a domain/base rename needs no
 // code change here. PERSON_ID mirrors `authorId` in astro.config.mjs (an
 // external identity URL that can't be derived from the site origin).
-const SITE = import.meta.env.SITE ?? "https://jmrplens.github.io";
+const SITE = import.meta.env.SITE ?? "https://docs.jmrp.io";
 const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
 const PERSON_ID = "https://jmrp.io/#person";
 const WEBSITE_ID = `${SITE}${BASE}/#website`;

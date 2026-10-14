@@ -376,7 +376,7 @@ Next steps:
      Nothing names the token on the command line, so it stays out of the process
      arguments and out of the client's own configuration file.
   2. Or configure another MCP client by hand:
-       https://jmrp.io/docs/gitlab-mcp-server/configuration/
+       https://docs.jmrp.io/gitlab-mcp-server/configuration/
 
 Running $BIN_NAME with no token prints what it needs and waits, so you can
 check the install without configuring anything.

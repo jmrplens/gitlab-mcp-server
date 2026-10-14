@@ -107,12 +107,11 @@ const (
 	projectRepository = "https://github.com/jmrplens/gitlab-mcp-server"
 
 	// projectWebsite is the Implementation.WebsiteURL advertised at handshake.
-	// It is the vanity redirect to the documentation site rather than the
-	// repository: a client rendering serverInfo shows this to an end user, for
-	// whom the guides are more useful than a source tree. It matches the
-	// homepage/documentation fields in mcpb/manifest.json and
-	// .plugin/plugin.json.
-	projectWebsite = "https://jmrp.io/docs/gitlab-mcp-server"
+	// It is the documentation site rather than the repository: a client
+	// rendering serverInfo shows this to an end user, for whom the guides are
+	// more useful than a source tree. It matches the homepage/documentation
+	// fields in mcpb/manifest.json and .plugin/plugin.json.
+	projectWebsite = "https://docs.jmrp.io/gitlab-mcp-server"
 
 	// projectDescription is the server's self-description at handshake, shown
 	// wherever a client or registry renders the MCP Implementation. It is kept
@@ -614,7 +613,7 @@ FLAGS
   Off by default, and it goes to a collector you configure through the
   standard OTEL_EXPORTER_OTLP_* environment; nothing is ever sent anywhere
   else. OTEL_SDK_DISABLED=true vetoes it regardless of the flag. See
-  https://jmrp.io/docs/gitlab-mcp-server/operations/telemetry/.
+  https://docs.jmrp.io/gitlab-mcp-server/operations/telemetry/.
 
 ENVIRONMENT VARIABLES (stdio mode)
   Settings this project defines are read as GITLAB_MCP_<NAME> and under no
@@ -744,7 +743,7 @@ JSON CONFIGURATION EXAMPLES
     }
   }
 
-  Every other client: https://jmrp.io/docs/gitlab-mcp-server/install/clients/
+  Every other client: https://docs.jmrp.io/gitlab-mcp-server/install/clients/
 
   HTTP mode (single GitLab instance):
   gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --http-addr=:8080

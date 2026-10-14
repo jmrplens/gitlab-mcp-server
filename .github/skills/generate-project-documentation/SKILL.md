@@ -21,7 +21,7 @@ The documentation must be:
 
 This skill is designed for the `Documentation Writer` agent or any agent tasked with producing project documentation. All output must be in English per the project language policy, with one exception the site requires: every user page also has a Spanish twin, written in the same change.
 
-The documentation has one home per audience (ADR-0025). **User documentation** lives only in the Astro Starlight site, `site/src/content/docs/` in English and `site/src/content/docs/es/` in Spanish, published at `https://jmrp.io/docs/gitlab-mcp-server/`; the `update-starlight-docs` skill carries its page map, its generated pages and its checks. **Contributor documentation** lives in `docs/development/`. The README is a short landing page that links the site, and `docs/` holds nothing beside `docs/development/` but a README pointing at the site.
+The documentation has one home per audience (ADR-0025). **User documentation** lives only in the Astro Starlight site, `site/src/content/docs/` in English and `site/src/content/docs/es/` in Spanish, published at `https://docs.jmrp.io/gitlab-mcp-server/`; the `update-starlight-docs` skill carries its page map, its generated pages and its checks. **Contributor documentation** lives in `docs/development/`. The README is a short landing page that links the site, and `docs/` holds nothing beside `docs/development/` but a README pointing at the site.
 
 ## Analysis Phase
 
@@ -102,8 +102,8 @@ The user documentation needs no index file of its own: the site's sidebar is the
 | [Architecture Decision Records](adr/README.md) | The recorded architectural decisions (ADRs) |
 
 **Looking for something else?**
-[Architecture](https://jmrp.io/docs/gitlab-mcp-server/architecture/) for design rationale ·
-[Tool reference](https://jmrp.io/docs/gitlab-mcp-server/reference/tools/) for every action ·
+[Architecture](https://docs.jmrp.io/gitlab-mcp-server/architecture/) for design rationale ·
+[Tool reference](https://docs.jmrp.io/gitlab-mcp-server/reference/tools/) for every action ·
 [../../CONTRIBUTING.md](../../CONTRIBUTING.md) for contribution mechanics.
 ```
 
@@ -247,7 +247,7 @@ A contributor page, so it lives under `docs/development/` and its links are rela
 |------|-------|
 | Add a new MCP tool | [Development Guide](development.md#adding-a-new-tool) |
 | Run tests | [Testing Guide](testing/README.md) |
-| Build for production | [Installation](https://jmrp.io/docs/gitlab-mcp-server/install/overview/) and [Remote Deployment](https://jmrp.io/docs/gitlab-mcp-server/operations/remote-deployment/) |
+| Build for production | [Installation](https://docs.jmrp.io/gitlab-mcp-server/install/overview/) and [Remote Deployment](https://docs.jmrp.io/gitlab-mcp-server/operations/remote-deployment/) |
 
 ## Getting Help
 
@@ -260,7 +260,7 @@ A contributor page, so it lives under `docs/development/` and its links are rela
 2. **Complete coverage**: Every exported type, function, and constant must appear in reference docs
 3. **Working examples**: All code examples must be syntactically valid Go
 4. **Mermaid diagrams**: Include at least one diagram per architecture/package document
-5. **Cross-references**: Link between repository files with relative paths; link a site page from outside the site as `https://jmrp.io/docs/gitlab-mcp-server/<slug>/`, and from another site page as `/gitlab-mcp-server/<slug>/` (`/gitlab-mcp-server/es/<slug>/` in a Spanish page). Read the target heading before writing an anchor
+5. **Cross-references**: Link between repository files with relative paths; link a site page from outside the site as `https://docs.jmrp.io/gitlab-mcp-server/<slug>/`, and from another site page as `/gitlab-mcp-server/<slug>/` (`/gitlab-mcp-server/es/<slug>/` in a Spanish page). Read the target heading before writing an anchor
 6. **No placeholders**: Final output must have no TBD, TODO, or placeholder text
 7. **Consistent terminology**: Use the same names as the source code
 8. **Pagination**: Document pagination patterns once and reference from each list tool

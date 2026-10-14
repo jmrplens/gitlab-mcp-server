@@ -43,11 +43,11 @@ Typical MCP client configuration (stdio):
 
 ## Verify what you run
 
-The binary the SDK runs is the release asset byte for byte, so the build provenance attestation GitHub holds for it verifies it with the [GitHub CLI](https://cli.github.com/): `gh attestation verify ~/.nuget/packages/gitlab-mcp-server.<rid>/<version>/tools/any/<rid>/gitlab-mcp-server -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml` for what `dnx` runs from the NuGet cache, and `gh attestation verify "$(readlink -f "$(command -v gitlab-mcp-server)")" -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml` after `dotnet tool install -g` on Linux and macOS, where the shim links into the tool store. `--signer-workflow` holds the attestation to the release workflow, since `-R` alone accepts one any workflow of the repository minted, and `--source-ref refs/tags/v<version>` holds it to one release. From the first release after 3.1.0 the packages themselves are attested as they were before NuGet.org added its repository signature: remove `.signature.p7s` from a downloaded copy with `zip -d` and run the same `gh attestation verify` on what is left. The steps are in the [NuGet installation page](https://jmrp.io/docs/gitlab-mcp-server/install/nuget/#verify-what-you-run).
+The binary the SDK runs is the release asset byte for byte, so the build provenance attestation GitHub holds for it verifies it with the [GitHub CLI](https://cli.github.com/): `gh attestation verify ~/.nuget/packages/gitlab-mcp-server.<rid>/<version>/tools/any/<rid>/gitlab-mcp-server -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml` for what `dnx` runs from the NuGet cache, and `gh attestation verify "$(readlink -f "$(command -v gitlab-mcp-server)")" -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml` after `dotnet tool install -g` on Linux and macOS, where the shim links into the tool store. `--signer-workflow` holds the attestation to the release workflow, since `-R` alone accepts one any workflow of the repository minted, and `--source-ref refs/tags/v<version>` holds it to one release. From the first release after 3.1.0 the packages themselves are attested as they were before NuGet.org added its repository signature: remove `.signature.p7s` from a downloaded copy with `zip -d` and run the same `gh attestation verify` on what is left. The steps are in the [NuGet installation page](https://docs.jmrp.io/gitlab-mcp-server/install/nuget/#verify-what-you-run).
 
 ## Configuration
 
-Everything is configured through environment variables: `GITLAB_MCP_TOOL_SURFACE` (dynamic, meta or individual tool catalogs), `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_TIER`, rate limiting, telemetry and more. See the [configuration guide](https://jmrp.io/docs/gitlab-mcp-server/configuration/) for the full reference.
+Everything is configured through environment variables: `GITLAB_MCP_TOOL_SURFACE` (dynamic, meta or individual tool catalogs), `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_TIER`, rate limiting, telemetry and more. See the [configuration guide](https://docs.jmrp.io/gitlab-mcp-server/configuration/) for the full reference.
 
 ## Platform support
 
@@ -55,7 +55,7 @@ Packages are published for `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64`, `
 
 ## Links
 
-- [Documentation](https://jmrp.io/docs/gitlab-mcp-server/)
+- [Documentation](https://docs.jmrp.io/gitlab-mcp-server/)
 - [Source repository](https://github.com/jmrplens/gitlab-mcp-server)
 - [Changelog and releases](https://github.com/jmrplens/gitlab-mcp-server/releases)
 - [Security policy](https://github.com/jmrplens/gitlab-mcp-server/blob/main/SECURITY.md)

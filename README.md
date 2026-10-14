@@ -36,7 +36,7 @@
 
 <!-- START TOKEN CLAIM -->
 
-**11,343 tokens of startup context by default, the same on every GitLab tier (1,941 with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog, where listing every tool as its own costs from 573,871 to 730,505 tokens. Measured with the cl100k_base tokenizer and checked in CI. [How it is measured](https://jmrp.io/docs/gitlab-mcp-server/tools/dynamic-tools/#how-much-startup-context-does-dynamic-mode-save)
+**11,343 tokens of startup context by default, the same on every GitLab tier (1,941 with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog, where listing every tool as its own costs from 573,871 to 730,505 tokens. Measured with the cl100k_base tokenizer and checked in CI. [How it is measured](https://docs.jmrp.io/gitlab-mcp-server/tools/dynamic-tools/#how-much-startup-context-does-dynamic-mode-save)
 
 <!-- END TOKEN CLAIM -->
 
@@ -45,7 +45,7 @@
 ## Why this server
 
 - **Every tier and every instance.** Free/CE, Premium and Ultimate, self-managed or GitLab.com with its Orbit knowledge graph. The tier is detected and the catalog follows it.
-- **The token you already have.** A personal, project or group access token with `api`, or `read_api` for the actions GitLab accepts from it; a fine-grained token, judged action by action from its grant; OAuth in HTTP mode. Each action's [tool reference](https://jmrp.io/docs/gitlab-mcp-server/reference/tools/) entry says which scope and which fine-grained permissions it needs.
+- **The token you already have.** A personal, project or group access token with `api`, or `read_api` for the actions GitLab accepts from it; a fine-grained token, judged action by action from its grant; OAuth in HTTP mode. Each action's [tool reference](https://docs.jmrp.io/gitlab-mcp-server/reference/tools/) entry says which scope and which fine-grained permissions it needs.
 - **Guard rails.** Read-only mode, safe mode (a preview of each write instead of the write), tools excluded by name, and a confirmation before anything destructive.
 - **Three surfaces, two transports.** Two discovery tools by default, one tool per domain or one per action; stdio for a desktop client, or HTTP for a shared deployment that keeps each credential apart. 45 resources and 37 prompts besides.
 - **Releases you can verify.** Signed checksums, an SBOM per binary and build provenance for every artifact.
@@ -106,13 +106,13 @@ winget install --id jmrplens.gitlab-mcp-server -e   # winget, Windows
 docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
-For a self-managed instance, set `GITLAB_URL=https://gitlab.example.com` beside the token; with the Docker image, also forward it by adding `-e GITLAB_URL` to the `docker` arguments, since the container receives only the variables named there ([Docker install](https://jmrp.io/docs/gitlab-mcp-server/install/docker/#configure-your-client)). Every channel, per-client configuration and verification step is in the [installation guide](https://jmrp.io/docs/gitlab-mcp-server/install/overview/), and an assistant installing it for you will find the same in [`llms.txt`](llms.txt).
+For a self-managed instance, set `GITLAB_URL=https://gitlab.example.com` beside the token; with the Docker image, also forward it by adding `-e GITLAB_URL` to the `docker` arguments, since the container receives only the variables named there ([Docker install](https://docs.jmrp.io/gitlab-mcp-server/install/docker/#configure-your-client)). Every channel, per-client configuration and verification step is in the [installation guide](https://docs.jmrp.io/gitlab-mcp-server/install/overview/), and an assistant installing it for you will find the same in [`llms.txt`](llms.txt).
 
-**To try it first**, a public instance runs at `https://mcp.jmrp.io/gitlab`, and the [browser inspector](https://mcp.jmrp.io/inspector/?server=gitlab) calls it read-only after an OAuth sign-in. Your token and every request pass through that machine, so run it yourself to keep using it; the [hosted endpoint page](https://jmrp.io/docs/gitlab-mcp-server/install/hosted/) says what it is and is not.
+**To try it first**, a public instance runs at `https://mcp.jmrp.io/gitlab`, and the [browser inspector](https://mcp.jmrp.io/inspector/?server=gitlab) calls it read-only after an OAuth sign-in. Your token and every request pass through that machine, so run it yourself to keep using it; the [hosted endpoint page](https://docs.jmrp.io/gitlab-mcp-server/install/hosted/) says what it is and is not.
 
 ## Documentation
 
-Everything else is at **[jmrp.io/docs/gitlab-mcp-server](https://jmrp.io/docs/gitlab-mcp-server)**, in English and Spanish: [getting started](https://jmrp.io/docs/gitlab-mcp-server/getting-started/), [configuration](https://jmrp.io/docs/gitlab-mcp-server/configuration/), [tool surfaces](https://jmrp.io/docs/gitlab-mcp-server/tools/overview/), [HTTP server mode](https://jmrp.io/docs/gitlab-mcp-server/operations/http-server/), [security](https://jmrp.io/docs/gitlab-mcp-server/operations/security/), [privacy](https://jmrp.io/docs/gitlab-mcp-server/operations/privacy/) and [troubleshooting](https://jmrp.io/docs/gitlab-mcp-server/operations/troubleshooting/).
+Everything else is at **[docs.jmrp.io/gitlab-mcp-server](https://docs.jmrp.io/gitlab-mcp-server)**, in English and Spanish: [getting started](https://docs.jmrp.io/gitlab-mcp-server/getting-started/), [configuration](https://docs.jmrp.io/gitlab-mcp-server/configuration/), [tool surfaces](https://docs.jmrp.io/gitlab-mcp-server/tools/overview/), [HTTP server mode](https://docs.jmrp.io/gitlab-mcp-server/operations/http-server/), [security](https://docs.jmrp.io/gitlab-mcp-server/operations/security/), [privacy](https://docs.jmrp.io/gitlab-mcp-server/operations/privacy/) and [troubleshooting](https://docs.jmrp.io/gitlab-mcp-server/operations/troubleshooting/).
 
 ## Contributing, security and licence
 

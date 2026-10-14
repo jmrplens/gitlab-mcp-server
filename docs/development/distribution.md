@@ -7,9 +7,9 @@ validated and pushed.
 > **Diátaxis type**: Reference & Explanation · **Audience**: 🛠️ Contributors & maintainers
 
 What a user installs, and how they verify it, is on the documentation site:
-[Installation](https://jmrp.io/docs/gitlab-mcp-server/install/overview/), one
+[Installation](https://docs.jmrp.io/gitlab-mcp-server/install/overview/), one
 page per channel, and the
-[Claude Desktop Extension](https://jmrp.io/docs/gitlab-mcp-server/claude-desktop/)
+[Claude Desktop Extension](https://docs.jmrp.io/gitlab-mcp-server/claude-desktop/)
 page. This page is the other half: what produces those artifacts and what
 refuses a bad one. The release workflow's own sequence (draft, attest,
 publish, read back) is described in the Release process section of
@@ -145,7 +145,7 @@ reads, so it is measured and not warned about.
 
 What the launcher does, and why it runs through `/bin/sh` and ends in `exec`,
 is on the site under
-[How the Linux entry starts](https://jmrp.io/docs/gitlab-mcp-server/claude-desktop/#how-the-linux-entry-starts).
+[How the Linux entry starts](https://docs.jmrp.io/gitlab-mcp-server/claude-desktop/#how-the-linux-entry-starts).
 Two details belong here. The launcher (`mcpb/linux/launch.sh`) exits `127`
 when the binary for the machine is missing from the extension and `126` when
 it is not executable and `chmod` cannot make it so. And Claude Desktop's Linux

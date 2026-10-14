@@ -384,7 +384,7 @@ The site's per-domain tool reference is generated from the action catalog by `ma
 
 The documentation has one home per audience (ADR-0025):
 
-- **User documentation** lives only in the [Astro Starlight](https://starlight.astro.build/) site, published at `https://jmrp.io/docs/gitlab-mcp-server/`: English pages under `site/src/content/docs/` and their Spanish twins at the same paths under `site/src/content/docs/es/`. Installation, configuration, operations, the tool reference, the capabilities and the examples are all site pages, and there is no copy of any of them under `docs/`.
+- **User documentation** lives only in the [Astro Starlight](https://starlight.astro.build/) site, published at `https://docs.jmrp.io/gitlab-mcp-server/`: English pages under `site/src/content/docs/` and their Spanish twins at the same paths under `site/src/content/docs/es/`. Installation, configuration, operations, the tool reference, the capabilities and the examples are all site pages, and there is no copy of any of them under `docs/`.
 - **Contributor documentation** lives in `docs/development/`: the development guide, the ADRs, the testing reference, the command utilities and the other pages about changing the code. `CLAUDE.md`, `AGENTS.md` and `.github/` carry the guidance AI assistants read.
 - The README is a short landing page that links the site, and `docs/` holds nothing beside `docs/development/` but a README pointing at the site.
 
@@ -414,7 +414,7 @@ site/
 - English (the root of `src/content/docs/`, not an `en/` folder) is the source of truth: write English first, then translate to Spanish in the same change. `pnpm run i18n:check` only proves that every page has a twin, not that the twin says the same thing
 - Use Starlight MDX components: `<Aside>`, `<Tabs>`, `<Card>`, `<Steps>`, `<FileTree>`
 - Every `.mdx` file needs frontmatter with `title` and `description`
-- Link a site page from another as `/gitlab-mcp-server/<slug>/` (`/gitlab-mcp-server/es/<slug>/` from a Spanish page), and from a file outside the site as `https://jmrp.io/docs/gitlab-mcp-server/<slug>/`
+- Link a site page from another as `/gitlab-mcp-server/<slug>/` (`/gitlab-mcp-server/es/<slug>/` from a Spanish page), and from a file outside the site as `https://docs.jmrp.io/gitlab-mcp-server/<slug>/`
 - After changes, verify the build and the site's checks: `cd site && pnpm run build && pnpm run lint`
 - Follow the `update-starlight-docs` skill for the full workflow: the page map, the generated pages, the sidebar and redirects
 

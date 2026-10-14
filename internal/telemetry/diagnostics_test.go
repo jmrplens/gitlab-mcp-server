@@ -217,7 +217,7 @@ func TestSDKVerbosityHandler_ADerivedHandlerKeepsTheClamp(t *testing.T) {
 // for a guarantee the guide states and a test could not fail on.
 //
 // The telemetry page
-// (https://jmrp.io/docs/gitlab-mcp-server/operations/telemetry/#authenticating-to-your-collector)
+// (https://docs.jmrp.io/gitlab-mcp-server/operations/telemetry/#authenticating-to-your-collector)
 // says of that variable "it is never logged: a test asserts the credential
 // never appears in this server's own log output, including when an export
 // fails". The server does not

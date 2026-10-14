@@ -91,7 +91,7 @@ gitlab-mcp-server/
 │   └── elicitation/        # MCP elicitation capability
 ├── docs/                   # Contributor documentation only: development/ and a README pointing users at the site (ADR-0025)
 │   └── development/        # adr/ (Architectural Decision Records), testing/ (generated), static analysis, cmd utilities, tool surfaces, and the internal architecture, error handling, GraphQL integration, capability APIs and distribution pages (architecture.md, error-handling.md, graphql.md, capabilities.md, distribution.md)
-├── site/                   # The user documentation: an Astro Starlight site, published at https://jmrp.io/docs/gitlab-mcp-server/
+├── site/                   # The user documentation: an Astro Starlight site, published at https://docs.jmrp.io/gitlab-mcp-server/
 │   ├── src/content/docs/   # One .mdx page per slug, its Spanish twin under es/; reference/tools/ (make gen-tool-reference) and reference/fine-grained-permissions.mdx (make gen-action-grants) are generated
 │   ├── src/data/           # Generated figures the pages read: stats.json (audit_metrics), token-footprint.json (audit_tokens), resource-benchmark.json (bench_resources); home.ts, the landing data, is hand-written
 │   └── scripts/            # The site's own checks (i18n:check, facts:check, chips:check, llms:check and version:check among them) and its llms.txt generator
@@ -130,7 +130,7 @@ gitlab-mcp-server/
 
 - Stdio mode uses `GITLAB_URL`; HTTP mode requires `--gitlab-url` (one instance fixes it, several publish an allow-list the `GITLAB-URL` header selects from) unless `--allow-any-gitlab-url` is passed, which lets the header name any host and is meant for single-user local deployments only
 - Authentication via `GITLAB_TOKEN` (Personal Access Token); the token is read from the environment or a dotenv file (`~/.gitlab-mcp-server.env`, or the file `GITLAB_MCP_ENV_FILE` names), never from a working-directory `.env` and never from a flag
-- A fine-grained personal access token (scopes `["granular"]`) is unknown authority, never read-only: its grant, read with the token itself and judged per action against what GitLab declares (`internal/finegrained`, `internal/tools/actiongrants`), decides what each session is listed and may call, per request and never through a shared catalog, shape or manifest key (ADR-0024, [fine-grained tokens](https://jmrp.io/docs/gitlab-mcp-server/operations/fine-grained-tokens/)). Refusals name the action by its canonical ID rather than a tool name; `make check-action-grants-derivation`, `make check-action-grants` and `make audit-1to1-grants` (steps 26 to 28 of `make analyze`) hold the derivation and the table
+- A fine-grained personal access token (scopes `["granular"]`) is unknown authority, never read-only: its grant, read with the token itself and judged per action against what GitLab declares (`internal/finegrained`, `internal/tools/actiongrants`), decides what each session is listed and may call, per request and never through a shared catalog, shape or manifest key (ADR-0024, [fine-grained tokens](https://docs.jmrp.io/gitlab-mcp-server/operations/fine-grained-tokens/)). Refusals name the action by its canonical ID rather than a tool name; `make check-action-grants-derivation`, `make check-action-grants` and `make audit-1to1-grants` (steps 26 to 28 of `make analyze`) hold the derivation and the table
 - Self-signed TLS certificates: skip verification when `GITLAB_MCP_SKIP_TLS_VERIFY=true`
 - All API calls must respect `context.Context` for cancellation
 - Rate limiting awareness and retry logic
@@ -282,7 +282,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `GITLAB_MCP_AUTH_MODE`              | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) | `legacy` (default) |
 | `GITLAB_MCP_OAUTH_CACHE_TTL`        | OAuth token identity cache TTL (also `--oauth-cache-ttl` flag) | `15m` (default)  |
 
-This table is the subset an assistant meets most often. Every variable, its bounds and its flag are tabulated under "Environment variables" in `CLAUDE.md`; the [environment variable](https://jmrp.io/docs/gitlab-mcp-server/reference/environment/) and [CLI](https://jmrp.io/docs/gitlab-mcp-server/reference/cli/) pages are the user-facing references. In HTTP mode an explicitly passed flag wins over the environment variable, which wins over the default (`internal/config/http_overlay.go`).
+This table is the subset an assistant meets most often. Every variable, its bounds and its flag are tabulated under "Environment variables" in `CLAUDE.md`; the [environment variable](https://docs.jmrp.io/gitlab-mcp-server/reference/environment/) and [CLI](https://docs.jmrp.io/gitlab-mcp-server/reference/cli/) pages are the user-facing references. In HTTP mode an explicitly passed flag wins over the environment variable, which wins over the default (`internal/config/http_overlay.go`).
 
 **HTTP-only flags** (no environment variable equivalent; two of many, the rest are in `CLAUDE.md`):
 

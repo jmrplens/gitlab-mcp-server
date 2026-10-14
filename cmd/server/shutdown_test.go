@@ -70,7 +70,7 @@ func TestCanonicalBinaryName_PlatformVariantsCompareEqual(t *testing.T) {
 
 // TestShutdownGracePeriod_IsTheFiveSecondsTheReferenceDocuments pins how long
 // --shutdown waits before force-killing. The CLI reference
-// (https://jmrp.io/docs/gitlab-mcp-server/reference/cli/#shutdown-mode)
+// (https://docs.jmrp.io/gitlab-mcp-server/reference/cli/#shutdown-mode)
 // promises five seconds to the updaters that call it before replacing the
 // binary, and the
 // running-peer test below only checks that a clean exit beats the period,

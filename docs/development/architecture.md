@@ -5,7 +5,7 @@ path a call takes through them, and the patterns every tool package follows.
 
 > **Diátaxis type**: Explanation · **Audience**: 🛠️ Contributors & maintainers
 
-The [Architecture](https://jmrp.io/docs/gitlab-mcp-server/architecture/) page
+The [Architecture](https://docs.jmrp.io/gitlab-mcp-server/architecture/) page
 on the documentation site describes the server from the outside: transports,
 surfaces, what a result carries. This page is the inside. Three pages go
 deeper on one part each: [Tool Surfaces & Canonical Action
@@ -130,8 +130,8 @@ It is what stdio mode uses: it requires `GITLAB_TOKEN` and defaults
 `GITLAB_URL` to `https://gitlab.com`. HTTP mode is configured by its flags,
 with the environment read for the flags that were not passed
 (`internal/config/http_overlay.go`). Every variable, flag and default is on the
-site's [environment reference](https://jmrp.io/docs/gitlab-mcp-server/reference/environment/)
-and [CLI reference](https://jmrp.io/docs/gitlab-mcp-server/reference/cli/).
+site's [environment reference](https://docs.jmrp.io/gitlab-mcp-server/reference/environment/)
+and [CLI reference](https://docs.jmrp.io/gitlab-mcp-server/reference/cli/).
 
 ## GitLab client (`internal/gitlab`)
 
@@ -343,7 +343,7 @@ find ranks is in [Dynamic Search Ranker](dynamic-search-ranker.md).
 | `internal/prompts/prompt_audit.go`           | 2 project audit prompts                         |
 
 The inventories themselves, with every URI, argument and output, are on the
-site under [Resources & Prompts](https://jmrp.io/docs/gitlab-mcp-server/tools/resources-prompts/).
+site under [Resources & Prompts](https://docs.jmrp.io/gitlab-mcp-server/tools/resources-prompts/).
 They are written by hand, so a change to a resource or a prompt changes that
 page and its Spanish twin in the same change.
 

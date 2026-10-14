@@ -97,7 +97,7 @@ site/src/content/docs/
 └── es/                # the Spanish twin of every page above, at the same path
 ```
 
-A page's slug is its path without the extension: `operations/http-server.mdx` is `operations/http-server`, published at `https://jmrp.io/docs/gitlab-mcp-server/operations/http-server/`.
+A page's slug is its path without the extension: `operations/http-server.mdx` is `operations/http-server`, published at `https://docs.jmrp.io/gitlab-mcp-server/operations/http-server/`.
 
 ### 3. Edit corresponding ES pages
 
@@ -160,7 +160,7 @@ Must produce zero errors. The build regenerates the site's `/llms.txt` first (`p
 npx markdownlint-cli2 site/src/content/docs/<page>.mdx site/src/content/docs/es/<page>.mdx
 go run ./cmd/format_md_tables/ --check   # the site's tables belong to this formatter, not to prettier
 make check-doc-tool-names                # every gitlab_* name and domain.action ID a page teaches exists
-make check-doc-links                     # every relative link and jmrp.io/docs/gitlab-mcp-server URL in a tracked .md or .mdx file resolves, anchor included
+make check-doc-links                     # every relative link and docs.jmrp.io/gitlab-mcp-server URL in a tracked .md or .mdx file resolves, anchor included
 ```
 
 ## Rules
@@ -172,7 +172,7 @@ make check-doc-links                     # every relative link and jmrp.io/docs/
 - Touch `site/astro.config.mjs` for two reasons only: a page added, renamed or removed changes the `sidebar` array (slug, label and `translations.es`), and a page that moves or leaves the site gets an entry in its `redirects` map for its old URL, English and Spanish, so a bookmark or an inbound link lands where the content went
 - A page added, renamed or removed also changes the `SECTIONS` table of `site/scripts/gen-llms.mjs`, in the order the sidebar shows it
 - Use Starlight components (Aside, Tabs, etc.) instead of raw HTML
-- Link between site pages by their published path: `/gitlab-mcp-server/<slug>/` in an English page and `/gitlab-mcp-server/es/<slug>/` in its Spanish twin, with an anchor read from the target's heading. A file outside the site links a page as `https://jmrp.io/docs/gitlab-mcp-server/<slug>/`
+- Link between site pages by their published path: `/gitlab-mcp-server/<slug>/` in an English page and `/gitlab-mcp-server/es/<slug>/` in its Spanish twin, with an anchor read from the target's heading. A file outside the site links a page as `https://docs.jmrp.io/gitlab-mcp-server/<slug>/`
 - Do NOT modify `src/content.config.ts` unless adding a new content collection
 - Images a page imports go in `site/src/assets/`; the benchmark charts under `site/public/benchmarks/` are generated
 

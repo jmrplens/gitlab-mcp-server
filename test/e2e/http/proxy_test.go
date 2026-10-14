@@ -185,7 +185,7 @@ func TestProxy_ServerAndProxyCORSCollide(t *testing.T) {
 	// would carry one and a `> 1` log would silently stop verifying anything.
 	// The collision itself is the deployment's bug to fix (drop the proxy's
 	// CORS block for the MCP location, as the security page says at
-	// https://jmrp.io/docs/gitlab-mcp-server/operations/security/#cross-origin-protection),
+	// https://docs.jmrp.io/gitlab-mcp-server/operations/security/#cross-origin-protection),
 	// but the server must reproduce it here so that fix has something to
 	// point at.
 	got = proxied.do(t, mcpPOST(headers))

@@ -127,7 +127,7 @@ Add these to the `env` block (and, for Docker, a matching `-e NAME` in
 | `GITLAB_MCP_SKIP_TLS_VERIFY` | `false`   | Allow self-signed certificates on self-managed instances                                          |
 | `GITLAB_MCP_LOG_LEVEL`              | `info`    | `debug`, `info`, `warn`, `error`                                                                  |
 
-Full reference: <https://jmrp.io/docs/gitlab-mcp-server/configuration/>
+Full reference: <https://docs.jmrp.io/gitlab-mcp-server/configuration/>
 
 ## Step 4 — Verify the installation
 
@@ -172,11 +172,11 @@ Full reference: <https://jmrp.io/docs/gitlab-mcp-server/configuration/>
 - **Docker: `docker: command not found`** — fall back to Method C (npm/npx,
   needs only Node 18+) or Method B (native binary).
 - Other symptoms and their fixes are under
-  [Connection and authentication](https://jmrp.io/docs/gitlab-mcp-server/operations/troubleshooting/#connection-and-authentication)
+  [Connection and authentication](https://docs.jmrp.io/gitlab-mcp-server/operations/troubleshooting/#connection-and-authentication)
   on the troubleshooting page.
 
 ## More documentation
 
 - Project README: <https://github.com/jmrplens/gitlab-mcp-server>
-- Docs site: <https://jmrp.io/docs/gitlab-mcp-server/>
-- Tool reference: <https://jmrp.io/docs/gitlab-mcp-server/tools/overview/>
+- Docs site: <https://docs.jmrp.io/gitlab-mcp-server/>
+- Tool reference: <https://docs.jmrp.io/gitlab-mcp-server/tools/overview/>

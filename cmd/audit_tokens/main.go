@@ -785,7 +785,7 @@ const (
 	// claimMeasuredURL is where the claim sends a reader who wants the
 	// figures behind it: the site's section on the default surface's startup
 	// context, which renders them from siteFootprintPath.
-	claimMeasuredURL = "https://jmrp.io/docs/gitlab-mcp-server/tools/dynamic-tools/#how-much-startup-context-does-dynamic-mode-save"
+	claimMeasuredURL = "https://docs.jmrp.io/gitlab-mcp-server/tools/dynamic-tools/#how-much-startup-context-does-dynamic-mode-save"
 )
 
 // Row identifiers used to pick the headline configurations out of the full

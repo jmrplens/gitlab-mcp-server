@@ -61,7 +61,7 @@ const (
 	// Only what the documentation site does not carry is linked that way:
 	// PRIVACY.md and the contributor documents under docs/development.
 	// The file is published at the docs domain
-	// (https://jmrp.io/docs/gitlab-mcp-server/llms.txt), where a relative path
+	// (https://docs.jmrp.io/gitlab-mcp-server/llms.txt), where a relative path
 	// such as "PRIVACY.md" resolves against that host and 404s because the
 	// repository is not part of the built site. Absolute blob URLs resolve from
 	// anywhere: the docs domain, the repository, or an AI crawler that fetched
@@ -73,7 +73,7 @@ const (
 	// user documentation, so a page is linked there by its slug with a
 	// trailing slash, the address the site serves it at, and never as a copy
 	// in the repository.
-	siteBaseURL = "https://jmrp.io/docs/gitlab-mcp-server/"
+	siteBaseURL = "https://docs.jmrp.io/gitlab-mcp-server/"
 
 	// clientsPage is the site page holding each MCP client's configuration,
 	// named twice in llms.txt: once where the install instructions send an

@@ -21,7 +21,7 @@ For security issues, please follow the [Security Policy](SECURITY.md) instead of
 ## Getting Started
 
 1. Clone the repository
-2. To run the end-to-end suite against your own GitLab, create a `.env` at the repository root with `GITLAB_URL` and `GITLAB_TOKEN`: `make test-e2e` reads it. The server itself never loads a `.env` from its working directory (see [Configuration](https://jmrp.io/docs/gitlab-mcp-server/configuration/) for how it is configured)
+2. To run the end-to-end suite against your own GitLab, create a `.env` at the repository root with `GITLAB_URL` and `GITLAB_TOKEN`: `make test-e2e` reads it. The server itself never loads a `.env` from its working directory (see [Configuration](https://docs.jmrp.io/gitlab-mcp-server/configuration/) for how it is configured)
 3. Run `make build` to verify the setup
 4. Run `make test` to ensure all tests pass
 
@@ -235,9 +235,9 @@ Then commit the updated golden files alongside your code changes. The CI will fa
 
 ### Where Documentation Lives
 
-The user documentation lives only on the [documentation site](https://jmrp.io/docs/gitlab-mcp-server/). Its pages are under `site/src/content/docs/` in English, each with a Spanish twin at the same path under `site/src/content/docs/es/`, and an English page and its twin change in the same pull request: `pnpm run i18n:check` (in `site/`) fails when a page has no twin, and the translation itself is the author's job. `docs/` keeps contributor documentation only, under [`docs/development/`](docs/development/README.md), and the README is a short landing page that links the site. ADR-0025, in the [ADR index](docs/development/adr/README.md), records the decision.
+The user documentation lives only on the [documentation site](https://docs.jmrp.io/gitlab-mcp-server/). Its pages are under `site/src/content/docs/` in English, each with a Spanish twin at the same path under `site/src/content/docs/es/`, and an English page and its twin change in the same pull request: `pnpm run i18n:check` (in `site/`) fails when a page has no twin, and the translation itself is the author's job. `docs/` keeps contributor documentation only, under [`docs/development/`](docs/development/README.md), and the README is a short landing page that links the site. ADR-0025, in the [ADR index](docs/development/adr/README.md), records the decision.
 
-A site page is named by its slug: `operations/http-server` is `site/src/content/docs/operations/http-server.mdx`, published at `https://jmrp.io/docs/gitlab-mcp-server/operations/http-server/`. Link it from a repository file by that URL; `make check-doc-links` resolves the URL and its anchor to the page.
+A site page is named by its slug: `operations/http-server` is `site/src/content/docs/operations/http-server.mdx`, published at `https://docs.jmrp.io/gitlab-mcp-server/operations/http-server/`. Link it from a repository file by that URL; `make check-doc-links` resolves the URL and its anchor to the page.
 
 A page that names the release a reader installs today (an install command, an image tag, a package pin, sample `--version` output, "the current release is") writes `%%VERSION%%` instead of the number, and the build replaces it with the published release, the top-level `version` of `server.json`, which the release workflow stamps once the release is out, so a release needs no page edit. `VERSION` is not used, because it names the release being prepared before anyone can download it. A number that is history ("removed in 3.1.0", "checked on 3.1.0") stays literal. `pnpm run version:check` (in `site/`) refuses the token in frontmatter, where the build does not replace it, and a release written by hand where the token belongs; the [`update-starlight-docs` skill](.github/skills/update-starlight-docs/SKILL.md) has the rule and its exceptions.
 

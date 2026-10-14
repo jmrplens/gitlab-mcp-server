@@ -13,7 +13,7 @@
     "stdio",
     "cli"
   ],
-  "homepage": "https://jmrp.io/docs/gitlab-mcp-server",
+  "homepage": "https://docs.jmrp.io/gitlab-mcp-server",
   "bugs": "https://github.com/jmrplens/gitlab-mcp-server/issues",
   "repository": {
     "type": "git",

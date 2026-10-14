@@ -3,7 +3,7 @@
 
 Issue 1163 made the documentation site the one home of the user
 documentation, so the README and every file that used to link into docs/ now
-link to https://jmrp.io/docs/gitlab-mcp-server/... instead. The checker holds
+link to https://docs.jmrp.io/gitlab-mcp-server/... instead. The checker holds
 such a link to the page under site/src/content/docs that serves it, and to
 the heading its anchor names, rather than skipping it as somebody else's
 server. The repository's own corpus only shows that every link it carries
@@ -30,8 +30,12 @@ import unittest
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 SCRIPT = os.path.join(ROOT, "scripts", "check-doc-links.mjs")
 
-SITE = "https://jmrp.io/docs/gitlab-mcp-server"
+SITE = "https://docs.jmrp.io/gitlab-mcp-server"
+# The two older spellings, which still redirect to SITE with the path kept:
+# the github.io origin the site was served from before its custom domain, and
+# the jmrp.io vanity redirect.
 PAGES = "https://jmrplens.github.io/gitlab-mcp-server"
+VANITY = "https://jmrp.io/docs/gitlab-mcp-server"
 
 # The pages and files the stand-in site serves.
 TREE = {
@@ -98,10 +102,11 @@ class CheckDocLinksSiteTest(unittest.TestCase):
         self.assertIn(link, output)
         self.assertIn(reason, output)
 
-    def test_page_and_its_heading_pass_under_both_addresses(self):
+    def test_page_and_its_heading_pass_under_every_address(self):
         for link in [
             SITE + "/configuration/#environment-variables",
             PAGES + "/configuration/#environment-variables",
+            VANITY + "/configuration/#environment-variables",
             SITE + "/configuration",
             SITE + "/configuration/?ref=readme",
         ]:
@@ -125,6 +130,7 @@ class CheckDocLinksSiteTest(unittest.TestCase):
             (SITE + "/nope/", "/nope"),
             (SITE + "/es/install/docker/", "/es/install/docker"),
             (PAGES + "/operations/telemetry/", "/operations/telemetry"),
+            (VANITY + "/operations/telemetry/", "/operations/telemetry"),
         ]:
             with self.subTest(link=link):
                 self.assert_refused(link, "no site page serves " + route)
@@ -164,7 +170,7 @@ class CheckDocLinksSiteTest(unittest.TestCase):
     def test_another_host_is_skipped(self):
         for link in [
             "https://jmrp.io/projects/",
-            "https://jmrp.io/docs/gitlab-mcp-server-other/nope/",
+            "https://docs.jmrp.io/gitlab-mcp-server-other/nope/",
             "https://example.com/docs/gitlab-mcp-server/nope/",
         ]:
             with self.subTest(link=link):

@@ -46,7 +46,7 @@ personal access token with the `api` scope (`read_api` is served the actions
 GitLab accepts from it). `GITLAB_URL` defaults to `https://gitlab.com`, so set it only for a
 self-managed instance. Every flag and variable (HTTP mode, OAuth, read-only and
 safe modes, tool surfaces, tiers) is documented in the
-[configuration reference](https://jmrp.io/docs/gitlab-mcp-server/configuration/).
+[configuration reference](https://docs.jmrp.io/gitlab-mcp-server/configuration/).
 
 ## Updating
 
@@ -66,6 +66,6 @@ the option to build from source.
 
 ## Links
 
-- Documentation: <https://jmrp.io/docs/gitlab-mcp-server>
+- Documentation: <https://docs.jmrp.io/gitlab-mcp-server>
 - Source and issues: <https://github.com/jmrplens/gitlab-mcp-server>
 - License: MIT

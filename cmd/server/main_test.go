@@ -1778,8 +1778,8 @@ func TestPrintHelp_LinksTheDocumentationSite(t *testing.T) {
 		t.Errorf("the help names %q, a path in the repository rather than a page of the site", found)
 	}
 	for _, want := range []string{
-		"See\n  https://jmrp.io/docs/gitlab-mcp-server/operations/telemetry/.",
-		"Every other client: https://jmrp.io/docs/gitlab-mcp-server/install/clients/",
+		"See\n  https://docs.jmrp.io/gitlab-mcp-server/operations/telemetry/.",
+		"Every other client: https://docs.jmrp.io/gitlab-mcp-server/install/clients/",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(help, want) {
@@ -1793,7 +1793,7 @@ func TestPrintHelp_LinksTheDocumentationSite(t *testing.T) {
 // siteAddress matches an address of the documentation site in printed text,
 // the route after the site root captured; a sentence's closing period is not
 // part of it.
-var siteAddress = regexp.MustCompile(`https://jmrp\.io/docs/gitlab-mcp-server(/[A-Za-z0-9_./#-]*[A-Za-z0-9_/#-])?`)
+var siteAddress = regexp.MustCompile(`https://docs\.jmrp\.io/gitlab-mcp-server(/[A-Za-z0-9_./#-]*[A-Za-z0-9_/#-])?`)
 
 // requireSitePages fails for every documentation site address text names that
 // no page of site/src/content/docs answers, or whose anchor no heading of that
@@ -1866,8 +1866,8 @@ func pageHasHeading(page, anchor string) bool {
 // index, the root to the home page, a closing period is left off, and an
 // anchor is held to a heading of the page.
 func TestRequireSitePages_Addresses_ResolvedToPagesAndHeadings(t *testing.T) {
-	text := "See https://jmrp.io/docs/gitlab-mcp-server/install/docker/#configure-your-client. " +
-		"Home: https://jmrp.io/docs/gitlab-mcp-server and https://jmrp.io/docs/gitlab-mcp-server/operations/telemetry/."
+	text := "See https://docs.jmrp.io/gitlab-mcp-server/install/docker/#configure-your-client. " +
+		"Home: https://docs.jmrp.io/gitlab-mcp-server and https://docs.jmrp.io/gitlab-mcp-server/operations/telemetry/."
 	got := siteAddress.FindAllStringSubmatch(text, -1)
 	want := []string{"/install/docker/#configure-your-client", "", "/operations/telemetry/"}
 	if len(got) != len(want) {

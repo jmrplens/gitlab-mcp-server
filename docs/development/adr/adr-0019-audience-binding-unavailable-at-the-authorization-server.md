@@ -127,7 +127,7 @@ authorized, and it destroys the per-user GitLab authorization that makes
 ADR-0018's read-only surface mean anything.
 
 The site's
-[security page](https://jmrp.io/docs/gitlab-mcp-server/operations/security/#audience-binding-a-documented-deviation)
+[security page](https://docs.jmrp.io/gitlab-mcp-server/operations/security/#audience-binding-a-documented-deviation)
 states the same thing in operator-facing terms, under "Audience binding: a
 documented deviation". The two must keep agreeing; if one is edited, edit both.
 
@@ -222,7 +222,7 @@ sets `--oauth-client-uid`.
 
 - [ADR-0018](adr-0018-authorization-admits-per-action-gating.md), admission at
   the minimum scope, writes gated per action.
-- [Security](https://jmrp.io/docs/gitlab-mcp-server/operations/security/#audience-binding-a-documented-deviation),
+- [Security](https://docs.jmrp.io/gitlab-mcp-server/operations/security/#audience-binding-a-documented-deviation),
   the operator-facing statement of the same deviation.
-- [OAuth application setup](https://jmrp.io/docs/gitlab-mcp-server/operations/oauth-app/), where an
+- [OAuth application setup](https://docs.jmrp.io/gitlab-mcp-server/operations/oauth-app/), where an
   application's uid is found.

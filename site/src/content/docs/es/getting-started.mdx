@@ -15,12 +15,12 @@ head:
       {
         "@context": "https://schema.org",
         "@type": "HowTo",
-        "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/getting-started/#howto",
+        "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/getting-started/#howto",
         "name": "Cómo instalar GitLab MCP Server y conectarlo a un asistente de IA",
         "description": "Crea un personal access token de GitLab, instala el binario o la imagen Docker de GitLab MCP Server, regístralo en un cliente MCP como VS Code, Claude Desktop, Cursor o Claude Code, y verifica la conexión.",
         "inLanguage": "es",
         "totalTime": "PT5M",
-        "isPartOf": { "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/getting-started/#article" },
+        "isPartOf": { "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/getting-started/#article" },
         "about": { "@id": "https://github.com/jmrplens/gitlab-mcp-server#software" },
         "tool": [
           {
@@ -38,28 +38,28 @@ head:
             "position": 1,
             "name": "Crear un personal access token",
             "text": "En GitLab, selecciona tu avatar y luego Edit profile, Access y Personal access tokens, y crea un token nuevo con el scope api. Cópialo: lo necesitas para la configuración. Para una configuración de solo lectura, usa un token con el scope read_api, que el servidor detecta y al que sirve las acciones que GitLab acepta con él, y activa GITLAB_MCP_READ_ONLY=true para retener también las pocas escrituras que GitLab acepta con read_api.",
-            "url": "https://jmrplens.github.io/gitlab-mcp-server/es/getting-started/#crear-un-personal-access-token"
+            "url": "https://docs.jmrp.io/gitlab-mcp-server/es/getting-started/#crear-un-personal-access-token"
           },
           {
             "@type": "HowToStep",
             "position": 2,
             "name": "Instalar el servidor",
             "text": "Elige una vía de instalación. Los botones de un clic registran un servidor basado en Docker que descarga la imagen en la primera ejecución. El instalador de una línea coloca el binario nativo en tu PATH mediante Homebrew, winget o un script de shell. Claude Desktop tiene una extensión nativa .mcpb que cifra el token con una clave del almacén de credenciales del sistema operativo, donde lo hay. Los lanzadores de npm (npx), PyPI (uvx) y NuGet (dnx) lo ejecutan sin un paso de instalación aparte. También puedes descargar el binario para tu plataforma desde GitHub Releases.",
-            "url": "https://jmrplens.github.io/gitlab-mcp-server/es/getting-started/#instalación-rápida"
+            "url": "https://docs.jmrp.io/gitlab-mcp-server/es/getting-started/#instalación-rápida"
           },
           {
             "@type": "HowToStep",
             "position": 3,
             "name": "Registrar el servidor en tu cliente MCP",
             "text": "Pon GITLAB_TOKEN en ~/.gitlab-mcp-server.env, que el servidor lee para los valores que no tiene ya en su entorno, y registra después el servidor sin nombrar el token. En Claude Code todo el paso es claude mcp add gitlab -- gitlab-mcp-server. Para una instancia autogestionada añade GITLAB_URL al mismo archivo, y GITLAB_MCP_SKIP_TLS_VERIFY=true si usa certificados autofirmados. Docker es la única excepción: un contenedor tiene su propio sistema de archivos y nunca lee ese archivo, así que exporta GITLAB_TOKEN donde lances el cliente y deja que el -e GITLAB_TOKEN del comando docker run lo reenvíe.",
-            "url": "https://jmrplens.github.io/gitlab-mcp-server/es/getting-started/#configuración-manual"
+            "url": "https://docs.jmrp.io/gitlab-mcp-server/es/getting-started/#configuración-manual"
           },
           {
             "@type": "HowToStep",
             "position": 4,
             "name": "Verificar la configuración",
             "text": "Abre tu cliente de IA y pregunta \"¿Quién soy en GitLab?\". El servidor devuelve tu perfil de usuario de GitLab, confirmando que la conexión funciona. Si obtienes errores de conexión, comprueba que GITLAB_URL es correcta y accesible, que el token tiene el scope api (o read_api, para las acciones que GitLab acepta con él), y que los certificados autofirmados se gestionan con GITLAB_MCP_SKIP_TLS_VERIFY=true.",
-            "url": "https://jmrplens.github.io/gitlab-mcp-server/es/getting-started/#verificar-la-configuración"
+            "url": "https://docs.jmrp.io/gitlab-mcp-server/es/getting-started/#verificar-la-configuración"
           }
         ]
       }

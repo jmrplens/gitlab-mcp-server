@@ -120,7 +120,7 @@ const minRedactedSecret = 8
 //
 // The exporters read OTEL_EXPORTER_OTLP*_HEADERS themselves and this server
 // never touches the value, which is the guarantee the telemetry page makes
-// (https://jmrp.io/docs/gitlab-mcp-server/operations/telemetry/#authenticating-to-your-collector).
+// (https://docs.jmrp.io/gitlab-mcp-server/operations/telemetry/#authenticating-to-your-collector).
 // The SDK does not keep it: its header parser logs the raw pair when one
 // has no "=", logs the raw value when percent-decoding fails, and the log
 // exporter goes further and hands otel.Handle the *entire* variable

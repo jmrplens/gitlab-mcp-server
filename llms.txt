@@ -40,7 +40,7 @@ One Docker caveat, for images tagged v2.7.5 or earlier only: those default to HT
 
 Nothing installed at all: https://mcp.jmrp.io/gitlab is a public instance of this server, fixed to https://gitlab.com and serving the default dynamic surface over stateless streamable HTTP. An OAuth-capable client needs no header and discovers the authorization server from the RFC 9728 challenge; any other client sends a GitLab.com token as `Authorization: Bearer <token>`, verified per request and never stored. It is one person's personal service with no SLA, so deploy your own for anything that matters.
 
-The exact config-file path and entry for each client (VS Code with GitHub Copilot, Claude Code, Claude Desktop, Cursor, OpenAI Codex CLI, Gemini CLI, LM Studio, mcp-remote, GitLab Duo Agent Platform, Windsurf, JetBrains, Zed, Kiro, OpenCode, Cline, Continue; stdio / HTTP / OAuth) are on [the MCP clients page](https://jmrp.io/docs/gitlab-mcp-server/install/clients/).
+The exact config-file path and entry for each client (VS Code with GitHub Copilot, Claude Code, Claude Desktop, Cursor, OpenAI Codex CLI, Gemini CLI, LM Studio, mcp-remote, GitLab Duo Agent Platform, Windsurf, JetBrains, Zed, Kiro, OpenCode, Cline, Continue; stdio / HTTP / OAuth) are on [the MCP clients page](https://docs.jmrp.io/gitlab-mcp-server/install/clients/).
 
 Running the binary by hand:
 
@@ -208,35 +208,35 @@ Prompts:
 
 ## Documentation
 
-- [Documentation site index](https://jmrp.io/docs/gitlab-mcp-server/llms.txt): Index of every published documentation page, which is what the documentation domain serves at /llms.txt
-- [Spanish documentation index](https://jmrp.io/docs/gitlab-mcp-server/es/llms.txt): The same documentation in Spanish, page for page
-- [Getting started](https://jmrp.io/docs/gitlab-mcp-server/getting-started/): Installation and first-run guide
-- [Installation](https://jmrp.io/docs/gitlab-mcp-server/install/overview/): Every install channel with its exact command, and how each one upgrades
-- [MCP clients](https://jmrp.io/docs/gitlab-mcp-server/install/clients/): Config-file path and entry for each MCP client, over stdio, HTTP and OAuth
-- [Claude Desktop extension](https://jmrp.io/docs/gitlab-mcp-server/claude-desktop/): One-click .mcpb install for Claude Desktop (macOS universal, Windows x64, Linux x64 and arm64)
-- [Configuration](https://jmrp.io/docs/gitlab-mcp-server/configuration/): Full configuration reference
-- [Environment variables](https://jmrp.io/docs/gitlab-mcp-server/reference/environment/): Environment variable reference
-- [HTTP server mode](https://jmrp.io/docs/gitlab-mcp-server/operations/http-server/): Remote MCP transport setup
-- [Security model](https://jmrp.io/docs/gitlab-mcp-server/operations/security/): Authentication, read-only mode, safe mode, and security controls
-- [Resource subscriptions](https://jmrp.io/docs/gitlab-mcp-server/capabilities/subscriptions/): resources/subscribe by polling: 26 subscribable kinds, cadence, lifetime, limits
+- [Documentation site index](https://docs.jmrp.io/gitlab-mcp-server/llms.txt): Index of every published documentation page, which is what the documentation domain serves at /llms.txt
+- [Spanish documentation index](https://docs.jmrp.io/gitlab-mcp-server/es/llms.txt): The same documentation in Spanish, page for page
+- [Getting started](https://docs.jmrp.io/gitlab-mcp-server/getting-started/): Installation and first-run guide
+- [Installation](https://docs.jmrp.io/gitlab-mcp-server/install/overview/): Every install channel with its exact command, and how each one upgrades
+- [MCP clients](https://docs.jmrp.io/gitlab-mcp-server/install/clients/): Config-file path and entry for each MCP client, over stdio, HTTP and OAuth
+- [Claude Desktop extension](https://docs.jmrp.io/gitlab-mcp-server/claude-desktop/): One-click .mcpb install for Claude Desktop (macOS universal, Windows x64, Linux x64 and arm64)
+- [Configuration](https://docs.jmrp.io/gitlab-mcp-server/configuration/): Full configuration reference
+- [Environment variables](https://docs.jmrp.io/gitlab-mcp-server/reference/environment/): Environment variable reference
+- [HTTP server mode](https://docs.jmrp.io/gitlab-mcp-server/operations/http-server/): Remote MCP transport setup
+- [Security model](https://docs.jmrp.io/gitlab-mcp-server/operations/security/): Authentication, read-only mode, safe mode, and security controls
+- [Resource subscriptions](https://docs.jmrp.io/gitlab-mcp-server/capabilities/subscriptions/): resources/subscribe by polling: 26 subscribable kinds, cadence, lifetime, limits
 - [Privacy policy](https://github.com/jmrplens/gitlab-mcp-server/blob/main/PRIVACY.md): No telemetry; data flows only to the configured GitLab instance
 
 ## Tool References
 
-- [Dynamic tools](https://jmrp.io/docs/gitlab-mcp-server/tools/dynamic-tools/): Low-token find/execute mode and usage pattern
-- [Meta-tools](https://jmrp.io/docs/gitlab-mcp-server/tools/meta-tools/): Consolidated domain meta-tool action reference
-- [All tools](https://jmrp.io/docs/gitlab-mcp-server/reference/tools/): Per-domain tool reference generated from the action catalog, one page per catalog group
-- [Resources](https://jmrp.io/docs/gitlab-mcp-server/tools/resources-prompts/#what-are-mcp-resources): Read-only MCP resource reference
-- [Prompts](https://jmrp.io/docs/gitlab-mcp-server/tools/resources-prompts/#what-are-mcp-prompts): Reusable MCP prompt templates
+- [Dynamic tools](https://docs.jmrp.io/gitlab-mcp-server/tools/dynamic-tools/): Low-token find/execute mode and usage pattern
+- [Meta-tools](https://docs.jmrp.io/gitlab-mcp-server/tools/meta-tools/): Consolidated domain meta-tool action reference
+- [All tools](https://docs.jmrp.io/gitlab-mcp-server/reference/tools/): Per-domain tool reference generated from the action catalog, one page per catalog group
+- [Resources](https://docs.jmrp.io/gitlab-mcp-server/tools/resources-prompts/#what-are-mcp-resources): Read-only MCP resource reference
+- [Prompts](https://docs.jmrp.io/gitlab-mcp-server/tools/resources-prompts/#what-are-mcp-prompts): Reusable MCP prompt templates
 
 ## Optional
 
-- [Medium LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-medium.txt): 157 KB, ~40k tokens. Every tool and action with its description, without the per-action JSON schemas. The largest of these that still loads into a context window
-- [Meta-tools reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-meta-tools.txt): 2.3 MB, ~615k tokens. Full schemas for the dynamic and meta-tool surfaces only
-- [Individual tools reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-individual-tools.txt): 983 KB, ~252k tokens. Full schemas for the one-tool-per-operation surface only
-- [Resources and prompts reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-resources-prompts.txt): 32 KB, ~8k tokens. MCP resource and prompt definitions only
-- [Full LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full.txt): 3.3 MB, ~875k tokens. The three splits above concatenated. Past every current context window, so search or retrieve inside it rather than loading it; if you want one surface, take its split instead
-- [Architecture](https://jmrp.io/docs/gitlab-mcp-server/architecture/): Internal architecture and catalog-first runtime overview
-- [Output format](https://jmrp.io/docs/gitlab-mcp-server/reference/output-format/): Markdown and structured output conventions
-- [Troubleshooting](https://jmrp.io/docs/gitlab-mcp-server/operations/troubleshooting/): Common setup and runtime issues
+- [Medium LLM reference](https://docs.jmrp.io/gitlab-mcp-server/llms-medium.txt): 157 KB, ~40k tokens. Every tool and action with its description, without the per-action JSON schemas. The largest of these that still loads into a context window
+- [Meta-tools reference](https://docs.jmrp.io/gitlab-mcp-server/llms-full-meta-tools.txt): 2.3 MB, ~615k tokens. Full schemas for the dynamic and meta-tool surfaces only
+- [Individual tools reference](https://docs.jmrp.io/gitlab-mcp-server/llms-full-individual-tools.txt): 983 KB, ~252k tokens. Full schemas for the one-tool-per-operation surface only
+- [Resources and prompts reference](https://docs.jmrp.io/gitlab-mcp-server/llms-full-resources-prompts.txt): 32 KB, ~8k tokens. MCP resource and prompt definitions only
+- [Full LLM reference](https://docs.jmrp.io/gitlab-mcp-server/llms-full.txt): 3.3 MB, ~875k tokens. The three splits above concatenated. Past every current context window, so search or retrieve inside it rather than loading it; if you want one surface, take its split instead
+- [Architecture](https://docs.jmrp.io/gitlab-mcp-server/architecture/): Internal architecture and catalog-first runtime overview
+- [Output format](https://docs.jmrp.io/gitlab-mcp-server/reference/output-format/): Markdown and structured output conventions
+- [Troubleshooting](https://docs.jmrp.io/gitlab-mcp-server/operations/troubleshooting/): Common setup and runtime issues
 - [Evaluation results](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/testing/model-results.md): Surface evaluation summaries for model behavior

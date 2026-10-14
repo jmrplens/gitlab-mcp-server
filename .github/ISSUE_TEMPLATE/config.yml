@@ -5,5 +5,5 @@ contact_links:
     about: Report a security vulnerability privately via GitHub Security Advisories.
       Do NOT open a public issue.
   - name: Documentation
-    url: https://jmrp.io/docs/gitlab-mcp-server/
+    url: https://docs.jmrp.io/gitlab-mcp-server/
     about: Read the documentation site before filing an issue.

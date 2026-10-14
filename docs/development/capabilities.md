@@ -8,8 +8,8 @@ how the icons are built and attached.
 
 What each capability does for a client, which clients support it, and the
 wire shapes are on the documentation site, under
-[Capabilities](https://jmrp.io/docs/gitlab-mcp-server/capabilities/overview/)
-and [Icons](https://jmrp.io/docs/gitlab-mcp-server/capabilities/icons/). This
+[Capabilities](https://docs.jmrp.io/gitlab-mcp-server/capabilities/overview/)
+and [Icons](https://docs.jmrp.io/gitlab-mcp-server/capabilities/icons/). This
 page is the Go side. Resource subscriptions have their decisions in
 [ADR-0015](adr/adr-0015-polled-resource-subscriptions.md) and their invariants
 in [CLAUDE.md](../../CLAUDE.md) under "Resource subscriptions".
@@ -163,7 +163,7 @@ trip requests (MRTR) from 2026-07-28, where the tool result carries an
 `inputRequests` map and the client retries the call with `inputResponses`.
 Which revision decides, and why it is the declared one rather than the
 negotiated one, is on the site under
-[Elicitation](https://jmrp.io/docs/gitlab-mcp-server/capabilities/elicitation/).
+[Elicitation](https://docs.jmrp.io/gitlab-mcp-server/capabilities/elicitation/).
 `elicitation.Flow` chooses the mechanism per request, so a handler is written
 once:
 

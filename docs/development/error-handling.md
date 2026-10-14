@@ -7,7 +7,7 @@ not-found result, and how to test them.
 > **Diátaxis type**: Reference & Explanation · **Audience**: 🛠️ Contributors & maintainers
 
 What a caller receives when a call fails, with examples, is on the site under
-[Error Handling](https://jmrp.io/docs/gitlab-mcp-server/operations/error-handling/).
+[Error Handling](https://docs.jmrp.io/gitlab-mcp-server/operations/error-handling/).
 The decision is [ADR-0007](adr/adr-0007-rich-error-semantics.md), and the
 short version every handler author needs is in the
 [Development Guide](development.md#error-handling-in-tool-handlers). This page

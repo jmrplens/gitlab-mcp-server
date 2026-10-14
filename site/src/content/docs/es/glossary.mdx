@@ -13,117 +13,117 @@ head:
       {
         "@context": "https://schema.org",
         "@type": "DefinedTermSet",
-        "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset",
+        "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#termset",
         "name": "Glosario de GitLab MCP Server",
         "description": "Definiciones de los conceptos del Model Context Protocol y de GitLab MCP Server usados en esta documentación.",
         "inLanguage": "es",
-        "isPartOf": { "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#article" },
+        "isPartOf": { "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#article" },
         "about": { "@id": "https://github.com/jmrplens/gitlab-mcp-server#software" },
         "hasDefinedTerm": [
           {
             "@type": "DefinedTerm",
-            "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#tool-surface",
+            "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#tool-surface",
             "name": "Superficie de herramientas",
             "description": "El conjunto de herramientas MCP que un cliente ve realmente al arrancar. GitLab MCP Server tiene tres: dinámica (dos herramientas), meta-herramientas (una por dominio) e individual (una por operación). Las tres son proyecciones del mismo catálogo de acciones, así que difieren en empaquetado y coste de tokens, nunca en capacidad. Se elige con GITLAB_MCP_TOOL_SURFACE.",
-            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
+            "inDefinedTermSet": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
-            "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#action-catalog",
+            "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#action-catalog",
             "name": "Catálogo canónico de acciones",
             "description": "La definición interna única de cada operación de GitLab que expone el servidor. Cada entrada lleva su ruta, esquemas de entrada y salida, clasificación de destructividad y tier de licencia. Todas las superficies visibles se generan desde este catálogo, y por eso todas aplican la misma clasificación, los mismos filtros y el mismo formato. Solo difiere cómo se confirma una llamada destructiva: la superficie dinámica por defecto siempre exige confirm: true.",
-            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
+            "inDefinedTermSet": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
-            "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#action-id",
+            "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#action-id",
             "name": "ID canónico de acción",
             "description": "El identificador estable de una operación, escrito domain.action — por ejemplo issue.list o merge_request.approve. El modo dinámico los devuelve desde gitlab_find_action y los ejecuta con gitlab_execute_action.",
-            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
+            "inDefinedTermSet": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
-            "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#meta-tool",
+            "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#meta-tool",
             "name": "Meta-herramienta",
             "description": "Una herramienta MCP a nivel de dominio que agrupa operaciones relacionadas tras una sola herramienta con un parámetro action; por ejemplo gitlab_issue atiende list, get, create, update y delete. Reducen el número de herramientas visibles en más de un 95% manteniendo cada operación accesible como acción.",
-            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
+            "inDefinedTermSet": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
-            "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#dynamic-mode",
+            "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#dynamic-mode",
             "name": "Modo dinámico",
             "description": "La superficie predeterminada, que expone solo gitlab_find_action y gitlab_execute_action. El asistente busca en el catálogo la operación que necesita, recibe su esquema exacto y la ejecuta. Cuesta una llamada de descubrimiento por tarea y mantiene el contexto de arranque órdenes de magnitud menor que registrar cada herramienta por separado.",
-            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
+            "inDefinedTermSet": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
-            "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#tier-gating",
+            "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#tier-gating",
             "name": "Gating por tier",
             "description": "Registrar solo las acciones y campos de esquema que soporta la licencia de GitLab conectada. El tier sale de GITLAB_MCP_TIER si está definido; si no, se detecta de la licencia de la instancia, después de los planes de los namespaces que administra el token y después, en GitLab.com, de los planes de los grupos de nivel superior de los que el token es miembro, con Free como reserva. Los esquemas de entrada se podan de forma estricta, para que un tier inferior nunca vea campos superiores; los de salida se podan de forma laxa, para que los datos sigan llegando.",
-            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
+            "inDefinedTermSet": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
-            "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#safe-mode",
+            "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#safe-mode",
             "name": "Modo seguro",
             "description": "Un ajuste de despliegue, GITLAB_MCP_SAFE_MODE=true, que intercepta cada acción mutante y devuelve una tarjeta de vista previa que nombra la acción, con los argumentos que habría enviado en un bloque JSON, en vez de ejecutarla. Se distingue del modo solo lectura, que elimina las operaciones del catálogo en lugar de previsualizarlas.",
-            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
+            "inDefinedTermSet": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
-            "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#read-only-mode",
+            "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#read-only-mode",
             "name": "Modo solo lectura",
             "description": "Un ajuste de despliegue, GITLAB_MCP_READ_ONLY=true, que retira del catálogo toda acción mutante. En las superficies dinámica y meta la acción desaparece de la herramienta que la servía, y en la superficie individual su herramienta no se registra; pedir una se rechaza antes de que nada llegue a GitLab.",
-            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
+            "inDefinedTermSet": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
-            "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#elicitation",
+            "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#elicitation",
             "name": "Elicitación",
             "description": "Una capacidad MCP que permite al servidor pedir datos al usuario mediante un formulario estructurado a mitad de conversación, en lugar de exigir todos los parámetros por adelantado. GitLab MCP Server la usa en flujos interactivos de creación y recurre a herramientas parametrizadas estándar en clientes que no la soportan.",
-            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
+            "inDefinedTermSet": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
-            "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#capability-surface",
+            "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#capability-surface",
             "name": "Superficie de capacidades",
             "description": "Qué recursos y prompts MCP se registran, seleccionado con GITLAB_MCP_CAPABILITY_SURFACE. full los registra todos y anuncia las suscripciones a recursos; minimal registra solo el manifiesto gitlab://tools, retirando las suscripciones junto con los recursos a los que aplican, y recorta el contexto compartido de arranque en torno a un 98% sin perder el descubrimiento de esquemas por acción.",
-            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
+            "inDefinedTermSet": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
-            "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#tool-manifest",
+            "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#tool-manifest",
             "name": "Recurso de manifiesto de herramientas",
             "description": "Los recursos MCP gitlab://tools y gitlab://tools/{id}. El primero lista cada herramienta visible y acción ejecutable de la superficie activa; el segundo devuelve la forma de llamada aceptada y el JSON Schema de una acción. Siguen disponibles con una superficie de capacidades mínima, y así un cliente descubre los parámetros exactos sin inflar la lista de herramientas.",
-            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
+            "inDefinedTermSet": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
-            "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#destructive-action",
+            "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#destructive-action",
             "name": "Acción destructiva",
             "description": "Una acción que el catálogo clasifica como irreversible o con pérdida de datos, como borrar un proyecto o eliminar artefactos de un job. Requieren confirmación explícita antes de ejecutarse, y el modo dinámico además suprime las coincidencias difusas débiles para ellas, de modo que una errata no pueda seleccionarlas.",
-            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
+            "inDefinedTermSet": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
-            "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#stdio-transport",
+            "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#stdio-transport",
             "name": "Transporte stdio",
             "description": "El transporte predeterminado: el cliente de IA arranca el servidor como proceso hijo e intercambia JSON-RPC por stdin y stdout. El token se pasa como variable de entorno, nunca sale de la máquina local y no hay exposición de red.",
-            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
+            "inDefinedTermSet": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
-            "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#http-transport",
+            "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#http-transport",
             "name": "Transporte HTTP",
             "description": "Un modo multiusuario en el que un proceso atiende a muchos clientes por red, cada uno autenticándose con su propio token de GitLab. El cliente de GitLab, el bucket del límite de tasa y los watchers de cada credencial se aíslan en su propia entrada de un pool LRU acotado indexado por un hash de token y URL de GitLab; el catálogo de herramientas se comparte, y no se escribe nada en disco.",
-            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
+            "inDefinedTermSet": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
-            "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#tool-schema-tokens",
+            "@id": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#tool-schema-tokens",
             "name": "Tokens de esquema de herramientas",
             "description": "El coste en tokens de las definiciones de herramienta visibles que el cliente recibe en cada tools/list: esquemas de entrada, anotaciones y descripciones. Es la cifra que diferencia unas superficies de otras, medida con el tokenizador cl100k_base, y excluye recursos y prompts MCP, que se contabilizan aparte como tokens compartidos.",
-            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
+            "inDefinedTermSet": "https://docs.jmrp.io/gitlab-mcp-server/es/glossary/#termset"
           }
         ]
       }

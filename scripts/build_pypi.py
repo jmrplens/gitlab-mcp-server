@@ -157,7 +157,7 @@ def build_metadata(version, readme, license_files):
     headers += [("License-File", name) for name in license_files]
     headers += [
         ("Project-URL", "Homepage, https://github.com/jmrplens/gitlab-mcp-server"),
-        ("Project-URL", "Documentation, https://jmrp.io/docs/gitlab-mcp-server/"),
+        ("Project-URL", "Documentation, https://docs.jmrp.io/gitlab-mcp-server/"),
         ("Project-URL", "Repository, https://github.com/jmrplens/gitlab-mcp-server"),
         ("Project-URL", "Changelog, https://github.com/jmrplens/gitlab-mcp-server/releases"),
         # "Issues" and "Security" are labels the well-known project URLs

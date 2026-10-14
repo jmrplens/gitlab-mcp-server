@@ -11,7 +11,7 @@ Update existing documentation to reflect current source code changes. Perform a 
 
 The documentation lives in two places, one per audience (ADR-0025):
 
-- **User documentation** is the site only: `site/src/content/docs/` in English and its Spanish twin under `site/src/content/docs/es/`, published at `https://jmrp.io/docs/gitlab-mcp-server/`. An English page and its twin change together. Follow the `update-starlight-docs` skill for the page map, the generated pages and the site's checks.
+- **User documentation** is the site only: `site/src/content/docs/` in English and its Spanish twin under `site/src/content/docs/es/`, published at `https://docs.jmrp.io/gitlab-mcp-server/`. An English page and its twin change together. Follow the `update-starlight-docs` skill for the page map, the generated pages and the site's checks.
 - **Contributor documentation** is `docs/development/`, plus `CLAUDE.md`, `AGENTS.md` and `.github/` for the guidance AI assistants read. Beside `docs/development/`, `docs/` holds only a README that points at the site.
 
 ## Execution Context

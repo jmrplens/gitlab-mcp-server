@@ -276,7 +276,7 @@ The REST asymmetry this server's authorization rests on, that a wrong "yes" surf
 - A declared position a non-null chain carries onto the spine is judged as part of it, since denying it nulls the spine.
 - Anything else denied is **degraded**: the action is served, and the answer carries a note naming each part GitLab leaves empty, written as the GraphQL selection that reaches it (`vulnerability { issueLinks { nodes } }`), and the permission a declared one needs.
 
-A not-found answer of an action that reads GraphQL, and an empty list from one whose answer is a GraphQL list, carry a note too, since either can be the grant rather than the data. See [Fine-grained Tokens](https://jmrp.io/docs/gitlab-mcp-server/operations/fine-grained-tokens/#what-an-empty-answer-can-mean) and [Fine-grained Permissions](https://jmrp.io/docs/gitlab-mcp-server/reference/fine-grained-permissions/), which prints the spine verdict of every action.
+A not-found answer of an action that reads GraphQL, and an empty list from one whose answer is a GraphQL list, carry a note too, since either can be the grant rather than the data. See [Fine-grained Tokens](https://docs.jmrp.io/gitlab-mcp-server/operations/fine-grained-tokens/#what-an-empty-answer-can-mean) and [Fine-grained Permissions](https://docs.jmrp.io/gitlab-mcp-server/reference/fine-grained-permissions/), which prints the spine verdict of every action.
 
 ## Shared Utilities
 

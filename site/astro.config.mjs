@@ -81,7 +81,7 @@ function rehypeTableAlign() {
 	};
 }
 
-const siteUrl = "https://jmrplens.github.io";
+const siteUrl = "https://docs.jmrp.io";
 const basePath = "/gitlab-mcp-server";
 const fullUrl = `${siteUrl}${basePath}`;
 const repositoryUrl = "https://github.com/jmrplens/gitlab-mcp-server";

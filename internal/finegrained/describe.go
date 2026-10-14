@@ -8,7 +8,7 @@ import (
 // Description is one action's requirement in GitLab's words: what the detail
 // of an action serves a model and what the documentation site's fine-grained
 // permissions page prints
-// (https://jmrp.io/docs/gitlab-mcp-server/reference/fine-grained-permissions/),
+// (https://docs.jmrp.io/gitlab-mcp-server/reference/fine-grained-permissions/),
 // built here once so the two never word a requirement differently.
 type Description struct {
 	// GitLabVersion is the release the requirement was recorded at.

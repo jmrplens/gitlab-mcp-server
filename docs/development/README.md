@@ -4,7 +4,7 @@
 
 This is the home for developer-facing material. Documentation for people who
 install, configure and use the server lives only on the
-[documentation site](https://jmrp.io/docs/gitlab-mcp-server/), in English and
+[documentation site](https://docs.jmrp.io/gitlab-mcp-server/), in English and
 Spanish; a page here links to it rather than repeating it. Start with the
 [Development Guide](development.md) for environment setup, building, testing, and
 the workflow for adding a new tool. The remaining pages go deep on the internal
@@ -44,7 +44,7 @@ testing reference live in subfolders here.
 | [Repository Settings](repository-settings.md)                             | Release-pipeline settings that live on GitHub rather than in the tree               |
 
 **Looking for something else?**
-[Architecture](https://jmrp.io/docs/gitlab-mcp-server/architecture/) for design rationale ·
-[Tool reference](https://jmrp.io/docs/gitlab-mcp-server/reference/tools/) and
-[CLI reference](https://jmrp.io/docs/gitlab-mcp-server/reference/cli/) for tool/flag details ·
+[Architecture](https://docs.jmrp.io/gitlab-mcp-server/architecture/) for design rationale ·
+[Tool reference](https://docs.jmrp.io/gitlab-mcp-server/reference/tools/) and
+[CLI reference](https://docs.jmrp.io/gitlab-mcp-server/reference/cli/) for tool/flag details ·
 [../../CONTRIBUTING.md](../../CONTRIBUTING.md) for contribution mechanics.
