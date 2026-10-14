@@ -69,7 +69,7 @@ Devuelve: títulos de issues, autores, etiquetas, milestones, asignados y fechas
 
 **Prompt**: "Abre un bug P1 en el proyecto backend: la página de login agota el tiempo de espera"
 
-```text
+```text translated
 issue.create → project_id: "my-group/backend",
   title: "Corregir el timeout del login", labels: ["bug", "P1"]
 ```
@@ -102,7 +102,7 @@ Dos prompts MCP responden a las preguntas más amplias: `my_issues` lista todos 
 
 **Prompt**: "Cierra el issue #456 con un comentario explicando la corrección"
 
-```text
+```text translated
 issue.note_create → project_id: "my-group/backend",
   issue_iid: 456, body: "Corregido en MR !89 — el timeout era causado por..."
 issue.update → project_id: "my-group/backend",
@@ -196,7 +196,7 @@ Mantén la conversación en el propio issue. Añade un comentario rápido, abre 
 
 **Prompt**: "Comenta en el issue #123: 'Reproducido en staging — el error solo ocurre con peticiones concurrentes'"
 
-```text
+```text translated
 issue.note_create → project_id: "my-group/backend",
   issue_iid: 123, body: "Reproducido en staging — el error solo ocurre con peticiones concurrentes"
 ```
@@ -205,7 +205,7 @@ issue.note_create → project_id: "my-group/backend",
 
 **Prompt**: "Crea un hilo de discusión en el issue #123 sobre la arquitectura propuesta"
 
-```text
+```text translated
 issue.discussion_create → project_id: "my-group/backend",
   issue_iid: 123, body: "Discutamos la arquitectura propuesta para esta funcionalidad..."
 ```
@@ -250,7 +250,7 @@ Devuelve: issues relacionados con seguridad en todos los proyectos del grupo.
 
 En la superficie dinámica predeterminada, el asistente descubre primero la acción de issues y su esquema, y luego la ejecuta, así que cada bloque anterior es el `action` de una llamada a `gitlab_execute_action`. El patrón de dos pasos es buscar y luego ejecutar:
 
-```text
+```text translated
 gitlab_find_action → query: "issues abiertos con una etiqueta"
 gitlab_execute_action → action: "issue.list", params: { project_id: "my-group/backend", state: "opened", labels: ["bug"] }
 ```

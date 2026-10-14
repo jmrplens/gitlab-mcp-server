@@ -222,7 +222,7 @@ Crea `.vscode/mcp.json` en tu workspace:
   "servers": {
     "gitlab": {
       "type": "stdio",
-      "command": "/ruta/a/gitlab-mcp-server",
+      "command": "/path/to/gitlab-mcp-server",
       "env": {
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
@@ -246,7 +246,7 @@ Crea `.vscode/mcp.json` en tu workspace:
   "servers": {
     "gitlab": {
       "type": "stdio",
-      "command": "/ruta/a/gitlab-mcp-server",
+      "command": "/path/to/gitlab-mcp-server",
       "env": {
         "GITLAB_TOKEN": "${input:gitlab-token}"
       }
@@ -266,7 +266,7 @@ La opción `password: true` oculta la entrada del token. VS Code lo solicitará 
   "servers": {
     "gitlab": {
       "type": "stdio",
-      "command": "/ruta/a/gitlab-mcp-server",
+      "command": "/path/to/gitlab-mcp-server",
       "envFile": "${userHome}/.config/gitlab-mcp-server.env"
     }
   }
@@ -287,7 +287,7 @@ Edita `claude_desktop_config.json`:
 {
   "mcpServers": {
     "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
+      "command": "/path/to/gitlab-mcp-server",
       "env": {
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
@@ -305,7 +305,7 @@ Crea `.cursor/mcp.json` en tu proyecto:
 {
   "mcpServers": {
     "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
+      "command": "/path/to/gitlab-mcp-server",
       "env": {
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
@@ -326,7 +326,7 @@ chmod 600 ~/.gitlab-mcp-server.env
 
 claude mcp add gitlab \
   --transport stdio \
-  -- /ruta/a/gitlab-mcp-server
+  -- /path/to/gitlab-mcp-server
 ```
 
 Añade `GITLAB_URL=https://gitlab.example.com` a ese mismo archivo solo para instancias autogestionadas, o escribe el archivo entero con un editor. Ninguno de los dos comandos nombra el token, así que nada lo pone en `argv`, en el historial de la shell ni en el propio archivo de configuración de Claude Code.
@@ -339,7 +339,7 @@ Añade a `~/.continue/config.yaml`; un espacio de trabajo puede en cambio guarda
 ```yaml
 mcpServers:
   - name: gitlab
-    command: /ruta/a/gitlab-mcp-server
+    command: /path/to/gitlab-mcp-server
     env:
       GITLAB_TOKEN: glpat-xxxxxxxxxxxxxxxxxxxx
 ```
@@ -355,7 +355,7 @@ Edita `~/.codeium/windsurf/mcp_config.json` (Cascade → Plugins → Configure):
 {
   "mcpServers": {
     "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
+      "command": "/path/to/gitlab-mcp-server",
       "env": {
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
@@ -375,7 +375,7 @@ Los IDEs de JetBrains (IntelliJ IDEA, GoLand, PyCharm, etc.) con el plugin **AI 
 {
   "mcpServers": {
     "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
+      "command": "/path/to/gitlab-mcp-server",
       "args": []
     }
   }

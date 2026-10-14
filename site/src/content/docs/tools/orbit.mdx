@@ -3,6 +3,8 @@ title: Orbit
 description: Six read-only MCP tools for GitLab.com's experimental Knowledge Graph API, available only on GitLab.com with a Premium or Ultimate tier.
 datePublished: "2026-05-06"
 faq:
+  - q: "What is Orbit in GitLab MCP Server?"
+    a: "Orbit exposes GitLab.com's experimental Knowledge Graph API through six read-only MCP tools: `status`, `schema`, `tools`, `dsl`, `query` and `graph_status`. They let an AI assistant check the service's health, inspect the graph ontology, list the MCP tool manifest Orbit serves, fetch the query DSL, run read-only queries against the Knowledge Graph and check the indexing state. Orbit performs no writes. It is registered only when the server connects to `https://gitlab.com` and the resolved tier is Premium or Ultimate: its six actions are the `orbit.*` catalog entries on the default dynamic surface, the `gitlab_orbit` meta-tool with `GITLAB_MCP_TOOL_SURFACE=meta`, or six `gitlab_orbit_*` tools with `GITLAB_MCP_TOOL_SURFACE=individual`."
   - q: "What are the four Orbit query_type variants?"
     a: "The `query` action takes a query in version 12 of the Orbit query DSL, which every query writes as a `query_type` and a `nodes` list, even for one node. **traversal** reads one node, or several joined by `relationships`. **aggregation** counts, sums or averages over nodes, optionally grouped. **neighbors** returns the relationships of its one node, outgoing unless `neighbors.direction` says `incoming` or `both`. **path_finding** finds the shortest path between two nodes, `max_depth` 1 to 3, along the `rel_types` it names. GitLab compiles each query and answers one it cannot run with a message naming the fault, which the server passes on."
   - q: "Is Orbit available on self-managed GitLab?"

@@ -157,14 +157,14 @@ The assistant runs `project.members` (`gitlab_project` with `action: members` on
 
 Dynamic mode is the default, so the prompts above never name a tool directly. The assistant first discovers the action and its schema with `gitlab_find_action`, then runs it with `gitlab_execute_action` using a canonical `domain.action` ID:
 
-```text
+```text translated
 gitlab_find_action → query: "list open merge requests"
 gitlab_execute_action → action: "merge_request.list", params: { project_id: "42", state: "opened" }
 ```
 
 When a pipeline fails, the same flow chains two actions — find the failing jobs, then read one job's log:
 
-```text
+```text translated
 gitlab_find_action → query: "list failed jobs in a pipeline"
 gitlab_execute_action → action: "job.list", params: { project_id: "42", pipeline_id: 8847, scope: ["failed"] }
 gitlab_execute_action → action: "job.trace", params: { project_id: "42", job_id: 501 }
@@ -174,7 +174,7 @@ gitlab_execute_action → action: "job.trace", params: { project_id: "42", job_i
 
 To see what a domain covers on the default dynamic surface, search the catalog or read the tool manifest resource:
 
-```text
+```text translated
 User: "What can I do with merge requests?"
 → gitlab_find_action → query: "merge request"        ranked actions with their input schemas
 → read gitlab://tools and keep the merge_request.* entries
@@ -193,7 +193,7 @@ Pass the remote exactly as `git remote -v` prints it, scheme or `git@` prefix in
 
 With `GITLAB_MCP_TOOL_SURFACE=meta`, {stats.meta.base} tools serve a Free or CE instance. The catalog grows with the tier: {stats.meta.premium} on self-managed Premium and {stats.meta.self_managed_enterprise} on self-managed Ultimate, one more of each on GitLab.com, where `gitlab_orbit` is served from Premium up ({stats.meta.gitlab_com_premium} on GitLab.com Premium, {stats.meta.gitlab_com} on GitLab.com Ultimate). Each domain tool takes only the top-level keys `action` and `params`:
 
-```text
+```text translated
 Resource: gitlab://tools/gitlab_project
 → the gitlab_project tool's entry: its description, which carries the guidance for each action, and its input schema
 
@@ -212,7 +212,7 @@ MCP prompts gather the GitLab data for a recurring question and hand it to the m
 
 A personal dashboard:
 
-```text
+```text translated
 my_open_mrs()                    → your open MRs across projects, as author or assignee
 my_pending_reviews()             → open MRs waiting for your review
 my_issues()                      → issues assigned to you, with overdue detection
@@ -221,7 +221,7 @@ daily_standup(project_id="42")   → your last 24 hours in one project: done, pl
 
 A manager's dashboard:
 
-```text
+```text translated
 team_overview(group_id="7")                → group members with open MR counts and recent merges
 reviewer_workload(group_id="7")            → how many open MRs each member is reviewing
 group_mr_dashboard(group_id="7")           → the group's MRs by project, with state and target branch filters
@@ -230,7 +230,7 @@ user_activity_report(username="johndoe")   → one user's events, merged MRs and
 
 A project's health:
 
-```text
+```text translated
 project_health_check(project_id="42")
 → latest pipeline status, open merge requests, branch hygiene and recommendations
 

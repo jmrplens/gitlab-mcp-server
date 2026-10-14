@@ -160,7 +160,7 @@ exec {to}>&-
 wait "${pid}"
 
 if [[ -z "${RESULT}" ]]; then
-  echo "el servidor terminó sin responder" >&2
+  echo "the server exited without answering" >&2
   exit 1
 fi
 jq '.' <<<"${RESULT}"
@@ -233,15 +233,15 @@ mcp_call() {
   # fallos distintos, y ninguno fija un estado de salida: sin estas
   # comprobaciones la función no imprime nada útil y el job termina con éxito.
   if [[ -z "${response}" ]]; then
-    echo "MCP ${action}: el servidor terminó sin responder" >&2
+    echo "MCP ${action}: the server exited without answering" >&2
     return 1
   fi
   if jq -e 'has("error")' >/dev/null <<<"${response}"; then
-    echo "MCP ${action} ha fallado: $(jq -r '.error.message' <<<"${response}")" >&2
+    echo "MCP ${action} failed: $(jq -r '.error.message' <<<"${response}")" >&2
     return 1
   fi
   if jq -e '.result.isError == true' >/dev/null <<<"${response}"; then
-    echo "MCP ${action} ha devuelto un error de herramienta: $(jq -r '.result.content[0].text' <<<"${response}")" >&2
+    echo "MCP ${action} returned a tool error: $(jq -r '.result.content[0].text' <<<"${response}")" >&2
     return 1
   fi
   jq -r '.result.content[0].text' <<<"${response}"
@@ -249,11 +249,11 @@ mcp_call() {
 
 # Uso
 ISSUES=$(mcp_call "issue.list" '{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened"}')
-echo "Issues abiertos: ${ISSUES}"
+echo "Open issues: ${ISSUES}"
 
 # CI_MERGE_REQUEST_IID solo existe en los pipelines de merge request
 MR_DETAILS=$(mcp_call "merge_request.get" '{"project_id":"'"${CI_PROJECT_ID}"'","merge_request_iid":"'"${CI_MERGE_REQUEST_IID}"'"}')
-echo "Detalles del MR: ${MR_DETAILS}"
+echo "MR details: ${MR_DETAILS}"
 ```
 
 ## Modo 2: Con LLM (Cliente MCP headless)
@@ -318,7 +318,7 @@ auto-review:
         --server gitlab \
         --provider openai \
         --model gpt-4o \
-        --prompt "Revisa el merge request !${CI_MERGE_REQUEST_IID} en el proyecto ${CI_PROJECT_ID}. Comprueba calidad de código, problemas de seguridad y tests faltantes. Publica tu revisión como nota en el MR." \
+        --prompt "Review merge request !${CI_MERGE_REQUEST_IID} in project ${CI_PROJECT_ID}. Check for code quality, security issues, and missing tests. Post your review as a note on the MR." \
         --raw
   rules:
     - if: $CI_MERGE_REQUEST_IID
@@ -360,7 +360,7 @@ triage-issues:
         --server gitlab \
         --provider openai \
         --model gpt-4o \
-        --prompt "Lista todos los issues abiertos del proyecto ${CI_PROJECT_ID} que no tengan etiquetas. Para cada uno, analiza su contenido y añade las etiquetas adecuadas (bug, feature, documentation, etc.)." \
+        --prompt "List all open issues in project ${CI_PROJECT_ID} without labels. For each issue, analyze its content and add appropriate labels (bug, feature, documentation, etc.)." \
         --raw
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
@@ -405,7 +405,7 @@ local-llm-review:
         --server gitlab \
         --provider ollama \
         --model qwen2.5-coder:7b \
-        --prompt "Resume los últimos 5 merge requests del proyecto ${CI_PROJECT_ID}." \
+        --prompt "Summarize the latest 5 merge requests in project ${CI_PROJECT_ID}." \
         --raw
 ```
 
@@ -548,7 +548,7 @@ jobs:
             --server gitlab \
             --provider openai \
             --model gpt-4o \
-            --prompt "Resume los merge requests fusionados la última semana en el proyecto de GitLab ${GITLAB_PROJECT}." \
+            --prompt "Summarize the merge requests merged in the last week in GitLab project ${GITLAB_PROJECT}." \
             --raw
 ```
 

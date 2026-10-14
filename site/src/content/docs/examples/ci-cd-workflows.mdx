@@ -99,7 +99,7 @@ Returns: full job log output. Useful for diagnosing test failures without openin
 
 A client that reads MCP resources can begin with the default branch's latest pipeline without a tool call, then follow the same path down to the log:
 
-```text
+```text translated
 1. Resource: gitlab://project/42/pipelines/latest
    → the default branch's latest pipeline: ID, status, ref, SHA, source and web URL
 2. job.list → project_id: "42", pipeline_id: 100, scope: ["failed"]
@@ -248,14 +248,14 @@ Returns: the metric aggregated for the entire group per interval, useful for eng
 
 In the default dynamic surface, the assistant discovers the exact CI/CD action and its schema first, then executes it, so the `domain.action` IDs above are exactly what it passes to `gitlab_execute_action`. The two-step pattern is find, then execute:
 
-```text
+```text translated
 gitlab_find_action → query: "latest pipeline status for project"
 gitlab_execute_action → action: "pipeline.latest", params: { project_id: "42" }
 ```
 
 For failed jobs, discover the log or retry action first, then execute with the returned schema:
 
-```text
+```text translated
 gitlab_find_action → query: "get failed job trace"
 gitlab_execute_action → action: "job.trace", params: { project_id: "42", job_id: 9876 }
 ```

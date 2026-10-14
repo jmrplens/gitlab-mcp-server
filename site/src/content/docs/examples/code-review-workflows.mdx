@@ -136,7 +136,7 @@ Only discussions count toward the unresolved-threads gate. Draft notes keep the 
 
 **Prompt**: "Add a comment to MR !42 saying 'The error handling in auth.go needs a retry mechanism'"
 
-```text
+```text translated
 mr_review.note_create → project_id: "my-group/backend",
   merge_request_iid: 42, body: "The error handling in auth.go needs a retry mechanism"
 ```
@@ -145,7 +145,7 @@ mr_review.note_create → project_id: "my-group/backend",
 
 **Prompt**: "Start a discussion on MR !42 about the database migration strategy"
 
-```text
+```text translated
 mr_review.discussion_create → project_id: "my-group/backend",
   merge_request_iid: 42, body: "Let's discuss the database migration strategy..."
 ```
@@ -165,7 +165,7 @@ Filter the results for threads where `resolved: false` to find outstanding revie
 
 **Prompt**: "Create a draft review note on MR !42 — I'll publish all my comments together"
 
-```text
+```text translated
 mr_review.draft_note_create → project_id: "my-group/backend",
   merge_request_iid: 42, note: "Consider using a context timeout here..."
 ```
@@ -182,7 +182,7 @@ Drive a merge request through its full lifecycle: open it from a feature branch,
 
 **Prompt**: "Create a branch feature/new-login from main in the backend project and add a login page to it"
 
-```text
+```text translated
 branch.create → project_id: "my-group/backend",
   branch_name: "feature/new-login", ref: "main"
 repository.file_create → project_id: "my-group/backend",
@@ -196,7 +196,7 @@ With `GITLAB_MCP_TOOL_SURFACE=individual` these are `gitlab_branch_create` and `
 
 **Prompt**: "Create a merge request from branch feature/auth-refactor to main in the backend project"
 
-```text
+```text translated
 merge_request.create → project_id: "my-group/backend",
   source_branch: "feature/auth-refactor", target_branch: "main",
   title: "Refactor authentication module"
@@ -250,14 +250,14 @@ Returns: list of commits, changed files, and diff statistics between the two bra
 
 On the default dynamic surface the assistant discovers the review action and its schema first, then executes it, so every block above is the `action` of a `gitlab_execute_action` call. The two-step pattern is find, then execute:
 
-```text
+```text translated
 gitlab_find_action → query: "merge requests waiting for my review"
 gitlab_execute_action → action: "merge_request.list", params: { project_id: "my-group/backend", reviewer_username: "johndoe", state: "opened" }
 ```
 
 Reading a diff and posting a threaded comment follow the same shape:
 
-```text
+```text translated
 gitlab_find_action → query: "merge request diff"
 gitlab_execute_action → action: "mr_review.changes_get", params: { project_id: "my-group/backend", merge_request_iid: 42 }
 gitlab_execute_action → action: "mr_review.discussion_create", params: { project_id: "my-group/backend", merge_request_iid: 42, body: "Let's discuss the database migration strategy..." }

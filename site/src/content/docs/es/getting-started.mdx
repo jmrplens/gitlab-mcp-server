@@ -402,7 +402,7 @@ Crea o edita `.vscode/mcp.json` en la raíz de tu workspace:
   "servers": {
     "gitlab": {
       "type": "stdio",
-      "command": "/ruta/a/gitlab-mcp-server",
+      "command": "/path/to/gitlab-mcp-server",
       "env": {
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
@@ -427,7 +427,7 @@ Usa variables de entrada de VS Code para evitar almacenar el token en texto plan
   "servers": {
     "gitlab": {
       "type": "stdio",
-      "command": "/ruta/a/gitlab-mcp-server",
+      "command": "/path/to/gitlab-mcp-server",
       "env": {
         "GITLAB_TOKEN": "${input:gitlab-token}"
       }
@@ -454,7 +454,7 @@ Edita `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) 
 {
   "mcpServers": {
     "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
+      "command": "/path/to/gitlab-mcp-server",
       "env": {
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
@@ -472,7 +472,7 @@ Crea o edita `.cursor/mcp.json` en la raíz de tu proyecto:
 {
   "mcpServers": {
     "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
+      "command": "/path/to/gitlab-mcp-server",
       "env": {
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
@@ -493,7 +493,7 @@ chmod 600 ~/.gitlab-mcp-server.env
 
 claude mcp add gitlab \
   --transport stdio \
-  -- /ruta/a/gitlab-mcp-server
+  -- /path/to/gitlab-mcp-server
 ```
 
 Añade `GITLAB_URL=https://gitlab.example.com` al mismo archivo para una instancia autogestionada, o escribe el archivo entero con un editor. Nada nombra el token en la línea de comandos, así que queda fuera de `argv`, fuera del historial de la shell y fuera del propio archivo de configuración de Claude Code.
@@ -507,7 +507,7 @@ Edita `~/.codeium/windsurf/mcp_config.json`:
 {
   "mcpServers": {
     "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
+      "command": "/path/to/gitlab-mcp-server",
       "env": {
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
@@ -528,7 +528,7 @@ Edita `~/.codeium/windsurf/mcp_config.json`:
 {
   "mcpServers": {
     "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
+      "command": "/path/to/gitlab-mcp-server",
       "args": []
     }
   }
@@ -546,7 +546,7 @@ Edita tu `settings.json` de Zed y añade:
 {
   "context_servers": {
     "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
+      "command": "/path/to/gitlab-mcp-server",
       "args": [],
       "env": {
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
@@ -565,7 +565,7 @@ Crea o edita `.kiro/settings/mcp.json` en tu espacio de trabajo, o `~/.kiro/sett
 {
   "mcpServers": {
     "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
+      "command": "/path/to/gitlab-mcp-server",
       "args": [],
       "env": {
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
@@ -588,7 +588,7 @@ En el panel de Cline, selecciona el icono **MCP Servers**, abre la pestaña **Co
 {
   "mcpServers": {
     "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
+      "command": "/path/to/gitlab-mcp-server",
       "env": {
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
@@ -604,7 +604,7 @@ Añade el servidor a `~/.codex/config.toml`. Aprobar sus herramientas de anteman
 
 ```toml title="~/.codex/config.toml"
 [mcp_servers.gitlab]
-command = "/ruta/a/gitlab-mcp-server"
+command = "/path/to/gitlab-mcp-server"
 args = ["--transport", "stdio"]
 default_tools_approval_mode = "approve"
 
@@ -726,13 +726,13 @@ Tanto GitLab CE (gratuito) como EE (Premium/Ultimate) son totalmente compatibles
 
 Tu cliente MCP arranca el servidor por su cuenta cuando se conecta, así que no hay nada que lanzar antes; un cliente que liste sus servidores MCP muestra ahí `gitlab` en cuanto está en marcha. Una vez configurado, abre tu cliente de IA y pregunta:
 
-```text
+```text translated
 ¿Quién soy en GitLab?
 ```
 
 El servidor debería devolver tu perfil de usuario de GitLab, confirmando que la conexión funciona. Después pide tus proyectos:
 
-```text
+```text translated
 Lista mis proyectos de GitLab
 ```
 
@@ -749,19 +749,19 @@ En la superficie dinámica por defecto el asistente localiza la acción `project
 
 También puedes probar:
 
-```text
+```text translated
 Muéstrame las ramas del proyecto my-app
 ```
 
-```text
+```text translated
 Muéstrame el contenido de README.md en el proyecto my-app
 ```
 
-```text
+```text translated
 Lista mis merge requests asignadas
 ```
 
-```text
+```text translated
 Muestra los pipelines recientes en my-project
 ```
 

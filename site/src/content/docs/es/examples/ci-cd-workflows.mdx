@@ -99,7 +99,7 @@ Devuelve: salida completa del log del job. Útil para diagnosticar fallos en tes
 
 Un cliente que lee recursos MCP puede empezar por el último pipeline de la rama predeterminada sin ninguna llamada a herramienta y seguir después el mismo camino hasta el log:
 
-```text
+```text translated
 1. Recurso: gitlab://project/42/pipelines/latest
    → ID, estado, ref, SHA, origen y URL web del último pipeline de la rama predeterminada
 2. job.list → project_id: "42", pipeline_id: 100, scope: ["failed"]
@@ -248,14 +248,14 @@ Devuelve: la métrica agregada para todo el grupo por intervalo, útil para dash
 
 En la superficie dinámica predeterminada, el asistente descubre primero la acción CI/CD exacta y su esquema, y luego la ejecuta, así que los IDs `domain.action` anteriores son exactamente lo que pasa a `gitlab_execute_action`. El patrón de dos pasos es buscar y luego ejecutar:
 
-```text
+```text translated
 gitlab_find_action → query: "estado del último pipeline del proyecto"
 gitlab_execute_action → action: "pipeline.latest", params: { project_id: "42" }
 ```
 
 Para jobs fallidos, descubre primero la acción de log o reintento y luego ejecuta con el schema devuelto:
 
-```text
+```text translated
 gitlab_find_action → query: "obtener trace de job fallido"
 gitlab_execute_action → action: "job.trace", params: { project_id: "42", job_id: 9876 }
 ```

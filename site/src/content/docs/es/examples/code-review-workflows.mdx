@@ -136,7 +136,7 @@ Solo las discusiones cuentan para el control de hilos sin resolver. Las notas bo
 
 **Prompt**: "Añade un comentario al MR !42 diciendo 'El manejo de errores en auth.go necesita un mecanismo de reintento'"
 
-```text
+```text translated
 mr_review.note_create → project_id: "my-group/backend",
   merge_request_iid: 42, body: "El manejo de errores en auth.go necesita un mecanismo de reintento"
 ```
@@ -145,7 +145,7 @@ mr_review.note_create → project_id: "my-group/backend",
 
 **Prompt**: "Inicia una discusión en el MR !42 sobre la estrategia de migración de base de datos"
 
-```text
+```text translated
 mr_review.discussion_create → project_id: "my-group/backend",
   merge_request_iid: 42, body: "Discutamos la estrategia de migración de base de datos..."
 ```
@@ -165,7 +165,7 @@ Filtra los resultados por hilos donde `resolved: false` para encontrar elementos
 
 **Prompt**: "Crea una nota de revisión en borrador en el MR !42 — publicaré todos mis comentarios juntos"
 
-```text
+```text translated
 mr_review.draft_note_create → project_id: "my-group/backend",
   merge_request_iid: 42, note: "Considera usar un context timeout aquí..."
 ```
@@ -182,7 +182,7 @@ Lleva un merge request por todo su ciclo de vida: ábrelo desde una rama de func
 
 **Prompt**: "Crea una rama feature/new-login desde main en el proyecto backend y añádele una página de login"
 
-```text
+```text translated
 branch.create → project_id: "my-group/backend",
   branch_name: "feature/new-login", ref: "main"
 repository.file_create → project_id: "my-group/backend",
@@ -196,7 +196,7 @@ Con `GITLAB_MCP_TOOL_SURFACE=individual` son `gitlab_branch_create` y `gitlab_fi
 
 **Prompt**: "Crea un merge request de la rama feature/auth-refactor a main en el proyecto backend"
 
-```text
+```text translated
 merge_request.create → project_id: "my-group/backend",
   source_branch: "feature/auth-refactor", target_branch: "main",
   title: "Refactorizar módulo de autenticación"
@@ -250,14 +250,14 @@ Devuelve: lista de commits, archivos modificados y estadísticas del diff entre 
 
 En la superficie dinámica predeterminada, el asistente descubre primero la acción de revisión y su esquema, y luego la ejecuta, así que cada bloque anterior es el `action` de una llamada a `gitlab_execute_action`. El patrón de dos pasos es buscar y luego ejecutar:
 
-```text
+```text translated
 gitlab_find_action → query: "merge requests pendientes de mi revisión"
 gitlab_execute_action → action: "merge_request.list", params: { project_id: "my-group/backend", reviewer_username: "johndoe", state: "opened" }
 ```
 
 Leer un diff y publicar un comentario en hilo siguen la misma forma:
 
-```text
+```text translated
 gitlab_find_action → query: "diff de un merge request"
 gitlab_execute_action → action: "mr_review.changes_get", params: { project_id: "my-group/backend", merge_request_iid: 42 }
 gitlab_execute_action → action: "mr_review.discussion_create", params: { project_id: "my-group/backend", merge_request_iid: 42, body: "Discutamos la estrategia de migración de base de datos..." }

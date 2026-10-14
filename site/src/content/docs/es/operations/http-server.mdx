@@ -398,7 +398,7 @@ El despliegue anuncia ese único scope en `scopes_supported`, y un cliente como 
       "type": "http",
       "url": "https://mcp.example.com/mcp",
       "oauth": {
-        "clientId": "TU_APPLICATION_ID_DE_GITLAB"
+        "clientId": "YOUR_GITLAB_APPLICATION_ID"
       }
     }
   }
@@ -419,7 +419,7 @@ Sin `clientId`, VS Code recurre al Registro Dinámico de Clientes (DCR). El DCR 
 ```bash
 claude mcp add gitlab \
   --transport http \
-  --client-id TU_APPLICATION_ID_DE_GITLAB \
+  --client-id YOUR_GITLAB_APPLICATION_ID \
   --callback-port 8090 \
   https://mcp.example.com/mcp
 ```
@@ -760,7 +760,7 @@ Añadir a `.vscode/mcp.json`:
       "type": "http",
       "url": "https://mcp.example.com/mcp",
       "headers": {
-        "PRIVATE-TOKEN": "glpat-tu-token"
+        "PRIVATE-TOKEN": "glpat-your-token"
       }
     }
   }
@@ -797,7 +797,7 @@ OpenCode guarda los servidores bajo `mcp` en `opencode.json`, y uno remoto lleva
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "PRIVATE-TOKEN: glpat-tu-token" \
+  -H "PRIVATE-TOKEN: glpat-your-token" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
@@ -1132,7 +1132,7 @@ Lo que eso retiene es la ocupación frente a los llamantes en general, no el hec
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "PRIVATE-TOKEN: glpat-tu-token" \
+  -H "PRIVATE-TOKEN: glpat-your-token" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' | head -c 200
 ```
 
@@ -1143,7 +1143,7 @@ curl -s -o /dev/null -w "%{http_code}" \
   -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "PRIVATE-TOKEN: glpat-tu-token" \
+  -H "PRIVATE-TOKEN: glpat-your-token" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 # Esperado: 200
 ```
@@ -1176,7 +1176,7 @@ El documento enumerante es la vía sancionada para decirle a algo que no tiene c
 Ambas fichas y el documento RFC 9728 en `/.well-known/oauth-protected-resource[/<ruta de --public-url>]` responden los mismos bytes hasta que el proceso se reinicia, y las tres lo dicen dos veces: `Cache-Control: public, max-age=3600` es cuánto tiempo puede reutilizar una copia el cliente sin preguntar, y el `ETag` es lo que envía después para preguntar si esa copia sigue vigente. La ficha SEP-2127 se genera una sola vez al arrancar, cuando se montan sus rutas, y el documento SEP-1649 una vez por proceso, en segundo plano, cuando llega su primera petición; el documento RFC 9728 se serializa en cada petición, a partir de un valor fijado al arrancar, y su tag se calcula sobre los bytes que produjo esa petición y no sobre una copia hecha para ello. Eso cuesta un hash de unos cientos de bytes en una ruta a la que un cliente llega una vez por descubrimiento, y compra un validador que no puede describir un cuerpo que nadie envió.
 
 ```bash
-curl -sI -H 'If-None-Match: "<el etag>"' \
+curl -sI -H 'If-None-Match: "<the etag>"' \
   http://localhost:8080/.well-known/mcp/server-card.json
 # HTTP/1.1 304 Not Modified
 ```

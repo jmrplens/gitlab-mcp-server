@@ -152,7 +152,7 @@ HAProxy computes the digest in its own configuration, so nothing has to be
 trusted to keep the raw credential out of a routing key, and it polls `/health`,
 which is what makes the drain window mean anything.
 
-```text
+```text comments=hash
 global
   daemon
 defaults

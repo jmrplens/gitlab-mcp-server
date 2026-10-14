@@ -72,7 +72,7 @@ falta ningún módulo de terceros.
 ```nginx
 # Mantén la sal fuera del repositorio: inclúyela desde un fichero 0600.
 map $host $mcp_salt {
-    default "una-sal-larga-y-aleatoria-por-despliegue";
+    default "a-long-random-per-deployment-salt";
 }
 
 # La credencial bearer, sin su prefijo de esquema.
@@ -155,7 +155,7 @@ HAProxy calcula el digest en su propia configuración, así que no hay que confi
 en nadie para mantener la credencial en bruto fuera de una clave de enrutado, y
 consulta `/health`, que es lo que hace que la ventana de drenaje signifique algo.
 
-```text
+```text comments=hash
 global
   daemon
 defaults
@@ -177,7 +177,7 @@ frontend mcp
 
 backend mcp_servers
   # Enruta por un digest con sal, nunca por la credencial.
-  balance hash var(txn.cred),concat(una-sal-larga-y-aleatoria-por-despliegue),sha1,hex
+  balance hash var(txn.cred),concat(a-long-random-per-deployment-salt),sha1,hex
   hash-type consistent
   option httpchk
   http-check send meth GET uri /health

@@ -157,14 +157,14 @@ El asistente ejecuta `project.members` (`gitlab_project` con `action: members` e
 
 El modo dinámico es el predeterminado, así que los prompts anteriores nunca nombran una herramienta directamente. El asistente descubre primero la acción y su esquema con `gitlab_find_action` y luego la ejecuta con `gitlab_execute_action` usando un ID canónico `domain.action`:
 
-```text
+```text translated
 gitlab_find_action → query: "listar merge requests abiertas"
 gitlab_execute_action → action: "merge_request.list", params: { project_id: "42", state: "opened" }
 ```
 
 Cuando falla un pipeline, el mismo flujo encadena dos acciones — localizar los jobs fallidos y leer el log de uno de ellos:
 
-```text
+```text translated
 gitlab_find_action → query: "listar jobs fallidos de un pipeline"
 gitlab_execute_action → action: "job.list", params: { project_id: "42", pipeline_id: 8847, scope: ["failed"] }
 gitlab_execute_action → action: "job.trace", params: { project_id: "42", job_id: 501 }
@@ -174,7 +174,7 @@ gitlab_execute_action → action: "job.trace", params: { project_id: "42", job_i
 
 Para ver qué cubre un dominio en la superficie dinámica predeterminada, busca en el catálogo o lee el recurso del manifiesto de herramientas:
 
-```text
+```text translated
 Usuario: "¿Qué puedo hacer con los merge requests?"
 → gitlab_find_action → query: "merge request"        acciones ordenadas con sus esquemas de entrada
 → leer gitlab://tools y quedarse con las entradas merge_request.*
@@ -193,7 +193,7 @@ Pasa el remoto tal como lo imprime `git remote -v`, con el esquema o el prefijo 
 
 Con `GITLAB_MCP_TOOL_SURFACE=meta`, {stats.meta.base} herramientas sirven a una instancia Free o CE. El catálogo crece con el tier: {stats.meta.premium} en Premium autoalojado y {stats.meta.self_managed_enterprise} en Ultimate autoalojado, una más en cada caso en GitLab.com, donde `gitlab_orbit` se sirve a partir de Premium ({stats.meta.gitlab_com_premium} en GitLab.com Premium, {stats.meta.gitlab_com} en GitLab.com Ultimate). Cada herramienta de dominio solo acepta las claves de primer nivel `action` y `params`:
 
-```text
+```text translated
 Recurso: gitlab://tools/gitlab_project
 → la entrada de la herramienta gitlab_project: su descripción, que lleva la guía de cada acción, y su esquema de entrada
 
@@ -212,7 +212,7 @@ Los prompts MCP reúnen los datos de GitLab para una pregunta recurrente y se lo
 
 Un panel personal:
 
-```text
+```text translated
 my_open_mrs()                    → tus MRs abiertos en todos los proyectos, como autor o asignado
 my_pending_reviews()             → MRs abiertos que esperan tu revisión
 my_issues()                      → issues asignados a ti, con detección de vencidos
@@ -221,7 +221,7 @@ daily_standup(project_id="42")   → tus últimas 24 horas en un proyecto: hecho
 
 Un panel de responsable de equipo:
 
-```text
+```text translated
 team_overview(group_id="7")                → miembros del grupo con sus MRs abiertos y fusiones recientes
 reviewer_workload(group_id="7")            → cuántos MRs abiertos revisa cada miembro
 group_mr_dashboard(group_id="7")           → los MRs del grupo por proyecto, con filtros de estado y rama destino
@@ -230,7 +230,7 @@ user_activity_report(username="johndoe")   → eventos, MRs fusionados y revisio
 
 La salud de un proyecto:
 
-```text
+```text translated
 project_health_check(project_id="42")
 → estado del último pipeline, merge requests abiertos, higiene de ramas y recomendaciones
 

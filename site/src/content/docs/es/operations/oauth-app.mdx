@@ -215,7 +215,7 @@ Configura cada cliente con el **Application ID** del Paso 1 y con el valor de `-
       "type": "http",
       "url": "https://mcp.example.com/mcp",
       "oauth": {
-        "clientId": "TU_APPLICATION_ID_DE_GITLAB"
+        "clientId": "YOUR_GITLAB_APPLICATION_ID"
       }
     }
   }
@@ -228,7 +228,7 @@ Configura cada cliente con el **Application ID** del Paso 1 y con el valor de `-
 ```bash
 claude mcp add gitlab \
   --transport http \
-  --client-id TU_APPLICATION_ID_DE_GITLAB \
+  --client-id YOUR_GITLAB_APPLICATION_ID \
   --callback-port 8090 \
   https://mcp.example.com/mcp
 ```
@@ -306,7 +306,7 @@ gitlab-mcp-server --http \
   --gitlab-url=https://gitlab.example.com \
   --auth-mode=oauth \
   --public-url=https://mcp.example.com/mcp \
-  --oauth-client-uid=TU_APPLICATION_ID_DE_GITLAB \
+  --oauth-client-uid=YOUR_GITLAB_APPLICATION_ID \
   --resource-documentation=https://docs.example.com/gitlab-mcp
 ```
 

@@ -69,7 +69,7 @@ Returns: issue titles, authors, labels, milestones, assignees, and creation date
 
 **Prompt**: "Open a P1 bug in the backend project: the login page times out"
 
-```text
+```text translated
 issue.create → project_id: "my-group/backend",
   title: "Fix login timeout", labels: ["bug", "P1"]
 ```
@@ -102,7 +102,7 @@ Two MCP prompts answer the wider questions: `my_issues` lists every issue assign
 
 **Prompt**: "Close issue #456 with a comment explaining the fix"
 
-```text
+```text translated
 issue.note_create → project_id: "my-group/backend",
   issue_iid: 456, body: "Fixed in MR !89 — the timeout was caused by..."
 issue.update → project_id: "my-group/backend",
@@ -196,7 +196,7 @@ Keep the conversation on the issue itself. Add a quick comment, open a threaded 
 
 **Prompt**: "Comment on issue #123: 'Reproduced on staging — the error only occurs with concurrent requests'"
 
-```text
+```text translated
 issue.note_create → project_id: "my-group/backend",
   issue_iid: 123, body: "Reproduced on staging — the error only occurs with concurrent requests"
 ```
@@ -205,7 +205,7 @@ issue.note_create → project_id: "my-group/backend",
 
 **Prompt**: "Create a discussion thread on issue #123 about the proposed architecture"
 
-```text
+```text translated
 issue.discussion_create → project_id: "my-group/backend",
   issue_iid: 123, body: "Let's discuss the proposed architecture for this feature..."
 ```
@@ -250,7 +250,7 @@ Returns: security-related issues across all projects in the group.
 
 On the default dynamic surface the assistant discovers the issue action and its schema first, then executes it, so every block above is the `action` of a `gitlab_execute_action` call. The two-step pattern is find, then execute:
 
-```text
+```text translated
 gitlab_find_action → query: "open issues with a label"
 gitlab_execute_action → action: "issue.list", params: { project_id: "my-group/backend", state: "opened", labels: ["bug"] }
 ```

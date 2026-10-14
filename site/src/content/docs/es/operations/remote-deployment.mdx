@@ -738,8 +738,8 @@ propio.
 
 ```yaml
 # ~/.cloudflared/config.yml
-tunnel: <uuid-del-tunel>
-credentials-file: /etc/cloudflared/<uuid-del-tunel>.json
+tunnel: <tunnel-uuid>
+credentials-file: /etc/cloudflared/<tunnel-uuid>.json
 
 ingress:
   - hostname: mcp.example.com
@@ -964,7 +964,7 @@ su cuenta. Esto no necesita ningún módulo de terceros:
 ```nginx
 # Mantén la sal fuera del repositorio: inclúyela desde un fichero 0600.
 map $host $mcp_salt {
-    default "una-sal-larga-y-aleatoria-por-despliegue";
+    default "a-long-random-per-deployment-salt";
 }
 
 # La credencial bearer, sin su prefijo de esquema.
