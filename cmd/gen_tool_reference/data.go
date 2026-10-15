@@ -68,8 +68,9 @@ func decodeDomains(raw []byte) (domains, error) {
 	categories := map[string]bool{}
 	for _, c := range data.Categories {
 		categories[c.ID] = true
-		problems = append(problems, c.Title.missing("category "+c.ID+" title")...)
-		problems = append(problems, c.Title.strays("category "+c.ID+" title")...)
+		title := "category " + c.ID + " title"
+		problems = append(problems, c.Title.missing(title)...)
+		problems = append(problems, c.Title.strays(title)...)
 	}
 	used := map[string]bool{}
 	for _, tool := range data.sortedTools() {
@@ -78,14 +79,16 @@ func decodeDomains(raw []byte) (domains, error) {
 		if !categories[d.Category] {
 			problems = append(problems, fmt.Sprintf("%s: unknown category %q", tool, d.Category))
 		}
-		problems = append(problems, d.Title.missing(tool+" title")...)
-		problems = append(problems, d.Description.missing(tool+" description")...)
-		problems = append(problems, d.Overview.missing(tool+" overview")...)
-		problems = append(problems, d.Questions.missing(tool+" questions")...)
-		problems = append(problems, d.Title.strays(tool+" title")...)
-		problems = append(problems, d.Description.strays(tool+" description")...)
-		problems = append(problems, d.Overview.strays(tool+" overview")...)
-		problems = append(problems, d.Questions.strays(tool+" questions")...)
+		title, description := tool+" title", tool+" description"
+		overview, questions := tool+" overview", tool+" questions"
+		problems = append(problems, d.Title.missing(title)...)
+		problems = append(problems, d.Description.missing(description)...)
+		problems = append(problems, d.Overview.missing(overview)...)
+		problems = append(problems, d.Questions.missing(questions)...)
+		problems = append(problems, d.Title.strays(title)...)
+		problems = append(problems, d.Description.strays(description)...)
+		problems = append(problems, d.Overview.strays(overview)...)
+		problems = append(problems, d.Questions.strays(questions)...)
 	}
 	for _, c := range data.Categories {
 		if !used[c.ID] {
