@@ -20,11 +20,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 21,667 |
-| Unit test functions                                   | 20,129 |
+| Total test functions                                  | 21,677 |
+| Unit test functions                                   | 20,139 |
 | E2E test functions                                    |  1,538 |
 | cmd test functions                                    |  4,807 |
-| Test files (internal/)                                |    714 |
+| Test files (internal/)                                |    715 |
 | Test files (cmd/)                                     |    335 |
 | Test files (test/e2e/)                                |    416 |
 | Tool sub-packages tested                              |    180 |
@@ -39,7 +39,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 13,344 | 61.6% |
 | `TestFunc` (no underscore)             |    908 |  4.2% |
-| `TestFunc_Scenario_Expected` (3+ part) |  7,415 | 34.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  7,425 | 34.3% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          4,014 |        237 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            413 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (180) |         10,895 |        461 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (180) |         10,905 |        462 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,538 |        416 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          4,807 |        335 | server entry point and developer command utilities                                              |
-| **Total**               |     **21,667** |  **1,465** |                                                                                                 |
+| **Total**               |     **21,677** |  **1,466** |                                                                                                 |
 
 ### Core Packages
 
@@ -107,7 +107,7 @@
 | jobs              |   171 |   100.0% |    17 |
 | commits           |   154 |   100.0% |    13 |
 | pipelines         |   149 |   100.0% |    12 |
-| search            |   139 |   100.0% |    10 |
+| search            |   149 |   100.0% |    10 |
 | workitems         |   136 |   100.0% |     6 |
 | resourceevents    |   131 |   100.0% |    17 |
 | runners           |   131 |   100.0% |    19 |
@@ -280,7 +280,7 @@
 | runnercontrollerscopes  |         40 |          2 |   100.0% |         5 |
 | runnercontrollertokens  |         48 |          2 |   100.0% |         5 |
 | runners                 |        131 |          2 |   100.0% |        19 |
-| search                  |        139 |          2 |   100.0% |        10 |
+| search                  |        149 |          3 |   100.0% |        10 |
 | securefiles             |         33 |          1 |   100.0% |         4 |
 | securityattributes      |         39 |          1 |   100.0% |         5 |
 | securitycategories      |         29 |          1 |   100.0% |         3 |
@@ -310,7 +310,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        136 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **10,895** |    **461** |          | **1,190** |
+| **Total**               | **10,905** |    **462** |          | **1,190** |
 
 </details>
 

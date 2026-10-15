@@ -1,9 +1,11 @@
 package search
 
 import (
+	"cmp"
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mergerequests"
@@ -18,16 +20,156 @@ import (
 // "(0)" above a table of rows — a count nothing had measured, presented as
 // GitLab's own.
 
-// FormatCodeMarkdown renders a paginated list of code search results.
-// Includes a Project column so global/group searches show which project
-// each blob belongs to.
+// maxSnippetLines bounds the lines of one code search snippet the Markdown
+// shows. GitLab sends three to five lines by default and 41 at most on
+// advanced search, while a basic-search hunk has no upper bound, since git
+// grep merges the context of nearby matches. With the default context every
+// backend puts the match within the first three lines it sends, so the head is
+// the part worth showing. That holds only because this server sends no
+// num_context_lines: passing it through would put the match up to 20 lines
+// down, and the cap would then have to keep the lines around the match.
+const maxSnippetLines = 10
+
+// maxSnippetLineRunes bounds one line of a snippet. GitLab sends whole lines
+// around a content match, so a minified or generated file arrives as one line
+// of any length. The cap is per line rather than on the whole snippet so that
+// long context lines above the match cannot push the match itself out of
+// view.
+const maxSnippetLineRunes = 300
+
+// maxCodeMarkdownBytes bounds the table and snippet sections of one code
+// search page as the client receives them, fences included. A hundred capped
+// snippets would still run to hundreds of kilobytes. The table itself is not
+// cut: the budget decides how many snippet sections follow it. Sections are
+// written in order and stop at the first that does not fit, so a large early
+// snippet leaves later small ones unshown, which keeps the results left
+// without a snippet one run a single note can name. Each of them keeps its
+// table row.
+//
+// None of the three is a parameter: the structured result carries every
+// snippet whole, and GitLab's own num_context_lines already sizes what it
+// sends on the backends that honor it.
+const maxCodeMarkdownBytes = 40_000
+
+// snippetLineEndings turns every line ending into a line feed. CommonMark
+// reads a lone carriage return as a line ending too, so counting lines by the
+// line feed alone would count fewer than a renderer shows.
+var snippetLineEndings = strings.NewReplacer("\r\n", "\n", "\r", "\n")
+
+// codeSnippet is what the Markdown shows of one result's data.
+type codeSnippet struct {
+	// text is the head of the data, one line feed after each line kept.
+	text string
+	// lines is how many lines GitLab sent.
+	lines int
+	// longLines reports whether a kept line was cut to maxSnippetLineRunes.
+	longLines bool
+}
+
+// cut reports whether the snippet shows less than GitLab sent.
+func (s codeSnippet) cut() bool {
+	return s.lines > maxSnippetLines || s.longLines
+}
+
+// shapeSnippet keeps the first maxSnippetLines lines of data, each cut to
+// maxSnippetLineRunes, and counts the lines it was sent. Empty data shapes to
+// no text and is never cut.
+func shapeSnippet(data string) codeSnippet {
+	data = strings.ToValidUTF8(snippetLineEndings.Replace(data), string(utf8.RuneError))
+	s := codeSnippet{lines: strings.Count(data, "\n")}
+	if !strings.HasSuffix(data, "\n") {
+		s.lines++
+	}
+	var b strings.Builder
+	rest := data
+	for kept := 0; kept < maxSnippetLines && rest != ""; kept++ {
+		line, after, _ := strings.Cut(rest, "\n")
+		head, cut := cutSnippetLine(line)
+		s.longLines = s.longLines || cut
+		b.WriteString(head)
+		b.WriteString("\n")
+		rest = after
+	}
+	s.text = b.String()
+	return s
+}
+
+// cutSnippetLine returns the first maxSnippetLineRunes runes of line, and
+// whether that left anything out. The cut lands between two runes.
+func cutSnippetLine(line string) (string, bool) {
+	runes := 0
+	for i := range line {
+		if runes == maxSnippetLineRunes {
+			return line[:i], true
+		}
+		runes++
+	}
+	return line, false
+}
+
+// writeSnippetSection writes one result's section: a heading naming the
+// result, the notes saying what the snippet leaves out, and the snippet in a
+// fence sized past its longest backtick run. GitLab sends no match line, so
+// the heading names the line the snippet starts on.
+func writeSnippetSection(c *toolutil.Card, n int, bl BlobOutput, s codeSnippet) {
+	section := c.Section(fmt.Sprintf("Result %d: %s (project %d, start line %d)",
+		n, cmp.Or(bl.Path, bl.Filename), bl.ProjectID, bl.Startline))
+	if bl.Data == "" {
+		section.Note("The snippet GitLab sent for this result is empty.")
+		return
+	}
+	if s.lines > maxSnippetLines {
+		section.Note(fmt.Sprintf("Showing the first %d of the %d lines GitLab sent for this result.", maxSnippetLines, s.lines))
+	}
+	if s.longLines {
+		section.Note(fmt.Sprintf("Lines longer than %d characters are cut.", maxSnippetLineRunes))
+	}
+	section.Fence("", "", s.text)
+}
+
+// snippetSectionBytes is how many bytes writeSnippetSection adds to b, as the
+// client receives them. The section is rendered on its own after the last two
+// bytes b holds, so the card writes the blank line that separates it from
+// what b ends with, as it will on b. WriteHints later defuses every guidance
+// heading in the response, fences included, and a defused heading is longer,
+// so the size is that of the defused text. No heading can span the seed and
+// the section, since the card puts a line break between them.
+func snippetSectionBytes(b *strings.Builder, n int, bl BlobOutput, s codeSnippet) int {
+	written := b.String()
+	seed := written[max(0, len(written)-2):]
+	var probe strings.Builder
+	probe.WriteString(seed)
+	writeSnippetSection(toolutil.NewCard(&probe, ""), n, bl, s)
+	return len(toolutil.DefuseHintsHeading(probe.String())) - len(seed)
+}
+
+// fitsCodeMarkdown reports whether a section of the given size, written after
+// used bytes, keeps the response within maxCodeMarkdownBytes.
+func fitsCodeMarkdown(used, section int) bool {
+	return used+section <= maxCodeMarkdownBytes
+}
+
+// unshownSnippetsNote names the results from first to last, counted from one,
+// that the budget left without a snippet section.
+func unshownSnippetsNote(first, last int) string {
+	const why = " no snippet shown here, as the response would be too large. Ask for fewer results per page to see every snippet."
+	if first == last {
+		return fmt.Sprintf("Result %d has", first) + why
+	}
+	return fmt.Sprintf("Results %d to %d have", first, last) + why
+}
+
+// FormatCodeMarkdown renders a paginated list of code search results: a
+// table naming each result, its project and the line its snippet starts on,
+// then each snippet under a heading of its own, cut to a bounded head. The
+// structured result carries every snippet whole.
 func FormatCodeMarkdown(out CodeOutput) string {
 	if len(out.Blobs) == 0 {
 		return toolutil.EmptyMessage("code search results")
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Code Search Results", len(out.Blobs), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("Project", "File", "Path", "Ref", "Line"))
+	b.WriteString(toolutil.MarkdownTableHeader("Project", "File", "Path", "Ref", "Start line"))
 	for _, bl := range out.Blobs {
 		b.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(bl.ProjectID, 10),
@@ -37,8 +179,30 @@ func FormatCodeMarkdown(out CodeOutput) string {
 			strconv.FormatInt(bl.Startline, 10),
 		))
 	}
-	toolutil.WriteListFooter(&b, out.Pagination, false,
-		toolutil.HintAction("repository.file_get", "read a found file by its path"))
+	c := toolutil.NewCard(&b, "")
+	// used counts the response as the client receives it, a path that spells
+	// the guidance heading in the table included.
+	used := len(toolutil.DefuseHintsHeading(b.String()))
+	cut := false
+	for i, bl := range out.Blobs {
+		n := i + 1
+		s := shapeSnippet(bl.Data)
+		section := snippetSectionBytes(&b, n, bl, s)
+		if !fitsCodeMarkdown(used, section) {
+			c.Note(unshownSnippetsNote(n, len(out.Blobs)))
+			cut = true
+			break
+		}
+		writeSnippetSection(c, n, bl, s)
+		used += section
+		cut = cut || s.cut()
+	}
+	var hints []string
+	if cut {
+		hints = append(hints, toolutil.HintAction("repository.file_get", "read the whole file of a cut or unshown snippet, with its path and ref"))
+	}
+	hints = append(hints, toolutil.HintAction("repository.file_get", "read a found file by its path"))
+	toolutil.WriteListFooter(&b, out.Pagination, false, hints...)
 	return b.String()
 }
 

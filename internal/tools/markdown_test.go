@@ -1343,6 +1343,11 @@ func TestFormatSearch_CodeMarkdown(t *testing.T) {
 		if !strings.Contains(md, "| main.go | src/main.go | main | 42 |") {
 			t.Error("missing blob row")
 		}
+		// The column holds the first line of the snippet GitLab sent, never
+		// the line that matched, and its header says so.
+		if !strings.Contains(md, "| Start line |") || strings.Contains(md, "| Line |") {
+			t.Errorf("the line column is not headed Start line:\n%s", md)
+		}
 	})
 
 	t.Run("empty", func(t *testing.T) {

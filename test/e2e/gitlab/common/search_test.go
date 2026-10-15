@@ -130,6 +130,13 @@ func TestSearch_EveryScope_FindsTheFixtureObject(t *testing.T) {
 		code := harness.Eventually(s, actionSearchCode, withParams(inProject, map[string]any{"query": f.token}), searchInterval, searchWait,
 			func(out search.CodeOutput) bool { return blobFound(out, f.commit.FilePath) })
 		e.T.Logf("code search for %q found %d blob(s)", f.token, len(code.Blobs))
+		// The text answer shows what each result matched, the file's line in
+		// a fence of its own, and not only its path, which carries the token
+		// too and so cannot tell the two apart.
+		_, said := harness.DoAnswer[search.CodeOutput](s, actionSearchCode, withParams(inProject, map[string]any{"query": f.token}))
+		if line := "The token is " + f.token + "."; !strings.Contains(said, "```\n"+line+"\n```\n") {
+			e.T.Errorf("the code search text does not fence the matched line %q:\n%s", line, said)
+		}
 
 		projects := harness.Eventually(s, actionSearchProjects, map[string]any{"query": f.project.Name}, searchInterval, searchWait,
 			func(out search.ProjectsOutput) bool { return projectFound(out, f.project.ID) })

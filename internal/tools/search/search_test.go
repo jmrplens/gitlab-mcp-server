@@ -1479,12 +1479,13 @@ func TestFormatCodeMarkdown_Empty(t *testing.T) {
 // code search results.
 func TestFormatCodeMarkdown_WithResults(t *testing.T) {
 	got := FormatCodeMarkdown(CodeOutput{
-		Blobs:      []BlobOutput{{Filename: "main.go", Path: "cmd/main.go", Ref: "main", Startline: 10}},
+		Blobs:      []BlobOutput{{Filename: "main.go", Path: "cmd/main.go", Ref: "main", Startline: 10, Data: "x := 1\n"}},
 		Pagination: onePage,
 	})
 	want := "## Code Search Results (1)\n\n" +
-		"| Project | File | Path | Ref | Line |\n| --- | --- | --- | --- | --- |\n" +
+		"| Project | File | Path | Ref | Start line |\n| --- | --- | --- | --- | --- |\n" +
 		"| 0 | main.go | cmd/main.go | main | 10 |\n" +
+		"\n### Result 1: cmd/main.go (project 0, start line 10)\n\n```\nx := 1\n```\n" +
 		onePageFooter("Use action 'repository.file_get' to read a found file by its path")
 	if got != want {
 		t.Errorf("code search:\n got %q\nwant %q", got, want)
@@ -2549,12 +2550,13 @@ func TestFormatCodeMarkdown_MiddlePageOfSeveral(t *testing.T) {
 	pag := toolutil.PaginationOutput{Page: 3, PerPage: 1, NextPage: 4, PrevPage: 2}
 	toolutil.AdjustPagination(&pag, 1)
 	got := FormatCodeMarkdown(CodeOutput{
-		Blobs:      []BlobOutput{{Filename: "main.go", Path: "cmd/main.go", Ref: "main", Startline: 10}},
+		Blobs:      []BlobOutput{{Filename: "main.go", Path: "cmd/main.go", Ref: "main", Startline: 10, Data: "x := 1\n"}},
 		Pagination: pag,
 	})
 	want := "## Code Search Results (1 shown, more available)\n\n" +
-		"| Project | File | Path | Ref | Line |\n| --- | --- | --- | --- | --- |\n" +
+		"| Project | File | Path | Ref | Start line |\n| --- | --- | --- | --- | --- |\n" +
 		"| 0 | main.go | cmd/main.go | main | 10 |\n" +
+		"\n### Result 1: cmd/main.go (project 0, start line 10)\n\n```\nx := 1\n```\n" +
 		"\nPage 3 | 1 per page | more pages available\n\n---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'repository.file_get' to read a found file by its path\n"
 	if got != want {
