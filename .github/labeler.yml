@@ -233,6 +233,7 @@ e2e:
           - test/e2e/internal/**
           - test/e2e/modeleval/**
           - internal/testutil/e2ecalls/**
+          - internal/testutil/e2erelease/**
           - internal/testutil/modelcorpus/**
           - internal/testutil/modelrecord/**
           - test/e2e/orbit/**

@@ -193,4 +193,20 @@
 // nothing read them (issue 1014). make test-e2e-ce and make test-e2e-ee apply
 // it through run-docker-e2e.sh, after the tests, and it decides the status
 // only of a run whose tests passed.
+//
+// # The release a run tests
+//
+// -check-release holds the GitLab release a run is about to test
+// (-gitlab-version, the version the instance answered) to the release the
+// fine-grained action table compiled into the server was recorded from, by
+// the rule in internal/testutil/e2erelease. A release in the table's
+// major.minor, or the prerelease right after it, is where a fine-grained
+// grant is judged, and one older than the table is a pin that runs in phase
+// A; each prints one line on stdout and exits 0. A release newer than both
+// would run every fine-grained session in phase A and let the scenarios that
+// hold a grant pass without checking one, so it exits 1 with the steps that
+// re-record the table, and a version that names no major.minor as GitLab
+// writes one exits 2, since nothing can be said about it (issue 1155). run-docker-e2e.sh applies
+// it on every run, complete or not, once the instance answers its version and
+// before go test; the harness refuses a self-hosted run by the same rule.
 package main

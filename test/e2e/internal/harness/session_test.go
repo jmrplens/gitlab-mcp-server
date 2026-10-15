@@ -13,11 +13,9 @@ package harness
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +25,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2erelease"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
 
@@ -1058,41 +1057,9 @@ func TestSession_FineGrainedPhase_HoldsThePhaseTheReleaseDecides(t *testing.T) {
 // the listing.
 func nextPrereleaseOf(t *testing.T, bucket string) string {
 	t.Helper()
-	majorText, minorText, _ := strings.Cut(bucket, ".")
-	major, majorErr := strconv.Atoi(majorText)
-	minor, minorErr := strconv.Atoi(minorText)
-	if majorErr != nil || minorErr != nil {
+	next := e2erelease.NextPrerelease(bucket)
+	if next == "" {
 		t.Fatalf("the table's bucket %q is not a major.minor", bucket)
 	}
-	if minor >= lastMinorOfAMajor {
-		return fmt.Sprintf("%d.0.0-pre", major+1)
-	}
-	return fmt.Sprintf("%d.%d.0-pre", major, minor+1)
-}
-
-// TestPrereleaseAfter_NamesTheOneReleaseTheListingFollows walks the rule the
-// harness holds the listing-only state to: the next minor's prerelease, the
-// next major's first after a major's last minor, and nothing else, a release
-// of that minor, a later minor and a bucket that is no major.minor included.
-func TestPrereleaseAfter_NamesTheOneReleaseTheListingFollows(t *testing.T) {
-	cases := []struct {
-		name, version, bucket string
-		want                  bool
-	}{
-		{name: "the next minor's prerelease", version: "19.5.0-pre", bucket: "19.4", want: true},
-		{name: "the next major's after the last minor", version: "20.0.0-pre", bucket: "19.11", want: true},
-		{name: "the next minor's release", version: "19.5.0", bucket: "19.4"},
-		{name: "the recorded minor's prerelease", version: "19.4.0-pre", bucket: "19.4"},
-		{name: "a later minor's prerelease", version: "19.6.0-pre", bucket: "19.4"},
-		{name: "the same major after the last minor", version: "19.12.0-pre", bucket: "19.11"},
-		{name: "a bucket with no minor", version: "19.5.0-pre", bucket: "19"},
-		{name: "a bucket with no major", version: "19.5.0-pre", bucket: "x.4"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := prereleaseAfter(tc.version, tc.bucket); got != tc.want {
-				t.Errorf("prereleaseAfter(%q, %q) = %t, want %t", tc.version, tc.bucket, got, tc.want)
-			}
-		})
-	}
+	return next
 }

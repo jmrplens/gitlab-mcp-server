@@ -539,16 +539,28 @@ type stubRoute struct {
 // belong against a real instance.
 func startStubGitLab(t *testing.T, routes ...stubRoute) *httptest.Server {
 	t.Helper()
+	return startStubGitLabAt(t, stubGitLabVersion, routes...)
+}
+
+// stubGitLabVersion is the release the stub GitLab reports unless a test asks
+// for another: one older than any table this repository records, so the
+// harness's own runs take the release rule's phase A and go ahead.
+const stubGitLabVersion = "18.0.0"
+
+// startStubGitLabAt is [startStubGitLab] reporting version as its release, for
+// a test of what the harness does with the release an instance answers.
+func startStubGitLabAt(t *testing.T, version string, routes ...stubRoute) *httptest.Server {
+	t.Helper()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
-		writeStubJSON(w, map[string]any{"version": "18.0.0", "revision": "abcdef", "enterprise": false})
+		writeStubJSON(w, map[string]any{"version": version, "revision": "abcdef", "enterprise": false})
 	})
 	// The health check reads /metadata, which GitLab serves with the same
 	// entity as the deprecated /version, while edition detection still reads
 	// /version, so the stub answers both.
 	mux.HandleFunc("/api/v4/metadata", func(w http.ResponseWriter, _ *http.Request) {
-		writeStubJSON(w, map[string]any{"version": "18.0.0", "revision": "abcdef", "enterprise": false, "kas": map[string]any{"enabled": false}})
+		writeStubJSON(w, map[string]any{"version": version, "revision": "abcdef", "enterprise": false, "kas": map[string]any{"enabled": false}})
 	})
 	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
 		writeStubJSON(w, map[string]any{"id": 7, "username": "harness", "name": "Harness", "is_admin": true})

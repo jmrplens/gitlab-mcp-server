@@ -246,6 +246,13 @@ func (s *runState) prepare() {
 	log.Printf("e2e: %s is GitLab %s (%s), tier %s, authenticated as %s (admin=%t)",
 		url, facts.Version, facts.editionName(), facts.tierDescription(), facts.Username, facts.Admin)
 
+	// Fatal rather than a mismatch: E2E_RUNTIME_MISMATCH=skip must not turn a
+	// table the GitLab under test has outgrown into a run of skips.
+	if refusal := checkRelease(facts.Version); refusal != "" {
+		s.refuse(refusalFatal, refusal)
+		return
+	}
+
 	if message := guardMessage(facts, s.requirement, s.pkg); message != "" {
 		s.refuse(refusalMismatch, message)
 		return

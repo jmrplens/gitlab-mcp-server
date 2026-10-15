@@ -124,6 +124,8 @@ derive_fixture_addresses
 . "${SCRIPT_DIR}/skip-gate.sh"
 # shellcheck source=test/e2e/scripts/gitlab-exceptions.sh
 . "${SCRIPT_DIR}/gitlab-exceptions.sh"
+# shellcheck source=test/e2e/scripts/release-gate.sh
+. "${SCRIPT_DIR}/release-gate.sh"
 
 # A run asked to be complete calls public URLs unless the caller said not to,
 # wherever the harness would have read that, and is refused before anything
@@ -283,6 +285,19 @@ fi
 # asked for and this says what answered, and printed inside the tee below as
 # well, so the saved output of a run names the release it tested.
 TESTED_VERSION="$(tested_gitlab_version "${E2E_DOCKER_GITLAB_URL}" "${REPO_ROOT}/test/e2e/.env.docker")" || TESTED_VERSION="unknown"
+
+# On every run, before the tests: a GitLab newer than the release the
+# fine-grained action table was recorded from would run every fine-grained
+# session in phase A, and the suite would pass without checking what a grant
+# lists or may call. The gate names both releases and how to re-record the
+# table; the trap above tears the stack down whatever it decides. A release
+# older than the table is a pin (GITLAB_IMAGE) and runs, said in one line.
+echo "=== Holding GitLab ${TESTED_VERSION} to the release the fine-grained action table records ==="
+RELEASE_STATUS=0
+gate_release "${TESTED_VERSION}" || RELEASE_STATUS=$?
+if [ "${RELEASE_STATUS}" -ne 0 ]; then
+    exit "${RELEASE_STATUS}"
+fi
 
 echo "=== Running E2E tests (${RUNTIME}) ==="
 mkdir -p "${E2E_REPORT_DIR}"

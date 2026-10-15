@@ -38,6 +38,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2erelease"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
 
@@ -547,24 +548,30 @@ type FineGrainedJudgement struct {
 // all three with one call and skips none.
 //
 // It reads the harness's own judgement of the token, which the served-set
-// check has already held the binary's listing to, against its own reading of
-// which release is which; the refusals a scenario asserts are the binary's
-// own word for the phase.
+// check has already held the binary's listing to, against the suite's own
+// reading of which release is which, internal/testutil/e2erelease, which is
+// written apart from internal/finegrained's Judge so that a Judge letting
+// another release in, or no longer letting this one in, is a session refused
+// here rather than one agreed with by construction; the refusals a scenario
+// asserts are the binary's own word for the phase. A release newer than both
+// judged states never reaches it: the run stops before any scenario reaches
+// the instance ([checkRelease]), so the phase A branch below is an older
+// release, a deliberate pin.
 func (s *Session) FineGrainedPhase() (judgement FineGrainedJudgement, problem string) {
 	authority := s.conn.authority
 	if authority == nil {
 		return FineGrainedJudgement{}, "the session carries no fine-grained authority, so its token ran as a classic one"
 	}
 	version, table := s.env.inst.facts.Version, actiongrants.Table()
-	switch {
-	case finegrained.Bucket(version) == table.Bucket:
+	switch e2erelease.Decide(version, table).Verdict {
+	case e2erelease.Recorded:
 		judgement = FineGrainedJudgement{Listing: true, Calls: true}
 		if authority.Phase() != finegrained.PhaseGranted || authority.ListingOnly() {
 			return judgement, fmt.Sprintf("on %s, the release the table records, the grant was not evaluated for the listing and the calls: "+
 				"phase %d, fallback %q, listing only %t", version, authority.Phase(), authority.Fallback(), authority.ListingOnly())
 		}
 		return judgement, ""
-	case prereleaseAfter(version, table.Bucket):
+	case e2erelease.ListingOnly:
 		judgement = FineGrainedJudgement{Listing: true}
 		if authority.Phase() != finegrained.PhaseGranted || !authority.ListingOnly() {
 			return judgement, fmt.Sprintf("on %s, the prerelease after the release the table (%s) records, the grant does not decide the listing "+
@@ -577,36 +584,6 @@ func (s *Session) FineGrainedPhase() (judgement FineGrainedJudgement, problem st
 			"want the version outside the record", version, table.Version, authority.Phase(), authority.Fallback())
 	}
 	return FineGrainedJudgement{}, ""
-}
-
-// lastMinorOfAMajor is the last minor GitLab releases in a major: a minor each
-// month and a major each May, so a major runs from .0 to .11.
-const lastMinorOfAMajor = 11
-
-// prereleaseAfter reports whether version is the prerelease of the release
-// right after the major.minor bucket: the next minor of the same major
-// ("19.5.0-pre" after "19.4"), or the next major's first after a major's last
-// minor ("20.0.0-pre" after "19.11").
-//
-// It is the harness's own reading of the rule internal/finegrained's Judge
-// applies rather than a call into it, so a Judge that let another release in,
-// or stopped letting this one in, is a session the harness refuses instead of
-// one it agrees with by construction.
-func prereleaseAfter(version, bucket string) bool {
-	if !strings.HasSuffix(version, "-pre") {
-		return false
-	}
-	majorText, minorText, _ := strings.Cut(bucket, ".")
-	major, majorErr := strconv.Atoi(majorText)
-	minor, minorErr := strconv.Atoi(minorText)
-	if majorErr != nil || minorErr != nil {
-		return false
-	}
-	next := fmt.Sprintf("%d.%d", major, minor+1)
-	if minor >= lastMinorOfAMajor {
-		next = fmt.Sprintf("%d.0", major+1)
-	}
-	return finegrained.Bucket(version) == next
 }
 
 // Tools returns the tool names the session listed when it started.

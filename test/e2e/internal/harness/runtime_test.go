@@ -7,12 +7,79 @@ package harness
 
 import (
 	"errors"
+	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2erelease"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
+
+// releasesAroundTheTable spells the releases the release rule is asked about
+// from the table this build carries, so the tests follow a re-record: the
+// table's own release, the prerelease right after it, a release one major
+// newer, and one one major older.
+func releasesAroundTheTable(t *testing.T) (recorded, listingOnly, newer, older string) {
+	t.Helper()
+	table := actiongrants.Table()
+	majorText, _, _ := strings.Cut(table.Bucket, ".")
+	major, err := strconv.Atoi(majorText)
+	if err != nil {
+		t.Fatalf("the table's bucket %q does not start with a major", table.Bucket)
+	}
+	listingOnly = e2erelease.NextPrerelease(table.Bucket)
+	if listingOnly == "" {
+		t.Fatalf("the table's bucket %q is no major.minor", table.Bucket)
+	}
+	return table.Version, listingOnly, fmt.Sprintf("%d.0.0-ee", major+1), fmt.Sprintf("%d.0.0", major-1)
+}
+
+// TestCheckRelease_EachVerdict_RefusesOnlyWhatTheRunStopsOn holds the
+// harness's half of issue 1155 to the release rule: a release newer than the
+// table and a version that does not parse are refused with the rule's own
+// text, while the table's release, the prerelease right after it and an
+// older release go ahead, each logging the one line that says which state the
+// run's fine-grained sessions are in.
+func TestCheckRelease_EachVerdict_RefusesOnlyWhatTheRunStopsOn(t *testing.T) {
+	recorded, listingOnly, newer, older := releasesAroundTheTable(t)
+	cases := []struct {
+		name, version string
+		refused       []string
+		logged        string
+	}{
+		{name: "the table's release", version: recorded, logged: "the listing and the calls (phase B)"},
+		{name: "the prerelease right after", version: listingOnly, logged: "the listing alone"},
+		{name: "an older release", version: older, logged: "phase A"},
+		{name: "a newer release", version: newer, refused: []string{"GitLab " + newer + " is newer", "make gen-api-live", "make gen-action-grants"}},
+		{name: "a version that does not parse", version: "unknown", refused: []string{`"unknown"`, "does not start with a major.minor"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			logs := captureLog(t)
+			refusal := checkRelease(tc.version)
+			if tc.refused == nil {
+				if refusal != "" {
+					t.Fatalf("checkRelease(%q) refused the run:\n%s", tc.version, refusal)
+				}
+				if got := logs.String(); !strings.Contains(got, "e2e: GitLab "+tc.version) || !strings.Contains(got, tc.logged) {
+					t.Errorf("checkRelease(%q) logged %q, want one line naming the release and %q", tc.version, got, tc.logged)
+				}
+				return
+			}
+			for _, want := range tc.refused {
+				if !strings.Contains(refusal, want) {
+					t.Errorf("checkRelease(%q) refused with a text that does not mention %q:\n%s", tc.version, want, refusal)
+				}
+			}
+			if got := logs.String(); got != "" {
+				t.Errorf("checkRelease(%q) logged %q besides refusing; the refusal is logged once, by the refusal itself", tc.version, got)
+			}
+		})
+	}
+}
 
 // TestGuardMessage_EveryRuntime_RefusesOnlyTheWrongOnes is the table the guard
 // exists for: three requirements against the three runtimes this suite runs

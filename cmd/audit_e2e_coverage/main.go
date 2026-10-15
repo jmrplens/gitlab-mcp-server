@@ -11,6 +11,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 )
 
 // The exit statuses. Findings and refusals are told apart because a CI step
@@ -64,6 +65,14 @@ type options struct {
 	checkSkips bool
 	// skipDeclarations is the skip gate's table.
 	skipDeclarations []skipDeclaration
+	// checkRelease holds the GitLab release a run is about to test
+	// (gitlabVersion) to the one the fine-grained action table was recorded
+	// from, which is how a Docker run stops before go test on a release the
+	// table has fallen behind (issue 1155). releaseTable is the table it is
+	// measured against; nil is the one this build carries.
+	checkRelease  bool
+	gitlabVersion string
+	releaseTable  *finegrained.Table
 	// recordPath and recordPage are the two committed artifacts; empty means
 	// the repository's own.
 	recordPath string
@@ -133,17 +142,24 @@ func main() {
 	flag.StringVar(&opts.recordPath, "record-path", "", "the coverage record to write, check or render (default: the repository's "+recordRelPath+")")
 	flag.StringVar(&opts.recordPage, "record-page", "", "the page rendered from the record (default: the repository's "+recordPageRelPath+")")
 	flag.BoolVar(&opts.checkSkips, "check-skips", false, "fail on a skip in the -results stream that no declaration for -runtime (ce or ee) covers, and on a declaration no skip of it matches")
+	flag.BoolVar(&opts.checkRelease, "check-release", false, "stop a run whose GitLab (-gitlab-version) is newer than the release the fine-grained action table was recorded from: exit 1 naming both and the steps to re-record it, 2 for a version that does not parse, 0 with one line otherwise")
+	flag.StringVar(&opts.gitlabVersion, "gitlab-version", "", "with -check-release, the version the instance under test reported on GET /api/v4/version")
 	flag.Parse()
 	osExit(run(opts, os.Stdout, os.Stderr))
 }
 
+// hasMode reports whether the run names anything to do. The three record
+// modes read a committed artifact and need no shards, which is the whole
+// reason they can gate on a machine with no Docker, and the skip gate reads
+// the results stream alone, and the release gate the version it is handed.
+func (o options) hasMode() bool {
+	return o.calls != "" || o.static || o.portMap || o.checkRecord || o.checkRecordPage || o.renderRecord || o.checkSkips || o.checkRelease
+}
+
 // run is main with its streams and its exit status handed to it.
 func run(opts options, stdout, stderr io.Writer) int {
-	// The three record modes read a committed artifact and need no shards,
-	// which is the whole reason they can gate on a machine with no Docker, and
-	// the skip gate reads the results stream alone.
-	if opts.calls == "" && !opts.static && !opts.portMap && !opts.checkRecord && !opts.checkRecordPage && !opts.renderRecord && !opts.checkSkips {
-		fmt.Fprintln(stderr, "audit_e2e_coverage: nothing to do: give -calls, -static, -port-map, -check-record, -check-record-page, -render-record or -check-skips")
+	if !opts.hasMode() {
+		fmt.Fprintln(stderr, "audit_e2e_coverage: nothing to do: give -calls, -static, -port-map, -check-record, -check-record-page, -render-record, -check-skips or -check-release")
 		return exitUsage
 	}
 	// -record is not a mode of its own: it commits what a -calls run
@@ -185,6 +201,9 @@ func run(opts options, stdout, stderr io.Writer) int {
 	}
 	if opts.checkSkips {
 		status = max(status, runCheckSkips(opts, stdout, stderr))
+	}
+	if opts.checkRelease {
+		status = max(status, runCheckRelease(opts, stdout, stderr))
 	}
 	return status
 }

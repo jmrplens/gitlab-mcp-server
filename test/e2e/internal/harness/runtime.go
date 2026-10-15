@@ -29,6 +29,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2erelease"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
 
@@ -276,6 +277,28 @@ func guardMessage(facts runtimeFacts, req Requirement, pkg string) string {
 	fmt.Fprintf(&b, "  run this package against a runtime that provides it:\n      %s\n", req.target())
 	fmt.Fprintf(&b, "  or set %s=skip to skip the package instead of failing it.", envRuntimeMismatch)
 	return b.String()
+}
+
+// checkRelease holds the release an instance reported to the one the
+// fine-grained action table was recorded from (issue 1155), and returns the
+// refusal when the run stops on it: a release newer than both states a grant
+// is judged in, or a version that does not parse. A release the run goes
+// ahead on, the table's own, the prerelease right after it or an older one,
+// is logged in one line saying which state the run's fine-grained sessions
+// are in, and "" is returned.
+//
+// The rule is internal/testutil/e2erelease's, the one cmd/audit_e2e_coverage
+// -check-release answers run-docker-e2e.sh with before go test starts, so a
+// Docker run stops before the suite and a self-hosted run stops here, both
+// with the same words. It runs before the runtime guard and before anything
+// is prepared, since a run that stops should change nothing on the instance.
+func checkRelease(version string) string {
+	decision := e2erelease.Decide(version, actiongrants.Table())
+	if !decision.Runs() {
+		return decision.Text()
+	}
+	log.Printf("e2e: %s", decision.Text())
+	return ""
 }
 
 // missingCredentialsMessage is what a run configured with no instance is told.

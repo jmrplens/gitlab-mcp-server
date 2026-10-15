@@ -15910,7 +15910,9 @@ func TestServerCardSubscriptions_PublishesTheEndingVocabulary(t *testing.T) {
 // setting that defers a committed-artifact comparison and imports testing for
 // the skip it performs, which belongs in a test binary and nowhere else.
 // internal/testutil/e2ecalls is the record the end-to-end harness writes and
-// cmd/audit_e2e_coverage reads, internal/testutil/shardio is the shard
+// cmd/audit_e2e_coverage reads, internal/testutil/e2erelease is the rule both
+// of them stop a run on when the GitLab under test is newer than the
+// fine-grained action table, internal/testutil/shardio is the shard
 // mechanism under it, internal/testutil/modelrecord is the record the model
 // evaluation run writes and cmd/gen_model_results reads,
 // internal/testutil/modelcorpus is the corpus that run is driven from,
@@ -15928,7 +15930,7 @@ func TestServerCardSubscriptions_PublishesTheEndingVocabulary(t *testing.T) {
 // instead: it sets GOMAXPROCS to one when a race build initializes it, so the
 // race-built server the transport modules drive would run on one processor.
 //
-// Today all nine stay out by accident, because nothing in the server's import
+// Today all ten stay out by accident, because nothing in the server's import
 // graph happens to reach them. This makes it hold on purpose: the day somebody
 // imports test support from production code, this is the check that says so,
 // and it says so before the binary grows.
@@ -15937,6 +15939,7 @@ func TestDependencies_TestSupport_NeverReachesTheServerBinary(t *testing.T) {
 	forbidden := []string{
 		"internal/testutil",
 		"internal/testutil/e2ecalls",
+		"internal/testutil/e2erelease",
 		"internal/testutil/shardio",
 		"internal/testutil/modelrecord",
 		"internal/testutil/modelcorpus",

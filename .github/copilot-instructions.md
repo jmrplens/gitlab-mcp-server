@@ -205,6 +205,7 @@ go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...  # Linux
 - The suite records what the server actually dispatched; `make audit-e2e-coverage` reports it and `make audit-e2e-gaps` prints the work list
 - Docker mode also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` for deterministic webhook, custom emoji, and push mirror tests without public Internet dependencies. Tests that call public URLs are opt-in behind `E2E_EXTERNAL_NETWORK=true`, which `make test-e2e-ce` and `make test-e2e-ee` turn on unless the caller set it (in the environment or `.env`), and refuse to start without
 - `make test-e2e-ce` and `make test-e2e-ee` are the complete runs: they pull a GitLab or runner image only when the registry has a newer one than the daemon holds, both start the Bitbucket fixture, and they fail on a skip `cmd/audit_e2e_coverage/skip_declarations.go` does not declare for their runtime (`audit_e2e_coverage -check-skips`), so a scenario that cannot run asserts what the runtime does instead of skipping. An offline host runs them with `E2E_GATE_SKIPS=false`, which is not a complete run
+- Every Docker run, complete or not, stops before `go test` when the GitLab it booted is newer than the release the fine-grained action table records (`audit_e2e_coverage -check-release`, issue 1155), and the harness refuses `make test-e2e` against such an instance the same way: re-record the table (`make gen-api-live`, `make gen-action-grants`, commit) rather than pinning the gate's image; an older release runs in phase A and says so
 
 ### Model Evaluation (Docker)
 

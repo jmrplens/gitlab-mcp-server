@@ -220,6 +220,76 @@ func TestRunStateFinish_Mismatch_HonoursTheSkipSetting(t *testing.T) {
 	}
 }
 
+// TestPrepare_ReleaseNewerThanTheTable_RefusesBeforePreparingTheInstance is
+// issue 1155's self-hosted half: a run pointed at a GitLab newer than the
+// release the fine-grained table was recorded from is refused in the
+// environment setup with the release rule's own text, and nothing is prepared
+// on the instance. The setup runs when the first test asks the harness for
+// its instance, so that test reports the refusal, every other one skips, and
+// the package exits 2. The refusal is fatal, so the setting that turns a
+// runtime mismatch into skips does not excuse it: a stale table is no
+// mismatch a run may skip its way past.
+func TestPrepare_ReleaseNewerThanTheTable_RefusesBeforePreparingTheInstance(t *testing.T) {
+	_, _, newer, _ := releasesAroundTheTable(t)
+	stub := startStubGitLabAt(t, newer)
+	run := &runState{
+		settings: testSettings(map[string]string{
+			envGitLabURL: stub.URL, envGitLabToken: stubToken, envRuntimeMismatch: "skip",
+		}),
+		requirement: Any,
+		pkg:         "common",
+	}
+	captureLog(t)
+
+	run.prepare()
+
+	if run.kind != refusalFatal {
+		t.Fatalf("a GitLab newer than the table left the run refused as %d, want a fatal refusal", run.kind)
+	}
+	if run.inst != nil {
+		t.Error("an instance was prepared for a run the release rule stops")
+	}
+	for _, want := range []string{"GitLab " + newer + " is newer", "make gen-api-live", "make gen-action-grants"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(run.refusal, want) {
+				t.Errorf("the refusal does not mention %q:\n%s", want, run.refusal)
+			}
+		})
+	}
+	if got := run.finish(0); got != 2 {
+		t.Errorf("finish(0) = %d, want 2 for a run the release rule stopped", got)
+	}
+}
+
+// TestPrepare_ReleaseTheTableRecords_GoesOnToTheRuntimeGuard is the other
+// branch: a GitLab on the release the table records passes the release rule,
+// says in one line which state its fine-grained sessions are in, and reaches
+// the runtime guard, which is what refuses it here, since the stub is an
+// unlicensed instance and the package asks for a licensed one. The refusal is
+// a mismatch, so it is the guard's and not the release rule's.
+func TestPrepare_ReleaseTheTableRecords_GoesOnToTheRuntimeGuard(t *testing.T) {
+	recorded, _, _, _ := releasesAroundTheTable(t)
+	stub := startStubGitLabAt(t, recorded)
+	run := &runState{
+		settings:    testSettings(map[string]string{envGitLabURL: stub.URL, envGitLabToken: stubToken}),
+		requirement: Licensed,
+		pkg:         "ee",
+	}
+	logged := captureLog(t)
+
+	run.prepare()
+
+	if run.kind != refusalMismatch {
+		t.Fatalf("a GitLab on the recorded release was refused as %d, want the runtime guard's mismatch:\n%s", run.kind, run.refusal)
+	}
+	if strings.Contains(run.refusal, "newer than") {
+		t.Errorf("the release rule refused a GitLab on the recorded release:\n%s", run.refusal)
+	}
+	if want := "GitLab " + recorded + " is in the release the fine-grained action table was recorded from"; !strings.Contains(logged.String(), want) {
+		t.Errorf("the log does not say which state the run's fine-grained sessions are in (%q):\n%s", want, logged.String())
+	}
+}
+
 // TestRunStateFinish_NoRefusal_KeepsTheTestsVerdict checks that a run which
 // reached its tests returns what they decided.
 func TestRunStateFinish_NoRefusal_KeepsTheTestsVerdict(t *testing.T) {
