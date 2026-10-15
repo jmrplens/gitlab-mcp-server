@@ -37,19 +37,32 @@ const maxSnippetLines = 10
 // view.
 const maxSnippetLineRunes = 300
 
-// maxCodeMarkdownBytes bounds the table and snippet sections of one code
-// search page as the client receives them, fences included. A hundred capped
-// snippets would still run to hundreds of kilobytes. The table itself is not
-// cut: the budget decides how many snippet sections follow it. Sections are
+// maxCodeMarkdownBytes bounds the heading, table and snippet sections of one
+// code search page as the client receives them, fences included: with every
+// guidance heading defused, as WriteHints leaves the response, and normalized,
+// as every response is on its way into a content block, which drops trailing
+// spaces and control bytes. A hundred capped snippets would still run to
+// hundreds of kilobytes, and a hundred rows of long paths pass the budget on
+// their own, so the table is held to it first. Its rows are written in order
+// and stop before the first that does not fit under the heading that counts
+// them, which keeps the results left out of the table one run at the end that
+// a single note can name; a result with no row gets no section either, and
+// when not even the first row fits no table is written and the heading counts
+// none. The sections of the rows shown share what is left: they too are
 // written in order and stop at the first that does not fit, so a large early
-// snippet leaves later small ones unshown, which keeps the results left
-// without a snippet one run a single note can name. Each of them keeps its
-// table row.
+// snippet leaves later small ones unshown and the rows left without a snippet
+// are one run a second note names. Each of them keeps its table row. A note
+// offers fewer results per page only for the results a page of their own
+// would show, and names those whose row, or row and snippet, would not fit
+// even there.
 //
 // None of the three is a parameter: the structured result carries every
-// snippet whole, and GitLab's own num_context_lines already sizes what it
-// sends on the backends that honor it.
+// result and snippet whole, and GitLab's own num_context_lines already sizes
+// what it sends on the backends that honor it.
 const maxCodeMarkdownBytes = 40_000
+
+// codeSearchHeader is the header of the code search table.
+var codeSearchHeader = toolutil.MarkdownTableHeader("Project", "File", "Path", "Ref", "Start line")
 
 // snippetLineEndings turns every line ending into a line feed. CommonMark
 // reads a lone carriage return as a line ending too, so counting lines by the
@@ -127,20 +140,29 @@ func writeSnippetSection(c *toolutil.Card, n int, bl BlobOutput, s codeSnippet) 
 	section.Fence("", "", s.text)
 }
 
+// deliveredBytes is the size of s as the client receives it. WriteHints
+// defuses every guidance heading in the response, fences included, and a
+// defused heading is longer; every response is then normalized on its way
+// into a content block ([toolutil.NormalizeResultMarkdown]), which drops the
+// trailing spaces and tabs of each line and every control byte. Both work
+// within a line, so s measures its own share of the response when it ends
+// with a line break and follows one.
+func deliveredBytes(s string) int {
+	return len(toolutil.NormalizeResultMarkdown(toolutil.DefuseHintsHeading(s)))
+}
+
 // snippetSectionBytes is how many bytes writeSnippetSection adds to b, as the
 // client receives them. The section is rendered on its own after the last two
 // bytes b holds, so the card writes the blank line that separates it from
-// what b ends with, as it will on b. WriteHints later defuses every guidance
-// heading in the response, fences included, and a defused heading is longer,
-// so the size is that of the defused text. No heading can span the seed and
-// the section, since the card puts a line break between them.
+// what b ends with, as it will on b; b always ends with a line break, so the
+// size is what the seed and the section measure together less the seed.
 func snippetSectionBytes(b *strings.Builder, n int, bl BlobOutput, s codeSnippet) int {
 	written := b.String()
 	seed := written[max(0, len(written)-2):]
 	var probe strings.Builder
 	probe.WriteString(seed)
 	writeSnippetSection(toolutil.NewCard(&probe, ""), n, bl, s)
-	return len(toolutil.DefuseHintsHeading(probe.String())) - len(seed)
+	return deliveredBytes(probe.String()) - deliveredBytes(seed)
 }
 
 // fitsCodeMarkdown reports whether a section of the given size, written after
@@ -149,57 +171,193 @@ func fitsCodeMarkdown(used, section int) bool {
 	return used+section <= maxCodeMarkdownBytes
 }
 
-// unshownSnippetsNote names the results from first to last, counted from one,
-// that the budget left without a snippet section.
-func unshownSnippetsNote(first, last int) string {
-	const why = " no snippet shown here, as the response would be too large. Ask for fewer results per page to see every snippet."
-	if first == last {
-		return fmt.Sprintf("Result %d has", first) + why
-	}
-	return fmt.Sprintf("Results %d to %d have", first, last) + why
+// leftOut words the note naming a run of results the budget left out of one
+// part of the response: the table, or the snippet sections of the rows the
+// table shows.
+type leftOut struct {
+	// one and many say what was left out, after one result and after a run.
+	one, many string
+	// part and parts name what of one result, and of several, would have to
+	// fit for a page of its own to show it.
+	part, parts string
+	// every and them name what a smaller page would show: all of the run,
+	// and the ones of it that fit.
+	every, them string
 }
 
-// FormatCodeMarkdown renders a paginated list of code search results: a
-// table naming each result, its project and the line its snippet starts on,
-// then each snippet under a heading of its own, cut to a bounded head. The
-// structured result carries every snippet whole.
-func FormatCodeMarkdown(out CodeOutput) string {
-	if len(out.Blobs) == 0 {
-		return toolutil.EmptyMessage("code search results")
+var (
+	// rowsLeftOut names the results left out of the table.
+	rowsLeftOut = leftOut{
+		one: "is not shown here", many: "are not shown here",
+		part: "row", parts: "rows",
+		every: "every result", them: "them",
 	}
+	// snippetsLeftOut names the table rows left without a snippet section.
+	snippetsLeftOut = leftOut{
+		one: "has no snippet shown here", many: "have no snippet shown here",
+		part: "row and snippet", parts: "rows and snippets",
+		every: "every snippet", them: "their snippets",
+	}
+)
+
+// note names the results first to last, counted from one, that the budget
+// left out, and says why. It asks for fewer results per page only for what a
+// page of its own would show: tooLarge numbers, in order, the results of the
+// run whose part would not fit the budget even there. When that is all of
+// them no smaller page is offered; otherwise it is offered for the rest, and
+// the one that would not fit is named or, when there are several, how many
+// and the first, which keeps the note one line of bounded size whatever the
+// page holds.
+func (k leftOut) note(first, last int, tooLarge []int) string {
+	subject := fmt.Sprintf("Result %d %s", first, k.one)
+	if first < last {
+		subject = fmt.Sprintf("Results %d to %d %s", first, last, k.many)
+	}
+	const alone = " alone would make the response too large."
+	run := last - first + 1
+	if len(tooLarge) == 0 {
+		return subject + ", as the response would be too large. Ask for fewer results per page to see " + k.every + "."
+	}
+	if len(tooLarge) == run {
+		if run == 1 {
+			return subject + ", as its " + k.part + alone
+		}
+		return subject + ", as the " + k.part + " of each" + alone
+	}
+	smaller := subject + ", as the response would be too large. Ask for fewer results per page to see " + k.them + ", except "
+	if len(tooLarge) == 1 {
+		return smaller + fmt.Sprintf("result %d, whose %s", tooLarge[0], k.part) + alone
+	}
+	return smaller + fmt.Sprintf("the %d whose %s alone would make the response too large, the first of them result %d.", len(tooLarge), k.parts, tooLarge[0])
+}
+
+// codeHeading is the heading of a code search page whose table shows shown
+// rows. It counts the rows shown, which is what [toolutil.WriteListHeading]
+// asks for, so a page whose table the budget cut does not announce the
+// results it left out as shown. Fewer rows never make it longer.
+func codeHeading(shown int, p toolutil.PaginationOutput) string {
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "Code Search Results", len(out.Blobs), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("Project", "File", "Path", "Ref", "Start line"))
-	for _, bl := range out.Blobs {
-		b.WriteString(toolutil.MarkdownTableRow(
-			strconv.FormatInt(bl.ProjectID, 10),
-			toolutil.EscapeMdTableCell(bl.Filename),
-			toolutil.EscapeMdTableCell(bl.Path),
-			toolutil.EscapeMdTableCell(bl.Ref),
-			strconv.FormatInt(bl.Startline, 10),
-		))
+	toolutil.WriteListHeading(&b, "Code Search Results", shown, p)
+	return b.String()
+}
+
+// codeTableRow is one result's row of the code search table.
+func codeTableRow(bl BlobOutput) string {
+	return toolutil.MarkdownTableRow(
+		strconv.FormatInt(bl.ProjectID, 10),
+		toolutil.EscapeMdTableCell(bl.Filename),
+		toolutil.EscapeMdTableCell(bl.Path),
+		toolutil.EscapeMdTableCell(bl.Ref),
+		strconv.FormatInt(bl.Startline, 10),
+	)
+}
+
+// codeTable returns the table of the rows of blobs that fit
+// maxCodeMarkdownBytes under the heading that counts them, and how many it
+// holds. Rows are taken in order and stop before the first that does not fit,
+// each measured as the client receives it, a path that spells the guidance
+// heading included. The heading is measured counting the rows with the one
+// being tried, and a heading is never shorter for more rows, so a row that
+// fails fails under every larger count too and the rows shown are the
+// longest run from the first that fits. When not even the first row fits the
+// table is empty, since a header with no row under it names nothing.
+func codeTable(blobs []BlobOutput, p toolutil.PaginationOutput) (table string, shown int) {
+	var rows strings.Builder
+	used := len(codeSearchHeader)
+	for _, bl := range blobs {
+		row := codeTableRow(bl)
+		size := deliveredBytes(row)
+		if !fitsCodeMarkdown(deliveredBytes(codeHeading(shown+1, p))+used, size) {
+			break
+		}
+		rows.WriteString(row)
+		used += size
+		shown++
 	}
-	c := toolutil.NewCard(&b, "")
-	// used counts the response as the client receives it, a path that spells
-	// the guidance heading in the table included.
-	used := len(toolutil.DefuseHintsHeading(b.String()))
+	if shown == 0 {
+		return "", 0
+	}
+	return codeSearchHeader + rows.String(), shown
+}
+
+// rowFitsAlone reports whether bl's row fits maxCodeMarkdownBytes on a table
+// of its own, under the heading this page would give one row: what a page of
+// that one result would show, but for its page numbers.
+func rowFitsAlone(bl BlobOutput, p toolutil.PaginationOutput) bool {
+	return fitsCodeMarkdown(deliveredBytes(codeHeading(1, p))+len(codeSearchHeader), deliveredBytes(codeTableRow(bl)))
+}
+
+// sectionFitsAlone reports whether the snippet section of result n fits
+// maxCodeMarkdownBytes after its row on a table of its own, under the heading
+// this page would give one row: whether a page of that one result would show
+// its snippet, but for its page numbers.
+func sectionFitsAlone(n int, bl BlobOutput, p toolutil.PaginationOutput) bool {
+	var b strings.Builder
+	b.WriteString(codeTableRow(bl))
+	used := deliveredBytes(codeHeading(1, p)) + len(codeSearchHeader) + deliveredBytes(b.String())
+	return fitsCodeMarkdown(used, snippetSectionBytes(&b, n, bl, shapeSnippet(bl.Data)))
+}
+
+// writeSnippetSections writes the section of each of blobs, the results the
+// table shows, in order, until the first that does not fit what is left of
+// maxCodeMarkdownBytes, and names the rows left without a section in one
+// note, apart from those whose section would not fit a page of its own
+// either. It reports whether any snippet was cut or left unshown.
+func writeSnippetSections(b *strings.Builder, c *toolutil.Card, blobs []BlobOutput, p toolutil.PaginationOutput) bool {
+	used := deliveredBytes(b.String())
 	cut := false
-	for i, bl := range out.Blobs {
+	for i, bl := range blobs {
 		n := i + 1
 		s := shapeSnippet(bl.Data)
-		section := snippetSectionBytes(&b, n, bl, s)
+		section := snippetSectionBytes(b, n, bl, s)
 		if !fitsCodeMarkdown(used, section) {
-			c.Note(unshownSnippetsNote(n, len(out.Blobs)))
-			cut = true
-			break
+			var tooLarge []int
+			for j := i; j < len(blobs); j++ {
+				if !sectionFitsAlone(j+1, blobs[j], p) {
+					tooLarge = append(tooLarge, j+1)
+				}
+			}
+			c.Note(snippetsLeftOut.note(n, len(blobs), tooLarge))
+			return true
 		}
 		writeSnippetSection(c, n, bl, s)
 		used += section
 		cut = cut || s.cut()
 	}
+	return cut
+}
+
+// FormatCodeMarkdown renders a paginated list of code search results: a
+// table naming each result, its project and the line its snippet starts on,
+// then each snippet under a heading of its own, cut to a bounded head. The
+// heading, the table and the sections share maxCodeMarkdownBytes, so a page
+// of long paths shows the rows that fit, its heading counts those, and a note
+// names the results it leaves out; the hint to read a whole file then says
+// where their paths are. The structured result carries every result and
+// every snippet whole.
+func FormatCodeMarkdown(out CodeOutput) string {
+	if len(out.Blobs) == 0 {
+		return toolutil.EmptyMessage("code search results")
+	}
+	table, rows := codeTable(out.Blobs, out.Pagination)
+	var b strings.Builder
+	b.WriteString(codeHeading(rows, out.Pagination))
+	b.WriteString(table)
+	c := toolutil.NewCard(&b, "")
+	cut := writeSnippetSections(&b, c, out.Blobs[:rows], out.Pagination)
+	if rows < len(out.Blobs) {
+		var tooLarge []int
+		for i := rows; i < len(out.Blobs); i++ {
+			if !rowFitsAlone(out.Blobs[i], out.Pagination) {
+				tooLarge = append(tooLarge, i+1)
+			}
+		}
+		c.Note(rowsLeftOut.note(rows+1, len(out.Blobs), tooLarge))
+		cut = true
+	}
 	var hints []string
 	if cut {
-		hints = append(hints, toolutil.HintAction("repository.file_get", "read the whole file of a cut or unshown snippet, with its path and ref"))
+		hints = append(hints, toolutil.HintAction("repository.file_get", "read the whole file of a cut or unshown snippet, with its path and ref from the table or the structured result"))
 	}
 	hints = append(hints, toolutil.HintAction("repository.file_get", "read a found file by its path"))
 	toolutil.WriteListFooter(&b, out.Pagination, false, hints...)
