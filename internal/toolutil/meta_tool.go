@@ -2696,6 +2696,9 @@ func defaultFormatResult(result any) *mcp.CallToolResult {
 	if result == nil {
 		return SuccessResult("ok")
 	}
+	if IsLeanOutputEnabled() {
+		result = ProjectOutput(result)
+	}
 	data, err := json.Marshal(result)
 	if err != nil {
 		return SuccessResult(fmt.Sprintf("%v", result))
