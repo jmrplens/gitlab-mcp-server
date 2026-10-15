@@ -22,7 +22,7 @@ func testPages(t *testing.T) map[string]string {
 // siteLinkTarget finds the target of a link to a page of the documentation
 // site, which every page of it is served under, in any of the forms
 // TestSiteLink_EveryFormOfALinkIntoTheSite_IsFound lists.
-var siteLinkTarget = regexp.MustCompile(`(?:(?:\]\(<?|\]:[ \t]*|<|href=["'])(?:https://docs\.jmrp\.io)?|https://docs\.jmrp\.io)(/gitlab-mcp-server/[^\s)"'>]*)`)
+var siteLinkTarget = regexp.MustCompile(`(?:(?:\]\([ \t]*(?:\r?\n[ \t]*)?<?|\]:[ \t]*(?:\r?\n[ \t]*)?|<|href=["'])(?:https://docs\.jmrp\.io)?|https://docs\.jmrp\.io)(/gitlab-mcp-server/[^\s)"'>]*)`)
 
 // localeLinks splits the site links of the pages lang writes into the ones
 // that stay in lang and the ones that leave it. The Spanish pages are the ones
@@ -490,11 +490,14 @@ func TestSiteLink_LanguagePaths_AreUnderTheSiteRoot(t *testing.T) {
 	}
 }
 
-// TestSiteLink_EveryFormOfALinkIntoTheSite_IsFound verifies the link finder
-// reads every way a page can link into the site, root-relative or on the
-// site's host, and nothing that only names the path: a Markdown link with or
-// without a title, one in angle brackets, a reference definition, an
-// autolink, a bare URL the site's Markdown turns into a link, and an href.
+// TestSiteLink_EveryFormOfALinkIntoTheSite_IsFound verifies both link
+// finders, the generator's and this test file's own, read every way a page
+// can link into the site, root-relative or on the site's host, and nothing
+// that only names the path: a Markdown link with or without a title, one in
+// angle brackets, one whose destination follows spaces, tabs or a line ending
+// after the opening parenthesis (CommonMark allows up to one line ending
+// there), a reference definition, one whose destination starts the next line,
+// an autolink, a bare URL the site's Markdown turns into a link, and an href.
 func TestSiteLink_EveryFormOfALinkIntoTheSite_IsFound(t *testing.T) {
 	text := strings.Join([]string{
 		"[a](/gitlab-mcp-server/a/)",
@@ -507,18 +510,32 @@ func TestSiteLink_EveryFormOfALinkIntoTheSite_IsFound(t *testing.T) {
 		"see https://docs.jmrp.io/gitlab-mcp-server/h/ there",
 		`<a href="/gitlab-mcp-server/i/">i</a> <a href='https://docs.jmrp.io/gitlab-mcp-server/j/'>j</a>`,
 		"the site is served under `/gitlab-mcp-server/k/`, [l](https://example.com/gitlab-mcp-server/l/)",
+		"[m]( /gitlab-mcp-server/m/) [n](\t https://docs.jmrp.io/gitlab-mcp-server/n/)",
+		"[o](\n  /gitlab-mcp-server/o/)",
+		"[p]:\n  /gitlab-mcp-server/p/",
 	}, "\n")
-	var got []string
-	for _, match := range siteLink.FindAllStringSubmatch(text, -1) {
-		got = append(got, match[1])
-	}
 	want := []string{
 		"/gitlab-mcp-server/a/", "/gitlab-mcp-server/b/", "/gitlab-mcp-server/c/", "/gitlab-mcp-server/d/",
 		"/gitlab-mcp-server/e/", "/gitlab-mcp-server/f/", "/gitlab-mcp-server/g/", "/gitlab-mcp-server/h/",
-		"/gitlab-mcp-server/i/", "/gitlab-mcp-server/j/",
+		"/gitlab-mcp-server/i/", "/gitlab-mcp-server/j/", "/gitlab-mcp-server/m/", "/gitlab-mcp-server/n/",
+		"/gitlab-mcp-server/o/", "/gitlab-mcp-server/p/",
 	}
-	if strings.Join(got, " ") != strings.Join(want, " ") {
-		t.Errorf("siteLink found\n%q\nwant\n%q", got, want)
+	for _, finder := range []struct {
+		name string
+		re   *regexp.Regexp
+	}{
+		{name: "siteLink", re: siteLink},
+		{name: "siteLinkTarget", re: siteLinkTarget},
+	} {
+		t.Run(finder.name, func(t *testing.T) {
+			var got []string
+			for _, match := range finder.re.FindAllStringSubmatch(text, -1) {
+				got = append(got, match[1])
+			}
+			if strings.Join(got, " ") != strings.Join(want, " ") {
+				t.Errorf("%s found\n%q\nwant\n%q", finder.name, got, want)
+			}
+		})
 	}
 }
 

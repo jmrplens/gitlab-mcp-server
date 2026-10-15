@@ -119,6 +119,12 @@ func TestDecodeDomains_InvalidFile_IsRefused(t *testing.T) {
 		{name: "a link with a title", edit: func(d map[string]any) {
 			widget(d)["overview"] = map[string]any{"en": []any{"One."}, "es": []any{`[A](/gitlab-mcp-server/a/ "Título")`}}
 		}, want: "gitlab_widget overview links /gitlab-mcp-server/a/ from its es text"},
+		{name: "a link with whitespace before its destination", edit: func(d map[string]any) {
+			widget(d)["overview"] = map[string]any{"en": []any{"One."}, "es": []any{"Mira [Orbit]( /gitlab-mcp-server/tools/orbit/)."}}
+		}, want: "gitlab_widget overview links /gitlab-mcp-server/tools/orbit/ from its es text"},
+		{name: "a link whose destination starts the next line", edit: func(d map[string]any) {
+			widget(d)["overview"] = map[string]any{"en": []any{"One."}, "es": []any{"Mira [Orbit](\n  /gitlab-mcp-server/tools/orbit/)."}}
+		}, want: "gitlab_widget overview links /gitlab-mcp-server/tools/orbit/ from its es text"},
 		{name: "an absolute link on the site's host", edit: func(d map[string]any) {
 			widget(d)["overview"] = map[string]any{"en": []any{"One."}, "es": []any{"[A](https://docs.jmrp.io/gitlab-mcp-server/a/)"}}
 		}, want: "gitlab_widget overview links /gitlab-mcp-server/a/ from its es text"},
@@ -130,6 +136,9 @@ func TestDecodeDomains_InvalidFile_IsRefused(t *testing.T) {
 		}, want: "gitlab_widget overview links /gitlab-mcp-server/a/ from its es text"},
 		{name: "a reference definition", edit: func(d map[string]any) {
 			widget(d)["overview"] = map[string]any{"en": []any{"One."}, "es": []any{"[A][a]\n\n[a]: /gitlab-mcp-server/a/"}}
+		}, want: "gitlab_widget overview links /gitlab-mcp-server/a/ from its es text"},
+		{name: "a reference definition whose destination starts the next line", edit: func(d map[string]any) {
+			widget(d)["overview"] = map[string]any{"en": []any{"One."}, "es": []any{"[A][a]\n\n[a]:\n  /gitlab-mcp-server/a/"}}
 		}, want: "gitlab_widget overview links /gitlab-mcp-server/a/ from its es text"},
 		{name: "an href", edit: func(d map[string]any) {
 			widget(d)["overview"] = map[string]any{"en": []any{"One."}, "es": []any{`<a href="/gitlab-mcp-server/a/">A</a>`}}

@@ -129,10 +129,13 @@ const siteRoot = "/gitlab-mcp-server/"
 // begins with siteRoot: a Markdown link with or without a title, one in angle
 // brackets, a reference definition, an autolink, an href, each root-relative
 // or on the site's host, and a bare URL on the site's host, which the site's
-// Markdown turns into a link. A path named in prose or in code is not a link
-// and is not read. The pattern spells the root and the host as literals so
-// that nothing is computed when the package initializes.
-var siteLink = regexp.MustCompile(`(?:(?:\]\(<?|\]:[ \t]*|<|href=["'])(?:https://docs\.jmrp\.io)?|https://docs\.jmrp\.io)(/gitlab-mcp-server/[^\s)"'>]*)`)
+// Markdown turns into a link. CommonMark lets spaces or tabs, with at most one
+// line ending among them, stand between a link's opening parenthesis or a
+// definition's colon and its destination, so the pattern does too. A path
+// named in prose or in code is not a link and is not read. The pattern spells
+// the root and the host as literals so that nothing is computed when the
+// package initializes.
+var siteLink = regexp.MustCompile(`(?:(?:\]\([ \t]*(?:\r?\n[ \t]*)?<?|\]:[ \t]*(?:\r?\n[ \t]*)?|<|href=["'])(?:https://docs\.jmrp\.io)?|https://docs\.jmrp\.io)(/gitlab-mcp-server/[^\s)"'>]*)`)
 
 // toolsPath is where a page links a page of this reference in l.
 func (l language) toolsPath() string {
