@@ -14,6 +14,9 @@
 # table the few minutes the boot took rather than the whole suite, which would
 # otherwise pass with every fine-grained session in phase A.
 
+# shellcheck source=test/e2e/scripts/audit-command.sh
+. "$(dirname "${BASH_SOURCE[0]}")/audit-command.sh"
+
 # gate_release asks the release gate about the version the instance reported,
 # from the repository root named by REPO_ROOT, and returns the gate's status:
 # 0 when the run may go ahead (the table's release, the prerelease right after
@@ -22,12 +25,14 @@
 # read. It is handed what tested_gitlab_version printed, "<version> (revision
 # <revision>)" or "unknown (<reason>)", and passes the first word, so an
 # instance that did not answer its version stops the run rather than passing it.
+# The command is built and run by run_audit_e2e_coverage, so the 2 reaches the
+# run as a 2.
 #
 #   gate_release <what tested_gitlab_version printed>
 gate_release() {
     local tested="$1"
     (
         cd "${REPO_ROOT}" || exit 1
-        go run ./cmd/audit_e2e_coverage/ -check-release -gitlab-version "${tested%% *}"
+        run_audit_e2e_coverage -check-release -gitlab-version "${tested%% *}"
     )
 }

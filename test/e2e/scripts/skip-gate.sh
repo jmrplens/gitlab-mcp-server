@@ -10,18 +10,22 @@
 # is how a run reaches it, what it does to the run's status, and what a run
 # asking to be complete has to be started with so that the gate can pass.
 
+# shellcheck source=test/e2e/scripts/audit-command.sh
+. "$(dirname "${BASH_SOURCE[0]}")/audit-command.sh"
+
 # gate_skips runs the skip gate over the go test -json stream of one run, from
 # the repository root named by REPO_ROOT, printing what it finds and appending
 # the same to the run's saved output, and returns the gate's status: 0 when
 # every skip is declared and every declaration was needed, 1 when not, 2 when
-# the stream could not be judged.
+# the stream could not be judged. The command is built and run by
+# run_audit_e2e_coverage, so the 2 reaches the run as a 2.
 #
 #   gate_skips <ce|ee> <go test -json stream> <saved output>
 gate_skips() {
     local runtime="$1" results="$2" output="$3"
     (
         cd "${REPO_ROOT}" || exit 1
-        go run ./cmd/audit_e2e_coverage/ -check-skips -runtime "${runtime}" -results "${results}"
+        run_audit_e2e_coverage -check-skips -runtime "${runtime}" -results "${results}"
     ) 2>&1 | tee -a "${output}"
     return "${PIPESTATUS[0]}"
 }

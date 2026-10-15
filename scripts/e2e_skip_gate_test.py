@@ -17,6 +17,7 @@ Run with:
 """
 
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -29,19 +30,31 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 SCRIPT = os.path.join(ROOT, "test", "e2e", "scripts", "skip-gate.sh")
 RUNNER = os.path.join(ROOT, "test", "e2e", "scripts", "run-docker-e2e.sh")
 
-# The stand-in go prints where it ran and what it was asked, one line each,
-# and exits with GO_STATUS. The driver sources the script under the options
-# run-docker-e2e.sh runs with, calls the function the way that script does,
-# and prints the status last.
+# The stand-in go writes where it ran and what it was asked to GO_LOG, one
+# line each, and answers a build the way go build does: with nothing on
+# stdout and a program at the -o path, or with GO_STATUS and no program when
+# that is not zero. The program it writes is a real one, which prints where it
+# ran and what it was asked, writes a line to stderr and exits with
+# AUDIT_STATUS, so the status the gate answers with is one a process exited
+# with and not one a shell function returned. The driver sources the script
+# under the options run-docker-e2e.sh runs with, calls the function the way
+# that script does, and prints the status last.
 DRIVER = r"""
 set -euo pipefail
 . "$1"
 shift
 go() {
-    echo "go ran in ${PWD}"
-    echo "go $*"
-    echo "a finding on stderr" >&2
-    return "${GO_STATUS}"
+    printf 'go ran in %s\ngo %s\n' "${PWD}" "$*" >>"${GO_LOG}"
+    if [ "$1" != build ] || [ "$2" != -o ]; then
+        echo "the stand-in go builds with -o and does nothing else" >&2
+        return 1
+    fi
+    if [ "${GO_STATUS}" != 0 ]; then
+        echo "a build error on stderr" >&2
+        return "${GO_STATUS}"
+    fi
+    printf '#!/usr/bin/env bash\necho "audit ran in ${PWD}"\necho "audit $*"\necho "a finding on stderr" >&2\nexit %s\n' "${AUDIT_STATUS}" >"$3"
+    chmod +x "$3"
 }
 status=0
 "$@" || status=$?
@@ -49,10 +62,12 @@ echo "status=${status}"
 """
 
 
-def drive(*command, go_status=0, repo_root=None, **settings):
+def drive(*command, go_status=0, audit_status=0, repo_root=None, tmp=None, go_log=None, **settings):
     """Runs one function of the script and returns its stdout lines."""
     env = {key: value for key, value in os.environ.items() if key not in CLEARED}
-    env["GO_STATUS"] = str(go_status)
+    env.update(GO_STATUS=str(go_status), AUDIT_STATUS=str(audit_status), GO_LOG=go_log or os.devnull)
+    if tmp is not None:
+        env["TMPDIR"] = tmp
     if repo_root is not None:
         env["REPO_ROOT"] = repo_root
     env.update(settings)
@@ -67,50 +82,82 @@ def drive(*command, go_status=0, repo_root=None, **settings):
 
 
 class GateSkipsTest(unittest.TestCase):
-    def gate(self, go_status):
-        with tempfile.TemporaryDirectory() as root:
-            output = os.path.join(root, "e2e-ce-output.txt")
+    def gate(self, go_status=0, audit_status=0, repo_root=None):
+        """Runs the gate over a saved output holding the tests' own line and
+        returns the repository root, the stdout lines, the saved output, what
+        the stand-in go was asked with the directory the gate built into
+        written as $BIN_DIR, and what the gate left in its temporary
+        directory."""
+        with tempfile.TemporaryDirectory() as scratch:
+            root = repo_root or scratch
+            output = os.path.join(scratch, "e2e-ce-output.txt")
             with open(output, "w", encoding="utf-8") as handle:
                 handle.write("the tests' own output\n")
-            lines = drive("gate_skips", "ce", "/reports/e2e-ce-log.json", output, go_status=go_status, repo_root=root)
+            tmp = os.path.join(scratch, "tmp")
+            os.mkdir(tmp)
+            log = os.path.join(scratch, "go.log")
+            lines = drive(
+                "gate_skips", "ce", "/reports/e2e-ce-log.json", output,
+                go_status=go_status, audit_status=audit_status, repo_root=root, tmp=tmp, go_log=log,
+            )
             with open(output, encoding="utf-8") as handle:
                 saved = handle.read()
-            return root, lines, saved
+            asked = []
+            if os.path.exists(log):
+                with open(log, encoding="utf-8") as handle:
+                    asked = [re.sub(re.escape(tmp) + r"/[^/ ]+", "$BIN_DIR", line) for line in handle.read().splitlines()]
+            return root, lines, saved, asked, os.listdir(tmp)
 
-    def test_the_gate_runs_the_command_from_the_repository_root(self):
-        root, lines, _ = self.gate(0)
+    def test_the_gate_builds_the_command_and_runs_it_from_the_repository_root(self):
+        root, lines, _, asked, _ = self.gate()
+        self.assertEqual(
+            asked,
+            [
+                f"go ran in {root}",
+                "go build -o $BIN_DIR/audit_e2e_coverage ./cmd/audit_e2e_coverage/",
+            ],
+        )
         self.assertEqual(
             lines,
             [
-                f"go ran in {root}",
-                "go run ./cmd/audit_e2e_coverage/ -check-skips -runtime ce -results /reports/e2e-ce-log.json",
+                f"audit ran in {root}",
+                "audit -check-skips -runtime ce -results /reports/e2e-ce-log.json",
                 "a finding on stderr",
                 "status=0",
             ],
         )
 
     def test_the_verdict_is_appended_to_the_saved_output(self):
-        root, _, saved = self.gate(1)
+        root, _, saved, _, _ = self.gate(audit_status=1)
         self.assertEqual(
             saved,
             "the tests' own output\n"
-            f"go ran in {root}\n"
-            "go run ./cmd/audit_e2e_coverage/ -check-skips -runtime ce -results /reports/e2e-ce-log.json\n"
+            f"audit ran in {root}\n"
+            "audit -check-skips -runtime ce -results /reports/e2e-ce-log.json\n"
             "a finding on stderr\n",
         )
 
-    def test_the_gate_answers_with_the_commands_status(self):
-        for go_status in (0, 1, 2):
-            with self.subTest(go_status=go_status):
-                _, lines, _ = self.gate(go_status)
-                self.assertEqual(lines[-1], f"status={go_status}")
+    def test_the_gate_answers_with_the_status_the_command_exits_with(self):
+        # 2 is the one go run would lose: it reports a program that failed as
+        # its own status 1, which is the gate's answer for a finding.
+        for audit_status in (0, 1, 2):
+            with self.subTest(audit_status=audit_status):
+                _, lines, _, _, left = self.gate(audit_status=audit_status)
+                self.assertEqual(lines[-1], f"status={audit_status}")
+                self.assertEqual(left, [])
+
+    def test_a_command_that_does_not_build_fails_the_gate_with_its_error_saved(self):
+        _, lines, saved, _, left = self.gate(go_status=1)
+        self.assertEqual(lines, ["a build error on stderr", "status=1"])
+        self.assertEqual(saved, "the tests' own output\na build error on stderr\n")
+        self.assertEqual(left, [])
 
     def test_a_root_that_is_not_there_fails_the_gate(self):
-        with tempfile.TemporaryDirectory() as root:
-            output = os.path.join(root, "out.txt")
-            lines = drive("gate_skips", "ee", "/r.json", output, repo_root=os.path.join(root, "missing"))
-        self.assertNotIn("go run", "\n".join(lines))
+        with tempfile.TemporaryDirectory() as scratch:
+            _, lines, _, asked, left = self.gate(repo_root=os.path.join(scratch, "missing"))
+        self.assertEqual(asked, [])
         self.assertEqual(lines[-1], "status=1")
+        self.assertEqual(left, [])
 
 
 class RunStatusAfterGateTest(unittest.TestCase):

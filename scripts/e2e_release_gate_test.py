@@ -26,18 +26,31 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 SCRIPT = os.path.join(ROOT, "test", "e2e", "scripts", "release-gate.sh")
 RUNNER = os.path.join(ROOT, "test", "e2e", "scripts", "run-docker-e2e.sh")
 
-# The stand-in go prints where it ran and what it was asked, one line each,
-# and exits with GO_STATUS. The driver sources the script under the options
-# run-docker-e2e.sh runs with, calls the function the way that script does,
-# and prints the status last.
+# The stand-in go writes where it ran and what it was asked to GO_LOG, one
+# line each, and answers a build the way go build does: with nothing on
+# stdout and a program at the -o path, or with GO_STATUS and no program when
+# that is not zero. The program it writes is a real one, which prints where it
+# ran and what it was asked and exits with AUDIT_STATUS, so the status the
+# gate answers with is one a process exited with and not one a shell function
+# returned. The driver sources the script under the options run-docker-e2e.sh
+# runs with, calls the function the way that script does, and prints the
+# status last.
 DRIVER = r"""
 set -euo pipefail
 . "$1"
 shift
 go() {
-    echo "go ran in ${PWD}"
-    echo "go $*"
-    return "${GO_STATUS}"
+    printf 'go ran in %s\ngo %s\n' "${PWD}" "$*" >>"${GO_LOG}"
+    if [ "$1" != build ] || [ "$2" != -o ]; then
+        echo "the stand-in go builds with -o and does nothing else" >&2
+        return 1
+    fi
+    if [ "${GO_STATUS}" != 0 ]; then
+        echo "a build error on stderr" >&2
+        return "${GO_STATUS}"
+    fi
+    printf '#!/usr/bin/env bash\necho "audit ran in ${PWD}"\necho "audit $*"\nexit %s\n' "${AUDIT_STATUS}" >"$3"
+    chmod +x "$3"
 }
 status=0
 "$@" || status=$?
@@ -45,36 +58,54 @@ echo "status=${status}"
 """
 
 
-def drive(*command, go_status=0, repo_root=None):
-    """Runs one function of the script and returns its stdout lines."""
-    env = dict(os.environ)
-    env["GO_STATUS"] = str(go_status)
-    if repo_root is not None:
-        env["REPO_ROOT"] = repo_root
-    result = subprocess.run(
-        ["bash", "-c", DRIVER, "driver", SCRIPT, *command],
-        env=env,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return result.stdout.splitlines()
+def drive(*command, go_status=0, audit_status=0, repo_root=None):
+    """Runs one function of the script and returns its stdout lines, what the
+    stand-in go was asked, one line each, with the directory the gate built
+    into written as $BIN_DIR, and what the gate left in its temporary
+    directory."""
+    with tempfile.TemporaryDirectory() as scratch:
+        log = os.path.join(scratch, "go.log")
+        tmp = os.path.join(scratch, "tmp")
+        os.mkdir(tmp)
+        env = dict(os.environ)
+        env.update(GO_STATUS=str(go_status), AUDIT_STATUS=str(audit_status), GO_LOG=log, TMPDIR=tmp)
+        if repo_root is not None:
+            env["REPO_ROOT"] = repo_root
+        result = subprocess.run(
+            ["bash", "-c", DRIVER, "driver", SCRIPT, *command],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        asked = []
+        if os.path.exists(log):
+            with open(log, encoding="utf-8") as handle:
+                asked = [re.sub(re.escape(tmp) + r"/[^/ ]+", "$BIN_DIR", line) for line in handle.read().splitlines()]
+        return result.stdout.splitlines(), asked, os.listdir(tmp)
 
 
 class GateReleaseTest(unittest.TestCase):
-    def gate(self, tested, go_status=0):
+    def gate(self, tested, go_status=0, audit_status=0):
         with tempfile.TemporaryDirectory() as root:
-            return root, drive("gate_release", tested, go_status=go_status, repo_root=root)
+            return (root, *drive("gate_release", tested, go_status=go_status, audit_status=audit_status, repo_root=root))
 
-    def test_the_gate_asks_the_command_from_the_repository_root_with_the_version_alone(self):
+    def test_the_gate_builds_the_command_and_asks_it_from_the_repository_root_with_the_version_alone(self):
         # tested_gitlab_version prints the revision beside the version; the
         # command is handed the version GitLab answered and nothing else.
-        root, lines = self.gate("19.4.1-ee (revision 0a1b2c3d)")
+        root, lines, asked, _ = self.gate("19.4.1-ee (revision 0a1b2c3d)")
+        self.assertEqual(
+            asked,
+            [
+                f"go ran in {root}",
+                "go build -o $BIN_DIR/audit_e2e_coverage ./cmd/audit_e2e_coverage/",
+            ],
+        )
         self.assertEqual(
             lines,
             [
-                f"go ran in {root}",
-                "go run ./cmd/audit_e2e_coverage/ -check-release -gitlab-version 19.4.1-ee",
+                f"audit ran in {root}",
+                "audit -check-release -gitlab-version 19.4.1-ee",
                 "status=0",
             ],
         )
@@ -82,24 +113,39 @@ class GateReleaseTest(unittest.TestCase):
     def test_an_instance_that_did_not_answer_hands_the_command_unknown(self):
         # The script's fallback names a reason after the word; the word is what
         # the command reads, and it does not parse, so the run stops.
-        _, lines = self.gate("unknown (GET http://localhost:8929/api/v4/version did not answer)")
-        self.assertIn("go run ./cmd/audit_e2e_coverage/ -check-release -gitlab-version unknown", lines)
+        _, lines, _, _ = self.gate("unknown (GET http://localhost:8929/api/v4/version did not answer)")
+        self.assertIn("audit -check-release -gitlab-version unknown", lines)
 
     def test_a_prerelease_is_handed_over_whole(self):
-        _, lines = self.gate("19.5.0-pre (revision abc)")
-        self.assertIn("go run ./cmd/audit_e2e_coverage/ -check-release -gitlab-version 19.5.0-pre", lines)
+        _, lines, _, _ = self.gate("19.5.0-pre (revision abc)")
+        self.assertIn("audit -check-release -gitlab-version 19.5.0-pre", lines)
 
-    def test_the_gate_answers_with_the_commands_status(self):
-        for go_status in (0, 1, 2):
-            with self.subTest(go_status=go_status):
-                _, lines = self.gate("19.4.1-ee (revision abc)", go_status=go_status)
-                self.assertEqual(lines[-1], f"status={go_status}")
+    def test_the_gate_answers_with_the_status_the_command_exits_with(self):
+        # 2 is the one go run would lose: it reports a program that failed as
+        # its own status 1, which is the gate's answer for a newer release.
+        for audit_status in (0, 1, 2):
+            with self.subTest(audit_status=audit_status):
+                _, lines, _, _ = self.gate("19.4.1-ee (revision abc)", audit_status=audit_status)
+                self.assertEqual(lines[-1], f"status={audit_status}")
+
+    def test_the_built_command_is_removed_whatever_it_answers(self):
+        for audit_status in (0, 1, 2):
+            with self.subTest(audit_status=audit_status):
+                _, _, _, left = self.gate("19.4.1-ee (revision abc)", audit_status=audit_status)
+                self.assertEqual(left, [])
+
+    def test_a_command_that_does_not_build_stops_the_run_and_runs_nothing(self):
+        _, lines, asked, left = self.gate("19.4.1-ee (revision abc)", go_status=1)
+        self.assertEqual(lines, ["status=1"])
+        self.assertEqual(len(asked), 2)
+        self.assertEqual(left, [])
 
     def test_a_root_that_is_not_there_fails_the_gate(self):
         with tempfile.TemporaryDirectory() as root:
-            lines = drive("gate_release", "19.4.1-ee (revision abc)", repo_root=os.path.join(root, "missing"))
-        self.assertNotIn("go run", "\n".join(lines))
-        self.assertEqual(lines[-1], "status=1")
+            lines, asked, left = drive("gate_release", "19.4.1-ee (revision abc)", repo_root=os.path.join(root, "missing"))
+        self.assertEqual(asked, [])
+        self.assertEqual(lines, ["status=1"])
+        self.assertEqual(left, [])
 
 
 class RunnerWiringTest(unittest.TestCase):
