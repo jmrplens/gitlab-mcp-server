@@ -8989,7 +8989,8 @@ reverted the minor bump to 5.9.7 on 2026-10-08.
 MUST cannot be met by its named mechanism. Recorded as
 [ADR-0019](adr/adr-0019-audience-binding-unavailable-at-the-authorization-server.md).
 If GitLab later refused, on its REST API, a token whose recorded resource
-names another server, the token passthrough of ADR-0019 decision 3 would stop
+names another server (this one, when a client asks for a token bound to this
+server's URL), the token passthrough of ADR-0019 decision 3 would stop
 working; the feature request keeps that out of its first iteration and names
 it as a separate decision.
 

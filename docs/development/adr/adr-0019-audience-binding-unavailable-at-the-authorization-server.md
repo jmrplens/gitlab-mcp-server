@@ -216,8 +216,9 @@ sets `--oauth-client-uid`.
   [gitlab-org/gitlab#634284](https://gitlab.com/gitlab-org/gitlab/-/issues/634284),
   behind a flag and without changing which tokens GitLab's API accepts, which
   matters for decision 3: a GitLab whose REST API stopped authenticating a
-  token whose recorded resource is this server would end the passthrough
-  rather than secure it. Row 2 of the upstream register follows it.]
+  token whose recorded resource is this server rather than GitLab itself
+  would end the passthrough rather than secure it. Row 2 of the upstream
+  register follows it.]
 
 ## Alternatives Considered
 
