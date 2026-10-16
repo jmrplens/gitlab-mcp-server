@@ -184,8 +184,8 @@ var searchActionMeta = map[string]searchActionMetaEntry{
 		usage:       "Search wiki page contents across global, group (group_id), or project (project_id) scope. Use to find wiki pages by their body or title keywords.",
 		aliases:     []string{"search wiki", "search wiki content", "find wiki by content", "full-text wiki search"},
 		tags:        []string{"wiki", "blob"},
-		related:     []string{actionSearchCode, "wiki.list", "wiki.get"},
-		description: "Search wiki blobs across global, group, or project scope. Returns: matching wiki pages with slug, title, content snippet, and format plus pagination metadata. See also: gitlab_search_code, gitlab_wiki_list, gitlab_wiki_get.",
+		related:     []string{actionSearchCode, "wiki.list", "wiki.get", "group.wiki_get"},
+		description: "Search wiki blobs across global, group, or project scope. Returns: the file of each matching wiki page with its path (the page slug plus the format's extension), ref, the line the snippet starts on, the snippet, its project ID and, from advanced search, its group ID (a page of a group wiki carries the group alone), and pagination metadata. On basic search a page whose file matched by its path also carries its blob ID, and its snippet is the start of the page. See also: gitlab_search_code, gitlab_wiki_list, gitlab_wiki_get, gitlab_group_wiki_get.",
 	},
 }
 

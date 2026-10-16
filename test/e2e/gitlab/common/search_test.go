@@ -81,8 +81,9 @@ type searchFixture struct {
 	commit fixture.Commit
 	// note is the body of the note on the issue.
 	note string
-	// wikiTitle is the page the wiki repository holds.
-	wikiTitle string
+	// wikiTitle is the page the wiki repository holds, and wikiSlug the slug
+	// GitLab gave it, which names the page's file in the wiki repository.
+	wikiTitle, wikiSlug string
 }
 
 // buildSearchFixture creates the project and every object the scopes are
@@ -107,15 +108,16 @@ func buildSearchFixture(e *harness.Env) searchFixture {
 		e.T.Fatalf("writing the note on issue #%d: %v", issue.IID, err)
 	}
 	wikiTitle := e.Name("wiki")
-	if _, _, err := e.Client().GL().Wikis.CreateWikiPage(project.ID, &gl.CreateWikiPageOptions{
+	page, _, err := e.Client().GL().Wikis.CreateWikiPage(project.ID, &gl.CreateWikiPageOptions{
 		Title: new(wikiTitle), Content: new("A wiki page mentioning " + token + ".\n"),
-	}, gl.WithContext(e.Ctx)); err != nil {
+	}, gl.WithContext(e.Ctx))
+	if err != nil {
 		e.T.Fatalf("writing the wiki page %q: %v", wikiTitle, err)
 	}
 
 	return searchFixture{
 		project: project, issue: issue, mr: mr, milestone: milestone, snippet: snippet,
-		token: token, commit: commit, note: note, wikiTitle: wikiTitle,
+		token: token, commit: commit, note: note, wikiTitle: wikiTitle, wikiSlug: page.Slug,
 	}
 }
 
@@ -190,16 +192,30 @@ func TestSearch_EveryScope_FindsTheFixtureObject(t *testing.T) {
 			func(out search.UsersOutput) bool { return userFound(out, username) })
 		e.T.Logf("user search for %q found %d user(s)", username, len(users.Users))
 
-		// The wiki scope is held to a row and not to the page: GitLab answers
-		// this scope with blob rows (basename, path, data), and client-go
-		// decodes them into its wiki page struct, so every field the server
-		// publishes here is empty. The row's fields are logged so a run shows
-		// what the surface says, and the page-level assertion waits on that
-		// fix.
+		// GitLab answers the wiki scope with the blob entity code search
+		// answers with: the page's file in the wiki repository, which a page
+		// written in Markdown names by its slug with ".md", and the lines
+		// that matched. The token is in the page's content and not in its
+		// slug, so the row is a content match, which no backend gives a blob
+		// id.
 		wiki := harness.Eventually(s, actionSearchWiki, withParams(inProject, map[string]any{"query": f.token}), searchInterval, searchWait,
-			func(out search.WikiOutput) bool { return len(out.WikiBlobs) > 0 })
-		e.T.Logf("wiki search for %q found %d page(s); the first reads %+v (the page is %q)", f.token, len(wiki.WikiBlobs), wiki.WikiBlobs[0], f.wikiTitle)
+			func(out search.WikiOutput) bool { return wikiPageFound(out, f.wikiSlug) != nil })
+		page := wikiPageFound(wiki, f.wikiSlug)
+		if page.ProjectID != f.project.ID || page.ID != "" || page.Ref == "" || !strings.Contains(page.Data, f.token) {
+			e.T.Errorf("wiki search for %q returned %+v, want the content match of page %q (%s) in project %d, holding the token", f.token, *page, f.wikiTitle, f.wikiSlug, f.project.ID)
+		}
 	})
+}
+
+// wikiPageFound returns the result of a wiki search that is the file of the
+// Markdown page with the slug, or nil.
+func wikiPageFound(out search.WikiOutput, slug string) *search.WikiBlobOutput {
+	for i := range out.WikiBlobs {
+		if out.WikiBlobs[i].Path == slug+".md" {
+			return &out.WikiBlobs[i]
+		}
+	}
+	return nil
 }
 
 // assertCodePathMatch asks basic search for the fixture's token, which the

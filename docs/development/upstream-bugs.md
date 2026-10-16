@@ -93,6 +93,7 @@ for the fork, branch, fix, test and MR workflow.
   - [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date)
   - [A nil SearchOptions panics in every search method but one](#a-nil-searchoptions-panics-in-every-search-method-but-one)
   - [The Link header parser reads rel only from the first parameter](#the-link-header-parser-reads-rel-only-from-the-first-parameter)
+  - [The wiki search decodes GitLab's blobs into wiki pages](#the-wiki-search-decodes-gitlabs-blobs-into-wiki-pages)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -368,6 +369,7 @@ readable without opening the tracker:
 | 127 | gitlab-org/gitlab | [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text) | No | No | No | No; GitLab's pages leave such a submodule unlinked | Yes, `repository.list_submodules` and `repository.read_submodule_file` resolve a sibling namespace and the other spellings of the instance's clone URLs |
 | 128 | client-go | [A nil SearchOptions panics in every search method but one](#a-nil-searchoptions-panics-in-every-search-method-but-one) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3139](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3139), merged | **Yes, v3.22.1** | No; every search action here passes options | Not needed |
 | 129 | client-go | [The Link header parser reads rel only from the first parameter](#the-link-header-parser-reads-rel-only-from-the-first-parameter) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3143](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3143), open | No | No; GitLab writes `rel` as the only parameter, so only a proxy that rewrites the header reaches it | None taken |
+| 130 | client-go | [The wiki search decodes GitLab's blobs into wiki pages](#the-wiki-search-decodes-gitlabs-blobs-into-wiki-pages) | No | No | No | No | Yes, `search.wiki` reads its page from the captured response |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -6790,6 +6792,46 @@ this server reads to continue a keyset list since issue 1165.
 **Fix in review**: the parser looks for the `rel` parameter by name,
 ignoring case and the whitespace RFC 8288 allows, keeps the first `rel` only,
 and a table test covers eleven headers.
+
+### The wiki search decodes GitLab's blobs into wiki pages
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no. v3.25.0, the head of main on 2026-10-15 (`26ff1abf`),
+  carries the same signatures.
+- **Blocking**: no.
+- **Workaround**: yes. `search.wiki` hands the request a
+  `gitlabclient.WithResponseCapture` context and decodes the captured body
+  into `search.WikiBlobOutput`, which is the blob entity GitLab sends
+  (ADR-0021), and ignores what client-go decoded. client-go reports no error
+  for GitLab's answer, since no key of it is a key of `Wiki`; the handler also
+  passes over the decode failure client-go would report for an answer holding
+  a `Wiki` key with another type, which GitLab does not send, so that guard is
+  defensive. It retires when the three methods return a type carrying the
+  blob's fields.
+
+**Where**: `search.go`, `WikiBlobs`, `WikiBlobsByGroup` and
+`WikiBlobsByProject`, which decode `GET /search`, `GET /groups/:id/search` and
+`GET /projects/:id/search` with `scope=wiki_blobs` into `[]*Wiki`, the wiki
+page struct of `wikis.go` (`content`, `encoding`, `format`, `slug`, `title`).
+
+**What**: GitLab answers the `wiki_blobs` scope with `API::Entities::Blob`
+(`lib/api/search.rb`, `SCOPE_ENTITY`), the entity the `blobs` scope answers
+with: `basename`, `data`, `path`, `filename`, `id`, `ref`, `startline`,
+`project_id`, and `group_id` for a wiki result (`lib/api/entities/blob.rb`).
+No key of it is a key of `Wiki`, so every result client-go returns is a struct
+of empty strings, one per page found. The struct client-go returns for the
+`blobs` scope, `Blob`, holds all of them but `group_id`.
+
+**How we found it**: issue 1393. Publishing the blob id of a code search result
+meant reading the entity each search scope presents, and the wiki scope
+presents the same one; `search.wiki` published `slug`, `title`, `content` and
+`format`, empty on every result, and the e2e scenario only logged the row
+because it had nothing to assert.
+
+**Effort**: small: a `WikiBlob` type (`Blob` plus `GroupID`) returned by the
+three methods, a breaking change for callers, so it waits for a major version
+or three parallel methods.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

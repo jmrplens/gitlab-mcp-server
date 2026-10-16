@@ -10,6 +10,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/files"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupwikis"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issuenotes"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/members"
@@ -52,6 +53,7 @@ func crossLinkableIDs(t *testing.T) map[string]bool {
 		"merge_request.": {mergerequests.ActionSpecs(client)},
 		"user.":          {users.ActionSpecs(client)},
 		"wiki.":          {wikis.ActionSpecs(client)},
+		"group.":         {groupwikis.ActionSpecs(client)},
 	}
 
 	ids := map[string]bool{}

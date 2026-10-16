@@ -699,12 +699,25 @@ type WikiInput struct {
 	toolutil.PaginationInput
 }
 
-// WikiBlobOutput represents a single wiki blob search result.
+// WikiBlobOutput represents a single wiki search result. GitLab answers the
+// wiki_blobs scope with API::Entities::Blob, the entity code search answers
+// with (lib/api/search.rb, SCOPE_ENTITY), each result a page's file in the
+// wiki repository with the lines that matched, and adds group_id for a wiki
+// page (lib/api/entities/blob.rb). It used to publish a wiki page's slug,
+// title, content and format, which no search answers with, and so every
+// field of every result was empty: client-go decodes this scope into its
+// Wiki struct, so the rows are read from the captured response instead
+// (ADR-0021).
 type WikiBlobOutput struct {
-	Slug    string `json:"slug"`
-	Title   string `json:"title"`
-	Content string `json:"content"`
-	Format  string `json:"format"`
+	Basename  string `json:"basename"`
+	Data      string `json:"data"                 jsonschema:"The snippet GitLab sent: the lines around a match, or the start of the page for a page whose file matched by its path"`
+	Path      string `json:"path"                 jsonschema:"Path of the page's file in the wiki repository. The page's slug is this path without its extension"`
+	Filename  string `json:"filename"`
+	ID        string `json:"id,omitempty"         jsonschema:"Git blob ID of a page whose file matched the query by its path, set by basic search only. Such a result carries the start of the page and startline 1 rather than the lines around a match. Absent for a match on the page's content, for a path match whose file GitLab could not read (which then carries no snippet either), and on every result of advanced search"`
+	Ref       string `json:"ref"`
+	Startline int64  `json:"startline"            jsonschema:"Line the snippet starts on. GitLab sends no line number for the match itself. 0 stands for the null basic search answers for a path match whose file it could not read"`
+	ProjectID int64  `json:"project_id,omitempty" jsonschema:"Project whose wiki holds the page. Absent for a page of a group wiki"`
+	GroupID   int64  `json:"group_id,omitempty"   jsonschema:"Group of the wiki, set by advanced search only: the group whose wiki holds the page, or the group of the project whose wiki does. Absent for a project in a user namespace"`
 }
 
 // WikiOutput holds a paginated list of wiki blob search results.
@@ -716,25 +729,27 @@ type WikiOutput struct {
 
 // Wiki searches for wiki blobs in GitLab.
 // Scope priority: project_id > group_id > global.
+//
+// The page is read from the captured response, whatever client-go made of
+// it: GitLab's blob keys share none with client-go's Wiki struct, so client-go
+// decodes each result into an empty Wiki and reports no error. capturesPage
+// is defensive, for an answer whose key client-go's Wiki declares with
+// another type, which would otherwise fail a page GitLab answered.
 func Wiki(ctx context.Context, client *gitlabclient.Client, input WikiInput) (WikiOutput, error) {
 	searchClient := client.GL().Search
-	wikis, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Wiki]{
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	_, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Wiki]{
 		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, page: input.Page, perPage: input.PerPage,
 		searchType: input.SearchType, operation: "searchWiki", projectSearch: searchClient.WikiBlobsByProject,
 		groupSearch: searchClient.WikiBlobsByGroup, globalSearch: searchClient.WikiBlobs,
+		capturesPage: true,
 	})
 	if err != nil {
 		return WikiOutput{}, err
 	}
-
-	out := make([]WikiBlobOutput, len(wikis))
-	for i, w := range wikis {
-		out[i] = WikiBlobOutput{
-			Slug:    w.Slug,
-			Title:   w.Title,
-			Content: w.Content,
-			Format:  string(w.Format),
-		}
+	var out []WikiBlobOutput
+	if err = captured.Decode(&out); err != nil {
+		return WikiOutput{}, toolutil.WrapErr("searchWiki", err)
 	}
 	return WikiOutput{WikiBlobs: out, Pagination: searchPagination(resp, len(out))}, nil
 }

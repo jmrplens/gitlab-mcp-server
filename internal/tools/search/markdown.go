@@ -3,6 +3,7 @@ package search
 import (
 	"cmp"
 	"fmt"
+	pathpkg "path"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -63,6 +64,107 @@ const maxCodeMarkdownBytes = 40_000
 
 // codeSearchHeader is the header of the code search table.
 var codeSearchHeader = toolutil.MarkdownTableHeader("Project", "File", "Path", "Ref", "Start line")
+
+// blobListing is one search scope GitLab answers as API::Entities::Blob, the
+// code scope and the wiki scope (lib/api/search.rb, SCOPE_ENTITY). Both carry
+// a snippet of unbounded size, so both are rendered the same way and held to
+// the same budget, and they differ in what the heading calls the list, how
+// the table names a result, and which action reads a whole file.
+type blobListing struct {
+	// title is the subject of the list heading, and empty what the answer
+	// with no result says it found none of.
+	title, empty string
+	// header is the table header, and row writes one result's row under it.
+	header string
+	row    func(foundBlob) string
+	// owner names where a result lives, as its section heading says it.
+	owner func(foundBlob) string
+	// readHints are the hints every page closes with, and cutHint the one a
+	// page whose snippets were cut or left unshown adds before them.
+	readHints []string
+	cutHint   string
+}
+
+// foundBlob is one result as a listing renders it: the blob, and for a wiki
+// page the group GitLab names, which a code search result never carries.
+type foundBlob struct {
+	BlobOutput
+	groupID int64
+}
+
+// codeListing renders the code scope.
+var codeListing = blobListing{
+	title:     "Code Search Results",
+	empty:     "code search results",
+	header:    codeSearchHeader,
+	row:       func(bl foundBlob) string { return codeTableRow(bl.BlobOutput) },
+	owner:     func(bl foundBlob) string { return fmt.Sprintf("project %d", bl.ProjectID) },
+	readHints: []string{toolutil.HintAction("repository.file_get", "read a found file by its path")},
+	cutHint:   toolutil.HintAction("repository.file_get", "read the whole file of a cut or unshown snippet, with its path and ref from the table or the structured result"),
+}
+
+// wikiListing renders the wiki scope. A wiki page is a file of the wiki's
+// repository, named by its slug with the format's extension, so the table's
+// Page column is the path without that extension, which is the slug the wiki
+// actions take. GitLab's basename is not used for it, because advanced search
+// writes a top-level page's as "./slug".
+var wikiListing = blobListing{
+	title:  "Wiki Search Results",
+	empty:  "wiki pages",
+	header: toolutil.MarkdownTableHeader("Wiki", "Page", "Path", "Ref", "Start line"),
+	row: func(bl foundBlob) string {
+		return toolutil.MarkdownTableRow(
+			wikiOwner(bl),
+			toolutil.EscapeMdTableCell(wikiSlug(bl.Path)),
+			toolutil.EscapeMdTableCell(bl.Path),
+			toolutil.EscapeMdTableCell(bl.Ref),
+			strconv.FormatInt(bl.Startline, 10),
+		)
+	},
+	owner: wikiOwner,
+	readHints: []string{
+		toolutil.HintAction("wiki.get", "read a found page of a project wiki, with its project as project_id and its Page as slug"),
+		toolutil.HintAction("group.wiki_get", "read a found page of a group wiki, with its group as group_id and its Page as slug"),
+	},
+	cutHint: toolutil.HintAction("wiki.get", "read the whole page of a cut or unshown snippet, or group.wiki_get for a group wiki, with its Page from the table, or its path without the extension from the structured result, as slug"),
+}
+
+// wikiOwner names the wiki a result belongs to: its project, or the group of
+// a group wiki page, which advanced search answers with no project.
+func wikiOwner(bl foundBlob) string {
+	if bl.ProjectID == 0 && bl.groupID != 0 {
+		return fmt.Sprintf("group %d", bl.groupID)
+	}
+	return fmt.Sprintf("project %d", bl.ProjectID)
+}
+
+// wikiSlug is the slug of the wiki page whose file is at path: the path
+// without the format's extension.
+func wikiSlug(path string) string {
+	return strings.TrimSuffix(path, pathpkg.Ext(path))
+}
+
+// foundCode is a page of code search results as the listing renders them.
+func foundCode(blobs []BlobOutput) []foundBlob {
+	out := make([]foundBlob, len(blobs))
+	for i, bl := range blobs {
+		out[i] = foundBlob{BlobOutput: bl}
+	}
+	return out
+}
+
+// foundWiki is a page of wiki search results as the listing renders them.
+func foundWiki(pages []WikiBlobOutput) []foundBlob {
+	out := make([]foundBlob, len(pages))
+	for i, page := range pages {
+		out[i] = foundBlob{
+			Basename: page.Basename, Data: page.Data, Path: page.Path, Filename: page.Filename,
+			ID: page.ID, Ref: page.Ref, Startline: page.Startline, ProjectID: page.ProjectID,
+			groupID: page.GroupID,
+		}
+	}
+	return out
+}
 
 // snippetLineEndings turns every line ending into a line feed. CommonMark
 // reads a lone carriage return as a line ending too, so counting lines by the
@@ -135,13 +237,14 @@ const pathMatchNote = "This file matched the query by its path, so the snippet i
 // starts on. A result carrying a blob id is a file that matched by its path,
 // which is the only result basic search gives one, and its heading and first
 // note say so; advanced and exact search give no result an id, so theirs read
-// as content matches whichever they are.
-func writeSnippetSection(c *toolutil.Card, n int, bl BlobOutput, s codeSnippet) {
+// as content matches whichever they are. owner names where the result lives,
+// as its listing names it.
+func writeSnippetSection(c *toolutil.Card, n int, owner string, bl BlobOutput, s codeSnippet) {
 	where := fmt.Sprintf("start line %d", bl.Startline)
 	if bl.ID != "" {
 		where = "path match"
 	}
-	section := c.Section(fmt.Sprintf("Result %d: %s (project %d, %s)", n, cmp.Or(bl.Path, bl.Filename), bl.ProjectID, where))
+	section := c.Section(fmt.Sprintf("Result %d: %s (%s, %s)", n, cmp.Or(bl.Path, bl.Filename), owner, where))
 	if bl.ID != "" {
 		section.Note(pathMatchNote)
 	}
@@ -174,12 +277,12 @@ func deliveredBytes(s string) int {
 // bytes b holds, so the card writes the blank line that separates it from
 // what b ends with, as it will on b; b always ends with a line break, so the
 // size is what the seed and the section measure together less the seed.
-func snippetSectionBytes(b *strings.Builder, n int, bl BlobOutput, s codeSnippet) int {
+func snippetSectionBytes(b *strings.Builder, n int, owner string, bl BlobOutput, s codeSnippet) int {
 	written := b.String()
 	seed := written[max(0, len(written)-2):]
 	var probe strings.Builder
 	probe.WriteString(seed)
-	writeSnippetSection(toolutil.NewCard(&probe, ""), n, bl, s)
+	writeSnippetSection(toolutil.NewCard(&probe, ""), n, owner, bl, s)
 	return deliveredBytes(probe.String()) - deliveredBytes(seed)
 }
 
@@ -249,13 +352,13 @@ func (k leftOut) note(first, last int, tooLarge []int) string {
 	return smaller + fmt.Sprintf("the %d whose %s alone would make the response too large, the first of them result %d.", len(tooLarge), k.parts, tooLarge[0])
 }
 
-// codeHeading is the heading of a code search page whose table shows shown
+// heading is the heading of a page of the listing whose table shows shown
 // rows. It counts the rows shown, which is what [toolutil.WriteListHeading]
 // asks for, so a page whose table the budget cut does not announce the
 // results it left out as shown. Fewer rows never make it longer.
-func codeHeading(shown int, p toolutil.PaginationOutput) string {
+func (l blobListing) heading(shown int, p toolutil.PaginationOutput) string {
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "Code Search Results", shown, p)
+	toolutil.WriteListHeading(&b, l.title, shown, p)
 	return b.String()
 }
 
@@ -270,22 +373,22 @@ func codeTableRow(bl BlobOutput) string {
 	)
 }
 
-// codeTable returns the table of the rows of blobs that fit
-// maxCodeMarkdownBytes under the heading that counts them, and how many it
-// holds. Rows are taken in order and stop before the first that does not fit,
-// each measured as the client receives it, a path that spells the guidance
-// heading included. The heading is measured counting the rows with the one
-// being tried, and a heading is never shorter for more rows, so a row that
-// fails fails under every larger count too and the rows shown are the
-// longest run from the first that fits. When not even the first row fits the
-// table is empty, since a header with no row under it names nothing.
-func codeTable(blobs []BlobOutput, p toolutil.PaginationOutput) (table string, shown int) {
+// table returns the table of the rows of blobs that fit maxCodeMarkdownBytes
+// under the heading that counts them, and how many it holds. Rows are taken
+// in order and stop before the first that does not fit, each measured as the
+// client receives it, a path that spells the guidance heading included. The
+// heading is measured counting the rows with the one being tried, and a
+// heading is never shorter for more rows, so a row that fails fails under
+// every larger count too and the rows shown are the longest run from the
+// first that fits. When not even the first row fits the table is empty, since
+// a header with no row under it names nothing.
+func (l blobListing) table(blobs []foundBlob, p toolutil.PaginationOutput) (table string, shown int) {
 	var rows strings.Builder
-	used := len(codeSearchHeader)
+	used := len(l.header)
 	for _, bl := range blobs {
-		row := codeTableRow(bl)
+		row := l.row(bl)
 		size := deliveredBytes(row)
-		if !fitsCodeMarkdown(deliveredBytes(codeHeading(shown+1, p))+used, size) {
+		if !fitsCodeMarkdown(deliveredBytes(l.heading(shown+1, p))+used, size) {
 			break
 		}
 		rows.WriteString(row)
@@ -295,25 +398,25 @@ func codeTable(blobs []BlobOutput, p toolutil.PaginationOutput) (table string, s
 	if shown == 0 {
 		return "", 0
 	}
-	return codeSearchHeader + rows.String(), shown
+	return l.header + rows.String(), shown
 }
 
 // rowFitsAlone reports whether bl's row fits maxCodeMarkdownBytes on a table
 // of its own, under the heading this page would give one row: what a page of
 // that one result would show, but for its page numbers.
-func rowFitsAlone(bl BlobOutput, p toolutil.PaginationOutput) bool {
-	return fitsCodeMarkdown(deliveredBytes(codeHeading(1, p))+len(codeSearchHeader), deliveredBytes(codeTableRow(bl)))
+func (l blobListing) rowFitsAlone(bl foundBlob, p toolutil.PaginationOutput) bool {
+	return fitsCodeMarkdown(deliveredBytes(l.heading(1, p))+len(l.header), deliveredBytes(l.row(bl)))
 }
 
 // sectionFitsAlone reports whether the snippet section of result n fits
 // maxCodeMarkdownBytes after its row on a table of its own, under the heading
 // this page would give one row: whether a page of that one result would show
 // its snippet, but for its page numbers.
-func sectionFitsAlone(n int, bl BlobOutput, p toolutil.PaginationOutput) bool {
+func (l blobListing) sectionFitsAlone(n int, bl foundBlob, p toolutil.PaginationOutput) bool {
 	var b strings.Builder
-	b.WriteString(codeTableRow(bl))
-	used := deliveredBytes(codeHeading(1, p)) + len(codeSearchHeader) + deliveredBytes(b.String())
-	return fitsCodeMarkdown(used, snippetSectionBytes(&b, n, bl, shapeSnippet(bl.Data)))
+	b.WriteString(l.row(bl))
+	used := deliveredBytes(l.heading(1, p)) + len(l.header) + deliveredBytes(b.String())
+	return fitsCodeMarkdown(used, snippetSectionBytes(&b, n, l.owner(bl), bl.BlobOutput, shapeSnippet(bl.Data)))
 }
 
 // writeSnippetSections writes the section of each of blobs, the results the
@@ -321,65 +424,73 @@ func sectionFitsAlone(n int, bl BlobOutput, p toolutil.PaginationOutput) bool {
 // maxCodeMarkdownBytes, and names the rows left without a section in one
 // note, apart from those whose section would not fit a page of its own
 // either. It reports whether any snippet was cut or left unshown.
-func writeSnippetSections(b *strings.Builder, c *toolutil.Card, blobs []BlobOutput, p toolutil.PaginationOutput) bool {
+func (l blobListing) writeSnippetSections(b *strings.Builder, c *toolutil.Card, blobs []foundBlob, p toolutil.PaginationOutput) bool {
 	used := deliveredBytes(b.String())
 	cut := false
 	for i, bl := range blobs {
 		n := i + 1
 		s := shapeSnippet(bl.Data)
-		section := snippetSectionBytes(b, n, bl, s)
+		owner := l.owner(bl)
+		section := snippetSectionBytes(b, n, owner, bl.BlobOutput, s)
 		if !fitsCodeMarkdown(used, section) {
 			var tooLarge []int
 			for j := i; j < len(blobs); j++ {
-				if !sectionFitsAlone(j+1, blobs[j], p) {
+				if !l.sectionFitsAlone(j+1, blobs[j], p) {
 					tooLarge = append(tooLarge, j+1)
 				}
 			}
 			c.Note(snippetsLeftOut.note(n, len(blobs), tooLarge))
 			return true
 		}
-		writeSnippetSection(c, n, bl, s)
+		writeSnippetSection(c, n, owner, bl.BlobOutput, s)
 		used += section
 		cut = cut || s.cut()
 	}
 	return cut
 }
 
-// FormatCodeMarkdown renders a paginated list of code search results: a
-// table naming each result, its project and the line its snippet starts on,
-// then each snippet under a heading of its own, cut to a bounded head. The
-// heading, the table and the sections share maxCodeMarkdownBytes, so a page
-// of long paths shows the rows that fit, its heading counts those, and a note
-// names the results it leaves out; the hint to read a whole file then says
-// where their paths are. The structured result carries every result and
-// every snippet whole.
-func FormatCodeMarkdown(out CodeOutput) string {
-	if len(out.Blobs) == 0 {
-		return toolutil.EmptyMessage("code search results")
+// format renders a page of the listing: a table naming each result, where it
+// lives and the line its snippet starts on, then each snippet under a heading
+// of its own, cut to a bounded head. The heading, the table and the sections
+// share maxCodeMarkdownBytes, so a page of long paths shows the rows that
+// fit, its heading counts those, and a note names the results it leaves out;
+// the hint to read a whole file then says where their paths are. The
+// structured result carries every result and every snippet whole.
+func (l blobListing) format(blobs []foundBlob, p toolutil.PaginationOutput) string {
+	if len(blobs) == 0 {
+		return toolutil.EmptyMessage(l.empty)
 	}
-	table, rows := codeTable(out.Blobs, out.Pagination)
+	table, rows := l.table(blobs, p)
 	var b strings.Builder
-	b.WriteString(codeHeading(rows, out.Pagination))
+	b.WriteString(l.heading(rows, p))
 	b.WriteString(table)
 	c := toolutil.NewCard(&b, "")
-	cut := writeSnippetSections(&b, c, out.Blobs[:rows], out.Pagination)
-	if rows < len(out.Blobs) {
+	cut := l.writeSnippetSections(&b, c, blobs[:rows], p)
+	if rows < len(blobs) {
 		var tooLarge []int
-		for i := rows; i < len(out.Blobs); i++ {
-			if !rowFitsAlone(out.Blobs[i], out.Pagination) {
+		for i := rows; i < len(blobs); i++ {
+			if !l.rowFitsAlone(blobs[i], p) {
 				tooLarge = append(tooLarge, i+1)
 			}
 		}
-		c.Note(rowsLeftOut.note(rows+1, len(out.Blobs), tooLarge))
+		c.Note(rowsLeftOut.note(rows+1, len(blobs), tooLarge))
 		cut = true
 	}
 	var hints []string
 	if cut {
-		hints = append(hints, toolutil.HintAction("repository.file_get", "read the whole file of a cut or unshown snippet, with its path and ref from the table or the structured result"))
+		hints = append(hints, l.cutHint)
 	}
-	hints = append(hints, toolutil.HintAction("repository.file_get", "read a found file by its path"))
-	toolutil.WriteListFooter(&b, out.Pagination, false, hints...)
+	hints = append(hints, l.readHints...)
+	toolutil.WriteListFooter(&b, p, false, hints...)
 	return b.String()
+}
+
+// FormatCodeMarkdown renders a paginated list of code search results through
+// codeListing: a table naming each result, its project and the line its
+// snippet starts on, then each snippet under a heading of its own, cut to a
+// bounded head and held with the table to maxCodeMarkdownBytes.
+func FormatCodeMarkdown(out CodeOutput) string {
+	return codeListing.format(foundCode(out.Blobs), out.Pagination)
 }
 
 // FormatMRsMarkdown renders a paginated list of merge request search results.
@@ -605,30 +716,14 @@ func FormatUsersMarkdown(out UsersOutput) string {
 	return b.String()
 }
 
-// FormatWikiMarkdown renders a paginated list of wiki search results.
-//
-// The three columns are what [WikiBlobOutput] carries. GitLab's wiki_blobs
-// scope answers with a blob (basename, path, ref, startline and the matched
-// data) rather than with a wiki page, so a real search fills none of them;
-// closing that means widening the output type from the captured response
-// (ADR-0021), which is a schema change and not this formatter's to make.
+// FormatWikiMarkdown renders a paginated list of wiki search results through
+// wikiListing. GitLab answers the wiki_blobs scope with the blob entity code
+// search answers with, matched lines and all, so a wiki page is rendered the
+// way a code result is: a table naming the wiki, the page and the line its
+// snippet starts on, then each snippet in a fence, under the same caps and
+// budget.
 func FormatWikiMarkdown(out WikiOutput) string {
-	if len(out.WikiBlobs) == 0 {
-		return toolutil.EmptyMessage("wiki pages")
-	}
-	var b strings.Builder
-	toolutil.WriteListHeading(&b, "Wiki Search Results", len(out.WikiBlobs), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("Title", "Slug", "Format"))
-	for _, w := range out.WikiBlobs {
-		b.WriteString(toolutil.MarkdownTableRow(
-			toolutil.EscapeMdTableCell(w.Title),
-			toolutil.EscapeMdTableCell(w.Slug),
-			toolutil.EscapeMdTableCell(w.Format),
-		))
-	}
-	toolutil.WriteListFooter(&b, out.Pagination, false,
-		toolutil.HintAction("wiki.get", "read the full wiki page, with slug"))
-	return b.String()
+	return wikiListing.format(foundWiki(out.WikiBlobs), out.Pagination)
 }
 
 // noteableRef formats a notable type and IID as a human-readable reference

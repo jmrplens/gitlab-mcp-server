@@ -35,6 +35,15 @@ const (
 	notePathMatch = "This file matched the query by its path, so the snippet is the start of the file rather than the lines around a match."
 	// codeTableHeader is the header of the code search table.
 	codeTableHeader = "| Project | File | Path | Ref | Start line |\n| --- | --- | --- | --- | --- |\n"
+	// wikiTableHeader is the header of the wiki search table.
+	wikiTableHeader = "| Wiki | Page | Path | Ref | Start line |\n| --- | --- | --- | --- | --- |\n"
+	// hintWikiGet and hintGroupWikiGet are the hints every wiki search
+	// result closes with, one for each kind of wiki a page can belong to.
+	hintWikiGet      = "Use action 'wiki.get' to read a found page of a project wiki, with its project as project_id and its Page as slug"
+	hintGroupWikiGet = "Use action 'group.wiki_get' to read a found page of a group wiki, with its group as group_id and its Page as slug"
+	// hintCutWikiPage is the hint a wiki page with a cut or unshown snippet
+	// adds first.
+	hintCutWikiPage = "Use action 'wiki.get' to read the whole page of a cut or unshown snippet, or group.wiki_get for a group wiki, with its Page from the table, or its path without the extension from the structured result, as slug"
 	// defusedGuidanceHeading is guidanceHeading as the client receives it
 	// anywhere but in the server's own guidance section.
 	defusedGuidanceHeading = "&#128161; **Next steps:**"
@@ -175,13 +184,67 @@ func codeMarkdownBody(md string) string {
 	}
 }
 
-// assertCodeMarkdownRuns checks a page of total results against what its
-// notes say it left out: the table holds rows 1 to r and the sections results
-// 1 to s in order, with s <= r <= total; the snippet note names s+1 to r and
-// the table note r+1 to total, each as one run, in that order and nothing
-// else, whatever reason each gives; and the hint to read a whole file leads
-// whenever either note is there. It returns r and s.
+// listingOracle is what the oracle knows of a listing, apart from the
+// formatter: the subject of its heading, its table header, the row of result
+// i as written before delivery, the hint a page leads with when a note names
+// what it left out, and how many hints a page closes with otherwise. The row
+// of a fuzzed result is spelled from the fields the fuzz varies alone (its
+// path, and for a wiki page whether it belongs to a group), with every other
+// cell the width the fuzz gives it.
+type listingOracle struct {
+	title, header string
+	row           func(i int, bl BlobOutput) string
+	cutHint       string
+	hints         int
+}
+
+// codeOracle is the code scope as the oracle knows it.
+var codeOracle = listingOracle{
+	title:  "Code Search Results",
+	header: codeTableHeader,
+	row: func(_ int, bl BlobOutput) string {
+		return toolutil.MarkdownTableRow("0", "f.go", toolutil.EscapeMdTableCell(bl.Path), "main", "0")
+	},
+	cutHint: hintCutSnippet,
+	hints:   1,
+}
+
+// wikiOracle is the wiki scope as the oracle knows it, for the pages
+// fuzzWikiPages builds: every third result is a page of group 7's wiki, the
+// rest pages of project 0's, and the Page column is the path up to the last
+// dot of its last element.
+var wikiOracle = listingOracle{
+	title:  "Wiki Search Results",
+	header: wikiTableHeader,
+	row: func(i int, bl BlobOutput) string {
+		owner := "project 0"
+		if fuzzGroupPage(i) {
+			owner = "group 7"
+		}
+		page := bl.Path
+		if dot := strings.LastIndexByte(page, '.'); dot > strings.LastIndexByte(page, '/') {
+			page = page[:dot]
+		}
+		return toolutil.MarkdownTableRow(owner, toolutil.EscapeMdTableCell(page), toolutil.EscapeMdTableCell(bl.Path), "main", "0")
+	},
+	cutHint: hintCutWikiPage,
+	hints:   2,
+}
+
+// assertCodeMarkdownRuns is assertListingRuns for a page of code search
+// results.
 func assertCodeMarkdownRuns(t *testing.T, md string, total int) (rows, sections int) {
+	t.Helper()
+	return assertListingRuns(t, md, total, codeOracle)
+}
+
+// assertListingRuns checks a page of total results of the listing o against
+// what its notes say it left out: the table holds rows 1 to r and the
+// sections results 1 to s in order, with s <= r <= total; the snippet note
+// names s+1 to r and the table note r+1 to total, each as one run, in that
+// order and nothing else, whatever reason each gives; and the hint to read a
+// whole file leads whenever either note is there. It returns r and s.
+func assertListingRuns(t *testing.T, md string, total int, o listingOracle) (rows, sections int) {
 	t.Helper()
 	doc := testutil.ScanGFM(md)
 	rows = doc.Rows
@@ -210,7 +273,7 @@ func assertCodeMarkdownRuns(t *testing.T, md string, total int) (rows, sections 
 	if !slices.EqualFunc(got, want, strings.HasPrefix) {
 		t.Fatalf("notes = %q, want them to open %q (rows %d, sections %d of %d)", got, want, rows, sections, total)
 	}
-	if hints := toolutil.ExtractHints(md); len(want) > 0 && (len(hints) != 2 || hints[0] != hintCutSnippet) {
+	if hints := toolutil.ExtractHints(md); len(want) > 0 && (len(hints) != o.hints+1 || hints[0] != o.cutHint) {
 		t.Fatalf("hints = %q, want the cut hint first while a note names what was left out", hints)
 	}
 	return rows, sections
@@ -1257,12 +1320,43 @@ func FuzzFormatCodeMarkdown(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data, path, other string, reps, count, kind, match uint8) {
 		blobs := fuzzBlobs(data, path, other, reps, count, match)
 		p := fuzzPage(kind, len(blobs))
-		md := FormatCodeMarkdown(CodeOutput{Blobs: blobs, Pagination: p})
-		doc := assertCodeMarkdownSound(t, md)
-		rows, sections := assertCodeMarkdownRuns(t, md, len(blobs))
-		assertCodeTableOracle(t, md, doc, blobs, p, rows)
-		assertMatchKindSections(t, doc, blobs, sections)
+		for _, listing := range []struct {
+			o  listingOracle
+			md string
+		}{
+			{o: codeOracle, md: FormatCodeMarkdown(CodeOutput{Blobs: blobs, Pagination: p})},
+			{o: wikiOracle, md: FormatWikiMarkdown(WikiOutput{WikiBlobs: fuzzWikiPages(blobs), Pagination: p})},
+		} {
+			doc := assertCodeMarkdownSound(t, listing.md)
+			rows, sections := assertListingRuns(t, listing.md, len(blobs), listing.o)
+			assertTableOracle(t, listing.md, doc, blobs, p, rows, listing.o)
+			assertMatchKindSections(t, doc, blobs, sections)
+		}
 	})
+}
+
+// fuzzGroupPage reports whether result i of a fuzzed wiki page belongs to a
+// group wiki rather than a project's: every third result does.
+func fuzzGroupPage(i int) bool {
+	return i%3 == 2
+}
+
+// fuzzWikiPages is the page of wiki search results FuzzFormatCodeMarkdown
+// renders beside blobs: the same results as pages of project 0's wiki,
+// every third of them a page of group 7's wiki instead, which GitLab answers
+// with no project.
+func fuzzWikiPages(blobs []BlobOutput) []WikiBlobOutput {
+	pages := make([]WikiBlobOutput, len(blobs))
+	for i, bl := range blobs {
+		pages[i] = WikiBlobOutput{
+			Basename: bl.Basename, Data: bl.Data, Path: bl.Path, Filename: bl.Filename,
+			ID: bl.ID, Ref: bl.Ref, Startline: bl.Startline, ProjectID: bl.ProjectID,
+		}
+		if fuzzGroupPage(i) {
+			pages[i].GroupID = 7
+		}
+	}
+	return pages
 }
 
 // fuzzBlobs is the page FuzzFormatCodeMarkdown renders: count%40+1 results
@@ -1319,8 +1413,8 @@ func assertMatchKindSections(t *testing.T, doc *testutil.GFMDocument, blobs []Bl
 	}
 }
 
-// assertCodeMarkdownSound checks what holds of every code search response
-// whatever GitLab sent: valid UTF-8 with no carriage return, the heading,
+// assertCodeMarkdownSound checks what holds of every code or wiki search
+// response whatever GitLab sent: valid UTF-8 with no carriage return, the heading,
 // table and sections within the budget and the whole within the budget and
 // its tail as delivered, one guidance section, which every fence being closed
 // leaves the server's, and no heading, row, link or list item from GitLab's
@@ -1352,26 +1446,27 @@ func assertCodeMarkdownSound(t *testing.T, md string) *testutil.GFMDocument {
 	return doc
 }
 
-// assertCodeTableOracle holds a rendered page of blobs to what the budget
-// allows, computed here apart from the formatter: the rows shown are the
-// longest run from the first whose heading, counting them, the header and the
-// rows fit as delivered; the response opens with that heading; and the table
-// note, when there is one, offers a smaller page for the results whose row
-// would fit a page of its own and names the ones whose row would not.
-func assertCodeTableOracle(t *testing.T, md string, doc *testutil.GFMDocument, blobs []BlobOutput, p toolutil.PaginationOutput, rows int) {
+// assertTableOracle holds a rendered page of blobs of the listing o to what
+// the budget allows, computed here apart from the formatter: the rows shown
+// are the longest run from the first whose heading, counting them, the header
+// and the rows fit as delivered; the response opens with that heading; and
+// the table note, when there is one, offers a smaller page for the results
+// whose row would fit a page of its own and names the ones whose row would
+// not.
+func assertTableOracle(t *testing.T, md string, doc *testutil.GFMDocument, blobs []BlobOutput, p toolutil.PaginationOutput, rows int, o listingOracle) {
 	t.Helper()
 	heading := func(shown int) string {
 		var b strings.Builder
-		toolutil.WriteListHeading(&b, "Code Search Results", shown, p)
+		toolutil.WriteListHeading(&b, o.title, shown, p)
 		return b.String()
 	}
-	rowSize := func(bl BlobOutput) int {
-		return len(delivered(toolutil.DefuseHintsHeading(toolutil.MarkdownTableRow("0", "f.go", toolutil.EscapeMdTableCell(bl.Path), "main", "0"))))
+	rowSize := func(i int) int {
+		return len(delivered(toolutil.DefuseHintsHeading(o.row(i, blobs[i]))))
 	}
 	n := len(blobs)
-	want, used := 0, len(codeTableHeader)
-	for want < n && len(heading(want+1))+used+rowSize(blobs[want]) <= maxCodeMarkdownBytes {
-		used += rowSize(blobs[want])
+	want, used := 0, len(o.header)
+	for want < n && len(heading(want+1))+used+rowSize(want) <= maxCodeMarkdownBytes {
+		used += rowSize(want)
 		want++
 	}
 	if rows != want {
@@ -1385,7 +1480,7 @@ func assertCodeTableOracle(t *testing.T, md string, doc *testutil.GFMDocument, b
 	}
 	var tooLarge []int
 	for i := rows; i < n; i++ {
-		if len(heading(1))+len(codeTableHeader)+rowSize(blobs[i]) > maxCodeMarkdownBytes {
+		if len(heading(1))+len(o.header)+rowSize(i) > maxCodeMarkdownBytes {
 			tooLarge = append(tooLarge, i+1)
 		}
 	}
@@ -1415,5 +1510,87 @@ func tableNoteReason(run int, tooLarge []int) string {
 		return fmt.Sprintf(", as the response would be too large. Ask for fewer results per page to see them, except result %d, whose row alone would make the response too large.", tooLarge[0])
 	default:
 		return fmt.Sprintf(", as the response would be too large. Ask for fewer results per page to see them, except the %d whose rows alone would make the response too large, the first of them result %d.", len(tooLarge), tooLarge[0])
+	}
+}
+
+// TestFormatWikiMarkdown_NoPages_SaysNoneWereFound verifies that an empty wiki
+// search is the one sentence and nothing else.
+func TestFormatWikiMarkdown_NoPages_SaysNoneWereFound(t *testing.T) {
+	if got, want := FormatWikiMarkdown(WikiOutput{}), "No wiki pages found.\n"; got != want {
+		t.Errorf("empty wiki search:\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestFormatWikiMarkdown_Pages_RenderedAsTheBlobsGitLabSends verifies the
+// whole render of a page of wiki search results, which GitLab answers with
+// the blob entity code search answers with: the table names the wiki each
+// page belongs to (a group's for a page advanced search answers with no
+// project), the page by its slug, which is its path without the extension,
+// the path, the ref and the line its snippet starts on, and each snippet
+// follows in a section of its own, a page whose file matched by its path
+// saying its snippet is the start of the file. Values GitLab authored are
+// escaped in the table and in the section headings. A page cut short by the
+// snippet caps closes with the hint naming both wiki actions first.
+func TestFormatWikiMarkdown_Pages_RenderedAsTheBlobsGitLabSends(t *testing.T) {
+	tests := []struct {
+		name  string
+		pages []WikiBlobOutput
+		want  string
+	}{
+		{
+			name: "project wiki, path match beside a content match",
+			pages: []WikiBlobOutput{
+				{ProjectID: 42, Path: "runbook.md", Filename: "runbook.md", ID: "dad0c4fb6e1bbbcd01e2d2b2a3c3b54e49ba8c1c", Ref: "main", Startline: 1, Data: "# Runbook\n"},
+				{ProjectID: 42, Path: "ops/on-call.md", Filename: "ops/on-call.md", Ref: "main", Startline: 3, Data: "See the runbook.\n"},
+			},
+			want: "## Wiki Search Results (2)\n\n" + wikiTableHeader +
+				"| project 42 | runbook | runbook.md | main | 1 |\n" +
+				"| project 42 | ops/on-call | ops/on-call.md | main | 3 |\n" +
+				"\n### Result 1: runbook.md (project 42, path match)\n\n" +
+				notePathMatch + "\n\n" +
+				"```\n# Runbook\n```\n" +
+				"\n### Result 2: ops/on-call.md (project 42, start line 3)\n\n" +
+				"```\nSee the runbook.\n```\n" +
+				pageOfFooter(2, hintWikiGet, hintGroupWikiGet),
+		},
+		{
+			name: "group wiki page beside a project page of the group",
+			pages: []WikiBlobOutput{
+				{GroupID: 7, Path: "home.md", Filename: "home.md", Ref: "4f0e1c2", Startline: 1, Data: "runbook\n"},
+				{ProjectID: 42, GroupID: 7, Path: "a|[b].rdoc", Filename: "a|[b].rdoc", Ref: "9a8b7c6", Startline: 2, Data: "runbook\n"},
+				{Path: "v1.2/noext", Filename: "v1.2/noext", Ref: "main", Startline: 5, Data: "runbook\n"},
+			},
+			want: "## Wiki Search Results (3)\n\n" + wikiTableHeader +
+				"| group 7 | home | home.md | 4f0e1c2 | 1 |\n" +
+				"| project 42 | a&#124;&#91;b] | a&#124;&#91;b].rdoc | 9a8b7c6 | 2 |\n" +
+				"| project 0 | v1.2/noext | v1.2/noext | main | 5 |\n" +
+				"\n### Result 1: home.md (group 7, start line 1)\n\n" +
+				"```\nrunbook\n```\n" +
+				"\n### Result 2: a|&#91;b].rdoc (project 42, start line 2)\n\n" +
+				"```\nrunbook\n```\n" +
+				"\n### Result 3: v1.2/noext (project 0, start line 5)\n\n" +
+				"```\nrunbook\n```\n" +
+				pageOfFooter(3, hintWikiGet, hintGroupWikiGet),
+		},
+		{
+			name: "snippet past the line cap",
+			pages: []WikiBlobOutput{
+				{ProjectID: 42, Path: "long.md", Filename: "long.md", Ref: "main", Startline: 1, Data: numberedLines(maxSnippetLines + 1)},
+			},
+			want: "## Wiki Search Results (1)\n\n" + wikiTableHeader +
+				"| project 42 | long | long.md | main | 1 |\n" +
+				"\n### Result 1: long.md (project 42, start line 1)\n\n" +
+				"Showing the first 10 of the 11 lines GitLab sent for this result.\n\n" +
+				"```\n" + numberedLines(maxSnippetLines) + "```\n" +
+				pageOfFooter(1, hintCutWikiPage, hintWikiGet, hintGroupWikiGet),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatWikiMarkdown(WikiOutput{WikiBlobs: tt.pages, Pagination: pageOf(len(tt.pages))})
+			if got != tt.want {
+				t.Errorf("FormatWikiMarkdown:\n got %q\nwant %q", got, tt.want)
+			}
+		})
 	}
 }
