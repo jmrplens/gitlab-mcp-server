@@ -1809,6 +1809,27 @@ func TestFormatNotesMarkdown_WithResults(t *testing.T) {
 	}
 }
 
+// TestFormatNotesMarkdown_AnInternalNote_SaysSoBesideItsType verifies that a
+// note only project members can read is marked in the table as well as in the
+// structured result. The body of a hit is quoted in the row, so a caller
+// reading the table alone would otherwise repeat an internal note as if anyone
+// could read it.
+func TestFormatNotesMarkdown_AnInternalNote_SaysSoBesideItsType(t *testing.T) {
+	got := FormatNotesMarkdown(NotesOutput{
+		Notes: []NoteOutput{
+			{Author: "reviewer", NoteableType: "Issue", NoteableIID: 5, Body: "Looks good", Internal: true},
+			{Author: "author", NoteableType: "Issue", NoteableIID: 6, Body: "Thanks"},
+		},
+		Pagination: onePage,
+	})
+	if !strings.Contains(got, "| reviewer | Issue (internal) | #5 | Looks good |\n") {
+		t.Errorf("internal note row missing its marker:\n%s", got)
+	}
+	if !strings.Contains(got, "| author | Issue | #6 | Thanks |\n") {
+		t.Errorf("a note anyone can read is marked:\n%s", got)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // New formatter tests: Projects
 // ---------------------------------------------------------------------------.
@@ -3008,7 +3029,7 @@ func TestSearchHandlers_EveryConvertedField_ComesFromItsOwnKey(t *testing.T) {
 			scope: "notes",
 			path:  pathSearchProject,
 			body: `[{"id":31,"body":"needs a changelog entry","noteable_type":"MergeRequest",` +
-				`"noteable_id":44,"noteable_iid":8,"system":true,"author":{"username":"reviewer-a"},` +
+				`"noteable_id":44,"noteable_iid":8,"system":true,"internal":true,"author":{"username":"reviewer-a"},` +
 				`"created_at":"2026-02-03T09:00:00Z","updated_at":"2026-02-04T11:30:00Z"}]`,
 			call: func(c *gitlabclient.Client) (any, error) {
 				out, err := Notes(context.Background(), c, NotesInput{ProjectID: "42", Query: "changelog"})
@@ -3017,7 +3038,7 @@ func TestSearchHandlers_EveryConvertedField_ComesFromItsOwnKey(t *testing.T) {
 			want: []NoteOutput{{
 				ID: 31, Body: "needs a changelog entry", Author: "reviewer-a",
 				CreatedAt: "2026-02-03T09:00:00Z", UpdatedAt: "2026-02-04T11:30:00Z",
-				NoteableType: "MergeRequest", NoteableID: 44, NoteableIID: 8, System: true,
+				NoteableType: "MergeRequest", NoteableID: 44, NoteableIID: 8, System: true, Internal: true,
 			}},
 		},
 		{

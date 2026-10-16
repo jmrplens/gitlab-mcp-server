@@ -615,7 +615,7 @@ func FormatNotesMarkdown(out NotesOutput) string {
 	for _, n := range out.Notes {
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(n.Author),
-			toolutil.EscapeMdTableCell(n.NoteableType),
+			toolutil.EscapeMdTableCell(noteKind(n)),
 			//gitlab:allow-unescaped noteableRef(n.NoteableType, n.NoteableIID): a reference this package composes itself from the class name and an integer IID, kept unescaped so the cell renders it as the reference it is.
 			noteableRef(n.NoteableType, n.NoteableIID),
 			toolutil.EscapeMdTableCell(truncateBody(n.Body, 80)),
@@ -724,6 +724,17 @@ func FormatUsersMarkdown(out UsersOutput) string {
 // budget.
 func FormatWikiMarkdown(out WikiOutput) string {
 	return wikiListing.format(foundWiki(out.WikiBlobs), out.Pagination)
+}
+
+// noteKind is the Type cell of a note search row: the class of the object the
+// note is on, marked when the note is internal. The row quotes the note's
+// body, so the marker is what keeps a reader of the table alone from
+// repeating an internal note as one anyone can read.
+func noteKind(n NoteOutput) string {
+	if n.Internal {
+		return n.NoteableType + " (internal)"
+	}
+	return n.NoteableType
 }
 
 // noteableRef formats a notable type and IID as a human-readable reference

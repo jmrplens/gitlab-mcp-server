@@ -164,7 +164,7 @@ var searchActionMeta = map[string]searchActionMetaEntry{
 		aliases:     []string{"search notes", "search comments", "find notes by content", "full-text note search"},
 		tags:        []string{"note", "comment"},
 		related:     []string{actionSearchIssues, actionSearchMergeRequests, actionIssueNoteList},
-		description: "Search note bodies within one project. Returns: matching notes with body, author, noteable type and ID, system flag, and timestamps plus pagination metadata. See also: gitlab_search_issues, gitlab_search_merge_requests, gitlab_issue_note_list.",
+		description: "Search note bodies within one project. Returns: matching notes with body, author, noteable type and ID, system and internal flags, and timestamps plus pagination metadata. See also: gitlab_search_issues, gitlab_search_merge_requests, gitlab_issue_note_list.",
 	},
 	"gitlab_search_snippets": {
 		usage:       "Search snippet titles globally (no group or project scope). Use to locate a snippet by its title keywords across the instance.",

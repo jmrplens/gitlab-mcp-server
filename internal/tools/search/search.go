@@ -430,6 +430,7 @@ type NoteOutput struct {
 	NoteableID   int64  `json:"noteable_id"`
 	NoteableIID  int64  `json:"noteable_iid,omitempty"`
 	System       bool   `json:"system"`
+	Internal     bool   `json:"internal" jsonschema:"Whether the note is internal, which GitLab shows only to project members allowed to read internal notes"`
 }
 
 // NotesOutput holds a paginated list of note search results.
@@ -470,6 +471,7 @@ func Notes(ctx context.Context, client *gitlabclient.Client, input NotesInput) (
 			NoteableID:   n.NoteableID,
 			NoteableIID:  n.NoteableIID,
 			System:       n.System,
+			Internal:     n.Internal,
 		}
 		if n.Author.Username != "" {
 			out[i].Author = n.Author.Username
