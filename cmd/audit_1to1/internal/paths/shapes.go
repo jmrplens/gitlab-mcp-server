@@ -350,6 +350,10 @@ type operationIndex struct {
 	// routes can share a shape, so the value is the union of their responses:
 	// taking one arbitrarily would report the other's fields as unpublished.
 	byShape map[string]operation
+	// record is what the index was built from, kept for the entity a
+	// declaration names for a route the record annotates with none
+	// ([operationIndex.as]).
+	record apilive.Document
 }
 
 // placeholder is the token every identifier segment collapses to when a path is
@@ -367,55 +371,79 @@ func newOperationIndex(record apilive.Document) *operationIndex {
 	index := &operationIndex{
 		byPath:  make(map[string]operation, len(record.Routes)),
 		byShape: make(map[string]operation, len(record.Routes)),
+		record:  record,
 	}
 	for _, route := range record.Routes {
-		normalized := apilive.NormalizePath(route.Path)
-		response := record.FieldNames(route.Entity)
-		offset, keyset := routePagination(route)
-		built := operation{
-			Entity:   route.Entity,
-			Response: response,
-			EntityOf: entityOf(route.Entity, response),
-			Nested:   record.NestedNames(route.Entity),
-			Offset:   offset,
-			Keyset:   keyset,
-			Params:   route.Params,
-			Routes:   1,
+		// Every spelling Grape's optional groups allow is the route: the
+		// scoped search is mounted as /groups/:id/(-/)search, and client-go
+		// sends /groups/:id/-/search, which no lookup of the parenthesized
+		// path could meet.
+		for _, normalized := range apilive.ExpandOptional(apilive.NormalizePath(route.Path)) {
+			index.add(record, route, normalized)
 		}
-		pathKey := route.Method + " " + normalized
-		if taken, ok := index.byPath[pathKey]; !ok {
-			index.byPath[pathKey] = built
-		} else {
-			// The record mounts a handful of routes twice, and the response of
-			// the first is what this index answers with, as it always has. The
-			// pagination facts are still merged in, because "some route at this
-			// path paginates" is the claim a finding rests on and dropping the
-			// second route's params would make it depend on mount order.
-			taken.Offset = taken.Offset || offset
-			taken.Keyset = taken.Keyset || keyset
-			taken.Params = unionParams(taken.Params, route.Params)
-			taken.Routes++
-			index.byPath[pathKey] = taken
-		}
-		shapeKey := route.Method + " " + pathShape(normalized)
-		merged := index.byShape[shapeKey]
-		merged.Response = union(merged.Response, built.Response)
-		merged.EntityOf = unionEntityOf(merged.EntityOf, built.EntityOf)
-		merged.Nested = unionNested(merged.Nested, built.Nested)
-		merged.Offset = merged.Offset || offset
-		merged.Keyset = merged.Keyset || keyset
-		merged.Params = unionParams(merged.Params, route.Params)
-		merged.Routes++
-		// The entity is the first one a route of this shape named, and is what
-		// a reader is shown for the operation as a whole. Which entity answers
-		// for a given key is EntityOf's business, because those two are not the
-		// same question once a shape merges two routes.
-		if merged.Entity == "" {
-			merged.Entity = built.Entity
-		}
-		index.byShape[shapeKey] = merged
 	}
 	return index
+}
+
+// add indexes one spelling of one route, under its exact path and its shape.
+func (index *operationIndex) add(record apilive.Document, route apilive.Route, normalized string) {
+	response := record.FieldNames(route.Entity)
+	offset, keyset := routePagination(route)
+	built := operation{
+		Entity:   route.Entity,
+		Response: response,
+		EntityOf: entityOf(route.Entity, response),
+		Nested:   record.NestedNames(route.Entity),
+		Offset:   offset,
+		Keyset:   keyset,
+		Params:   route.Params,
+		Routes:   1,
+	}
+	pathKey := route.Method + " " + normalized
+	if taken, ok := index.byPath[pathKey]; !ok {
+		index.byPath[pathKey] = built
+	} else {
+		// The record mounts a handful of routes twice, and the response of
+		// the first is what this index answers with, as it always has. The
+		// pagination facts are still merged in, because "some route at this
+		// path paginates" is the claim a finding rests on and dropping the
+		// second route's params would make it depend on mount order.
+		taken.Offset = taken.Offset || offset
+		taken.Keyset = taken.Keyset || keyset
+		taken.Params = unionParams(taken.Params, route.Params)
+		taken.Routes++
+		index.byPath[pathKey] = taken
+	}
+	shapeKey := route.Method + " " + pathShape(normalized)
+	merged := index.byShape[shapeKey]
+	merged.Response = union(merged.Response, built.Response)
+	merged.EntityOf = unionEntityOf(merged.EntityOf, built.EntityOf)
+	merged.Nested = unionNested(merged.Nested, built.Nested)
+	merged.Offset = merged.Offset || offset
+	merged.Keyset = merged.Keyset || keyset
+	merged.Params = unionParams(merged.Params, route.Params)
+	merged.Routes++
+	// The entity is the first one a route of this shape named, and is what a
+	// reader is shown for the operation as a whole. Which entity answers for a
+	// given key is EntityOf's business, because those two are not the same
+	// question once a shape merges two routes.
+	if merged.Entity == "" {
+		merged.Entity = built.Entity
+	}
+	index.byShape[shapeKey] = merged
+}
+
+// as is found answering with entity: the keys the entity sends, each read on
+// it, and the objects under them, in place of the empty answer of a route the
+// record annotates with no entity. Everything else the operation says about
+// the route, its params and its pagination, is the record's and is kept.
+func (index *operationIndex) as(found operation, entity string) operation {
+	response := index.record.FieldNames(entity)
+	found.Entity = entity
+	found.Response = response
+	found.EntityOf = entityOf(entity, response)
+	found.Nested = index.record.NestedNames(entity)
+	return found
 }
 
 // routePagination reads what a route's declared params say about pagination.

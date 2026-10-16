@@ -21,14 +21,24 @@ type sdkRoute struct {
 	// reported so a reader of a finding can see that the names searched are an
 	// element's.
 	Many bool
+	// Entity is the entity the method's answer is presented with on a route
+	// GitLab annotates with none, which [scopedEntities] declares for a search
+	// method from the scope it sends. Empty for every other method, whose
+	// route the record speaks for.
+	Entity string
 }
 
-// operation spells the route the way a finding names it.
+// operation spells the route the way a finding names it, with the entity a
+// declaration carries for it, since the record names none.
 func (r sdkRoute) operation() string {
+	spelled := r.Method + " " + r.Path
 	if r.Many {
-		return r.Method + " " + r.Path + " (collection)"
+		spelled += " (collection)"
 	}
-	return r.Method + " " + r.Path
+	if r.Entity != "" {
+		spelled += " as " + r.Entity
+	}
+	return spelled
 }
 
 // readSDKRoutes returns, for every struct a client-go service method answers
@@ -37,9 +47,13 @@ func (r sdkRoute) operation() string {
 // A directory that cannot be read, or a source with no route in it, yields
 // nothing rather than failing the scope: this reads a module cache it does not
 // own the state of, and the join it feeds reports rather than gates.
+//
+// A method declared misdecoded is left out: client-go decodes its answer into
+// a struct GitLab does not send, so crediting its routes to that struct would
+// hold every type modeling the struct to an answer it never decodes.
 func readSDKRoutes(dir string) map[string][]sdkRoute {
 	return routesBy(sdkroutes.Read(dir), func(method sdkroutes.Method) []string {
-		if method.Answers == "" {
+		if method.Answers == "" || misdecoded(method.Key()) {
 			return nil
 		}
 		return []string{method.Answers}
@@ -68,7 +82,8 @@ func readSDKMethodRoutes(dir string) map[string][]sdkRoute {
 }
 
 // routesBy indexes every method's routes under the keys keysOf names for it,
-// each with the method's Many flag.
+// each with the method's Many flag and the entity a scope declaration names
+// for the method.
 //
 // The reading is [sdkroutes]', the one the action request derivation reads
 // too: it follows a method into the helper, the field and the generic function
@@ -82,9 +97,10 @@ func readSDKMethodRoutes(dir string) map[string][]sdkRoute {
 func routesBy(sdk *sdkroutes.SDK, keysOf func(sdkroutes.Method) []string) map[string][]sdkRoute {
 	found := map[string]map[sdkRoute]bool{}
 	for _, method := range sdk.Methods() {
+		entity := scopedEntityOf(method.Key())
 		for _, key := range keysOf(method) {
 			for _, route := range method.Routes {
-				addRoute(found, key, sdkRoute{Method: route.Method, Path: route.Path, Many: method.Many})
+				addRoute(found, key, sdkRoute{Method: route.Method, Path: route.Path, Many: method.Many, Entity: entity})
 			}
 		}
 	}

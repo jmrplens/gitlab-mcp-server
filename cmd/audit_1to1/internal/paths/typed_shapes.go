@@ -122,6 +122,16 @@ type TypedShapeCheck struct {
 	// gaps only the package grain saw, under two thousand findings of other
 	// kinds.
 	Projections []string `json:"projections,omitempty"`
+	// Captured names, as "package.Type", sorted, the types among Compared that
+	// are read off the captured response (ADR-0021) rather than filled by a
+	// converter, judged against the routes of the client-go methods whose
+	// answer they read ([capturedPairings]). Their findings name
+	// capturedSDKType in place of a struct, since none models what they read.
+	Captured []string `json:"captured,omitempty"`
+	// UnusedScopeDeclarations names, sorted, what no longer holds of the scope
+	// declarations and the captured pairings ([scopeDeclarationProblems]),
+	// each a sentence. They are stale declarations like UnusedDeclarations.
+	UnusedScopeDeclarations []string `json:"unused_scope_declarations,omitempty"`
 	// Envelopes names, as "package.Type", sorted, the output types that carry
 	// no pairing because they are this server's packaging around payloads that
 	// have one, and whose every payload was compared, so the response each
@@ -203,11 +213,11 @@ func (c TypedShapeCheck) staleDeclarations() []string {
 	if !c.Ran {
 		return nil
 	}
-	stale := make([]string, 0, len(c.UnusedDeclarations))
+	stale := make([]string, 0, len(c.UnusedDeclarations)+len(c.UnusedScopeDeclarations))
 	for _, key := range c.UnusedDeclarations {
 		stale = append(stale, key+" is declared as a field GitLab sends and its record does not list, and no finding matched it: the record now lists the field, or the type no longer publishes it")
 	}
-	return stale
+	return append(stale, c.UnusedScopeDeclarations...)
 }
 
 // Grain names which join produced a finding, spelled once.
@@ -253,6 +263,7 @@ func typedShapeCheck(root string, index *operationIndex, conditions *conditionIn
 		projected:    projectionsByType(pairings.Outputs, pairings.Projections),
 		sdkFields:    sdkFieldsByType(pairings.Outputs, pairings.Projections),
 	}
+	join.projected = withCaptured(join.projected, join.sdkTypes)
 
 	check := TypedShapeCheck{Ran: true}
 	outcomes := map[[2]string]typeOutcome{}
@@ -272,10 +283,11 @@ func typedShapeCheck(root string, index *operationIndex, conditions *conditionIn
 	sortFindings(check.Unpublished)
 	sortFindings(check.Nested)
 	sortUnsurfaced(check.Unsurfaced)
-	for _, names := range [][]string{check.Skipped.NoPairing, check.Skipped.NoRoute, check.Skipped.NoSchema, check.Envelopes, check.Projections} {
+	for _, names := range [][]string{check.Skipped.NoPairing, check.Skipped.NoRoute, check.Skipped.NoSchema, check.Envelopes, check.Projections, check.Captured} {
 		sort.Strings(names)
 	}
 	check.Unpublished, check.Nested, check.UnusedDeclarations = classifyShapeFindings(check.Unpublished, check.Nested)
+	check.UnusedScopeDeclarations = scopeDeclarationProblems(scopedEntities, capturedPairings, join.methodRoutes, index, published)
 	return check
 }
 
@@ -398,7 +410,9 @@ func (join typeJoin) compare(c *TypedShapeCheck, candidate publishedType, named 
 	if candidate.Inner {
 		c.ComparedInner++
 	}
-	if len(projections) > 0 {
+	if isCaptured(projections) {
+		c.Captured = append(c.Captured, named)
+	} else if len(projections) > 0 {
 		c.Projections = append(c.Projections, named)
 	}
 	c.Unpublished = append(c.Unpublished, unpublishedAtTypeGrain(candidate, paired, described)...)
@@ -564,10 +578,16 @@ func describedProjections(projections []structs.ProjectionPairing, routes, metho
 }
 
 // describe reads what GitLab's document says about each route of each list, in
-// order, which is the order an entity is credited to a key by.
+// order, which is the order an entity is credited to a key by, with one
+// exception: a response whose entity only a scope declaration names is read
+// after every response the record annotates. The record is GitLab's word for
+// its route and a declaration is ours, and search routes sort ahead of most
+// others, so read in place they would credit a user's keys to the entity a
+// search scope selects rather than to the one its own routes name.
 func describe(lists [][]sdkRoute, index *operationIndex) describedResponses {
 	seen := map[string]bool{}
 	described := describedResponses{EntityOf: map[string]string{}, Known: map[string]bool{}, Nested: map[string]map[string]bool{}}
+	var declared []operation
 	for _, list := range lists {
 		for _, route := range list {
 			described.Routed = true
@@ -578,15 +598,34 @@ func describe(lists [][]sdkRoute, index *operationIndex) describedResponses {
 			// template, so its placeholders are already placeholders, and there
 			// is no fixture value in one for a loose match to be evidence about.
 			answer, quality, _ := index.lookup(route.Method, route.Path)
-			if quality != matchExact || len(answer.Response) == 0 {
+			if quality != matchExact {
+				continue
+			}
+			// A route GitLab annotates with no entity answers with the one a
+			// declaration names for the method reaching it, which is how a
+			// search answer is held to the entity its scope selects. A route
+			// the record annotates answers with its own: the record is
+			// GitLab's word for it.
+			byDeclaration := route.Entity != "" && answer.Entity == ""
+			if byDeclaration {
+				answer = index.as(answer, route.Entity)
+			}
+			if len(answer.Response) == 0 {
 				continue
 			}
 			if name := route.operation(); !seen[name] {
 				seen[name] = true
 				described.Operations = append(described.Operations, name)
 			}
+			if byDeclaration {
+				declared = append(declared, answer)
+				continue
+			}
 			described.absorb(answer)
 		}
+	}
+	for _, answer := range declared {
+		described.absorb(answer)
 	}
 	sort.Strings(described.Operations)
 	return described

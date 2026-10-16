@@ -23,13 +23,16 @@ func stubTypeGrainInputs(t *testing.T, pairings structs.Pairings, loadErr error,
 	t.Helper()
 	previousPairings, previousRoutes, previousMethodRoutes := collectPairings, readRoutes, readMethodRoutes
 	previousDeclarations, previousSent := declaredShapeFields, declaredUnsurfaced
+	previousScoped, previousCaptured := scopedEntities, capturedPairings
 	collectPairings = func(string) (structs.Pairings, error) { return pairings, loadErr }
 	readRoutes = func(string) map[string][]sdkRoute { return routes }
 	readMethodRoutes = func(string) map[string][]sdkRoute { return nil }
 	declaredShapeFields, declaredUnsurfaced = nil, nil
+	scopedEntities, capturedPairings = nil, nil
 	t.Cleanup(func() {
 		collectPairings, readRoutes, readMethodRoutes = previousPairings, previousRoutes, previousMethodRoutes
 		declaredShapeFields, declaredUnsurfaced = previousDeclarations, previousSent
+		scopedEntities, capturedPairings = previousScoped, previousCaptured
 	})
 }
 

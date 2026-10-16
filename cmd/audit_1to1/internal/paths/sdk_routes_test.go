@@ -217,12 +217,54 @@ func TestReadSDKRoutes_NothingToRead_IsNoRoutes(t *testing.T) {
 }
 
 // TestSDKRoute_Operation_NamesACollection verifies the spelling a finding
-// names a route by.
+// names a route by, and that a route carrying the entity its method's scope
+// selects says so, since the record names none for it.
 func TestSDKRoute_Operation_NamesACollection(t *testing.T) {
 	if got := (sdkRoute{Method: "GET", Path: "/projects", Many: true}).operation(); got != "GET /projects (collection)" {
 		t.Errorf("operation() = %q, want the collection named", got)
 	}
 	if got := (sdkRoute{Method: "GET", Path: "/projects/:"}).operation(); got != "GET /projects/:" {
 		t.Errorf("operation() = %q, want the route alone", got)
+	}
+	if got := (sdkRoute{Method: "GET", Path: "/search", Many: true, Entity: blobEntity}).operation(); got != "GET /search (collection) as "+blobEntity {
+		t.Errorf("operation() = %q, want the declared entity named", got)
+	}
+}
+
+// TestReadSDKRoutes_AScopedMethod_CarriesTheEntityItsScopeSelects verifies
+// how the scope declarations reach the two route views. A method declared
+// with the entity its scope selects carries it on every route it reaches, in
+// both views; a method declared misdecoded is left out of the view keyed by
+// the struct client-go decodes its answer into, since that struct is not what
+// GitLab sends and every type modeling it would be held to the wrong entity,
+// and stays in the per-method view a captured pairing reads.
+func TestReadSDKRoutes_AScopedMethod_CarriesTheEntityItsScopeSelects(t *testing.T) {
+	stubScopeDeclarations(t, []scopedEntity{
+		{Method: "Search.Blobs", Scope: "blobs", Entity: blobEntity},
+		{Method: "Search.WikiBlobs", Scope: "wiki_blobs", Entity: blobEntity, Misdecoded: true},
+	}, nil)
+	dir := sdkSourceIn(t, map[string]string{
+		"routes.go": `package gitlab
+
+var routeSearch = route("search")
+`,
+		"search.go": `package gitlab
+
+func (s *SearchService) Blobs(query string, opt *SearchOptions) ([]*Blob, *Response, error) {
+	return do[[]*Blob](s.client, withPath(routeSearch))
+}
+
+func (s *SearchService) WikiBlobs(query string, opt *SearchOptions) ([]*Wiki, *Response, error) {
+	return do[[]*Wiki](s.client, withPath(routeSearch))
+}
+`,
+	})
+	scoped := sdkRoute{Method: "GET", Path: "/search", Many: true, Entity: blobEntity}
+
+	if got, want := readSDKRoutes(dir), map[string][]sdkRoute{"Blob": {scoped}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("readSDKRoutes() = %+v, want %+v", got, want)
+	}
+	if got, want := readSDKMethodRoutes(dir), map[string][]sdkRoute{"Search.Blobs": {scoped}, "Search.WikiBlobs": {scoped}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("readSDKMethodRoutes() = %+v, want %+v", got, want)
 	}
 }

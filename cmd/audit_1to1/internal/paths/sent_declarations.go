@@ -277,6 +277,18 @@ const (
 	usersPkg           = toolsDir + "/users"
 )
 
+// searchPkg publishes a row per search scope, each held to the entity its
+// scope selects (scope_entities.go). It is spelled whole rather than joined to
+// toolsDir, for the reason reasonCodeSearchGroupID is one literal; a
+// declaration naming a package path that does not exist is reported stale.
+const searchPkg = "internal/tools/search"
+
+// reasonCodeSearchGroupID answers the one key of the blob entity a code search
+// can never carry. It is one literal rather than parts joined with +, because
+// a package-level initializer carries no statement counter and every operator
+// in one is a mutant the mutation run reports as not covered.
+const reasonCodeSearchGroupID = "lib/api/entities/blob.rb exposes group_id only `if: ->(object) { object.is_a?(Gitlab::Search::FoundWikiPage) }`. The blobs scope presents Gitlab::Search::FoundBlob on every engine: basic search (Gitlab::FileFinder in lib/gitlab/file_finder.rb, for a path match and a content match alike), advanced search (parse_search_result in ee/lib/gitlab/elastic/search_results.rb) and exact code search (parse_zoekt_search_result in ee/lib/search/zoekt/search_results.rb), and FoundWikiPage is a SimpleDelegator over a FoundBlob that only the wiki_blobs scope builds. search.WikiBlobOutput, which that scope fills, publishes the key."
+
 // The four user entities the eleven endpoints behind client-go's User present.
 // UserPublic is what every group-scoped list answers with; the other three
 // belong to routes only internal/tools/users calls.
@@ -1105,6 +1117,15 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 			"(lib/api/entities/user_stars_project.rb). None of UserBasic's keys is at the top of the response; they are under " +
 			"user, which projects.StarrerOutput publishes as ProjectUserOutput.",
 	},
+
+	// The search scopes, held to the entity each selects since the scope
+	// declarations gave their routes one. GET /search and the group and
+	// project search routes declare neither only_path nor
+	// with_custom_attributes, and present with the current user alone
+	// (lib/api/search.rb).
+	{Package: searchPkg, Type: "BlobOutput", Entity: blobEntity, Field: "group_id", Category: categorySubclassCannotSatisfy, Reason: reasonCodeSearchGroupID},
+	{Package: searchPkg, Entity: userBasicEntity, Field: "avatar_path", Category: categoryOptionNeverPassed, Reason: reasonOnlyPathNeverPassed},
+	{Package: searchPkg, Entity: userBasicEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonCustomAttributesNeverPassed},
 }, declaredCompactRows(), declaredConfirmations())
 
 // reasonStatusCheckResponse answers the two objects the response to setting a
@@ -1408,8 +1429,23 @@ func declaredCompactRows() []sentDeclaration {
 			"spp_repository_pipeline_access", "squash_commit_template", "squash_option", "star_count", "statistics",
 			"suggestion_commit_message", "tag_list", "topics", "updated_at", "warn_about_potentially_unwanted_characters",
 			"web_based_commit_signing_enabled", "wiki_access_level", "wiki_enabled"),
+		compactRow(searchPkg, "NoteOutput", noteEntity, reasonSearchNoteRow,
+			"commands_changes", "commit_id", "confidential", "imported", "imported_from", "position", "project_id",
+			"resolvable", "resolved", "resolved_at", "resolved_by", "suggestions", "type"),
+		compactRow(searchPkg, "SnippetOutput", snippetEntity, reasonSearchSnippetRow,
+			"files", "http_url_to_repo", "imported", "imported_from", "repository_storage", "ssh_url_to_repo"),
+		compactRow(searchPkg, "UserOutput", userBasicEntity, reasonSearchUserRow, "locked", "public_email"),
 	)
 }
+
+// The search rows: one row per hit, each leaving the rest of the object to
+// the action that reads it. Each reason is one literal, as
+// reasonCodeSearchGroupID is, so the mutation run finds no operator in them.
+const (
+	reasonSearchNoteRow    = "GET /projects/:id/(-/)search with scope notes presents API::Entities::Note (SCOPE_ENTITY in lib/api/search.rb). The row keeps what finds a note and says what it is on: the ID, the body it matched on, the author, the created and updated instants, the class, ID and IID of the object the note is on, whether it is a system note, and whether it is internal, which the Markdown also marks beside the type so a reader of the table alone does not repeat an internal note as public. confidential is that same value under its earlier name (lib/api/entities/note.rb exposes confidential? as both). The rest is the note's own read, issue.note_get, mr_review.note_get or snippet.note_get by the object it is on, or repository.commit_discussion_list for a note on a commit, which return the whole note: its type and position on a diff, its resolution, its suggestions, the quick actions it ran and its import provenance."
+	reasonSearchSnippetRow = "GET /search with scope snippet_titles presents API::Entities::Snippet (SCOPE_ENTITY in lib/api/search.rb). The row keeps what finds a snippet and opens it: the ID, title, file name, description, visibility, author, web and raw URLs, project ID and the created and updated instants. The rest is snippet.get's, which returns the whole snippet: its files, its clone URLs, its import provenance and, for an administrator, its repository storage."
+	reasonSearchUserRow    = "the users scope of GET /search and of the group and project search routes presents API::Entities::UserBasic (SCOPE_ENTITY in lib/api/search.rb). The row keeps what finds a user and names them in every other action: the ID, username, name, state, avatar and web URL. Whether the account is locked and its public email are user.get's, which returns the whole user."
+)
 
 // reasonResolvedProject answers what the project a git remote resolves to
 // leaves to project.get.

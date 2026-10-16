@@ -620,6 +620,25 @@ func TestNewOperationIndex_TwoRoutesSharingAShape_UnionTheirKeysAndKeepTheFirstE
 	}
 }
 
+// TestNewOperationIndex_AnOptionalGroup_IsIndexedUnderEachSpelling verifies
+// that a route Grape mounts with an optional group is found by the path a
+// caller writes either way. GitLab mounts the scoped search as
+// /projects/:id/(-/)search and client-go sends /projects/:id/-/search, so an
+// index holding only the parenthesized path matched neither spelling and the
+// route read as one GitLab does not serve.
+func TestNewOperationIndex_AnOptionalGroup_IsIndexedUnderEachSpelling(t *testing.T) {
+	index := newOperationIndex(searchRecord())
+
+	for _, path := range []string{"/projects/:id/-/search", "/projects/:id/search", "/projects/:/-/search"} {
+		t.Run(path, func(t *testing.T) {
+			found, quality, _ := index.lookup("GET", path)
+			if quality != matchExact || found.Params["scope"] == (apilive.Param{}) {
+				t.Errorf("lookup(GET %s) = %v %+v, want the search route exactly", path, quality, found)
+			}
+		})
+	}
+}
+
 // TestEntityOf_ARouteMissingEitherHalf_AttributesNothing verifies that an
 // attribution is made only where the route names both an entity and the keys
 // it sends. A route naming no entity would attribute every key to the empty
