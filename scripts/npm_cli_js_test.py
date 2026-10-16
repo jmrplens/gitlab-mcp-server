@@ -32,6 +32,7 @@ import subprocess
 import tempfile
 import time
 import unittest
+import unittest.mock
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 LAUNCHER = os.path.join(ROOT, "npm", "gitlab-mcp-server", "cli.js")
@@ -98,13 +99,42 @@ def alive(pid):
     # rather than testing for it first is what keeps the two from racing. A
     # host whose /proc keeps no Linux-style stat file, which this process's own
     # entry tells, cannot say whether the process is a zombie, so the signal
-    # probe's answer stands there.
+    # probe's answer stands there. A process reaped after the open and before
+    # the read is gone too: the kernel answers that read with ESRCH, which
+    # Python raises as ProcessLookupError, or with nothing at all.
     try:
         with open("/proc/{}/stat".format(pid), encoding="utf-8") as fh:
             text = fh.read()
     except FileNotFoundError:
         return not os.path.exists("/proc/self/stat")
+    except ProcessLookupError:
+        return False
+    if ")" not in text:
+        return False
     return text[text.rindex(")") + 2] != "Z"
+
+
+class AliveTest(unittest.TestCase):
+    """Holds alive() to its answer at each point a process can be reaped."""
+
+    def answer(self, read):
+        """alive() for a process the signal probe finds and whose stat read does read."""
+        stat = unittest.mock.mock_open()
+        stat.return_value.read.side_effect = read
+        with unittest.mock.patch("os.kill"), unittest.mock.patch("builtins.open", stat):
+            return alive(4242)
+
+    def test_a_process_reaped_after_the_open_is_gone(self):
+        self.assertFalse(self.answer(ProcessLookupError(3, "No such process")))
+
+    def test_a_stat_file_read_empty_is_a_process_that_is_gone(self):
+        self.assertFalse(self.answer(lambda: ""))
+
+    def test_a_zombie_is_gone(self):
+        self.assertFalse(self.answer(lambda: "4242 (sh) Z 1 4242"))
+
+    def test_a_running_process_is_alive(self):
+        self.assertTrue(self.answer(lambda: "4242 (sh) S 1 4242"))
 
 
 @unittest.skipUnless(os.name == "posix", "the launcher forwards signals on POSIX only")
