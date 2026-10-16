@@ -248,9 +248,9 @@ readable without opening the tracker:
 | 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | Yes, [modelcontextprotocol/go-sdk#1262](https://github.com/modelcontextprotocol/go-sdk/issues/1262), closed on 2026-10-14 with the change declined: the write deadline is the operator's to handle in a middleware | Yes, theirs, [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232), merged; ours, [modelcontextprotocol/go-sdk#1293](https://github.com/modelcontextprotocol/go-sdk/pull/1293), closed unmerged on 2026-10-14 | Partly, by [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232), not ours, unreleased | No | Yes, permanent for the write deadline since the SDK declined it |
 | 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | Yes, by another user, [modelcontextprotocol/go-sdk#1209](https://github.com/modelcontextprotocol/go-sdk/issues/1209) | Yes, theirs, [modelcontextprotocol/go-sdk#1210](https://github.com/modelcontextprotocol/go-sdk/pull/1210), open | No | Was yes | Yes |
-| 10 | go-sdk | [Cannot send `notifications/cancelled` for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream) | Yes, [modelcontextprotocol/go-sdk#1263](https://github.com/modelcontextprotocol/go-sdk/issues/1263) | No, proposal first; another contributor's prototype of 2026-10-14 waits on the maintainers to choose the API | No | No | None possible |
+| 10 | go-sdk | [Cannot send `notifications/cancelled` for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream) | Yes, [modelcontextprotocol/go-sdk#1263](https://github.com/modelcontextprotocol/go-sdk/issues/1263) | No, proposal first; another contributor's prototype of 2026-10-14 waits on the maintainers to choose the API, and on 2026-10-16 we confirmed its callback shape fits this server | No | No | None possible |
 | 11 | go-sdk | [Declared, not negotiated, version selects MRTR](#the-declared-protocol-version-not-the-negotiated-one-selects-mrtr) | Yes, [modelcontextprotocol/go-sdk#1258](https://github.com/modelcontextprotocol/go-sdk/issues/1258) | Yes, [modelcontextprotocol/go-sdk#1266](https://github.com/modelcontextprotocol/go-sdk/pull/1266), open, conflicting with `main` in test imports only; `main` since row 66's merge answers the downgraded session with no `resultType` at all, which this pull request corrects | No | No, on v1.8.0; a release carrying row 66's merge without this one would lose the guided flows' question for such a session | None taken |
-| 12 | go-sdk | [A cancelled call is still answered](#a-cancelled-incoming-call-is-still-answered) | Yes, [modelcontextprotocol/go-sdk#1259](https://github.com/modelcontextprotocol/go-sdk/issues/1259) | Yes, [modelcontextprotocol/go-sdk#1267](https://github.com/modelcontextprotocol/go-sdk/pull/1267), open; on 2026-10-12 a maintainer narrowed it to stdio-style transports on protocol revision 2026-07-28 or later, we answered on 2026-10-13 with the one defect left, which his push recording the drop under the connection's lock closes by reading; approved on 2026-10-14 and the approval dismissed by his own push of `d62e2589`, it now conflicts with `main` in test imports only | No | No | Partial |
+| 12 | go-sdk | [A cancelled call is still answered](#a-cancelled-incoming-call-is-still-answered) | Yes, [modelcontextprotocol/go-sdk#1259](https://github.com/modelcontextprotocol/go-sdk/issues/1259) | Yes, [modelcontextprotocol/go-sdk#1267](https://github.com/modelcontextprotocol/go-sdk/pull/1267), open; on 2026-10-12 a maintainer narrowed it to stdio-style transports on protocol revision 2026-07-28 or later, we answered on 2026-10-13 with the one defect left, which their push recording the drop under the connection's lock closes by reading; approved on 2026-10-14 and the approval dismissed by their own push of `d62e2589`, it now conflicts with `main` in test imports only, and on 2026-10-16 we corrected the test names in its description | No | No | Partial |
 | 13 | go-sdk | [The cancellation reason is discarded](#the-cancellation-reason-is-discarded-before-any-handler-sees-it) | Yes, [modelcontextprotocol/go-sdk#1254](https://github.com/modelcontextprotocol/go-sdk/issues/1254) | Yes, [modelcontextprotocol/go-sdk#1255](https://github.com/modelcontextprotocol/go-sdk/pull/1255), merged | **Yes, unreleased** | No | Yes, until it ships |
 | 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | Yes, by another user, [modelcontextprotocol/go-sdk#1234](https://github.com/modelcontextprotocol/go-sdk/issues/1234) | Yes, theirs, [modelcontextprotocol/go-sdk#1242](https://github.com/modelcontextprotocol/go-sdk/pull/1242), merged | **Yes, unreleased** | No | None taken |
 | 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | Yes, [modelcontextprotocol/go-sdk#1260](https://github.com/modelcontextprotocol/go-sdk/issues/1260) | Yes, [modelcontextprotocol/go-sdk#1268](https://github.com/modelcontextprotocol/go-sdk/pull/1268), merged | **Yes, unreleased** | No | None taken |
@@ -291,7 +291,7 @@ readable without opening the tracker:
 | 50 | go-sdk | [The negotiated version is recorded on one path of four](#the-negotiated-protocol-version-is-recorded-on-one-path-of-four) | Yes, [modelcontextprotocol/go-sdk#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272) | Yes, [modelcontextprotocol/go-sdk#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274), merged | **Yes, unreleased** | No | None taken |
 | 51 | client-go | [A WithOptions delegation sends `null` as the request body](#a-withoptions-delegation-sends-null-as-the-request-body) | Yes | Yes, [gitlab-org/api/client-go!3065](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3065), open | No | No | Yes |
 | 52 | client-go | [`UpdatePackageProtectionRulesOptions` lacks `omitempty`](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | Partly | Partial |
-| 53 | gitlab-org/gitlab | [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator) | Yes, [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305) | Yes, [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936), open; the product decision the backend maintainer's review of 2026-10-06 asked for was given on the issue on 2026-10-09, needing no change, and he approved it on 2026-10-12, so every approval rule is met; two threads are open (the AppSec review's and the trial license question), its history line says 19.6 since 2026-10-12 while its milestone still says 19.5, and nobody has set it to merge | No | No | Yes |
+| 53 | gitlab-org/gitlab | [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator) | Yes, [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305) | Yes, [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936), open; the product decision the backend maintainer's review of 2026-10-06 asked for was given on the issue on 2026-10-09, needing no change, and they approved it on 2026-10-12, so every approval rule is met; two threads are open (the AppSec review's and the trial license question), its history line says 19.6 since 2026-10-12 while its milestone still says 19.5, and nobody has set it to merge | No | No | Yes |
 | 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No; one latent, one narrows an action | Not needed for five; two handlers require the field, one of them until the tag changes |
 | 55 | gitlab-org/gitlab | [A permission refusal is answered 401 rather than 403](#a-permission-refusal-is-answered-401-rather-than-403) | In part, by another user, [gitlab-org/gitlab#383531](https://gitlab.com/gitlab-org/gitlab/-/issues/383531), for one of its sites | The documentation half, [gitlab-org/gitlab!260774](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260774), merged; the behaviour, no; the SAML group link routes' 401 for a missing group, [gitlab-org/gitlab!261348](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261348), open, closing that issue and keeping the permission 401, approved, with a pipeline failed on a runner warning it has no part in and no maintainer acting on it since 2026-10-13 | **The documentation half, 19.5.0**; the behaviour, no | No | Yes |
 | 56 | gitlab-org/gitlab | [Deleting an external status check without the role answers 204 and deletes nothing](#deleting-an-external-status-check-without-the-role-answers-204-and-deletes-nothing) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260486](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260486), merged, with row 57 | **Yes, 19.5.0**: merged on 2026-10-09 before the 19.5 cut, although its milestone says 19.6 | No | Partial, for releases before 19.5 |
@@ -6861,7 +6861,20 @@ state it gives is current, with
 [modelcontextprotocol/go-sdk#1267](https://github.com/modelcontextprotocol/go-sdk/pull/1267)
 and
 [modelcontextprotocol/go-sdk#1293](https://github.com/modelcontextprotocol/go-sdk/pull/1293)
-open and the rest merged.
+open and the rest merged. The body was brought up to date again at 16:16
+UTC on 2026-10-16:
+[modelcontextprotocol/go-sdk#1262](https://github.com/modelcontextprotocol/go-sdk/issues/1262)
+and
+[modelcontextprotocol/go-sdk#1293](https://github.com/modelcontextprotocol/go-sdk/pull/1293)
+read as declined and closed on 2026-10-14 ([row 8](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)),
+[modelcontextprotocol/go-sdk#1359](https://github.com/modelcontextprotocol/go-sdk/issues/1359)
+as closed on 2026-10-15 as fixed by its merge,
+[modelcontextprotocol/go-sdk#1267](https://github.com/modelcontextprotocol/go-sdk/pull/1267)
+as narrowed to stdio-style transports on 2026-07-28 and later, with
+[modelcontextprotocol/go-sdk#1259](https://github.com/modelcontextprotocol/go-sdk/issues/1259)
+to be closed on that scope once it merges, and the opening says the nine
+findings had no fix when the index was opened rather than that they have
+none.
 
 Read on 2026-10-13, v1.8.0 is still the SDK's newest release and `main` is 61
 commits ahead of it (`7cdd99f7`). The next release is 1.9.0:
@@ -6910,7 +6923,7 @@ was filed on 2026-09-25.
   streamed tool calls and the standalone GET under the same deadline, and
   replacing the deadline on every write has semantics that are hard to
   describe (it can shorten a large `WriteTimeout`, and it adds a deadline to
-  a server that sets none). An operator, he wrote, handles it in a few lines
+  a server that sets none). An operator, they wrote, handles it in a few lines
   of middleware.
 - **In review**: yes, theirs,
   [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232),
@@ -6962,7 +6975,7 @@ was filed on 2026-09-25.
   page, which says the go-sdk emits no periodic ping of its own. The write
   deadline half is already a middleware of the kind the maintainer
   described, though it keys on the response rather than on the
-  `Mcp-Method` header he suggested: `sseWriteDeadlineMiddleware` in the same
+  `Mcp-Method` header they suggested: `sseWriteDeadlineMiddleware` in the same
   file clears the connection's write deadline once a response commits to
   `text/event-stream`. Since the
   SDK declined that half on 2026-10-14, the workaround is permanent rather
@@ -7219,8 +7232,9 @@ passing if the SDK ever fixes this and the filter is removed.
   moved on far enough that the branch conflicts with it in
   `internal/jsonrpc2/conn_test.go`, in the imports alone: merged with `main`
   in a scratch tree it passes `go vet ./...` and `go test ./...`. Its
-  description still names, under its tests, the two tests that commit
-  folded away.
+  description named, under its tests, the two tests that commit folded
+  away until 16:16 UTC that day, when I corrected that line to name
+  `TestCancelFromPeer` in their place and changed nothing else.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: partial and honest rather than a fix. The response cannot be
@@ -7381,7 +7395,13 @@ the server's output.
   [modelcontextprotocol/go-sdk#1226](https://github.com/modelcontextprotocol/go-sdk/pull/1226)
   without this pull request would therefore break the guided flows for a
   client that asks for 2026-07-28 in `initialize`; the pin catches it, but
-  its message names only the case where this pull request landed.
+  its message names only the case where this pull request landed. I put
+  the finding on the pull request at 16:16 UTC on 2026-10-16
+  ([comment 6219740922](https://github.com/modelcontextprotocol/go-sdk/pull/1266#issuecomment-6219740922)):
+  the result `main` sends, the two places in the dispatcher it comes from,
+  what the branch sends instead, that the branch conflicts with `main` only
+  in the imports of `mcp/mrtr_test.go` and passes merged with it, and an
+  offer to push that merge and paste the reproduction.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: none taken, deliberately. Disagreeing with the SDK here would
@@ -7571,7 +7591,13 @@ against the session's.
   choose a shape. A callback of that shape fits how this server ends a listen
   from outside today, by cancelling the handler's context when a resource is
   gone or unreadable, a lifetime ends or a credential is evicted. Read on
-  2026-10-16 no maintainer has answered.
+  2026-10-16 no maintainer has answered, and at 16:16 UTC that day I
+  confirmed it on the issue as its reporter
+  ([comment 6219744181](https://github.com/modelcontextprotocol/go-sdk/issues/1263#issuecomment-6219744181)):
+  the callback would be called where this server now cancels the handler's
+  context, the result that follows is kept, and `ServerSession.Close`
+  going the same way covers shutdown, where nothing is sent today; the
+  choice of shape stays the maintainers'.
 - **Merged**: no.
 - **Blocking**: no. The client still receives the completion result the SDK
   writes when the stream's handler returns, which tells a conforming client the
@@ -8472,7 +8498,11 @@ three paths that was not kept.
   `rust-v0.162.1` and every earlier release still pin 3.3.0, and
   `rust-v0.164.0-alpha.1` was published on 2026-10-16. So Codex CLI 0.163.0
   and later decode a fractional `annotations.priority` again; the third step,
-  a ChatGPT.app that bundles such a Codex, is still to come.
+  a ChatGPT.app that bundles such a Codex, is still to come. At 16:16 UTC
+  that day I said so on the issue
+  ([comment 6219744978](https://github.com/openai/codex/issues/38979#issuecomment-6219744978)),
+  with the pin and the releases on each side of it, and that it can be
+  closed once a ChatGPT.app build ships Codex 0.163.0 or later.
 - **Blocking**: it was. Every tool call failed with "Unexpected response type",
   so the server was unusable from Codex rather than degraded.
 - **Workaround**: yes, and it is load-bearing. `internal/clientcompat` detects
@@ -8707,7 +8737,7 @@ markdown. We keep emitting both.
   with the same five threads unresolved and nobody set to merge it. At 20:04
   UTC that day we resolved the three threads @ck3g's approval settles, moved
   the history line of `doc/api/metadata.md` to 19.6 (`4e4e42db`) and asked
-  him to move the milestone to 19.6 and resolve the AppSec thread. Read on
+  them to move the milestone to 19.6 and resolve the AppSec thread. Read on
   2026-10-16 it has the approvals of @narendran-kannan and @ck3g and needs no
   other, two of its 24 resolvable threads are open (the AppSec reviewer's and
   the trial license question, left for the documentation reviewer), its
@@ -8852,7 +8882,7 @@ regenerated GraphQL introspection files.
   the Orbit endpoint's 403, keyword arguments, logging the
   `insufficient_scope` refusal, the sentence on project and group tokens, two
   nits and shorter comments), every point was answered and folded in at 19:45
-  UTC, and he approved it at 11:40 UTC on 2026-10-14 and asked @michaelangeloio
+  UTC, and they approved it at 11:40 UTC on 2026-10-14 and asked @michaelangeloio
   for the MCP Server review. @michaelangeloio tested it end to end on a GDK
   with the Orbit stack and approved it at 14:02 UTC on 2026-10-15 with one
   non-blocking question: the Orbit endpoint's 403 names `mcp_orbit`, `mcp`,
@@ -10992,7 +11022,7 @@ had shown one of them going nowhere.
   `95a393ae` with his approval, still set to join the train, and needs that
   job run again. On 2026-10-13 @alexbuijs asked why static analysis failed
   again: `master` had shortened the shared description of `granular_scopes`
-  (`fbbd3e3f`), so the OpenAPI document was regenerated once more, he
+  (`fbbd3e3f`), so the OpenAPI document was regenerated once more, they
   approved it again, the train dropped it at 11:13 UTC for
   `pre-merge-checks`, and it merged at 17:40 UTC that day (below). The
   client-go half no. Two
@@ -11462,13 +11492,13 @@ I would like to take this, following the proposal above and the approach of !245
   this project's maintainer,
   [gitlab-org/gitlab#633317](https://gitlab.com/gitlab-org/gitlab/-/issues/633317)
   ("Include granular_scopes in service account personal access token list
-  API responses"), opened at 14:48 UTC on 2026-10-11 and assigned to him.
+  API responses"), opened at 14:48 UTC on 2026-10-11 and assigned to its author.
   Its merge request is ours,
   [gitlab-org/gitlab!261673](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261673)
   ("Return granular_scopes when listing service account tokens"), opened
   from the community fork at 00:23 UTC on 2026-10-13 and readied, and we
   asked @eduardosanz for the backend review at 11:59 UTC. @idurham's two
-  wording suggestions went in as `f68acc60` at 18:13 UTC, and he approved at
+  wording suggestions went in as `f68acc60` at 18:13 UTC, and they approved at
   13:42 UTC on 2026-10-14; @eduardosanz approved at 15:38 UTC on 2026-10-15
   and asked @alexbuijs, who approved and set it to merge at 06:40 UTC on
   2026-10-16 and a minute later reported merge conflicts and asked us to
@@ -12657,10 +12687,10 @@ resolves no boundary, which the merge request leaves as a separate question.
   2026-10-10 it has no review, no approval and no milestone. The bot reminded
   @eugielimpin again at 00:28 UTC on 2026-10-12, and read that day it is
   otherwise unchanged. We asked @eugielimpin again at 00:30 UTC on
-  2026-10-14; he left one non-blocking suggestion at 03:50 UTC, a comment on
+  2026-10-14; they left one non-blocking suggestion at 03:50 UTC, a comment on
   the generated type and keeping the name check, which went in as `8dfbcae3`
   at 10:23 UTC beside `b6aee867`, which passes the type's name from
-  `graphql_object_type?`; he approved at 10:48 UTC.
+  `graphql_object_type?`; they approved at 10:48 UTC.
 - **Merged**: yes, unreleased: it merged at 01:43 UTC on 2026-10-15, in
   milestone 19.6, so it is not in `v19.5.0-ee` and 19.6 is the first release
   that carries it; it reached GitLab.com's production stage at 13:47 UTC that
