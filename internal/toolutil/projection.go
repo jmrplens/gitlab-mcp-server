@@ -44,8 +44,17 @@ var preserveEmptyStringKeys = map[string]struct{}{
 	"raw":     {},
 }
 
-// ProjectOutput recursively prunes metadata noise, empty strings, and nil fields
-// from GitLab API responses to optimize LLM context window token efficiency.
+// ProjectOutput recursively prunes metadata noise, unpopulated strings, and empty
+// nested collections from GitLab API responses to optimize LLM context window token efficiency.
+//
+// Design Principle: "Lean means lean, not complete."
+// The primary goal is minimizing token churn across agent conversations (often 500-3,000
+// tokens per list query) rather than providing a 1:1 bitwise reflection of the GitLab REST API.
+// Empty nested collections ([] and {}) and decorative empty strings are pruned because LLMs
+// naturally assume absent fields denote empty/none, preventing token waste across multi-turn
+// context histories. Semantic content keys (such as 'value', 'content', 'diff', 'raw') are
+// preserved even when empty. For full, unadulterated API payloads, GITLAB_MCP_LEAN_OUTPUT can
+// be left disabled.
 func ProjectOutput(input any) any {
 	if input == nil {
 		return nil
