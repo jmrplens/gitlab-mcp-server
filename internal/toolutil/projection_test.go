@@ -278,3 +278,37 @@ func TestProjectOutput_PreservesLargeIntegerPrecision(t *testing.T) {
 		t.Errorf("expected exact big_id 9007199254740993, got %s", jsonStr)
 	}
 }
+
+func TestProjectOutput_PreservesEmptyContentKeys(t *testing.T) {
+	input := map[string]any{
+		"key":         "DEPLOY_TOKEN",
+		"value":       "",
+		"file_name":   "empty.txt",
+		"content":     "",
+		"diff":        "",
+		"description": "",
+		"empty_field": "",
+	}
+
+	result := ProjectOutput(input)
+	m, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map[string]any, got %T", result)
+	}
+
+	if val, exists := m["value"]; !exists || val != "" {
+		t.Errorf("expected 'value' to be preserved as empty string, got %v (exists: %v)", val, exists)
+	}
+	if val, exists := m["content"]; !exists || val != "" {
+		t.Errorf("expected 'content' to be preserved as empty string, got %v (exists: %v)", val, exists)
+	}
+	if val, exists := m["diff"]; !exists || val != "" {
+		t.Errorf("expected 'diff' to be preserved as empty string, got %v (exists: %v)", val, exists)
+	}
+	if _, exists := m["description"]; exists {
+		t.Errorf("expected 'description' with empty string to be pruned")
+	}
+	if _, exists := m["empty_field"]; exists {
+		t.Errorf("expected 'empty_field' with empty string to be pruned")
+	}
+}

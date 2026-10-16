@@ -34,6 +34,16 @@ var noiseKeySet = map[string]struct{}{
 	"followers_url":       {},
 }
 
+// preserveEmptyStringKeys contains property keys whose semantic meaning relies on
+// distinguishing an intentional empty string (e.g. empty file content or empty variable value)
+// from an absent or nil field.
+var preserveEmptyStringKeys = map[string]struct{}{
+	"value":   {},
+	"content": {},
+	"diff":    {},
+	"raw":     {},
+}
+
 // ProjectOutput recursively prunes metadata noise, empty strings, and nil fields
 // from GitLab API responses to optimize LLM context window token efficiency.
 func ProjectOutput(input any) any {
@@ -82,9 +92,15 @@ func projectGenericValue(val any) any {
 				continue
 			}
 			cleaned := projectGenericValue(item)
-			if cleaned != nil && cleaned != "" {
-				out[k] = cleaned
+			if cleaned == nil {
+				continue
 			}
+			if str, isStr := cleaned.(string); isStr && str == "" {
+				if _, keep := preserveEmptyStringKeys[k]; !keep {
+					continue
+				}
+			}
+			out[k] = cleaned
 		}
 		if len(out) == 0 {
 			return nil
