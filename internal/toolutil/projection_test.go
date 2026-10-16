@@ -97,7 +97,15 @@ func TestProjectOutput_SlicePreservation(t *testing.T) {
 		t.Errorf("expected title 'Issue 1', got %v", item0["title"])
 	}
 	if _, exists := item0["avatar_url"]; exists {
-		t.Errorf("expected avatar_url to be pruned from slice item")
+		t.Errorf("expected avatar_url to be pruned from slice item 0")
+	}
+
+	item1 := slice[1].(map[string]any)
+	if item1["title"] != "Issue 2" {
+		t.Errorf("expected title 'Issue 2', got %v", item1["title"])
+	}
+	if _, exists := item1["avatar_url"]; exists {
+		t.Errorf("expected avatar_url to be pruned from slice item 1")
 	}
 }
 
@@ -176,6 +184,20 @@ func TestProjectOutput_CompressionBenchmark(t *testing.T) {
 
 	if savedPct < 50.0 {
 		t.Errorf("expected at least 50%% reduction, got %.1f%%", savedPct)
+	}
+
+	m, ok := projected.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map[string]any, got %T", projected)
+	}
+	if m["name"] != "core-platform" {
+		t.Errorf("expected name 'core-platform', got %v", m["name"])
+	}
+	if m["id"] != 42 {
+		t.Errorf("expected id 42, got %v", m["id"])
+	}
+	if m["default_branch"] != "main" {
+		t.Errorf("expected default_branch 'main', got %v", m["default_branch"])
 	}
 }
 
@@ -310,5 +332,18 @@ func TestProjectOutput_PreservesEmptyContentKeys(t *testing.T) {
 	}
 	if _, exists := m["empty_field"]; exists {
 		t.Errorf("expected 'empty_field' with empty string to be pruned")
+	}
+}
+
+func TestProjectOutput_CycleProtection(t *testing.T) {
+	cyclic := map[string]any{
+		"name": "loop",
+	}
+	cyclic["self"] = cyclic
+
+	// Verifies recursion depth cutoff prevents stack overflow
+	res := ProjectOutput(cyclic)
+	if res == nil {
+		t.Errorf("expected non-nil result from cyclic projection")
 	}
 }

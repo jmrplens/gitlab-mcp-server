@@ -76,7 +76,7 @@ func ProjectOutput(input any) any {
 		}
 	}
 
-	projected := projectGenericValue(generic)
+	projected := projectGenericValue(generic, 0)
 	if projected == nil {
 		switch generic.(type) {
 		case []any:
@@ -88,9 +88,11 @@ func ProjectOutput(input any) any {
 	return projected
 }
 
-func projectGenericValue(val any) any {
-	if val == nil {
-		return nil
+const maxProjectionDepth = 32
+
+func projectGenericValue(val any, depth int) any {
+	if val == nil || depth > maxProjectionDepth {
+		return val
 	}
 
 	switch v := val.(type) {
@@ -100,7 +102,7 @@ func projectGenericValue(val any) any {
 			if _, isNoise := noiseKeySet[k]; isNoise {
 				continue
 			}
-			cleaned := projectGenericValue(item)
+			cleaned := projectGenericValue(item, depth+1)
 			if cleaned == nil {
 				continue
 			}
@@ -119,7 +121,7 @@ func projectGenericValue(val any) any {
 	case []any:
 		out := make([]any, 0, len(v))
 		for _, item := range v {
-			cleaned := projectGenericValue(item)
+			cleaned := projectGenericValue(item, depth+1)
 			if cleaned != nil && cleaned != "" {
 				out = append(out, cleaned)
 			}
