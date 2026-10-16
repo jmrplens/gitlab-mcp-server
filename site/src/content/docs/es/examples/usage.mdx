@@ -138,6 +138,8 @@ Para un asistente que ejecuta skills, este repositorio incluye además un [skill
 
 El asistente ejecuta `search.code` (`gitlab_search` con `action: code` en la superficie meta), buscando en todos los proyectos el patrón de código especificado.
 
+Cada coincidencia lleva la ruta del fichero, la ref, la línea en la que empieza su fragmento y el fragmento. En la búsqueda básica, que solo responde a búsquedas de código dentro de un proyecto, un resultado que coincidió con la ruta del fichero lleva su ID de blob, y su fragmento es el principio del fichero, no las líneas que coincidieron. La búsqueda básica vuelve a listar el mismo fichero, sin ID de blob, por cada coincidencia en su contenido. La búsqueda avanzada y la exacta no envían ID de blob, y la exacta responde a un fichero que coincidió por su ruta con la propia ruta en lugar de un fragmento, que el resultado marca como coincidencia por ruta.
+
 ## Conceder un logro
 
 **Prompt**: "Concede el logro 'First merge' definido en my-group al usuario 42"
