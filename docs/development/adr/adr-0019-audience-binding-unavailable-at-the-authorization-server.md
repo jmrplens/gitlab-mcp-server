@@ -209,13 +209,15 @@ sets `--oauth-client-uid`.
   permits `resource` at the authorization endpoint only to choose the `mcp`
   scope, never validates, stores or compares it, the token endpoint ignores
   it, and neither token info nor introspection returns an `aud`. The day
-  either endpoint returns one, decision 2 can check the resource instead of
-  the application. Requested the same day as
+  GitLab validates `resource`, records it with the token and returns that
+  value as the `aud` of either endpoint, decision 2 can check the resource
+  instead of the application; an `aud` that names only the application, or a
+  default, would not be enough. Requested the same day as
   [gitlab-org/gitlab#634284](https://gitlab.com/gitlab-org/gitlab/-/issues/634284),
   behind a flag and without changing which tokens GitLab's API accepts, which
-  matters for decision 3: a GitLab that refused, on its REST API, a token
-  recorded for this server would end the passthrough rather than secure it.
-  Row 2 of the upstream register follows it.]
+  matters for decision 3: a GitLab whose REST API stopped authenticating a
+  token whose recorded resource is this server would end the passthrough
+  rather than secure it. Row 2 of the upstream register follows it.]
 
 ## Alternatives Considered
 
