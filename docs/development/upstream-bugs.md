@@ -155,6 +155,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The REST delete of a locked Terraform state answers 200 and deletes nothing](#the-rest-delete-of-a-locked-terraform-state-answers-200-and-deletes-nothing)
   - [The vulnerability dismissal reason outlives the dismissal](#the-vulnerability-dismissal-reason-outlives-the-dismissal)
   - [Issue move and clone, and transfer, are authorized at the source boundary only for a fine-grained token](#issue-move-and-clone-and-transfer-are-authorized-at-the-source-boundary-only-for-a-fine-grained-token)
+  - [The REST code search answers an exact-search name match with the path as its snippet](#the-rest-code-search-answers-an-exact-search-name-match-with-the-path-as-its-snippet)
 - [GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)](#gitlab-orbit-gitlab-orgorbitknowledge-graph)
   - [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types)
   - [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both)
@@ -370,6 +371,7 @@ readable without opening the tracker:
 | 128 | client-go | [A nil SearchOptions panics in every search method but one](#a-nil-searchoptions-panics-in-every-search-method-but-one) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3139](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3139), merged | **Yes, v3.22.1** | No; every search action here passes options | Not needed |
 | 129 | client-go | [The Link header parser reads rel only from the first parameter](#the-link-header-parser-reads-rel-only-from-the-first-parameter) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3143](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3143), open | No | No; GitLab writes `rel` as the only parameter, so only a proxy that rewrites the header reaches it | None taken |
 | 130 | client-go | [The wiki search decodes GitLab's blobs into wiki pages](#the-wiki-search-decodes-gitlabs-blobs-into-wiki-pages) | No | No | No | No | Yes, `search.wiki` reads its page from the captured response |
+| 131 | gitlab-org/gitlab | [The REST code search answers an exact-search name match with the path as its snippet](#the-rest-code-search-answers-an-exact-search-name-match-with-the-path-as-its-snippet) | No; the search page's version of it was closed | No | No | No | Yes, the code and wiki search Markdown reads a result whose snippet is its own path as a path match and fences nothing |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -13524,6 +13526,51 @@ source needs, which is GitLab's rule; this server has no issue clone action.
 **How we found it**: [issue 1337](https://github.com/jmrplens/gitlab-mcp-server/issues/1337),
 read against the 19.4.1 source and checked on a 19.4.2 instance with a token
 whose grant named one project.
+
+### The REST code search answers an exact-search name match with the path as its snippet
+
+- **Reported**: no.
+  [gitlab-org/gitlab#422752](https://gitlab.com/gitlab-org/gitlab/-/issues/422752)
+  reported the same quirk in the search page, which now reads the mark, and
+  was closed on 2025-05-15; the REST answer was not part of it.
+- **In review**: no.
+- **Merged**: no. Read on master at `aa0991bde227` (2026-10-16).
+- **Blocking**: no.
+- **Workaround**: yes. The code and wiki search Markdown
+  (`internal/tools/search/markdown.go`, `nameMatched`) reads a result with no
+  blob id whose snippet is exactly its own path as a file that matched by its
+  name: its row and heading say path match, and its section says GitLab sent
+  the path in place of a snippet instead of fencing the path as line 1 of the
+  file. The `data` and `startline` descriptions of `search.code` say the same.
+  A fix upstream that marks such a result, or answers it with the start of
+  the file as basic search does, retires the reading.
+
+**Where**: `ee/lib/search/zoekt/search_results.rb`, `build_result`, which
+turns each zoekt line match into a REST result of exact code search, and
+`parse_zoekt_search_result`, which makes it the `Gitlab::Search::FoundBlob`
+that `API::Entities::Blob` presents.
+
+**What**: zoekt answers a file whose name matched the query, and whose
+content did not, with one line match flagged `FileName`, whose line is the
+file name and which carries no line before or after it. `build_result` reads
+the line and not the flag, so the result's `data` is the file's path and its
+`startline` is 1 (`[LineNumber - before lines, 1].max` with a line number of
+0; 19.4.1 computes `[line - 1, 0].max` and answers 0), and nothing in
+`API::Entities::Blob` says the line is the file's name. The search page reads
+the flag (`ee/lib/search/zoekt/multi_match.rb` skips such a match), but the
+API never builds a `MultiMatch` (`search_results.rb`,
+`MultiMatch.new(...) unless source == :api`), so only a REST caller is shown
+the path as if it were the file's first line.
+
+**What it costs this server**: a code search result whose snippet would read
+as line 1 of the file. On gitlab.com on 2026-10-17,
+`GET /projects/gitlab-org%2Fapi%2Fclient-go/search?scope=blobs&search=wikis.go`
+answered `wikis.go` and `group_wikis.go` with `data` equal to the path and
+`startline` 1 under `search_type=zoekt`, and with the first lines of each file
+under `search_type=advanced`.
+
+**How we found it**: the review of issue 1393's path match marker, which read
+what each backend sends for a file that matched by its path.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 

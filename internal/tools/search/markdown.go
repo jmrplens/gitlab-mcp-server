@@ -118,7 +118,7 @@ var wikiListing = blobListing{
 			toolutil.EscapeMdTableCell(wikiSlug(bl.Path)),
 			toolutil.EscapeMdTableCell(bl.Path),
 			toolutil.EscapeMdTableCell(bl.Ref),
-			strconv.FormatInt(bl.Startline, 10),
+			startCell(bl.BlobOutput),
 		)
 	},
 	owner: wikiOwner,
@@ -223,30 +223,75 @@ func cutSnippetLine(line string) (string, bool) {
 }
 
 // pathMatchNote is what the section of a file that matched by its path says
-// before anything else. GitLab answers such a result with the start of the
-// file (the first 1024 bytes on basic search, Gitlab::Search::FoundBlob
-// fetch_blob) and start line 1, so its snippet need not hold the query at all,
-// and read as the context of a match it sends a reader looking for a line
-// that is not there.
+// before anything else when GitLab gave it a blob id. Basic search answers
+// such a result with the start of the file (the first 1024 bytes,
+// Gitlab::Search::FoundBlob fetch_blob) and start line 1, so its snippet need
+// not hold the query at all, and read as the context of a match it sends a
+// reader looking for a line that is not there.
 const pathMatchNote = "This file matched the query by its path, so the snippet is the start of the file rather than the lines around a match."
+
+// nameMatchNote is what the section of a file that matched by its path says
+// when GitLab sent the path itself in place of a snippet, which is how exact
+// code search answers a match on a file's name: zoekt marks such a line match
+// FileName and gives the file name as its line, and the API's build_result
+// (ee/lib/search/zoekt/search_results.rb) reads the line and not the mark, so
+// the answer's data is the path and its start line 1 (0 on GitLab 19.4). There
+// is no snippet to show, and fencing the path would present it as line 1 of
+// the file.
+const nameMatchNote = "This file matched the query by its path, and GitLab sent the path in place of a snippet."
+
+// nameMatched reports whether bl is exact search's answer to a file that
+// matched by its name: no blob id, and the file's path, or its file name when
+// GitLab sent no path, as the whole snippet. A content match reads the same
+// only when its snippet is a single line holding exactly the path with no line
+// feed after it, the last line of a one-line file that does not end with one,
+// since every other line a snippet carries ends with a line feed.
+func nameMatched(bl BlobOutput) bool {
+	return bl.ID == "" && bl.Data != "" && bl.Data == cmp.Or(bl.Path, bl.Filename)
+}
+
+// pathMatched reports whether bl matched the query by its path, which GitLab
+// marks with a blob id on basic search and with the path as the snippet on
+// exact search. Advanced search marks neither, so its path matches read as
+// content matches from line 1.
+func pathMatched(bl BlobOutput) bool {
+	return bl.ID != "" || nameMatched(bl)
+}
+
+// startCell is the Start line cell of a result's row: the line its snippet
+// starts on, or "path match" for a file that matched by its path, whose
+// snippet is the start of the file or no line of it at all, so that a row
+// whose section the budget leaves out still says which kind of match it is.
+func startCell(bl BlobOutput) string {
+	if pathMatched(bl) {
+		return "path match"
+	}
+	return strconv.FormatInt(bl.Startline, 10)
+}
 
 // writeSnippetSection writes one result's section: a heading naming the
 // result, the notes saying what the snippet is and what it leaves out, and the
 // snippet in a fence sized past its longest backtick run. GitLab sends no
 // match line, so the heading of a content match names the line the snippet
-// starts on. A result carrying a blob id is a file that matched by its path,
-// which is the only result basic search gives one, and its heading and first
-// note say so; advanced and exact search give no result an id, so theirs read
-// as content matches whichever they are. owner names where the result lives,
-// as its listing names it.
+// starts on. A file that matched by its path is headed as a path match, and
+// the first thing its section says is what its snippet is: the start of the
+// file when basic search gave it a blob id, or nothing of the file when exact
+// search sent its path in place of a snippet, which leaves nothing to fence.
+// Advanced search marks neither kind, so its results read as content matches
+// whichever they are. owner names where the result lives, as its listing
+// names it.
 func writeSnippetSection(c *toolutil.Card, n int, owner string, bl BlobOutput, s codeSnippet) {
 	where := fmt.Sprintf("start line %d", bl.Startline)
-	if bl.ID != "" {
+	if pathMatched(bl) {
 		where = "path match"
 	}
 	section := c.Section(fmt.Sprintf("Result %d: %s (%s, %s)", n, cmp.Or(bl.Path, bl.Filename), owner, where))
 	if bl.ID != "" {
 		section.Note(pathMatchNote)
+	}
+	if nameMatched(bl) {
+		section.Note(nameMatchNote)
+		return
 	}
 	if bl.Data == "" {
 		section.Note("The snippet GitLab sent for this result is empty.")
@@ -369,7 +414,7 @@ func codeTableRow(bl BlobOutput) string {
 		toolutil.EscapeMdTableCell(bl.Filename),
 		toolutil.EscapeMdTableCell(bl.Path),
 		toolutil.EscapeMdTableCell(bl.Ref),
-		strconv.FormatInt(bl.Startline, 10),
+		startCell(bl),
 	)
 }
 
