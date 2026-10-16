@@ -1,6 +1,7 @@
 package toolutil
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 )
@@ -31,7 +32,6 @@ var noiseKeySet = map[string]struct{}{
 	"gists_url":           {},
 	"following_url":       {},
 	"followers_url":       {},
-	"html_url":            {},
 }
 
 // ProjectOutput recursively prunes metadata noise, empty strings, and nil fields
@@ -50,7 +50,9 @@ func ProjectOutput(input any) any {
 		if err != nil {
 			return input
 		}
-		if err := json.Unmarshal(b, &generic); err != nil {
+		dec := json.NewDecoder(bytes.NewReader(b))
+		dec.UseNumber()
+		if err := dec.Decode(&generic); err != nil {
 			return input
 		}
 	}

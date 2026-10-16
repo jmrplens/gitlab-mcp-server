@@ -239,3 +239,42 @@ func TestProjectOutput_StructAndNil(t *testing.T) {
 		t.Errorf("expected name 'struct-test', got %v", m["name"])
 	}
 }
+
+func TestProjectOutput_PreservesHtmlUrl(t *testing.T) {
+	input := map[string]any{
+		"id":       100,
+		"html_url": "https://gitlab.example.com/project/-/blob/main/LICENSE",
+	}
+	result := ProjectOutput(input)
+	m, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map[string]any, got %T", result)
+	}
+	if m["html_url"] != "https://gitlab.example.com/project/-/blob/main/LICENSE" {
+		t.Errorf("expected html_url to be preserved, got %v", m["html_url"])
+	}
+}
+
+func TestProjectOutput_PreservesLargeIntegerPrecision(t *testing.T) {
+	type BigIntStruct struct {
+		BigID int64  `json:"big_id"`
+		Name  string `json:"name"`
+	}
+	// 9007199254740993 is 2^53 + 1, which loses precision in float64 (rounds to 9007199254740992)
+	const expectedBigID int64 = 9007199254740993
+	st := BigIntStruct{
+		BigID: expectedBigID,
+		Name:  "precision-test",
+	}
+
+	result := ProjectOutput(st)
+	b, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("failed to marshal projected result: %v", err)
+	}
+
+	jsonStr := string(b)
+	if !strings.Contains(jsonStr, `"big_id":9007199254740993`) {
+		t.Errorf("expected exact big_id 9007199254740993, got %s", jsonStr)
+	}
+}
