@@ -202,7 +202,20 @@ sets `--oauth-client-uid`.
   protected-resource document because each would state a capability GitLab
   does not offer, and would go in the day it does). `code_challenge_methods_supported`
   is present in both the OAuth and the OpenID documents, so the PKCE gate
-  every MCP client must apply passes against GitLab.]
+  every MCP client must apply passes against GitLab.] [Re-checked 2026-10-16:
+  the same eighteen keys, still no `resource_indicators_supported`. That
+  member is not in the IANA registry, although Doorkeeper 6 publishes it, so
+  the trigger is better read as behaviour than as a key: GitLab's `master`
+  permits `resource` at the authorization endpoint only to choose the `mcp`
+  scope, never validates, stores or compares it, the token endpoint ignores
+  it, and neither token info nor introspection returns an `aud`. The day
+  either endpoint returns one, decision 2 can check the resource instead of
+  the application. Requested the same day as
+  [gitlab-org/gitlab#634284](https://gitlab.com/gitlab-org/gitlab/-/issues/634284),
+  behind a flag and without changing which tokens GitLab's API accepts, which
+  matters for decision 3: a GitLab that refused, on its REST API, a token
+  recorded for this server would end the passthrough rather than secure it.
+  Row 2 of the upstream register follows it.]
 
 ## Alternatives Considered
 

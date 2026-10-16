@@ -240,7 +240,7 @@ readable without opening the tracker:
 | # | Project | Issue | Reported | In review | Merged | Blocking | Workaround |
 | - | ------- | ----- | -------- | --------- | ------ | -------- | ---------- |
 | 1 | gitlab-org/gitlab | [403 carries no `WWW-Authenticate`](#403-responses-carry-no-www-authenticate-header) | Yes, by the merge request; in part before it, by GitLab, in a closed issue, [gitlab-org/gitlab#604654](https://gitlab.com/gitlab-org/gitlab/-/issues/604654) | Yes, [gitlab-org/gitlab!260668](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260668), merged; its follow-up for the MCP endpoints' 403, [gitlab-org/gitlab#633417](https://gitlab.com/gitlab-org/gitlab/-/issues/633417), assigned to the maintainer and in review as [gitlab-org/gitlab!261813](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261813), approved by its backend and MCP Server reviewers, with one non-blocking question of the second waiting on us | **Yes, unreleased**: merged on 2026-10-12 in milestone 19.5, after the 19.5 cut, so 19.6 is the first release that carries it; deployed to GitLab.com at 17:06 UTC on 2026-10-13 | No | Yes |
-| 2 | gitlab-org/gitlab | [No `resource_indicators_supported`](#no-resource_indicators_supported-in-authorization-server-metadata) | No | No | No | No | Yes |
+| 2 | gitlab-org/gitlab | [No `resource_indicators_supported`](#no-resource_indicators_supported-in-authorization-server-metadata) | Yes, as a feature request, [gitlab-org/gitlab#634284](https://gitlab.com/gitlab-org/gitlab/-/issues/634284), opened 2026-10-16, with an offer to contribute the first iteration once Authentication answers its three questions | No | No | No | Yes |
 | 3 | client-go | [Panic unmarshalling an issue](#panic-unmarshalling-an-issue-with-no-id) | Yes | Yes | **Yes, v2.59.1** | Was yes | Retired |
 | 4 | client-go | [`UpdateIssueBoardList` cannot decode its own response](#updateissueboardlist-cannot-decode-a-successful-response) | Yes | Yes | **Yes, v3.0.0** | No | Retired |
 | 5 | client-go | [`GetNamespace` breaks on a path lookup](#getnamespace-cannot-decode-a-path-based-lookup) | No, not reproduced | No | No | No | Retired |
@@ -8897,8 +8897,28 @@ from the authentication area and a changelog entry.
 
 ### No resource_indicators_supported in authorization-server metadata
 
-- **Reported**: no. It is a feature request rather than a defect.
-- **In review**: no.
+- **Reported**: yes, as a feature request rather than a defect:
+  [gitlab-org/gitlab#634284](https://gitlab.com/gitlab-org/gitlab/-/issues/634284)
+  ("Support RFC 8707 resource indicators in the OAuth authorization server"),
+  opened 2026-10-16. It proposes a first iteration behind a feature flag that
+  accepts and validates `resource`, records it with the grant and the token,
+  and returns it as `aud` from `/oauth/token/info` and `/oauth/introspect`,
+  without changing which tokens GitLab's own API accepts, and asks
+  Authentication three questions before any merge request: Doorkeeper 5.9 now
+  or after the Doorkeeper 6 upgrade, the shape the database team wants for
+  `oauth_access_tokens` (`table_size: over_limit`), and whether recording and
+  exposing alone is an acceptable first step. The same day a note on
+  [gitlab-org/gitlab#604551](https://gitlab.com/gitlab-org/gitlab/-/issues/604551)
+  ("Audience-restricted access tokens", the IAM service's issue, which
+  Authentication deferred past the IAM service's first release on 2026-10-05
+  after asking whether audience restriction is needed for opaque Doorkeeper
+  tokens) points at it and answers that question: an opaque token carries no
+  `aud`, but the authorization server can record the resource and return it
+  from introspection, which is how Doorkeeper 6 does it.
+- **In review**: no. A merge request is possible, since GitLab accepts
+  community merge requests in this area and has merged several of ours there,
+  but it waits on the answers, because the owning group has questioned the
+  need and closed external merge requests here for want of an agreed approach.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes, the specification's own alternative. `--oauth-client-uid`
@@ -8906,18 +8926,46 @@ from the authentication area and a changelog entry.
   `application.uid`. Off by default, since enabling it refuses personal access
   tokens.
 
-**Where**: `/.well-known/oauth-authorization-server`.
+**Where**: `/.well-known/oauth-authorization-server`, and behind it the
+authorization and token endpoints.
 
 **What**: verified live on 2026-08-29 against gitlab.com, the document
 advertises seventeen fields and not this one, so RFC 8707 resource indicators
 are unavailable and a client cannot request an audience-restricted token.
-Re-read on 2026-10-05, it advertises eighteen fields, still not this one.
+Re-read on 2026-10-05, it advertises eighteen fields, still not this one, and
+again on 2026-10-16 with the same eighteen.
+
+The missing member is the weaker half of the evidence:
+`resource_indicators_supported` is not in the IANA OAuth Authorization Server
+Metadata registry (Doorkeeper 6 publishes it all the same). The stronger half
+is the behaviour, read on `master` at `6850834e` on 2026-10-16:
+`Oauth::AuthorizationsController` permits `resource` but only uses it to pick
+the `mcp` or `mcp_orbit` scope when the value ends in `/api/v4/mcp` or
+`/api/v4/orbit/mcp`, and nothing validates, stores or compares it; the token
+endpoint does not read it; neither `oauth_access_grants` nor
+`oauth_access_tokens` has a column for it; and neither token info nor
+introspection returns an `aud`.
+
+Doorkeeper implements RFC 8707 natively since
+[doorkeeper-gem/doorkeeper#1886](https://github.com/doorkeeper-gem/doorkeeper/pull/1886)
+(merged 2026-08-01, first released in 6.0.0.beta2, still a prerelease at
+6.0.0.rc2), with a `resource` column on grants and tokens, `invalid_target`,
+`aud` in introspection and the metadata member. GitLab pins `doorkeeper` at
+`~> 5.8`, and `doorkeeper-device_authorization_grant` 1.0.3, its latest
+release, requires `~> 5.5`, so the upgrade is blocked there; GitLab also
+reverted the minor bump to 5.9.7 on 2026-10-08.
 
 **Consequence for us**: the MCP authorization specification's audience-binding
 MUST cannot be met by its named mechanism. Recorded as
 [ADR-0019](adr/adr-0019-audience-binding-unavailable-at-the-authorization-server.md).
+If GitLab later refused, on its REST API, a token whose recorded resource
+names another server, the token passthrough of ADR-0019 decision 3 would stop
+working; the feature request keeps that out of its first iteration and names
+it as a separate decision.
 
-**Effort**: large, and it is a product decision rather than a patch.
+**Effort**: large (a feature flag, migrations, patches to Doorkeeper 5.9
+request classes, `aud` in two endpoints and the matching change in the IAM
+service's copy of the discovery document), and a product decision first.
 
 ### The merge request approvals GET answers 24 keys on EE under a four-key annotation
 
