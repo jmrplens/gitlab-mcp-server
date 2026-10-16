@@ -120,13 +120,31 @@ func cutSnippetLine(line string) (string, bool) {
 	return line, false
 }
 
+// pathMatchNote is what the section of a file that matched by its path says
+// before anything else. GitLab answers such a result with the start of the
+// file (the first 1024 bytes on basic search, Gitlab::Search::FoundBlob
+// fetch_blob) and start line 1, so its snippet need not hold the query at all,
+// and read as the context of a match it sends a reader looking for a line
+// that is not there.
+const pathMatchNote = "This file matched the query by its path, so the snippet is the start of the file rather than the lines around a match."
+
 // writeSnippetSection writes one result's section: a heading naming the
-// result, the notes saying what the snippet leaves out, and the snippet in a
-// fence sized past its longest backtick run. GitLab sends no match line, so
-// the heading names the line the snippet starts on.
+// result, the notes saying what the snippet is and what it leaves out, and the
+// snippet in a fence sized past its longest backtick run. GitLab sends no
+// match line, so the heading of a content match names the line the snippet
+// starts on. A result carrying a blob id is a file that matched by its path,
+// which is the only result basic search gives one, and its heading and first
+// note say so; advanced and exact search give no result an id, so theirs read
+// as content matches whichever they are.
 func writeSnippetSection(c *toolutil.Card, n int, bl BlobOutput, s codeSnippet) {
-	section := c.Section(fmt.Sprintf("Result %d: %s (project %d, start line %d)",
-		n, cmp.Or(bl.Path, bl.Filename), bl.ProjectID, bl.Startline))
+	where := fmt.Sprintf("start line %d", bl.Startline)
+	if bl.ID != "" {
+		where = "path match"
+	}
+	section := c.Section(fmt.Sprintf("Result %d: %s (project %d, %s)", n, cmp.Or(bl.Path, bl.Filename), bl.ProjectID, where))
+	if bl.ID != "" {
+		section.Note(pathMatchNote)
+	}
 	if bl.Data == "" {
 		section.Note("The snippet GitLab sent for this result is empty.")
 		return

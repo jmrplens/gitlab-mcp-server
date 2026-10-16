@@ -164,14 +164,30 @@ type CodeInput struct {
 	toolutil.PaginationInput
 }
 
-// BlobOutput represents a single code search result.
+// BlobOutput represents a single code search result, which GitLab renders as
+// API::Entities::Blob.
+//
+// ID tells the two kinds of basic-search result apart. Basic search sets the
+// blob id only on a file that matched by its path (Gitlab::FileFinder's
+// find_by_path, whose Gitlab::Search::FoundBlob is filled by fetch_blob), and
+// answers such a file with its first 1024 bytes and start line 1; a match on
+// the file's content is parsed from git grep output with no id, and GitLab
+// answers null. A path match whose blob fetch_blob could not read answers
+// null for the id, the snippet and the start line alike, and so reads as a
+// content match with nothing in it. Advanced and exact search build every
+// result without an id, so there a missing id says nothing about why the file
+// matched. Exact search tells a match on a file's name apart another way: it
+// sends the file's path as the snippet, with start line 1 (0 on GitLab 19.4),
+// because the API reads the line zoekt gives such a match and not the mark
+// saying the line is the file's name.
 type BlobOutput struct {
 	Basename  string `json:"basename"`
-	Data      string `json:"data"`
+	Data      string `json:"data"       jsonschema:"The snippet GitLab sent: the lines around a match, or for a file that matched by its path the start of the file on basic search and the file's path itself on exact search"`
 	Path      string `json:"path"`
 	Filename  string `json:"filename"`
+	ID        string `json:"id,omitempty" jsonschema:"Git blob ID of a file that matched the query by its path, set by basic search only. Such a result carries the start of the file and startline 1 rather than the lines around a match. Absent for a match on the file's content, for a path match whose file GitLab could not read (which then carries no snippet either), and on every result of advanced and exact search"`
 	Ref       string `json:"ref"`
-	Startline int64  `json:"startline"`
+	Startline int64  `json:"startline"  jsonschema:"Line the snippet starts on. GitLab sends no line number for the match itself. Exact search answers 1 for a file that matched by its name, and on GitLab 19.4 answers 0 for that and for a snippet starting on the first line. 0 also stands for the null basic search answers for a path match whose file it could not read"`
 	ProjectID int64  `json:"project_id"`
 }
 
@@ -202,6 +218,7 @@ func Code(ctx context.Context, client *gitlabclient.Client, input CodeInput) (Co
 			Data:      b.Data,
 			Path:      b.Path,
 			Filename:  b.Filename,
+			ID:        b.ID,
 			Ref:       b.Ref,
 			Startline: b.Startline,
 			ProjectID: b.ProjectID,

@@ -88,6 +88,57 @@ func TestSearchCode_ProjectScope(t *testing.T) {
 	}
 }
 
+// TestSearchCode_PathAndContentMatch_PublishTheBlobIDGitLabSends verifies
+// that a result carries the blob id GitLab sends and that the structured
+// result tells the two kinds of basic-search result apart: GitLab sets the id
+// only on a file that matched by its path, whose data is the start of the
+// file, and answers null for a match on the file's content, which the result
+// leaves out rather than publishing an empty string.
+func TestSearchCode_PathAndContentMatch_PublishTheBlobIDGitLabSends(t *testing.T) {
+	const blobID = "dad0c4fb7b1d70e47a702cf8d2577c32290dd330"
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathSearchProject {
+			testutil.AssertQueryParam(t, r, queryScope, scopeBlobs)
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
+				{"basename":"wikis_test","data":"//\n// Copyright\n","path":"wikis_test.go",
+				 "filename":"wikis_test.go","id":"`+blobID+`","ref":"main","startline":1,"project_id":42},
+				{"basename":"wikis","data":"// Copyright\n","path":"wikis.go",
+				 "filename":"wikis.go","id":null,"ref":"main","startline":1,"project_id":42}
+			]`, defaultPagination)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Code(context.Background(), client, CodeInput{ProjectID: "42", Query: "wikis_test", SearchType: "basic"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Blobs) != 2 {
+		t.Fatalf("len(Blobs) = %d, want 2", len(out.Blobs))
+	}
+	if got := out.Blobs[0].ID; got != blobID {
+		t.Errorf("path match ID = %q, want %q", got, blobID)
+	}
+	if got := out.Blobs[1].ID; got != "" {
+		t.Errorf("content match ID = %q, want none", got)
+	}
+	raw, err := json.Marshal(out.Blobs)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var rows []map[string]any
+	if err = json.Unmarshal(raw, &rows); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got := rows[0]["id"]; got != blobID {
+		t.Errorf("path match publishes id %v, want %q", got, blobID)
+	}
+	if got, ok := rows[1]["id"]; ok {
+		t.Errorf("content match publishes id %v, want the key left out", got)
+	}
+}
+
 // TestSearchCode_SearchType verifies that the optional search_type parameter
 // is forwarded to GitLab Search API requests.
 func TestSearchCode_SearchType(t *testing.T) {

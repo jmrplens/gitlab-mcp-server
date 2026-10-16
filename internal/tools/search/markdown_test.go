@@ -29,6 +29,10 @@ const (
 	noteEmptySnippet = "The snippet GitLab sent for this result is empty."
 	// noteLongLines is what a snippet with a cut line says.
 	noteLongLines = "Lines longer than 300 characters are cut."
+	// notePathMatch is what the section of a file that matched by its path
+	// says, before anything else: its snippet is where the file starts, and
+	// need not hold the query at all.
+	notePathMatch = "This file matched the query by its path, so the snippet is the start of the file rather than the lines around a match."
 	// codeTableHeader is the header of the code search table.
 	codeTableHeader = "| Project | File | Path | Ref | Start line |\n| --- | --- | --- | --- | --- |\n"
 	// defusedGuidanceHeading is guidanceHeading as the client receives it
@@ -255,6 +259,57 @@ func TestFormatCodeMarkdown_TwoResults_SnippetsFollowTheTable(t *testing.T) {
 		"- " + hintFileGet + "\n"
 	if got != want {
 		t.Errorf("two code search results:\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestFormatCodeMarkdown_PathMatch_SaysTheSnippetIsTheStartOfTheFile verifies
+// that the section of a result GitLab gave a blob id, which basic search does
+// only for a file that matched by its path, is headed as a path match and says
+// that its snippet is the start of the file, while the content match beside it
+// keeps the line its snippet starts on. An empty file that matched by its path
+// says both what it is and that GitLab sent nothing of it.
+func TestFormatCodeMarkdown_PathMatch_SaysTheSnippetIsTheStartOfTheFile(t *testing.T) {
+	tests := []struct {
+		name  string
+		blobs []BlobOutput
+		want  string
+	}{
+		{
+			name: "path match beside a content match",
+			blobs: []BlobOutput{
+				{ProjectID: 42, Path: "wikis_test.go", Filename: "wikis_test.go", ID: "dad0c4fb7b1d70e47a702cf8d2577c32290dd330", Ref: "main", Startline: 1, Data: "//\n// Copyright 2021\n"},
+				{ProjectID: 42, Path: "wikis.go", Filename: "wikis.go", Ref: "main", Startline: 1, Data: "// Copyright 2021\n"},
+			},
+			want: codeTablePrefix(2) +
+				"| 42 | wikis_test.go | wikis_test.go | main | 1 |\n" +
+				"| 42 | wikis.go | wikis.go | main | 1 |\n" +
+				"\n### Result 1: wikis_test.go (project 42, path match)\n\n" +
+				notePathMatch + "\n\n" +
+				"```\n//\n// Copyright 2021\n```\n" +
+				"\n### Result 2: wikis.go (project 42, start line 1)\n\n" +
+				"```\n// Copyright 2021\n```\n" +
+				pageOfFooter(2, hintFileGet),
+		},
+		{
+			name: "empty file matched by its path",
+			blobs: []BlobOutput{
+				{ProjectID: 42, Path: "empty.go", Filename: "empty.go", ID: "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391", Ref: "main", Startline: 1},
+			},
+			want: codeTablePrefix(1) +
+				"| 42 | empty.go | empty.go | main | 1 |\n" +
+				"\n### Result 1: empty.go (project 42, path match)\n\n" +
+				notePathMatch + "\n\n" +
+				noteEmptySnippet + "\n" +
+				pageOfFooter(1, hintFileGet),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatCodeMarkdown(CodeOutput{Blobs: tt.blobs, Pagination: pageOf(len(tt.blobs))})
+			if got != tt.want {
+				t.Errorf("FormatCodeMarkdown:\n got %q\nwant %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -1155,7 +1210,9 @@ func fuzzPage(kind uint8, n int) toolutil.PaginationOutput {
 // down the page, the first repeated, so that the rows alone can pass the
 // budget, up to a first row that does not fit at all, and so that rows of two
 // sizes interleave: a table that skipped a row too large and went on with the
-// smaller ones after it would show more rows than one taken in order.
+// smaller ones after it would show more rows than one taken in order. A mask
+// gives some results a blob id, which is how GitLab marks a file that matched
+// by its path, and each section shown must say which kind its result is.
 func FuzzFormatCodeMarkdown(f *testing.F) {
 	for _, seed := range []string{
 		"", "a", "```", "````\n```", "a\r\nb\r\n", "a\rb", "\r", "\n\n\n",
@@ -1170,8 +1227,10 @@ func FuzzFormatCodeMarkdown(f *testing.F) {
 		strings.Repeat("x"+strings.Repeat(" ", 290)+"\n", 10),
 		strings.Repeat("x\x01\x7f\u0085\n", 10),
 	} {
-		f.Add(seed, "dir/file.go", "b.go", uint8(0), uint8(1), uint8(0))
-		f.Add(seed, "dir/file.go", "b.go", uint8(0), uint8(39), uint8(1))
+		f.Add(seed, "dir/file.go", "b.go", uint8(0), uint8(1), uint8(0), uint8(0))
+		f.Add(seed, "dir/file.go", "b.go", uint8(0), uint8(39), uint8(1), uint8(0))
+		f.Add(seed, "dir/file.go", "b.go", uint8(0), uint8(1), uint8(0), uint8(1))
+		f.Add(seed, "dir/file.go", "b.go", uint8(0), uint8(39), uint8(1), uint8(0x5a))
 	}
 	// Rows of these paths pass the budget on their own: a long path, one that
 	// is longer still once defused, one repeated past what a single row may
@@ -1190,25 +1249,27 @@ func FuzzFormatCodeMarkdown(f *testing.F) {
 		{path: "a.go", other: strings.Repeat("o", 9500)},
 	} {
 		for kind := range uint8(4) {
-			f.Add("x\n", seed.path, seed.other, seed.reps, uint8(39), kind)
+			f.Add("x\n", seed.path, seed.other, seed.reps, uint8(39), kind, uint8(0))
 		}
-		f.Add("x\n", seed.path, seed.other, seed.reps, uint8(0), uint8(1))
-		f.Add(strings.Repeat(strings.Repeat("z", 300)+"\n", 10), seed.path, seed.other, seed.reps, uint8(39), uint8(0))
+		f.Add("x\n", seed.path, seed.other, seed.reps, uint8(0), uint8(1), uint8(0xff))
+		f.Add(strings.Repeat(strings.Repeat("z", 300)+"\n", 10), seed.path, seed.other, seed.reps, uint8(39), uint8(0), uint8(0xa5))
 	}
-	f.Fuzz(func(t *testing.T, data, path, other string, reps, count, kind uint8) {
-		blobs := fuzzBlobs(data, path, other, reps, count)
+	f.Fuzz(func(t *testing.T, data, path, other string, reps, count, kind, match uint8) {
+		blobs := fuzzBlobs(data, path, other, reps, count, match)
 		p := fuzzPage(kind, len(blobs))
 		md := FormatCodeMarkdown(CodeOutput{Blobs: blobs, Pagination: p})
 		doc := assertCodeMarkdownSound(t, md)
-		rows, _ := assertCodeMarkdownRuns(t, md, len(blobs))
+		rows, sections := assertCodeMarkdownRuns(t, md, len(blobs))
 		assertCodeTableOracle(t, md, doc, blobs, p, rows)
+		assertMatchKindSections(t, doc, blobs, sections)
 	})
 }
 
 // fuzzBlobs is the page FuzzFormatCodeMarkdown renders: count%40+1 results
 // of data, the even ones at path repeated reps%48+1 times and the odd ones at
-// other.
-func fuzzBlobs(data, path, other string, reps, count uint8) []BlobOutput {
+// other. Result i matched by its path, and carries a blob id, when bit i%8 of
+// match is set.
+func fuzzBlobs(data, path, other string, reps, count, match uint8) []BlobOutput {
 	// A path reaches the formatter through JSON decoding, which replaces every
 	// invalid byte, so it is valid UTF-8 by the time it is a field.
 	path = strings.Repeat(strings.ToValidUTF8(path, "\uFFFD"), int(reps%48)+1)
@@ -1219,8 +1280,43 @@ func fuzzBlobs(data, path, other string, reps, count uint8) []BlobOutput {
 		if i%2 == 1 {
 			blobs[i].Path = other
 		}
+		if match>>(i%8)&1 == 1 {
+			blobs[i].ID = "0123456789abcdef0123456789abcdef01234567"
+			blobs[i].Startline = 1
+		}
 	}
 	return blobs
+}
+
+// assertMatchKindSections checks that each of the first sections results
+// shown says which kind of match it is, apart from the formatter: a result
+// GitLab gave a blob id, a file that matched by its path, is headed as a path
+// match and its section says the snippet is the start of the file, and every
+// other result is headed with the line its snippet starts on. The note is the
+// server's own line outside a fence, so counting it counts the sections that
+// carry it.
+func assertMatchKindSections(t *testing.T, doc *testutil.GFMDocument, blobs []BlobOutput, sections int) {
+	t.Helper()
+	pathMatches := 0
+	for i, heading := range doc.Headings[1 : sections+1] {
+		suffix := fmt.Sprintf(", start line %d)", blobs[i].Startline)
+		if blobs[i].ID != "" {
+			suffix = ", path match)"
+			pathMatches++
+		}
+		if !strings.HasSuffix(heading, suffix) {
+			t.Fatalf("section %d is headed %q, want it to end %q", i+1, heading, suffix)
+		}
+	}
+	notes := 0
+	for _, line := range doc.Content {
+		if line == notePathMatch {
+			notes++
+		}
+	}
+	if notes != pathMatches {
+		t.Fatalf("%d sections say they show the start of a file, want %d, one per path match shown", notes, pathMatches)
+	}
 }
 
 // assertCodeMarkdownSound checks what holds of every code search response

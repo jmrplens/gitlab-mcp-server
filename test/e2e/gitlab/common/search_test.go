@@ -12,7 +12,10 @@
 package common
 
 import (
+	"crypto/sha1" //nolint:gosec // G505: git names a blob by its SHA-1, and the path match assertion computes that name.
+	"encoding/hex"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -137,6 +140,7 @@ func TestSearch_EveryScope_FindsTheFixtureObject(t *testing.T) {
 		if line := "The token is " + f.token + "."; !strings.Contains(said, "```\n"+line+"\n```\n") {
 			e.T.Errorf("the code search text does not fence the matched line %q:\n%s", line, said)
 		}
+		assertCodePathMatch(e, s, inProject, f)
 
 		projects := harness.Eventually(s, actionSearchProjects, map[string]any{"query": f.project.Name}, searchInterval, searchWait,
 			func(out search.ProjectsOutput) bool { return projectFound(out, f.project.ID) })
@@ -196,6 +200,51 @@ func TestSearch_EveryScope_FindsTheFixtureObject(t *testing.T) {
 			func(out search.WikiOutput) bool { return len(out.WikiBlobs) > 0 })
 		e.T.Logf("wiki search for %q found %d page(s); the first reads %+v (the page is %q)", f.token, len(wiki.WikiBlobs), wiki.WikiBlobs[0], f.wikiTitle)
 	})
+}
+
+// assertCodePathMatch asks basic search for the fixture's token, which the
+// file's path carries as well as its content, and holds the result that
+// matched by the path to what GitLab marks such a result with: the blob id of
+// the file, which is the git blob of the content the fixture wrote and so is
+// computed here rather than read back, with the start of the file as its
+// snippet. The text answer says that snippet is the start of the file rather
+// than presenting it as the context of a match.
+func assertCodePathMatch(e *harness.Env, s *harness.Session, inProject map[string]any, f searchFixture) {
+	e.T.Helper()
+	content := "The token is " + f.token + ".\n"
+	basic := withParams(inProject, map[string]any{"query": f.token, "search_type": "basic"})
+	out := harness.Eventually(s, actionSearchCode, basic, searchInterval, searchWait,
+		func(out search.CodeOutput) bool { return pathMatch(out, f.commit.FilePath) != nil })
+	match := pathMatch(out, f.commit.FilePath)
+	if want := gitBlobID(content); match.ID != want {
+		e.T.Errorf("the path match of %s carries blob id %q, want %q, the blob of the content the fixture wrote", f.commit.FilePath, match.ID, want)
+	}
+	if match.Startline != 1 || match.Data != content {
+		e.T.Errorf("the path match of %s starts at line %d with %q, want the whole file from line 1, %q", f.commit.FilePath, match.Startline, match.Data, content)
+	}
+	_, said := harness.DoAnswer[search.CodeOutput](s, actionSearchCode, basic)
+	if !strings.Contains(said, f.commit.FilePath+" (project ") || !strings.Contains(said, ", path match)") ||
+		!strings.Contains(said, "matched the query by its path, so the snippet is the start of the file") {
+		e.T.Errorf("the basic code search text does not mark the path match of %s as the start of the file:\n%s", f.commit.FilePath, said)
+	}
+}
+
+// pathMatch returns the result of a code search that matched the file at path
+// by its path, which is the result GitLab gives a blob id, or nil.
+func pathMatch(out search.CodeOutput, path string) *search.BlobOutput {
+	for i := range out.Blobs {
+		if out.Blobs[i].Path == path && out.Blobs[i].ID != "" {
+			return &out.Blobs[i]
+		}
+	}
+	return nil
+}
+
+// gitBlobID is the object id git gives a blob holding content, in the SHA-1
+// object format a GitLab repository uses by default.
+func gitBlobID(content string) string {
+	sum := sha1.Sum([]byte("blob " + strconv.Itoa(len(content)) + "\x00" + content)) //nolint:gosec // G401: git names a blob by the SHA-1 of its header and content, and the test computes that name to compare it, which is no security claim.
+	return hex.EncodeToString(sum[:])
 }
 
 // blobFound reports whether a code search holds the file at the path.
