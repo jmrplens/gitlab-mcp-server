@@ -2,7 +2,7 @@
   "name": "gitlab-mcp-server-docs",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@12.4.2+sha512.08adc6613180275c7c9edada39dcf08c9c61ad4e7eaf330a4f3461f102b0f907423454d117f98e72d47fef0616070644d7bffc973a6a57f5090a6d7c368b07c9",
+  "packageManager": "pnpm@12.9.0+sha512.8f64efa0b792986ca98ae568791bcd7722807e274c4f0c1d9853c62116495c584119db98762a2a5343b1684d361b9ae26fdd16d551666d7635346d3fae830ddd",
   "engines": {
     "node": ">=24.18.0"
   },
@@ -33,23 +33,23 @@
   "type": "module",
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.2",
-    "@astrojs/starlight": "^0.42.5",
-    "astro": "^7.3.6",
-    "mermaid": "^12.0.0",
+    "@astrojs/starlight": "^0.42.6",
+    "astro": "^7.3.8",
+    "mermaid": "^12.1.0",
     "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
-    "@typescript-eslint/eslint-plugin": "^8.71.0",
-    "@typescript-eslint/parser": "^8.71.0",
-    "eslint": "^10.11.0",
+    "@typescript-eslint/eslint-plugin": "^8.71.1",
+    "@typescript-eslint/parser": "^8.71.1",
+    "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-astro": "^3.2.1",
     "html-validate": "^11.16.2",
     "htmlhint": "^1.9.2",
     "pa11y-ci": "^4.1.1",
     "playwright": "^1.63.0",
-    "prettier": "^3.9.9",
+    "prettier": "^3.9.10",
     "rehype-mermaid": "^3.0.0",
     "starlight-links-validator": "^0.26.0",
     "typescript": "^6.0.3"

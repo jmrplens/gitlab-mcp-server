@@ -15,9 +15,11 @@ overrides:
   # advisories to two on that bump alone. Pinned rather than the bump reverted,
   # because the fix is a version that exists and the alternative is holding a
   # rendering dependency back for a transitive parser's dependency. chevrotain
-  # 11.1.2 still asks for exactly 4.17.23, so the pin is still what keeps it
-  # off the vulnerable release. lodash itself needs no pin any more: its one
-  # consumer, pa11y-ci, asks for ~4.18.1.
+  # 13.2.0, which mermaid 12.1.0 moved to, no longer depends on lodash-es, but
+  # dagre-d3-es 7.0.14, which mermaid pins exactly, asks for ^4.17.21, a range
+  # that still admits the vulnerable releases, so the pin is still what keeps
+  # it off them. lodash itself needs no pin any more: its one consumer,
+  # pa11y-ci, asks for ~4.18.1.
   lodash-es: 4.18.1
   # brace-expansion ReDoS (GHSA-3jxr-9vmj-r5cp) and unbounded-expansion DoS
   # (GHSA-mh99-v99m-4gvg, GHSA-rgw5-rvv9-x895); dev/build deps only.
@@ -110,10 +112,13 @@ auditConfig:
     - GHSA-c475-qrg2-pj4r
     # http-cache-semantics honours a client's max-stale on a shared-cache entry
     # that was zeroed for security, so one user can be served another's cached
-    # response, Set-Cookie included (GHSA-ch52-4w7c-c8xp). Every release up to
-    # the newest, 4.2.0, is affected and none fixes it, so there is nothing to
-    # pin to. Build-time only: astro is its one consumer (7.3.5, the newest,
-    # still asks for ^4.2.0) and imports it only in assets/build/remote.js, to
+    # response, Set-Cookie included (GHSA-ch52-4w7c-c8xp). The advisory lists
+    # every release up to 4.2.0, the version the lockfile resolves, and names
+    # no fixed one. 4.3.0 (2026-10-04), which astro 7.4.0 asks for, changes
+    # Vary matching and adds status() but leaves the max-stale handling as it
+    # was, so there is nothing to pin to. Build-time only: astro is its one
+    # consumer (7.3.8, the version taken, still asks for ^4.2.0) and imports
+    # it only in assets/build/remote.js, to
     # decide how long a remote image fetched during a build stays fresh. It
     # calls only storable() and timeToLive() on a request it builds itself,
     # and max-stale is read only in evaluateRequest(), which astro never
