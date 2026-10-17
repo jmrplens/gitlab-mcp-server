@@ -210,6 +210,7 @@ func vulnerabilityDeclarations() []sentDeclaration {
 		{"reachability", "17.11", "whether the vulnerable code is reachable"},
 		{"representationInformation", "17.7", "the commit the vulnerability was resolved in"},
 		{"trackedRef", "18.10", "the branch or tag the vulnerability was detected on"},
+		{"validityDisplayState", "19.5", "whether a leaked secret is valid, which GitLab derives from the token status published as token_status and from whether the vendor still supports the check"},
 	} {
 		declarations = append(declarations, sentDeclaration{
 			Package:    vulnerabilitiesPackage,
@@ -317,6 +318,18 @@ func findingDeclarations() []sentDeclaration {
 			Field:      "userPermissions",
 			Category:   categoryAffordance,
 			Reason:     permissionsReason("two booleans (admin the vulnerability, create an issue)"),
+		},
+		{
+			Package:    securityFindingsPackage,
+			SchemaType: securityFindingType,
+			Field:      "validityDisplayState",
+			Category:   categoryExperiment,
+			Reason: "GitLab marks validityDisplayState (whether a leaked secret is valid, derived from its token " +
+				"status and from whether the vendor still supports the check) an experiment, experiment: { milestone: " +
+				"'19.5' } in ee/app/graphql/types/pipeline_security_report_finding_type.rb. GitLab may change or remove " +
+				"an experiment without notice and refuses a whole document naming a field it no longer has, so " +
+				"selecting it would stake the findings list on the experiment. The token status it is derived from is " +
+				"published as token_status, and the state is selected once GitLab declares it generally available.",
 		},
 		detailsDeclaration(securityFindingsPackage, securityFindingType),
 		htmlDeclaration(securityFindingsPackage, securityFindingType, "descriptionHtml", "description"),

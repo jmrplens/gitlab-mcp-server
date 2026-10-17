@@ -6258,7 +6258,13 @@ a work item that has it and a caller of a work item tool would read:
   and the date and state of each link (`linkCreatedAt`, `linkUpdatedAt`,
   `workItemState`);
 - the start and due date widget's `isFixed` and the milestone or work item
-  each date is inherited from.
+  each date is inherited from;
+- the severity widget of an incident and the requester widget of a Service
+  Desk ticket, which the issue tools already publish from REST as `severity`
+  and `service_desk_reply_to`. GitLab added the severity widget in 19.5 and
+  the requester widget in 19.6, and an earlier GitLab refuses a document
+  naming either, so they could join only as fields `ReturnedFields` selects
+  and never by default, as row 106's two do.
 
 Everything else the schema offers on a work item and its widgets is left out
 on purpose, and the client-go run of `cmd/audit_graphql_shapes` holds each
@@ -6267,7 +6273,8 @@ the viewer, a rendering for the web interface, a reference to another
 domain's object, or a part of GitLab this server serves no tool for.
 
 **How we found it**: the client-go run of `cmd/audit_graphql_shapes`, issue
-1022, against v3.15.0 and the 19.5.0-pre pin.
+1022, against v3.15.0 and the 19.5.0-pre pin; the severity and requester
+widgets by the same run when the pin moved to 19.6.0-pre.
 
 **Effort**: small per field; most are a line in the fragment and a field on
 the struct.

@@ -1,6 +1,7 @@
 // The answers to what the schema offers at an object a client-go decoder
 // reads and no document of its service selects: the one-time triage of
-// issue 1022, against client-go v3.15.0 and the 19.5.0-pre pin.
+// issue 1022, against client-go v3.15.0 and the 19.5.0-pre pin, and the four
+// work item widgets the 19.6.0-pre pin added to it.
 
 package main
 
@@ -241,7 +242,20 @@ func workItemsSDKSent() []sentDeclaration {
 	for _, feature := range []string{"customFields", "description", "progress", "timeTracking"} {
 		declarations = append(declarations, recordedField(workItemsService, "WorkItemFeatures", feature, "107", row107))
 	}
+	// addedIn is what the two recent widgets the issue tools already publish
+	// from REST have in common, given the release that added each.
+	addedIn := func(release string) string {
+		return " GitLab added the widget in " + release + " and an earlier GitLab refuses a document naming it, so " +
+			"client-go could select it only as a field ReturnedFields selects and never by default, as row 106's two " +
+			"are; no client-go change is open for it."
+	}
 	declarations = append(declarations,
+		recordedField(workItemsService, "WorkItemFeatures", "severity", "107",
+			"an incident's severity, which the issue tools publish from REST as severity."+addedIn("19.5")),
+		recordedField(workItemsService, "WorkItemFeatures", "requester", "107",
+			"the email of the non-GitLab user who opened a Service Desk ticket, obfuscated for a caller who may not "+
+				"read external emails, which the issue tools publish from REST as service_desk_reply_to (the widget "+
+				"reads external_author, an alias of that column in app/models/issue.rb)."+addedIn("19.6")),
 		experimentField(workItemsService, "WorkItem", "archived", "16.5", source),
 		experimentField(workItemsService, "WorkItem", "externalAuthor", "18.8", source),
 		experimentField(workItemsService, "WorkItem", "project", "15.3", source),
@@ -352,6 +366,10 @@ func workItemWidgetsSDKSent() []sentDeclaration {
 		workItemThirdPartyFeature("crmContacts", "the customer relations contacts of the work item"),
 		workItemThirdPartyFeature("designs", "design management"),
 		workItemThirdPartyFeature("emailParticipants", "the Service Desk email participants"),
+		workItemThirdPartyFeature("escalationPolicy",
+			"the escalation policy an incident pages its on-call schedules through (GitLab 19.5, Enterprise only)"),
+		workItemThirdPartyFeature("escalationStatus",
+			"an incident's escalation status, whether its paging is triggered, acknowledged, resolved or ignored (GitLab 19.5)"),
 		workItemThirdPartyFeature("linkedResources", "the incident linked resources (Zoom and similar links)"),
 		workItemThirdPartyFeature("requirementLegacy", "the legacy requirements identifier"),
 		workItemThirdPartyFeature("testReports", "the requirement test reports"),

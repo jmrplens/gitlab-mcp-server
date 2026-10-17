@@ -229,6 +229,9 @@ func epicNoteDeclarations(pkg string) []sentDeclaration {
 		return sentDeclaration{Package: pkg, SchemaType: "Note", Field: field, Category: category, Reason: reason}
 	}
 	return []sentDeclaration{
+		note("agentPresence", categoryOutsideSurface, duoReason()+" This one, the attribution of a note a session "+
+			"posted, is also an experiment (experiment: { milestone: '19.5' } in ee/app/graphql/ee/types/notes/"+
+			"note_type.rb) that answers null unless the agent_presence_consolidation feature flag is on."),
 		note("authorIsContributor", categoryNeverSentHere, "Types::Notes::NoteType resolves it as Note#contributor?, "+
 			"which is project&.team&.contributor?(author_id) (app/models/note.rb). An epic is a group-level work item, "+
 			"so its notes carry no project and the value is null on every note of an epic; nothing in EE overrides it."),
