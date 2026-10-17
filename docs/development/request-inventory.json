@@ -9482,6 +9482,16 @@
     {
       "package": "internal/tools/groupserviceaccounts",
       "kind": "rest",
+      "method": "GET",
+      "path": "/groups/:group_id/service_accounts/:service_account_id",
+      "identifiers": {
+        ":group_id": 1,
+        ":service_account_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groupserviceaccounts",
+      "kind": "rest",
       "method": "PATCH",
       "path": "/groups/:group_id/service_accounts/:service_account_id",
       "body": [

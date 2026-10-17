@@ -17150,6 +17150,9 @@
         "created_at": {
           "type": "string"
         },
+        "fingerprint": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
         },
@@ -58206,6 +58209,12 @@
         "description": {
           "type": "string"
         },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_core_features_enabled": {
           "type": [
             "null",
@@ -58346,6 +58355,12 @@
         "lock_math_rendering_limits_enabled": {
           "type": "boolean"
         },
+        "lock_require_sha_for_merge": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "lock_resource_access_token_notify_inherited": {
           "type": "boolean"
         },
@@ -58484,6 +58499,12 @@
         },
         "request_access_enabled": {
           "type": "boolean"
+        },
+        "require_sha_for_merge": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "require_two_factor_authentication": {
           "type": "boolean"
@@ -59907,6 +59928,12 @@
         "description": {
           "type": "string"
         },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_core_features_enabled": {
           "type": [
             "null",
@@ -60047,6 +60074,12 @@
         "lock_math_rendering_limits_enabled": {
           "type": "boolean"
         },
+        "lock_require_sha_for_merge": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "lock_resource_access_token_notify_inherited": {
           "type": "boolean"
         },
@@ -60185,6 +60218,12 @@
         },
         "request_access_enabled": {
           "type": "boolean"
+        },
+        "require_sha_for_merge": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "require_two_factor_authentication": {
           "type": "boolean"
@@ -63006,6 +63045,12 @@
               "description": {
                 "type": "string"
               },
+              "duo_code_review_decisions_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "duo_core_features_enabled": {
                 "type": [
                   "null",
@@ -64882,6 +64927,12 @@
               },
               "description": {
                 "type": "string"
+              },
+              "duo_code_review_decisions_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "duo_core_features_enabled": {
                 "type": [
@@ -71879,6 +71930,12 @@
         "description": {
           "type": "string"
         },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_core_features_enabled": {
           "type": [
             "null",
@@ -72019,6 +72076,12 @@
         "lock_math_rendering_limits_enabled": {
           "type": "boolean"
         },
+        "lock_require_sha_for_merge": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "lock_resource_access_token_notify_inherited": {
           "type": "boolean"
         },
@@ -72157,6 +72220,12 @@
         },
         "request_access_enabled": {
           "type": "boolean"
+        },
+        "require_sha_for_merge": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "require_two_factor_authentication": {
           "type": "boolean"
@@ -73378,6 +73447,12 @@
               "description": {
                 "type": "string"
               },
+              "duo_code_review_decisions_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "duo_core_features_enabled": {
                 "type": [
                   "null",
@@ -73861,6 +73936,12 @@
         "email": {
           "type": "string"
         },
+        "external": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "id": {
           "type": "integer"
         },
@@ -73990,6 +74071,12 @@
         "email": {
           "type": "string"
         },
+        "external": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "id": {
           "type": "integer"
         },
@@ -74086,6 +74173,12 @@
             "properties": {
               "email": {
                 "type": "string"
+              },
+              "external": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "id": {
                 "type": "integer"
@@ -74883,6 +74976,12 @@
         "email": {
           "type": "string"
         },
+        "external": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "id": {
           "type": "integer"
         },
@@ -75594,6 +75693,12 @@
               "description": {
                 "type": "string"
               },
+              "duo_code_review_decisions_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "duo_core_features_enabled": {
                 "type": [
                   "null",
@@ -76255,6 +76360,12 @@
         "description": {
           "type": "string"
         },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_core_features_enabled": {
           "type": [
             "null",
@@ -76395,6 +76506,12 @@
         "lock_math_rendering_limits_enabled": {
           "type": "boolean"
         },
+        "lock_require_sha_for_merge": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "lock_resource_access_token_notify_inherited": {
           "type": "boolean"
         },
@@ -76533,6 +76650,12 @@
         },
         "request_access_enabled": {
           "type": "boolean"
+        },
+        "require_sha_for_merge": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "require_two_factor_authentication": {
           "type": "boolean"
@@ -77287,6 +77410,12 @@
         "description": {
           "type": "string"
         },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_core_features_enabled": {
           "type": [
             "null",
@@ -77427,6 +77556,12 @@
         "lock_math_rendering_limits_enabled": {
           "type": "boolean"
         },
+        "lock_require_sha_for_merge": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "lock_resource_access_token_notify_inherited": {
           "type": "boolean"
         },
@@ -77565,6 +77700,12 @@
         },
         "request_access_enabled": {
           "type": "boolean"
+        },
+        "require_sha_for_merge": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "require_two_factor_authentication": {
           "type": "boolean"
@@ -78709,6 +78850,12 @@
         "description": {
           "type": "string"
         },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_core_features_enabled": {
           "type": [
             "null",
@@ -78849,6 +78996,12 @@
         "lock_math_rendering_limits_enabled": {
           "type": "boolean"
         },
+        "lock_require_sha_for_merge": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "lock_resource_access_token_notify_inherited": {
           "type": "boolean"
         },
@@ -78987,6 +79140,12 @@
         },
         "request_access_enabled": {
           "type": "boolean"
+        },
+        "require_sha_for_merge": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "require_two_factor_authentication": {
           "type": "boolean"
@@ -79589,6 +79748,12 @@
         "description": {
           "type": "string"
         },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_core_features_enabled": {
           "type": [
             "null",
@@ -79729,6 +79894,12 @@
         "lock_math_rendering_limits_enabled": {
           "type": "boolean"
         },
+        "lock_require_sha_for_merge": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "lock_resource_access_token_notify_inherited": {
           "type": "boolean"
         },
@@ -79867,6 +80038,12 @@
         },
         "request_access_enabled": {
           "type": "boolean"
+        },
+        "require_sha_for_merge": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "require_two_factor_authentication": {
           "type": "boolean"
@@ -84402,6 +84579,12 @@
           "type": [
             "null",
             "string"
+          ]
+        },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
           ]
         },
         "duo_dependency_bump_breaking_changes_enabled": {
@@ -118396,6 +118579,9 @@
               "created_at": {
                 "type": "string"
               },
+              "fingerprint": {
+                "type": "string"
+              },
               "id": {
                 "type": "integer"
               },
@@ -125363,6 +125549,12 @@
             "properties": {
               "email": {
                 "type": "string"
+              },
+              "external": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "id": {
                 "type": "integer"
@@ -174309,6 +174501,12 @@
             "string"
           ]
         },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_dependency_bump_breaking_changes_enabled": {
           "type": [
             "null",
@@ -175916,6 +176114,12 @@
             "string"
           ]
         },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_dependency_bump_breaking_changes_enabled": {
           "type": [
             "null",
@@ -177519,6 +177723,12 @@
             "string"
           ]
         },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_dependency_bump_breaking_changes_enabled": {
           "type": [
             "null",
@@ -178568,6 +178778,12 @@
           "type": [
             "null",
             "string"
+          ]
+        },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
           ]
         },
         "duo_dependency_bump_breaking_changes_enabled": {
@@ -180713,6 +180929,12 @@
             "string"
           ]
         },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_dependency_bump_breaking_changes_enabled": {
           "type": [
             "null",
@@ -181778,6 +182000,12 @@
           "type": [
             "null",
             "string"
+          ]
+        },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
           ]
         },
         "duo_dependency_bump_breaking_changes_enabled": {
@@ -185257,6 +185485,12 @@
                   "string"
                 ]
               },
+              "duo_code_review_decisions_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "duo_dependency_bump_breaking_changes_enabled": {
                 "type": [
                   "null",
@@ -186722,6 +186956,12 @@
                 "type": [
                   "null",
                   "string"
+                ]
+              },
+              "duo_code_review_decisions_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
                 ]
               },
               "duo_dependency_bump_breaking_changes_enabled": {
@@ -188893,6 +189133,12 @@
                   "string"
                 ]
               },
+              "duo_code_review_decisions_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "duo_dependency_bump_breaking_changes_enabled": {
                 "type": [
                   "null",
@@ -190408,6 +190654,12 @@
                   "string"
                 ]
               },
+              "duo_code_review_decisions_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "duo_dependency_bump_breaking_changes_enabled": {
                 "type": [
                   "null",
@@ -191921,6 +192173,12 @@
                 "type": [
                   "null",
                   "string"
+                ]
+              },
+              "duo_code_review_decisions_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
                 ]
               },
               "duo_dependency_bump_breaking_changes_enabled": {
@@ -195320,6 +195578,12 @@
             "string"
           ]
         },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_dependency_bump_breaking_changes_enabled": {
           "type": [
             "null",
@@ -196137,6 +196401,12 @@
         "email": {
           "type": "string"
         },
+        "external": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "id": {
           "type": "integer"
         },
@@ -196275,6 +196545,12 @@
         "email": {
           "type": "string"
         },
+        "external": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "id": {
           "type": "integer"
         },
@@ -196374,6 +196650,12 @@
             "properties": {
               "email": {
                 "type": "string"
+              },
+              "external": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "id": {
                 "type": "integer"
@@ -197185,6 +197467,12 @@
       "properties": {
         "email": {
           "type": "string"
+        },
+        "external": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "id": {
           "type": "integer"
@@ -198570,6 +198858,12 @@
             "string"
           ]
         },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_dependency_bump_breaking_changes_enabled": {
           "type": [
             "null",
@@ -199728,6 +200022,12 @@
             "string"
           ]
         },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_dependency_bump_breaking_changes_enabled": {
           "type": [
             "null",
@@ -200778,6 +201078,12 @@
             "string"
           ]
         },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_dependency_bump_breaking_changes_enabled": {
           "type": [
             "null",
@@ -201822,6 +202128,12 @@
           "type": [
             "null",
             "string"
+          ]
+        },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
           ]
         },
         "duo_dependency_bump_breaking_changes_enabled": {
@@ -203596,6 +203908,12 @@
             "string"
           ]
         },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_dependency_bump_breaking_changes_enabled": {
           "type": [
             "null",
@@ -204731,6 +205049,12 @@
           "type": [
             "null",
             "string"
+          ]
+        },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
           ]
         },
         "duo_dependency_bump_breaking_changes_enabled": {
@@ -218742,6 +219066,9 @@
             "array"
           ]
         },
+        "token_expires_at": {
+          "type": "string"
+        },
         "version": {
           "type": "string"
         }
@@ -221153,6 +221480,9 @@
             "null",
             "array"
           ]
+        },
+        "token_expires_at": {
+          "type": "string"
         },
         "version": {
           "type": "string"
@@ -230928,6 +231258,12 @@
               "description": {
                 "type": "string"
               },
+              "duo_code_review_decisions_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "duo_core_features_enabled": {
                 "type": [
                   "null",
@@ -235201,6 +235537,12 @@
       "properties": {
         "email": {
           "type": "string"
+        },
+        "external": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "id": {
           "type": "integer"

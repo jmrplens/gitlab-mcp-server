@@ -40,7 +40,7 @@ Read-only actions: 68 of 158, the ones a deployment in read-only mode keeps. A t
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)). A parameter followed by a tier in parentheses is served only from that tier on.
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.5.0 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)). A parameter followed by a tier in parentheses is served only from that tier on.
 
 | Action                                                                                         | Tier     | Individual                                      |
 | ---------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------- |
@@ -569,7 +569,7 @@ The description of each action, and of each of its parameters, is the text the s
 - **Individual tool**: `gitlab_epic_create`
 - **Tier**: Premium
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Not reachable at this release: `WorkItem` is declared at a boundary the object the action reaches never resolves to, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `WorkItemType` in the answer, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, not idempotent
 
 | Parameter                  | Type                                             | Mandatory | Description                                                                                                                                                                                                 |

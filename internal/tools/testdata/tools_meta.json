@@ -4027,6 +4027,12 @@
             "string"
           ]
         },
+        "duo_code_review_decisions_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_dependency_bump_breaking_changes_enabled": {
           "type": [
             "null",

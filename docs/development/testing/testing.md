@@ -20,9 +20,9 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 21,713 |
-| Unit test functions                                   | 20,172 |
-| E2E test functions                                    |  1,541 |
+| Total test functions                                  | 21,720 |
+| Unit test functions                                   | 20,176 |
+| E2E test functions                                    |  1,544 |
 | cmd test functions                                    |  4,817 |
 | Test files (internal/)                                |    717 |
 | Test files (cmd/)                                     |    336 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,339 | 61.4% |
+| `TestFunc_Scenario` (2-part)           | 13,340 | 61.4% |
 | `TestFunc` (no underscore)             |    908 |  4.2% |
-| `TestFunc_Scenario_Expected` (3+ part) |  7,466 | 34.4% |
+| `TestFunc_Scenario_Expected` (3+ part) |  7,472 | 34.4% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          4,014 |        237 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            414 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (180) |         10,927 |        464 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,541 |        416 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| Tool sub-packages (180) |         10,931 |        464 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,544 |        416 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          4,817 |        336 | server entry point and developer command utilities                                              |
-| **Total**               |     **21,713** |  **1,469** |                                                                                                 |
+| **Total**               |     **21,720** |  **1,469** |                                                                                                 |
 
 ### Core Packages
 
@@ -97,7 +97,7 @@
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   492 |   100.0% |    57 |
+| projects          |   493 |   100.0% |    57 |
 | mergerequests     |   332 |   100.0% |    30 |
 | groups            |   316 |   100.0% |    37 |
 | dynamic           |   308 |   100.0% |     2 |
@@ -109,8 +109,8 @@
 | commits           |   154 |   100.0% |    13 |
 | pipelines         |   149 |   100.0% |    12 |
 | workitems         |   136 |   100.0% |     6 |
+| runners           |   132 |   100.0% |    19 |
 | resourceevents    |   131 |   100.0% |    17 |
-| runners           |   131 |   100.0% |    19 |
 | awardemoji        |   130 |   100.0% |    24 |
 | containerregistry |   123 |   100.0% |    16 |
 | snippets          |   114 |   100.0% |    15 |
@@ -210,8 +210,8 @@
 | groups                  |        316 |         10 |   100.0% |        37 |
 | groupsaml               |         39 |          3 |   100.0% |         5 |
 | groupscim               |         31 |          3 |   100.0% |         4 |
-| groupserviceaccounts    |         33 |          2 |   100.0% |         9 |
-| groupsshcerts           |         32 |          5 |   100.0% |         3 |
+| groupserviceaccounts    |         34 |          2 |   100.0% |         9 |
+| groupsshcerts           |         33 |          5 |   100.0% |         3 |
 | groupstoragemoves       |         38 |          2 |   100.0% |         6 |
 | groupvariables          |         61 |          4 |   100.0% |         5 |
 | groupwikis              |         44 |          3 |   100.0% |         5 |
@@ -263,7 +263,7 @@
 | projectimportexport     |         53 |          2 |   100.0% |         5 |
 | projectiterations       |         24 |          3 |   100.0% |         1 |
 | projectmirrors          |         76 |          2 |   100.0% |         7 |
-| projects                |        492 |          9 |   100.0% |        57 |
+| projects                |        493 |          9 |   100.0% |        57 |
 | projectserviceaccounts  |         25 |          2 |   100.0% |         9 |
 | projectstatistics       |         12 |          2 |   100.0% |         1 |
 | projectstoragemoves     |         21 |          2 |   100.0% |         6 |
@@ -279,7 +279,7 @@
 | runnercontrollers       |         40 |          2 |   100.0% |         5 |
 | runnercontrollerscopes  |         40 |          2 |   100.0% |         5 |
 | runnercontrollertokens  |         48 |          2 |   100.0% |         5 |
-| runners                 |        131 |          2 |   100.0% |        19 |
+| runners                 |        132 |          2 |   100.0% |        19 |
 | search                  |        171 |          5 |   100.0% |        10 |
 | securefiles             |         33 |          1 |   100.0% |         4 |
 | securityattributes      |         39 |          1 |   100.0% |         5 |
@@ -310,7 +310,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        136 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **10,927** |    **464** |          | **1,190** |
+| **Total**               | **10,931** |    **464** |          | **1,190** |
 
 </details>
 

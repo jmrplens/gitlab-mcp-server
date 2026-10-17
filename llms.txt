@@ -232,7 +232,7 @@ Prompts:
 ## Optional
 
 - [Medium LLM reference](https://docs.jmrp.io/gitlab-mcp-server/llms-medium.txt): 157 KB, ~40k tokens. Every tool and action with its description, without the per-action JSON schemas. The largest of these that still loads into a context window
-- [Meta-tools reference](https://docs.jmrp.io/gitlab-mcp-server/llms-full-meta-tools.txt): 2.3 MB, ~616k tokens. Full schemas for the dynamic and meta-tool surfaces only
+- [Meta-tools reference](https://docs.jmrp.io/gitlab-mcp-server/llms-full-meta-tools.txt): 2.4 MB, ~617k tokens. Full schemas for the dynamic and meta-tool surfaces only
 - [Individual tools reference](https://docs.jmrp.io/gitlab-mcp-server/llms-full-individual-tools.txt): 984 KB, ~252k tokens. Full schemas for the one-tool-per-operation surface only
 - [Resources and prompts reference](https://docs.jmrp.io/gitlab-mcp-server/llms-full-resources-prompts.txt): 32 KB, ~8k tokens. MCP resource and prompt definitions only
 - [Full LLM reference](https://docs.jmrp.io/gitlab-mcp-server/llms-full.txt): 3.3 MB, ~876k tokens. The three splits above concatenated. Past every current context window, so search or retrieve inside it rather than loading it; if you want one surface, take its split instead
