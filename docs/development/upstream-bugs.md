@@ -373,7 +373,7 @@ readable without opening the tracker:
 | 129 | client-go | [The Link header parser reads rel only from the first parameter](#the-link-header-parser-reads-rel-only-from-the-first-parameter) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3143](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3143), open | No | No; GitLab writes `rel` as the only parameter, so only a proxy that rewrites the header reaches it | None taken |
 | 130 | client-go | [The wiki search decodes GitLab's blobs into wiki pages](#the-wiki-search-decodes-gitlabs-blobs-into-wiki-pages) | No | No | No | No | Yes, `search.wiki` reads its page from the captured response |
 | 131 | gitlab-org/gitlab | [The REST code search answers an exact-search name match with the path as its snippet](#the-rest-code-search-answers-an-exact-search-name-match-with-the-path-as-its-snippet) | No; the search page's version of it was closed | No | No | No | Yes, the code and wiki search Markdown reads a result whose snippet is its own path as a path match and fences nothing |
-| 132 | client-go | [SearchOptions models neither num_context_lines nor regex](#searchoptions-models-neither-num_context_lines-nor-regex) | No; for the joint merge request | No | No | No | Yes, `search.code` adds both to the query through a request option, each only when set |
+| 132 | client-go | [SearchOptions models neither num_context_lines nor regex](#searchoptions-models-neither-num_context_lines-nor-regex) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes, `search.code` adds both to the query through a request option, each only when set |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -2764,7 +2764,9 @@ arrived with
 Entries 19 and 51 were in it too, as commits 4 and 2, until 2026-09-30, after
 the review asked for each to be reviewed in a merge request of its own
 (below); it had 35 commits from then until 2026-10-12, when three more made
-it 38. Three things are left out on purpose:
+it 38, and 38 until 2026-10-17, when a 39th, for
+[entry 132](#searchoptions-models-neither-num_context_lines-nor-regex), made
+it 39. Three things are left out on purpose:
 the seven `Hook` fields, which are
 `gitlab-org/api/client-go!3048`; the `action` object and the illustration
 fields of `DetailedStatus` that
@@ -6839,11 +6841,10 @@ or three parallel methods.
 
 ### SearchOptions models neither num_context_lines nor regex
 
-- **Reported**: no. It belongs with the option struct commits of the joint
-  merge request,
-  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
-  which is the change that retires it, and is not in it yet.
-- **In review**: no.
+- **Reported**: yes, as commit 39 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
+  (`be72781d`), pushed on 2026-10-17.
+- **In review**: yes, in that merge request, open.
 - **Merged**: no. v3.25.0, the head of main on 2026-10-15, carries the same
   struct.
 - **Blocking**: no.
