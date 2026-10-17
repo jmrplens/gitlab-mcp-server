@@ -1,13 +1,12 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "note": "What GitLab.com's Orbit routes answered the requests this server's handlers build, as a key tree with no values: written by cmd/gen_orbit_record, judged offline by its -check, and compared with the Orbit output types by cmd/audit_1to1 -scope=paths. A verbatim key is recorded as its root only, because its keys are data.",
   "source": {
     "instance": "https://gitlab.com",
-    "orbit_version": "0.137.0",
-    "dsl_schema": "https://gitlab.com/gitlab-org/orbit/knowledge-graph/schemas/graph_query/v12",
-    "dsl_version": "12.1.10",
+    "orbit_version": "0.146.0",
+    "query_grammar": "sha256:219ec2e7f6d18d345e9440c1eec96625a2b53a83530aa1f5c31dce315528c6cc",
     "namespace": "plens1",
-    "retrieved_at": "2026-10-05"
+    "retrieved_at": "2026-10-17"
   },
   "calls": [
     {
@@ -16,8 +15,9 @@
       "output": "internal/tools/orbit.DSLOutput",
       "request": {
         "method": "GET",
-        "path": "/orbit/schema/dsl",
+        "path": "/orbit/agent/commands",
         "query": [
+          "command_names",
           "response_format"
         ]
       },
@@ -27,6 +27,12 @@
         "keys": [
           {
             "path": "$",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "formatted_text",
             "kinds": [
               "string"
             ]
@@ -40,8 +46,9 @@
       "output": "internal/tools/orbit.DSLOutput",
       "request": {
         "method": "GET",
-        "path": "/orbit/schema/dsl",
+        "path": "/orbit/agent/commands",
         "query": [
+          "command_names",
           "response_format"
         ]
       },
@@ -51,6 +58,30 @@
         "keys": [
           {
             "path": "$",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "[]",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "[].description",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "[].name",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "[].parameters",
             "kinds": [
               "object"
             ],
@@ -113,6 +144,42 @@
             ]
           },
           {
+            "path": "code_indexing",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "code_indexing.last_completed_at",
+            "kinds": [
+              "null"
+            ]
+          },
+          {
+            "path": "code_indexing.last_duration_ms",
+            "kinds": [
+              "null"
+            ]
+          },
+          {
+            "path": "code_indexing.last_error",
+            "kinds": [
+              "null"
+            ]
+          },
+          {
+            "path": "code_indexing.last_started_at",
+            "kinds": [
+              "null"
+            ]
+          },
+          {
+            "path": "code_indexing.state",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
             "path": "domains",
             "kinds": [
               "array"
@@ -149,6 +216,12 @@
             ]
           },
           {
+            "path": "domains[].items[].state",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
             "path": "domains[].name",
             "kinds": [
               "string"
@@ -163,7 +236,7 @@
           {
             "path": "indexing.last_completed_at",
             "kinds": [
-              "null"
+              "string"
             ]
           },
           {
@@ -212,6 +285,67 @@
             "path": "projects.total_known",
             "kinds": [
               "number"
+            ]
+          },
+          {
+            "path": "sdlc_indexing",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "sdlc_indexing.last_completed_at",
+            "kinds": [
+              "null"
+            ]
+          },
+          {
+            "path": "sdlc_indexing.last_duration_ms",
+            "kinds": [
+              "null"
+            ]
+          },
+          {
+            "path": "sdlc_indexing.last_error",
+            "kinds": [
+              "null"
+            ]
+          },
+          {
+            "path": "sdlc_indexing.last_started_at",
+            "kinds": [
+              "null"
+            ]
+          },
+          {
+            "path": "sdlc_indexing.state",
+            "kinds": [
+              "string"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "action": "orbit.query",
+      "variant": "gql",
+      "output": "internal/tools/orbit.QueryOutput",
+      "request": {
+        "method": "POST",
+        "path": "/orbit/query",
+        "body": [
+          "query",
+          "response_format"
+        ]
+      },
+      "response": {
+        "status": 200,
+        "content_type": "text/plain",
+        "keys": [
+          {
+            "path": "$",
+            "kinds": [
+              "text"
             ]
           }
         ]
