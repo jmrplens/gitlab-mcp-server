@@ -1354,6 +1354,30 @@ func fuzzPage(kind uint8, n int) toolutil.PaginationOutput {
 	return p
 }
 
+// fuzzShape is the shape of the page FuzzFormatCodeMarkdown renders, apart
+// from the text its results carry: how many times the even results' path
+// repeats, how many results there are, which of the four kinds of page holds
+// them, and which of them matched by their path. A fuzz target takes no
+// struct, so the fuzzer passes the four as one byte each, in that order, and
+// not packed into one integer, which it only ever moves up or down by at most
+// 100, so that every field above the lowest would hardly leave its seed.
+type fuzzShape struct {
+	reps, count, kind, match uint8
+}
+
+// fuzzShapeOf reads the shape the fuzzer passed: one byte per field, a byte
+// the input is short of reading as zero and any past the fourth ignored.
+func fuzzShapeOf(b []byte) fuzzShape {
+	var f [4]uint8
+	copy(f[:], b)
+	return fuzzShape{reps: f[0], count: f[1], kind: f[2], match: f[3]}
+}
+
+// bytes is the fuzz argument fuzzShapeOf reads back as s.
+func (s fuzzShape) bytes() []byte {
+	return []byte{s.reps, s.count, s.kind, s.match}
+}
+
 // FuzzFormatCodeMarkdown holds the code search Markdown to its invariants
 // whatever a snippet or a path holds and whatever page GitLab answered with:
 // valid UTF-8, every fence closed so the one guidance section is the server's,
@@ -1384,17 +1408,17 @@ func FuzzFormatCodeMarkdown(f *testing.F) {
 		strings.Repeat("x"+strings.Repeat(" ", 290)+"\n", 10),
 		strings.Repeat("x\x01\x7f\u0085\n", 10),
 	} {
-		f.Add(seed, "dir/file.go", "b.go", uint8(0), uint8(1), uint8(0), uint8(0))
-		f.Add(seed, "dir/file.go", "b.go", uint8(0), uint8(39), uint8(1), uint8(0))
-		f.Add(seed, "dir/file.go", "b.go", uint8(0), uint8(1), uint8(0), uint8(1))
-		f.Add(seed, "dir/file.go", "b.go", uint8(0), uint8(39), uint8(1), uint8(0x5a))
+		f.Add(seed, "dir/file.go", "b.go", fuzzShape{count: 1}.bytes())
+		f.Add(seed, "dir/file.go", "b.go", fuzzShape{count: 39, kind: 1}.bytes())
+		f.Add(seed, "dir/file.go", "b.go", fuzzShape{count: 1, match: 1}.bytes())
+		f.Add(seed, "dir/file.go", "b.go", fuzzShape{count: 39, kind: 1, match: 0x5a}.bytes())
 	}
 	// A snippet that is the path itself, which is how exact search answers a
 	// file that matched by its name: alone, beside a blob id, and on the odd
 	// results' path among results of the other.
-	f.Add("dir/file.go", "dir/file.go", "b.go", uint8(0), uint8(1), uint8(0), uint8(0))
-	f.Add("dir/file.go", "dir/file.go", "b.go", uint8(0), uint8(1), uint8(0), uint8(1))
-	f.Add("b.go", "dir/file.go", "b.go", uint8(0), uint8(39), uint8(1), uint8(0x5a))
+	f.Add("dir/file.go", "dir/file.go", "b.go", fuzzShape{count: 1}.bytes())
+	f.Add("dir/file.go", "dir/file.go", "b.go", fuzzShape{count: 1, match: 1}.bytes())
+	f.Add("b.go", "dir/file.go", "b.go", fuzzShape{count: 39, kind: 1, match: 0x5a}.bytes())
 	// Rows of these paths pass the budget on their own: a long path, one that
 	// is longer still once defused, one repeated past what a single row may
 	// carry, so that no row fits at all, and long rows between short ones on
@@ -1412,14 +1436,15 @@ func FuzzFormatCodeMarkdown(f *testing.F) {
 		{path: "a.go", other: strings.Repeat("o", 9500)},
 	} {
 		for kind := range uint8(4) {
-			f.Add("x\n", seed.path, seed.other, seed.reps, uint8(39), kind, uint8(0))
+			f.Add("x\n", seed.path, seed.other, fuzzShape{reps: seed.reps, count: 39, kind: kind}.bytes())
 		}
-		f.Add("x\n", seed.path, seed.other, seed.reps, uint8(0), uint8(1), uint8(0xff))
-		f.Add(strings.Repeat(strings.Repeat("z", 300)+"\n", 10), seed.path, seed.other, seed.reps, uint8(39), uint8(0), uint8(0xa5))
+		f.Add("x\n", seed.path, seed.other, fuzzShape{reps: seed.reps, kind: 1, match: 0xff}.bytes())
+		f.Add(strings.Repeat(strings.Repeat("z", 300)+"\n", 10), seed.path, seed.other, fuzzShape{reps: seed.reps, count: 39, match: 0xa5}.bytes())
 	}
-	f.Fuzz(func(t *testing.T, data, path, other string, reps, count, kind, match uint8) {
-		blobs := fuzzBlobs(data, path, other, reps, count, match)
-		p := fuzzPage(kind, len(blobs))
+	f.Fuzz(func(t *testing.T, data, path, other string, shape []byte) {
+		s := fuzzShapeOf(shape)
+		blobs := fuzzBlobs(data, path, other, s)
+		p := fuzzPage(s.kind, len(blobs))
 		for _, listing := range []struct {
 			o  listingOracle
 			md string
@@ -1459,22 +1484,22 @@ func fuzzWikiPages(blobs []BlobOutput) []WikiBlobOutput {
 	return pages
 }
 
-// fuzzBlobs is the page FuzzFormatCodeMarkdown renders: count%40+1 results
-// of data, the even ones at path repeated reps%48+1 times and the odd ones at
-// other. Result i matched by its path, and carries a blob id, when bit i%8 of
-// match is set.
-func fuzzBlobs(data, path, other string, reps, count, match uint8) []BlobOutput {
+// fuzzBlobs is the page FuzzFormatCodeMarkdown renders: s.count%40+1 results
+// of data, the even ones at path repeated s.reps%48+1 times and the odd ones
+// at other. Result i matched by its path, and carries a blob id, when bit i%8
+// of s.match is set.
+func fuzzBlobs(data, path, other string, s fuzzShape) []BlobOutput {
 	// A path reaches the formatter through JSON decoding, which replaces every
 	// invalid byte, so it is valid UTF-8 by the time it is a field.
-	path = strings.Repeat(strings.ToValidUTF8(path, "\uFFFD"), int(reps%48)+1)
+	path = strings.Repeat(strings.ToValidUTF8(path, "\uFFFD"), int(s.reps%48)+1)
 	other = strings.ToValidUTF8(other, "\uFFFD")
-	blobs := make([]BlobOutput, int(count%40)+1)
+	blobs := make([]BlobOutput, int(s.count%40)+1)
 	for i := range blobs {
 		blobs[i] = BlobOutput{Filename: "f.go", Path: path, Ref: "main", Data: data}
 		if i%2 == 1 {
 			blobs[i].Path = other
 		}
-		if match>>(i%8)&1 == 1 {
+		if s.match>>(i%8)&1 == 1 {
 			blobs[i].ID = "0123456789abcdef0123456789abcdef01234567"
 			blobs[i].Startline = 1
 		}
