@@ -252,16 +252,18 @@ const workItemRename = `mutation($id: WorkItemID!, $title: String!) {
   workItemUpdate(input: { id: $id, title: $title }) { workItem { id title } errors }
 }`
 
-// TestFineGrainedProbes_GroupWorkItem_ResolvesNoBoundary measures what the
-// group-work-item declarations of cmd/gen_action_grants rest on: GitLab
-// declares WorkItem at the project boundary only, so an epic, a group's work
-// item, resolves no boundary for a fine-grained token granted work items on
-// its group. A read of it answers null with no error where the classic token
-// reads it, and a write commits, answering null with no error, which is why
-// the server withholds the epic actions rather than letting a model take
-// either answer for the truth.
-func TestFineGrainedProbes_GroupWorkItem_ResolvesNoBoundary(t *testing.T) {
-	e := harness.New(t, harness.Needs(harness.NeedAdmin, harness.Tier(edition.Ultimate)))
+// TestFineGrainedProbes_GroupWorkItem_ResolvesTheGroupBoundary measures what
+// the permission table recorded from GitLab 19.5.0 rests on for an epic, a
+// group's work item: 19.5 declares WorkItem at the group boundary beside the
+// project one (gitlab-org/gitlab!259765, upstream-bugs row 89), so a
+// fine-grained token granted work items on the group reads the epic and gets
+// its write answered with it. Up to 19.4 the read answered null with no error
+// and the write committed and answered null, which is what the group-work-item
+// declarations of cmd/gen_action_grants withheld the epic actions for until the
+// table was recorded from 19.5.0; the epic actions stay withheld there for
+// Namespace, which declares nothing yet (row 87).
+func TestFineGrainedProbes_GroupWorkItem_ResolvesTheGroupBoundary(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin, harness.Tier(edition.Ultimate), harness.GitLabAtLeast(19, 5)))
 	group := fixture.NewGroup(e)
 	epic := fixture.NewEpic(e, group, "fine-grained boundary")
 	user := fixture.NewUser(e, "fgepic")
@@ -277,8 +279,9 @@ func TestFineGrainedProbes_GroupWorkItem_ResolvesNoBoundary(t *testing.T) {
 	if len(classic.Errors) > 0 || string(classic.Data["workItem"]) == "null" {
 		t.Fatalf("the classic token could not read the epic: %s %v", classic.Data["workItem"], classic.Errors)
 	}
-	if len(fine.Errors) > 0 || string(fine.Data["workItem"]) != "null" {
-		t.Errorf("the fine-grained read of the epic answered %s %v, want null with no error", fine.Data["workItem"], fine.Errors)
+	if len(fine.Errors) > 0 || string(fine.Data["workItem"]) != string(classic.Data["workItem"]) {
+		t.Errorf("the fine-grained read of the epic answered %s %v, want %s with no error, as the classic token reads it",
+			fine.Data["workItem"], fine.Errors, classic.Data["workItem"])
 	}
 
 	renamed := "renamed by a fine-grained token"
@@ -290,8 +293,8 @@ func TestFineGrainedProbes_GroupWorkItem_ResolvesNoBoundary(t *testing.T) {
 	if err := json.Unmarshal(written.Data["workItemUpdate"], &payload); err != nil || len(written.Errors) > 0 {
 		t.Fatalf("the fine-grained write answered %s %v: %v", written.Data["workItemUpdate"], written.Errors, err)
 	}
-	if string(payload.WorkItem) != "null" || len(payload.Errors) > 0 {
-		t.Errorf("the fine-grained write answered %s with errors %v, want null and none", payload.WorkItem, payload.Errors)
+	if !strings.Contains(string(payload.WorkItem), renamed) || len(payload.Errors) > 0 {
+		t.Errorf("the fine-grained write answered %s with errors %v, want the renamed epic and none", payload.WorkItem, payload.Errors)
 	}
 	after := fixture.ProbeGraphQL(e, fixture.Token{}, workItemQuery, id)
 	if !strings.Contains(string(after.Data["workItem"]), renamed) {

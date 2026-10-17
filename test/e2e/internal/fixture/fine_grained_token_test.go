@@ -151,3 +151,62 @@ func TestStartupScopes_AreTheFourTheServerStartsOn(t *testing.T) {
 		t.Error("StartupScopes() hands every caller the same slices, so one scenario can change another's grant")
 	}
 }
+
+// TestMergeScopes_FoldsWhatGitLabCountsAsOneScope holds the builder to
+// GitLab's uniqueness rule from 19.5 (Authz::GranularScopes::UniquenessCheck):
+// one scope per access level naming no namespace, and one per namespace, each
+// carrying every permission written for it once, in the order first written.
+// A grant GitLab already takes passes through unchanged.
+func TestMergeScopes_FoldsWhatGitLabCountsAsOneScope(t *testing.T) {
+	tests := []struct {
+		name   string
+		scopes []GranularScope
+		want   []GranularScope
+	}{
+		{
+			name: "an instance scope beside the startup one",
+			scopes: append(StartupScopes(), GranularScope{
+				Access: AccessInstance, Permissions: []string{"read_application_setting", "read_metadata"},
+			}),
+			want: []GranularScope{
+				{Access: AccessUser, Permissions: []string{"read_user", "read_namespace", "read_personal_access_token"}},
+				{Access: AccessInstance, Permissions: []string{"read_metadata", "read_application_setting"}},
+			},
+		},
+		{
+			name: "two selected scopes naming one project, and a group",
+			scopes: []GranularScope{
+				{Access: AccessSelectedMemberships, Permissions: []string{"read_project"}, ProjectIDs: []int64{7, 8}},
+				{Access: AccessSelectedMemberships, Permissions: []string{"create_work_item", "read_project"}, ProjectIDs: []int64{7}, GroupIDs: []int64{3}},
+			},
+			want: []GranularScope{
+				{Access: AccessSelectedMemberships, Permissions: []string{"read_project", "create_work_item"}, ProjectIDs: []int64{7}},
+				{Access: AccessSelectedMemberships, Permissions: []string{"read_project"}, ProjectIDs: []int64{8}},
+				{Access: AccessSelectedMemberships, Permissions: []string{"create_work_item", "read_project"}, GroupIDs: []int64{3}},
+			},
+		},
+		{
+			name: "a grant GitLab already takes",
+			scopes: append(StartupScopes(), GranularScope{
+				Access: AccessAllMemberships, Permissions: []string{"create_work_item"},
+			}),
+			want: append(StartupScopes(), GranularScope{
+				Access: AccessAllMemberships, Permissions: []string{"create_work_item"},
+			}),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mergeScopes(tt.scopes)
+			if len(got) != len(tt.want) {
+				t.Fatalf("mergeScopes() = %+v, want %+v", got, tt.want)
+			}
+			for i := range tt.want {
+				if got[i].Access != tt.want[i].Access || !slices.Equal(got[i].Permissions, tt.want[i].Permissions) ||
+					!slices.Equal(got[i].ProjectIDs, tt.want[i].ProjectIDs) || !slices.Equal(got[i].GroupIDs, tt.want[i].GroupIDs) {
+					t.Errorf("scope %d = %+v, want %+v", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}

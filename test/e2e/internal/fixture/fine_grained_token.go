@@ -27,6 +27,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -122,8 +123,9 @@ func NewFineGrainedToken(e *harness.Env, user User, scopes ...GranularScope) Tok
 
 	name := e.Name("fgtok")
 	expiry := time.Now().Add(tokenLifetime + 24*time.Hour).UTC().Format(time.DateOnly)
+	request := fineGrainedTokenRequest{Name: name, ExpiresAt: expiry, GranularScopes: mergeScopes(scopes)}
 	token, err := retryTransient(e, "create fine-grained token "+name, createRetries, func() (Token, error) {
-		return createFineGrainedToken(e.Ctx, client, fineGrainedTokenRequest{Name: name, ExpiresAt: expiry, GranularScopes: scopes})
+		return createFineGrainedToken(e.Ctx, client, request)
 	})
 	if err != nil {
 		e.T.Fatalf("minting a fine-grained token for user %d: %v", user.ID, err)
@@ -140,6 +142,48 @@ func NewFineGrainedToken(e *harness.Env, user User, scopes ...GranularScope) Tok
 		return nil
 	})
 	return token
+}
+
+// mergeScopes folds the scopes a scenario wrote into the ones GitLab accepts
+// together: from 19.5 the creation route refuses a token carrying two scopes
+// at one access level that names no namespace, or two scopes for one
+// namespace (Authz::GranularScopes::UniquenessCheck), and a scenario writes
+// its own scopes beside StartupScopes, which hold the user and instance ones
+// already. Scopes at an access level naming no namespace are merged per
+// level; a selected-memberships scope is split into one per project and one
+// per group it names and merged per namespace. Each merged scope keeps the
+// permissions of every scope folded into it, each once, in the order first
+// written, and the scopes keep the order their first member was written in,
+// so the grant is the one the scenario asked for.
+func mergeScopes(scopes []GranularScope) []GranularScope {
+	var merged []GranularScope
+	at := map[string]int{}
+	add := func(key string, scope GranularScope) {
+		index, seen := at[key]
+		if !seen {
+			at[key] = len(merged)
+			merged = append(merged, GranularScope{Access: scope.Access, ProjectIDs: scope.ProjectIDs, GroupIDs: scope.GroupIDs})
+			index = len(merged) - 1
+		}
+		for _, permission := range scope.Permissions {
+			if !slices.Contains(merged[index].Permissions, permission) {
+				merged[index].Permissions = append(merged[index].Permissions, permission)
+			}
+		}
+	}
+	for _, scope := range scopes {
+		if scope.Access != AccessSelectedMemberships || len(scope.ProjectIDs)+len(scope.GroupIDs) == 0 {
+			add(scope.Access, scope)
+			continue
+		}
+		for _, id := range scope.ProjectIDs {
+			add(fmt.Sprintf("project %d", id), GranularScope{Access: scope.Access, Permissions: scope.Permissions, ProjectIDs: []int64{id}})
+		}
+		for _, id := range scope.GroupIDs {
+			add(fmt.Sprintf("group %d", id), GranularScope{Access: scope.Access, Permissions: scope.Permissions, GroupIDs: []int64{id}})
+		}
+	}
+	return merged
 }
 
 // AwaitProjectAccess holds until user can read every project named, asked
