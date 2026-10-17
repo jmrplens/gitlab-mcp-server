@@ -140,6 +140,8 @@ El asistente ejecuta `search.code` (`gitlab_search` con `action: code` en la sup
 
 Cada coincidencia lleva la ruta del fichero, la ref, la línea en la que empieza su fragmento y el fragmento. En la búsqueda básica, que solo responde a búsquedas de código dentro de un proyecto, un resultado que coincidió con la ruta del fichero lleva su ID de blob, y su fragmento es el principio del fichero, no las líneas que coincidieron. La búsqueda básica vuelve a listar el mismo fichero, sin ID de blob, por cada coincidencia en su contenido. La búsqueda avanzada y la exacta no envían ID de blob, y la exacta responde a un fichero que coincidió por su ruta con la propia ruta en lugar de un fragmento, que el resultado marca como coincidencia por ruta.
 
+La búsqueda de código exacta lee la consulta como una expresión regular salvo que `regex` sea `false`, así que una búsqueda de texto literal con un `(`, un `.` o un `*` envía `regex: false`. `num_context_lines`, de 0 a 20, amplía o reduce las líneas que se envían alrededor de cada coincidencia en la búsqueda de código avanzada y en la exacta. GitLab Enterprise rechaza cualquiera de los dos en la búsqueda básica, que es también la que usa siempre una búsqueda en un proyecto sobre una rama que no es la predeterminada, y el error indica qué motor necesita el parámetro.
+
 ## Conceder un logro
 
 **Prompt**: "Concede el logro 'First merge' definido en my-group al usuario 42"

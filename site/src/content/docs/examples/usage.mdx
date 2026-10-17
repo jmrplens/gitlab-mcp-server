@@ -140,6 +140,8 @@ The assistant runs `search.code` (`gitlab_search` with `action: code` on the met
 
 Each match carries its file path, ref, the line its snippet starts on and the snippet. On basic search, which answers code searches inside one project only, a result that matched the file's path carries its blob ID, and its snippet is the start of the file, not the lines that matched. Basic search lists the same file again, with no blob ID, for each match in its content. Advanced and exact code search send no blob ID, and exact search answers a file that matched by its path with the path itself in place of a snippet, which the result marks as a path match.
 
+Exact code search reads the query as a regular expression unless `regex` is `false`, so a search for literal text holding a `(`, a `.` or a `*` sends `regex: false`. `num_context_lines`, from 0 to 20, widens or narrows the lines sent around each match on advanced and exact code search. GitLab Enterprise refuses either on basic search, which is also what a project search of a branch other than the default always runs, and the error says which backend the parameter needs.
+
 ## Award an achievement
 
 **Prompt**: "Award the 'First merge' achievement defined in my-group to user 42"
