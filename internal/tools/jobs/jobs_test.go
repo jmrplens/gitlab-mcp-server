@@ -230,7 +230,9 @@ func TestJobTrace_LongLog_ReadsOnlyItsEnd(t *testing.T) {
 		}
 	})
 	t.Logf("Trace allocated %d bytes, client-go's read alone %d", traced, read)
-	if traced > read+20*traceWindowBytes {
+	// A race build reallocates what sync.Pool hands back (jobs_race_test.go),
+	// so the bound is held only where allocation is what the server pays.
+	if !raceEnabled && traced > read+20*traceWindowBytes {
 		t.Errorf("Trace allocated %d bytes and client-go's read alone %d, want at most twenty windows of %d between them", traced, read, traceWindowBytes)
 	}
 	if !strings.HasSuffix(out.Trace, "FATAL unit test TestCheckout failed expected 200 got 500\n") || !out.Truncated {
