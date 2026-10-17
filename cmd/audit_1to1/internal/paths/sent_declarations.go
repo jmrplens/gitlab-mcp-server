@@ -182,7 +182,11 @@ const (
 	// keys the row does not publish are declared one by one.
 	mrContextCommitsPkg  = toolsDir + "/mrcontextcommits"
 	commitWithLinkEntity = "API::Entities::CommitWithLink"
-	mrBasicEntity        = "API::Entities::MergeRequestBasic"
+	// repositorySubmodulesPkg is the submodule package, which three
+	// declarations name: the commit stats it never asks for and the tree and
+	// superproject it reads for its own use.
+	repositorySubmodulesPkg = toolsDir + "/repositorysubmodules"
+	mrBasicEntity           = "API::Entities::MergeRequestBasic"
 )
 
 // The context commit answers: why the commit types meet the list's entity at
@@ -977,7 +981,7 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 
 	// The commit a submodule update answers with, and an epic's deprecated
 	// short reference.
-	{Package: toolsDir + "/repositorysubmodules", Entity: commitDetailEntity, Field: "stats", Category: categoryOptionNeverPassed, Reason: reasonSubmoduleCommitStatsNeverPassed},
+	{Package: repositorySubmodulesPkg, Entity: commitDetailEntity, Field: "stats", Category: categoryOptionNeverPassed, Reason: reasonSubmoduleCommitStatsNeverPassed},
 	{Package: toolsDir + "/epics", Entity: "API::Entities::Epic", Field: "reference", Category: categoryOptionNeverPassed, Reason: reasonEpicReferenceNeverPassed},
 
 	// The two access-request types, each answered for the entity of the
@@ -1094,8 +1098,8 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	// pinned at, and the project the two contribution listings read to link
 	// each event. The license and custom attribute keys of that project stay
 	// answered by the option declarations above, which come first.
-	{Package: toolsDir + "/repositorysubmodules", Entity: "API::Entities::TreeObject", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonSubmoduleTreeLookup},
-	{Package: toolsDir + "/repositorysubmodules", Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonSubmoduleSuperproject},
+	{Package: repositorySubmodulesPkg, Entity: "API::Entities::TreeObject", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonSubmoduleTreeLookup},
+	{Package: repositorySubmodulesPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonSubmoduleSuperproject},
 	{Package: toolsDir + "/terraformstates", Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonTerraformStateProjectPath},
 	{Package: eventsPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonEventProjectLookup},
 	{Package: usersPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonEventProjectLookup},
