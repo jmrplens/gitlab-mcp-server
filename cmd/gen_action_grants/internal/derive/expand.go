@@ -33,10 +33,16 @@ type expansion struct {
 }
 
 // call expands a function called with call (nil for a root or a reference),
-// its parameters bound in the caller's frame.
+// its parameters bound in the caller's frame. A function declared to send
+// outside client-go is not walked: it sends what its declaration says, where
+// it is called.
 func (e *expansion) call(fn *types.Func, call *ast.CallExpr, caller *frame, ctx context) pathSet {
 	if e.stack[fn] {
 		return unit()
+	}
+	if entry, declaredSends := e.d.sends[symbol(fn)]; declaredSends {
+		entry.used = true
+		return e.declared(entry, &leaf{site: fn}, ctx)
 	}
 	indexed, ok := e.d.prog.Function(fn)
 	if !ok {

@@ -656,6 +656,30 @@ func Bare(input Input) {
 	}
 }
 
+// probe reads a URL with an HTTP client of its own, as the client's version
+// read does, which the walk reads nothing of, and then looks the project up
+// through client-go, which the walk reads unless a declaration stands for
+// probe.
+func probe(ctx context.Context, client *gitlabclient.Client, target string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	_ = resp.Body.Close()
+	return get(ctx, client, target)
+}
+
+func Probed(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	if input.N > 0 {
+		_ = probe(ctx, client, input.Method)
+	}
+	return Output{}, edit(ctx, client, input.ID)
+}
+
 func deleteRoute(client *gitlabclient.Client, fn func(context.Context, *gitlabclient.Client, string) error) toolutil.ActionRoute {
 	return toolutil.RouteAction(client, func(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
 		return Output{}, fn(ctx, client, input.ID)
@@ -695,6 +719,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		spec("forced", toolutil.RouteAction(client, Forced)),
 		spec("documented", toolutil.RouteAction(client, Documented)),
 		spec("helpers", toolutil.RouteAction(client, Helpers)),
+		spec("probed", toolutil.RouteAction(client, Probed)),
 		spec("twice", toolutil.RouteAction(client, Sequence)),
 		spec("twice", toolutil.RouteAction(client, Branches)),
 	}
@@ -806,7 +831,7 @@ func fixtureActions() []actionrequests.Action {
 		"sequence", "branches", "optional", "switches", "kinds", "loops", "directed", "closures", "tables",
 		"choices", "documents", "unsent", "raws", "raw_unknowns", "folds", "overflow", "statements",
 		"expressions", "terminations", "bound", "nothing", "refusals", "seams", "spellings", "twice", "missing",
-		"compound", "depths", "operators", "exits", "forced", "documented", "helpers",
+		"compound", "depths", "operators", "exits", "forced", "documented", "helpers", "probed",
 	}
 	actions := make([]actionrequests.Action, len(names))
 	for i, name := range names {
@@ -922,6 +947,8 @@ func TestDerive_Fixture_ReadsEachShape(t *testing.T) {
 		"nothing":      "path []\n",
 		"refusals":     getRoute + "[mandatory]\npath [0]\n",
 		"seams":        putRoute + "[mandatory]\n" + queryOne + "[mandatory]\n" + queryTwo + "[mandatory]\npath [0 1 2]\n",
+		"probed": getRoute + "[optional]\n" + putRoute + "[mandatory]\n" + queryOne + "[mandatory]\n" + queryTwo + "[mandatory]\n" +
+			"path [1 2 3]\n",
 	}
 	for name, want := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -1102,6 +1129,40 @@ func TestDerive_Declarations_AnswerWhatTheWalkCannotRead(t *testing.T) {
 				t.Errorf("no finding %q among %q", want, result.Findings)
 			}
 		})
+	}
+}
+
+// TestDerive_SendsDeclarations_StandForTheFunctionWhereverItIsCalled verifies
+// a declaration that a function of ours sends outside client-go: every action
+// reaching the function sends the declared requests where it calls it, shaped
+// by the syntax around that call (optional here, under an if with no else),
+// qualified and named by the declaration and sited at the function; the
+// function's body is not walked, so the client-go lookup it also makes is not
+// recorded; and a declaration of a function no action reaches is reported by
+// the function's name.
+func TestDerive_SendsDeclarations_StandForTheFunctionWhereverItIsCalled(t *testing.T) {
+	version := Request{Kind: KindREST, Method: "GET", Path: "/version"}
+	result := deriveWithin(t, []Declaration{
+		{Sends: "grants.probe", Category: "outside-client-go", Requests: []Request{version}},
+		{Sends: "grants.nowhere", Category: "outside-client-go", Requests: []Request{version}},
+	})
+
+	probed := actionByID(t, result, "fixture.probed")
+	want := "GET /version [optional]\n" + putRoute + "[mandatory]\n" + queryOne + "[mandatory]\n" + queryTwo + "[mandatory]\npath [1 2 3]\n"
+	if got := describe(probed); got != want {
+		t.Errorf("fixture.probed derives\n%s\nwant\n%s", got, want)
+	}
+	if read := probed.Uses[0]; !read.Qualified || read.Declaration != "outside-client-go" || !slices.Equal(read.Sites, []string{"grants.probe"}) {
+		t.Errorf("the declared read is qualified %t by %q from %q; want qualified by outside-client-go from grants.probe",
+			read.Qualified, read.Declaration, read.Sites)
+	}
+	stale := "grants.nowhere: the outside-client-go declaration answers nothing the walk reaches " +
+		"(no action reaches grants.nowhere); remove it, or say what it answers now"
+	if !slices.Contains(result.Findings, stale) {
+		t.Errorf("no finding %q among %q", stale, result.Findings)
+	}
+	if slices.ContainsFunc(result.Findings, func(finding string) bool { return strings.HasPrefix(finding, "grants.probe:") }) {
+		t.Errorf("the declaration of a function an action reaches is reported stale: %q", result.Findings)
 	}
 }
 

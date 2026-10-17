@@ -25,13 +25,23 @@ const (
 	ClassOptional Class = actionrequests.ClassOptional
 )
 
-// Declaration answers, for one action, what the walk cannot read: an action
+// Declaration answers what the walk cannot read: for one action, an action
 // that sends nothing, the requests behind one unresolved request, or the
-// requests GitLab's answer to a resolved one makes the client send after it.
+// requests GitLab's answer to a resolved one makes the client send after it;
+// for every action, the requests a function of ours sends outside client-go.
 type Declaration struct {
 	Action   string
 	Category string
 	Reason   string
+	// Sends is a function of the loaded source, named the way the record
+	// names a site (package, receiver type and name), that sends the declared
+	// requests through an HTTP client of its own rather than through
+	// client-go, so the walk reads nothing of them: every action that reaches
+	// the function sends them, all of them, where it calls the function, and
+	// the directives around that call qualify them as they would any request
+	// written there. Action is empty for such a declaration, since the
+	// requests are the function's and not one action's.
+	Sends string
 	// Replaces is the [Request.Reason] of the unresolved request the
 	// declaration answers, "" for an action declared to send nothing or for
 	// one that follows a request.
@@ -102,6 +112,9 @@ type deriver struct {
 	sdk        Requester
 	directives *directives
 	bodies     map[*types.Func]*node
+	// sends are the declarations of functions that send outside client-go,
+	// by the function's name.
+	sends map[string]*declared
 }
 
 // Derive derives every catalog action's requests.
@@ -111,12 +124,17 @@ func Derive(prog *actionrequests.Program, actions []actionrequests.Action, sdk R
 		sdk:        sdk,
 		directives: collectDirectives(prog.Position, prog.Packages()),
 		bodies:     map[*types.Func]*node{},
+		sends:      map[string]*declared{},
 	}
 	byAction := map[string][]*declared{}
 	var all []*declared
 	for i := range declarations {
 		entry := &declared{Declaration: declarations[i]}
-		byAction[entry.Action] = append(byAction[entry.Action], entry)
+		if entry.Sends != "" {
+			d.sends[entry.Sends] = entry
+		} else {
+			byAction[entry.Action] = append(byAction[entry.Action], entry)
+		}
 		all = append(all, entry)
 	}
 	sites := prog.Sites()
@@ -130,7 +148,7 @@ func Derive(prog *actionrequests.Program, actions []actionrequests.Action, sdk R
 		if !entry.used {
 			result.Findings = append(result.Findings, fmt.Sprintf(
 				"%s: the %s declaration answers nothing the walk reaches (%s); remove it, or say what it answers now",
-				entry.Action, entry.Category, describeAnswer(&entry.Declaration),
+				entry.subject(), entry.Category, describeAnswer(&entry.Declaration),
 			))
 		}
 	}
@@ -138,16 +156,29 @@ func Derive(prog *actionrequests.Program, actions []actionrequests.Action, sdk R
 	return result
 }
 
-// describeAnswer names what a declaration answers, for a finding.
-func describeAnswer(entry *Declaration) string {
-	switch {
-	case entry.Follows != "":
-		return "the action sends no " + entry.Follows
-	case entry.Replaces == "":
-		return "the action is declared to send nothing and the walk found a request"
-	default:
-		return "no request reads " + entry.Replaces
+// subject names what a declaration is about, for a finding: its action, or
+// the function it says sends outside client-go.
+func (entry *Declaration) subject() string {
+	if entry.Sends != "" {
+		return entry.Sends
 	}
+	return entry.Action
+}
+
+// describeAnswer names what a declaration answers, for a finding. It is
+// written as ifs rather than a tagless switch, since the mutation tool cannot
+// see a case expression and reads every condition there as never covered.
+func describeAnswer(entry *Declaration) string {
+	if entry.Sends != "" {
+		return "no action reaches " + entry.Sends
+	}
+	if entry.Follows != "" {
+		return "the action sends no " + entry.Follows
+	}
+	if entry.Replaces == "" {
+		return "the action is declared to send nothing and the walk found a request"
+	}
+	return "no request reads " + entry.Replaces
 }
 
 // declared is a declaration with whether some action's walk used it.
