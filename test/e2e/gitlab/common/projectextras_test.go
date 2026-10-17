@@ -169,6 +169,51 @@ func transferProjectAndWait(e *harness.Env, s *harness.Session, project fixture.
 	}
 }
 
+// npmScopeTransferReason is the reason GitLab records when its transfer
+// worker refuses to move a project holding an npm package scoped to the old
+// top-level namespace into another one
+// (Projects::TransferService#transfer).
+const npmScopeTransferReason = "Root namespace can't be updated if the project has NPM packages scoped to the current root level namespace."
+
+// TestProjectTransfer_NpmPackageOfTheOldTopLevelGroup_AnswersGitLabsReason
+// moves a project of each surface's own, holding an npm package scoped to its
+// top-level group, into another top-level group. GitLab accepts the transfer
+// and its worker then refuses it, since the package would be left scoped to a
+// namespace the project no longer sits under, so the move fails in the
+// background and the only report is a to-do item. From 19.5 the item carries
+// GitLab's reason, and the action's error quotes it ahead of the hint; the
+// project stays where it was, which project.get confirms.
+//
+// It is the background failure a Docker instance can make on demand: the
+// other checks the worker alone runs need a project pending deletion whose
+// record is gone, or container registry tags, and the name and path check runs
+// with the request from 19.5.
+func TestProjectTransfer_NpmPackageOfTheOldTopLevelGroup_AnswersGitLabsReason(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.GitLabAtLeast(19, 5)))
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		source := fixture.NewGroup(e, fixture.WithGroupNamePrefix("npmsource"))
+		project := fixture.NewProject(e, fixture.InGroup(source), fixture.WithNamePrefix("npmscoped"))
+		fixture.NewNpmPackage(e, project, source.Path)
+		destination := fixture.NewGroup(e, fixture.WithGroupNamePrefix("npmdestination"))
+		params := map[string]any{"project_id": project.IDParam()}
+
+		drained := fixture.DrainSidekiqWithin(e.Ctx, e.Client(), transferDrainWait)
+		text := harness.ExpectToolError(s, actionProjectTransfer,
+			withParams(params, map[string]any{"namespace": destination.Path}), npmScopeTransferReason)
+		reason, suggestion := strings.Index(text, npmScopeTransferReason), strings.Index(text, "Suggestion:")
+		if reason < 0 || suggestion < reason {
+			e.T.Errorf("the failed transfer answered %q, want GitLab's reason ahead of the suggestion (Sidekiq drained before it: %t)", text, drained)
+		}
+
+		stored := harness.Do[projects.Output](s, actionProjectGet, params)
+		if stored.PathWithNamespace != project.Path {
+			e.T.Errorf("project.get after the failed transfer answered %q, want the project still at %q", stored.PathWithNamespace, project.Path)
+		}
+	})
+}
+
 // transferDrainWait bounds the drain before each transfer of the project and
 // group scenarios: long enough for a licensed instance to work off what the
 // scenarios before it queued, which took more than a minute and a half on
