@@ -71,8 +71,11 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2erelease"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 	orbit "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/orbit" // the package under test, imported from outside it (see Layout above)
 )
 
@@ -706,6 +709,97 @@ func TestOrbitLiveGitLabCom_DetectTier_IsPaidWhereOrbitIsServed(t *testing.T) {
 	if tier := client.DetectTier(ctx); tier < edition.Premium {
 		t.Errorf("DetectTier() = %v for a token GitLab.com serves Orbit to, want Premium or higher: "+
 			"Orbit is served only to a member of a group whose top-level group's plan is paid", tier)
+	}
+}
+
+// TestOrbitLiveGitLabCom_Version_IsOneTheActionTableJudgesAGrantAt holds the
+// release GitLab.com reports to the fine-grained action table this tree
+// compiles in (issue 1023). A fine-grained session's grant is judged only at
+// the table's own release, or for the listing alone at the prerelease of the
+// release right after it, which is what GitLab.com reports between releases;
+// anywhere else the session falls back to phase A, listed everything but what
+// no fine-grained token reaches, with nothing in a run saying so. That is how
+// GitLab.com moving from 19.5.0-pre to 19.6.0-pre put every fine-grained
+// session there in phase A against the 19.4 table, found by a reading of the
+// upstream register rather than by a test. The version is read the way the
+// server reads the one it judges a grant at ([gitlabclient.Client.ReadVersion]),
+// and the rule is internal/testutil/e2erelease's, the one -check-release and
+// the e2e harness stop a run with ([gitLabComReleaseProblem]). It needs no
+// fixture namespace and reads only GET /api/v4/version.
+func TestOrbitLiveGitLabCom_Version_IsOneTheActionTableJudgesAGrantAt(t *testing.T) {
+	client := newLiveClient(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	version, answered := client.ReadVersion(ctx)
+	if !answered {
+		t.Fatal("GitLab.com did not answer GET /api/v4/version, so nothing can say which phase its fine-grained sessions are in")
+	}
+	table := actiongrants.Table()
+	if problem := gitLabComReleaseProblem(version, table); problem != "" {
+		t.Fatal(problem)
+	}
+	t.Logf("GitLab.com reports %s: %s", version, e2erelease.Decide(version, table).Text())
+}
+
+// gitLabComReleaseProblem returns why a fine-grained session on an instance
+// reporting version would not have its grant judged by table, or "" when it
+// would: at the table's own release (phase B) or at the prerelease right after
+// it (phase B for the listing). It is internal/testutil/e2erelease's rule held
+// tighter in one place: an older release is a pin a Docker run may choose and
+// so goes ahead there, while GitLab.com reporting one would put every
+// fine-grained session on it in phase A just as a newer one does.
+func gitLabComReleaseProblem(version string, table *finegrained.Table) string {
+	decision := e2erelease.Decide(version, table)
+	switch decision.Verdict {
+	case e2erelease.Recorded, e2erelease.ListingOnly:
+		return ""
+	case e2erelease.Older:
+		return fmt.Sprintf("GitLab.com reported %s, which is older than the release the fine-grained action table was recorded from (%s): "+
+			"no fine-grained grant is judged on it, so every fine-grained session on GitLab.com runs in phase A. "+
+			"The table was recorded from a release GitLab.com has not reached; record it from the newest release GitLab.com has passed "+
+			"(go run ./cmd/gen_api_live/ -image gitlab/gitlab-ee:<release>-ee.0, then make gen-action-grants).",
+			version, decision.Table)
+	default:
+		return "GitLab.com: " + decision.Text()
+	}
+}
+
+// TestGitLabComReleaseProblem_AgainstARecordedTable_PassesItsReleaseAndTheNextPrerelease
+// holds the rule the live version test applies able to fail, against a
+// stand-in table recorded from 19.5.0: the table's own releases and the 19.6
+// prerelease pass, and an older release, a newer one, a prerelease two minors
+// ahead and a version that does not parse are each refused with the reason a
+// maintainer acts on. It needs no network and no token.
+func TestGitLabComReleaseProblem_AgainstARecordedTable_PassesItsReleaseAndTheNextPrerelease(t *testing.T) {
+	table := &finegrained.Table{Version: "19.5.0-ee", Bucket: "19.5"}
+	tests := []struct {
+		name    string
+		version string
+		want    string
+	}{
+		{name: "the release the table was recorded from", version: "19.5.0-ee"},
+		{name: "a patch of that release", version: "19.5.2-ee"},
+		{name: "the prerelease of that release", version: "19.5.0-pre"},
+		{name: "the prerelease of the release right after it", version: "19.6.0-pre"},
+		{name: "a prerelease two minors ahead", version: "19.7.0-pre", want: "make gen-action-grants"},
+		{name: "the release right after it", version: "19.6.0-ee", want: "make gen-api-live"},
+		{name: "an older release", version: "19.4.1-ee", want: "older than the release"},
+		{name: "a version that does not parse", version: "", want: "does not start with a major.minor"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := gitLabComReleaseProblem(tt.version, table)
+			if tt.want == "" {
+				if got != "" {
+					t.Errorf("gitLabComReleaseProblem(%q) = %q, want none", tt.version, got)
+				}
+				return
+			}
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("gitLabComReleaseProblem(%q) = %q, want it to contain %q", tt.version, got, tt.want)
+			}
+		})
 	}
 }
 
