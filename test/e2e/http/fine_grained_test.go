@@ -19,21 +19,27 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
 
-// The two credentials, and the tools the assertions name: custom_emoji.list
-// reads a GraphQL type GitLab 19.4.1 declares no fine-grained permission on,
-// so no fine-grained token runs it, and issue.create is a REST write GitLab
-// judges against the grant.
+// The two credentials, and the tools the assertions name: ci_catalog.list
+// reads a GraphQL type the release the table records declares no fine-grained
+// permission on, so no fine-grained token runs it, and issue.create is a REST
+// write GitLab judges against the grant. The release is read from the table
+// this tree compiles in, which is what the binary words its answers with.
 const (
 	phaseAClassicToken = "glpat-classic-unknown-scopes"
 	phaseAFineToken    = "glpat-fine-grained-phase-a"
-	withheldTool       = "gitlab_list_custom_emoji"
-	withheldAction     = "custom_emoji.list"
+	withheldTool       = "gitlab_list_catalog_resources"
+	withheldAction     = "ci_catalog.list"
 	servedWriteTool    = "gitlab_issue_create"
-	phaseAWithheldFor  = `action "custom_emoji.list" exists but is not available to a fine-grained personal access token: ` +
-		`GitLab 19.4.1 declares no fine-grained permission on the GraphQL type CustomEmoji this action reads`
 )
+
+// phaseAWithheldFor is the answer the fine-grained token is given for
+// withheldAction.
+var phaseAWithheldFor = `action "ci_catalog.list" exists but is not available to a fine-grained personal access token: ` +
+	`GitLab ` + actiongrants.Table().DisplayVersion() + ` declares no fine-grained permission on the GraphQL type CiCatalogResource this action reads`
 
 // phaseAGitLab is a stand-in that knows one classic token, whose scopes it
 // does not describe, and one fine-grained token, which it describes as GitLab
@@ -214,10 +220,10 @@ func TestFineGrained_TwoCredentialsOnOneShape_PhaseAIsDecidedPerRequest(t *testi
 			withheldTool, slices.Contains(classicEntries, withheldTool), slices.Contains(fineEntries, withheldTool))
 	}
 
-	if text := callAs(t, srv, phaseAFineToken, withheldTool, `{"group_path":"g"}`); !strings.Contains(text, phaseAWithheldFor) {
+	if text := callAs(t, srv, phaseAFineToken, withheldTool, `{}`); !strings.Contains(text, phaseAWithheldFor) {
 		t.Errorf("the fine-grained call to %s = %q, want the withheld answer naming %s", withheldTool, text, withheldAction)
 	}
-	if text := callAs(t, srv, phaseAClassicToken, withheldTool, `{"group_path":"g"}`); strings.Contains(text, "fine-grained") {
+	if text := callAs(t, srv, phaseAClassicToken, withheldTool, `{}`); strings.Contains(text, "fine-grained") {
 		t.Errorf("the classic call to %s was answered as a fine-grained one: %q", withheldTool, text)
 	}
 
@@ -261,7 +267,7 @@ func TestFineGrained_WithheldCall_EachRevision_CarriesTheResultTypeTheServedCall
 				t.Fatalf("a served tools/call at %s carried resultType %v, want %v: the control is broken, so this case cannot say anything about the refusal", tc.name, got, tc.want)
 			}
 
-			refused := callResultAs(t, srv, tc.name, phaseAFineToken, withheldTool, `{"group_path":"g"}`, nil)
+			refused := callResultAs(t, srv, tc.name, phaseAFineToken, withheldTool, `{}`, nil)
 			if isError, _ := refused["isError"].(bool); !isError || !strings.Contains(refusalText(refused), phaseAWithheldFor) {
 				t.Fatalf("the call to %s was not phase A's refusal, so this case is not about a middleware-made result: %v", withheldTool, refused)
 			}
@@ -283,7 +289,7 @@ func TestFineGrained_WithheldExecute_ModernRevision_IsLabeledLikeAServedCall(t *
 	gitlab := startPhaseAGitLab(t)
 	srv := startServer(t, nil, "--gitlab-url="+gitlab.URL)
 
-	arguments := fmt.Sprintf(`{"action":%q,"params":{"group_path":"g"}}`, withheldAction)
+	arguments := fmt.Sprintf(`{"action":%q,"params":{}}`, withheldAction)
 	refused := callResultAs(t, srv, protocolVersion, phaseAFineToken, "gitlab_execute_action", arguments,
 		map[string]string{"Mcp-Param-Action": withheldAction})
 	if isError, _ := refused["isError"].(bool); !isError || !strings.HasPrefix(refusalText(refused), "gitlab_execute_action: "+phaseAWithheldFor) {
@@ -302,9 +308,12 @@ const (
 	phaseBClassicToken = "glpat-classic-phase-b"
 	phaseBFineToken    = "glpat-fine-grained-phase-b"
 	phaseBWithheldTool = "gitlab_branch_create"
-	phaseBRefusal      = `action "branch.create" exists but this fine-grained personal access token was not granted ` +
-		`what it needs: the project permission [Branch: Create], as GitLab 19.4.1 declares it.`
 )
+
+// phaseBRefusal is the answer the fine-grained token is given for
+// phaseBWithheldTool, in the words of the release the table records.
+var phaseBRefusal = `action "branch.create" exists but this fine-grained personal access token was not granted ` +
+	`what it needs: the project permission [Branch: Create], as GitLab ` + actiongrants.Table().DisplayVersion() + ` declares it.`
 
 // phaseBGitLab is a stand-in at the release the table records that describes
 // the fine-grained token with its id, answers its grant, and counts the issues
@@ -321,7 +330,7 @@ func startPhaseBGitLab(t *testing.T) *phaseBGitLab {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"version":"19.4.1-ee","revision":"26212baa"}`))
+		_, _ = w.Write([]byte(`{"version":"` + actiongrants.Table().Version + `","revision":"26212baa"}`))
 	})
 	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

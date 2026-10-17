@@ -297,6 +297,16 @@ func TestTokenScope_FineGrainedTokenIsListedWhatUnknownScopesAreLessWhatNoGrantR
 // it names (register row AUT-007).
 const withheldPrefix = "exists but is not available to a fine-grained personal access token: "
 
+// phaseAWithheldAction and phaseAWithheldTool name an action no fine-grained
+// token reaches at the release the table records, and its individual tool:
+// ci_catalog.list reads CiCatalogResource, a GraphQL type that declares no
+// fine-grained permission. custom_emoji.list was the example until GitLab 19.5
+// declared CustomEmoji.
+const (
+	phaseAWithheldAction = "ci_catalog.list"
+	phaseAWithheldTool   = "gitlab_list_catalog_resources"
+)
+
 // TestTokenScope_FineGrainedToken_PhaseAWithholdsWithTheVersionNamed verifies,
 // on the default surface, that an action no fine-grained token can reach is
 // answered as withheld, with the reason, what GitLab does to it and the GitLab
@@ -305,22 +315,22 @@ const withheldPrefix = "exists but is not available to a fine-grained personal a
 // of being not found; and that a token whose scopes are unknown is answered
 // nothing of the kind.
 func TestTokenScope_FineGrainedToken_PhaseAWithholdsWithTheVersionNamed(t *testing.T) {
-	const want = `gitlab_execute_action: action "custom_emoji.list" ` + withheldPrefix +
-		`GitLab 19.4.1 declares no fine-grained permission on the GraphQL type CustomEmoji this action reads, ` +
-		`and removes the items from such a list.`
-	call := `{"name":"gitlab_execute_action","arguments":{"action":"custom_emoji.list","params":{"group_path":"g"}}}`
+	want := `gitlab_execute_action: action "` + phaseAWithheldAction + `" ` + withheldPrefix +
+		`GitLab ` + actiongrants.Table().DisplayVersion() + ` declares no fine-grained permission on the GraphQL type CiCatalogResource this action reads, ` +
+		`and answers such a read with null.`
+	call := `{"name":"gitlab_execute_action","arguments":{"action":"` + phaseAWithheldAction + `","params":{}}}`
 
 	fake := startFakeGitLab(t)
 	fake.scopes = []string{"granular"}
 	s := startSession(t, baseEnv(fake.URL))
 	if text := resultText(t, s.call(t, request(1, "tools/call", call))); !strings.HasPrefix(text, want) {
-		t.Errorf("custom_emoji.list under a fine-grained token = %q, want it to begin %q", text, want)
+		t.Errorf("%s under a fine-grained token = %q, want it to begin %q", phaseAWithheldAction, text, want)
 	}
-	read := s.call(t, request(2, "resources/read", `{"uri":"gitlab://tools/custom_emoji.list"}`))
+	read := s.call(t, request(2, "resources/read", `{"uri":"gitlab://tools/`+phaseAWithheldAction+`"}`))
 	result, _ := read["result"].(map[string]any)
 	contents, _ := result["contents"].([]any)
 	if len(contents) != 1 {
-		t.Fatalf("gitlab://tools/custom_emoji.list answered %v", read)
+		t.Fatalf("gitlab://tools/%s answered %v", phaseAWithheldAction, read)
 	}
 	first, _ := contents[0].(map[string]any)
 	var detail struct {
@@ -330,7 +340,7 @@ func TestTokenScope_FineGrainedToken_PhaseAWithholdsWithTheVersionNamed(t *testi
 		} `json:"withheld"`
 	}
 	if err := json.Unmarshal([]byte(first["text"].(string)), &detail); err != nil || detail.Withheld == nil {
-		t.Fatalf("the detail of custom_emoji.list carries no withheld block: %v %v", err, first["text"])
+		t.Fatalf("the detail of %s carries no withheld block: %v %v", phaseAWithheldAction, err, first["text"])
 	}
 	if detail.Withheld.Cause != "graphql-type-undeclared" || !strings.Contains(want, detail.Withheld.Message[:40]) {
 		t.Errorf("withheld block = %+v", detail.Withheld)
@@ -369,7 +379,7 @@ func TestTokenScope_FineGrainedToken_ADegradedStartIsJudgedOnceGitLabAnswers(t *
 		t.Fatalf("the call that recovers the client was answered as a fine-grained session's: %q", text)
 	}
 
-	withheld := `{"name":"gitlab_execute_action","arguments":{"action":"custom_emoji.list","params":{"group_path":"g"}}}`
+	withheld := `{"name":"gitlab_execute_action","arguments":{"action":"` + phaseAWithheldAction + `","params":{}}}`
 	deadline := time.Now().Add(10 * time.Second)
 	for id := 3; ; id++ {
 		text := resultText(t, s.call(t, request(id, "tools/call", withheld)))
@@ -377,7 +387,7 @@ func TestTokenScope_FineGrainedToken_ADegradedStartIsJudgedOnceGitLabAnswers(t *
 			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("custom_emoji.list was still not withheld %s after the instance answered: %q", 10*time.Second, text)
+			t.Fatalf("%s was still not withheld %s after the instance answered: %q", phaseAWithheldAction, 10*time.Second, text)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -408,8 +418,8 @@ func TestTokenScope_FineGrainedToken_TheFirstListingIsAlreadyNarrowed(t *testing
 	tools, _ := result["tools"].([]any)
 	for _, entry := range tools {
 		tool, _ := entry.(map[string]any)
-		if tool["name"] == "gitlab_list_custom_emoji" {
-			t.Fatal("the first listing, held while the catalog was prepared, lists gitlab_list_custom_emoji, which no fine-grained token can run")
+		if tool["name"] == phaseAWithheldTool {
+			t.Fatalf("the first listing, held while the catalog was prepared, lists %s, which no fine-grained token can run", phaseAWithheldTool)
 		}
 	}
 	if len(tools) == 0 {
@@ -607,9 +617,10 @@ func TestTokenScope_DynamicSurfaceNamesTheTokenAsTheReason(t *testing.T) {
 const workItemCreateGrant = `[{"access":"all_memberships","permissions":["create_work_item"]}]`
 
 // phaseBBranchRefusal is how branch.create is refused to that grant, as the
-// recorded release declares what it needs.
-const phaseBBranchRefusal = `action "branch.create" exists but this fine-grained personal access token was not granted ` +
-	`what it needs: the project permission [Branch: Create], as GitLab 19.4.1 declares it.`
+// recorded release declares what it needs; the release is read from the table
+// this tree compiles in, which is what the binary words its answer with.
+var phaseBBranchRefusal = `action "branch.create" exists but this fine-grained personal access token was not granted ` +
+	`what it needs: the project permission [Branch: Create], as GitLab ` + actiongrants.Table().DisplayVersion() + ` declares it.`
 
 // TestTokenScope_FineGrainedToken_PhaseBServesWhatTheGrantReaches verifies a
 // fine-grained token that may read its grant, against an instance reporting
@@ -621,7 +632,7 @@ const phaseBBranchRefusal = `action "branch.create" exists but this fine-grained
 func TestTokenScope_FineGrainedToken_PhaseBServesWhatTheGrantReaches(t *testing.T) {
 	fake := startFakeGitLab(t)
 	fake.scopes = []string{"granular"}
-	fake.version = "19.4.1-ee"
+	fake.version = actiongrants.Table().Version
 	fake.grantScopes = workItemCreateGrant
 	env := baseEnv(fake.URL)
 	env["GITLAB_MCP_TOOL_SURFACE"] = "individual"
@@ -654,7 +665,7 @@ func TestTokenScope_FineGrainedToken_PhaseBServesWhatTheGrantReaches(t *testing.
 func TestTokenScope_FineGrainedToken_PhaseBTheFirstListingIsAlreadyNarrowed(t *testing.T) {
 	fake := startFakeGitLab(t)
 	fake.scopes = []string{"granular"}
-	fake.version = "19.4.1-ee"
+	fake.version = actiongrants.Table().Version
 	fake.grantScopes = workItemCreateGrant
 	fake.grantHold = make(chan struct{})
 	env := baseEnv(fake.URL)

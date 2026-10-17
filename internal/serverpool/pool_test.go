@@ -5854,12 +5854,23 @@ type fineGrainedGitLab struct {
 	onGrant atomic.Pointer[func()]
 }
 
-// newFineGrainedGitLab starts the stand-in at 19.4.1-ee with a grant of
-// Project: Read on one project.
+// The releases the fine-grained stand-in reports, read from the table this
+// tree compiles in so that re-recording the table moves them with it: the
+// release it was recorded from, a later patch of that release, and one past
+// every table, two majors on.
+var (
+	recordedRelease      = actiongrants.Table().Version
+	recordedPatchRelease = actiongrants.Table().Bucket + ".9-ee"
+)
+
+const releaseOutsideTheTable = "99.0.0-ee"
+
+// newFineGrainedGitLab starts the stand-in at the release the table was
+// recorded from, with a grant of Project: Read on one project.
 func newFineGrainedGitLab(t *testing.T) *fineGrainedGitLab {
 	t.Helper()
 	g := &fineGrainedGitLab{}
-	version := "19.4.1-ee"
+	version := recordedRelease
 	g.version.Store(&version)
 	g.grantStatus.Store(http.StatusOK)
 	granular := `["granular"]`
@@ -5943,8 +5954,8 @@ func TestGetOrCreate_FineGrainedTokenThatMayReadItsGrant_IsServedWhatItReaches(t
 	}
 
 	authority := entry.Client().Authority()
-	if authority == nil || authority.Phase() != finegrained.PhaseGranted || authority.Reported() != "19.4.1-ee" {
-		t.Fatalf("authority = %+v, want phase B at 19.4.1-ee", authority)
+	if authority == nil || authority.Phase() != finegrained.PhaseGranted || authority.Reported() != recordedRelease {
+		t.Fatalf("authority = %+v, want phase B at %s", authority, recordedRelease)
 	}
 	if authority.Lists("issue.create") {
 		t.Error("issue.create is listed for a grant of Project: Read alone")
@@ -6094,21 +6105,22 @@ func TestRevalidateAll_FineGrainedEntry_RereadsWithoutASlot(t *testing.T) {
 		t.Error("a re-read that kept the authority was logged as one that moved it")
 	}
 
-	g.setVersion("19.6.0-ee")
+	g.setVersion(releaseOutsideTheTable)
 	pool.revalidateAll(context.Background())
 	pool.revalidateAll(context.Background())
 	upgraded := entry.Client().Authority()
 	if upgraded.Phase() != finegrained.PhaseUnknown || upgraded.Fallback() != finegrained.FallbackVersionOutside {
 		t.Errorf("after the upgrade: phase %v, fallback %q; want phase A outside the record", upgraded.Phase(), upgraded.Fallback())
 	}
-	assertMovedLogs(t, logs, []string{"A " + string(finegrained.FallbackVersionOutside) + " 19.6"})
+	outside := "A " + string(finegrained.FallbackVersionOutside) + " " + finegrained.Bucket(releaseOutsideTheTable)
+	assertMovedLogs(t, logs, []string{outside})
 
-	g.setVersion("19.4.2-ee")
+	g.setVersion(recordedPatchRelease)
 	pool.revalidateAll(context.Background())
-	if got := entry.Client().Authority(); got.Phase() != finegrained.PhaseGranted || got.Reported() != "19.4.2-ee" {
-		t.Errorf("back at the recorded release: phase %v at %q; want phase B at 19.4.2-ee", got.Phase(), got.Reported())
+	if got := entry.Client().Authority(); got.Phase() != finegrained.PhaseGranted || got.Reported() != recordedPatchRelease {
+		t.Errorf("back at the recorded release: phase %v at %q; want phase B at %s", got.Phase(), got.Reported(), recordedPatchRelease)
 	}
-	assertMovedLogs(t, logs, []string{"A " + string(finegrained.FallbackVersionOutside) + " 19.6", "B  19.4"})
+	assertMovedLogs(t, logs, []string{outside, "B  " + actiongrants.Table().Bucket})
 }
 
 // assertMovedLogs holds the lines a fine-grained re-read that moved an entry

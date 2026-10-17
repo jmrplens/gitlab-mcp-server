@@ -235,7 +235,7 @@ func TestPrepareStdioCatalog_FineGrainedToken_AListingParkedAtStartupIsAlreadyNa
 		switch r.URL.Path {
 		case "/api/v4/version":
 			<-listingSent
-			testutil.RespondJSON(w, http.StatusOK, `{"version":"19.4.1-ee","revision":"abc"}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"version":"`+phaseBRelease+`","revision":"abc"}`)
 		case "/api/v4/user":
 			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"username":"testuser"}`)
 		case "/api/v4/personal_access_tokens/self":
@@ -412,11 +412,20 @@ const (
 	phaseBClassicAPI    = "glpat-classic-api"
 )
 
-// newPhaseBGitLab starts the stand-in at 19.4.1-ee.
+// phaseBRelease is the release the fine-grained stand-ins report: the one the
+// table this tree compiles in was recorded from, read from the table so that
+// re-recording it moves the stand-ins with it. releaseOutsideTheTable is one
+// past every table, two majors on.
+var phaseBRelease = actiongrants.Table().Version
+
+const releaseOutsideTheTable = "99.0.0-ee"
+
+// newPhaseBGitLab starts the stand-in at the release the table was recorded
+// from.
 func newPhaseBGitLab(t *testing.T) *phaseBGitLab {
 	t.Helper()
 	g := &phaseBGitLab{}
-	release := "19.4.1-ee"
+	release := phaseBRelease
 	g.version.Store(&release)
 	ids := map[string]int{phaseBProjectReader: 11, phaseBIssueCreator: 12}
 	grants := map[string]string{
@@ -547,13 +556,13 @@ func TestStdioAuthority_JudgesTheGrantAtTheVersionAlreadyRead(t *testing.T) {
 	asked := g.versions.Load()
 	facts := gitlabclient.DetectToken(t.Context(), initialized.GL())
 	authority := stdioAuthority(t.Context(), initialized, facts)
-	if authority.Phase() != finegrained.PhaseGranted || authority.Reported() != "19.4.1-ee" || g.versions.Load() != asked {
+	if authority.Phase() != finegrained.PhaseGranted || authority.Reported() != phaseBRelease || g.versions.Load() != asked {
 		t.Errorf("initialized start: phase %v at %q after %d more version reads; want phase B and none", authority.Phase(), authority.Reported(), g.versions.Load()-asked)
 	}
 
 	degraded := newClient(t, phaseBProjectReader)
-	if got := stdioAuthority(t.Context(), degraded, facts); got.Reported() != "19.4.1-ee" || g.versions.Load() != asked+1 {
-		t.Errorf("degraded start: reported %q after %d version reads; want 19.4.1-ee read once", got.Reported(), g.versions.Load()-asked)
+	if got := stdioAuthority(t.Context(), degraded, facts); got.Reported() != phaseBRelease || g.versions.Load() != asked+1 {
+		t.Errorf("degraded start: reported %q after %d version reads; want %s read once", got.Reported(), g.versions.Load()-asked, phaseBRelease)
 	}
 
 	logs := captureFineGrainedLogs(t)
@@ -624,7 +633,7 @@ func TestRefreshStdioAuthority_FollowsTheInstanceUntilTheContextEnds(t *testing.
 
 	// Each wait is for the refresh goroutine: the upgrade moving the token to
 	// phase A, a failed re-read being logged, and two more failed re-reads.
-	g.setVersion("19.6.0-ee")
+	g.setVersion(releaseOutsideTheTable)
 	waitFor(t, func() bool { return client.Authority().Fallback() == finegrained.FallbackVersionOutside })
 	reads := g.versions.Load()
 	waitFor(t, func() bool { return g.versions.Load() >= reads+2 })
@@ -638,7 +647,7 @@ func TestRefreshStdioAuthority_FollowsTheInstanceUntilTheContextEnds(t *testing.
 	if count := strings.Count(text, "keeping what it was shown"); count != 1 || !strings.Contains(text, "reason="+string(finegrained.FallbackVersionUnanswered)) {
 		t.Errorf("the kept re-read was logged %d times, want once with its reason:\n%s", count, text)
 	}
-	moved := "re-read moved what it is shown\" phase=A reason=" + string(finegrained.FallbackVersionOutside) + " bucket=19.6"
+	moved := "re-read moved what it is shown\" phase=A reason=" + string(finegrained.FallbackVersionOutside) + " bucket=" + finegrained.Bucket(releaseOutsideTheTable)
 	if count := strings.Count(text, "re-read moved what it is shown"); count != 1 || !strings.Contains(text, moved) {
 		t.Errorf("the upgrade was logged %d times, want once as %q:\n%s", count, moved, text)
 	}
@@ -689,7 +698,7 @@ func TestRefreshStdioAuthority_AnUnknownKind_IsAskedUntilGitLabAnswers(t *testin
 	readsBefore := g.versions.Load()
 	g.selfDown.Store(false)
 	waitFor(t, func() bool { return client.Authority() != nil })
-	if got := client.Authority(); got.Phase() != finegrained.PhaseGranted || got.Reported() != "19.4.1-ee" {
+	if got := client.Authority(); got.Phase() != finegrained.PhaseGranted || got.Reported() != phaseBRelease {
 		t.Errorf("once described: phase %v at %q; want phase B at the version the start read", got.Phase(), got.Reported())
 	}
 	waitFor(t, func() bool { return g.versions.Load() > readsBefore })
@@ -733,8 +742,8 @@ func TestPrepareStdioCatalog_ADegradedStart_AsksTheTokensKindOnceItRecovers(t *t
 	g.down.Store(false)
 	client.EnsureInitialized(t.Context())
 	waitFor(t, func() bool { return client.Authority() != nil })
-	if got := client.Authority(); got.Phase() != finegrained.PhaseGranted || got.Reported() != "19.4.1-ee" {
-		t.Errorf("once recovered: phase %v at %q; want phase B at 19.4.1-ee", got.Phase(), got.Reported())
+	if got := client.Authority(); got.Phase() != finegrained.PhaseGranted || got.Reported() != phaseBRelease {
+		t.Errorf("once recovered: phase %v at %q; want phase B at %s", got.Phase(), got.Reported(), phaseBRelease)
 	}
 }
 
