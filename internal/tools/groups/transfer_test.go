@@ -69,22 +69,30 @@ func fastTransferWait(t *testing.T, bound time.Duration) {
 // groupTransferGitLab is a GitLab whose transfer answers with one group and
 // whose reads of group 99 answer with the others in order, repeating the last.
 // Its to-do listing answers todos, or no items when that is empty, and a
-// non-empty date is the Date header of the transfer's answer. It counts the
-// reads and the listings, and records what each transfer and read sent.
+// non-empty date is the Date header of the transfer's answer. A non-empty
+// version is what its version endpoint answers, and a non-empty graphql what
+// its GraphQL endpoint answers, with graphqlStatus or 200; either asked while
+// empty fails the test. It counts the reads, the listings and the GraphQL
+// requests, and records what each transfer and read sent.
 type groupTransferGitLab struct {
-	t        *testing.T
-	answer   string
-	date     string
-	reads    []string
-	todos    string
-	onRead   func()
-	stop     context.CancelFunc
-	readHits atomic.Int64
-	todoHits atomic.Int64
+	t             *testing.T
+	answer        string
+	date          string
+	reads         []string
+	todos         string
+	version       string
+	graphql       string
+	graphqlStatus int
+	onRead        func()
+	stop          context.CancelFunc
+	readHits      atomic.Int64
+	todoHits      atomic.Int64
+	graphqlHits   atomic.Int64
 
-	mu          sync.Mutex
-	bodies      []string
-	readQueries []string
+	mu            sync.Mutex
+	bodies        []string
+	readQueries   []string
+	graphqlBodies []string
 }
 
 // landingContext is the context a test that expects the move to land calls
@@ -122,6 +130,15 @@ func (g *groupTransferGitLab) handler() http.HandlerFunc {
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v4/todos":
 			g.todoHits.Add(1)
 			testutil.RespondJSON(w, http.StatusOK, cmp.Or(g.todos, "[]"))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v4/version" && g.version != "":
+			testutil.RespondJSON(w, http.StatusOK, g.version)
+		case r.Method == http.MethodPost && r.URL.Path == "/api/graphql" && g.graphql != "":
+			g.graphqlHits.Add(1)
+			raw, _ := io.ReadAll(r.Body)
+			g.mu.Lock()
+			g.graphqlBodies = append(g.graphqlBodies, string(raw))
+			g.mu.Unlock()
+			testutil.RespondJSON(w, cmp.Or(g.graphqlStatus, http.StatusOK), g.graphql)
 		case r.Method == http.MethodGet && r.URL.Path == pathGroup99:
 			n := g.readHits.Add(1)
 			g.mu.Lock()
@@ -226,30 +243,82 @@ func TestTransferSubGroup_MoveLandsLater_AnswersTheMovedGroup(t *testing.T) {
 	}
 }
 
+// groupPathReason is a reason GitLab 19.5 records when its worker refuses a
+// group transfer (Groups::TransferService#execute, a path taken meanwhile),
+// and groupReasonAnswer GraphQL's answer for the failure item holding it. The
+// reason needs no escaping in JSON.
+const (
+	groupPathReason   = "The parent group already has a subgroup or a project with the same path."
+	groupReasonAnswer = `{"data":{"todo":{"transferFailureReason":"` + groupPathReason + `"}}}`
+)
+
 // TestTransferSubGroup_MoveFailsInTheBackground_AnswersTheFailure verifies
 // that a transfer the worker refuses, which GitLab reports only as a to-do
 // item on the group, ends the wait at the first read that finds the item,
 // with an error naming the destination, and that the item of a descendant's
-// failure, which the group's listing also carries, is not taken for it.
+// failure, which the group's listing also carries, is not taken for it. From
+// 19.5 the item carries the reason, which the error quotes ahead of the hint;
+// 19.4 is sent no GraphQL at all, and a read of the reason that fails leaves
+// the error 19.4 gets.
 func TestTransferSubGroup_MoveFailsInTheBackground_AnswersTheFailure(t *testing.T) {
-	fastTransferWait(t, landingBound)
-	gitlab := &groupTransferGitLab{
-		t: t, answer: groupAtTopLevel, date: groupTransferDate,
-		reads: []string{groupAtTopLevel}, todos: failedGroupTransferTodos,
+	tests := []struct {
+		name          string
+		version       string
+		graphql       string
+		graphqlStatus int
+		reason        string
+		hint          string
+		graphqlHits   int64
+	}{
+		{name: "19.4", version: `{"version":"19.4.1-ee"}`, hint: hintSubGroupTransferFailed},
+		{
+			name: "19.5", version: `{"version":"19.5.0-ee"}`, graphql: groupReasonAnswer,
+			reason: groupPathReason, hint: hintSubGroupTransferFailedReason, graphqlHits: 1,
+		},
+		{
+			name: "19.5 with the reason unreadable", version: `{"version":"19.5.0-ee"}`,
+			graphql: `{"message":"500 Internal Server Error"}`, graphqlStatus: http.StatusInternalServerError,
+			hint: hintSubGroupTransferFailed, graphqlHits: 1,
+		},
 	}
-	client := testutil.NewTestClient(t, gitlab.handler())
-	parent := int64(42)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fastTransferWait(t, landingBound)
+			gitlab := &groupTransferGitLab{
+				t: t, answer: groupAtTopLevel, date: groupTransferDate,
+				reads: []string{groupAtTopLevel}, todos: failedGroupTransferTodos,
+				version: tt.version, graphql: tt.graphql, graphqlStatus: tt.graphqlStatus,
+			}
+			client := testutil.NewTestClient(t, gitlab.handler())
+			parent := int64(42)
 
-	_, err := TransferSubGroup(gitlab.landingContext(t), nil, client, TransferSubGroupInput{GroupID: "99", ParentID: &parent})
-	if err == nil {
-		t.Fatal("TransferSubGroup() error = nil, want the failure GitLab reported")
-	}
-	if msg := err.Error(); !strings.HasPrefix(msg, "groupTransferSubGroup: ") ||
-		!strings.Contains(msg, "the transfer to parent/child failed") || !strings.Contains(msg, hintSubGroupTransferFailed) {
-		t.Errorf("TransferSubGroup() error = %q, want the destination the to-do item names and the hint %q", msg, hintSubGroupTransferFailed)
-	}
-	if reads, listings := gitlab.readHits.Load(), gitlab.todoHits.Load(); reads != 1 || listings != 1 {
-		t.Errorf("reads = %d and to-do listings = %d, want 1 each: the first listing found the failure", reads, listings)
+			_, err := TransferSubGroup(gitlab.landingContext(t), nil, client, TransferSubGroupInput{GroupID: "99", ParentID: &parent})
+			if err == nil {
+				t.Fatal("TransferSubGroup() error = nil, want the failure GitLab reported")
+			}
+			want := "groupTransferSubGroup: GitLab accepted the transfer and then failed it in the background, " +
+				"leaving a to-do item that says the transfer to parent/child failed"
+			if tt.reason != "" {
+				want += fmt.Sprintf(", for this reason: %q", tt.reason)
+			}
+			want += ". Suggestion: " + tt.hint
+			if msg := err.Error(); msg != want {
+				t.Errorf("TransferSubGroup() error =\n%q\nwant\n%q", msg, want)
+			}
+			if reads, listings := gitlab.readHits.Load(), gitlab.todoHits.Load(); reads != 1 || listings != 1 {
+				t.Errorf("reads = %d and to-do listings = %d, want 1 each: the first listing found the failure", reads, listings)
+			}
+			if got := gitlab.graphqlHits.Load(); got != tt.graphqlHits {
+				t.Errorf("GraphQL requests = %d, want %d", got, tt.graphqlHits)
+			}
+			gitlab.mu.Lock()
+			defer gitlab.mu.Unlock()
+			for _, body := range gitlab.graphqlBodies {
+				if !strings.Contains(body, `"gid://gitlab/Todo/5"`) {
+					t.Errorf("GraphQL body %s, want the reason of item 5, the group's own, not its descendant's", body)
+				}
+			}
+		})
 	}
 }
 
@@ -540,6 +609,7 @@ func TestTransferSubGroup_RefusalUnderAnotherStatus_CarriesNoTransferHint(t *tes
 var allSubGroupTransferHints = []string{
 	hintSubGroupTransferPermission, hintSubGroupTransferCRM, hintSubGroupTransferNotFound, hintSubGroupTransferUnderWay,
 	hintSubGroupTransferInPlace, hintSubGroupTransferCollision, hintSubGroupTransferRefused, hintSubGroupTransferFailed,
+	hintSubGroupTransferFailedReason,
 }
 
 // subGroupTransferHintIn returns the first of the transfer hints err
@@ -551,6 +621,36 @@ func subGroupTransferHintIn(err error) string {
 		}
 	}
 	return ""
+}
+
+// TestTransferHints_NameWhatTheWorkerCanFailOn holds the two background
+// failure hints to what GitLab's group worker does at v19.5.0-ee. Without a
+// reason the hint names the failures only the worker meets: a Service Desk
+// address the move would give a project that another already uses, raised
+// while it renames the routes (Groups::TransferService#execute rescues
+// AddressSlugConflictError), beside a path GitLab cannot update. With a
+// reason it says that one saying the transfer failed unexpectedly is retried
+// by GitLab, since the worker raises again and Sidekiq retries it up to three
+// times (Namespaces::Groups::TransferWorker, retry: 3), which a second
+// transfer would race.
+func TestTransferHints_NameWhatTheWorkerCanFailOn(t *testing.T) {
+	tests := []struct {
+		name string
+		hint string
+		want []string
+	}{
+		{name: "failed without a reason", hint: hintSubGroupTransferFailed, want: []string{"Service Desk", "path GitLab cannot update"}},
+		{name: "failed with a reason", hint: hintSubGroupTransferFailedReason, want: []string{"group.get", "failed unexpectedly", "retries"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, word := range tt.want {
+				if !strings.Contains(tt.hint, word) {
+					t.Errorf("hint %q does not name %q", tt.hint, word)
+				}
+			}
+		})
+	}
 }
 
 // TestTransferTiming_IsWaitpolls verifies the handler waits with the shared

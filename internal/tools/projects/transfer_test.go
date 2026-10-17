@@ -67,18 +67,25 @@ func fastTransferWait(t *testing.T, bound time.Duration) {
 // transferGitLab is a GitLab whose transfer answers with one project and whose
 // reads of project 42 answer with the others in order, repeating the last. Its
 // to-do listing answers todos, or no items when that is empty, and a non-empty
-// date is the Date header of the transfer's answer. It counts the reads and
-// the listings, and records the namespace each transfer asked for.
+// date is the Date header of the transfer's answer. A non-empty version is
+// what its version endpoint answers, and a non-empty graphql what its GraphQL
+// endpoint answers, with graphqlStatus or 200; either asked while empty fails
+// the test. It counts the reads, the listings and the GraphQL requests, and
+// records the namespace each transfer asked for.
 type transferGitLab struct {
-	t        *testing.T
-	answer   string
-	date     string
-	reads    []string
-	todos    string
-	onRead   func(n int64)
-	stop     context.CancelFunc
-	readHits atomic.Int64
-	todoHits atomic.Int64
+	t             *testing.T
+	answer        string
+	date          string
+	reads         []string
+	todos         string
+	version       string
+	graphql       string
+	graphqlStatus int
+	onRead        func(n int64)
+	stop          context.CancelFunc
+	readHits      atomic.Int64
+	todoHits      atomic.Int64
+	graphqlHits   atomic.Int64
 
 	mu         sync.Mutex
 	namespaces []string
@@ -125,6 +132,11 @@ func (g *transferGitLab) handler() http.HandlerFunc {
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v4/todos":
 			g.todoHits.Add(1)
 			testutil.RespondJSON(w, http.StatusOK, cmp.Or(g.todos, "[]"))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v4/version" && g.version != "":
+			testutil.RespondJSON(w, http.StatusOK, g.version)
+		case r.Method == http.MethodPost && r.URL.Path == "/api/graphql" && g.graphql != "":
+			g.graphqlHits.Add(1)
+			testutil.RespondJSON(w, cmp.Or(g.graphqlStatus, http.StatusOK), g.graphql)
 		case r.Method == http.MethodGet && r.URL.Path == pathProject42:
 			n := g.readHits.Add(1)
 			if g.onRead != nil {
@@ -213,17 +225,85 @@ func TestTransfer_MoveLandsLater_AnswersTheMovedProject(t *testing.T) {
 	}
 }
 
+// npmTransferReason is the reason GitLab 19.5 records when its worker refuses
+// to move a project with npm packages scoped to the old top-level namespace,
+// and npmReasonAnswer GraphQL's answer for the failure item holding it. The
+// reason needs no escaping in JSON.
+const (
+	npmTransferReason = "Root namespace can't be updated if the project has NPM packages scoped to the current root level namespace."
+	npmReasonAnswer   = `{"data":{"todo":{"transferFailureReason":"` + npmTransferReason + `"}}}`
+)
+
 // TestTransfer_MoveFailsInTheBackground_AnswersTheFailure holds what GitLab
-// 19.4 does with a transfer its worker refuses, a name collision among them:
-// the project stays where it was and the only report is a to-do item. The
-// first read that finds the item ends the wait with an error naming the
-// destination and the checks the worker runs, rather than a queued answer
-// after the whole bound.
+// does with a transfer its worker refuses: the project stays where it was and
+// the only report is a to-do item, so the first read that finds the item ends
+// the wait with an error naming the destination rather than a queued answer
+// after the whole bound. From 19.5 the item carries the reason, which the
+// error quotes ahead of the hint; 19.4 is sent no GraphQL at all, and a read
+// of the reason that fails leaves the error 19.4 gets.
 func TestTransfer_MoveFailsInTheBackground_AnswersTheFailure(t *testing.T) {
+	tests := []struct {
+		name          string
+		version       string
+		graphql       string
+		graphqlStatus int
+		reason        string
+		hint          string
+		graphqlHits   int64
+	}{
+		{name: "19.4", version: `{"version":"19.4.1-ee"}`, hint: hintTransferFailed},
+		{
+			name: "19.5", version: `{"version":"19.5.0-ee"}`, graphql: npmReasonAnswer,
+			reason: npmTransferReason, hint: hintTransferFailedReason, graphqlHits: 1,
+		},
+		{
+			name: "19.5 with the reason unreadable", version: `{"version":"19.5.0-ee"}`,
+			graphql: `{"message":"500 Internal Server Error"}`, graphqlStatus: http.StatusInternalServerError,
+			hint: hintTransferFailed, graphqlHits: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fastTransferWait(t, landingBound)
+			gitlab := &transferGitLab{
+				t: t, answer: projectInUserNamespace, date: transferDate,
+				reads: []string{projectInUserNamespace}, todos: failedTransferTodos,
+				version: tt.version, graphql: tt.graphql, graphqlStatus: tt.graphqlStatus,
+			}
+			client := testutil.NewTestClient(t, gitlab.handler())
+
+			_, err := Transfer(gitlab.landingContext(t), nil, client, TransferInput{ProjectID: "42", Namespace: "newns"})
+			if err == nil {
+				t.Fatal("Transfer() error = nil, want the failure GitLab reported")
+			}
+			want := "projectTransfer: GitLab accepted the transfer and then failed it in the background, " +
+				"leaving a to-do item that says the transfer to newns/moving failed"
+			if tt.reason != "" {
+				want += fmt.Sprintf(", for this reason: %q", tt.reason)
+			}
+			want += ". Suggestion: " + tt.hint
+			if msg := err.Error(); msg != want {
+				t.Errorf("Transfer() error =\n%q\nwant\n%q", msg, want)
+			}
+			if reads, listings := gitlab.readHits.Load(), gitlab.todoHits.Load(); reads != 1 || listings != 1 {
+				t.Errorf("reads = %d and to-do listings = %d, want 1 each: the first listing found the failure", reads, listings)
+			}
+			if got := gitlab.graphqlHits.Load(); got != tt.graphqlHits {
+				t.Errorf("GraphQL requests = %d, want %d", got, tt.graphqlHits)
+			}
+		})
+	}
+}
+
+// TestTransfer_ReasonPrecedesTheSuggestion verifies that GitLab's reason is
+// read before the hint, so a caller meets what GitLab said first and this
+// server's advice after it.
+func TestTransfer_ReasonPrecedesTheSuggestion(t *testing.T) {
 	fastTransferWait(t, landingBound)
 	gitlab := &transferGitLab{
 		t: t, answer: projectInUserNamespace, date: transferDate,
 		reads: []string{projectInUserNamespace}, todos: failedTransferTodos,
+		version: `{"version":"19.5.0-ee"}`, graphql: npmReasonAnswer,
 	}
 	client := testutil.NewTestClient(t, gitlab.handler())
 
@@ -231,12 +311,10 @@ func TestTransfer_MoveFailsInTheBackground_AnswersTheFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("Transfer() error = nil, want the failure GitLab reported")
 	}
-	if msg := err.Error(); !strings.HasPrefix(msg, "projectTransfer: ") ||
-		!strings.Contains(msg, "the transfer to newns/moving failed") || !strings.Contains(msg, hintTransferFailed) {
-		t.Errorf("Transfer() error = %q, want the destination the to-do item names and the hint %q", msg, hintTransferFailed)
-	}
-	if reads, listings := gitlab.readHits.Load(), gitlab.todoHits.Load(); reads != 1 || listings != 1 {
-		t.Errorf("reads = %d and to-do listings = %d, want 1 each: the first listing found the failure", reads, listings)
+	msg := err.Error()
+	reason, suggestion := strings.Index(msg, npmTransferReason), strings.Index(msg, "Suggestion:")
+	if reason < 0 || suggestion < 0 || reason > suggestion {
+		t.Errorf("Transfer() error = %q, want GitLab's reason ahead of the suggestion", msg)
 	}
 }
 
@@ -503,7 +581,8 @@ func TestTransfer_MissingInput_IsRefusedBeforeAnyRequest(t *testing.T) {
 // test can hold that a refusal carries its own hint and none of the others.
 var allTransferHints = []string{
 	hintTransferPermission, hintTransferNamespace, hintTransferNotFound, hintTransferUnderWay,
-	hintTransferInPlace, hintTransferCollision, hintTransferRefused, hintTransferFailed,
+	hintTransferInPlace, hintTransferCollision, hintTransferPendingDeletion, hintTransferRefused,
+	hintTransferFailed, hintTransferFailedReason,
 }
 
 // TestTransfer_Refusal_IsHintedByWhatGitLabSaid drives each refusal GitLab
@@ -511,8 +590,10 @@ var allTransferHints = []string{
 // own) and holds the hint each gets. A transfer that cannot start is told it
 // may be running or the project marked for deletion, a project already in the
 // namespace that there is nothing left to move, both to read the project
-// back, and only a name or path collision is told to rename. A 404 is hinted
-// by which of the two lookups failed.
+// back, a name or path collision to rename, and a name or path a project
+// pending deletion still holds, which an instance that transfers inline
+// refuses with the request, to wait for that deletion or finish it. A 404 is
+// hinted by which of the two lookups failed.
 func TestTransfer_Refusal_IsHintedByWhatGitLabSaid(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -534,7 +615,7 @@ func TestTransfer_Refusal_IsHintedByWhatGitLabSaid(t *testing.T) {
 		},
 		{
 			name: "name or path pending deletion", status: http.StatusBadRequest,
-			message: "A project with the same name or path was recently deleted in the target namespace. Please wait for the deletion to complete or permanently delete it first.", want: hintTransferCollision,
+			message: "A project with the same name or path was recently deleted in the target namespace. Please wait for the deletion to complete or permanently delete it first.", want: hintTransferPendingDeletion,
 		},
 		{
 			name: "no permission on the project", status: http.StatusBadRequest,
@@ -617,6 +698,40 @@ func TestTransfer_RefusalUnderAnotherStatus_CarriesNoTransferHint(t *testing.T) 
 			}
 			if !strings.Contains(err.Error(), "transfer in progress") {
 				t.Errorf("Transfer() error = %q, want GitLab's own message kept", err)
+			}
+		})
+	}
+}
+
+// TestTransferHints_NameWhatFollowingThemTakes holds two hints to what acting
+// on them needs. Deleting the project that holds the name or path for good
+// takes full_path set to its path_with_namespace beside permanently_remove,
+// which GitLab refuses the delete without (lib/api/projects.rb). A failure
+// GitLab gives a reason for is read back with project.get before the transfer
+// is sent again, and a reason saying the transfer failed unexpectedly is one
+// GitLab's worker raises again so Sidekiq retries it, up to three times
+// (Projects::TransferWorker, retry: 3), which a second transfer would race.
+func TestTransferHints_NameWhatFollowingThemTakes(t *testing.T) {
+	tests := []struct {
+		name string
+		hint string
+		want []string
+	}{
+		{
+			name: "pending deletion", hint: hintTransferPendingDeletion,
+			want: []string{"project.delete", "permanently_remove", "full_path", "path_with_namespace"},
+		},
+		{
+			name: "failed with a reason", hint: hintTransferFailedReason,
+			want: []string{"project.get", "failed unexpectedly", "retries"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, word := range tt.want {
+				if !strings.Contains(tt.hint, word) {
+					t.Errorf("hint %q does not name %q", tt.hint, word)
+				}
 			}
 		})
 	}

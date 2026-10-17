@@ -28,14 +28,16 @@ var (
 // collision all with 400, and each needs a different next step, so the hint
 // is chosen by what GitLab said rather than by the status alone.
 const (
-	hintTransferPermission = "transferring a project requires the Owner role on the project and permission to create projects in the target namespace"
-	hintTransferNamespace  = "verify the target namespace exists. Use group.list or user.get, and pass the namespace as a numeric ID or a full path"
-	hintTransferNotFound   = "verify project_id with project.get, or find the project with project.list"
-	hintTransferUnderWay   = "GitLab is applying a transfer of this project right now (since GitLab 19.4 a transfer runs in the background), or the project is marked for deletion, which GitLab refuses a transfer with in the same words. Wait, then read the project back with project.get to see which namespace it is in and whether it is marked for deletion, before transferring it again"
-	hintTransferInPlace    = "the project is already in the target namespace, either from the start or because an earlier transfer has moved it. Read it back with project.get to confirm its path: there is nothing left to transfer"
-	hintTransferCollision  = "a project with this name or path already exists in the target namespace, or was deleted there recently and is still pending deletion. Rename the project with project.update (both name and path), or remove the other project, then transfer again"
-	hintTransferRefused    = "GitLab refused the transfer for the reason quoted above. Use project.get to confirm where the project is now"
-	hintTransferFailed     = "GitLab reports a failed background transfer only as this to-do item, without the reason. The checks it runs there are a project with the same name or path in the target namespace, or one there still pending deletion, container registry images, and npm packages scoped to the old top-level namespace. Look for a project with this name or path in the target namespace with project.list, rename the project with project.update (both name and path) or remove the other one, then transfer again. The item stays pending in user.todo_list until a transfer of this project succeeds"
+	hintTransferPermission      = "transferring a project requires the Owner role on the project and permission to create projects in the target namespace"
+	hintTransferNamespace       = "verify the target namespace exists. Use group.list or user.get, and pass the namespace as a numeric ID or a full path"
+	hintTransferNotFound        = "verify project_id with project.get, or find the project with project.list"
+	hintTransferUnderWay        = "GitLab is applying a transfer of this project right now (since GitLab 19.4 a transfer runs in the background), or the project is marked for deletion, which GitLab refuses a transfer with in the same words. Wait, then read the project back with project.get to see which namespace it is in and whether it is marked for deletion, before transferring it again"
+	hintTransferInPlace         = "the project is already in the target namespace, either from the start or because an earlier transfer has moved it. Read it back with project.get to confirm its path: there is nothing left to transfer"
+	hintTransferCollision       = "a project with this name or path already exists in the target namespace. Rename the project with project.update (both name and path), or remove the other project, then transfer again"
+	hintTransferPendingDeletion = "a project with this name or path was deleted in the target namespace and is still pending deletion. Wait for the deletion to complete or delete that project permanently (project.delete with permanently_remove and full_path set to its path_with_namespace), or rename this project with project.update (both name and path), then transfer again"
+	hintTransferRefused         = "GitLab refused the transfer for the reason quoted above. Use project.get to confirm where the project is now"
+	hintTransferFailed          = "GitLab keeps the reason of a failed background transfer only from 19.5, on this to-do item, and none could be read here. The checks its worker runs are a project in the target namespace still pending deletion with the same name or path, container registry images, and npm packages scoped to the old top-level namespace when the move changes it. It also refuses a name or path the target namespace already holds, which GitLab 19.5 and later refuse with the request itself unless the other project appeared after it. Look for a project with this name or path in the target namespace with project.list, rename the project with project.update (both name and path) or remove the other one, then transfer again. The item stays pending in user.todo_list until a transfer of this project succeeds"
+	hintTransferFailedReason    = "read the project back with project.get first. If GitLab's reason says the transfer failed unexpectedly, GitLab retries it by itself a few more times over the next minutes, so wait and read the project again rather than sending the transfer a second time. Otherwise fix what the reason names, then transfer again. A name or path the target namespace already holds, or holds for a project still pending deletion, is freed by renaming this project with project.update (both name and path) or by removing the other one, which project.list finds. The item stays pending in user.todo_list until a transfer of this project succeeds"
 )
 
 // TransferInput defines parameters for transferring a project to another namespace.
@@ -59,12 +61,12 @@ type TransferOutput struct {
 }
 
 // transferRead is one read of a project a transfer is moving: where the
-// project is, and whether GitLab has reported the move failed, with the
-// destination its report names.
+// project is, and whether GitLab has reported the move failed, with the to-do
+// item its report is.
 type transferRead struct {
-	project  Output
-	failed   bool
-	failedTo string
+	project Output
+	failed  bool
+	failure waitpoll.TransferFailure
 }
 
 // Transfer moves a project to a different namespace and waits for the move.
@@ -73,14 +75,18 @@ type transferRead struct {
 // it still is and move it in a background worker, so an answer that does not
 // yet show the destination is read back until it does, for up to
 // [waitpoll.TransferBound]. An older GitLab answers after the move, and its
-// answer is returned as it is, with no read at all; so does one from 18.11 to
+// answer is returned as it is, with no read at all; so does one from 19.0 to
 // 19.3 unless the groups_and_projects_async_transfer flag is on, and the
 // handler tells the two apart by the answer rather than by the version.
 //
-// The checks that the name and path are free in the target namespace run in
-// that worker too, and a failure is reported only as a to-do item for the
-// caller, so each read that does not find the project moved also looks for
-// that item, and one dated after the transfer ends the wait with an error.
+// Some checks run only in that worker (a project pending deletion with the
+// same name or path, container registry images, npm packages scoped to the
+// old top-level namespace, and on 19.4 the name and path collision, which
+// 19.5 refuses with the request too), and a failure is reported only as a
+// to-do item for the caller, so each read that does not find the project
+// moved also looks for that item, and one dated after the transfer ends the
+// wait with an error. From 19.5 the item carries GitLab's reason, which the
+// error quotes ([transferFailedError]).
 // A move that has neither landed nor been reported failed when the wait ends
 // is answered with the project from the transfer's own answer and
 // TransferQueued set, never as an error: GitLab accepted it, and a model told
@@ -124,8 +130,8 @@ func Transfer(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 			if readErr != nil || inNamespace(current, input.Namespace) {
 				return transferRead{project: current}, readErr
 			}
-			failedTo, failed, readErr := waitpoll.TransferFailed(readCtx, client, target, answeredAt)
-			return transferRead{project: current, failed: failed, failedTo: failedTo}, readErr
+			failure, failed, readErr := waitpoll.TransferFailed(readCtx, client, target, answeredAt)
+			return transferRead{project: current, failed: failed, failure: failure}, readErr
 		},
 		Landed: func(current transferRead) bool {
 			return current.failed || inNamespace(current.project, input.Namespace)
@@ -138,10 +144,23 @@ func Transfer(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 	case !done:
 		return TransferOutput{Output: answered, TransferQueued: true}, nil
 	case settled.failed:
-		return TransferOutput{}, fmt.Errorf("projectTransfer: GitLab accepted the transfer and then failed it in the background, leaving a to-do item that says the transfer to %s failed. Suggestion: %s", settled.failedTo, hintTransferFailed)
+		return TransferOutput{}, transferFailedError(ctx, client, settled.failure)
 	default:
 		return TransferOutput{Output: settled.project}, nil
 	}
+}
+
+// transferFailedError is the error a transfer GitLab failed in the background
+// is answered with: the destination the to-do item names and, from GitLab
+// 19.5, the reason the item carries, quoted ahead of the hint so a caller
+// reads what GitLab said before this server's advice. Without a reason the
+// hint lists the checks the worker runs.
+func transferFailedError(ctx context.Context, client *gitlabclient.Client, failure waitpoll.TransferFailure) error {
+	reason := waitpoll.TransferFailureReason(ctx, client, failure.TodoID)
+	if reason == "" {
+		return fmt.Errorf("projectTransfer: GitLab accepted the transfer and then failed it in the background, leaving a to-do item that says the transfer to %s failed. Suggestion: %s", failure.Destination, hintTransferFailed)
+	}
+	return fmt.Errorf("projectTransfer: GitLab accepted the transfer and then failed it in the background, leaving a to-do item that says the transfer to %s failed, for this reason: %q. Suggestion: %s", failure.Destination, reason, hintTransferFailedReason)
 }
 
 // inNamespace reports whether a project sits in the namespace a transfer
@@ -164,10 +183,13 @@ func inNamespace(p Output, namespace string) bool {
 // and the route in lib/api/projects.rb): a transfer that cannot start means
 // one is running or the project is marked for deletion, and a project already
 // in the namespace needs nothing more, which reading the project back settles
-// in both cases, while only a name or path collision is fixed by renaming. The
-// route looks the project up before the namespace, so a 404 names which of
-// the two it could not find, and [notFoundHint] reads which from the
-// captured answer.
+// in both cases, while a name or path collision is fixed by renaming. A name
+// or path a project pending deletion still holds is a refusal of its own,
+// answered with the request only by an instance that transfers inline (from
+// 19.4 its worker reports it), and is fixed by waiting for that deletion as
+// well; its words contain the collision's, so it is matched first. The route
+// looks the project up before the namespace, so a 404 names which of the two
+// it could not find, and [notFoundHint] reads which from the captured answer.
 func transferError(err error, captured *gitlabclient.ResponseCapture) error {
 	const op = "projectTransfer"
 	switch {
@@ -181,6 +203,8 @@ func transferError(err error, captured *gitlabclient.ResponseCapture) error {
 		return toolutil.WrapErrWithHint(op, err, hintTransferUnderWay)
 	case toolutil.ContainsAny(err, "already in this namespace"):
 		return toolutil.WrapErrWithHint(op, err, hintTransferInPlace)
+	case toolutil.ContainsAny(err, "recently deleted"):
+		return toolutil.WrapErrWithHint(op, err, hintTransferPendingDeletion)
 	case toolutil.ContainsAny(err, "same name or path"):
 		return toolutil.WrapErrWithHint(op, err, hintTransferCollision)
 	case toolutil.ContainsAny(err, "don't have permission"):

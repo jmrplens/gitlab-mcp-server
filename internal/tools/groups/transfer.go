@@ -28,14 +28,15 @@ var (
 // different next step, so the hint is chosen by what GitLab said rather than
 // by the status alone.
 const (
-	hintSubGroupTransferPermission = "transferring a group requires the Owner role on the group and on the destination parent group. Use group.transfer_locations to list the parents it can be moved under"
-	hintSubGroupTransferCRM        = "the group holds customer relations contacts or organizations, and moving them to another top-level group needs permission to manage the contacts and organizations of the destination's top-level group, which the Owner role on this group and on its new parent does not give. Ask for that access there, or choose a parent under the same top-level group from group.transfer_locations"
-	hintSubGroupTransferNotFound   = "verify group_id (and parent_id) with group.get"
-	hintSubGroupTransferUnderWay   = "GitLab is applying a transfer of this group right now (since GitLab 19.4 a transfer runs in the background), or the group is marked for deletion, which GitLab refuses a transfer with in the same words. Wait, then read the group back with group.get to see its parent and whether it is marked for deletion, before transferring it again"
-	hintSubGroupTransferInPlace    = "the group is already where this transfer would put it, under that parent or at the top level, either from the start or because an earlier transfer has moved it. Read it back with group.get to confirm its parent: there is nothing left to transfer"
-	hintSubGroupTransferCollision  = "the destination parent already has a subgroup or project with this group's path. Change the group's path with group.update, or choose another parent from group.transfer_locations"
-	hintSubGroupTransferRefused    = "the destination parent is invalid for this group, for example one of its own subgroups, or GitLab cannot move what the group holds (container images, npm packages, a subscription). Use group.transfer_locations to find valid parents"
-	hintSubGroupTransferFailed     = "GitLab reports a failed background transfer only as this to-do item, without the reason. The worker repeats the checks the request passed, so a subgroup or project with this group's path that appeared under the parent meanwhile fails it, and so does a path GitLab cannot update. Read the group back with group.get, check the destination with group.transfer_locations, then transfer again. The item stays pending in user.todo_list until a transfer of this group succeeds"
+	hintSubGroupTransferPermission   = "transferring a group requires the Owner role on the group and on the destination parent group. Use group.transfer_locations to list the parents it can be moved under"
+	hintSubGroupTransferCRM          = "the group holds customer relations contacts or organizations, and moving them to another top-level group needs permission to manage the contacts and organizations of the destination's top-level group, which the Owner role on this group and on its new parent does not give. Ask for that access there, or choose a parent under the same top-level group from group.transfer_locations"
+	hintSubGroupTransferNotFound     = "verify group_id (and parent_id) with group.get"
+	hintSubGroupTransferUnderWay     = "GitLab is applying a transfer of this group right now (since GitLab 19.4 a transfer runs in the background), or the group is marked for deletion, which GitLab refuses a transfer with in the same words. Wait, then read the group back with group.get to see its parent and whether it is marked for deletion, before transferring it again"
+	hintSubGroupTransferInPlace      = "the group is already where this transfer would put it, under that parent or at the top level, either from the start or because an earlier transfer has moved it. Read it back with group.get to confirm its parent: there is nothing left to transfer"
+	hintSubGroupTransferCollision    = "the destination parent already has a subgroup or project with this group's path. Change the group's path with group.update, or choose another parent from group.transfer_locations"
+	hintSubGroupTransferRefused      = "the destination parent is invalid for this group, for example one of its own subgroups, or GitLab cannot move what the group holds (container images, npm packages, a subscription). Use group.transfer_locations to find valid parents"
+	hintSubGroupTransferFailed       = "GitLab keeps the reason of a failed background transfer only from 19.5, on this to-do item, and none could be read here. The worker repeats the checks the request passed, so a subgroup or project with this group's path that appeared under the parent meanwhile fails it. It also meets failures the request cannot: a Service Desk address the new path would give a project of this group while another project already uses it (change that project's Service Desk project key), a path GitLab cannot update, and a record it cannot save. Read the group back with group.get, check the destination with group.transfer_locations, then transfer again. The item stays pending in user.todo_list until a transfer of this group succeeds"
+	hintSubGroupTransferFailedReason = "read the group back with group.get first. If GitLab's reason says the transfer failed unexpectedly, GitLab retries it by itself a few more times over the next minutes, so wait and read the group again rather than sending the transfer a second time. Otherwise fix what the reason names, check the destination with group.transfer_locations, then transfer again. The item stays pending in user.todo_list until a transfer of this group succeeds"
 )
 
 // TransferSubGroupInput defines parameters for transferring a group under a new
@@ -67,15 +68,19 @@ type TransferSubGroupOutput struct {
 // still is and move it in a background worker, so an answer that does not yet
 // show the new parent is read back until it does, for up to
 // [waitpoll.TransferBound]. An older GitLab answers after the move, and its
-// answer is returned as it is, with no read at all; so does one from 18.11 to
+// answer is returned as it is, with no read at all; so does one from 19.0 to
 // 19.3 unless the groups_and_projects_async_transfer flag is on, and the
 // handler tells the two apart by the answer rather than by the version.
 //
-// The worker repeats the checks the request passed, and a failure there is
-// reported only as a to-do item for the caller, so each read that does not
-// find the group moved also looks for that item, and one dated after the
-// transfer ends the wait with an error. A move that has neither landed nor
-// been reported failed when the wait ends is answered with the group from the
+// The worker repeats the checks the request passed and meets failures of its
+// own while it moves the group (a Service Desk address the new path gives a
+// project another one already uses, a path it cannot update, a record it
+// cannot save). A failure there is reported only as a to-do item for the
+// caller, so each read that does not find the group moved also looks for that
+// item, and one dated after the transfer ends the wait with an error. From
+// 19.5 the item carries GitLab's reason, which the error quotes
+// ([subGroupTransferFailedError]). A move that has neither landed nor been
+// reported failed when the wait ends is answered with the group from the
 // transfer's own answer and TransferQueued set, never as an error: GitLab
 // accepted it, and a model told the transfer failed would send it again,
 // which GitLab runs a second time while the first is queued and refuses while
@@ -122,8 +127,8 @@ func TransferSubGroup(ctx context.Context, req *mcp.CallToolRequest, client *git
 			if readErr != nil || underParent(current, input.ParentID) {
 				return groupTransferRead{group: current}, readErr
 			}
-			failedTo, failed, readErr := waitpoll.TransferFailed(readCtx, client, target, answeredAt)
-			return groupTransferRead{group: current, failed: failed, failedTo: failedTo}, readErr
+			failure, failed, readErr := waitpoll.TransferFailed(readCtx, client, target, answeredAt)
+			return groupTransferRead{group: current, failed: failed, failure: failure}, readErr
 		},
 		Landed: func(current groupTransferRead) bool {
 			return current.failed || underParent(current.group, input.ParentID)
@@ -136,19 +141,32 @@ func TransferSubGroup(ctx context.Context, req *mcp.CallToolRequest, client *git
 	case !done:
 		return TransferSubGroupOutput{DetailOutput: answered, TransferQueued: true}, nil
 	case settled.failed:
-		return TransferSubGroupOutput{}, fmt.Errorf("groupTransferSubGroup: GitLab accepted the transfer and then failed it in the background, leaving a to-do item that says the transfer to %s failed. Suggestion: %s", settled.failedTo, hintSubGroupTransferFailed)
+		return TransferSubGroupOutput{}, subGroupTransferFailedError(ctx, client, settled.failure)
 	default:
 		return TransferSubGroupOutput{DetailOutput: settled.group}, nil
 	}
 }
 
+// subGroupTransferFailedError is the error a group transfer GitLab failed in
+// the background is answered with: the destination the to-do item names and,
+// from GitLab 19.5, the reason the item carries, quoted ahead of the hint so
+// a caller reads what GitLab said before this server's advice. Without a
+// reason the hint says which checks the worker repeats.
+func subGroupTransferFailedError(ctx context.Context, client *gitlabclient.Client, failure waitpoll.TransferFailure) error {
+	reason := waitpoll.TransferFailureReason(ctx, client, failure.TodoID)
+	if reason == "" {
+		return fmt.Errorf("groupTransferSubGroup: GitLab accepted the transfer and then failed it in the background, leaving a to-do item that says the transfer to %s failed. Suggestion: %s", failure.Destination, hintSubGroupTransferFailed)
+	}
+	return fmt.Errorf("groupTransferSubGroup: GitLab accepted the transfer and then failed it in the background, leaving a to-do item that says the transfer to %s failed, for this reason: %q. Suggestion: %s", failure.Destination, reason, hintSubGroupTransferFailedReason)
+}
+
 // groupTransferRead is one read of a group a transfer is moving: where the
-// group is, and whether GitLab has reported the move failed, with the
-// destination its report names.
+// group is, and whether GitLab has reported the move failed, with the to-do
+// item its report is.
 type groupTransferRead struct {
-	group    DetailOutput
-	failed   bool
-	failedTo string
+	group   DetailOutput
+	failed  bool
+	failure waitpoll.TransferFailure
 }
 
 // underParent reports whether a group sits where a transfer put it: under the
