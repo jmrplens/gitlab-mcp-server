@@ -26677,6 +26677,9 @@
           ],
           "sdk_methods": [
             "Search.BlobsByProject"
+          ],
+          "directives": [
+            "alternatives: the search goes to exactly one of the project, group and instance routes, the narrowest scope the caller named, and refusalHint, a function in the same literal, sends nothing and only explains a refusal"
           ]
         },
         {
@@ -26689,6 +26692,9 @@
           ],
           "sdk_methods": [
             "Search.BlobsByGroup"
+          ],
+          "directives": [
+            "alternatives: the search goes to exactly one of the project, group and instance routes, the narrowest scope the caller named, and refusalHint, a function in the same literal, sends nothing and only explains a refusal"
           ]
         },
         {
@@ -26701,6 +26707,9 @@
           ],
           "sdk_methods": [
             "Search.Blobs"
+          ],
+          "directives": [
+            "alternatives: the search goes to exactly one of the project, group and instance routes, the narrowest scope the caller named, and refusalHint, a function in the same literal, sends nothing and only explains a refusal"
           ]
         }
       ],

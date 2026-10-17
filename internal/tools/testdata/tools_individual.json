@@ -221906,13 +221906,22 @@
   },
   {
     "name": "gitlab_search_code",
-    "description": "Search code blobs across global, group, or project scope. Returns: matching blobs with file path, basename, ref, starting line, the surrounding snippet, project ID, and pagination metadata. See also: gitlab_search_projects, gitlab_file_get, gitlab_repository_tree.",
+    "description": "Search code blobs across global, group, or project scope. Returns: matching blobs with file path, basename, ref, the line the snippet starts on, the snippet, project ID, and pagination metadata. On basic search a file that matched by its path also carries its blob ID, and its snippet is the start of the file rather than the lines around a match. On exact search such a file carries its path in place of a snippet. num_context_lines (0 to 20) sets the lines around each match on advanced and exact search, and regex chooses between a regular expression and literal text on exact search. See also: gitlab_search_projects, gitlab_file_get, gitlab_repository_tree.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "group_id": {
           "description": "Group ID or URL-encoded path (optional)",
           "type": "string"
+        },
+        "num_context_lines": {
+          "description": "Lines of context GitLab sends around a code match, up to this many on each side, 0 to 20. Honored by advanced and exact code search (search_type advanced or zoekt), which send 2 and 1 by default, though exact search only from GitLab 19.5. GitLab Enterprise 18.11 and later refuses it on basic search, which a project search of a ref other than the default branch always runs, unless the token carries the mcp scope. Earlier releases and Community Edition ignore it",
+          "maximum": 20,
+          "minimum": 0,
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
@@ -221936,6 +221945,13 @@
         "ref": {
           "description": "Branch or tag name to search in (default: default branch)",
           "type": "string"
+        },
+        "regex": {
+          "description": "Search the query as a regular expression (true) or as literal text (false). Honored by exact code search alone (search_type zoekt), which reads the query as a regular expression when this is left out. GitLab Enterprise 18.9 and later refuses it on any other backend, false included, and so on a project search of a ref other than the default branch, which always runs basic search, unless the token carries the mcp scope. Earlier releases and Community Edition ignore it",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "search_type": {
           "description": "Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance.",
@@ -221963,9 +221979,14 @@
                 "type": "string"
               },
               "data": {
+                "description": "The snippet GitLab sent: the lines around a match, or for a file that matched by its path the start of the file on basic search and the file's path itself on exact search",
                 "type": "string"
               },
               "filename": {
+                "type": "string"
+              },
+              "id": {
+                "description": "Git blob ID of a file that matched the query by its path, set by basic search only. Such a result carries the start of the file and startline 1 rather than the lines around a match. Absent for a match on the file's content, for a path match whose file GitLab could not read (which then carries no snippet either), and on every result of advanced and exact search",
                 "type": "string"
               },
               "path": {
@@ -221978,6 +221999,7 @@
                 "type": "string"
               },
               "startline": {
+                "description": "Line the snippet starts on. GitLab sends no line number for the match itself. Exact search answers 1 for a file that matched by its name, and on GitLab 19.4 answers 0 for that and for a snippet starting on the first line. 0 also stands for the null basic search answers for a path match whose file it could not read",
                 "type": "integer"
               }
             },
@@ -224054,7 +224076,7 @@
   },
   {
     "name": "gitlab_search_notes",
-    "description": "Search note bodies within one project. Returns: matching notes with body, author, noteable type and ID, system flag, and timestamps plus pagination metadata. See also: gitlab_search_issues, gitlab_search_merge_requests, gitlab_issue_note_list.",
+    "description": "Search note bodies within one project. Returns: matching notes with body, author, noteable type and ID, system and internal flags, and timestamps plus pagination metadata. See also: gitlab_search_issues, gitlab_search_merge_requests, gitlab_issue_note_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -224121,6 +224143,10 @@
               "id": {
                 "type": "integer"
               },
+              "internal": {
+                "description": "Whether the note is internal, which GitLab shows only to project members allowed to read internal notes",
+                "type": "boolean"
+              },
               "noteable_id": {
                 "type": "integer"
               },
@@ -224145,7 +224171,8 @@
               "updated_at",
               "noteable_type",
               "noteable_id",
-              "system"
+              "system",
+              "internal"
             ],
             "type": "object"
           },
@@ -224823,7 +224850,7 @@
   },
   {
     "name": "gitlab_search_wiki",
-    "description": "Search wiki blobs across global, group, or project scope. Returns: matching wiki pages with slug, title, content snippet, and format plus pagination metadata. See also: gitlab_search_code, gitlab_wiki_list, gitlab_wiki_get.",
+    "description": "Search wiki blobs across global, group, or project scope. Returns: the file of each matching wiki page with its path (the page slug plus the format's extension), ref, the line the snippet starts on, the snippet, its project ID and, from advanced search, its group ID (a page of a group wiki carries the group alone), and pagination metadata. On basic search a page whose file matched by its path also carries its blob ID, and its snippet is the start of the page. See also: gitlab_search_code, gitlab_wiki_list, gitlab_wiki_get, gitlab_group_wiki_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -224920,24 +224947,47 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "content": {
+              "basename": {
                 "type": "string"
               },
-              "format": {
+              "data": {
+                "description": "The snippet GitLab sent: the lines around a match, or the start of the page for a page whose file matched by its path",
                 "type": "string"
               },
-              "slug": {
+              "filename": {
                 "type": "string"
               },
-              "title": {
+              "group_id": {
+                "description": "Group of the wiki, set by advanced search only: the group whose wiki holds the page, or the group of the project whose wiki does. Absent for a project in a user namespace",
+                "type": "integer"
+              },
+              "id": {
+                "description": "Git blob ID of a page whose file matched the query by its path, set by basic search only. Such a result carries the start of the page and startline 1 rather than the lines around a match. Absent for a match on the page's content, for a path match whose file GitLab could not read (which then carries no snippet either), and on every result of advanced search",
                 "type": "string"
+              },
+              "path": {
+                "description": "Path of the page's file in the wiki repository. The page's slug is this path without its extension",
+                "type": "string"
+              },
+              "project_id": {
+                "description": "Project whose wiki holds the page. Absent for a page of a group wiki",
+                "type": "integer"
+              },
+              "ref": {
+                "type": "string"
+              },
+              "startline": {
+                "description": "Line the snippet starts on. GitLab sends no line number for the match itself. 0 stands for the null basic search answers for a path match whose file it could not read",
+                "type": "integer"
               }
             },
             "required": [
-              "slug",
-              "title",
-              "content",
-              "format"
+              "basename",
+              "data",
+              "path",
+              "filename",
+              "ref",
+              "startline"
             ],
             "type": "object"
           },

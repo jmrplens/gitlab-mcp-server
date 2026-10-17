@@ -10187,7 +10187,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"code","params":{...}}. The only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_search.<action>. A domain.action ID below is the action after the dot on the gitlab_<domain> tool, or that tool itself where it takes no action, so search.code is {"action":"code"} on this one.
 Action guidance:
-- code: Search code blobs and file contents. Use for text, symbols, snippets, or filenames inside repositories. Do not use for project or repository name discovery.
+- code: Search code blobs and file contents. Use for text, symbols, snippets, or filenames inside repositories. Do not use for project or repository name discovery. num_context_lines asks advanced or exact search for more or fewer lines around each match, and regex chooses a regular expression or literal text on exact search.
 - commits: Search commit messages across global, group (group_id), or project (project_id) scope. Use to find commits by message keywords. Use repository.commit_get when the SHA is already known.
 - issues: Search issues by title and description across global, group (group_id), or project (project_id) scope. Use when the prompt gives keywords. If it already names a project plus an issue number, use issue.get instead.
 - merge_requests: Search merge requests by title and description across global, group (group_id), or project (project_id) scope. Use when the prompt names keywords from an MR rather than a specific MR IID in a known project.
@@ -10246,7 +10246,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 <details><summary>code</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"blobs":{"items":{"additionalProperties":false,"properties":{"basename":{"type":"string"},"data":{"type":"string"},"filename":{"type":"string"},"path":{"type":"string"},"project_id":{"type":"integer"},"ref":{"type":"string"},"startline":{"type":"integer"}},"required":["basename","data","path","filename","ref","startline","project_id"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"next_page_token":{"type":"string"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["blobs","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"blobs":{"items":{"additionalProperties":false,"properties":{"basename":{"type":"string"},"data":{"description":"The snippet GitLab sent: the lines around a match, or for a file that matched by its path the start of the file on basic search and the file's path itself on exact search","type":"string"},"filename":{"type":"string"},"id":{"description":"Git blob ID of a file that matched the query by its path, set by basic search only. Such a result carries the start of the file and startline 1 rather than the lines around a match. Absent for a match on the file's content, for a path match whose file GitLab could not read (which then carries no snippet either), and on every result of advanced and exact search","type":"string"},"path":{"type":"string"},"project_id":{"type":"integer"},"ref":{"type":"string"},"startline":{"description":"Line the snippet starts on. GitLab sends no line number for the match itself. Exact search answers 1 for a file that matched by its name, and on GitLab 19.4 answers 0 for that and for a snippet starting on the first line. 0 also stands for the null basic search answers for a path match whose file it could not read","type":"integer"}},"required":["basename","data","path","filename","ref","startline","project_id"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"next_page_token":{"type":"string"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["blobs","pagination"],"type":"object"}
 ```
 
 </details>
@@ -10286,7 +10286,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 <details><summary>notes</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"notes":{"items":{"additionalProperties":false,"properties":{"author":{"type":"string"},"body":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"noteable_id":{"type":"integer"},"noteable_iid":{"type":"integer"},"noteable_type":{"type":"string"},"system":{"type":"boolean"},"updated_at":{"type":"string"}},"required":["id","body","author","created_at","updated_at","noteable_type","noteable_id","system"],"type":"object"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"next_page_token":{"type":"string"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["notes","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"notes":{"items":{"additionalProperties":false,"properties":{"author":{"type":"string"},"body":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"internal":{"description":"Whether the note is internal, which GitLab shows only to project members allowed to read internal notes","type":"boolean"},"noteable_id":{"type":"integer"},"noteable_iid":{"type":"integer"},"noteable_type":{"type":"string"},"system":{"type":"boolean"},"updated_at":{"type":"string"}},"required":["id","body","author","created_at","updated_at","noteable_type","noteable_id","system","internal"],"type":"object"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"next_page_token":{"type":"string"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["notes","pagination"],"type":"object"}
 ```
 
 </details>
@@ -10318,7 +10318,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 <details><summary>wiki</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"next_page_token":{"type":"string"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"},"wiki_blobs":{"items":{"additionalProperties":false,"properties":{"content":{"type":"string"},"format":{"type":"string"},"slug":{"type":"string"},"title":{"type":"string"}},"required":["slug","title","content","format"],"type":"object"},"type":["null","array"]}},"required":["wiki_blobs","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"next_page_token":{"type":"string"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"},"wiki_blobs":{"items":{"additionalProperties":false,"properties":{"basename":{"type":"string"},"data":{"description":"The snippet GitLab sent: the lines around a match, or the start of the page for a page whose file matched by its path","type":"string"},"filename":{"type":"string"},"group_id":{"description":"Group of the wiki, set by advanced search only: the group whose wiki holds the page, or the group of the project whose wiki does. Absent for a project in a user namespace","type":"integer"},"id":{"description":"Git blob ID of a page whose file matched the query by its path, set by basic search only. Such a result carries the start of the page and startline 1 rather than the lines around a match. Absent for a match on the page's content, for a path match whose file GitLab could not read (which then carries no snippet either), and on every result of advanced search","type":"string"},"path":{"description":"Path of the page's file in the wiki repository. The page's slug is this path without its extension","type":"string"},"project_id":{"description":"Project whose wiki holds the page. Absent for a page of a group wiki","type":"integer"},"ref":{"type":"string"},"startline":{"description":"Line the snippet starts on. GitLab sends no line number for the match itself. 0 stands for the null basic search answers for a path match whose file it could not read","type":"integer"}},"required":["basename","data","path","filename","ref","startline"],"type":"object"},"type":["null","array"]}},"required":["wiki_blobs","pagination"],"type":"object"}
 ```
 
 </details>
@@ -27984,16 +27984,18 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_search_code
 
-Search code blobs across global, group, or project scope. Returns: matching blobs with file path, basename, ref, starting line, the surrounding snippet, project ID, and pagination metadata. See also: gitlab_search_projects, gitlab_file_get, gitlab_repository_tree.
+Search code blobs across global, group, or project scope.
 
 **Parameters:**
 
 - `group_id` (string): Group ID or URL-encoded path (optional)
+- `num_context_lines` (integer): Lines of context GitLab sends around a code match, up to this many on each side, 0 to 20. Honored by advanced and exact code search (search_type advanced or zoekt), which send 2 and 1 by default, though exact search only from GitLab 19.5. GitLab Enterprise 18.11 and later refuses it on basic search, which a project search of a ref other than the default branch always runs, unless the token carries the mcp scope. Earlier releases and Community Edition ignore it
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string): Project ID or URL-encoded path (optional)
 - `query` (string) (required): Search query text (param 'query' not 'search')
 - `ref` (string): Branch or tag name to search in (default: default branch)
+- `regex` (boolean): Search the query as a regular expression (true) or as literal text (false). Honored by exact code search alone (search_type zoekt), which reads the query as a regular expression when this is left out. GitLab Enterprise 18.9 and later refuses it on any other backend, false included, and so on a project search of a ref other than the default branch, which always runs basic search, unless the token carries the mcp scope. Earlier releases and Community Edition ignore it
 - `search_type` (string): Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -28060,7 +28062,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_search_notes
 
-Search note bodies within one project. Returns: matching notes with body, author, noteable type and ID, system flag, and timestamps plus pagination metadata. See also: gitlab_search_issues, gitlab_search_merge_requests, gitlab_issue_note_list.
+Search note bodies within one project. Returns: matching notes with body, author, noteable type and ID, system and internal flags, and timestamps plus pagination metadata. See also: gitlab_search_issues, gitlab_search_merge_requests, gitlab_issue_note_list.
 
 **Parameters:**
 
@@ -28116,7 +28118,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_search_wiki
 
-Search wiki blobs across global, group, or project scope. Returns: matching wiki pages with slug, title, content snippet, and format plus pagination metadata. See also: gitlab_search_code, gitlab_wiki_list, gitlab_wiki_get.
+Search wiki blobs across global, group, or project scope. Returns: the file of each matching wiki page with its path (the page slug plus the format's extension), ref, the line the snippet starts on, the snippet, its project ID and, from advanced search, its group ID (a page of a group wiki carries the group alone), and pagination metadata. On basic search a page whose file matched by its path also carries its blob ID, and its snippet is the start of the page. See also: gitlab_search_code, gitlab_wiki_list, gitlab_wiki_get, gitlab_group_wiki_get.
 
 **Parameters:**
 

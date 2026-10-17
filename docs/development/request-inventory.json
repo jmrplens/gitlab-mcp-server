@@ -17532,6 +17532,9 @@
       "method": "GET",
       "path": "/groups/:group_id/-/search",
       "query": [
+        "num_context_lines",
+        "ref",
+        "regex",
         "scope",
         "search"
       ],
@@ -17545,9 +17548,12 @@
       "method": "GET",
       "path": "/projects/:project_id/-/search",
       "query": [
+        "num_context_lines",
         "ref",
+        "regex",
         "scope",
-        "search"
+        "search",
+        "search_type"
       ],
       "identifiers": {
         ":project_id": 1
@@ -17559,6 +17565,8 @@
       "method": "GET",
       "path": "/search",
       "query": [
+        "num_context_lines",
+        "regex",
         "scope",
         "search",
         "search_type"
