@@ -13,7 +13,7 @@ Todo lo que se hace con un grupo: crearlo, leerlo, listarlo, buscarlo, actualiza
 
 A partir de Premium el grupo trae también webhooks, reglas de push, ramas y entornos protegidos, épicas con sus notas, discusiones, issues y tableros, wikis de grupo, vínculos de grupo LDAP y SAML, certificados SSH, miembros facturables y recuentos de actividad; a partir de Ultimate, el inventario de credenciales y los ajustes de seguridad.
 
-`group.transfer` necesita el rol Owner tanto en el grupo que se mueve como en su nuevo padre; `group.transfer_locations` lista los padres bajo los que puede ir. Desde GitLab 19.4 GitLab aplica la transferencia en segundo plano (GitLab 18.11 a 19.3 lo hacen cuando está activada la feature flag `groups_and_projects_async_transfer`) y responde con el grupo donde aún está, y la acción vuelve a leer el grupo cada 2 segundos durante un máximo de 45 segundos. Un traslado fallido se informa solo con una tarea pendiente (to-do) de acción `transfer_failed` para el usuario que lo pidió, que la acción convierte en un error; un traslado que para entonces ni se ha completado ni ha fallado se responde con `transfer_queued` activado. Vuelve a leer el grupo más tarde con `group.get`, busca esa tarea con `user.todo_list` y no envíes la transferencia otra vez, porque GitLab ejecuta también una segunda transferencia mientras la primera está en cola.
+`group.transfer` necesita el rol Owner tanto en el grupo que se mueve como en su nuevo padre; `group.transfer_locations` lista los padres bajo los que puede ir. Desde GitLab 19.4 GitLab aplica la transferencia en segundo plano (GitLab 19.0 a 19.3 lo hacen cuando está activada la feature flag `groups_and_projects_async_transfer`) y responde con el grupo donde aún está, y la acción vuelve a leer el grupo cada 2 segundos durante un máximo de 45 segundos. Un traslado fallido se informa solo con una tarea pendiente (to-do) de acción `transfer_failed` para el usuario que lo pidió, que la acción convierte en un error que cita el motivo que GitLab 19.5 y posteriores guardan en la tarea; un traslado que para entonces ni se ha completado ni ha fallado se responde con `transfer_queued` activado. Vuelve a leer el grupo más tarde con `group.get`, busca esa tarea con `user.todo_list` y no envíes la transferencia otra vez, porque GitLab ejecuta también una segunda transferencia mientras la primera está en cola.
 
 ## Preguntas de ejemplo
 
@@ -3177,13 +3177,13 @@ Además necesita al menos uno de estos: `user_id`; `username`.
 
 ### `group.transfer`
 
-> Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed. See also: [`group.transfer_locations`](#grouptransfer_locations), [`group.get`](#groupget), [`group.subgroups`](#groupsubgroups).
+> Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed, with GitLab's reason from 19.5. See also: [`group.transfer_locations`](#grouptransfer_locations), [`group.get`](#groupget), [`group.subgroups`](#groupsubgroups).
 
 - **Meta-herramienta**: `gitlab_group`, acción `transfer`
 - **Herramienta individual**: `gitlab_group_transfer`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Group: Transfer en grupo. Algunas llamadas también necesitan: Group: Read en grupo; Todo: Read en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#group))
+- **Token de grano fino**: Group: Transfer en grupo. Algunas llamadas también necesitan: Group: Read en grupo; Todo: Read en usuario; Metadata: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#group))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro   | Tipo             | Requerido | Descripción                                                                  |

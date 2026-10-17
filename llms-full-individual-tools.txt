@@ -6044,7 +6044,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_transfer
 
-Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list.
+Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed, with GitLab's reason from 19.5. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list.
 
 **Parameters:**
 
@@ -12852,7 +12852,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_transfer
 
-Transfer a project to another namespace, waiting up to 45 seconds for GitLab to apply the move. Returns: the project in its new namespace, or with transfer_queued set and its current namespace when GitLab has not applied the move yet, or an error when GitLab reports the move failed. See also: gitlab_project_get, gitlab_group_get.
+Transfer a project to another namespace, waiting up to 45 seconds for GitLab to apply the move. Returns: the project in its new namespace, or with transfer_queued set and its current namespace when GitLab has not applied the move yet, or an error when GitLab reports the move failed, with GitLab's reason from 19.5. See also: gitlab_project_get, gitlab_group_get.
 
 **Parameters:**
 

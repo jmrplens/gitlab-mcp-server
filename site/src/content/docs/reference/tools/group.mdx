@@ -13,7 +13,7 @@ Everything done to a group: create, read, list, search, update, archive, transfe
 
 From Premium the group also carries webhooks, push rules, protected branches and environments, epics with their notes, discussions, issues and boards, group wikis, LDAP and SAML group links, SSH certificates, billable members and activity counts; from Ultimate, the credentials inventory and security settings.
 
-`group.transfer` needs the Owner role on both the group being moved and its new parent; `group.transfer_locations` lists the parents it can go under. Since GitLab 19.4 GitLab applies the transfer in the background (GitLab 18.11 to 19.3 do so when the `groups_and_projects_async_transfer` feature flag is enabled), answering with the group where it still is, and the action reads the group back every 2 seconds for up to 45 seconds. A failed move is reported only as a pending to-do item of action `transfer_failed` for the user who asked for it, which the action turns into an error; a move that has neither landed nor failed by then is answered with `transfer_queued` set. Read the group back later with `group.get`, look for that item with `user.todo_list`, and do not send the transfer again, since GitLab runs a second transfer as well while the first is queued.
+`group.transfer` needs the Owner role on both the group being moved and its new parent; `group.transfer_locations` lists the parents it can go under. Since GitLab 19.4 GitLab applies the transfer in the background (GitLab 19.0 to 19.3 do so when the `groups_and_projects_async_transfer` feature flag is enabled), answering with the group where it still is, and the action reads the group back every 2 seconds for up to 45 seconds. A failed move is reported only as a pending to-do item of action `transfer_failed` for the user who asked for it, which the action turns into an error that quotes the reason GitLab 19.5 and later keep on the item; a move that has neither landed nor failed by then is answered with `transfer_queued` set. Read the group back later with `group.get`, look for that item with `user.todo_list`, and do not send the transfer again, since GitLab runs a second transfer as well while the first is queued.
 
 ## Sample questions
 
@@ -3177,13 +3177,13 @@ Also needs at least one of: `user_id`; `username`.
 
 ### `group.transfer`
 
-> Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed. See also: [`group.transfer_locations`](#grouptransfer_locations), [`group.get`](#groupget), [`group.subgroups`](#groupsubgroups).
+> Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed, with GitLab's reason from 19.5. See also: [`group.transfer_locations`](#grouptransfer_locations), [`group.get`](#groupget), [`group.subgroups`](#groupsubgroups).
 
 - **Meta-tool**: `gitlab_group`, action `transfer`
 - **Individual tool**: `gitlab_group_transfer`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Group: Transfer at group. Some calls also need: Group: Read at group; Todo: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
+- **Fine-grained token**: Group: Transfer at group. Some calls also need: Group: Read at group; Todo: Read at user; Metadata: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, idempotent
 
 | Parameter   | Type             | Mandatory | Description                                                                  |

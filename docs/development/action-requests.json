@@ -11954,6 +11954,38 @@
           "sdk_methods": [
             "Todos.ListTodos"
           ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /version",
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "gitlab.Client.ReadVersion"
+          ],
+          "directives": [
+            "optional: the version is asked only while no read of it has answered, and is kept from the first answer on"
+          ],
+          "declaration": "outside-client-go"
+        },
+        {
+          "kind": "graphql",
+          "operation": "query todo (transferFailureReasonQuery)",
+          "root_fields": [
+            "todo"
+          ],
+          "positions": [
+            "todo"
+          ],
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "waitpoll.queryTransferFailureReason"
+          ],
+          "directives": [
+            "optional: the item is read once more only when GitLab answered it without the reason it stores a moment after creating it",
+            "optional: the reason is read only once a transfer is found failed, and the failure is reported without it when the read gives none"
+          ]
         }
       ],
       "paths": [
@@ -15752,14 +15784,42 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /version",
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "gitlab.Client.ReadVersion"
+          ],
+          "directives": [
+            "optional: the version is asked only while no read of it has answered, and is kept from the first answer on"
+          ],
+          "declaration": "outside-client-go"
+        },
+        {
+          "kind": "rest",
+          "route": "POST /projects/:id/merge_requests/:merge_request_iid/cancel_auto_merge",
+          "class": "alternative",
+          "classic": "api",
+          "sites": [
+            "mergerequests.postCancelAutoMerge"
+          ],
+          "directives": [
+            "alternatives: an instance on 19.5 or later is sent cancel_auto_merge and the deprecated route below is not sent"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "POST /projects/:id/merge_requests/:merge_request_iid/cancel_merge_when_pipeline_succeeds",
-          "class": "mandatory",
+          "class": "alternative",
           "classic": "api",
           "sites": [
             "mergerequests.CancelAutoMerge"
           ],
           "sdk_methods": [
             "MergeRequests.CancelMergeWhenPipelineSucceeds"
+          ],
+          "directives": [
+            "alternatives: an instance older than 19.5, or one whose release is not known, is sent the deprecated route instead of cancel_auto_merge"
           ]
         },
         {
@@ -15777,7 +15837,10 @@
       ],
       "paths": [
         [
-          0
+          1
+        ],
+        [
+          2
         ]
       ]
     },
@@ -23972,6 +24035,38 @@
           ],
           "sdk_methods": [
             "Todos.ListTodos"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /version",
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "gitlab.Client.ReadVersion"
+          ],
+          "directives": [
+            "optional: the version is asked only while no read of it has answered, and is kept from the first answer on"
+          ],
+          "declaration": "outside-client-go"
+        },
+        {
+          "kind": "graphql",
+          "operation": "query todo (transferFailureReasonQuery)",
+          "root_fields": [
+            "todo"
+          ],
+          "positions": [
+            "todo"
+          ],
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "waitpoll.queryTransferFailureReason"
+          ],
+          "directives": [
+            "optional: the item is read once more only when GitLab answered it without the reason it stores a moment after creating it",
+            "optional: the reason is read only once a transfer is found failed, and the failure is reported without it when the read gives none"
           ]
         }
       ],

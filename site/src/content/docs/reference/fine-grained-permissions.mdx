@@ -504,7 +504,7 @@ This table judges fine-grained tokens alone. The scope a classic personal access
 | `group.ssh_cert_delete`                        | SSH Certificate: Delete at group                                                                                                                                                                   |                                                                                                                                                                                                                                                     |
 | `group.ssh_cert_list`                          | SSH Certificate: Read at group                                                                                                                                                                     |                                                                                                                                                                                                                                                     |
 | `group.subgroups`                              | Group: Read at group                                                                                                                                                                               |                                                                                                                                                                                                                                                     |
-| `group.transfer`                               | Group: Transfer at group. Some calls also need: Group: Read at group; Todo: Read at user                                                                                                           |                                                                                                                                                                                                                                                     |
+| `group.transfer`                               | Group: Transfer at group. Some calls also need: Group: Read at group; Todo: Read at user; Metadata: Read at instance                                                                               |                                                                                                                                                                                                                                                     |
 | `group.transfer_locations`                     | Group: Read at group                                                                                                                                                                               |                                                                                                                                                                                                                                                     |
 | `group.transfer_project`                       | Project: Transfer at instance                                                                                                                                                                      |                                                                                                                                                                                                                                                     |
 | `group.unarchive`                              | Group: Archive at group                                                                                                                                                                            |                                                                                                                                                                                                                                                     |
@@ -654,66 +654,66 @@ This table judges fine-grained tokens alone. The scope a classic personal access
 
 ## `merge_request`
 
-| Action                                           | Needs                                                                                              | Served empty |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ------------ |
-| `merge_request.approval_config`                  | Merge Request: Read at project                                                                     |              |
-| `merge_request.approval_reset`                   | Merge Request: Approve at project                                                                  |              |
-| `merge_request.approval_rule_create`             | Merge Request Approval Rule: Create at project                                                     |              |
-| `merge_request.approval_rule_delete`             | Merge Request Approval Rule: Delete at project                                                     |              |
-| `merge_request.approval_rule_update`             | Merge Request Approval Rule: Update at project                                                     |              |
-| `merge_request.approval_rules`                   | Merge Request Approval Rule: Read at project                                                       |              |
-| `merge_request.approval_settings_group_get`      | Approval Setting: Read at group                                                                    |              |
-| `merge_request.approval_settings_group_update`   | Approval Setting: Update at group                                                                  |              |
-| `merge_request.approval_settings_project_get`    | Approval Setting: Read at project                                                                  |              |
-| `merge_request.approval_settings_project_update` | Approval Setting: Update at project                                                                |              |
-| `merge_request.approval_state`                   | Merge Request: Read at project                                                                     |              |
-| `merge_request.approve`                          | Merge Request: Approve at project                                                                  |              |
-| `merge_request.cancel_auto_merge`                | Merge Request: Merge at project. Some calls also need: Merge Request: Read at project              |              |
-| `merge_request.commits`                          | Merge Request: Read at project                                                                     |              |
-| `merge_request.context_commits_create`           | Merge Request: Update at project                                                                   |              |
-| `merge_request.context_commits_delete`           | Merge Request: Update at project                                                                   |              |
-| `merge_request.context_commits_list`             | Merge Request: Read at project                                                                     |              |
-| `merge_request.create`                           | Merge Request: Create at project                                                                   |              |
-| `merge_request.create_pipeline`                  | Merge Request: Update at project                                                                   |              |
-| `merge_request.create_todo`                      | Todo: Create at project                                                                            |              |
-| `merge_request.delete`                           | Merge Request: Delete at project                                                                   |              |
-| `merge_request.dependencies_list`                | Merge Request: Read at project                                                                     |              |
-| `merge_request.dependency_create`                | Merge Request: Create at project                                                                   |              |
-| `merge_request.dependency_delete`                | Merge Request: Delete at project                                                                   |              |
-| `merge_request.emoji_mr_create`                  | Work Item: Create at project. Some calls also need: User: Read at user; Work Item: Read at project |              |
-| `merge_request.emoji_mr_delete`                  | Work Item: Delete at project                                                                       |              |
-| `merge_request.emoji_mr_get`                     | Work Item: Read at project                                                                         |              |
-| `merge_request.emoji_mr_list`                    | Work Item: Read at project                                                                         |              |
-| `merge_request.emoji_mr_note_create`             | Work Item: Create at project                                                                       |              |
-| `merge_request.emoji_mr_note_delete`             | Work Item: Delete at project                                                                       |              |
-| `merge_request.emoji_mr_note_get`                | Work Item: Read at project                                                                         |              |
-| `merge_request.emoji_mr_note_list`               | Work Item: Read at project                                                                         |              |
-| `merge_request.event_mr_label_get`               | Merge Request: Read at project                                                                     |              |
-| `merge_request.event_mr_label_list`              | Merge Request: Read at project                                                                     |              |
-| `merge_request.event_mr_milestone_get`           | Work Item: Read at project                                                                         |              |
-| `merge_request.event_mr_milestone_list`          | Work Item: Read at project                                                                         |              |
-| `merge_request.event_mr_state_get`               | Work Item: Read at project                                                                         |              |
-| `merge_request.event_mr_state_list`              | Work Item: Read at project                                                                         |              |
-| `merge_request.get`                              | Merge Request: Read at project                                                                     |              |
-| `merge_request.issues_closed`                    | Merge Request: Read at project                                                                     |              |
-| `merge_request.list`                             | Merge Request: Read at project                                                                     |              |
-| `merge_request.list_global`                      | Merge Request: Read at user                                                                        |              |
-| `merge_request.list_group`                       | Merge Request: Read at group                                                                       |              |
-| `merge_request.merge`                            | Merge Request: Merge at project. Some calls also need: Merge Request: Read at project              |              |
-| `merge_request.participants`                     | Merge Request: Read at project                                                                     |              |
-| `merge_request.pipelines`                        | Merge Request: Read at project                                                                     |              |
-| `merge_request.rebase`                           | Merge Request: Update at project                                                                   |              |
-| `merge_request.related_issues`                   | Merge Request: Read at project                                                                     |              |
-| `merge_request.reviewers`                        | Merge Request: Read at project                                                                     |              |
-| `merge_request.spent_time_add`                   | Work Item: Update at project                                                                       |              |
-| `merge_request.spent_time_reset`                 | Work Item: Update at project                                                                       |              |
-| `merge_request.subscribe`                        | Merge Request: Subscribe at project. Some calls also need: Merge Request: Read at project          |              |
-| `merge_request.time_estimate_reset`              | Work Item: Update at project                                                                       |              |
-| `merge_request.time_estimate_set`                | Work Item: Update at project                                                                       |              |
-| `merge_request.time_stats`                       | Work Item: Read at project                                                                         |              |
-| `merge_request.unapprove`                        | Merge Request: Approve at project                                                                  |              |
-| `merge_request.unsubscribe`                      | Merge Request: Subscribe at project. Some calls also need: Merge Request: Read at project          |              |
-| `merge_request.update`                           | Merge Request: Update at project                                                                   |              |
+| Action                                           | Needs                                                                                                             | Served empty |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | ------------ |
+| `merge_request.approval_config`                  | Merge Request: Read at project                                                                                    |              |
+| `merge_request.approval_reset`                   | Merge Request: Approve at project                                                                                 |              |
+| `merge_request.approval_rule_create`             | Merge Request Approval Rule: Create at project                                                                    |              |
+| `merge_request.approval_rule_delete`             | Merge Request Approval Rule: Delete at project                                                                    |              |
+| `merge_request.approval_rule_update`             | Merge Request Approval Rule: Update at project                                                                    |              |
+| `merge_request.approval_rules`                   | Merge Request Approval Rule: Read at project                                                                      |              |
+| `merge_request.approval_settings_group_get`      | Approval Setting: Read at group                                                                                   |              |
+| `merge_request.approval_settings_group_update`   | Approval Setting: Update at group                                                                                 |              |
+| `merge_request.approval_settings_project_get`    | Approval Setting: Read at project                                                                                 |              |
+| `merge_request.approval_settings_project_update` | Approval Setting: Update at project                                                                               |              |
+| `merge_request.approval_state`                   | Merge Request: Read at project                                                                                    |              |
+| `merge_request.approve`                          | Merge Request: Approve at project                                                                                 |              |
+| `merge_request.cancel_auto_merge`                | Merge Request: Merge at project. Some calls also need: Metadata: Read at instance; Merge Request: Read at project |              |
+| `merge_request.commits`                          | Merge Request: Read at project                                                                                    |              |
+| `merge_request.context_commits_create`           | Merge Request: Update at project                                                                                  |              |
+| `merge_request.context_commits_delete`           | Merge Request: Update at project                                                                                  |              |
+| `merge_request.context_commits_list`             | Merge Request: Read at project                                                                                    |              |
+| `merge_request.create`                           | Merge Request: Create at project                                                                                  |              |
+| `merge_request.create_pipeline`                  | Merge Request: Update at project                                                                                  |              |
+| `merge_request.create_todo`                      | Todo: Create at project                                                                                           |              |
+| `merge_request.delete`                           | Merge Request: Delete at project                                                                                  |              |
+| `merge_request.dependencies_list`                | Merge Request: Read at project                                                                                    |              |
+| `merge_request.dependency_create`                | Merge Request: Create at project                                                                                  |              |
+| `merge_request.dependency_delete`                | Merge Request: Delete at project                                                                                  |              |
+| `merge_request.emoji_mr_create`                  | Work Item: Create at project. Some calls also need: User: Read at user; Work Item: Read at project                |              |
+| `merge_request.emoji_mr_delete`                  | Work Item: Delete at project                                                                                      |              |
+| `merge_request.emoji_mr_get`                     | Work Item: Read at project                                                                                        |              |
+| `merge_request.emoji_mr_list`                    | Work Item: Read at project                                                                                        |              |
+| `merge_request.emoji_mr_note_create`             | Work Item: Create at project                                                                                      |              |
+| `merge_request.emoji_mr_note_delete`             | Work Item: Delete at project                                                                                      |              |
+| `merge_request.emoji_mr_note_get`                | Work Item: Read at project                                                                                        |              |
+| `merge_request.emoji_mr_note_list`               | Work Item: Read at project                                                                                        |              |
+| `merge_request.event_mr_label_get`               | Merge Request: Read at project                                                                                    |              |
+| `merge_request.event_mr_label_list`              | Merge Request: Read at project                                                                                    |              |
+| `merge_request.event_mr_milestone_get`           | Work Item: Read at project                                                                                        |              |
+| `merge_request.event_mr_milestone_list`          | Work Item: Read at project                                                                                        |              |
+| `merge_request.event_mr_state_get`               | Work Item: Read at project                                                                                        |              |
+| `merge_request.event_mr_state_list`              | Work Item: Read at project                                                                                        |              |
+| `merge_request.get`                              | Merge Request: Read at project                                                                                    |              |
+| `merge_request.issues_closed`                    | Merge Request: Read at project                                                                                    |              |
+| `merge_request.list`                             | Merge Request: Read at project                                                                                    |              |
+| `merge_request.list_global`                      | Merge Request: Read at user                                                                                       |              |
+| `merge_request.list_group`                       | Merge Request: Read at group                                                                                      |              |
+| `merge_request.merge`                            | Merge Request: Merge at project. Some calls also need: Merge Request: Read at project                             |              |
+| `merge_request.participants`                     | Merge Request: Read at project                                                                                    |              |
+| `merge_request.pipelines`                        | Merge Request: Read at project                                                                                    |              |
+| `merge_request.rebase`                           | Merge Request: Update at project                                                                                  |              |
+| `merge_request.related_issues`                   | Merge Request: Read at project                                                                                    |              |
+| `merge_request.reviewers`                        | Merge Request: Read at project                                                                                    |              |
+| `merge_request.spent_time_add`                   | Work Item: Update at project                                                                                      |              |
+| `merge_request.spent_time_reset`                 | Work Item: Update at project                                                                                      |              |
+| `merge_request.subscribe`                        | Merge Request: Subscribe at project. Some calls also need: Merge Request: Read at project                         |              |
+| `merge_request.time_estimate_reset`              | Work Item: Update at project                                                                                      |              |
+| `merge_request.time_estimate_set`                | Work Item: Update at project                                                                                      |              |
+| `merge_request.time_stats`                       | Work Item: Read at project                                                                                        |              |
+| `merge_request.unapprove`                        | Merge Request: Approve at project                                                                                 |              |
+| `merge_request.unsubscribe`                      | Merge Request: Subscribe at project. Some calls also need: Merge Request: Read at project                         |              |
+| `merge_request.update`                           | Merge Request: Update at project                                                                                  |              |
 
 ## `merge_train`
 
@@ -981,7 +981,7 @@ This table judges fine-grained tokens alone. The scope a classic personal access
 | `project.target_branch_rule_create`        | Not reachable at this release: GitLab declares no fine-grained permission for `ProjectTargetBranchRule` in the answer, so the write commits and its answer is lost |              |
 | `project.target_branch_rule_delete`        | Target Branch Rule: Delete at project                                                                                                                              |              |
 | `project.target_branch_rule_list`          | Not reachable at this release: GitLab declares no fine-grained permission for `ProjectTargetBranchRule`, which the answer is made of                               |              |
-| `project.transfer`                         | Project: Transfer at project. Some calls also need: Project: Read at project; Todo: Read at user                                                                   |              |
+| `project.transfer`                         | Project: Transfer at project. Some calls also need: Project: Read at project; Todo: Read at user; Metadata: Read at instance                                       |              |
 | `project.unarchive`                        | Project: Archive at project                                                                                                                                        |              |
 | `project.unstar`                           | Project: Update at project                                                                                                                                         |              |
 | `project.update`                           | Project: Update at project                                                                                                                                         |              |
