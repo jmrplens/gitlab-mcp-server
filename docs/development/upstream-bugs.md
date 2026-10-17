@@ -316,9 +316,9 @@ readable without opening the tracker:
 | 71 | gitlab-org/gitlab | [The transfer API pages do not say the answer precedes the move, or how a failure is reported](#the-transfer-api-pages-do-not-say-the-answer-precedes-the-move-or-how-a-failure-is-reported) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260143](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260143), merged | **Yes, 19.5.0** | No | Yes |
 | 72 | gitlab-org/gitlab | [A saved view create or subscribe from a token answers 500, and the create has already saved the view](#a-saved-view-create-or-subscribe-from-a-token-answers-500-and-the-create-has-already-saved-the-view) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074), merged | **Yes, 19.5.0** | Yes | Partial |
 | 73 | gobco | [gobco type-checks every file of a package directory](#gobco-type-checks-every-file-of-a-package-directory-whatever-its-build-constraints-say) | Yes, [rillig/gobco#40](https://github.com/rillig/gobco/issues/40) | Yes, [rillig/gobco#41](https://github.com/rillig/gobco/pull/41), open | No | No; it keeps the condition gate from measuring the e2e harness | Partial |
-| 74 | gitlab-org/gitlab | [The Orbit API page's query examples predate version 12 of the query DSL](#the-orbit-api-pages-query-examples-predate-version-12-of-the-query-dsl) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258241](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258241), merged | **Yes, 19.5.0** | No | Yes, `orbit.query`'s own guidance and the site's Orbit page teach version 12, with [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031) |
-| 75 | gitlab-org/orbit/knowledge-graph | [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types) | Yes, [gitlab-org/orbit/knowledge-graph#1329](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1329), closed by the merge | Yes, [gitlab-org/orbit/knowledge-graph!2650](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2650), merged; the follow-up making the schema require it, [gitlab-org/orbit/knowledge-graph!2691](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2691), merged | **Yes, Orbit v0.137.0**, which GitLab.com served on 2026-10-05; it serves 0.145.0 on 2026-10-16 | No | Not needed: GitLab.com serves the corrected schema, and `orbit.query`'s guidance states the rule too, with [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031) |
-| 76 | gitlab-org/orbit/knowledge-graph | [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both) | Yes, [gitlab-org/orbit/knowledge-graph#1330](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1330), closed by the merge | Yes, [gitlab-org/orbit/knowledge-graph!2651](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2651), merged | **Yes, Orbit v0.137.0**, which GitLab.com served on 2026-10-05; it serves 0.145.0 on 2026-10-16 | No; a result could be silently incomplete until then | Not needed: GitLab.com serves the corrected schema, and `orbit.query`'s guidance says the default is `outgoing` too, with [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031) |
+| 74 | gitlab-org/gitlab | [The Orbit API page's query examples predate version 12 of the query DSL](#the-orbit-api-pages-query-examples-predate-version-12-of-the-query-dsl) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258241](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258241), merged | **Yes, 19.5.0** | No | Yes, `orbit.query`'s own guidance and the site's Orbit page teach the language GitLab.com reads: version 12 with [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031), GQL since GitLab.com read every query as GQL from 2026-10-15 and refused the page's corrected examples, with [issue 1414](https://github.com/jmrplens/gitlab-mcp-server/issues/1414) |
+| 75 | gitlab-org/orbit/knowledge-graph | [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types) | Yes, [gitlab-org/orbit/knowledge-graph#1329](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1329), closed by the merge | Yes, [gitlab-org/orbit/knowledge-graph!2650](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2650), merged; the follow-up making the schema require it, [gitlab-org/orbit/knowledge-graph!2691](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2691), merged | **Yes, Orbit v0.137.0**, which GitLab.com served on 2026-10-05; it serves 0.145.0 on 2026-10-16 | No | Not needed: GitLab.com served the corrected schema, and `orbit.query`'s guidance stated the rule too, with [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031); since 2026-10-15 GitLab.com reads every query as GQL, whose path names its relationship type in the pattern, and `orbit.query` teaches that, with [issue 1414](https://github.com/jmrplens/gitlab-mcp-server/issues/1414) |
+| 76 | gitlab-org/orbit/knowledge-graph | [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both) | Yes, [gitlab-org/orbit/knowledge-graph#1330](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1330), closed by the merge | Yes, [gitlab-org/orbit/knowledge-graph!2651](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2651), merged | **Yes, Orbit v0.137.0**, which GitLab.com served on 2026-10-05; it serves 0.145.0 on 2026-10-16 | No; a result could be silently incomplete until then | Not needed: GitLab.com served the corrected schema, and `orbit.query`'s guidance said the default is `outgoing` too, with [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031); since 2026-10-15 GitLab.com reads every query as GQL, where the undirected `--` takes both directions and `->` or `<-` one, and `orbit.query` teaches that, with [issue 1414](https://github.com/jmrplens/gitlab-mcp-server/issues/1414) |
 | 77 | gitlab-org/gitlab | [The context commit list is annotated with `Commit` and presents `CommitWithLink`](#the-context-commit-list-is-annotated-with-commit-and-presents-commitwithlink) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260487](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260487), merged | **Yes, 19.5.0** | No | Audit half retired: the live record is taken from 19.5.0-ee; the captured read stays for client-go |
 | 78 | gitlab-org/gitlab | [An unknown severity on a pipeline's findings list answers 500](#an-unknown-severity-on-a-pipelines-findings-list-answers-500) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260459](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260459), open, with row 79, the GraphQL reference approved and the backend reviewer's suggestion added on 2026-10-14, waiting on that review again | No | No | Yes |
 | 79 | gitlab-org/gitlab | [An unknown report type on a pipeline's findings list is dropped and filters out every finding](#an-unknown-report-type-on-a-pipelines-findings-list-is-dropped-and-filters-out-every-finding) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260459](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260459), open, with row 78, the GraphQL reference approved and the backend reviewer's suggestion added on 2026-10-14, waiting on that review again | No | No | Yes |
@@ -10654,7 +10654,18 @@ reason would still leave a view nobody follows.
   teach is version 12: the schema description of `orbit.query`'s `query`,
   its parameter guidance and the site's Orbit page, whose four examples, one
   per query type, GitLab.com compiled and answered on 2026-10-05. Nothing
-  here waits on the merge request; it retires nothing of ours.
+  here waits on the merge request; it retires nothing of ours. Since 01:06
+  UTC on 2026-10-15 GitLab.com reads every query as GQL, the openCypher 9
+  based language Rails sends when the `orbit_gql_queries` flag is on
+  ([gitlab-org/gitlab!256465](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256465),
+  merged), and that day the flag was turned on for everyone. The corrected
+  examples are JSON and GitLab.com answers each with `400 compile_error`,
+  read on 2026-10-17; the draft
+  [gitlab-org/gitlab!261947](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261947),
+  not ours, removes the flag and the JSON route and rewrites the page in GQL.
+  `orbit.query`, its guidance and the site's Orbit page teach GQL since
+  [issue 1414](https://github.com/jmrplens/gitlab-mcp-server/issues/1414), so
+  this row asks nothing more of us.
 
 **Where**: the *Query examples* section of `doc/api/orbit.md` (master
 `c2769a65`, lines 265 to 468, unchanged since `187cd4b6`, blob `e86660fd`).
@@ -14005,12 +14016,19 @@ stopped those tests hardcoding the version, so a bump no longer edits them.
   newest tag is v0.145.0, cut at 13:38 UTC that day, and GitLab.com's
   `/orbit/status` reports 0.145.0.
 - **Blocking**: no.
-- **Workaround**: not needed. `orbit.dsl` hands the model GitLab's schema text
-  verbatim, which now states the rule, and `orbit.query`'s own guidance states
+- **Workaround**: not needed. `orbit.dsl` handed the model GitLab's schema text
+  verbatim, which states the rule, and `orbit.query`'s own guidance stated
   it too since
   [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031): its
-  parameter guidance names `rel_types` as required, `["*"]` for any type, and
-  the Orbit live suite holds a path query naming them to a 200.
+  parameter guidance named `rel_types` as required, `["*"]` for any type, and
+  the Orbit live suite held a path query naming them to a 200. Since
+  2026-10-15 GitLab.com reads every query as GQL, and read on 2026-10-17
+  `GET /orbit/schema/dsl` answers 404, so the JSON schema this row is about
+  is no longer what a GitLab.com caller writes against. In GQL a shortest
+  path names its relationship type in the pattern,
+  `-[:IN_PROJECT*1..2]->`, or any type with `-[*1..3]->`, which is what
+  `orbit.query` teaches and the live suite asks since
+  [issue 1414](https://github.com/jmrplens/gitlab-mcp-server/issues/1414).
 
 **Where**: `PathConfig.rel_types.description` in
 `config/schemas/graph_query.schema.json` (main `1c43d9f0`, line 636), served
@@ -14113,13 +14131,18 @@ while rewriting `orbit.query` for issue 1031.
   2026-10-16, GitLab.com serves Orbit 0.145.0, its newest tag.
 - **Blocking**: no. Until the release a result could be silently incomplete,
   to a client that read the schema's default.
-- **Workaround**: not needed. GitLab.com's schema states the default now, and
-  `orbit.query`'s own guidance says it too since
+- **Workaround**: not needed. GitLab.com's schema stated the default, and
+  `orbit.query`'s own guidance said it too since
   [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031):
   the schema description of `query`, its parameter guidance and the site's
-  Orbit page each say that `direction` defaults to `outgoing` and to pass
-  `both` for every relationship of the center, and the Orbit live suite asks
-  its neighbors queries that way.
+  Orbit page each said that `direction` defaults to `outgoing` and to pass
+  `both` for every relationship of the center, and the Orbit live suite asked
+  its neighbors queries that way. Since 2026-10-15 GitLab.com reads every
+  query as GQL, and read on 2026-10-17 `GET /orbit/schema/dsl` answers 404.
+  In GQL the direction is written in the pattern, the undirected `--` for
+  every relationship of a node and `->` or `<-` for one direction, which is
+  what `orbit.query` teaches and the live suite asks since
+  [issue 1414](https://github.com/jmrplens/gitlab-mcp-server/issues/1414).
 
 **Where**: `NeighborsConfig.direction` in
 `config/schemas/graph_query.schema.json` (main `1c43d9f0`, lines 654 to 658)

@@ -11,29 +11,40 @@ it.
 
 ## What the tests need
 
-`TestOrbitLiveGitLabCom` and `TestOrbitLiveGitLabCom_ShapeDiscovery`
-are self-contained: they query by `full_path` filter
-(`full_path: "plens1/*"`) and use no hardcoded project ids. They will
-return rows against any namespace that has at least:
+Every query the tests send is written in GQL, the read-only language
+based on openCypher 9 that GitLab.com compiles every query in since
+2026-10-15, and each was answered `200` against this namespace on
+2026-10-17. A query written as a JSON object, the query DSL the suite
+used before, is refused by GitLab.com now, and one subtest holds what a
+caller is told about it.
 
-- a `Project` matching `full_path: "<namespace>/kg-fixtures"`
-- a `Project` matching `full_path: "<namespace>/security-fixtures"`
-- at least one `Milestone` with `state: "active"`
-- at least one `MergeRequest` with `source_branch: "feature/restock-helper"`
+`TestOrbitLiveGitLabCom` and `TestOrbitLiveGitLabCom_ShapeDiscovery`
+are self-contained: they bound their projects by path
+(`WHERE p.full_path STARTS WITH 'plens1/'`) and use no hardcoded project
+ids; the ids a statement carries are read from the graph first. They
+will return rows against any namespace that has at least:
+
+- a `Project` matching `{full_path: '<namespace>/kg-fixtures'}`
+- a `Project` matching `{full_path: '<namespace>/security-fixtures'}`
+- at least one `Milestone` with `{state: 'active'}`
+- at least one `MergeRequest` with `{source_branch: 'feature/restock-helper'}`
 - at least one detected `Vulnerability`
 
-`TestOrbitLiveGitLabCom_Fixtures` filters by content
-(`path ends_with .py`, `state = detected`, etc.) so it works against
-any namespace once the indexer has had time to scan the fixture
+`TestOrbitLiveGitLabCom_Fixtures` matches by content
+(`f.path ENDS WITH '.py'`, `{state: 'detected'}`, etc.) so it works
+against any namespace once the indexer has had time to scan the fixture
 content.
 
 `TestOrbitLiveGitLabCom_FeatureCoverage` exercises every documented
-query-DSL pattern at least once against the namespace: filter
-operators, multi-node traversals with relationships, aggregations with
-`group_by`/`sort`/`sum`/`max`/`avg`, `order_by`, virtual columns,
-cursor pagination and `options.dynamic_columns`. Each of its subtests
-is informational: it passes as long as the API accepts the query and
-returns a valid envelope, even with `row_count=0`.
+GQL pattern at least once against the namespace: comparison, list and
+string predicates joined by `AND`, multi-node patterns with a
+relationship type, aggregations grouped by a property and by a node
+with `count`, `sum`, `max` and `avg`, `ORDER BY`, the virtual `diff` and
+`content` properties, `PAGE`, an id range, incoming neighbors of one
+relationship type, `properties(n)` and the procedure GQL calls for the
+ontology of one entity. Each of its subtests is informational: it passes as long as
+the API accepts the statement and returns a valid envelope, even with
+`row_count=0`.
 
 ## Reproducing the fixtures
 
@@ -197,7 +208,7 @@ After the live tests the target re-records the answers with `make gen-orbit-reco
 
 The six Orbit routes have no response schema anywhere GitLab publishes one, and no self-managed GitLab serves them, so what they answer is recorded here instead and committed as `docs/development/orbit-responses.json`. `cmd/gen_orbit_record` calls each Orbit handler through a proxy on the loopback interface that forwards to GitLab.com with `GITLAB_COM_TOKEN`, so the requests recorded are the ones the server builds. Every call is a read. It asks about the fixture namespace (`ORBIT_FIXTURES_NAMESPACE`, `plens1` by default): the indexing status of the namespace and a traversal of `<namespace>/kg-fixtures`, which is why the fixtures above have to be indexed before a recording means anything.
 
-The record holds, per call, the action and variant, the output type the handler returned, the parameter names the request carried, and the key tree of the answer with the JSON kinds seen at each path. Its source names the Orbit version and the query DSL GitLab.com served beside the answers, the `$id` and `version` of the JSON Schema `orbit.dsl` returns, and a re-recording that finds a different DSL fails until the record is committed, which is the prompt to read `orbit.query`'s guidance against the new language. It holds no value: a subtree whose keys are data (the DSL's JSON Schema, a tool's parameter schema, the rows a query returns, a status component's metrics) is kept as its root and marked verbatim, and a key outside one that is not an identifier fails the recording. That second rule stops data that cannot be a name, not data shaped like one: a map keyed by identifier-shaped data would be recorded as keys, which is why such a subtree has to be named verbatim in `cmd/gen_orbit_record/calls.go`. `make audit-1to1-paths` holds the Orbit output types to it (see the Orbit paragraph of the audit_1to1 section in [cmd utilities](cmd-utilities.md#audit_1to1)).
+The record holds, per call, the action and variant, the output type the handler returned, the parameter names the request carried, and the key tree of the answer with the JSON kinds seen at each path. Its source names the Orbit version and the query grammar GitLab.com published beside the answers, a SHA-256 of the description and input schema of the `query_graph` command `orbit.dsl` returns (schema version 3 of the record, since GitLab.com reads GQL; version 2 named the JSON query DSL by its `$id` and `version`, and the check refuses a version 2 record by its version and a version 3 record still naming it as one not in the form the generator writes), and a re-recording that finds a different grammar fails until the record is committed, which is the prompt to read `orbit.query`'s guidance against the new language. The query calls send a GQL statement, the fixture project by its path. It holds no value: a subtree whose keys are data (the query command's input schema, a tool's parameter schema, the rows a query returns, a status component's metrics) is kept as its root and marked verbatim, and a key outside one that is not an identifier fails the recording. That second rule stops data that cannot be a name, not data shaped like one: a map keyed by identifier-shaped data would be recorded as keys, which is why such a subtree has to be named verbatim in `cmd/gen_orbit_record/calls.go`. `make audit-1to1-paths` holds the Orbit output types to it (see the Orbit paragraph of the audit_1to1 section in [cmd utilities](cmd-utilities.md#audit_1to1)).
 
 A recording refuses to write anything when the fixture namespace is not indexed: a traversal of the fixture project that finds no row, or an indexing status that counts no indexed project, would record a tree without the paths the rows and counts carry. `orbit-wait-indexer` proceeds with a warning when it times out, so on a slow indexer the chain fails here, and the fix is to wait and run `make gen-orbit-record` again.
 
