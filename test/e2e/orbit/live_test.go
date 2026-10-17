@@ -4,7 +4,7 @@
 // GitLab Orbit Knowledge Graph API on GitLab.com. The tests hit the real
 // https://gitlab.com/api/v4/orbit/* endpoints (no httptest mocks) and
 // exercise every public orbit handler in internal/tools/orbit plus the
-// full query DSL surface end-to-end.
+// query language surface end-to-end.
 //
 // # Build tag
 //
@@ -33,18 +33,25 @@
 //
 // # The query language
 //
-// Every query here is written in version 12 of the Orbit query DSL, the one
-// GitLab.com serves (graph_query/v12, read through orbit.dsl): a nodes list
-// even for one node, filters as a bare value or an object keyed by operators,
-// a neighbors query whose center is its one node, a path query that names its
-// relationship types, function-keyed aggregations and string orderings. A
-// query GitLab cannot compile fails its subtest by name ([liveQuery]), and
-// TestOrbitLiveGitLabCom_DSL fails when GitLab.com serves another major
-// version of the language than the one orbit.query teaches (issue 1031).
+// Every query here is written in GQL, the read-only openCypher 9 based
+// language GitLab.com compiles every query in since it turned
+// orbit_gql_queries on for everyone at 01:06 UTC on 2026-10-15, and which
+// orbit.dsl describes from the query_graph command GitLab.com publishes: one
+// MATCH ... RETURN statement, every node labeled and at least one bounded by
+// its id or a literal property, a relationship type after a colon, WHERE with
+// AND and NOT, aggregates aliased to be sorted by, and ANY SHORTEST for a
+// path. Each was answered 200 by GitLab.com against the fixture namespace on
+// 2026-10-17. A query GitLab cannot compile fails its subtest by name
+// ([liveQuery]), and TestOrbitLiveGitLabCom_DSL fails when GitLab.com stops
+// describing the query command as GQL (issue 1414). A query written as a
+// JSON object, the JSON DSL this suite used until then, is refused, and a
+// subtest holds what a caller is told about it.
 //
 // No project, user or namespace id is written down: each is found by its
 // path in the fixture namespace, since re-provisioning the fixtures gives
-// them new ids.
+// them new ids. A path is written into a query between single quotes as it
+// is: a GitLab path holds letters, digits, dots, dashes, underscores and
+// slashes, none of which a GQL string literal has to escape.
 //
 // # Layout
 //
@@ -61,9 +68,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -85,11 +92,11 @@ import (
 // GitLab.com-only experimental surface.
 const liveGitLabComURL = "https://gitlab.com"
 
-// taughtDSLSchema is the $id of the query DSL orbit.query's guidance teaches
-// (internal/tools/orbit, QueryInput). TestOrbitLiveGitLabCom_DSL holds what
-// GitLab.com serves to it, so a new major version of the language fails the
-// suite rather than the guidance going stale in silence.
-const taughtDSLSchema = "https://gitlab.com/gitlab-org/orbit/knowledge-graph/schemas/graph_query/v12"
+// queryCommand is the Orbit command a graph query runs as, whose description
+// orbit.dsl publishes as the query language. TestOrbitLiveGitLabCom_DSL holds
+// that description to GQL, so GitLab.com describing another language fails
+// the suite rather than the guidance going stale in silence.
+const queryCommand = "query_graph"
 
 // Fixture project names created under <namespace>/ by
 // scripts/setup-orbit-fixtures.sh. kg-fixtures populates the Project,
@@ -125,11 +132,11 @@ func newLiveClient(t *testing.T) *gitlabclient.Client {
 // The fn is expected to return a JSON-marshalable value or an error.
 //
 // The 60s budget is wide enough to absorb a slow /api/v4/orbit/query
-// response (the path_finding shape can scan a non-trivial slice of
-// the graph even with a small `max_depth`); the Orbit knowledge
-// graph service is the slowest of the six endpoints. Tighter
-// budgets (e.g. 30s) produced flaky CI on a re-run right after
-// setup, when the indexer had only just finished catching up.
+// response (a shortest path can scan a non-trivial slice of the graph
+// even bounded at three hops); the Orbit knowledge graph service is the
+// slowest of the six endpoints. Tighter budgets (e.g. 30s) produced flaky
+// CI on a re-run right after setup, when the indexer had only just
+// finished catching up.
 func summarize(t *testing.T, name string, fn func(context.Context) (any, error)) {
 	t.Helper()
 	t.Run(name, func(t *testing.T) {
@@ -159,15 +166,22 @@ func summarize(t *testing.T, name string, fn func(context.Context) (any, error))
 var refusalCodes = []string{"{code: compile_error}", "{code: validation_error}"}
 
 // errQueryRefused is what [liveQuery] wraps a refused query in.
-var errQueryRefused = errors.New("GitLab refused to compile a query this suite asks, so it is written in a shape the DSL GitLab.com serves does not accept: read orbit.dsl and correct it")
+var errQueryRefused = errors.New("GitLab refused to compile a query this suite asks, so it is written in a shape the GQL GitLab.com compiles does not accept: read orbit.dsl and correct it")
 
-// liveQuery runs one query through the handler. Every query here is in the
-// DSL GitLab.com serves, so a refusal GitLab writes for a fault in the query
-// is not an answer to log: it means the language moved or a query here is
+// liveQuery runs one GQL statement through the handler. Every query here is
+// one GitLab.com ran, so a refusal GitLab writes for a fault in the query is
+// not an answer to log: it means the language moved or a query here is
 // wrong, and the subtest fails saying which (issue 1031, where the suite's
 // queries had been refused this way while the handler's own checks passed
-// them).
-func liveQuery(ctx context.Context, client *gitlabclient.Client, input orbit.QueryInput) (orbit.QueryOutput, error) {
+// them, and issue 1414, where GitLab.com stopped reading the language they
+// were written in).
+func liveQuery(ctx context.Context, client *gitlabclient.Client, query string) (orbit.QueryOutput, error) {
+	return liveQueryAs(ctx, client, orbit.QueryInput{Query: query})
+}
+
+// liveQueryAs is [liveQuery] with the whole input, for a query that asks for
+// a response format of its own.
+func liveQueryAs(ctx context.Context, client *gitlabclient.Client, input orbit.QueryInput) (orbit.QueryOutput, error) {
 	out, err := orbit.Query(ctx, client, input)
 	if err != nil {
 		for _, code := range refusalCodes {
@@ -179,17 +193,21 @@ func liveQuery(ctx context.Context, client *gitlabclient.Client, input orbit.Que
 	return out, err
 }
 
+// queryRun returns the subtest body that runs one GQL statement and logs
+// what came back.
+func queryRun(client *gitlabclient.Client, query string) func(context.Context) (any, error) {
+	return func(ctx context.Context) (any, error) {
+		out, err := liveQuery(ctx, client, query)
+		if err != nil {
+			return nil, err
+		}
+		return rowSummary(out), nil
+	}
+}
+
 // rowSummary is the one-line summary a query subtest logs.
 func rowSummary(out orbit.QueryOutput) string {
 	return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount)
-}
-
-// node is a node selector of the version 12 DSL: an alias, an entity, and
-// whichever of filters, node_ids and columns the caller sets.
-func node(id, entity string, fields map[string]any) map[string]any {
-	selector := map[string]any{"id": id, "entity": entity}
-	maps.Copy(selector, fields)
-	return selector
 }
 
 // projectPath is the full path of a fixture project in namespace.
@@ -210,31 +228,45 @@ func orbitFixturesNamespace() string {
 	return ns
 }
 
+// projectByPath is the statement that matches one fixture project by its
+// full path and returns the properties named.
+func projectByPath(namespace, project, returns string) string {
+	return "MATCH (p:Project {full_path: '" + projectPath(namespace, project) + "'}) RETURN " + returns
+}
+
+// underNamespace is the WHERE predicate that keeps the projects of the
+// fixture namespace.
+func underNamespace(namespace string) string {
+	return "p.full_path STARTS WITH '" + namespace + "/'"
+}
+
 // fixtureProjectIDs returns the ids of the fixture namespace's projects, as
 // the Knowledge Graph reports them, by a traversal of the projects under the
-// namespace's path. The node_ids subtests ask for these rather than for ids
-// written down here, which re-provisioning the fixtures replaces.
-func fixtureProjectIDs(ctx context.Context, client *gitlabclient.Client, namespace string) ([]any, error) {
-	out, err := liveQuery(ctx, client, orbit.QueryInput{
+// namespace's path. The subtests that bound a node by its id ask for these
+// rather than for ids written down here, which re-provisioning the fixtures
+// replaces. Each is checked to be a decimal integer before a query carries
+// it, since it is written into the statement as a number.
+func fixtureProjectIDs(ctx context.Context, client *gitlabclient.Client, namespace string) ([]string, error) {
+	out, err := liveQueryAs(ctx, client, orbit.QueryInput{
 		ResponseFormat: "raw",
-		Query: map[string]any{
-			"query_type": "traversal",
-			"nodes": []any{node("p", "Project", map[string]any{
-				"filters": map[string]any{"full_path": map[string]any{"starts_with": namespace + "/"}},
-				"columns": []any{"id", "full_path"},
-			})},
-		},
+		Query:          "MATCH (p:Project) WHERE " + underNamespace(namespace) + " RETURN p.id, p.full_path",
 	})
 	if err != nil {
 		return nil, err
 	}
 	result, _ := out.Result.(map[string]any)
 	nodes, _ := result["nodes"].([]any)
-	ids := make([]any, 0, len(nodes))
+	ids := make([]string, 0, len(nodes))
 	for _, entry := range nodes {
-		if row, ok := entry.(map[string]any); ok && row["id"] != nil {
-			ids = append(ids, row["id"])
+		row, ok := entry.(map[string]any)
+		if !ok || row["id"] == nil {
+			continue
 		}
+		id := fmt.Sprint(row["id"])
+		if _, parseErr := strconv.ParseInt(id, 10, 64); parseErr != nil {
+			return nil, fmt.Errorf("the Knowledge Graph reported the project id %q, which is not a decimal integer a query can carry: %w", id, parseErr)
+		}
+		ids = append(ids, id)
 	}
 	if len(ids) == 0 {
 		return nil, fmt.Errorf("no project of %s is indexed yet: run make orbit-wait-indexer and try again", namespace)
@@ -306,28 +338,34 @@ func testOrbitLiveReadOnlyHandlers(t *testing.T, client *gitlabclient.Client) {
 
 // testOrbitLiveDSLHandlers exercises [DSL] in default, llm, and raw
 // response formats. The subtest names correspond to the response_format
-// the handler is invoked with.
+// the handler is invoked with. The raw answer, asked for or left to
+// GitLab's default, is the query command with its grammar and input schema,
+// and the llm answer the same as compact text.
 func testOrbitLiveDSLHandlers(t *testing.T, client *gitlabclient.Client) {
 	t.Helper()
+	described := func(out orbit.DSLOutput) (any, error) {
+		if out.Name != queryCommand || out.Description == "" || out.Parameters == nil {
+			return nil, fmt.Errorf("query language = %+v, want the %s command with its grammar and input schema", out, queryCommand)
+		}
+		return fmt.Sprintf("format=%s command=%s grammar_bytes=%d", out.ResponseFormat, out.Name, len(out.Description)), nil
+	}
 	summarize(t, "DSL_default", func(ctx context.Context) (any, error) {
 		out, err := orbit.DSL(ctx, client, orbit.DSLInput{})
 		if err != nil {
 			return nil, err
 		}
-		return fmt.Sprintf("format=%s bytes=%d", out.ResponseFormat, len(out.Content)), nil
+		return described(out)
 	})
 
-	// GitLab sends the llm grammar as a JSON string; the handler publishes
-	// the text inside it, so a leading quote means the decode was lost.
 	summarize(t, "DSL_llm", func(ctx context.Context) (any, error) {
 		out, err := orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormat: "llm"})
 		if err != nil {
 			return nil, err
 		}
-		if out.Content == "" || strings.HasPrefix(out.Content, `"`) {
-			return nil, fmt.Errorf("llm grammar = %.60q, want the grammar's text rather than the JSON string it arrives in", out.Content)
+		if !strings.Contains(out.FormattedText, queryCommand) {
+			return nil, fmt.Errorf("llm query language = %.80q, want the compact text of the %s command", out.FormattedText, queryCommand)
 		}
-		return fmt.Sprintf("format=%s bytes=%d", out.ResponseFormat, len(out.Content)), nil
+		return fmt.Sprintf("format=%s bytes=%d", out.ResponseFormat, len(out.FormattedText)), nil
 	})
 
 	summarize(t, "DSL_raw", func(ctx context.Context) (any, error) {
@@ -335,106 +373,77 @@ func testOrbitLiveDSLHandlers(t *testing.T, client *gitlabclient.Client) {
 		if err != nil {
 			return nil, err
 		}
-		return fmt.Sprintf("format=%s bytes=%d", out.ResponseFormat, len(out.Content)), nil
+		return described(out)
 	})
 }
 
-// TestOrbitLiveGitLabCom_DSL holds the query DSL GitLab.com serves to the one
-// orbit.query teaches, by its $id, and logs its version. The guidance names
-// the shape of version 12 (nodes, operator-keyed filters, a neighbors query
-// with no node of its own, rel_types on every path), and the Orbit response
-// record names the DSL it was taken against, so a new major version is a
-// change somebody has to read the guidance against: this is where it fails
-// first, on the next live run, instead of a model being taught a language
-// GitLab no longer compiles, which is what issue 1031 was.
+// TestOrbitLiveGitLabCom_DSL holds the query language GitLab.com describes to
+// the one orbit.query teaches: GQL, a MATCH ... RETURN statement sent as the
+// query command's one string input. The guidance names GQL's rules, and the
+// Orbit response record stamps the grammar it was taken against, so GitLab.com
+// describing another language is a change somebody has to read the guidance
+// against: this is where it fails first, on the next live run, instead of a
+// model being taught a language GitLab no longer compiles, which is what
+// issues 1031 and 1414 were.
 func TestOrbitLiveGitLabCom_DSL(t *testing.T) {
 	client := newLiveClient(t)
-	summarize(t, "DSL_is_the_version_orbit_query_teaches", func(ctx context.Context) (any, error) {
+	summarize(t, "DSL_is_the_GQL_orbit_query_teaches", func(ctx context.Context) (any, error) {
 		out, err := orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormat: "raw"})
 		if err != nil {
 			return nil, err
 		}
-		var stamp struct {
-			ID       string   `json:"$id"`
-			Version  string   `json:"version"`
-			Required []string `json:"required"`
+		if out.Name != queryCommand {
+			return nil, fmt.Errorf("GitLab.com describes no %s command (got %q): orbit.dsl describes nothing, read GET /orbit/agent/commands", queryCommand, out.Name)
 		}
-		if err = json.Unmarshal([]byte(out.Content), &stamp); err != nil {
-			return nil, fmt.Errorf("the raw DSL is not a JSON Schema document: %w", err)
+		if !strings.Contains(out.Description, "MATCH ... RETURN") {
+			return nil, fmt.Errorf("GitLab.com describes the query command as %.120q, which is not the MATCH ... RETURN statement orbit.query teaches: read the new language and move the guidance, the examples and this test to it", out.Description)
 		}
-		if stamp.ID != taughtDSLSchema {
-			return nil, fmt.Errorf("GitLab.com serves the query DSL %q at version %s and orbit.query teaches %q: read the new language and move the guidance, the examples and this constant to it", stamp.ID, stamp.Version, taughtDSLSchema)
+		var input struct {
+			Required   []string `json:"required"`
+			Properties map[string]struct {
+				Type string `json:"type"`
+			} `json:"properties"`
 		}
-		return fmt.Sprintf("dsl=%s version=%s required=%v", stamp.ID, stamp.Version, stamp.Required), nil
+		raw, err := json.Marshal(out.Parameters)
+		if err != nil {
+			return nil, err
+		}
+		if err = json.Unmarshal(raw, &input); err != nil {
+			return nil, fmt.Errorf("the query command's input schema is not an object schema: %w", err)
+		}
+		if input.Properties["query"].Type != "string" {
+			return nil, fmt.Errorf("the query command takes its query as %q, and orbit.query sends GQL text: read the input schema and move the handler to it", input.Properties["query"].Type)
+		}
+		return fmt.Sprintf("command=%s required=%v grammar_bytes=%d", out.Name, input.Required, len(out.Description)), nil
 	})
 }
 
-// testOrbitLiveQueryHandlers exercises [Query] against the live API
-// with a representative query for each query_type variant: traversal
-// (with both node_ids and filters), aggregation, llm response format,
-// neighbors, and path_finding. Each subtest logs query_type and
-// row_count to surface a successful decode.
+// testOrbitLiveQueryHandlers exercises [Query] against the live API with a
+// representative statement for each query type GitLab infers from GQL:
+// traversal (bounded by an id and by a literal property), aggregation, the
+// llm response format, neighbors and a shortest path. Each subtest logs
+// query_type and row_count to surface a successful decode. The last holds
+// what a caller who sends the retired JSON DSL is told.
 func testOrbitLiveQueryHandlers(t *testing.T, client *gitlabclient.Client, namespace string) {
 	t.Helper()
-	summarize(t, "Query_traversal_by_node_ids", func(ctx context.Context) (any, error) {
+	summarize(t, "Query_traversal_by_id", func(ctx context.Context) (any, error) {
 		ids, err := fixtureProjectIDs(ctx, client, namespace)
 		if err != nil {
 			return nil, err
 		}
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "traversal",
-				"nodes":      []any{node("proj", "Project", map[string]any{"node_ids": ids[:1], "columns": []any{"id"}})},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
+		return queryRun(client, "MATCH (p:Project {id: "+ids[0]+"}) RETURN p.id")(ctx)
 	})
 
-	summarize(t, "Query_traversal_with_filter", func(ctx context.Context) (any, error) {
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "traversal",
-				"nodes": []any{node("p", "Project", map[string]any{
-					"filters": map[string]any{"full_path": map[string]any{"starts_with": namespace + "/"}},
-					"columns": []any{"id"},
-				})},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	summarize(t, "Query_traversal_with_filter", queryRun(client,
+		"MATCH (p:Project) WHERE "+underNamespace(namespace)+" RETURN p.id"))
 
-	summarize(t, "Query_aggregation", func(ctx context.Context) (any, error) {
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "aggregation",
-				"nodes": []any{node("p", "Project", map[string]any{
-					"filters": map[string]any{"full_path": map[string]any{"starts_with": namespace + "/"}},
-				})},
-				"aggregations": []any{map[string]any{"count": "p", "as": "project_count"}},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	summarize(t, "Query_aggregation", queryRun(client,
+		"MATCH (p:Project) WHERE "+underNamespace(namespace)+" RETURN count(p) AS project_count"))
 
 	summarize(t, "Query_llm_format", func(ctx context.Context) (any, error) {
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
+		out, err := liveQueryAs(ctx, client, orbit.QueryInput{
 			ResponseFormat: "llm",
-			Query: map[string]any{
-				"query_type": "traversal",
-				"nodes": []any{node("proj", "Project", map[string]any{
-					"filters": map[string]any{"full_path": map[string]any{"starts_with": namespace + "/"}},
-					"columns": []any{"id"},
-				})},
-			},
+			Query:          "MATCH (p:Project) WHERE " + underNamespace(namespace) + " RETURN p.id",
 		})
 		if err != nil {
 			return nil, err
@@ -443,71 +452,68 @@ func testOrbitLiveQueryHandlers(t *testing.T, client *gitlabclient.Client, names
 		if len(preview) > 200 {
 			preview = preview[:200] + "...(truncated)"
 		}
-		return fmt.Sprintf("query_type=%s formatted_text=%q", out.QueryType, preview), nil
+		return fmt.Sprintf("formatted_text=%q", preview), nil
 	})
 
-	summarize(t, "Query_neighbors", func(ctx context.Context) (any, error) {
-		// The center of a neighbors query is its one node; neighbors holds
-		// only direction and rel_types. The direction defaults to outgoing,
-		// so both is what reaches every relationship of the project.
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "neighbors",
-				"nodes": []any{node("p", "Project", map[string]any{
-					"filters": map[string]any{"full_path": projectPath(namespace, kgFixturesProjectPath)},
-				})},
-				"neighbors": map[string]any{"direction": "both"},
-			},
+	// The gql format answers with the result as a graph pattern table, text/plain
+	// like llm, so it arrives as formatted_text too.
+	summarize(t, "Query_gql_format", func(ctx context.Context) (any, error) {
+		out, err := liveQueryAs(ctx, client, orbit.QueryInput{
+			ResponseFormat: "gql",
+			Query:          "MATCH (p:Project) WHERE " + underNamespace(namespace) + " RETURN p.id",
 		})
 		if err != nil {
 			return nil, err
 		}
-		return rowSummary(out), nil
-	})
-
-	summarize(t, "Query_path_finding", func(ctx context.Context) (any, error) {
-		// A path query names its relationship types, and each is followed
-		// only in its defined direction: a merge request is IN_PROJECT its
-		// project, not the other way round.
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "path_finding",
-				"nodes": []any{
-					node("mr", "MergeRequest", map[string]any{"filters": map[string]any{"source_branch": fixtureBranch}}),
-					node("p", "Project", map[string]any{"filters": map[string]any{"full_path": projectPath(namespace, kgFixturesProjectPath)}}),
-				},
-				"path": map[string]any{"type": "shortest", "from": "mr", "to": "p", "max_depth": 2, "rel_types": []any{"IN_PROJECT"}},
-			},
-		})
-		if err != nil {
-			return nil, err
+		if strings.TrimSpace(out.FormattedText) == "" {
+			return nil, errors.New("the gql format answered no text")
 		}
-		return rowSummary(out), nil
+		preview := out.FormattedText
+		if len(preview) > 200 {
+			preview = preview[:200] + "...(truncated)"
+		}
+		return fmt.Sprintf("formatted_text=%q", preview), nil
 	})
 
-	summarize(t, "Query_with_a_top_level_node_is_refused_in_GitLabs_words", func(ctx context.Context) (any, error) {
-		// The shape this server taught until issue 1031: a top-level node.
-		// It reaches GitLab as written, and what comes back is GitLab's own
-		// account of the fault and the hint naming orbit.dsl, never a
-		// refusal of this server's making. The account is held by its code
-		// and never by its prose, which is the JSON Schema validator's
-		// wording rather than Workhorse's contract and is being rewritten
-		// upstream; the summary carries the prose to the run's log instead.
+	// The neighbors of one node: the far end of the undirected pattern has a
+	// variable and nothing else, so every relationship of the project, in
+	// either direction, is reached.
+	summarize(t, "Query_neighbors", queryRun(client,
+		"MATCH (p:Project {full_path: '"+projectPath(namespace, kgFixturesProjectPath)+"'})--(n) RETURN n"))
+
+	// A shortest path between two bounded ends, along the one relationship
+	// type that joins them, followed in its defined direction: a merge
+	// request is IN_PROJECT its project, not the other way round.
+	summarize(t, "Query_path_finding", queryRun(client,
+		"MATCH path = ANY SHORTEST (mr:MergeRequest {source_branch: '"+fixtureBranch+"'})-[:IN_PROJECT*1..2]->"+
+			"(p:Project {full_path: '"+projectPath(namespace, kgFixturesProjectPath)+"'}) RETURN path"))
+
+	summarize(t, "Query_as_a_JSON_object_is_refused_with_the_GQL_hint", func(ctx context.Context) (any, error) {
+		// The JSON DSL this suite and orbit.query taught until issue 1414. It
+		// reaches GitLab as written, and GitLab.com, reading GQL, answers
+		// compile_error; the caller is told GitLab.com reads a query as GQL
+		// text, with an example. The account is held by its code and by this
+		// server's hint, never by GitLab's prose, which is the GQL parser's
+		// wording rather than Workhorse's contract; the summary carries the
+		// prose to the run's log instead.
 		_, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "traversal",
-				"node":       node("p", "Project", map[string]any{"filters": map[string]any{"full_path": projectPath(namespace, kgFixturesProjectPath)}}),
+				"nodes": []any{map[string]any{
+					"id": "p", "entity": "Project",
+					"filters": map[string]any{"full_path": projectPath(namespace, kgFixturesProjectPath)},
+				}},
 			},
 		})
 		if err == nil {
-			return nil, errors.New("GitLab.com ran a query with a top-level node, which version 12 of the DSL refuses: read orbit.dsl, the language may have moved")
+			return nil, errors.New("GitLab.com ran a query written as a JSON object, which it stopped reading on 2026-10-15: read orbit.dsl, GitLab.com may have turned GQL off again")
 		}
-		for _, want := range []string{"{code: compile_error}", "orbit.dsl serves the query language"} {
+		for _, want := range []string{"{code: compile_error}", "GitLab.com reads a query as GQL text, not as a JSON object"} {
 			if !strings.Contains(err.Error(), want) {
 				return nil, fmt.Errorf("refusal = %q, want it to carry %q", err.Error(), want)
 			}
 		}
-		return "refused with GitLab's compile error: " + err.Error(), nil
+		return "refused with GitLab's compile error and the GQL hint: " + err.Error(), nil
 	})
 }
 
@@ -551,82 +557,36 @@ func testOrbitLiveGraphStatusHandlers(t *testing.T, client *gitlabclient.Client,
 }
 
 // TestOrbitLiveGitLabCom_ShapeDiscovery keeps regression coverage of the
-// smallest query of each kind GitLab.com runs in version 12 of the DSL. If
-// GitLab ever tightens validation, these subtests fail first, and the
-// QueryInput documentation, the parameter guidance and the site's Orbit page
-// should be moved to the new contract with them.
+// smallest statement of each kind GitLab.com runs in GQL. If GitLab ever
+// tightens the language, these subtests fail first, and the QueryInput
+// documentation, the parameter guidance and the site's Orbit page should be
+// moved to the new contract with them.
 func TestOrbitLiveGitLabCom_ShapeDiscovery(t *testing.T) {
 	client := newLiveClient(t)
 	namespace := orbitFixturesNamespace()
 
-	summarize(t, "Aggregation_with_filter", func(ctx context.Context) (any, error) {
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "aggregation",
-				"nodes": []any{node("p", "Project", map[string]any{
-					"filters": map[string]any{"full_path": map[string]any{"starts_with": namespace + "/"}},
-				})},
-				"aggregations": []any{map[string]any{"count": "p", "as": "count_projects"}},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	summarize(t, "Aggregation_with_filter", queryRun(client,
+		"MATCH (p:Project) WHERE "+underNamespace(namespace)+" RETURN count(p) AS count_projects"))
 
-	summarize(t, "Aggregation_with_node_ids", func(ctx context.Context) (any, error) {
+	summarize(t, "Aggregation_with_ids", func(ctx context.Context) (any, error) {
 		ids, err := fixtureProjectIDs(ctx, client, namespace)
 		if err != nil {
 			return nil, err
 		}
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type":   "aggregation",
-				"nodes":        []any{node("p", "Project", map[string]any{"node_ids": ids})},
-				"aggregations": []any{map[string]any{"count": "p", "as": "count_projects"}},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
+		return queryRun(client, "MATCH (p:Project) WHERE p.id IN ["+strings.Join(ids, ", ")+"] RETURN count(p) AS count_projects")(ctx)
 	})
 
-	summarize(t, "Neighbors_center_is_the_one_node", func(ctx context.Context) (any, error) {
+	summarize(t, "Neighbors_of_one_node_by_id", func(ctx context.Context) (any, error) {
 		ids, err := fixtureProjectIDs(ctx, client, namespace)
 		if err != nil {
 			return nil, err
 		}
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "neighbors",
-				"nodes":      []any{node("p", "Project", map[string]any{"node_ids": ids[:1]})},
-				"neighbors":  map[string]any{"direction": "both"},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
+		return queryRun(client, "MATCH (p:Project {id: "+ids[0]+"})--(n) RETURN n")(ctx)
 	})
 
-	summarize(t, "PathFinding_any_relationship", func(ctx context.Context) (any, error) {
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "path_finding",
-				"nodes": []any{
-					node("mr", "MergeRequest", map[string]any{"filters": map[string]any{"source_branch": fixtureBranch}}),
-					node("p", "Project", map[string]any{"filters": map[string]any{"full_path": projectPath(namespace, kgFixturesProjectPath)}}),
-				},
-				"path": map[string]any{"type": "shortest", "from": "mr", "to": "p", "max_depth": 3, "rel_types": []any{"*"}},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	summarize(t, "PathFinding_any_relationship", queryRun(client,
+		"MATCH path = ANY SHORTEST (mr:MergeRequest {source_branch: '"+fixtureBranch+"'})-[*1..3]->"+
+			"(p:Project {full_path: '"+projectPath(namespace, kgFixturesProjectPath)+"'}) RETURN path"))
 
 	// Schema with the default response format (handler omits the
 	// response_format parameter so the API applies its own default, raw).
@@ -803,12 +763,12 @@ func TestGitLabComReleaseProblem_AgainstARecordedTable_PassesItsReleaseAndTheNex
 	}
 }
 
-// TestOrbitLiveGitLabCom_Fixtures exercises the four query_type variants
-// against the live fixture data the setup script provisions in any
+// TestOrbitLiveGitLabCom_Fixtures exercises the query types GitLab infers
+// from GQL against the live fixture data the setup script provisions in any
 // GitLab namespace (defaults to plens1, configurable via
-// ORBIT_FIXTURES_NAMESPACE). All subtests use full_path-based filters
-// instead of hardcoded project ids so the test is portable across
-// namespaces: any developer who runs `scripts/setup-orbit-fixtures.sh`
+// ORBIT_FIXTURES_NAMESPACE). All subtests bound their nodes by path or by a
+// literal property instead of hardcoded project ids so the test is portable
+// across namespaces: any developer who runs `scripts/setup-orbit-fixtures.sh`
 // with their own token gets a working test surface.
 //
 // The Orbit indexer is eventually consistent: if a fresh push has not
@@ -855,15 +815,9 @@ func TestOrbitLiveGitLabCom_ReadAPIToken_PassesTheQueryScopeCheck(t *testing.T) 
 
 // readAPIQuery is the query the read_api measurement sends: the id of the
 // fixture project, found by its path as every query here finds one, which is
-// about the least the route can be asked, in version 12 of the DSL.
+// about the least the route can be asked, in GQL.
 func readAPIQuery() orbit.QueryInput {
-	path := projectPath(orbitFixturesNamespace(), kgFixturesProjectPath)
-	return orbit.QueryInput{
-		Query: map[string]any{
-			"query_type": "traversal",
-			"nodes":      []any{node("proj", "Project", map[string]any{"filters": map[string]any{"full_path": path}, "columns": []any{"id"}})},
-		},
-	}
+	return orbit.QueryInput{Query: projectByPath(orbitFixturesNamespace(), kgFixturesProjectPath, "p.id")}
 }
 
 // refusedForScope reports whether err carries GitLab's refusal of the calling
@@ -936,12 +890,11 @@ func TestRefusedForScope_ThroughTheQueryHandler_ReadsGitLabsAnswer(t *testing.T)
 	})
 }
 
-// testOrbitLiveFixtures exercises the four query_type variants
-// against the live fixture data the setup script provisions in any
-// GitLab namespace (defaults to plens1, configurable via
-// ORBIT_FIXTURES_NAMESPACE). All subtests use full_path-based filters
-// instead of hardcoded project ids so the test is portable across
-// namespaces.
+// testOrbitLiveFixtures exercises the query types GitLab infers from GQL
+// against the live fixture data the setup script provisions in any GitLab
+// namespace (defaults to plens1, configurable via ORBIT_FIXTURES_NAMESPACE).
+// All subtests bound their nodes by path or by a literal property instead of
+// hardcoded project ids so the test is portable across namespaces.
 //
 // The Orbit indexer is eventually consistent: if a fresh push has not
 // been indexed yet, the affected subtest will log row_count=0 without
@@ -952,460 +905,160 @@ func testOrbitLiveFixtures(t *testing.T) {
 	client := newLiveClient(t)
 	namespace := orbitFixturesNamespace()
 
-	summarize(t, "Project_kg_fixtures_filter", func(ctx context.Context) (any, error) {
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "traversal",
-				"nodes": []any{node("p", "Project", map[string]any{
-					"filters": map[string]any{"full_path": projectPath(namespace, kgFixturesProjectPath)},
-					"columns": []any{"id", "full_path", "name"},
-				})},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	summarize(t, "Project_kg_fixtures_by_path", queryRun(client,
+		projectByPath(namespace, kgFixturesProjectPath, "p.id, p.full_path, p.name")))
 
-	summarize(t, "Project_security_fixtures_filter", func(ctx context.Context) (any, error) {
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "traversal",
-				"nodes": []any{node("p", "Project", map[string]any{
-					"filters": map[string]any{"full_path": map[string]any{"eq": projectPath(namespace, securityFixturesProjectPath)}},
-					"columns": []any{"id", "full_path"},
-				})},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	summarize(t, "Project_security_fixtures_by_equality", queryRun(client,
+		"MATCH (p:Project) WHERE p.full_path = '"+projectPath(namespace, securityFixturesProjectPath)+"' RETURN p.id, p.full_path"))
 
-	summarize(t, "Milestone_count_active", func(ctx context.Context) (any, error) {
-		// Count active milestones. The setup script provisions one active
-		// milestone (the KG coverage one); other namespaces may hold more.
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type":   "aggregation",
-				"nodes":        []any{node("m", "Milestone", map[string]any{"filters": map[string]any{"state": "active"}})},
-				"aggregations": []any{map[string]any{"count": "m", "as": "active_milestones"}},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	// Count active milestones. The setup script provisions one active
+	// milestone (the KG coverage one); other namespaces may hold more.
+	summarize(t, "Milestone_count_active", queryRun(client,
+		"MATCH (m:Milestone {state: 'active'}) RETURN count(m) AS active_milestones"))
 
-	summarize(t, "File_count_python", func(ctx context.Context) (any, error) {
-		// Count Python source files. The File entity does not expose
-		// a project_id filter, so we count by path suffix across the
-		// whole namespace. Each fixture project contributes 8-9 .py files.
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type":   "aggregation",
-				"nodes":        []any{node("f", "File", map[string]any{"filters": map[string]any{"path": map[string]any{"ends_with": ".py"}}})},
-				"aggregations": []any{map[string]any{"count": "f", "as": "python_files"}},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	// Count Python source files. The File entity does not expose a project
+	// property to bound by, so the count is by path suffix across every file
+	// the caller may read. Each fixture project contributes 8-9 .py files.
+	summarize(t, "File_count_python", queryRun(client,
+		"MATCH (f:File) WHERE f.path ENDS WITH '.py' RETURN count(f) AS python_files"))
 
-	summarize(t, "MergeRequest_in_kg_fixtures", func(ctx context.Context) (any, error) {
-		// Fetch the squash-merged MR the setup script creates. The MR
-		// id is dynamic per instance, so we filter by its branches.
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "traversal",
-				"nodes": []any{node("mr", "MergeRequest", map[string]any{
-					"filters": map[string]any{"source_branch": fixtureBranch, "target_branch": "main"},
-					"columns": []any{"id", "iid", "title", "state", "source_branch"},
-				})},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	// Fetch the squash-merged MR the setup script creates. The MR id is
+	// dynamic per instance, so it is matched by its branches.
+	summarize(t, "MergeRequest_in_kg_fixtures", queryRun(client,
+		"MATCH (mr:MergeRequest {source_branch: '"+fixtureBranch+"', target_branch: 'main'}) "+
+			"RETURN mr.id, mr.iid, mr.title, mr.state, mr.source_branch"))
 
-	summarize(t, "Vulnerability_count_detected", func(ctx context.Context) (any, error) {
-		// Count detected vulnerabilities. The setup script provisions
-		// 5 such findings (1 critical AWS key, 3 high SQLi/eval,
-		// 1 medium weak-hash) via the SAST and Secret Detection
-		// templates. The exact number depends on how many analyzers
-		// have finished.
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type":   "aggregation",
-				"nodes":        []any{node("v", "Vulnerability", map[string]any{"filters": map[string]any{"state": "detected"}})},
-				"aggregations": []any{map[string]any{"count": "v", "as": "open_vulnerabilities"}},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	// Count detected vulnerabilities. The setup script provisions 5 such
+	// findings (1 critical AWS key, 3 high SQLi/eval, 1 medium weak-hash) via
+	// the SAST and Secret Detection templates. The exact number depends on how
+	// many analyzers have finished.
+	summarize(t, "Vulnerability_count_detected", queryRun(client,
+		"MATCH (v:Vulnerability {state: 'detected'}) RETURN count(v) AS open_vulnerabilities"))
 
-	summarize(t, "Neighbors_kg_fixtures", func(ctx context.Context) (any, error) {
-		// What the kg-fixtures project is connected to, in both
-		// directions: its group, creator and labels are reached by
-		// incoming relationships, which the default outgoing direction
-		// leaves out.
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "neighbors",
-				"nodes": []any{node("p", "Project", map[string]any{
-					"filters": map[string]any{"full_path": projectPath(namespace, kgFixturesProjectPath)},
-				})},
-				"neighbors": map[string]any{"direction": "both"},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	// What the kg-fixtures project is connected to, in both directions: its
+	// group, creator and labels are reached by incoming relationships, which
+	// the undirected pattern takes with the outgoing ones.
+	summarize(t, "Neighbors_kg_fixtures", queryRun(client,
+		"MATCH (p:Project {full_path: '"+projectPath(namespace, kgFixturesProjectPath)+"'})--(n) RETURN n"))
 }
 
-// TestOrbitLiveGitLabCom_FeatureCoverage exercises the full Orbit
-// query DSL surface against the live fixture namespace: filter
-// operators, multi-node traversals with relationships, aggregations
-// with group_by/sort/sum/max/avg, order_by, virtual columns,
-// cursor pagination, and options.dynamic_columns. Each subtest
-// is informational: it PASSes as long as the API accepts the
-// query and returns a valid envelope, even if row_count=0 (the
-// data may not match the filter in this namespace). This is the
-// comprehensive coverage test: every documented query pattern the
-// API supports is exercised at least once against real data.
+// TestOrbitLiveGitLabCom_FeatureCoverage exercises the GQL surface against
+// the live fixture namespace: comparison and string predicates, a list
+// membership, multi-node patterns with a relationship type, aggregations
+// grouped by a property and by a node with their ORDER BY, sum, max and avg,
+// ORDER BY on a property, the virtual diff and content properties, PAGE,
+// an id range, the incoming neighbors of one relationship type, the
+// properties of every neighbor, and the ontology procedure. Each subtest is
+// informational: it PASSes as long as the API accepts the statement and
+// returns a valid envelope, even if row_count=0 (the data may not match the
+// predicate in this namespace). This is the comprehensive coverage test:
+// every documented statement pattern the API supports is exercised at least
+// once against real data.
 func TestOrbitLiveGitLabCom_FeatureCoverage(t *testing.T) {
 	testOrbitLiveFeatureCoverage(t)
 }
 
-// testOrbitLiveFeatureCoverage exercises the full Orbit query DSL
-// surface against the live namespace: filter operators, multi-node
-// traversals with relationships, aggregations with group_by/sort/
-// sum/max/avg, order_by, virtual columns, cursor pagination, and
-// options.dynamic_columns. Each subtest is informational: it PASSes
-// as long as the API accepts the query and returns a valid envelope,
-// even if row_count=0 (the data may not match the filter in this
-// namespace). This is the comprehensive coverage test: every
-// documented query pattern the API supports is exercised at least
-// once against real data.
+// testOrbitLiveFeatureCoverage runs the three groups of
+// [TestOrbitLiveGitLabCom_FeatureCoverage].
 func testOrbitLiveFeatureCoverage(t *testing.T) {
 	t.Helper()
 	client := newLiveClient(t)
 	namespace := orbitFixturesNamespace()
-	testOrbitLiveFeatureCoverageFiltersAndTraversal(t, client, namespace)
+	testOrbitLiveFeatureCoveragePredicatesAndTraversal(t, client, namespace)
 	testOrbitLiveFeatureCoverageAggregation(t, client, namespace)
 	testOrbitLiveFeatureCoverageVirtualAndMeta(t, client, namespace)
 }
 
-// testOrbitLiveFeatureCoverageFiltersAndTraversal exercises the
-// `in`, `contains`, `gt` and combined `gte`/`lt` filter operators and a
-// multi-node traversal that joins MergeRequest to Project through the
-// IN_PROJECT relationship.
-func testOrbitLiveFeatureCoverageFiltersAndTraversal(t *testing.T, client *gitlabclient.Client, namespace string) {
+// testOrbitLiveFeatureCoveragePredicatesAndTraversal exercises IN, CONTAINS,
+// a comparison, several predicates joined by AND, and a pattern that joins
+// MergeRequest to Project through the IN_PROJECT relationship.
+func testOrbitLiveFeatureCoveragePredicatesAndTraversal(t *testing.T, client *gitlabclient.Client, namespace string) {
 	t.Helper()
-	summarize(t, "Filter_in_operator_severity", func(ctx context.Context) (any, error) {
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "traversal",
-				"nodes": []any{node("v", "Vulnerability", map[string]any{
-					"filters": map[string]any{"severity": map[string]any{"in": []any{"critical", "high"}}},
-					"columns": []any{"id", "severity"},
-				})},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	summarize(t, "Predicate_in_list_severity", queryRun(client,
+		"MATCH (v:Vulnerability) WHERE v.severity IN ['critical', 'high'] RETURN v.id, v.severity"))
 
-	summarize(t, "Filter_contains_operator_path", func(ctx context.Context) (any, error) {
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "traversal",
-				"nodes": []any{node("f", "File", map[string]any{
-					"filters": map[string]any{"path": map[string]any{"contains": "orders"}},
-					"columns": []any{"id", "path"},
-				})},
-				"limit": 5,
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	summarize(t, "Predicate_contains_path", queryRun(client,
+		"MATCH (f:File) WHERE f.path CONTAINS 'orders' RETURN f.id, f.path LIMIT 5"))
 
-	summarize(t, "Filter_gt_operator", func(ctx context.Context) (any, error) {
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "traversal",
-				"nodes": []any{node("p", "Project", map[string]any{
-					"filters": map[string]any{"star_count": map[string]any{"gt": 0}},
-					"columns": []any{"id", "full_path", "star_count"},
-				})},
-				"limit": 10,
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	summarize(t, "Predicate_greater_than", queryRun(client,
+		"MATCH (p:Project) WHERE p.star_count > 0 RETURN p.id, p.full_path, p.star_count LIMIT 10"))
 
-	summarize(t, "Filter_operators_combined_on_one_property", func(ctx context.Context) (any, error) {
-		// Several operator keys on one property AND-combine.
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "traversal",
-				"nodes": []any{node("p", "Project", map[string]any{
-					"filters": map[string]any{
-						"full_path":  map[string]any{"starts_with": namespace + "/"},
-						"star_count": map[string]any{"gte": 0, "lt": 1000},
-					},
-					"columns": []any{"id", "star_count"},
-				})},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	// Several predicates AND-combine, two of them on one property.
+	summarize(t, "Predicates_combined_with_AND", queryRun(client,
+		"MATCH (p:Project) WHERE "+underNamespace(namespace)+" AND p.star_count >= 0 AND p.star_count < 1000 RETURN p.id, p.star_count"))
 
-	summarize(t, "Traversal_project_to_merge_requests", func(ctx context.Context) (any, error) {
-		// Classic "find MRs in a project" pattern. The relationship
-		// IN_PROJECT connects MergeRequest to Project; the alias mr is
-		// used in the columns block.
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "traversal",
-				"nodes": []any{
-					node("p", "Project", map[string]any{
-						"filters": map[string]any{"full_path": projectPath(namespace, kgFixturesProjectPath)},
-						"columns": []any{"id", "full_path"},
-					}),
-					node("mr", "MergeRequest", map[string]any{"columns": []any{"id", "iid", "title", "state"}}),
-				},
-				"relationships": []any{map[string]any{"type": "IN_PROJECT", "from": "mr", "to": "p"}},
-				"limit":         5,
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	// The classic "find MRs in a project" pattern: IN_PROJECT joins
+	// MergeRequest to Project, and both nodes' properties are returned.
+	summarize(t, "Traversal_project_to_merge_requests", queryRun(client,
+		"MATCH (mr:MergeRequest)-[:IN_PROJECT]->(p:Project {full_path: '"+projectPath(namespace, kgFixturesProjectPath)+"'}) "+
+			"RETURN p.id, p.full_path, mr.id, mr.iid, mr.title, mr.state LIMIT 5"))
 }
 
-// testOrbitLiveFeatureCoverageAggregation exercises the aggregation
-// functions (count, sum, max, avg) plus the group_by alternatives:
-// group_by on a property (severity) and group_by on a node alias
-// joined via the IN_PROJECT relationship.
+// testOrbitLiveFeatureCoverageAggregation exercises the aggregate functions
+// (count, sum, max, avg) and both groupings: by a property (severity) and by
+// a node joined through the IN_PROJECT relationship, each sorted by its
+// aliased aggregate.
 func testOrbitLiveFeatureCoverageAggregation(t *testing.T, client *gitlabclient.Client, namespace string) {
 	t.Helper()
-	summarize(t, "Aggregation_group_by_severity", func(ctx context.Context) (any, error) {
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type":       "aggregation",
-				"nodes":            []any{node("v", "Vulnerability", map[string]any{"filters": map[string]any{"state": "detected"}})},
-				"group_by":         []any{"v.severity"},
-				"aggregations":     []any{map[string]any{"count": "v", "as": "vuln_count"}},
-				"aggregation_sort": "-vuln_count",
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	summarize(t, "Aggregation_grouped_by_severity", queryRun(client,
+		"MATCH (v:Vulnerability {state: 'detected'}) RETURN v.severity, count(v) AS vuln_count ORDER BY vuln_count DESC"))
 
-	summarize(t, "Aggregation_group_by_node_with_relationship", func(ctx context.Context) (any, error) {
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "aggregation",
-				"nodes": []any{
-					node("p", "Project", map[string]any{
-						"filters": map[string]any{"full_path": map[string]any{"starts_with": namespace + "/"}},
-					}),
-					node("mr", "MergeRequest", map[string]any{"columns": []any{"id"}}),
-				},
-				"relationships":    []any{map[string]any{"type": "IN_PROJECT", "from": "mr", "to": "p"}},
-				"group_by":         []any{"p"},
-				"aggregations":     []any{map[string]any{"count": "mr", "as": "mr_count"}},
-				"aggregation_sort": "-mr_count",
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	summarize(t, "Aggregation_grouped_by_node_with_relationship", queryRun(client,
+		"MATCH (mr:MergeRequest)-[:IN_PROJECT]->(p:Project) WHERE "+underNamespace(namespace)+
+			" RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC"))
 
 	starsOf := func(function, alias string) func(context.Context) (any, error) {
-		return func(ctx context.Context) (any, error) {
-			out, err := liveQuery(ctx, client, orbit.QueryInput{
-				Query: map[string]any{
-					"query_type": "aggregation",
-					"nodes": []any{node("p", "Project", map[string]any{
-						"filters": map[string]any{"full_path": map[string]any{"starts_with": namespace + "/"}},
-					})},
-					"aggregations": []any{map[string]any{function: "p.star_count", "as": alias}},
-				},
-			})
-			if err != nil {
-				return nil, err
-			}
-			return rowSummary(out), nil
-		}
+		return queryRun(client, "MATCH (p:Project) WHERE "+underNamespace(namespace)+" RETURN "+function+"(p.star_count) AS "+alias)
 	}
 	summarize(t, "Aggregation_sum_star_count", starsOf("sum", "total_stars"))
 	summarize(t, "Aggregation_max_star_count", starsOf("max", "max_stars"))
 	summarize(t, "Aggregation_avg_star_count", starsOf("avg", "avg_stars"))
 }
 
-// testOrbitLiveFeatureCoverageVirtualAndMeta exercises order_by,
-// virtual columns (diff, content), keyset pagination, the id_range
-// scope, a neighbors query narrowed to one relationship type, and the
-// options.dynamic_columns knob for neighbors hydration.
+// testOrbitLiveFeatureCoverageVirtualAndMeta exercises ORDER BY, the virtual
+// diff and content properties, PAGE, an id range, the incoming neighbors of
+// one relationship type, the properties of every neighbor, and the ontology
+// procedure.
 func testOrbitLiveFeatureCoverageVirtualAndMeta(t *testing.T, client *gitlabclient.Client, namespace string) {
 	t.Helper()
-	summarize(t, "Traversal_order_by_name_desc", func(ctx context.Context) (any, error) {
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "traversal",
-				"nodes": []any{node("p", "Project", map[string]any{
-					"filters": map[string]any{"full_path": map[string]any{"starts_with": namespace + "/"}},
-					"columns": []any{"id", "full_path", "name"},
-				})},
-				"order_by": "-p.name",
-				"limit":    5,
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	summarize(t, "Traversal_order_by_name_desc", queryRun(client,
+		"MATCH (p:Project) WHERE "+underNamespace(namespace)+" RETURN p.id, p.full_path, p.name ORDER BY p.name DESC LIMIT 5"))
 
-	summarize(t, "Traversal_merge_request_with_diff_column", func(ctx context.Context) (any, error) {
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "traversal",
-				"nodes": []any{node("mr", "MergeRequest", map[string]any{
-					"filters": map[string]any{"source_branch": fixtureBranch},
-					"columns": []any{"id", "iid", "title", "diff"},
-				})},
-				"limit": 1,
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	summarize(t, "Traversal_merge_request_with_diff_property", queryRun(client,
+		"MATCH (mr:MergeRequest {source_branch: '"+fixtureBranch+"'}) RETURN mr.id, mr.iid, mr.title, mr.diff LIMIT 1"))
 
-	summarize(t, "Traversal_file_with_content_column", func(ctx context.Context) (any, error) {
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "traversal",
-				"nodes": []any{node("f", "File", map[string]any{
-					"filters": map[string]any{"path": map[string]any{"ends_with": "models.py"}},
-					"columns": []any{"id", "path", "language", "content"},
-				})},
-				"limit": 1,
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	summarize(t, "Traversal_file_with_content_property", queryRun(client,
+		"MATCH (f:File) WHERE f.path ENDS WITH 'models.py' RETURN f.id, f.path, f.language, f.content LIMIT 1"))
 
-	summarize(t, "Traversal_keyset_pagination", func(ctx context.Context) (any, error) {
-		// The first page omits after; the next one would pass the
-		// pagination.next_cursor this answer carries.
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "traversal",
-				"nodes": []any{node("p", "Project", map[string]any{
-					"filters": map[string]any{"full_path": map[string]any{"starts_with": namespace + "/"}},
-					"columns": []any{"id", "full_path"},
-				})},
-				"limit":  2,
-				"cursor": map[string]any{"page_size": 1},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	// The first page omits AFTER; the next one would pass the
+	// pagination.next_cursor this answer carries.
+	summarize(t, "Traversal_page", queryRun(client,
+		"MATCH (p:Project) WHERE "+underNamespace(namespace)+" RETURN p.id, p.full_path ORDER BY p.id PAGE 1"))
 
-	summarize(t, "Traversal_id_range_scope", func(ctx context.Context) (any, error) {
+	summarize(t, "Traversal_id_range", func(ctx context.Context) (any, error) {
 		ids, err := fixtureProjectIDs(ctx, client, namespace)
 		if err != nil {
 			return nil, err
 		}
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "traversal",
-				"nodes": []any{node("p", "Project", map[string]any{
-					"id_range": map[string]any{"start": ids[0], "end": ids[0]},
-					"columns":  []any{"id", "full_path"},
-				})},
-				"limit": 5,
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
+		return queryRun(client, "MATCH (p:Project) WHERE p.id >= "+ids[0]+" AND p.id <= "+ids[0]+" RETURN p.id, p.full_path LIMIT 5")(ctx)
 	})
 
-	summarize(t, "Neighbors_incoming_of_one_relationship_type", func(ctx context.Context) (any, error) {
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "neighbors",
-				"nodes": []any{node("p", "Project", map[string]any{
-					"filters": map[string]any{"full_path": projectPath(namespace, kgFixturesProjectPath)},
-				})},
-				"neighbors": map[string]any{"direction": "incoming", "rel_types": []any{"IN_PROJECT"}},
-				"limit":     5,
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return rowSummary(out), nil
-	})
+	summarize(t, "Neighbors_incoming_of_one_relationship_type", queryRun(client,
+		"MATCH (p:Project {full_path: '"+projectPath(namespace, kgFixturesProjectPath)+"'})<-[:IN_PROJECT]-(n) RETURN n LIMIT 5"))
 
-	summarize(t, "Neighbors_with_dynamic_columns_option", func(ctx context.Context) (any, error) {
-		out, err := liveQuery(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "neighbors",
-				"nodes": []any{node("p", "Project", map[string]any{
-					"filters": map[string]any{"full_path": projectPath(namespace, kgFixturesProjectPath)},
-				})},
-				"neighbors": map[string]any{"direction": "both"},
-				"options":   map[string]any{"dynamic_columns": "default"},
-				"limit":     5,
-			},
-		})
+	summarize(t, "Neighbors_with_their_properties", queryRun(client,
+		"MATCH (p:Project {full_path: '"+projectPath(namespace, kgFixturesProjectPath)+"'})--(n) RETURN properties(n) LIMIT 5"))
+
+	// The ontology procedure GQL carries, answered like orbit.schema with
+	// one entity named.
+	summarize(t, "Schema_procedure_for_one_entity", func(ctx context.Context) (any, error) {
+		out, err := liveQuery(ctx, client, "CALL db.schema('Project')")
 		if err != nil {
 			return nil, err
 		}
-		return rowSummary(out), nil
+		if out.Result == nil {
+			return nil, errors.New("CALL db.schema('Project') answered no result")
+		}
+		return fmt.Sprintf("query_type=%q result=present", out.QueryType), nil
 	})
 }

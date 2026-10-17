@@ -25,9 +25,11 @@
 // has not reached, whose answers would lack the rows and counts the record
 // holds the shape of. It compares what it recorded with the record committed
 // at HEAD, read through git rather than from the file it has just replaced,
-// and prints every key added, dropped or changed, and a query DSL whose $id or
-// version moved (read from the raw orbit.dsl answer into the record's source);
-// when the key tree or the DSL differs it still writes the new record and
+// and prints every key added, dropped or changed, and a query grammar
+// GitLab.com published differently (the stamp of the GQL grammar and input
+// schema the raw orbit.dsl answer carries, read into the record's source);
+// the query it sends is GQL, the language GitLab.com reads since 2026-10-15.
+// When the key tree or the grammar differs it still writes the new record and
 // exits 1, and every later recording exits 1
 // too until somebody has read the change and committed the record. A -dir
 // outside the repository, a record HEAD does not hold yet, or a machine with

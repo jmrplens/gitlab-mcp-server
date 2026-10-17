@@ -86,6 +86,52 @@ func TestFind_EveryExampleSatisfiesItsInputSchema(t *testing.T) {
 	}
 }
 
+// TestExampleValue_SchemaExamples_AreOfferedFirst verifies that a parameter
+// whose schema carries a JSON Schema example is offered that example, as the
+// schema writes it: a value its own schema accepts that the name alone could
+// never produce. A schema with no example, or an empty list of them, keeps
+// the value its type and name give.
+func TestExampleValue_SchemaExamples_AreOfferedFirst(t *testing.T) {
+	const statement = "MATCH (p:Project {id: 1}) RETURN p.id"
+	cases := []struct {
+		name   string
+		schema map[string]any
+		want   any
+	}{
+		{name: "an example decoded from JSON", schema: map[string]any{"type": []any{"string", "object"}, "examples": []any{statement}}, want: statement},
+		{name: "examples an override wrote in Go", schema: map[string]any{"type": "string", "examples": []string{"first", "second"}}, want: "first"},
+		{name: "an example ahead of an enum", schema: map[string]any{"type": "string", "enum": []any{"a", "b"}, "examples": []any{"b"}}, want: "b"},
+		{name: "no example", schema: map[string]any{"type": "string"}, want: "value"},
+		{name: "an empty list", schema: map[string]any{"type": "string", "examples": []any{}}, want: "value"},
+		{name: "a list of another kind", schema: map[string]any{"type": "string", "examples": "first"}, want: "value"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := exampleValue("query", tc.schema); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("exampleValue() = %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFind_OrbitQueryExample_IsTheGQLStatementItsSchemaOffers verifies the
+// call find and describe offer for orbit.query on GitLab.com: its query is the
+// GQL statement the action's schema carries as its example, which GitLab.com
+// answers, rather than the placeholder its name gives, which GitLab.com
+// refuses as GQL that does not parse (issue 1414).
+func TestFind_OrbitQueryExample_IsTheGQLStatementItsSchemaOffers(t *testing.T) {
+	const want = "MATCH (p:Project {full_path: 'gitlab-org/gitlab'}) RETURN p.id, p.full_path LIMIT 1"
+	registry := NewRegistryFromCatalog(buildServedCatalog(t, exampleCatalog{name: "gitlab.com ultimate", tier: edition.Ultimate, dotcom: true}))
+	entry, ok := registry.byID["orbit.query"]
+	if !ok {
+		t.Fatal("the GitLab.com catalog serves no orbit.query")
+	}
+	params, _ := registry.describeEntry(entry).Example.Arguments["params"].(map[string]any)
+	if got := params["query"]; got != want {
+		t.Errorf("orbit.query example query = %#v, want the GQL statement %q", got, want)
+	}
+}
+
 // checkPublishedExample holds one described action to the four rules the
 // catalog-wide test states: its example satisfies its input schema, execute's
 // check of the params accepts it, its required params name nothing only an

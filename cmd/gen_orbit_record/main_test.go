@@ -29,9 +29,26 @@ type fakeAnswer struct {
 	body        string
 }
 
-// fakeDSLSchema is the $id the fake DSL answers with, the one GitLab.com
-// serves for version 12 of the query language.
-const fakeDSLSchema = "https://gitlab.com/gitlab-org/orbit/knowledge-graph/schemas/graph_query/v12"
+// fakeGrammar is the description the fake query command answers with, and
+// fakeGrammarStamp what a recording names it by: the stamp of that
+// description beside the input schema the fake answers raw.
+const fakeGrammar = "Read-only openCypher 9-based syntax (MATCH ... RETURN)."
+
+// fakeGrammarStamp is the stamp the fake raw answer to orbit.dsl records.
+func fakeGrammarStamp() string {
+	return orbitrecord.GrammarStamp(fakeGrammar, map[string]any{
+		"type":       "object",
+		"required":   []any{"query"},
+		"properties": map[string]any{"query": map[string]any{"type": "string"}},
+		"$defs":      map[string]any{},
+	})
+}
+
+// agentCommands is the fake raw answer to orbit.dsl, the query command with
+// the given description.
+func agentCommands(description string) string {
+	return `[{"name":"query_graph","description":"` + description + `","parameters":{"type":"object","required":["query"],"properties":{"query":{"type":"string"}},"$defs":{}}}]`
+}
 
 // orbitAnswers are the answers of a healthy GitLab.com, keyed by route and
 // response format, shaped like the ones recorded on 2026-09-27 and carrying
@@ -43,17 +60,18 @@ func orbitAnswers() map[string]fakeAnswer {
 		return fakeAnswer{status: 200, contentType: "application/json", body: body}
 	}
 	return map[string]fakeAnswer{
-		"GET /orbit/status raw":       ok(`{"user":{"available":true},"system":{"status":"healthy","timestamp":"t","version":"0.130.0","components":[{"name":"api","status":"healthy","replicas":{"ready":1,"desired":2},"metrics":{"kind":"deployment","query-latency.p99_ms":"12"}}]}}`),
-		"GET /orbit/status llm":       ok(`{"user":{"available":true},"system":{"formatted_text":"status: healthy"}}`),
-		"GET /orbit/schema raw":       ok(`{"schema_version":"1","domains":[{"name":"core","description":"d","node_names":["User"]}],"nodes":[{"name":"User","domain":"core"}],"edges":[{"name":"AUTHORED","description":"d","variants":[{"source_type":"User","target_type":"Issue"}]}]}`),
-		"GET /orbit/schema llm":       ok(`{"formatted_text":"nodes: User"}`),
-		"GET /orbit/tools ":           ok(`[{"name":"invoke_command","description":"d","parameters":{"type":"object","properties":{"$ref":{}}}}]`),
-		"GET /orbit/schema/dsl raw":   ok(`{"$id":"` + fakeDSLSchema + `","$defs":{},"version":"12.1.8"}`),
-		"GET /orbit/schema/dsl llm":   ok(`"query := node+"`),
-		"POST /orbit/query raw":       ok(`{"result":{"format_version":"5.0.3","nodes":[{"id":"1","full_path":"plens1/kg-fixtures"}],"edges":[]},"query_type":"traversal","row_count":1}`),
-		"POST /orbit/query llm":       {status: 200, contentType: "text/plain; charset=utf-8", body: "@header\nquery_type:traversal\n"},
-		"GET /orbit/graph_status raw": ok(`{"projects":{"indexed":2,"total_known":2},"domains":[{"name":"SDLC","items":[{"name":"Project","count":2}]}],"indexing":{"state":"indexed","last_error":null}}`),
-		"GET /orbit/graph_status llm": ok(`{"formatted_text":"indexed"}`),
+		"GET /orbit/status raw":         ok(`{"user":{"available":true},"system":{"status":"healthy","timestamp":"t","version":"0.130.0","components":[{"name":"api","status":"healthy","replicas":{"ready":1,"desired":2},"metrics":{"kind":"deployment","query-latency.p99_ms":"12"}}]}}`),
+		"GET /orbit/status llm":         ok(`{"user":{"available":true},"system":{"formatted_text":"status: healthy"}}`),
+		"GET /orbit/schema raw":         ok(`{"schema_version":"1","domains":[{"name":"core","description":"d","node_names":["User"]}],"nodes":[{"name":"User","domain":"core"}],"edges":[{"name":"AUTHORED","description":"d","variants":[{"source_type":"User","target_type":"Issue"}]}]}`),
+		"GET /orbit/schema llm":         ok(`{"formatted_text":"nodes: User"}`),
+		"GET /orbit/tools ":             ok(`[{"name":"invoke_command","description":"d","parameters":{"type":"object","properties":{"$ref":{}}}}]`),
+		"GET /orbit/agent/commands raw": ok(agentCommands(fakeGrammar)),
+		"GET /orbit/agent/commands llm": ok(`{"formatted_text":"commands[1]: query_graph, MATCH ... RETURN"}`),
+		"POST /orbit/query raw":         ok(`{"result":{"format_version":"5.0.3","nodes":[{"id":"1","full_path":"plens1/kg-fixtures"}],"edges":[]},"query_type":"traversal","row_count":1}`),
+		"POST /orbit/query llm":         {status: 200, contentType: "text/plain; charset=utf-8", body: "@header\nquery_type:traversal\n"},
+		"POST /orbit/query gql":         {status: 200, contentType: "text/plain; charset=utf-8", body: "+---+\n| p |\n+---+\n\n1 row\n"},
+		"GET /orbit/graph_status raw":   ok(`{"projects":{"indexed":2,"total_known":2},"domains":[{"name":"SDLC","items":[{"name":"Project","count":2}]}],"indexing":{"state":"indexed","last_error":null}}`),
+		"GET /orbit/graph_status llm":   ok(`{"formatted_text":"indexed"}`),
 	}
 }
 
@@ -199,11 +217,11 @@ func TestRecord_AgainstAHealthyGitLab_WritesARecordTheCheckAccepts(t *testing.T)
 	if status != 0 {
 		t.Fatalf("record status = %d, stderr:\n%s", status, errOut)
 	}
-	if !strings.Contains(out, "wrote "+orbitrecord.Path(dir)+": 12 calls, Orbit 0.130.0, query DSL "+fakeDSLSchema+" 12.1.8") || !strings.Contains(out, "nothing to compare this one with") {
+	if !strings.Contains(out, "wrote "+orbitrecord.Path(dir)+": 13 calls, Orbit 0.130.0, query grammar "+fakeGrammarStamp()) || !strings.Contains(out, "nothing to compare this one with") {
 		t.Errorf("stdout = %q", out)
 	}
-	if asked := fake.snapshot(); len(asked) != 12 || !strings.HasPrefix(asked[0], "https://gitlab.com GET /orbit/status raw") {
-		t.Errorf("asked = %q, want the twelve calls against gitlab.com", asked)
+	if asked := fake.snapshot(); len(asked) != 13 || !strings.HasPrefix(asked[0], "https://gitlab.com GET /orbit/status raw") {
+		t.Errorf("asked = %q, want the thirteen calls against gitlab.com", asked)
 	}
 	for _, token := range fake.tokens() {
 		if token != "glpat-test" {
@@ -215,19 +233,19 @@ func TestRecord_AgainstAHealthyGitLab_WritesARecordTheCheckAccepts(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := orbitrecord.Source{Instance: orbitrecord.Instance, OrbitVersion: "0.130.0", DSLSchema: fakeDSLSchema, DSLVersion: "12.1.8", Namespace: "plens1", RetrievedAt: "2026-09-27"}
+	want := orbitrecord.Source{Instance: orbitrecord.Instance, OrbitVersion: "0.130.0", QueryGrammar: fakeGrammarStamp(), Namespace: "plens1", RetrievedAt: "2026-09-27"}
 	if doc.Source != want {
 		t.Errorf("source = %+v, want %+v", doc.Source, want)
 	}
 	checkStatus, checkOut, checkErr := runCapture(genRun{dir: dir, check: true, now: func() time.Time { return recordedOn }})
-	if checkStatus != 0 || !strings.Contains(checkOut, "12 calls recorded from https://gitlab.com, Orbit 0.130.0, query DSL "+fakeDSLSchema+" 12.1.8, namespace plens1, on 2026-09-27") {
+	if checkStatus != 0 || !strings.Contains(checkOut, "13 calls recorded from https://gitlab.com, Orbit 0.130.0, query grammar "+fakeGrammarStamp()+", namespace plens1, on 2026-09-27") {
 		t.Errorf("check = %d, %q, %q", checkStatus, checkOut, checkErr)
 	}
 
 	head.commit(t, dir)
 	cfg.client = &http.Client{Transport: &fakeGitLab{answers: orbitAnswers()}}
 	again, againOut, againErr := runCapture(cfg)
-	if again != 0 || !strings.Contains(againOut, "the key tree and the query DSL are the ones committed at HEAD") {
+	if again != 0 || !strings.Contains(againOut, "the key tree and the query grammar are the ones committed at HEAD") {
 		t.Errorf("second record = %d, %q, %q", again, againOut, againErr)
 	}
 }
@@ -246,7 +264,7 @@ func TestRecord_WhatTheRecordHolds_IsTheShapeAndNeverAValue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, value := range []string{"healthy", "deployment", "query-latency", "metrics.kind", "plens1/kg-fixtures", "invoke_command", "AUTHORED", "$defs", "$ref", "query := node+", "@header"} {
+	for _, value := range []string{"healthy", "deployment", "query-latency", "metrics.kind", "plens1/kg-fixtures", "invoke_command", "AUTHORED", "$defs", "$ref", "query_graph", "openCypher", "MATCH", "@header"} {
 		t.Run("no "+value, func(t *testing.T) {
 			if bytes.Contains(raw, []byte(value)) {
 				t.Errorf("the record holds %q, a value or a data key", value)
@@ -270,7 +288,7 @@ func TestRecord_WhatTheRecordHolds_IsTheShapeAndNeverAValue(t *testing.T) {
 	verbatim := map[string]string{
 		"orbit.status (raw)":    "system.components[].metrics",
 		"orbit.tools (default)": "[].parameters",
-		"orbit.dsl (raw)":       orbitrecord.Root,
+		"orbit.dsl (raw)":       "[].parameters",
 		"orbit.query (raw)":     "result.nodes[]",
 	}
 	for id, path := range verbatim {
@@ -316,7 +334,14 @@ func TestRecord_AChangedAnswer_FailsEveryRunUntilItIsCommitted(t *testing.T) {
 	changed := orbitAnswers()
 	changed["GET /orbit/graph_status llm"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"formatted_text":"indexed","region":"eu"}`}
 	changed["GET /orbit/schema llm"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"text":"nodes"}`}
-	changed["GET /orbit/schema/dsl raw"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"$id":"` + fakeDSLSchema + `","$defs":{},"version":"12.1.10"}`}
+	const laterGrammar = "Read-only openCypher 9-based syntax (MATCH ... RETURN), now with OPTIONAL MATCH."
+	changed["GET /orbit/agent/commands raw"] = fakeAnswer{status: 200, contentType: "application/json", body: agentCommands(laterGrammar)}
+	laterStamp := orbitrecord.GrammarStamp(laterGrammar, map[string]any{
+		"type":       "object",
+		"required":   []any{"query"},
+		"properties": map[string]any{"query": map[string]any{"type": "string"}},
+		"$defs":      map[string]any{},
+	})
 	rerun := func() (int, string) {
 		cfg := testRun(dir, &fakeGitLab{answers: changed})
 		cfg.git = head.git
@@ -334,8 +359,8 @@ func TestRecord_AChangedAnswer_FailsEveryRunUntilItIsCommitted(t *testing.T) {
 				"+ orbit.graph_status (llm): region string",
 				"+ orbit.schema (llm): text string",
 				"- orbit.schema (llm): formatted_text string",
-				"~ query DSL: " + fakeDSLSchema + " 12.1.8 -> " + fakeDSLSchema + " 12.1.10: read orbit.query's guidance against it",
-				"the key tree or the query DSL differs from the record committed at HEAD in 4 places",
+				"~ query grammar: " + fakeGrammarStamp() + " -> " + laterStamp + ": read orbit.query's guidance against it",
+				"the key tree or the query grammar differs from the record committed at HEAD in 4 places",
 			} {
 				if !strings.Contains(errOut, line) {
 					t.Errorf("stderr lacks %q:\n%s", line, errOut)
@@ -368,7 +393,7 @@ func TestRecord_RefusesWhatItCannotRecordWhole(t *testing.T) {
 	unindexed := orbitAnswers()
 	unindexed["GET /orbit/graph_status raw"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"projects":{"indexed":0,"total_known":2},"domains":[],"indexing":{"state":"pending"}}`}
 	unstamped := orbitAnswers()
-	unstamped["GET /orbit/schema/dsl raw"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"$defs":{},"version":"12.1.8"}`}
+	unstamped["GET /orbit/agent/commands raw"] = fakeAnswer{status: 200, contentType: "application/json", body: `[{"name":"list_commands","description":"d","parameters":{"type":"object"}}]`}
 	cases := []struct {
 		name  string
 		token string
@@ -380,7 +405,7 @@ func TestRecord_RefusesWhatItCannotRecordWhole(t *testing.T) {
 		{name: "a query that finds no row", token: "glpat-test", fake: &fakeGitLab{answers: noRows}, want: "orbit.query (raw) found no row for the fixture project: the fixture namespace is not indexed"},
 		{name: "a namespace with no indexed project", token: "glpat-test", fake: &fakeGitLab{answers: unindexed}, want: "orbit.graph_status (raw) counts no indexed project"},
 		{name: "a record the check refuses", token: "glpat-test", fake: &fakeGitLab{answers: versionless}, want: "names no Orbit version"},
-		{name: "a DSL naming no $id", token: "glpat-test", fake: &fakeGitLab{answers: unstamped}, want: "names no query DSL schema and version"},
+		{name: "no query command described", token: "glpat-test", fake: &fakeGitLab{answers: unstamped}, want: "names no query grammar"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -429,6 +454,62 @@ func TestRecord_AnUnwritableDirectory_Fails(t *testing.T) {
 	status, _, errOut := runCapture(testRun(blocker, &fakeGitLab{answers: orbitAnswers()}))
 	if status != 1 || !strings.Contains(errOut, "create directory for") {
 		t.Errorf("status = %d, stderr = %q", status, errOut)
+	}
+}
+
+// TestCheckRecord_ARecordPinningTheJSONQueryDSL_IsRefused verifies the gate
+// on the case issue 1414 is about, a record that still pins the JSON query
+// DSL GitLab.com stopped reading on 2026-10-15, in both shapes such a record
+// can take: one of schema version 2, which is every record a recording wrote
+// before the change, is refused by its version with the command that
+// re-records it, and one of version 3 that carries the JSON DSL's $id and
+// version beside its grammar is refused as not the form the generator
+// writes, since version 3 has no place for either key.
+func TestCheckRecord_ARecordPinningTheJSONQueryDSL_IsRefused(t *testing.T) {
+	const pins = `"dsl_schema": "https://gitlab.com/gitlab-org/orbit/knowledge-graph/schemas/graph_query/v12",` + "\n    " + `"dsl_version": "12.1.10",` + "\n    "
+	cases := []struct {
+		name string
+		edit func(record []byte) []byte
+		want string
+	}{
+		{
+			name: "a record of schema version 2",
+			edit: func(record []byte) []byte {
+				return bytes.Replace(record, []byte(`"schema_version": 3`), []byte(`"schema_version": 2`), 1)
+			},
+			want: "the Orbit response record is schema version 2 and this build reads version 3: regenerate it with make gen-orbit-record",
+		},
+		{
+			name: "a record of version 3 that still names the JSON DSL",
+			edit: func(record []byte) []byte {
+				return bytes.Replace(record, []byte(`"namespace": `), []byte(pins+`"namespace": `), 1)
+			},
+			want: "the record is not in the form this command writes",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if status, _, errOut := runCapture(testRun(dir, &fakeGitLab{answers: orbitAnswers()})); status != 0 {
+				t.Fatalf("record failed: %s", errOut)
+			}
+			record, err := os.ReadFile(orbitrecord.Path(dir))
+			if err != nil {
+				t.Fatal(err)
+			}
+			edited := tc.edit(record)
+			if bytes.Equal(edited, record) {
+				t.Fatalf("the edit changed nothing in %s", record)
+			}
+			if err = os.WriteFile(orbitrecord.Path(dir), edited, 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			status, _, errOut := runCapture(genRun{dir: dir, check: true, now: func() time.Time { return recordedOn }})
+			if status != 1 || !strings.Contains(errOut, tc.want) {
+				t.Errorf("status = %d, stderr = %q, want 1 and %q", status, errOut, tc.want)
+			}
+		})
 	}
 }
 

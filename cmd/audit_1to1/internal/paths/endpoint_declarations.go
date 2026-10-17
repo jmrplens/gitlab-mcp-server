@@ -153,7 +153,7 @@ var declaredUndocumentedEndpoints = []endpointDeclaration{
 			"(gitlab-org/gitlab@79abefeb) and points at the generated reference at api.gitlab.com instead of listing " +
 			"the routes: its plaintext blocks name only /orbit/skills and its subpaths, which this server does not call, " +
 			"and that reference (doc/api/openapi/openapi_v3.yaml) gives query, schema, status and tools no response " +
-			"schema while schema/dsl and graph_status are hidden routes. What the six routes answer is held instead to " +
+			"schema while agent/commands and graph_status are hidden routes. What the six routes answer is held instead to " +
 			"docs/development/orbit-responses.json, which cmd/gen_orbit_record records from GitLab.com.",
 	},
 	{

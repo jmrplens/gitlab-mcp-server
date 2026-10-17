@@ -387,73 +387,226 @@ func TestTools_Success_ExpectedOutput(t *testing.T) {
 	}
 }
 
-// TestDSL_EachResponseFormat_PublishesTheDSLItself verifies what [DSL] makes of
-// each answer GitLab gives. The llm grammar arrives as a JSON string under
-// application/json, which is how GitLab.com answered it when the Orbit record
-// was taken (docs/development/orbit-responses.json, orbit.dsl (llm)), and is
-// published as the grammar's text rather than as one quoted line of escapes.
-// An llm body that is not a JSON string is published as it came, and the raw
-// JSON Schema document is never decoded, since its text is what a reader
-// wants, whether raw was asked for or left to GitLab's default. A requested
-// format reaches GitLab as response_format, and none is sent otherwise.
-func TestDSL_EachResponseFormat_PublishesTheDSLItself(t *testing.T) {
+// queryGraphGrammar stands in for the description GitLab.com gives the
+// query_graph command, which is the grammar of the GQL it compiles queries in.
+const queryGraphGrammar = "Read-only openCypher 9-based syntax (MATCH ... RETURN). No OR, XOR, DISTINCT, count(*), OPTIONAL MATCH, WITH or UNION."
+
+// agentCommandsRaw is the raw answer of GET /api/v4/orbit/agent/commands in
+// the shape GitLab.com gave it on 2026-10-17, with a second command ahead of
+// query_graph so the reader has to find the query command rather than take the
+// first one it meets.
+const agentCommandsRaw = `[{"name":"list_commands","description":"Lists the commands.","parameters":{"type":"object"}},` +
+	`{"name":"query_graph","description":"` + queryGraphGrammar + `",` +
+	`"parameters":{"type":"object","required":["query"],"properties":{"query":{"type":"string","description":"Read-only GQL query text."}},"additionalProperties":false}}]`
+
+// queryGraphParameters is the JSON Schema of the query_graph input in
+// [agentCommandsRaw], decoded.
+func queryGraphParameters() map[string]any {
+	return map[string]any{
+		"type":     "object",
+		"required": []any{"query"},
+		"properties": map[string]any{
+			"query": map[string]any{"type": "string", "description": "Read-only GQL query text."},
+		},
+		"additionalProperties": false,
+	}
+}
+
+// TestDSL_EachResponseFormat_ReadsTheQueryCommand verifies that [DSL] reads
+// the language GitLab.com compiles queries in from the query_graph command of
+// GET /orbit/agent/commands, and never asks GET /orbit/schema/dsl, which
+// answers 404 since GitLab.com turned GQL on for everyone (issue 1414). The raw
+// answer, asked for or left to GitLab's default, publishes the command, its
+// grammar and the JSON Schema of its input; the llm answer publishes the
+// compact text. The command is named in command_names, and a requested
+// format reaches GitLab as response_format and none is sent otherwise.
+func TestDSL_EachResponseFormat_ReadsTheQueryCommand(t *testing.T) {
+	const (
+		llmText = "commands[1]{name,description}:\n  query_graph,Read-only openCypher 9-based syntax"
+		llmBody = `{"formatted_text":"commands[1]{name,description}:\n  query_graph,Read-only openCypher 9-based syntax"}`
+	)
 	cases := []struct {
-		name        string
-		format      string
-		contentType string
-		body        string
-		want        string
+		name   string
+		format string
+		body   string
+		want   DSLOutput
 	}{
-		{name: "llm, as GitLab sends it", format: "llm", contentType: "application/json", body: `"@dsl\nquery_type: traversal\n"`, want: "@dsl\nquery_type: traversal\n"},
-		{name: "llm, as text", format: "llm", contentType: "text/plain", body: "@dsl\nquery_type: traversal\n", want: "@dsl\nquery_type: traversal\n"},
-		{name: "raw", format: "raw", contentType: "application/json", body: `{"$defs":{},"version":"12.1.8"}`, want: `{"$defs":{},"version":"12.1.8"}`},
-		{name: "raw, a JSON string left alone", format: "raw", contentType: "application/json", body: `"kept"`, want: `"kept"`},
-		{name: "no format, which GitLab answers raw", contentType: "application/json", body: `"kept"`, want: `"kept"`},
+		{
+			name:   "raw",
+			format: "raw",
+			body:   agentCommandsRaw,
+			want:   DSLOutput{ResponseFormat: "raw", Name: "query_graph", Description: queryGraphGrammar, Parameters: queryGraphParameters()},
+		},
+		{
+			name: "no format, which GitLab answers raw",
+			body: agentCommandsRaw,
+			want: DSLOutput{Name: "query_graph", Description: queryGraphGrammar, Parameters: queryGraphParameters()},
+		},
+		{
+			name:   "llm",
+			format: "llm",
+			body:   llmBody,
+			want:   DSLOutput{ResponseFormat: "llm", FormattedText: llmText},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			var retiredRoute atomic.Int32
 			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/v4/orbit/schema/dsl" {
+					retiredRoute.Add(1)
+					testutil.RespondJSON(w, http.StatusNotFound, `{"code":5,"message":"Orbit request failed"}`)
+					return
+				}
 				testutil.AssertRequestMethod(t, r, http.MethodGet)
-				testutil.AssertRequestPath(t, r, "/api/v4/orbit/schema/dsl")
+				testutil.AssertRequestPath(t, r, "/api/v4/orbit/agent/commands")
+				testutil.AssertQueryParam(t, r, "command_names", "query_graph")
 				testutil.AssertQueryParam(t, r, "response_format", tc.format)
-				w.Header().Set("Content-Type", tc.contentType)
-				_, _ = w.Write([]byte(tc.body))
+				testutil.RespondJSON(w, http.StatusOK, tc.body)
 			}))
 
 			out, err := DSL(context.Background(), client, DSLInput{ResponseFormat: tc.format})
 			if err != nil {
 				t.Fatalf("DSL() error: %v", err)
 			}
-			if out.ResponseFormat != tc.format || out.Content != tc.want {
-				t.Errorf("DSL() = %+v, want format %q and content %q", out, tc.format, tc.want)
+			if !reflect.DeepEqual(out, tc.want) {
+				t.Errorf("DSL() = %+v, want %+v", out, tc.want)
+			}
+			if n := retiredRoute.Load(); n != 0 {
+				t.Errorf("DSL() asked GET /orbit/schema/dsl %d time(s), want never", n)
 			}
 		})
 	}
 }
 
-// TestQuery_Success_ForwardsRawQuery verifies that [Query] posts the raw graph
-// query object and response format before decoding the query result.
-//
-// The test posts a traversal query and asserts the request body and decoded result.
-// This ensures the handler sends the correct payload and parses the response.
-func TestQuery_Success_ForwardsRawQuery(t *testing.T) {
+// TestDSL_NoQueryCommand_PublishesNothing verifies that an answer describing
+// no query_graph command, an empty list or one holding other commands only,
+// publishes no language at all rather than describing another command as the
+// query language.
+func TestDSL_NoQueryCommand_PublishesNothing(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "an empty list", body: `[]`},
+		{name: "other commands only", body: `[{"name":"list_commands","description":"Lists the commands.","parameters":{"type":"object"}}]`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestPath(t, r, "/api/v4/orbit/agent/commands")
+				testutil.RespondJSON(w, http.StatusOK, tc.body)
+			}))
+
+			out, err := DSL(context.Background(), client, DSLInput{ResponseFormat: "raw"})
+			if err != nil {
+				t.Fatalf("DSL() error: %v", err)
+			}
+			if want := (DSLOutput{ResponseFormat: "raw"}); !reflect.DeepEqual(out, want) {
+				t.Errorf("DSL() = %+v, want %+v", out, want)
+			}
+		})
+	}
+}
+
+// TestDSL_BodyThatDoesNotDecode_ReturnsAnError verifies that an answer [DSL]
+// cannot read, an object whose text is not a string or anything but an object
+// or a list of commands, is an error naming the operation and what failed to
+// decode, rather than an empty card that reads as GitLab describing nothing.
+func TestDSL_BodyThatDoesNotDecode_ReturnsAnError(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "an object whose text is a number", body: `{"formatted_text":5}`, want: "decode the query command as text"},
+		{name: "a string", body: `"query_graph"`, want: "decode the query command: "},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tc.body)
+			}))
+
+			_, err := DSL(context.Background(), client, DSLInput{})
+			if err == nil || !strings.Contains(err.Error(), "orbit_dsl") || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("DSL() error = %v, want orbit_dsl and %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestGetAgentCommands_PathThatCannotBeBuilt_ReturnsTheError verifies that
+// the request client-go cannot build is reported rather than sent. No
+// constant path produces one, which is why the path is a parameter.
+func TestGetAgentCommands_PathThatCannotBeBuilt_ReturnsTheError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("handler should not be called for a request that cannot be built: %s %s", r.Method, r.URL.Path)
+		http.Error(w, "unexpected request", http.StatusInternalServerError)
+	}))
+
+	if _, err := getAgentCommands(context.Background(), client, "orbit/%zz", agentCommandsOptions{CommandNames: queryCommand}); err == nil {
+		t.Fatal("getAgentCommands() error = nil, want the error of the request that cannot be built")
+	}
+}
+
+// TestOrbitHandlers_CancelledOnArrival_ReturnCanceled verifies that [DSL] and
+// [Query], on both of its paths, hand client-go the caller's context: the
+// context ends when the request reaches the mock, so each returns
+// context.Canceled promptly only if its request carried it.
+func TestOrbitHandlers_CancelledOnArrival_ReturnCanceled(t *testing.T) {
+	respond := func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	}
+	cases := []struct {
+		name string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{name: "dsl", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := DSL(ctx, client, DSLInput{})
+			return err
+		}},
+		{name: "query", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Query(ctx, client, QueryInput{Query: projectByIDGQL})
+			return err
+		}},
+		{name: "query in the llm format", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Query(ctx, client, QueryInput{Query: projectByIDGQL, ResponseFormat: "llm"})
+			return err
+		}},
+		{name: "query in the gql format", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Query(ctx, client, QueryInput{Query: projectByIDGQL, ResponseFormat: "gql"})
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, client := testutil.CancelOnArrival(t, respond)
+			if err := tc.call(ctx, client); !errors.Is(err, context.Canceled) {
+				t.Fatalf("%s error = %v after the context was cancelled mid-flight, want context.Canceled", tc.name, err)
+			}
+		})
+	}
+}
+
+// TestQuery_GQLText_IsSentAsTheBodysQueryString verifies the body [Query]
+// posts for a query written in GQL, the language GitLab.com reads every query
+// in since 2026-10-15: {"query": "<GQL text>", "response_format": "raw"} and
+// nothing else, the text a JSON string GitLab compiles as it was written. The
+// answer is decoded as the structured envelope.
+func TestQuery_GQLText_IsSentAsTheBodysQueryString(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodPost)
 		testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
-		var got map[string]json.RawMessage
+		var got map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Errorf("decode request: %v", err)
 			http.Error(w, "decode request", http.StatusInternalServerError)
 			return
 		}
-		if string(got["query"]) != `{"nodes":[{"entity":"Project","id":"p","node_ids":[1]}],"query_type":"traversal"}` {
-			t.Errorf("query body = %s, want traversal query with node_ids", got["query"])
-			http.Error(w, "query body, want traversal query with node_ids", http.StatusInternalServerError)
-			return
-		}
-		if string(got["response_format"]) != `"raw"` {
-			t.Errorf("response_format = %s, want raw", got["response_format"])
-			http.Error(w, "response_format, want raw", http.StatusInternalServerError)
+		if want := map[string]any{"query": projectByIDGQL, "response_format": "raw"}; !reflect.DeepEqual(got, want) {
+			t.Errorf("request body = %v, want %v", got, want)
+			http.Error(w, "request body differs", http.StatusInternalServerError)
 			return
 		}
 		testutil.RespondJSON(w, http.StatusOK, `{
@@ -465,7 +618,7 @@ func TestQuery_Success_ForwardsRawQuery(t *testing.T) {
 	}))
 
 	out, err := Query(context.Background(), client, QueryInput{
-		Query:          projectByIDQuery(),
+		Query:          projectByIDGQL,
 		ResponseFormat: "raw",
 	})
 	if err != nil {
@@ -504,7 +657,7 @@ func TestQuery_NoResponseFormat_DefaultsToRaw(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{"result":[{"_id":"1"}],"query_type":"traversal","row_count":1}`)
 	}))
 
-	out, err := Query(context.Background(), client, QueryInput{Query: projectByIDQuery()})
+	out, err := Query(context.Background(), client, QueryInput{Query: projectByIDGQL})
 	if err != nil {
 		t.Fatalf("Query() error: %v", err)
 	}
@@ -514,25 +667,81 @@ func TestQuery_NoResponseFormat_DefaultsToRaw(t *testing.T) {
 	}
 }
 
-// projectByIDQuery is the smallest query GitLab.com runs in version 12 of the
-// DSL: one Project node, in the nodes list every query carries, bounded by its
-// id.
-func projectByIDQuery() map[string]any {
+// projectByIDGQL is the smallest query GitLab.com runs in GQL: one Project
+// node, labeled where it appears and bounded by its id.
+const projectByIDGQL = "MATCH (p:Project {id: 1}) RETURN p.id, p.full_path"
+
+// projectByIDObject is the same query written as an object in version 12 of
+// the JSON DSL, which GitLab.com read until 2026-10-15 and which [Query] still
+// forwards as written.
+func projectByIDObject() map[string]any {
 	return map[string]any{
 		"query_type": "traversal",
 		"nodes":      []any{map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}}},
 	}
 }
 
-// TestQuery_EveryQueryType_ReachesTheWire verifies that a query of each type,
-// in the version 12 shape GitLab.com answered 200 to on 2026-10-05, is
-// forwarded to GitLab as the caller wrote it: a filtered traversal, an
-// aggregation grouped by a node and sorted by its count, a neighbors query
-// whose center is its one node, and a path with the rel_types GitLab
-// requires. The neighbors case is the shape the validator this package
-// carried, written for an older shape of the DSL, refused before sending
-// anything (issue 1031).
-func TestQuery_EveryQueryType_ReachesTheWire(t *testing.T) {
+// projectByIDObjectText is that object written as JSON text, which a client
+// that serializes a nested object sends as a string, and which GitLab.com
+// refused on 2026-10-17 with the same "Orbit query syntax at line 1, column 1"
+// it answers the object with.
+const projectByIDObjectText = `{"query_type":"traversal","nodes":[{"id":"p","entity":"Project","node_ids":[1]}]}`
+
+// TestQuery_EveryQueryShape_InGQL_ReachesTheWire verifies that a query of each
+// shape GQL writes, each answered 200 by GitLab.com on 2026-10-17 against the
+// fixture namespace, reaches GitLab as the text the caller wrote: a filtered
+// traversal, an aggregation grouped by a node and sorted by its alias, the
+// neighbors of one node and a shortest path between two bounded ones. Nothing
+// here parses the text, so a quote, an arrow or a brace inside it travels as
+// it is.
+func TestQuery_EveryQueryShape_InGQL_ReachesTheWire(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+	}{
+		{name: "traversal", query: "MATCH (p:Project) WHERE p.full_path STARTS WITH 'plens1/' RETURN p.id, p.full_path LIMIT 3"},
+		{name: "aggregation", query: "MATCH (mr:MergeRequest)-[:IN_PROJECT]->(p:Project) WHERE p.full_path STARTS WITH 'plens1/' RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC"},
+		{name: "neighbors", query: "MATCH (p:Project {full_path: 'plens1/kg-fixtures'})--(n) RETURN n"},
+		{name: "path_finding", query: "MATCH path = ANY SHORTEST (mr:MergeRequest {source_branch: 'feature/restock-helper'})-[:IN_PROJECT*1..2]->(p:Project {full_path: 'plens1/kg-fixtures'}) RETURN path"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var got struct {
+					Query any `json:"query"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+					t.Errorf("decode request: %v", err)
+					http.Error(w, "decode request", http.StatusInternalServerError)
+					return
+				}
+				if got.Query != tt.query {
+					t.Errorf("query = %#v, want the caller's text %q", got.Query, tt.query)
+				}
+				testutil.RespondJSON(w, http.StatusOK, `{"result":[],"query_type":"`+tt.name+`","row_count":0}`)
+			}))
+
+			out, err := Query(context.Background(), client, QueryInput{Query: tt.query})
+			if err != nil {
+				t.Fatalf("Query() error: %v", err)
+			}
+			if out.QueryType != tt.name {
+				t.Fatalf("Query() query type = %q, want %q as GitLab inferred it", out.QueryType, tt.name)
+			}
+		})
+	}
+}
+
+// TestQuery_JSONObject_IsForwardedAsWritten verifies that a query written as
+// an object, in the version 12 shape of the JSON DSL GitLab.com answered 200
+// to on 2026-10-05, is still forwarded to GitLab exactly as the caller wrote
+// it rather than refused here: a filtered traversal, an aggregation, a
+// neighbors query and a path. GitLab.com reads GQL now and refuses it, but an
+// object keeps working if GitLab.com turns GQL back off before
+// gitlab-org/gitlab!261947 removes the JSON DSL (issue 1414). The neighbors
+// case is the shape the validator this package once carried refused before
+// sending anything (issue 1031).
+func TestQuery_JSONObject_IsForwardedAsWritten(t *testing.T) {
 	tests := []struct {
 		name  string
 		query map[string]any
@@ -617,37 +826,55 @@ func TestQuery_EveryQueryType_ReachesTheWire(t *testing.T) {
 }
 
 // TestQuery_LLMResponseFormat_UsesRawResponse verifies that [Query] uses the
-// raw Orbit API path for LLM/text responses instead of JSON decoding.
-//
-// The test mocks a text/plain response and asserts that FormattedText is set and Result is nil.
+// raw Orbit API path for LLM/text responses instead of JSON decoding, sending
+// the query as it was written. The llm answer carries no query type of its
+// own: a query written as an object is labeled with the query_type it names,
+// and a GQL one, whose type GitLab infers from the statement, with none.
 func TestQuery_LLMResponseFormat_UsesRawResponse(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertRequestMethod(t, r, http.MethodPost)
-		testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
-		var got map[string]json.RawMessage
-		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-			t.Errorf("decode request: %v", err)
-			http.Error(w, "decode request", http.StatusInternalServerError)
-			return
-		}
-		if string(got["response_format"]) != `"llm"` {
-			t.Errorf("response_format = %s, want llm", got["response_format"])
-			http.Error(w, "response_format, want llm", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "text/plain")
-		_, _ = w.Write([]byte("@header\nProject(name: gitlab)\n"))
-	}))
-
-	out, err := Query(context.Background(), client, QueryInput{
-		Query:          projectByIDQuery(),
-		ResponseFormat: "llm",
-	})
-	if err != nil {
-		t.Fatalf("Query() error: %v", err)
+	cases := []struct {
+		name      string
+		query     any
+		wantQuery any
+		wantType  string
+	}{
+		{name: "GQL text", query: projectByIDGQL, wantQuery: projectByIDGQL, wantType: ""},
+		{name: "a JSON object", query: projectByIDObject(), wantQuery: map[string]any{
+			"query_type": "traversal",
+			"nodes":      []any{map[string]any{"id": "p", "entity": "Project", "node_ids": []any{float64(1)}}},
+		}, wantType: "traversal"},
 	}
-	if !strings.Contains(out.FormattedText, "@header") || out.Result != nil || out.QueryType != "traversal" {
-		t.Fatalf("Query() = %+v, want raw formatted text with query type", out)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodPost)
+				testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
+				var got map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+					t.Errorf("decode request: %v", err)
+					http.Error(w, "decode request", http.StatusInternalServerError)
+					return
+				}
+				if want := map[string]any{"query": tc.wantQuery, "response_format": "llm"}; !reflect.DeepEqual(got, want) {
+					t.Errorf("request body = %v, want %v", got, want)
+					http.Error(w, "request body differs", http.StatusInternalServerError)
+					return
+				}
+				w.Header().Set("Content-Type", "text/plain")
+				_, _ = w.Write([]byte("@header\nProject(name: gitlab)\n"))
+			}))
+
+			out, err := Query(context.Background(), client, QueryInput{
+				Query:          tc.query,
+				ResponseFormat: "llm",
+			})
+			if err != nil {
+				t.Fatalf("Query() error: %v", err)
+			}
+			want := QueryOutput{FormattedText: "@header\nProject(name: gitlab)\n", QueryType: tc.wantType}
+			if !reflect.DeepEqual(out, want) {
+				t.Fatalf("Query() = %+v, want %+v", out, want)
+			}
+		})
 	}
 }
 
@@ -663,7 +890,7 @@ func TestQuery_LLMResponseFormat_RawError(t *testing.T) {
 	}))
 
 	_, err := Query(context.Background(), client, QueryInput{
-		Query:          projectByIDQuery(),
+		Query:          projectByIDGQL,
 		ResponseFormat: "llm",
 	})
 	if err == nil {
@@ -671,22 +898,131 @@ func TestQuery_LLMResponseFormat_RawError(t *testing.T) {
 	}
 }
 
+// projectTable is GitLab.com's answer to a GQL query in the gql response
+// format, as it answered MATCH (p:Project {full_path: 'plens1/kg-fixtures'})
+// RETURN p.id, p.full_path LIMIT 1 on 2026-10-17: a graph pattern table as
+// text/plain, written by writeLLMResultResponse in
+// workhorse/internal/orbit/sendquery.go like the llm answer.
+const projectTable = "+------------------------------------------------------------+\n" +
+	"| p                                                          |\n" +
+	"+------------------------------------------------------------+\n" +
+	"| (:Project {id: 83234203, full_path: \"plens1/kg-fixtures\"}) |\n" +
+	"+------------------------------------------------------------+\n\n1 row\n"
+
+// TestQuery_GQLResponseFormat_ReturnsTheGraphPatternTable verifies the third
+// response format POST /orbit/query takes, gql, which GitLab declares on that
+// route alone (`values: %w[raw llm gql]` in ee/lib/api/orbit/data.rb) and which
+// the query command orbit.dsl publishes in its input schema: it reaches GitLab
+// as written, in any case, and the table GitLab answers with is published
+// whole as formatted_text, the way the llm text is. It was refused here as
+// "use raw or llm" while orbit.dsl taught it.
+func TestQuery_GQLResponseFormat_ReturnsTheGraphPatternTable(t *testing.T) {
+	for _, format := range []string{"gql", " GQL "} {
+		t.Run(format, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodPost)
+				testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
+				var got map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+					t.Errorf("decode request: %v", err)
+					http.Error(w, "decode request", http.StatusInternalServerError)
+					return
+				}
+				if want := map[string]any{"query": projectByIDGQL, "response_format": "gql"}; !reflect.DeepEqual(got, want) {
+					t.Errorf("request body = %v, want %v", got, want)
+					http.Error(w, "request body differs", http.StatusInternalServerError)
+					return
+				}
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				_, _ = w.Write([]byte(projectTable))
+			}))
+
+			out, err := Query(context.Background(), client, QueryInput{Query: projectByIDGQL, ResponseFormat: format})
+			if err != nil {
+				t.Fatalf("Query() error: %v", err)
+			}
+			if want := (QueryOutput{FormattedText: projectTable}); !reflect.DeepEqual(out, want) {
+				t.Fatalf("Query() = %+v, want %+v", out, want)
+			}
+		})
+	}
+}
+
+// TestQuery_UnknownResponseFormat_NamesTheThreeItTakes verifies that a
+// response format POST /orbit/query does not declare is refused before
+// anything is sent, with the three values the route takes.
+func TestQuery_UnknownResponseFormat_NamesTheThreeItTakes(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("handler should not be called for an unknown response format: %s %s", r.Method, r.URL.Path)
+		http.Error(w, "unexpected request", http.StatusInternalServerError)
+	}))
+	_, err := Query(context.Background(), client, QueryInput{Query: projectByIDGQL, ResponseFormat: "xml"})
+	if err == nil || err.Error() != "invalid response_format: use raw, llm or gql" {
+		t.Fatalf("Query() error = %v, want the three formats the query route takes", err)
+	}
+}
+
+// TestOrbitReads_GQLResponseFormat_IsRefusedWhereGitLabDeclaresNone verifies
+// that gql stays a format of the query route alone: status, the query
+// language, the schema and the indexing status declare raw and llm, so gql is
+// refused there before anything is sent rather than answered 400 by GitLab.
+func TestOrbitReads_GQLResponseFormat_IsRefusedWhereGitLabDeclaresNone(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("handler should not be called for gql outside the query route: %s %s", r.Method, r.URL.Path)
+		http.Error(w, "unexpected request", http.StatusInternalServerError)
+	}))
+	cases := []struct {
+		name string
+		call func() error
+		want string
+	}{
+		{name: "status", want: "invalid response_format: use raw or llm", call: func() error {
+			_, err := Status(context.Background(), client, StatusInput{ResponseFormatInput{ResponseFormat: "gql"}})
+			return err
+		}},
+		{name: "dsl", want: "invalid response_format: use raw or llm", call: func() error {
+			_, err := DSL(context.Background(), client, DSLInput{ResponseFormatInput{ResponseFormat: "gql"}})
+			return err
+		}},
+		{name: "schema", want: "invalid format: use raw or llm", call: func() error {
+			_, err := Schema(context.Background(), client, SchemaInput{Format: "gql"})
+			return err
+		}},
+		{name: "graph_status", want: "invalid response_format: use raw or llm", call: func() error {
+			_, err := GraphStatus(context.Background(), client, GraphStatusInput{FullPath: "plens1", ResponseFormat: "gql"})
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.call(); err == nil || err.Error() != tc.want {
+				t.Fatalf("%s error = %v, want %q", tc.name, err, tc.want)
+			}
+		})
+	}
+}
+
 // TestQuery_AnyShape_IsLeftForGitLabToJudge verifies that the handler holds a
-// query to nothing but being one: queries in the older shape this package
-// taught (a top-level node, an {op, value} filter, a node named inside
-// neighbors), an unbounded one, one with an unknown or missing query_type, and
-// an empty object all reach GitLab exactly as the caller wrote them.
+// query to nothing but being one: GQL text GitLab refuses (an unbounded node,
+// OR, a syntax error), objects in the older shape of the JSON DSL this
+// package taught (a top-level node, an {op, value} filter, a node named
+// inside neighbors), an unbounded object, one with an unknown or missing
+// query_type, and an empty object all reach GitLab exactly as the caller
+// wrote them.
 //
-// The shape rules this package used to check were written for that older
-// shape, and they refused the one neighbors query GitLab runs while letting
-// through queries GitLab refuses (issue 1031). GitLab compiles every query
-// against the DSL it serves and says what is wrong with it, so a local copy of
-// those rules could only ever fall behind it.
+// The shape rules this package used to check were written for an older shape
+// of the JSON DSL, and they refused the one neighbors query GitLab runs while
+// letting through queries GitLab refuses (issue 1031). GitLab compiles every
+// query and says what is wrong with it, so a local copy of its rules could
+// only ever fall behind it.
 func TestQuery_AnyShape_IsLeftForGitLabToJudge(t *testing.T) {
 	tests := []struct {
 		name  string
-		query map[string]any
+		query any
 	}{
+		{name: "an unbounded GQL node", query: "MATCH (p:Project) RETURN p LIMIT 5"},
+		{name: "GQL with OR", query: "MATCH (p:Project) WHERE p.id = 1 OR p.id = 2 RETURN p.id"},
+		{name: "GQL that does not parse", query: "MATCH (p:Project {id: 1}) RETURN p.id GROUP BY p.id"},
 		{name: "a top-level node", query: map[string]any{"query_type": "traversal", "node": map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}}}},
 		{name: "an op and value filter", query: map[string]any{"query_type": "traversal", "nodes": []any{map[string]any{"id": "p", "entity": "Project", "filters": map[string]any{"full_path": map[string]any{"op": "starts_with", "value": "plens1/"}}}}}},
 		{name: "a node named inside neighbors", query: map[string]any{"query_type": "neighbors", "nodes": []any{map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}}}, "neighbors": map[string]any{"node": "p"}}},
@@ -728,14 +1064,15 @@ func TestQuery_AnyShape_IsLeftForGitLabToJudge(t *testing.T) {
 }
 
 // TestQuery_GitLabRefusal_ReachesTheCallerWithTheQueryHint verifies what a
-// caller is told when GitLab refuses a query: the operation, GitLab's code and
-// message as Workhorse wrote them, the hint naming orbit.dsl and orbit.schema,
-// and the request line, on both the structured and the llm path. The message
-// is what makes the refusal correctable, and before issue 1031 it was
-// withheld: the code key read as the mark of a body something other than
+// caller is told when GitLab refuses a GQL query: the operation, GitLab's
+// code and message as Workhorse wrote them, the hint naming orbit.dsl and
+// orbit.schema, and the request line, on both the structured and the llm
+// path. The message, GitLab.com's own answer to an unbounded node on
+// 2026-10-17, is what makes the refusal correctable, and before issue 1031 it
+// was withheld: the code key read as the mark of a body something other than
 // GitLab composed, so a model was told only "bad request".
 func TestQuery_GitLabRefusal_ReachesTheCallerWithTheQueryHint(t *testing.T) {
-	const refusal = `schema violation: "nodes" is a required property at ; Additional properties are not allowed ('node' was unexpected) at `
+	const refusal = `schema violation: add filters or node_ids to at least one node`
 	formats := []struct {
 		name   string
 		format string
@@ -757,7 +1094,7 @@ func TestQuery_GitLabRefusal_ReachesTheCallerWithTheQueryHint(t *testing.T) {
 			}))
 
 			_, err := Query(context.Background(), client, QueryInput{
-				Query:          map[string]any{"query_type": "traversal", "node": map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}}},
+				Query:          "MATCH (p:Project) RETURN p LIMIT 5",
 				ResponseFormat: format,
 			})
 			if err == nil {
@@ -775,13 +1112,108 @@ func TestQuery_GitLabRefusal_ReachesTheCallerWithTheQueryHint(t *testing.T) {
 	}
 }
 
-// TestQueryType_NonString_ReturnsEmpty verifies that queryType ignores malformed query_type values.
-//
-// The test passes a non-string query_type and expects an empty result. This keeps raw LLM response
-// metadata safe when user-provided Orbit query JSON contains an unexpected value type.
+// TestQuery_JSONObjectRefusedForItsLanguage_SaysGitLabReadsGQL verifies what
+// a caller who sent an object is told. While GitLab.com reads queries as GQL
+// it parses the object's text as GQL and answers compile_error with "Orbit
+// query syntax at line 1, column 1" (measured 2026-10-17), and once
+// gitlab-org/gitlab!261947 removes the JSON DSL Grape answers "query is
+// invalid": both get the hint that GitLab.com reads a query as GQL text, with
+// an example, on the structured and the llm path. The object written as JSON
+// text, which a client that serializes nested objects sends as a string, is
+// refused the same way and gets the same hint. An object GitLab compiled as
+// the JSON DSL and refused for what it asked, and GQL text refused for its
+// syntax, keep the hint that points at the fault, since telling either to
+// send GQL would send it the wrong way.
+func TestQuery_JSONObjectRefusedForItsLanguage_SaysGitLabReadsGQL(t *testing.T) {
+	const (
+		gqlSyntax  = `{"code":"compile_error","message":"schema violation: Orbit query syntax at line 1, column 1: expected Statement"}`
+		grape      = `{"error":"query is invalid"}`
+		jsonSchema = `{"code":"compile_error","message":"schema violation: \"nodes\" is a required property"}`
+	)
+	cases := []struct {
+		name   string
+		query  any
+		format string
+		body   string
+		hint   string
+	}{
+		{name: "an object GitLab.com parsed as GQL", query: projectByIDObject(), body: gqlSyntax, hint: queryObjectRefusedHint},
+		{name: "an object GitLab.com parsed as GQL, llm", query: projectByIDObject(), format: "llm", body: gqlSyntax, hint: queryObjectRefusedHint},
+		{name: "an object Grape refused", query: projectByIDObject(), body: grape, hint: queryObjectRefusedHint},
+		{name: "an object refused as the JSON DSL", query: projectByIDObject(), body: jsonSchema, hint: queryRefusedHint},
+		{name: "GQL text refused for its syntax", query: "MATCH (p:Project {id: 1}) RETURN", body: gqlSyntax, hint: queryRefusedHint},
+		{name: "an object written as JSON text, parsed as GQL", query: projectByIDObjectText, body: gqlSyntax, hint: queryObjectRefusedHint},
+		{name: "an object written as JSON text after white space, llm", query: "\n  " + projectByIDObjectText, format: "llm", body: gqlSyntax, hint: queryObjectRefusedHint},
+		{name: "an object written as JSON text Grape refused", query: projectByIDObjectText, body: grape, hint: queryObjectRefusedHint},
+		{name: "an object written as JSON text refused as the JSON DSL", query: projectByIDObjectText, body: jsonSchema, hint: queryRefusedHint},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
+				testutil.RespondJSON(w, http.StatusBadRequest, tc.body)
+			}))
+
+			_, err := Query(context.Background(), client, QueryInput{Query: tc.query, ResponseFormat: tc.format})
+			if err == nil || !strings.Contains(err.Error(), "Suggestion: "+tc.hint+":") {
+				t.Fatalf("Query() error = %v, want the hint %q", err, tc.hint)
+			}
+		})
+	}
+}
+
+// TestQuery_NeitherTextNorObject_IsRefusedBeforeSending verifies the one
+// thing [Query] judges about a query: that there is one, as text that is not
+// blank or as an object. A number, a list or a boolean is no query in any
+// language GitLab reads, and is refused with what a query has to be rather
+// than sent; a blank string is a missing query.
+func TestQuery_NeitherTextNorObject_IsRefusedBeforeSending(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("handler should not be called for a query that is not one: %s %s", r.Method, r.URL.Path)
+		http.Error(w, "unexpected request", http.StatusInternalServerError)
+	}))
+	cases := []struct {
+		name  string
+		query any
+		want  string
+	}{
+		{name: "a number", query: float64(42), want: "query must be GQL text or a JSON object, not float64"},
+		{name: "a list", query: []any{"MATCH (p:Project {id: 1}) RETURN p.id"}, want: "query must be GQL text or a JSON object, not []interface {}"},
+		{name: "a boolean", query: true, want: "query must be GQL text or a JSON object, not bool"},
+		{name: "an empty string", query: "", want: "query is required"},
+		{name: "blank text", query: " \n\t", want: "query is required"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Query(context.Background(), client, QueryInput{Query: tc.query})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Query() error = %v, want %q", err, tc.want)
+			}
+			if tc.want != "query is required" && !errors.Is(err, errQueryShape) {
+				t.Fatalf("Query() error = %v, want it to wrap errQueryShape", err)
+			}
+		})
+	}
+}
+
+// TestQueryType_NonString_ReturnsEmpty verifies that queryType labels only a
+// query written as an object naming its query_type as a string: GQL text,
+// whose type GitLab infers from the statement, and a malformed query_type
+// value both leave the llm answer unlabeled.
 func TestQueryType_NonString_ReturnsEmpty(t *testing.T) {
-	if got := queryType(map[string]any{"query_type": 42}); got != "" {
-		t.Fatalf("queryType() = %q, want empty", got)
+	cases := []struct {
+		name  string
+		query any
+	}{
+		{name: "a number for query_type", query: map[string]any{"query_type": 42}},
+		{name: "GQL text", query: projectByIDGQL},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := queryType(tc.query); got != "" {
+				t.Fatalf("queryType() = %q, want empty", got)
+			}
+		})
 	}
 }
 
@@ -1006,7 +1438,7 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 				}})
 				return err
 			},
-			want: "query must be a JSON object: json: unsupported type: func()",
+			want: "query must be GQL text or a JSON object: json: unsupported type: func()",
 		},
 		{
 			name: "invalid schema format",
@@ -1052,12 +1484,12 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 			name: "invalid query response format",
 			call: func() error {
 				_, err := Query(context.Background(), client, QueryInput{
-					Query:          projectByIDQuery(),
+					Query:          projectByIDGQL,
 					ResponseFormat: "xml",
 				})
 				return err
 			},
-			want: "use raw or llm",
+			want: "use raw, llm or gql",
 		},
 		{
 			name: "invalid dsl response format",
@@ -1123,7 +1555,7 @@ func TestOrbit_HTTPErrorHints_ReturnExpectedGuidance(t *testing.T) {
 		},
 		{
 			name:   "dsl forbidden",
-			path:   "/api/v4/orbit/schema/dsl",
+			path:   "/api/v4/orbit/agent/commands",
 			status: http.StatusForbidden,
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
 				_, err := DSL(ctx, client, DSLInput{})
@@ -1136,7 +1568,7 @@ func TestOrbit_HTTPErrorHints_ReturnExpectedGuidance(t *testing.T) {
 			path:   "/api/v4/orbit/query",
 			status: http.StatusForbidden,
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Query(ctx, client, QueryInput{Query: projectByIDQuery()})
+				_, err := Query(ctx, client, QueryInput{Query: projectByIDGQL})
 				return err
 			},
 			want: "Knowledge Graph enabled",
@@ -1149,7 +1581,7 @@ func TestOrbit_HTTPErrorHints_ReturnExpectedGuidance(t *testing.T) {
 			path:   "/api/v4/orbit/query",
 			status: http.StatusBadRequest,
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Query(ctx, client, QueryInput{Query: projectByIDQuery()})
+				_, err := Query(ctx, client, QueryInput{Query: projectByIDGQL})
 				return err
 			},
 			want: "Suggestion: " + queryRefusedHint,
@@ -1169,7 +1601,7 @@ func TestOrbit_HTTPErrorHints_ReturnExpectedGuidance(t *testing.T) {
 			path:   "/api/v4/orbit/query",
 			status: http.StatusTooManyRequests,
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Query(ctx, client, QueryInput{Query: projectByIDQuery()})
+				_, err := Query(ctx, client, QueryInput{Query: projectByIDGQL})
 				return err
 			},
 			want: "rate-limited",
@@ -1230,7 +1662,7 @@ func TestOrbitHandlers_ContextCancellation_ReturnsError(t *testing.T) {
 		{name: "tools", call: func() error { _, err := Tools(ctx, client, ToolsInput{}); return err }},
 		{name: "dsl", call: func() error { _, err := DSL(ctx, client, DSLInput{}); return err }},
 		{name: "query", call: func() error {
-			_, err := Query(ctx, client, QueryInput{Query: projectByIDQuery()})
+			_, err := Query(ctx, client, QueryInput{Query: projectByIDGQL})
 			return err
 		}},
 		{name: "graph status", call: func() error {
@@ -1259,7 +1691,7 @@ func TestOrbitMarkdownAndDynamicJSON_FallbackBranches(t *testing.T) {
 	if md := FormatToolsMarkdown(ToolsOutput{}); !strings.Contains(md, "No Orbit tools") {
 		t.Fatalf("FormatToolsMarkdown() = %q, want empty-state text", md)
 	}
-	if md := FormatDSLMarkdown(DSLOutput{}); !strings.Contains(md, "No Orbit DSL") {
+	if md := FormatDSLMarkdown(DSLOutput{}); !strings.Contains(md, "GitLab described no query command") {
 		t.Fatalf("FormatDSLMarkdown() = %q, want empty-state text", md)
 	}
 	if md := FormatQueryMarkdown(QueryOutput{QueryType: "traversal", RawQueryStrings: []string{"MATCH (n) RETURN n"}}); !strings.Contains(md, "Raw Query Strings") || !strings.Contains(md, "MATCH (n)") {

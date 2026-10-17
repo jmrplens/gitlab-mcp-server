@@ -18,7 +18,8 @@ import (
 )
 
 // ResponseFormatInput is the shared response_format selector used by
-// the status, dsl, and query Orbit endpoints.
+// the status, dsl and graph_status Orbit endpoints. The query endpoint takes a
+// third value and declares its own field ([QueryInput.ResponseFormat]).
 type ResponseFormatInput struct {
 	// ResponseFormat selects the Orbit response shape. GitLab declares
 	// two values on every route that takes it (ee/lib/api/orbit/data.rb,
@@ -32,9 +33,7 @@ type ResponseFormatInput struct {
 	// own until that was measured.
 	//
 	// When empty the parameter is not sent and GitLab applies its own
-	// default, which is "raw" on every route. [Query] sends "raw"
-	// explicitly when the field is omitted, so the structured envelope
-	// it decodes does not depend on that default staying what it is.
+	// default, which is "raw" on every route.
 	ResponseFormat string `json:"response_format,omitempty" jsonschema:"Response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies."`
 }
 
@@ -64,109 +63,100 @@ type SchemaInput struct {
 // signature is uniform with the other Orbit handlers.
 type ToolsInput struct{}
 
-// DSLInput holds parameters for retrieving the Orbit query DSL.
+// DSLInput holds parameters for retrieving the Orbit query language.
 type DSLInput struct {
 	ResponseFormatInput
 }
 
-// DSLOutput holds the Orbit query DSL response.
+// DSLOutput is the query language GitLab.com compiles orbit.query in, as the
+// Orbit command a graph query runs as describes it.
+//
+// GitLab.com reads every query as GQL since it turned orbit_gql_queries on for
+// everyone at 01:06 UTC on 2026-10-15, and GET /api/v4/orbit/schema/dsl, which
+// served the JSON DSL this type used to carry whole, answers 404 since then
+// (issue 1414). What GitLab publishes for GQL instead is the query_graph
+// command of GET /api/v4/orbit/agent/commands: a description of the grammar and
+// the JSON Schema of the command's input. The other two GQL routes publish no
+// grammar: GET /orbit/schema/format is the JSON Schema of a query's answer, and
+// GET /orbit/query/templates lists named queries written in GQL.
 type DSLOutput struct {
 	toolutil.HintableOutput
-	// ResponseFormat echoes the response_format that produced Content
-	// ("raw" for the JSON Schema body, "llm" for the text grammar).
+	// ResponseFormat echoes the response_format that was asked for ("raw" for
+	// the command as a JSON object, "llm" for it as compact text), or nothing
+	// when GitLab chose its default, raw.
 	ResponseFormat string `json:"response_format,omitempty"`
-	// Content is the DSL: for raw, the JSON Schema document as GitLab
-	// sent it; for llm, the grammar text, decoded from the JSON string
-	// GitLab sends it in.
-	Content string `json:"content,omitempty"`
+	// FormattedText is the command as compact text, which is the whole of
+	// GitLab's answer when the caller selected the "llm" response format.
+	FormattedText string `json:"formatted_text,omitempty"`
+	// Name is the name of the Orbit command a query runs as, query_graph,
+	// under the key GitLab sends it with.
+	Name string `json:"name,omitempty"`
+	// Description is the grammar of the query language as the command
+	// describes it.
+	Description string `json:"description,omitempty"`
+	// Parameters is the decoded JSON Schema of the command's input, whose
+	// query property is the query text orbit.query sends.
+	Parameters any `json:"parameters,omitempty"`
 }
 
 // QueryInput holds parameters for executing an Orbit Knowledge Graph query.
 //
-// The Query field is a query in the DSL GitLab serves at
-// GET /api/v4/orbit/schema/dsl ([DSL]), a JSON Schema whose $id is
-// graph_query/v12 (version 12.1.10 on GitLab.com, Orbit 0.137.0, read
-// 2026-10-05). This server checks only that a query was given and that it
-// encodes as JSON: GitLab compiles it against that schema and the ontology
-// and refuses what it cannot run with a message naming the fault, which
+// The Query field is GQL text, the read-only subset of openCypher 9 syntax the
+// Knowledge Graph compiles, which is the language GitLab.com reads every query
+// in since it turned orbit_gql_queries on for everyone at 01:06 UTC on
+// 2026-10-15 (gitlab-org/gitlab!256465 has Rails send the language the flag
+// selects, and the compiler refuses the other). [DSL] describes it from what
+// GitLab.com publishes. This server checks only that a query was given and
+// that it is text or a JSON object: GitLab compiles it and refuses what it
+// cannot run with a message naming the line and column of the fault, which
 // reaches the caller (toolutil's Workhorse query refusal). Rules written here
-// would only go stale, which is how the checks this field carried, written for
-// an older shape of the DSL, came to refuse the one neighbors shape GitLab
-// accepts (issue 1031).
+// would only go stale, which is what issue 1031 was.
 //
-// The shape, as version 12 states it:
+// A query given as a JSON object is forwarded as written rather than refused
+// here, so it keeps working if GitLab.com turns the flag back off before
+// gitlab-org/gitlab!261947 removes the JSON DSL. While GitLab.com reads GQL it
+// answers such a query with compile_error, and [wrapQueryErr] then says that
+// GitLab.com reads queries as GQL, with an example (issue 1414).
 //
-//   - query_type (required): traversal, aggregation, neighbors or
-//     path_finding.
-//   - nodes (required): one to five node selectors, a list even for one node.
-//     A top-level node is refused. Each selector is {id, entity, columns?,
-//     filters?, node_ids?, id_range?, id_property?}: id is the alias the rest
-//     of the query refers to, entity a type orbit.schema lists, columns "*" or
-//     a list of properties, node_ids at most 500 ids, id_range {start, end}.
-//   - filters: {property: entry}, where an entry is a bare value (equality),
-//     an object keyed by operators ({"starts_with": "group/"},
-//     {"gte": 1, "lt": 9}), or a list of such objects. The operators are eq,
-//     ne, gt, lt, gte, lte, in, contains, starts_with, ends_with, is_null,
-//     is_not_null, token_match, all_tokens and any_tokens. The older
-//     {op, value} form is refused, and a search pattern shorter than three
-//     characters is refused at compile time.
-//   - relationships: [{type, from, to, hops?, direction?, filters?}], type a
-//     relationship name, a list of names or "*", hops an inclusive
-//     [min, max] between 1 and 3.
-//   - aggregations: [{<function>: ref, as?}], one function key among count,
-//     sum, avg, min, max and collect, whose value is "node" (count only) or
-//     "node.property".
-//   - group_by: ["node" | "node.property" | {key, truncate?, as?}].
-//   - order_by: "node.property", or "-node.property" for descending.
-//   - aggregation_sort: an output column, "-column" for descending.
-//   - limit: 1 to 1000, default 30. cursor: {page_size, after}, where after
-//     is the pagination.next_cursor of the previous answer.
-//   - neighbors: required for a neighbors query, {direction?, rel_types?}.
-//     The center is nodes[0], the query's only node, and nothing in
-//     neighbors names it. direction defaults to outgoing, so a query wanting
-//     every relationship of the center passes "both".
-//   - path: required for path_finding, {type: "shortest", from, to,
-//     max_depth: 1 to 3, rel_types}. rel_types is required ("*" for any),
-//     and each relationship is followed only in its defined direction.
-//   - options: {dynamic_columns?: "default" | "*", include_debug_sql?}.
+// The statement, as the Orbit query frontend states it
+// (docs/design-documents/querying/orbit_query_frontend.md in
+// gitlab-org/orbit/knowledge-graph):
 //
-// A traversal or aggregation query needs node_ids or filters on at least one
-// node, and a neighbors query on its center; GitLab refuses an unbounded
-// query rather than scan every edge. A multi-node traversal needs
-// relationships joining its nodes.
+//	MATCH pattern [WHERE predicates]
+//	[MATCH pattern [WHERE predicates] ...]
+//	RETURN projections
+//	[ORDER BY key [ASC | DESC]]
+//	[LIMIT rows | PAGE rows [AFTER 'token']]
 //
-// Examples:
+// Every node carries a label where it first appears, and at least one is
+// bounded by its id or a literal property, inline or in WHERE. A relationship
+// type follows a colon, -[:IN_PROJECT]->, a repeat is bounded (*1..3), and no
+// path is longer than three hops. WHERE combines predicates with AND and NOT.
+// RETURN selects properties or whole nodes, and count, sum, avg, min and max
+// aggregate, every other item becoming a group key. A neighbors query has one
+// labeled, bounded node and a far endpoint with a variable and nothing else,
+// and a shortest path is written MATCH path = ANY SHORTEST (a)-[...]->(b)
+// RETURN path. CALL db.schema() and CALL db.schema('Node') answer the ontology.
+// The query type of the answer is inferred from the statement.
 //
-//   - Projects under a group:
-//     {"query_type":"traversal","nodes":[{"id":"p","entity":"Project",
-//     "filters":{"full_path":{"starts_with":"gitlab-org/"}},
-//     "columns":["id","full_path"]}],"limit":20}
+// Examples, each answered 200 by GitLab.com on 2026-10-17:
 //
-//   - Merge requests per project:
-//     {"query_type":"aggregation","nodes":[{"id":"p","entity":"Project",
-//     "filters":{"full_path":{"starts_with":"gitlab-org/"}}},
-//     {"id":"mr","entity":"MergeRequest"}],
-//     "relationships":[{"type":"IN_PROJECT","from":"mr","to":"p"}],
-//     "group_by":["p"],"aggregations":[{"count":"mr","as":"mr_count"}],
-//     "aggregation_sort":"-mr_count"}
-//
-//   - Everything a project is related to:
-//     {"query_type":"neighbors","nodes":[{"id":"p","entity":"Project",
-//     "filters":{"full_path":"gitlab-org/gitlab"}}],
-//     "neighbors":{"direction":"both"}}
-//
-//   - A path from a user to a project:
-//     {"query_type":"path_finding","nodes":[{"id":"u","entity":"User",
-//     "node_ids":[1]},{"id":"p","entity":"Project","node_ids":[2]}],
-//     "path":{"type":"shortest","from":"u","to":"p","max_depth":3,
-//     "rel_types":["*"]}}
-//
-// Reference: https://docs.gitlab.com/orbit/remote/queries/, the Orbit query
-// language guide, which states the path and neighbors rules above since
-// Orbit 0.137.0 (register rows 75 and 76 of docs/development/upstream-bugs.md).
+//	MATCH (p:Project {full_path: 'plens1/kg-fixtures'}) RETURN p.id, p.full_path, p.name
+//	MATCH (mr:MergeRequest)-[:IN_PROJECT]->(p:Project) WHERE p.full_path STARTS WITH 'plens1/' RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC
+//	MATCH (p:Project {full_path: 'plens1/kg-fixtures'})--(n) RETURN n
+//	MATCH path = ANY SHORTEST (mr:MergeRequest {source_branch: 'feature/restock-helper'})-[:IN_PROJECT*1..2]->(p:Project {full_path: 'plens1/kg-fixtures'}) RETURN path
 type QueryInput struct {
-	Query map[string]any `json:"query" jsonschema:"Orbit query in the version 12 DSL that orbit.dsl serves, as a JSON object. Required: query_type (traversal, aggregation, neighbors or path_finding) and nodes, a list of node selectors {id, entity, columns, filters, node_ids, id_range} even for one node. A filter is a bare value for equality or an object keyed by operators such as {\"starts_with\": \"gitlab-org/\"}, never {op, value}. A traversal or aggregation query needs node_ids or filters on a node. A neighbors query takes one node and neighbors {direction, rel_types}, where direction defaults to outgoing (pass both for every relationship). A path_finding query takes two nodes and path {type: shortest, from, to, max_depth 1 to 3, rel_types} with rel_types required (* for any). Aggregations are {count: \"mr\", as: \"n\"}, order_by is \"node.property\" (\"-node.property\" descending). orbit.schema lists the entities, properties and relationship types. GitLab refuses a query it cannot compile with a message naming the fault.,required"`
-	ResponseFormatInput
+	Query any `json:"query" jsonschema:"Orbit query as GQL text, the read-only openCypher 9 based language GitLab.com compiles (orbit.dsl describes it). One statement: MATCH pattern [WHERE predicates] RETURN projections [ORDER BY key [ASC or DESC]] [LIMIT n or PAGE n [AFTER cursor]]. Label every node and anchor at least one by its id or a literal property, as in MATCH (p:Project {full_path: 'gitlab-org/gitlab'}) RETURN p.id, p.full_path LIMIT 1. A relationship type follows a colon, -[:IN_PROJECT]->, and a repeat is bounded, *1..3 at most. WHERE takes AND and NOT, never OR. count, sum, avg, min and max aggregate, and every other RETURN item groups: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC. orbit.schema lists the entities, properties and relationship types a query names. A JSON object is forwarded as written, and GitLab.com refuses it while it reads queries as GQL. GitLab refuses a query it cannot compile with a message naming the fault.,required"`
+	// ResponseFormat selects the answer's shape. POST /orbit/query declares
+	// a third value beside raw and llm, which is why this input carries its
+	// own field rather than [ResponseFormatInput] (`values: %w[raw llm gql]`
+	// in ee/lib/api/orbit/data.rb):
+	//   - "raw": the structured envelope, sent when the field is omitted
+	//   - "llm": compact text optimized for LLM consumption
+	//   - "gql": the result as a graph pattern table, text like llm
+	//
+	// "json" is read as "raw", for the reason [ResponseFormatInput] gives.
+	ResponseFormat string `json:"response_format,omitempty" jsonschema:"Response format: raw (structured JSON, the default here), llm (compact text) or gql (the result as a graph pattern table). json is read as raw."`
 }
 
 // GraphStatusInput holds parameters for retrieving Orbit graph indexing status.
@@ -331,8 +321,9 @@ type ToolsOutput struct {
 // QueryOutput is the result envelope returned by Orbit query execution.
 type QueryOutput struct {
 	toolutil.HintableOutput
-	// FormattedText is the pre-formatted text body returned by the
-	// server when the caller selected the "llm" response format.
+	// FormattedText is the text body returned by the server when the
+	// caller selected the "llm" response format, or the graph pattern
+	// table of the "gql" one.
 	FormattedText string `json:"formatted_text,omitempty"`
 	// Result is the decoded result envelope returned for the
 	// "raw" response format. Its shape depends on the
@@ -515,71 +506,119 @@ func Tools(ctx context.Context, client *gitlabclient.Client, _ ToolsInput) (Tool
 	return convertTools(tools), nil
 }
 
-// DSL retrieves the Orbit query DSL grammar or LLM-friendly schema from
-// GitLab.com.
+// queryCommand is the Orbit command a graph query runs as, the one whose
+// description is the grammar of the query language.
+const queryCommand = "query_graph"
+
+// agentCommandsPath is the route that describes Orbit's commands, below
+// /api/v4. client-go has no method for it.
+const agentCommandsPath = "orbit/agent/commands"
+
+// orbitDSLOp is the operation a [DSL] failure is reported under.
+const orbitDSLOp = "orbit_dsl"
+
+// agentCommandsOptions are the parameters of GET /api/v4/orbit/agent/commands
+// (ee/lib/api/orbit/data.rb): the comma-separated commands to describe, and
+// the response format, which GitLab defaults to raw when it is left out.
+type agentCommandsOptions struct {
+	CommandNames   string                       `url:"command_names"`
+	ResponseFormat *gl.OrbitResponseFormatValue `url:"response_format,omitempty"`
+}
+
+// DSL retrieves the query language GitLab.com compiles orbit.query in, as the
+// query_graph command describes it.
 //
-// Endpoint: GET /api/v4/orbit/schema/dsl. With response_format="raw"
-// the body is a JSON Schema document, published as it came; with
-// response_format="llm" it is a compact text grammar suitable for
-// inclusion in an LLM prompt, which GitLab sends as a JSON string and
-// [llmGrammar] reads the text out of.
+// Endpoint: GET /api/v4/orbit/agent/commands?command_names=query_graph. With
+// response_format="raw" (GitLab's default) the body is a list of commands, and
+// the query_graph entry gives the grammar's description and the JSON Schema of
+// the command's input; with response_format="llm" it is
+// {"formatted_text": ...}, the same command as compact text. Under GQL, which
+// GitLab.com reads every query in since 2026-10-15, the description is the GQL
+// grammar, and the route this action used to read, GET /orbit/schema/dsl,
+// answers 404, so nothing here asks it (issue 1414). The Knowledge Graph
+// describes only the language it reads for the caller, so the description is
+// of the JSON DSL again for a caller GitLab serves that language to.
 func DSL(ctx context.Context, client *gitlabclient.Client, input DSLInput) (DSLOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return DSLOutput{}, err
 	}
-	format, hasFormat, err := responseFormat(input.ResponseFormat, "response_format")
+	format, _, err := responseFormat(input.ResponseFormat, "response_format")
 	if err != nil {
 		return DSLOutput{}, err
 	}
-	opts := &gl.GetOrbitDslOptions{}
-	if hasFormat {
-		opts.ResponseFormat = format
-	}
-
-	content, _, err := client.GL().Orbit.GetDsl(opts, gl.WithContext(ctx))
+	body, err := getAgentCommands(ctx, client, agentCommandsPath, agentCommandsOptions{CommandNames: queryCommand, ResponseFormat: format})
 	if err != nil {
-		return DSLOutput{}, wrapOrbitErr("orbit_dsl", err)
+		return DSLOutput{}, wrapOrbitErr(orbitDSLOp, err)
 	}
-	if hasFormat && *format == gl.OrbitResponseFormatLLM {
-		content = llmGrammar(content)
+	out, err := decodeQueryCommand(body)
+	if err != nil {
+		return DSLOutput{}, toolutil.WrapErr(orbitDSLOp, err)
 	}
-	return DSLOutput{ResponseFormat: responseFormatName(format), Content: content}, nil
+	out.ResponseFormat = responseFormatName(format)
+	return out, nil
 }
 
-// llmGrammar reads the llm grammar out of the body GitLab answers it in.
-//
-// get_query_dsl (ee/lib/analytics/knowledge_graph/grpc_client.rb) returns
-// the grammar as a Ruby String and ee/lib/api/orbit/data.rb presents it,
-// which Grape renders as a JSON string under application/json: the grammar
-// in quotes, every newline escaped (docs/development/orbit-responses.json
-// records orbit.dsl (llm) as a string at the root). client-go's GetDsl
-// hands that body over as it came, so publishing it whole gave a model one
-// quoted line of escapes. A body that is not a JSON string is kept as it
-// came, which is what a route answering the grammar as text would send.
-func llmGrammar(body string) string {
-	var grammar string
-	if err := json.Unmarshal([]byte(body), &grammar); err != nil {
-		return body
+// getAgentCommands sends the GET that describes Orbit's commands and returns
+// the body as it came. The path is a parameter so a test reaches the request
+// that cannot be built, which no constant path produces.
+func getAgentCommands(ctx context.Context, client *gitlabclient.Client, path string, opts agentCommandsOptions) ([]byte, error) {
+	req, err := client.GL().NewRequest(http.MethodGet, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, err
 	}
-	return grammar
+	var body bytes.Buffer
+	_, err = client.GL().Do(req, &body)
+	return body.Bytes(), err
+}
+
+// agentCommand is one command of the raw answer of
+// GET /api/v4/orbit/agent/commands.
+type agentCommand struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Parameters  json.RawMessage `json:"parameters"`
+}
+
+// decodeQueryCommand reads the query_graph command out of the answer, by its
+// shape rather than by the format asked for: an object is the llm answer,
+// {"formatted_text": ...}, and anything else is the raw list of commands. A
+// list that holds no query_graph command answers nothing, which the card says
+// rather than describing another command as the query language.
+func decodeQueryCommand(body []byte) (DSLOutput, error) {
+	trimmed := bytes.TrimSpace(body)
+	if bytes.HasPrefix(trimmed, []byte("{")) {
+		var text struct {
+			FormattedText string `json:"formatted_text"`
+		}
+		if err := json.Unmarshal(trimmed, &text); err != nil {
+			return DSLOutput{}, fmt.Errorf("decode the query command as text: %w", err)
+		}
+		return DSLOutput{FormattedText: text.FormattedText}, nil
+	}
+	var commands []agentCommand
+	if err := json.Unmarshal(trimmed, &commands); err != nil {
+		return DSLOutput{}, fmt.Errorf("decode the query command: %w", err)
+	}
+	for _, command := range commands {
+		if command.Name == queryCommand {
+			return DSLOutput{Name: command.Name, Description: command.Description, Parameters: decodeRaw(command.Parameters)}, nil
+		}
+	}
+	return DSLOutput{}, nil
 }
 
 // Query executes a read-only Orbit Knowledge Graph query on GitLab.com.
 //
 // Endpoint: POST /api/v4/orbit/query. The query is forwarded as the caller
-// wrote it, once [encodeQuery] has checked there is one and that it encodes;
-// see [QueryInput] for the DSL. GitLab judges everything else, and a query it
-// refuses comes back as a 400 whose message says what to change, with
-// [queryRefusedHint] pointing at the two actions that describe the DSL and
-// the graph.
+// wrote it, once [encodeQuery] has checked there is one and that it is text or
+// an object: GQL text reaches GitLab as the body's query string,
+// {"query": "<GQL text>"}, and an object as that object. See [QueryInput] for
+// the language. GitLab judges everything else, and a query it refuses comes
+// back as a 400 whose message says what to change, with [wrapQueryErr]'s hint
+// pointing at the two actions that describe the language and the graph.
 //
-// The four query types:
-//
-//   - traversal: one node, or several joined by relationships, with
-//     ordering and keyset pagination.
-//   - aggregation: count, sum, avg, min, max or collect, grouped or not.
-//   - neighbors: the relationships of the query's one node.
-//   - path_finding: the shortest path between two nodes, depth 1 to 3.
+// GitLab infers the query type from the statement and answers it beside the
+// result: traversal, aggregation, neighbors or path_finding.
 //
 // When response_format is omitted, the handler sends "raw" (structured
 // JSON) explicitly rather than leaving the choice to GitLab's default,
@@ -587,7 +626,9 @@ func llmGrammar(body string) string {
 // Structured JSON is strictly more useful for an MCP tool: the LLM can
 // iterate over result nodes directly, the SDK decodes row_count, and
 // downstream markdown formatters pretty-print the envelope. Callers who
-// want the compact TOON text can pass response_format="llm" explicitly.
+// want the compact TOON text pass response_format="llm", and the graph
+// pattern table "gql"; both are text GitLab answers whole, which
+// client-go's QueryRaw hands back as it came.
 func Query(ctx context.Context, client *gitlabclient.Client, input QueryInput) (QueryOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return QueryOutput{}, err
@@ -596,65 +637,101 @@ func Query(ctx context.Context, client *gitlabclient.Client, input QueryInput) (
 	if err != nil {
 		return QueryOutput{}, err
 	}
-	format, hasFormat, err := responseFormat(input.ResponseFormat, "response_format")
+	format, err := queryResponseFormat(input.ResponseFormat)
 	if err != nil {
 		return QueryOutput{}, err
 	}
-	request := &gl.OrbitQueryRequest{
-		Query: query,
-	}
-	// Default to "raw" when the caller did not pick a format; see the
-	// Query function godoc for the LLM-friendly rationale.
-	rawFormat := gl.OrbitResponseFormatRaw
-	switch {
-	case hasFormat:
-		request.ResponseFormat = format
-	default:
-		request.ResponseFormat = &rawFormat
-	}
-	useRaw := hasFormat && *format == gl.OrbitResponseFormatLLM
-	if useRaw {
-		var raw bytes.Buffer
-		_, err = client.GL().Orbit.QueryRaw(request, &raw, gl.WithContext(ctx))
+	request := &gl.OrbitQueryRequest{Query: query, ResponseFormat: format}
+	if *format != gl.OrbitResponseFormatRaw {
+		var text bytes.Buffer
+		_, err = client.GL().Orbit.QueryRaw(request, &text, gl.WithContext(ctx))
 		if err != nil {
-			return QueryOutput{}, wrapQueryErr(err)
+			return QueryOutput{}, wrapQueryErr(err, input.Query)
 		}
-		return QueryOutput{FormattedText: raw.String(), QueryType: queryType(input.Query)}, nil
+		return QueryOutput{FormattedText: text.String(), QueryType: queryType(input.Query)}, nil
 	}
 
 	result, _, err := client.GL().Orbit.Query(request, gl.WithContext(ctx))
 	if err != nil {
-		return QueryOutput{}, wrapQueryErr(err)
+		return QueryOutput{}, wrapQueryErr(err, input.Query)
 	}
 	return convertQuery(result), nil
 }
 
-// encodeQuery checks the two things about a query GitLab cannot answer for
-// itself, that one was given and that it encodes as JSON, and returns it
-// encoded. Everything else about its shape is GitLab's to judge: the rules
-// this used to hold a query to were written for an older shape of the DSL and
-// refused the one neighbors query GitLab runs (issue 1031), and GitLab's own
-// refusal names the fault it finds.
-func encodeQuery(query map[string]any) (json.RawMessage, error) {
-	if query == nil {
-		return nil, toolutil.ErrFieldRequired("query")
+// queryFormatGQL is the response format POST /orbit/query takes and no other
+// Orbit route does: the result as a graph pattern table, text written by
+// writeLLMResultResponse in workhorse/internal/orbit/sendquery.go like the llm
+// answer. client-go declares raw and llm only, and its format type is a
+// string, so the value is spelled here.
+const queryFormatGQL gl.OrbitResponseFormatValue = "gql"
+
+// errQueryFormat is what [queryResponseFormat] answers for a format the query
+// route does not take.
+var errQueryFormat = errors.New("invalid response_format: use raw, llm or gql")
+
+// queryResponseFormat normalizes the response format of a query: gql, which
+// the query route alone takes, and otherwise what [responseFormat] accepts,
+// raw when the caller chose none (see [Query]). It never answers nil.
+func queryResponseFormat(format string) (*gl.OrbitResponseFormatValue, error) {
+	if strings.EqualFold(strings.TrimSpace(format), string(queryFormatGQL)) {
+		value := queryFormatGQL
+		return &value, nil
 	}
+	value, hasFormat, err := responseFormat(format, "response_format")
+	if err != nil {
+		return nil, errQueryFormat
+	}
+	if !hasFormat {
+		raw := gl.OrbitResponseFormatRaw
+		return &raw, nil
+	}
+	return value, nil
+}
+
+// errQueryShape is what [encodeQuery] answers for a query that is neither
+// text nor an object, which no language GitLab reads is written as.
+var errQueryShape = errors.New("query must be GQL text or a JSON object")
+
+// encodeQuery checks the things about a query GitLab cannot answer for
+// itself, that one was given and that it is GQL text or a JSON object that
+// encodes, and returns it encoded: text as a JSON string, which is the body
+// GitLab.com compiles as GQL, and an object as itself. Everything else about it
+// is GitLab's to judge, and GitLab's own refusal names the fault it finds: the
+// rules this used to hold a query to were written for an older shape of the
+// JSON DSL and refused the one neighbors query GitLab ran (issue 1031). An
+// object is not refused here although GitLab.com reads queries as GQL, so a
+// caller still gets the JSON DSL if GitLab.com turns GQL back off (issue 1414).
+func encodeQuery(query any) (json.RawMessage, error) {
+	switch typed := query.(type) {
+	case nil:
+		return nil, toolutil.ErrFieldRequired("query")
+	case string:
+		if strings.TrimSpace(typed) == "" {
+			return nil, toolutil.ErrFieldRequired("query")
+		}
+	case map[string]any:
+		// An object is encoded below as it is, like the text.
+	default:
+		return nil, fmt.Errorf("%w, not %T", errQueryShape, query)
+	}
+	// Text always encodes; an object built in Go rather than decoded from
+	// JSON may hold a value that does not, which is refused here since
+	// nothing could then be sent.
 	buf, err := json.Marshal(query)
 	if err != nil {
-		return nil, fmt.Errorf("query must be a JSON object: %w", err)
+		return nil, fmt.Errorf("%w: %w", errQueryShape, err)
 	}
 	return json.RawMessage(buf), nil
 }
 
-// queryType returns the query_type field of an Orbit query as a
-// string, or "" when the field is missing or of an unexpected type.
-// Used to label the Query output envelope regardless of the chosen
-// response format.
-func queryType(query map[string]any) string {
-	queryTypeValue, ok := query["query_type"].(string)
-	if !ok {
-		return ""
-	}
+// queryType returns the query_type field of an Orbit query written as a JSON
+// object, or "" for GQL text, a missing field or one of another type. It
+// labels the llm answer, which carries no query type of its own; GitLab
+// infers the type of a GQL query from the statement and says it in the raw
+// answer.
+func queryType(query any) string {
+	object, _ := query.(map[string]any)
+	queryTypeValue, _ := object["query_type"].(string)
 	return queryTypeValue
 }
 
@@ -663,20 +740,53 @@ const orbitQueryOp = "orbit_query"
 
 // queryRefusedHint follows a query GitLab refused with 400. The refusal
 // carries GitLab's account of the fault when it compiled the query against
-// the DSL or the ontology, so the hint names where the vocabulary of a
+// the language or the ontology, so the hint names where the vocabulary of a
 // correction comes from rather than guessing at the fault itself. It is one
 // literal: a constant joined from two has an operator gremlins mutates and
 // no coverage block to place it in, so it reads as a mutant no test reaches.
 const queryRefusedHint = "correct the query where GitLab's message points. orbit.dsl serves the query language and orbit.schema the entities, properties and relationship types it accepts"
 
+// queryObjectRefusedHint follows a query sent as a JSON object that GitLab
+// refused for its language rather than for what it asked.
+const queryObjectRefusedHint = "GitLab.com reads a query as GQL text, not as a JSON object. Send the query as a string, such as MATCH (p:Project {full_path: 'gitlab-org/gitlab'}) RETURN p.id, p.full_path LIMIT 1. orbit.dsl serves the language and orbit.schema the entities, properties and relationship types it accepts"
+
+// queryObjectRefusals are the two refusals GitLab answers a query written as
+// a JSON object with when it reads no JSON. While GitLab.com reads queries as
+// GQL the Knowledge Graph parses the object's text as GQL and answers
+// compile_error, "schema violation: Orbit query syntax at line 1, column 1:
+// expected Statement" (measured 2026-10-17); once gitlab-org/gitlab!261947
+// removes the JSON DSL, Grape refuses the object as "query is invalid" before
+// the Knowledge Graph sees it. compile_error alone would not do: a JSON DSL
+// query GitLab compiled and refused for what it asked carries that code too,
+// and would be told to send GQL to an instance that reads JSON.
+var queryObjectRefusals = []string{"Orbit query syntax", "query is invalid"}
+
 // wrapQueryErr classifies a failed [Query]. A 400 is a query GitLab refused
-// to run, which [queryRefusedHint] answers; anything else is classified the
-// way every Orbit failure is, by [wrapOrbitErr].
-func wrapQueryErr(err error) error {
-	if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-		return toolutil.WrapErrWithHint(orbitQueryOp, err, queryRefusedHint)
+// to run: one written as a JSON object and refused for its language is
+// answered by [queryObjectRefusedHint], and any other by [queryRefusedHint].
+// Anything else is classified the way every Orbit failure is, by
+// [wrapOrbitErr].
+func wrapQueryErr(err error, query any) error {
+	if !toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+		return wrapOrbitErr(orbitQueryOp, err)
 	}
-	return wrapOrbitErr(orbitQueryOp, err)
+	if writtenAsObject(query) && toolutil.ContainsAny(err, queryObjectRefusals...) {
+		return toolutil.WrapErrWithHint(orbitQueryOp, err, queryObjectRefusedHint)
+	}
+	return toolutil.WrapErrWithHint(orbitQueryOp, err, queryRefusedHint)
+}
+
+// writtenAsObject reports whether a query was written as a JSON object: an
+// object, or text that opens one, which a client that serializes nested
+// objects sends in place of the object and GitLab.com refuses the same way
+// (measured 2026-10-17). No GQL statement opens with a brace, since one
+// starts with MATCH or CALL.
+func writtenAsObject(query any) bool {
+	if text, isText := query.(string); isText {
+		return strings.HasPrefix(strings.TrimSpace(text), "{")
+	}
+	_, isObject := query.(map[string]any)
+	return isObject
 }
 
 // GraphStatus retrieves Orbit graph indexing status for a single

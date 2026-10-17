@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -30,42 +29,36 @@ func TestCallSpecs_AreTheExpectedCallsInOrder(t *testing.T) {
 }
 
 // TestFixtureQuery_IsTheTraversalOfTheFixtureProject verifies the query the
-// recording sends is written in the DSL GitLab.com serves now: a nodes list
-// and a bare equality filter on the fixture project's full path.
+// recording sends is written in GQL, the language GitLab.com reads every query
+// in since 2026-10-15: the fixture project matched by its full path, three of
+// its properties returned. GitLab.com answered this statement 200 against the
+// fixture namespace on 2026-10-17.
 func TestFixtureQuery_IsTheTraversalOfTheFixtureProject(t *testing.T) {
-	want := map[string]any{
-		"query_type": "traversal",
-		"nodes": []any{map[string]any{
-			"id": "p", "entity": "Project",
-			"filters": map[string]any{"full_path": "acme/kg-fixtures"},
-			"columns": []any{"id", "full_path", "name"},
-		}},
-	}
-	if got := fixtureQuery("acme"); !reflect.DeepEqual(got, want) {
-		t.Errorf("fixtureQuery() = %v, want %v", got, want)
+	want := "MATCH (p:Project {full_path: 'acme/kg-fixtures'}) RETURN p.id, p.full_path, p.name"
+	if got := fixtureQuery("acme"); got != want {
+		t.Errorf("fixtureQuery() = %q, want %q", got, want)
 	}
 }
 
-// TestDSLStamp_ReadsTheIDAndVersionOrNothing verifies what the record names
-// the query DSL by: the $id and the version of the JSON Schema orbit.dsl
-// answers with, and nothing at all for a body that is not that document, so
-// the record's own check refuses it rather than recording half a stamp.
-func TestDSLStamp_ReadsTheIDAndVersionOrNothing(t *testing.T) {
+// TestGrammarOf_StampsTheQueryCommandOrNothing verifies what the record names
+// the query grammar by: the stamp of the description and input schema of the
+// query command orbit.dsl answers with raw, and nothing at all for an answer
+// that described no query command, so the record's own check refuses it
+// rather than recording a grammar GitLab never described.
+func TestGrammarOf_StampsTheQueryCommandOrNothing(t *testing.T) {
+	parameters := map[string]any{"type": "object"}
 	cases := []struct {
-		name        string
-		content     string
-		wantSchema  string
-		wantVersion string
+		name string
+		dsl  orbit.DSLOutput
+		want string
 	}{
-		{name: "the DSL GitLab.com serves", content: `{"$id":"graph_query/v12","$defs":{},"version":"12.1.10"}`, wantSchema: "graph_query/v12", wantVersion: "12.1.10"},
-		{name: "a document naming neither", content: `{"$defs":{}}`},
-		{name: "a body that is not JSON", content: "query := node+"},
+		{name: "the query command", dsl: orbit.DSLOutput{Name: "query_graph", Description: "MATCH ... RETURN", Parameters: parameters}, want: orbitrecord.GrammarStamp("MATCH ... RETURN", parameters)},
+		{name: "no query command", dsl: orbit.DSLOutput{ResponseFormat: "raw"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			schema, version := dslStamp(tc.content)
-			if schema != tc.wantSchema || version != tc.wantVersion {
-				t.Errorf("dslStamp() = %q, %q, want %q, %q", schema, version, tc.wantSchema, tc.wantVersion)
+			if got := grammarOf(tc.dsl); got != tc.want {
+				t.Errorf("grammarOf() = %q, want %q", got, tc.want)
 			}
 		})
 	}
@@ -130,7 +123,10 @@ func startProxy(t *testing.T, fake *fakeGitLab) (*recorder, *gitlabclient.Client
 // returned a type no audit here could find.
 func TestMakeCall_RefusesACallItCannotRecordFromOneAnswer(t *testing.T) {
 	answers := orbitAnswers()
-	answers["GET /orbit/schema/dsl raw"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"broken"`}
+	// The llm answer to a query is the one a handler passes on as it came, so
+	// it is the one whose undecodable JSON reaches the recording rather than
+	// failing in the handler.
+	answers["POST /orbit/query llm"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"broken"`}
 	proxy, client := startProxy(t, &fakeGitLab{answers: answers})
 	id := orbitrecord.CallID{Action: "orbit.test", Variant: "raw"}
 	status := func(ctx context.Context, c *gitlabclient.Client) (orbit.StatusOutput, error) {
@@ -155,9 +151,9 @@ func TestMakeCall_RefusesACallItCannotRecordFromOneAnswer(t *testing.T) {
 			}
 			return status(ctx, c)
 		}, want: "orbit.test (raw) made 2 Orbit requests"},
-		{name: "an answer that does not decode", invoke: func(ctx context.Context, c *gitlabclient.Client, _ string) (any, error) {
-			return orbit.DSL(ctx, c, orbit.DSLInput{ResponseFormatInput: formatted("raw")})
-		}, want: "orbit.test (raw): GET /orbit/schema/dsl answered 200: the answer is declared application/json and does not decode"},
+		{name: "an answer that does not decode", invoke: func(ctx context.Context, c *gitlabclient.Client, namespace string) (any, error) {
+			return orbit.Query(ctx, c, orbit.QueryInput{Query: fixtureQuery(namespace), ResponseFormat: "llm"})
+		}, want: "orbit.test (raw): POST /orbit/query answered 200: the answer is declared application/json and does not decode"},
 		{name: "a data key with no verbatim path", invoke: func(ctx context.Context, c *gitlabclient.Client, _ string) (any, error) {
 			return status(ctx, c)
 		}, want: `the answer has the key "query-latency.p99_ms" under system.components[].metrics, which is not a key name`},

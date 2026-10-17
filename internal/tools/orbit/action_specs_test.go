@@ -120,14 +120,15 @@ func TestActionSpecs_AliasesAndRelatedActions(t *testing.T) {
 	}
 }
 
-// TestOrbit_QuerySpec_TeachesTheVersion12DSL verifies that what orbit.query
-// serves a model about its one parameter is version 12 of the DSL, the one
-// GitLab.com compiles queries against: the usage line, the schema description
-// of query, and its parameter guidance, whose example is a query of that
-// version. Every confusion names a rule of that version a model gets wrong,
-// three of them refusing the older shape this server taught until issue 1031.
-// The other five actions take no query and carry no guidance.
-func TestOrbit_QuerySpec_TeachesTheVersion12DSL(t *testing.T) {
+// TestOrbit_QuerySpec_TeachesGQL verifies that what orbit.query serves a model
+// about its one parameter is GQL, the language GitLab.com compiles every query
+// in since 2026-10-15 (issue 1414): the usage line, the schema description of
+// query, and its parameter guidance, whose example is a GQL statement
+// GitLab.com answered. Every confusion names a rule of GQL a model gets wrong,
+// and one says what a query sent as a JSON object is answered. Nothing served
+// teaches the JSON DSL any longer. The other five actions take no query and
+// carry no guidance.
+func TestOrbit_QuerySpec_TeachesGQL(t *testing.T) {
 	client, err := gitlabclient.NewClientWithToken("https://gitlab.example.com", "tok", false)
 	if err != nil {
 		t.Fatalf("NewClientWithToken() error: %v", err)
@@ -156,35 +157,41 @@ func TestOrbit_QuerySpec_TeachesTheVersion12DSL(t *testing.T) {
 		t.Errorf("orbit.query usage's first sentence is %d runes, want at most 160 so a reader that cuts there keeps it whole: %q", n, firstSentence)
 	}
 
+	description := field.Tag.Get("jsonschema")
+	confusions := strings.Join(guidance.CommonConfusions, "\n")
 	served := []struct {
 		name string
 		text string
 		want string
 	}{
-		{name: "the first sentence points at the DSL", text: firstSentence, want: "orbit.dsl"},
+		{name: "the first sentence points at the language", text: firstSentence, want: "orbit.dsl"},
 		{name: "the first sentence points at the schema", text: firstSentence, want: "orbit.schema"},
-		{name: "usage names the version", text: querySpec.Usage, want: "version 12"},
-		{name: "usage names the nodes list", text: querySpec.Usage, want: "nodes array"},
-		{name: "usage points at the DSL", text: querySpec.Usage, want: "orbit.dsl"},
-		{name: "usage points at the schema", text: querySpec.Usage, want: "orbit.schema"},
+		{name: "the first sentence names GQL", text: firstSentence, want: "GQL"},
+		{name: "usage names the statement", text: querySpec.Usage, want: "MATCH ... RETURN"},
+		{name: "usage says a query is text", text: querySpec.Usage, want: "sent as text"},
+		{name: "usage names the anchoring rule", text: querySpec.Usage, want: "bounded by its id or a literal property"},
 		{name: "usage points at the refusal", text: querySpec.Usage, want: "message GitLab answers with"},
-		{name: "description names the version", text: field.Tag.Get("jsonschema"), want: "version 12"},
-		{name: "description points at the DSL", text: field.Tag.Get("jsonschema"), want: "orbit.dsl"},
-		{name: "description points at the schema", text: field.Tag.Get("jsonschema"), want: "orbit.schema"},
-		{name: "description lists nodes", text: field.Tag.Get("jsonschema"), want: "nodes, a list"},
-		{name: "description keys a filter by its operator", text: field.Tag.Get("jsonschema"), want: `{"starts_with"`},
-		{name: "description refuses op and value", text: field.Tag.Get("jsonschema"), want: "never {op, value}"},
-		{name: "description gives the neighbors default", text: field.Tag.Get("jsonschema"), want: "defaults to outgoing"},
-		{name: "description requires rel_types on a path", text: field.Tag.Get("jsonschema"), want: "rel_types required"},
-		{name: "description keeps the parameter required", text: field.Tag.Get("jsonschema"), want: ",required"},
-		{name: "value source points at the DSL", text: guidance.ValueSource, want: "orbit.dsl"},
+		{name: "description names GQL", text: description, want: "GQL text"},
+		{name: "description points at the language", text: description, want: "orbit.dsl"},
+		{name: "description points at the schema", text: description, want: "orbit.schema"},
+		{name: "description gives the statement", text: description, want: "MATCH pattern [WHERE predicates] RETURN projections"},
+		{name: "description gives an example", text: description, want: "MATCH (p:Project {full_path: 'gitlab-org/gitlab'}) RETURN p.id, p.full_path LIMIT 1"},
+		{name: "description gives the relationship type syntax", text: description, want: "-[:IN_PROJECT]->"},
+		{name: "description refuses OR", text: description, want: "never OR"},
+		{name: "description gives an aggregation", text: description, want: "count(mr) AS mr_count"},
+		{name: "description names where the vocabulary comes from", text: description, want: "orbit.schema lists the entities, properties and relationship types"},
+		{name: "description says what an object gets", text: description, want: "GitLab.com refuses it while it reads queries as GQL"},
+		{name: "description keeps the parameter required", text: description, want: ",required"},
+		{name: "value source names GQL", text: guidance.ValueSource, want: "GQL text"},
+		{name: "value source points at the language", text: guidance.ValueSource, want: "orbit.dsl"},
 		{name: "value source points at the schema", text: guidance.ValueSource, want: "orbit.schema"},
-		{name: "confusions refuse a top-level node", text: strings.Join(guidance.CommonConfusions, "\n"), want: "top-level node is refused"},
-		{name: "confusions key a filter by its operator", text: strings.Join(guidance.CommonConfusions, "\n"), want: `{"starts_with": "gitlab-org/"}`},
-		{name: "confusions refuse op and value", text: strings.Join(guidance.CommonConfusions, "\n"), want: "older {op, value} form is refused"},
-		{name: "confusions give the neighbors default", text: strings.Join(guidance.CommonConfusions, "\n"), want: "defaults to outgoing"},
-		{name: "confusions name any relationship type", text: strings.Join(guidance.CommonConfusions, "\n"), want: `["*"]`},
-		{name: "confusions key an aggregation by its function", text: strings.Join(guidance.CommonConfusions, "\n"), want: `{"count": "mr", "as": "mr_count"}`},
+		{name: "confusions bound a node", text: confusions, want: "LIMIT bounds nothing"},
+		{name: "confusions give the colon", text: confusions, want: "Written without it, -[IN_PROJECT]-> declares a variable"},
+		{name: "confusions refuse OR", text: confusions, want: "OR, XOR, DISTINCT, count(*), OPTIONAL MATCH, WITH and UNION are refused"},
+		{name: "confusions negate a list", text: confusions, want: "NOT p.visibility_level IN [...]"},
+		{name: "confusions keep -- for neighbors", text: confusions, want: "The undirected -- is for the neighbors of one node"},
+		{name: "confusions give a shortest path", text: confusions, want: "ANY SHORTEST"},
+		{name: "confusions say what an object gets", text: confusions, want: "answered compile_error while it reads GQL"},
 	}
 	for _, tt := range served {
 		t.Run(tt.name, func(t *testing.T) {
@@ -194,14 +201,318 @@ func TestOrbit_QuerySpec_TeachesTheVersion12DSL(t *testing.T) {
 		})
 	}
 
-	var example map[string]any
-	if err = json.Unmarshal([]byte(guidance.ExampleBinding), &example); err != nil {
-		t.Fatalf("query ExampleBinding %q is not JSON: %v", guidance.ExampleBinding, err)
+	// What the JSON DSL taught: a nodes list, an operator-keyed filter, the
+	// version number. A served sentence teaching any of it again would send a
+	// model to write the language GitLab.com refuses.
+	retired := []string{"version 12", "nodes array", "query_type (", `{"starts_with"`, "rel_types required", `{"count": "mr"`}
+	texts := []struct {
+		name string
+		text string
+	}{
+		{name: "usage", text: querySpec.Usage},
+		{name: "description", text: description},
+		{name: "value source", text: guidance.ValueSource},
+		{name: "confusions", text: confusions},
+		{name: "example", text: guidance.ExampleBinding},
 	}
-	nodes, isList := example["nodes"].([]any)
-	if example["query_type"] != "traversal" || !isList || len(nodes) != 1 || example["node"] != nil {
-		t.Errorf("query ExampleBinding = %v, want a traversal listing its one node in nodes", example)
+	for _, tt := range texts {
+		t.Run("the "+tt.name+" teaches no JSON DSL", func(t *testing.T) {
+			for _, gone := range retired {
+				if strings.Contains(tt.text, gone) {
+					t.Errorf("served %s %q still teaches the JSON DSL (%q)", tt.name, tt.text, gone)
+				}
+			}
+		})
 	}
+
+	if guidance.ExampleBinding != queryExampleGQL {
+		t.Errorf("query ExampleBinding = %q, want the GQL statement %q", guidance.ExampleBinding, queryExampleGQL)
+	}
+}
+
+// TestOrbit_QueryResponseFormat_NamesTheThreeFormats verifies that the schema
+// description of orbit.query's response_format names the three formats
+// POST /orbit/query takes, gql among them, and that the actions reading the
+// other routes, which take two, still say raw or llm.
+func TestOrbit_QueryResponseFormat_NamesTheThreeFormats(t *testing.T) {
+	cases := []struct {
+		name  string
+		input reflect.Type
+		want  string
+	}{
+		{name: "query", input: reflect.TypeFor[QueryInput](), want: "raw (structured JSON, the default here), llm (compact text) or gql (the result as a graph pattern table)"},
+		{name: "status", input: reflect.TypeFor[StatusInput](), want: "Response format: raw or llm"},
+		{name: "graph_status", input: reflect.TypeFor[GraphStatusInput](), want: "Response format: raw or llm"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			field, ok := tc.input.FieldByName("ResponseFormat")
+			if !ok {
+				t.Fatalf("%s has no ResponseFormat field", tc.input)
+			}
+			if got := field.Tag.Get("jsonschema"); !strings.Contains(got, tc.want) {
+				t.Errorf("%s response_format description = %q, want it to say %q", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestOrbit_DSLRoute_NotFound_NamesTheQueryLanguage verifies the card a 404
+// from the query command's route produces: it names the query language and
+// the query_graph command it is read from, never the JSON DSL GitLab.com
+// stopped serving.
+func TestOrbit_DSLRoute_NotFound_NamesTheQueryLanguage(t *testing.T) {
+	routes := newOrbitSpecsByTool(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+	result, err := routes["gitlab_orbit_dsl"].Handler(t.Context(), map[string]any{})
+	if err != nil {
+		t.Fatalf("Route.Handler() error = %v, want nil", err)
+	}
+	callResult := toolutil.MarkdownForResult(result)
+	if callResult == nil || len(callResult.Content) == 0 {
+		t.Fatalf("MarkdownForResult() = %#v, want the not-found card", callResult)
+	}
+	text, ok := callResult.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content type = %T, want *mcp.TextContent", callResult.Content[0])
+	}
+	for _, want := range []string{"GitLab Orbit Query Language Not Found", "query_graph command"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text.Text, want) {
+				t.Errorf("card = %q, want it to say %q", text.Text, want)
+			}
+		})
+	}
+	if strings.Contains(text.Text, "DSL") {
+		t.Errorf("card = %q, still names the JSON DSL", text.Text)
+	}
+}
+
+// TestOrbit_DSLSpec_DescribesGQL verifies that orbit.dsl's usage line says it
+// serves GQL, the language GitLab.com compiles queries in, rather than the
+// JSON DSL schema GitLab.com no longer serves.
+func TestOrbit_DSLSpec_DescribesGQL(t *testing.T) {
+	client, err := gitlabclient.NewClientWithToken("https://gitlab.example.com", "tok", false)
+	if err != nil {
+		t.Fatalf("NewClientWithToken() error: %v", err)
+	}
+	dslSpec := ActionSpecs(client)[3]
+	for _, want := range []string{"GQL", "query language", "JSON Schema of its input"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(dslSpec.Usage, want) {
+				t.Errorf("orbit.dsl usage = %q, want it to say %q", dslSpec.Usage, want)
+			}
+		})
+	}
+	if strings.Contains(dslSpec.Usage, "DSL schema") {
+		t.Errorf("orbit.dsl usage = %q, still promises the JSON DSL schema", dslSpec.Usage)
+	}
+}
+
+// TestOrbit_QuerySchema_TakesTextOrAnObjectOnEverySurface verifies that the
+// query parameter is served as a string or an object on every surface that
+// carries a schema: the individual tool, and the meta tool's per-action schema
+// in its full and compact modes. A Go field typed any reflects as no type at
+// all, which the compact mode would serve as an empty schema, and the type
+// override is what says both forms are taken; a schema typed object alone, as
+// it was until issue 1414, refuses the GQL text GitLab.com reads before the
+// handler sees it.
+func TestOrbit_QuerySchema_TakesTextOrAnObjectOnEverySurface(t *testing.T) {
+	client, err := gitlabclient.NewClientWithToken("https://gitlab.com", "tok", false)
+	if err != nil {
+		t.Fatalf("NewClientWithToken() error: %v", err)
+	}
+	want := []any{"string", "object"}
+
+	tool, err := toolutil.IndividualToolFromSpecs(ActionSpecs(client), "gitlab_orbit_query", toolutil.IndividualToolProjectionOptions{Description: "Run an Orbit query."})
+	if err != nil {
+		t.Fatalf("IndividualToolFromSpecs() error: %v", err)
+	}
+	individual, ok := tool.InputSchema.(map[string]any)
+	if !ok {
+		t.Fatalf("individual input schema = %T, want a map", tool.InputSchema)
+	}
+	wantExamples := []any{queryExampleGQL}
+	if got := schemaPropertyType(t, individual, "query"); !reflect.DeepEqual(got, want) {
+		t.Errorf("individual query type = %#v, want %#v", got, want)
+	}
+	if got := propertySchema(t, individual, "query")["examples"]; !reflect.DeepEqual(got, wantExamples) {
+		t.Errorf("individual query examples = %#v, want the GQL statement %#v", got, wantExamples)
+	}
+
+	routes := orbitActionSpecRoutes(t, client)
+	modes := []struct {
+		mode     string
+		examples any
+	}{
+		// The compact mode keeps a property's type and enum and nothing else,
+		// so it carries no example by its own design.
+		{mode: toolutil.MetaParamSchemaFull, examples: wantExamples},
+		{mode: toolutil.MetaParamSchemaCompact, examples: nil},
+	}
+	for _, tc := range modes {
+		t.Run("meta "+tc.mode, func(t *testing.T) {
+			params := metaActionParams(t, toolutil.BuildMetaToolSchema(routes, tc.mode), "query")
+			if got := schemaPropertyType(t, params, "query"); !reflect.DeepEqual(got, want) {
+				t.Errorf("meta %s query type = %#v, want %#v", tc.mode, got, want)
+			}
+			if got := propertySchema(t, params, "query")["examples"]; !reflect.DeepEqual(got, tc.examples) {
+				t.Errorf("meta %s query examples = %#v, want %#v", tc.mode, got, tc.examples)
+			}
+		})
+	}
+}
+
+// TestOrbit_MetaFullSchema_AcceptsGQLText verifies end to end that a GQL
+// statement passed to the gitlab_orbit meta tool's query action, under the
+// full parameter schema whose conditionals the SDK validates arguments
+// against, reaches GitLab as the body's query string and comes back as a
+// result rather than a validation error.
+func TestOrbit_MetaFullSchema_AcceptsGQLText(t *testing.T) {
+	restore := toolutil.SetMetaParamSchemaModeScoped(toolutil.MetaParamSchemaFull)
+	t.Cleanup(restore)
+	session := newOrbitMetaSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
+		var got struct {
+			Query any `json:"query"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		if got.Query != projectByIDGQL {
+			t.Errorf("query = %#v, want the GQL text %q", got.Query, projectByIDGQL)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"result":[],"query_type":"traversal","row_count":0}`)
+	}))
+
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "gitlab_orbit",
+		Arguments: map[string]any{"action": "query", "params": map[string]any{"query": projectByIDGQL}},
+	})
+	if err != nil {
+		t.Fatalf("CallTool() error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("gitlab_orbit query with GQL text = %#v, want a result", result.Content)
+	}
+}
+
+// TestOrbit_DSLRoute_ReadsTheQueryCommandWhileTheDSLRouteAnswers404 verifies
+// the orbit.dsl route as a caller meets it: GitLab.com answers 404 at
+// GET /orbit/schema/dsl since it turned GQL on, and the route serves the
+// query command's grammar instead, its card ending on the action that lists
+// the entities a query names, rather than the "Orbit is not enabled" card the
+// retired route's 404 produced (issue 1414).
+func TestOrbit_DSLRoute_ReadsTheQueryCommandWhileTheDSLRouteAnswers404(t *testing.T) {
+	routes := newOrbitSpecsByTool(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/orbit/schema/dsl":
+			testutil.RespondJSON(w, http.StatusNotFound, `{"code":5,"message":"Orbit request failed"}`)
+		case "/api/v4/orbit/agent/commands":
+			testutil.RespondJSON(w, http.StatusOK, agentCommandsRaw)
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.Error(w, "unexpected path", http.StatusInternalServerError)
+		}
+	}))
+
+	result, err := routes["gitlab_orbit_dsl"].Handler(t.Context(), map[string]any{})
+	if err != nil {
+		t.Fatalf("Route.Handler() error: %v", err)
+	}
+	callResult := toolutil.MarkdownForResult(result)
+	if callResult == nil || callResult.IsError || len(callResult.Content) == 0 {
+		t.Fatalf("MarkdownForResult() = %#v, want the query language card", callResult)
+	}
+	text, ok := callResult.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content type = %T, want *mcp.TextContent", callResult.Content[0])
+	}
+	for _, want := range []string{queryGraphGrammar, "Use action 'orbit.schema'"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text.Text, want) {
+				t.Errorf("card = %q, want it to carry %q", text.Text, want)
+			}
+		})
+	}
+}
+
+// TestOrbit_QueryRoute_SendsGQLTextAndExplainsARefusedObject verifies the
+// orbit.query route as a caller meets it: GQL text passed as the query
+// argument reaches GitLab as the body's query string, and a JSON object that
+// GitLab.com refuses for its language is answered with the hint that it reads
+// a query as GQL text.
+func TestOrbit_QueryRoute_SendsGQLTextAndExplainsARefusedObject(t *testing.T) {
+	routes := newOrbitSpecsByTool(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var got struct {
+			Query any `json:"query"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		if _, isObject := got.Query.(map[string]any); isObject {
+			testutil.RespondJSON(w, http.StatusBadRequest, `{"code":"compile_error","message":"schema violation: Orbit query syntax at line 1, column 1: expected Statement"}`)
+			return
+		}
+		if got.Query != projectByIDGQL {
+			t.Errorf("query = %#v, want the GQL text %q", got.Query, projectByIDGQL)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"result":[],"query_type":"traversal","row_count":0}`)
+	}))
+	route := routes["gitlab_orbit_query"]
+
+	if _, err := route.Handler(t.Context(), map[string]any{"query": projectByIDGQL}); err != nil {
+		t.Fatalf("Route.Handler() with GQL text error: %v", err)
+	}
+	_, err := route.Handler(t.Context(), map[string]any{"query": projectByIDObject()})
+	if err == nil || !strings.Contains(err.Error(), "GitLab.com reads a query as GQL text, not as a JSON object") {
+		t.Fatalf("Route.Handler() with an object error = %v, want the hint that GitLab.com reads GQL", err)
+	}
+}
+
+// schemaPropertyType returns the type a schema's properties give name,
+// failing the test when the schema has no such property.
+func schemaPropertyType(t *testing.T, schema map[string]any, name string) any {
+	t.Helper()
+	return propertySchema(t, schema, name)["type"]
+}
+
+// propertySchema returns the schema a schema's properties give name, failing
+// the test when the schema has no such property.
+func propertySchema(t *testing.T, schema map[string]any, name string) map[string]any {
+	t.Helper()
+	properties, _ := schema["properties"].(map[string]any)
+	property, ok := properties[name].(map[string]any)
+	if !ok {
+		t.Fatalf("schema properties = %v, want %q", properties, name)
+	}
+	return property
+}
+
+// metaActionParams returns the params schema a meta tool schema's
+// conditionals give action, failing the test when none does.
+func metaActionParams(t *testing.T, schema map[string]any, action string) map[string]any {
+	t.Helper()
+	conditionals, _ := schema["allOf"].([]any)
+	for _, entry := range conditionals {
+		conditional, _ := entry.(map[string]any)
+		ifPart, _ := conditional["if"].(map[string]any)
+		ifProperties, _ := ifPart["properties"].(map[string]any)
+		actionSchema, _ := ifProperties["action"].(map[string]any)
+		if actionSchema["const"] != action {
+			continue
+		}
+		thenPart, _ := conditional["then"].(map[string]any)
+		thenProperties, _ := thenPart["properties"].(map[string]any)
+		params, ok := thenProperties["params"].(map[string]any)
+		if !ok {
+			t.Fatalf("conditional for %q = %v, want a params schema", action, conditional)
+		}
+		return params
+	}
+	t.Fatalf("meta schema allOf = %v, want a conditional for %q", conditionals, action)
+	return nil
 }
 
 // TestOrbit_ActionSpecs_Metadata verifies that every canonical Orbit
@@ -325,9 +636,9 @@ func TestOrbit_ActionSpecs_CallAllRoutes(t *testing.T) {
 		case "/api/v4/orbit/tools":
 			testutil.AssertRequestMethod(t, r, http.MethodGet)
 			testutil.RespondJSON(w, http.StatusOK, `[{"name":"query_graph","description":"Execute graph queries","parameters":{"type":"object"}}]`)
-		case "/api/v4/orbit/schema/dsl":
+		case "/api/v4/orbit/agent/commands":
 			testutil.AssertRequestMethod(t, r, http.MethodGet)
-			testutil.RespondJSON(w, http.StatusOK, `{"type":"object","properties":{"query_type":{"type":"string"}}}`)
+			testutil.RespondJSON(w, http.StatusOK, agentCommandsRaw)
 		case "/api/v4/orbit/query":
 			testutil.AssertRequestMethod(t, r, http.MethodPost)
 			testutil.RespondJSON(w, http.StatusOK, `{"result":[],"query_type":"traversal","row_count":0}`)
@@ -349,7 +660,7 @@ func TestOrbit_ActionSpecs_CallAllRoutes(t *testing.T) {
 		{name: "gitlab_orbit_schema", args: map[string]any{}},
 		{name: "gitlab_orbit_tools", args: map[string]any{}},
 		{name: "gitlab_orbit_dsl", args: map[string]any{}},
-		{name: "gitlab_orbit_query", args: map[string]any{"query": projectByIDQuery()}},
+		{name: "gitlab_orbit_query", args: map[string]any{"query": projectByIDGQL}},
 		{name: "gitlab_orbit_graph_status", args: map[string]any{"full_path": "gitlab-org/gitlab"}},
 	}
 
@@ -387,7 +698,7 @@ func TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult(t *testing.T) {
 		{name: "gitlab_orbit_schema", args: map[string]any{}},
 		{name: "gitlab_orbit_tools", args: map[string]any{}},
 		{name: "gitlab_orbit_dsl", args: map[string]any{}},
-		{name: "gitlab_orbit_query", args: map[string]any{"query": projectByIDQuery()}},
+		{name: "gitlab_orbit_query", args: map[string]any{"query": projectByIDGQL}},
 		{name: "gitlab_orbit_graph_status", args: map[string]any{"full_path": "gitlab-org/gitlab"}},
 	}
 
@@ -437,7 +748,7 @@ func TestOrbit_ActionSpecs_ForbiddenStaysAnError(t *testing.T) {
 		{name: "gitlab_orbit_schema", args: map[string]any{}},
 		{name: "gitlab_orbit_tools", args: map[string]any{}},
 		{name: "gitlab_orbit_dsl", args: map[string]any{}},
-		{name: "gitlab_orbit_query", args: map[string]any{"query": projectByIDQuery()}},
+		{name: "gitlab_orbit_query", args: map[string]any{"query": projectByIDGQL}},
 		{name: "gitlab_orbit_graph_status", args: map[string]any{"full_path": "gitlab-org/gitlab"}},
 	}
 

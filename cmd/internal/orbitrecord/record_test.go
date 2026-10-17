@@ -14,9 +14,12 @@ import (
 // the checks are asked on, well inside the window.
 const recordDay = "2026-09-27"
 
-// dslSchema is the $id of the query DSL GitLab.com served when version 2 of
-// the record was introduced.
-const dslSchema = "https://gitlab.com/gitlab-org/orbit/knowledge-graph/schemas/graph_query/v12"
+// queryGrammar and laterGrammar are two stamps of the GQL grammar in the form
+// [GrammarStamp] writes them.
+const (
+	queryGrammar = "sha256:0d1f6f6c3d9e8a2b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3"
+	laterGrammar = "sha256:9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d"
+)
 
 var judgedOn = time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 
@@ -26,7 +29,7 @@ func wholeRecord() Document {
 	doc := Document{
 		SchemaVersion: SchemaVersion,
 		Note:          "fixture",
-		Source:        Source{Instance: Instance, OrbitVersion: "0.130.0", DSLSchema: dslSchema, DSLVersion: "12.1.9", Namespace: "plens1", RetrievedAt: recordDay},
+		Source:        Source{Instance: Instance, OrbitVersion: "0.130.0", QueryGrammar: queryGrammar, Namespace: "plens1", RetrievedAt: recordDay},
 	}
 	for _, id := range ExpectedCalls() {
 		doc.Calls = append(doc.Calls, Call{
@@ -46,11 +49,12 @@ func wholeRecord() Document {
 	return doc
 }
 
-// TestExpectedCalls_AreTheTwelveInTheOrderTheGeneratorMakesThem pins the call
-// set a whole record holds. The status call is first because the record is
-// stamped with the version it reports, and every other entry is one answer an
-// output type is judged by.
-func TestExpectedCalls_AreTheTwelveInTheOrderTheGeneratorMakesThem(t *testing.T) {
+// TestExpectedCalls_AreTheThirteenInTheOrderTheGeneratorMakesThem pins the
+// call set a whole record holds. The status call is first because the record
+// is stamped with the version it reports, and every other entry is one answer
+// an output type is judged by: each response format a handler offers, the
+// query's gql table among them.
+func TestExpectedCalls_AreTheThirteenInTheOrderTheGeneratorMakesThem(t *testing.T) {
 	var got []string
 	for _, id := range ExpectedCalls() {
 		got = append(got, id.String())
@@ -60,7 +64,7 @@ func TestExpectedCalls_AreTheTwelveInTheOrderTheGeneratorMakesThem(t *testing.T)
 		"orbit.schema (raw)", "orbit.schema (llm)", "orbit.schema (expand)",
 		"orbit.tools (default)",
 		"orbit.dsl (raw)", "orbit.dsl (llm)",
-		"orbit.query (raw)", "orbit.query (llm)",
+		"orbit.query (raw)", "orbit.query (llm)", "orbit.query (gql)",
 		"orbit.graph_status (raw)", "orbit.graph_status (llm)",
 	}
 	if !slices.Equal(got, want) {
@@ -131,8 +135,9 @@ func TestRead_WhatIsNotARecordOfThisBuild_IsRefused(t *testing.T) {
 	}{
 		{name: "missing", want: "reading the Orbit response record"},
 		{name: "not JSON", content: "{", want: "decoding the Orbit response record"},
-		{name: "the schema version before the query DSL was recorded", content: `{"schema_version": 1}`, want: "schema version 1 and this build reads version 2: regenerate it with make gen-orbit-record"},
-		{name: "a later schema version", content: `{"schema_version": 3}`, want: "schema version 3 and this build reads version 2: regenerate it with make gen-orbit-record"},
+		{name: "the schema version before the query DSL was recorded", content: `{"schema_version": 1}`, want: "schema version 1 and this build reads version 3: regenerate it with make gen-orbit-record"},
+		{name: "the schema version that pinned the JSON query DSL", content: `{"schema_version": 2}`, want: "schema version 2 and this build reads version 3: regenerate it with make gen-orbit-record"},
+		{name: "a later schema version", content: `{"schema_version": 4}`, want: "schema version 4 and this build reads version 3: regenerate it with make gen-orbit-record"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -295,8 +300,8 @@ func TestProblems_EachDefect_IsNamed(t *testing.T) {
 	}{
 		{name: "another instance", edit: func(d *Document) { d.Source.Instance = "https://gitlab.example.com" }, want: `taken from "https://gitlab.example.com", not https://gitlab.com`},
 		{name: "no version", edit: func(d *Document) { d.Source.OrbitVersion = "" }, want: "names no Orbit version"},
-		{name: "no query DSL schema", edit: func(d *Document) { d.Source.DSLSchema = "" }, want: "names no query DSL schema and version"},
-		{name: "no query DSL version", edit: func(d *Document) { d.Source.DSLVersion = "" }, want: "names no query DSL schema and version"},
+		{name: "no query grammar", edit: func(d *Document) { d.Source.QueryGrammar = "" }, want: "names no query grammar"},
+		{name: "a query grammar that is no SHA-256", edit: func(d *Document) { d.Source.QueryGrammar = "sha256:12.1.10" }, want: `names the query grammar as "sha256:12.1.10"`},
 		{name: "no namespace", edit: func(d *Document) { d.Source.Namespace = "" }, want: "names no fixture namespace"},
 		{name: "no date", edit: func(d *Document) { d.Source.RetrievedAt = "yesterday" }, want: `taken on "yesterday", which is not a date`},
 		{name: "a future date", edit: func(d *Document) { d.Source.RetrievedAt = "2026-12-01" }, want: "has not happened yet"},
@@ -386,32 +391,27 @@ func TestDiff_NamesEveryChangeToTheKeyTree(t *testing.T) {
 	}
 }
 
-// TestDiff_AChangedQueryDSL_IsTheOneProvenanceChangeReported verifies the
-// drift alarm issue 1031 asked for: a record taken against another query DSL,
-// a new $id or only a new version of the same one, is reported, while a new
-// Orbit version or day alone is not. orbit.query teaches a model that
-// language, so a change to it is a change somebody has to read its guidance
-// against before the record is committed.
-func TestDiff_AChangedQueryDSL_IsTheOneProvenanceChangeReported(t *testing.T) {
-	committed := Source{OrbitVersion: "0.135.0", DSLSchema: dslSchema, DSLVersion: "12.1.9", RetrievedAt: "2026-10-01"}
+// TestDiff_AChangedQueryGrammar_IsTheOneProvenanceChangeReported verifies the
+// drift alarm issue 1031 asked for, held to the GQL grammar since issue 1414:
+// a record taken against a query grammar GitLab.com published differently is
+// reported, while a new Orbit version or day alone is not. orbit.query teaches
+// a model that language, so a change to it is a change somebody has to read
+// its guidance against before the record is committed.
+func TestDiff_AChangedQueryGrammar_IsTheOneProvenanceChangeReported(t *testing.T) {
+	committed := Source{OrbitVersion: "0.135.0", QueryGrammar: queryGrammar, RetrievedAt: "2026-10-01"}
 	cases := []struct {
 		name  string
 		after Source
 		want  []string
 	}{
 		{
-			name:  "a new version of the language",
-			after: Source{OrbitVersion: "0.137.0", DSLSchema: dslSchema, DSLVersion: "12.1.10", RetrievedAt: recordDay},
-			want:  []string{"~ query DSL: " + dslSchema + " 12.1.9 -> " + dslSchema + " 12.1.10: read orbit.query's guidance against it"},
-		},
-		{
-			name:  "a new language at the same version",
-			after: Source{OrbitVersion: "0.135.0", DSLSchema: "graph_query/v13", DSLVersion: "12.1.9", RetrievedAt: "2026-10-01"},
-			want:  []string{"~ query DSL: " + dslSchema + " 12.1.9 -> graph_query/v13 12.1.9: read orbit.query's guidance against it"},
+			name:  "a grammar published differently",
+			after: Source{OrbitVersion: "0.137.0", QueryGrammar: laterGrammar, RetrievedAt: recordDay},
+			want:  []string{"~ query grammar: " + queryGrammar + " -> " + laterGrammar + ": read orbit.query's guidance against it"},
 		},
 		{
 			name:  "a new Orbit version and day alone",
-			after: Source{OrbitVersion: "0.137.0", DSLSchema: dslSchema, DSLVersion: "12.1.9", RetrievedAt: recordDay},
+			after: Source{OrbitVersion: "0.137.0", QueryGrammar: queryGrammar, RetrievedAt: recordDay},
 		},
 	}
 	for _, tc := range cases {
@@ -420,5 +420,50 @@ func TestDiff_AChangedQueryDSL_IsTheOneProvenanceChangeReported(t *testing.T) {
 				t.Errorf("Diff() = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestGrammarStamp_NamesWhatGitLabPublishesTheLanguageAs verifies the stamp a
+// record names the query grammar by: a SHA-256 of the grammar's description
+// and the JSON Schema of the query command's input, the same for the same
+// grammar whatever order its keys were decoded in, different when either part
+// changes or a character moves from one part to the other, and empty when
+// there is no description, which [Problems] then refuses rather than stamping
+// a grammar GitLab never described.
+func TestGrammarStamp_NamesWhatGitLabPublishesTheLanguageAs(t *testing.T) {
+	parameters := map[string]any{"type": "object", "required": []any{"query"}}
+	reordered := map[string]any{"required": []any{"query"}, "type": "object"}
+	stamp := GrammarStamp("MATCH ... RETURN", parameters)
+
+	if !strings.HasPrefix(stamp, "sha256:") || len(stamp) != len("sha256:")+64 {
+		t.Fatalf("GrammarStamp() = %q, want sha256: and 64 hex digits", stamp)
+	}
+	doc := wholeRecord()
+	doc.Source.QueryGrammar = stamp
+	if problems := Problems(doc, judgedOn); len(problems) != 0 {
+		t.Errorf("Problems() of a record stamped %q = %q, want none", stamp, problems)
+	}
+	if again := GrammarStamp("MATCH ... RETURN", reordered); again != stamp {
+		t.Errorf("GrammarStamp() of the same grammar = %q, want %q", again, stamp)
+	}
+	differ := []struct {
+		name        string
+		description string
+		parameters  any
+	}{
+		{name: "another description", description: "MATCH ... RETURN ... LIMIT", parameters: parameters},
+		{name: "another input schema", description: "MATCH ... RETURN", parameters: map[string]any{"type": "object"}},
+		{name: "no input schema", description: "MATCH ... RETURN", parameters: nil},
+		{name: "a character moved across the boundary", description: "MATCH ... RETURN{", parameters: nil},
+	}
+	for _, tc := range differ {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := GrammarStamp(tc.description, tc.parameters); got == stamp || got == "" {
+				t.Errorf("GrammarStamp() = %q, want a stamp other than %q", got, stamp)
+			}
+		})
+	}
+	if got := GrammarStamp("", parameters); got != "" {
+		t.Errorf("GrammarStamp() with no description = %q, want none", got)
 	}
 }

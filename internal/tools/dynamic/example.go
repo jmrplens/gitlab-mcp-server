@@ -79,11 +79,19 @@ func exampleObject(schema map[string]any, names []string) map[string]any {
 // answered from its first oneOf or anyOf branch, and a parameter with no
 // schema at all keeps the placeholder its name suggests.
 //
+// A schema that carries its own example is answered with the first of them,
+// ahead of all that: an action that knows what a good value looks like says
+// so in its schema, as orbit.query does with a GQL statement, which no type
+// or name could produce.
+//
 // It covers the shapes the catalog's parameters take, and
 // TestFind_EveryExampleSatisfiesItsInputSchema holds every action of every
 // catalog to it, so a shape it does not know fails there rather than in a
 // model's first call.
 func exampleValue(name string, schema map[string]any) any {
+	if values := exampleValues(schema); len(values) > 0 {
+		return values[0]
+	}
 	if value, ok := enumExample(name, schema); ok {
 		return value
 	}
@@ -131,7 +139,20 @@ func enumExample(name string, schema map[string]any) (any, bool) {
 // override wrote it in Go (security_attribute.bulk_update's mode), and both
 // reach the example.
 func enumValues(schema map[string]any) []any {
-	switch values := schema["enum"].(type) {
+	return schemaList(schema, "enum")
+}
+
+// exampleValues returns the JSON Schema examples a schema carries, in the two
+// shapes [enumValues] reads.
+func exampleValues(schema map[string]any) []any {
+	return schemaList(schema, "examples")
+}
+
+// schemaList returns the list a schema keyword holds, as decoded JSON writes
+// it ([]any) or as an action's override writes it in Go ([]string), and nil
+// for anything else.
+func schemaList(schema map[string]any, keyword string) []any {
+	switch values := schema[keyword].(type) {
 	case []any:
 		return values
 	case []string:

@@ -2,6 +2,8 @@ package orbitrecord
 
 import (
 	"cmp"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -18,9 +20,15 @@ import (
 
 // SchemaVersion is the shape of this record. A reader refuses a version it
 // was not written for rather than guessing at a field that moved. Version 2
-// added the query DSL the record was taken against to its source
-// ([Source.DSLSchema], [Source.DSLVersion]).
-const SchemaVersion = 2
+// added the query DSL the record was taken against to its source, by the
+// JSON DSL's $id and version. Version 3 replaced them with the GQL grammar
+// ([Source.QueryGrammar]), since GitLab.com reads every query as GQL from
+// 2026-10-15 and answers 404 where it served the JSON DSL, and its query
+// calls are written in GQL, the gql table of a query among them (issue
+// 1414). A record that still pins the JSON DSL is therefore refused by its
+// version, and one of version 3 that carries the old keys anyway is not in
+// the form [Encode] writes, which the generator's -check refuses.
+const SchemaVersion = 3
 
 // DefaultDir is where the record lives, beside the other pinned records.
 const DefaultDir = "docs/development"
@@ -69,18 +77,16 @@ type Source struct {
 	// reported in the status call, which is what moves between two
 	// recordings far more often than GitLab's own release does.
 	OrbitVersion string `json:"orbit_version"`
-	// DSLSchema is the $id of the query DSL GitLab.com served beside the
-	// answers (orbit.dsl, raw): the language orbit.query's guidance teaches,
-	// graph_query/v12 when this field was added. A new $id is a new major
-	// version of that language.
-	DSLSchema string `json:"dsl_schema"`
-	// DSLVersion is the DSL's own version field, which moves with every
-	// change GitLab makes to the language (query_dsl in config/versions.yaml
-	// of gitlab-org/orbit/knowledge-graph). With [DSLSchema] it is the drift
-	// alarm issue 1031 asked for: [Diff] reports either changing, so a
-	// recording fails until somebody has read orbit.query's guidance against
-	// the new language and committed the record.
-	DSLVersion string `json:"dsl_version"`
+	// QueryGrammar names the query language GitLab.com published beside the
+	// answers (orbit.dsl, raw): the description of the query_graph command,
+	// which is the GQL grammar, and the JSON Schema of its input, as
+	// [GrammarStamp] writes them. GQL carries no version of its own the way
+	// the JSON DSL's $id and version field did, so the stamp is a digest of
+	// what GitLab says the language is, which moves whenever GitLab says it
+	// differently. It is the drift alarm issue 1031 asked for: [Diff] reports
+	// it changing, so a recording fails until somebody has read orbit.query's
+	// guidance against the new language and committed the record.
+	QueryGrammar string `json:"query_grammar"`
 	// Namespace is the fixture namespace the indexing status and the query
 	// were asked about (test/fixtures/orbit, docs/development/orbit-fixtures.md).
 	Namespace string `json:"namespace"`
@@ -165,6 +171,7 @@ func ExpectedCalls() []CallID {
 		{Action: "orbit.dsl", Variant: "llm"},
 		{Action: "orbit.query", Variant: "raw"},
 		{Action: "orbit.query", Variant: "llm"},
+		{Action: "orbit.query", Variant: "gql"},
 		{Action: "orbit.graph_status", Variant: "raw"},
 		{Action: "orbit.graph_status", Variant: "llm"},
 	}
@@ -351,8 +358,8 @@ func Problems(doc Document, now time.Time) []string {
 	if doc.Source.OrbitVersion == "" {
 		problems = append(problems, "the record names no Orbit version: nothing can then say which Knowledge Graph service it speaks for")
 	}
-	if doc.Source.DSLSchema == "" || doc.Source.DSLVersion == "" {
-		problems = append(problems, "the record names no query DSL schema and version: nothing can then say which query language orbit.query's guidance was checked against, and a change to it goes unreported")
+	if problem := grammarProblem(doc.Source.QueryGrammar); problem != "" {
+		problems = append(problems, problem)
 	}
 	if doc.Source.Namespace == "" {
 		problems = append(problems, "the record names no fixture namespace: the indexing status and the query were asked about something nobody can find again")
@@ -363,6 +370,18 @@ func Problems(doc Document, now time.Time) []string {
 		problems = append(problems, callProblems(call)...)
 	}
 	return problems
+}
+
+// grammarProblem reports a record's query grammar stamp that is missing or is
+// not the digest a recording writes, or "" for one that is.
+func grammarProblem(stamp string) string {
+	if stamp == "" {
+		return "the record names no query grammar: nothing can then say which query language orbit.query's guidance was checked against, and a change to it goes unreported"
+	}
+	if !grammarStampPattern.MatchString(stamp) {
+		return fmt.Sprintf("the record names the query grammar as %q, which is not the sha256: digest a recording writes", stamp)
+	}
+	return ""
 }
 
 // callSetProblems reports an expected call the record lacks, one it holds
@@ -461,21 +480,44 @@ func keyShapeProblems(id CallID, key Key) []string {
 	return problems
 }
 
+// grammarStampPattern is the shape of a [GrammarStamp].
+var grammarStampPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
+// GrammarStamp is how a record names the query language GitLab.com
+// published: "sha256:" and the hex SHA-256 of the query command's
+// description, a zero byte, and the JSON encoding of the JSON Schema of its
+// input, whose object keys encoding/json writes sorted, so the same grammar
+// stamps the same however it was decoded. A command with no description
+// describes no language and stamps nothing, which [Problems] refuses.
+func GrammarStamp(description string, parameters any) string {
+	if description == "" {
+		return ""
+	}
+	digest := sha256.New()
+	digest.Write([]byte(description))
+	digest.Write([]byte{0})
+	// The input schema was decoded from JSON, so encoding it again cannot
+	// fail, and this repository's rule for that is to say so at the leaf.
+	digest.Write(cmdutil.Must(json.Marshal(parameters)))
+	return "sha256:" + hex.EncodeToString(digest.Sum(nil))
+}
+
 // Diff lists what changed between two records, one line per change, sorted: a
 // call added or dropped, a key added or dropped, a key's kinds changed, a key
-// that became or stopped being verbatim, and the query DSL the record was
+// that became or stopped being verbatim, and the query grammar the record was
 // taken against. The rest of the provenance and the request names are not
 // compared, since a new day or Orbit version is what every recording brings
-// and is not a change to the shape. The DSL is the exception because it is
-// what orbit.query teaches a model: a new $id or version is a language that
-// guidance has not been read against yet (issue 1031).
+// and is not a change to the shape. The grammar is the exception because it
+// is what orbit.query teaches a model: a grammar GitLab publishes differently
+// is a language that guidance has not been read against yet (issues 1031 and
+// 1414).
 func Diff(before, after Document) []string {
 	beforeCalls := callsByID(before.Calls)
 	afterCalls := callsByID(after.Calls)
 	var lines []string
-	if before.Source.DSLSchema != after.Source.DSLSchema || before.Source.DSLVersion != after.Source.DSLVersion {
-		lines = append(lines, fmt.Sprintf("~ query DSL: %s %s -> %s %s: read orbit.query's guidance against it",
-			before.Source.DSLSchema, before.Source.DSLVersion, after.Source.DSLSchema, after.Source.DSLVersion))
+	if before.Source.QueryGrammar != after.Source.QueryGrammar {
+		lines = append(lines, fmt.Sprintf("~ query grammar: %s -> %s: read orbit.query's guidance against it",
+			before.Source.QueryGrammar, after.Source.QueryGrammar))
 	}
 	for id, call := range afterCalls {
 		previous, had := beforeCalls[id]

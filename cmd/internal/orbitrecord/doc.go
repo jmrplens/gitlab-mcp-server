@@ -24,11 +24,14 @@
 // the handler the generator called.
 //
 // Its source names, beside the instance, the Orbit version, the fixture
-// namespace and the day, the query DSL GitLab.com served when the record was
-// taken: the $id and version of the JSON Schema orbit.dsl returns. That is
-// the one part of the provenance [Diff] compares, because it is the language
-// orbit.query teaches a model, and a new one is a change somebody has to read
-// that guidance against (issue 1031).
+// namespace and the day, the query grammar GitLab.com published when the
+// record was taken: a digest of the GQL grammar and input schema orbit.dsl
+// returns ([GrammarStamp]). That is the one part of the provenance [Diff]
+// compares, because it is the language orbit.query teaches a model, and a
+// grammar published differently is a change somebody has to read that
+// guidance against (issue 1031). Until issue 1414 the record pinned the JSON
+// query DSL by its $id and version instead; GitLab.com stopped reading that
+// language on 2026-10-15, and [Problems] refuses a record that still pins it.
 //
 // cmd/gen_orbit_record writes it from a run against GitLab.com, which needs a
 // token and the network and so can never gate; its -check reads the committed

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -179,7 +178,7 @@ func replicaCell(replicas *StatusReplicas) string {
 // lead to orbit.tools for "the live query and tool manifest", which is the
 // manifest of the MCP tools Orbit serves (list_commands and invoke_command on
 // GitLab.com, read 2026-10-06) and describes no query: the grammar is what
-// orbit.dsl returns.
+// orbit.dsl returns, read from the query_graph command since issue 1414.
 //
 // The edge types and the nodes GitLab answered expanded are written out too
 // (issue 1311). The card used to stop at the counts and the domains, so the
@@ -343,25 +342,38 @@ func FormatToolsMarkdown(out ToolsOutput) string {
 	return b.String()
 }
 
-// FormatDSLMarkdown renders the Orbit query DSL as the card of one object whose
-// body is the grammar inside a fence sized to it.
+// FormatDSLMarkdown renders the Orbit query language as the card of one object:
+// the command a query runs as, its grammar and the JSON Schema of its input,
+// each inside a fence sized to it, or the compact text GitLab answers the llm
+// format with as the whole body.
+//
+// The grammar names no entity, so every shape of the card ends on the action
+// that lists them, and the card says so when GitLab described no query command
+// at all, which is also what a caller is told while the route this action read
+// until issue 1414, GET /orbit/schema/dsl, answers 404.
 func FormatDSLMarkdown(out DSLOutput) string {
 	var b strings.Builder
-	c := toolutil.NewCard(&b, "Orbit DSL")
-	if out.Content == "" {
-		c.Note("No Orbit DSL data returned.")
-		c.End(toolutil.HintAction(actionSchema, "read the node and edge names a query names"))
+	c := toolutil.NewCard(&b, "Orbit Query Language")
+	schemaHint := toolutil.HintAction(actionSchema, "read the entities, properties and relationship types a query names")
+	queryHint := toolutil.HintAction(actionQuery, "run a query written in this language, sent as text")
+	if out.FormattedText != "" {
+		c.Fence("", "text", out.FormattedText)
+		c.End(queryHint, schemaHint)
 		return b.String()
 	}
-	language := "json"
-	if strings.EqualFold(out.ResponseFormat, string(gl.OrbitResponseFormatLLM)) {
-		language = "text"
+	if out.Name == "" && out.Description == "" && out.Parameters == nil {
+		c.Note("GitLab described no query command, so no query language was returned.")
+		c.End(schemaHint)
+		return b.String()
 	}
-	c.Fence("", language, out.Content)
-	c.End(
-		toolutil.HintAction(actionQuery, "run a query once you have chosen a shape from the DSL"),
-		toolutil.HintAction(actionSchema, "read the node and edge names a query names"),
-	)
+	c.Field("Command", out.Name)
+	if out.Description != "" {
+		c.Fence("Grammar", "text", out.Description)
+	}
+	if out.Parameters != nil {
+		c.Fence("Input schema", "json", prettyAny(out.Parameters))
+	}
+	c.End(queryHint, schemaHint)
 	return b.String()
 }
 

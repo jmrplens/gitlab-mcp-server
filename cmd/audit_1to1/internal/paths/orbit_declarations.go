@@ -106,22 +106,15 @@ var declaredOrbitFields = []orbitDeclaration{
 	},
 	{
 		Package: orbitPkg, Output: "QueryOutput", Path: "formatted_text", Direction: orbitPublished, Category: categoryOrbitWholeBody,
-		Reason: "the llm answer to POST /orbit/query is text/plain, written by writeLLMResultResponse in " +
-			"workhorse/internal/orbit/sendquery.go, so it has no keys at all. Query reads it through client-go's QueryRaw and " +
+		Reason: "the llm and gql answers to POST /orbit/query are text/plain, both written by writeLLMResultResponse in " +
+			"workhorse/internal/orbit/sendquery.go, so they have no keys at all. Query reads either through client-go's QueryRaw and " +
 			"publishes the text as formatted_text, the name the other Orbit answers give their llm text.",
-	},
-	{
-		Package: orbitPkg, Output: "DSLOutput", Path: "content", Direction: orbitPublished, Category: categoryOrbitWholeBody,
-		Reason: "GET /orbit/schema/dsl answers with the DSL itself: a JSON Schema document for raw, a JSON string for llm " +
-			"(get_query_dsl in ee/lib/analytics/knowledge_graph/grpc_client.rb). client-go's GetDsl returns the body as a " +
-			"string; DSL publishes the raw document whole as content, since its keys are its own properties and not a " +
-			"response shape, and the llm string's text, decoded by llmGrammar. The record keeps the raw body verbatim for " +
-			"the same reason.",
 	},
 	{
 		Package: orbitPkg, Output: "DSLOutput", Path: "response_format", Direction: orbitPublished, Category: categoryServerDerived,
 		Reason: "the response format the caller asked for, echoed by DSL (internal/tools/orbit/orbit.go) so a reader can " +
-			"tell a JSON Schema body from an llm grammar; the route answers with the body alone.",
+			"tell the query command read as JSON from its compact llm text; GET /orbit/agent/commands answers with the " +
+			"commands alone (`present result` of list_agent_commands, under namespace :agent in ee/lib/api/orbit/data.rb).",
 	},
 }
 

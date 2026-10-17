@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -44,24 +43,19 @@ func formatted(format string) orbit.ResponseFormatInput {
 }
 
 // fixtureQuery is the traversal the query calls send: the fixture project by
-// its full path, three of its columns. It is written in the DSL GitLab.com
-// serves now, a nodes list and a bare equality filter.
-func fixtureQuery(namespace string) map[string]any {
-	return map[string]any{
-		"query_type": "traversal",
-		"nodes": []any{map[string]any{
-			"id":      "p",
-			"entity":  "Project",
-			"filters": map[string]any{"full_path": namespace + "/" + fixtureProject},
-			"columns": []any{"id", "full_path", "name"},
-		}},
-	}
+// its full path, three of its properties. It is written in GQL, the language
+// GitLab.com reads every query in since 2026-10-15 (issue 1414); the full
+// path is a namespace this repository's own scripts provision, so it needs no
+// quoting beyond the single quotes around it.
+func fixtureQuery(namespace string) string {
+	return "MATCH (p:Project {full_path: '" + namespace + "/" + fixtureProject + "'}) RETURN p.id, p.full_path, p.name"
 }
 
 // callSpecs is every call a recording makes, in [orbitrecord.ExpectedCalls]
 // order. The verbatim paths are the answers whose keys are data: a JSON
-// Schema document names its own properties, a query row carries the columns
-// the query asked for, and a component's metrics are the proto map
+// Schema document names its own properties (a tool's parameters, and the
+// query command's input schema orbit.dsl reads), a query row carries the
+// columns the query asked for, and a component's metrics are the proto map
 // `map<string, string> metrics` (crates/orbit-server/proto/orbit.proto in
 // gitlab-org/orbit/knowledge-graph), which component_to_hash in
 // ee/lib/analytics/knowledge_graph/grpc_client.rb sends as
@@ -86,17 +80,20 @@ func callSpecs() []callSpec {
 		{id: orbitrecord.CallID{Action: "orbit.tools", Variant: "default"}, verbatim: []string{"[].parameters"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.Tools(ctx, client, orbit.ToolsInput{})
 		}},
-		{id: orbitrecord.CallID{Action: "orbit.dsl", Variant: "raw"}, verbatim: []string{orbitrecord.Root}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+		{id: orbitrecord.CallID{Action: "orbit.dsl", Variant: "raw"}, verbatim: []string{"[].parameters"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormatInput: formatted("raw")})
 		}},
 		{id: orbitrecord.CallID{Action: "orbit.dsl", Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormatInput: formatted("llm")})
 		}},
 		{id: orbitrecord.CallID{Action: "orbit.query", Variant: "raw"}, verbatim: []string{"result.edges[]", "result.nodes[]"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
-			return orbit.Query(ctx, client, orbit.QueryInput{Query: fixtureQuery(namespace), ResponseFormatInput: formatted("raw")})
+			return orbit.Query(ctx, client, orbit.QueryInput{Query: fixtureQuery(namespace), ResponseFormat: "raw"})
 		}},
 		{id: orbitrecord.CallID{Action: "orbit.query", Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
-			return orbit.Query(ctx, client, orbit.QueryInput{Query: fixtureQuery(namespace), ResponseFormatInput: formatted("llm")})
+			return orbit.Query(ctx, client, orbit.QueryInput{Query: fixtureQuery(namespace), ResponseFormat: "llm"})
+		}},
+		{id: orbitrecord.CallID{Action: "orbit.query", Variant: "gql"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
+			return orbit.Query(ctx, client, orbit.QueryInput{Query: fixtureQuery(namespace), ResponseFormat: "gql"})
 		}},
 		{id: orbitrecord.CallID{Action: "orbit.graph_status", Variant: "raw"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
 			return orbit.GraphStatus(ctx, client, orbit.GraphStatusInput{FullPath: namespace, ResponseFormatInput: formatted("raw")})
@@ -163,27 +160,20 @@ func recordCalls(ctx context.Context, cfg genRun) (orbitrecord.Document, error) 
 			doc.Source.OrbitVersion = status.Version
 		}
 		if dsl, isDSL := output.(orbit.DSLOutput); isDSL && spec.id.Variant == "raw" {
-			doc.Source.DSLSchema, doc.Source.DSLVersion = dslStamp(dsl.Content)
+			doc.Source.QueryGrammar = grammarOf(dsl)
 		}
 		doc.Calls = append(doc.Calls, call)
 	}
 	return orbitrecord.Canonical(doc), nil
 }
 
-// dslStamp reads the $id and the version out of the JSON Schema document
-// orbit.dsl answers with raw, which is what the record names the query DSL
-// by. A document that does not decode, or that names neither, leaves both
-// empty, and [orbitrecord.Problems] then refuses the record rather than
-// writing one that cannot report the DSL changing.
-func dslStamp(content string) (schema, version string) {
-	var stamp struct {
-		ID      string `json:"$id"`
-		Version string `json:"version"`
-	}
-	if json.Unmarshal([]byte(content), &stamp) != nil {
-		return "", ""
-	}
-	return stamp.ID, stamp.Version
+// grammarOf is what the record names the query grammar by: the stamp of the
+// query command orbit.dsl answers with raw, its description and the JSON
+// Schema of its input. An answer that described no query command stamps
+// nothing, and [orbitrecord.Problems] then refuses the record rather than
+// writing one that cannot report the grammar changing.
+func grammarOf(dsl orbit.DSLOutput) string {
+	return orbitrecord.GrammarStamp(dsl.Description, dsl.Parameters)
 }
 
 // makeCall invokes one handler and reads the one exchange it made.

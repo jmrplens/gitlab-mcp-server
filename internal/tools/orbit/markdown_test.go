@@ -379,34 +379,81 @@ func TestFormatToolsMarkdown_NoTools_IsOneSentence(t *testing.T) {
 	}
 }
 
-// TestFormatDSLMarkdown_ResponseFormats_ChooseTheInfoString verifies that the
-// grammar is fenced, and that the fence's language follows the response format
-// the caller asked for.
-func TestFormatDSLMarkdown_ResponseFormats_ChooseTheInfoString(t *testing.T) {
+// dslHints is the end of every query language card that describes a
+// language: run a query in it, and read the names one is built from.
+const dslHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'orbit.query' to run a query written in this language, sent as text\n" +
+	"- Use action 'orbit.schema' to read the entities, properties and relationship types a query names\n"
+
+// TestFormatDSLMarkdown_QueryCommand_RendersGrammarAndInputSchema verifies
+// that the raw description of the query command renders as the card of one
+// object: the command as a row, the grammar as text, and the JSON Schema of the
+// command's input as indented JSON, each fence titled, then the two next steps
+// a reader of a grammar needs.
+func TestFormatDSLMarkdown_QueryCommand_RendersGrammarAndInputSchema(t *testing.T) {
+	out := DSLOutput{
+		Name:        "query_graph",
+		Description: "Read-only openCypher 9-based syntax (MATCH ... RETURN).",
+		Parameters:  map[string]any{"type": "object", "required": []any{"query"}},
+	}
+
+	want := "## Orbit Query Language\n\n" +
+		"- **Command**: query_graph\n\n" +
+		"### Grammar\n\n" +
+		"```text\nRead-only openCypher 9-based syntax (MATCH ... RETURN).\n```\n\n" +
+		"### Input schema\n\n" +
+		"```json\n{\n  \"required\": [\n    \"query\"\n  ],\n  \"type\": \"object\"\n}\n```\n" +
+		dslHints
+
+	if got := FormatDSLMarkdown(out); got != want {
+		t.Errorf("FormatDSLMarkdown() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatDSLMarkdown_FormattedText_RendersOneFence verifies that the
+// compact text GitLab answers the llm format with is the whole body of the
+// card, one text fence ending on the same two next steps.
+func TestFormatDSLMarkdown_FormattedText_RendersOneFence(t *testing.T) {
+	out := DSLOutput{ResponseFormat: "llm", FormattedText: "commands[1]{name,description}:\n  query_graph,Read-only openCypher 9-based syntax"}
+
+	want := "## Orbit Query Language\n\n" +
+		"```text\ncommands[1]{name,description}:\n  query_graph,Read-only openCypher 9-based syntax\n```\n" +
+		dslHints
+
+	if got := FormatDSLMarkdown(out); got != want {
+		t.Errorf("FormatDSLMarkdown() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatDSLMarkdown_PartsAlone_RenderOnlyWhatCame verifies that each part
+// of the command renders without the others, so a command GitLab described
+// with no input schema, or an input schema with no description, is not
+// mistaken for no language at all.
+func TestFormatDSLMarkdown_PartsAlone_RenderOnlyWhatCame(t *testing.T) {
 	tests := []struct {
 		name string
 		out  DSLOutput
 		want string
 	}{
 		{
-			name: "llm format is text",
-			out:  DSLOutput{ResponseFormat: "llm", Content: "@dsl\nquery_type: traversal"},
-			want: "```text\n@dsl\nquery_type: traversal\n```\n",
+			name: "a command alone",
+			out:  DSLOutput{Name: "query_graph"},
+			want: "- **Command**: query_graph\n",
 		},
 		{
-			name: "any other format is json",
-			out:  DSLOutput{ResponseFormat: "json", Content: `{"query_type":"traversal"}`},
-			want: "```json\n{\"query_type\":\"traversal\"}\n```\n",
+			name: "a grammar alone",
+			out:  DSLOutput{Description: "MATCH ... RETURN"},
+			want: "### Grammar\n\n```text\nMATCH ... RETURN\n```\n",
+		},
+		{
+			name: "an input schema alone",
+			out:  DSLOutput{Parameters: map[string]any{"type": "object"}},
+			want: "### Input schema\n\n```json\n{\n  \"type\": \"object\"\n}\n```\n",
 		},
 	}
-
-	hints := "\n---\n💡 **Next steps:**\n" +
-		"- Use action 'orbit.query' to run a query once you have chosen a shape from the DSL\n" +
-		"- Use action 'orbit.schema' to read the node and edge names a query names\n"
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			want := "## Orbit DSL\n\n" + tt.want + hints
+			want := "## Orbit Query Language\n\n" + tt.want + dslHints
 			if got := FormatDSLMarkdown(tt.out); got != want {
 				t.Errorf("FormatDSLMarkdown() =\n%q\nwant\n%q", got, want)
 			}
@@ -414,14 +461,16 @@ func TestFormatDSLMarkdown_ResponseFormats_ChooseTheInfoString(t *testing.T) {
 	}
 }
 
-// TestFormatDSLMarkdown_NoContent_SaysSo verifies that an empty grammar renders
-// a sentence rather than an empty fence.
-func TestFormatDSLMarkdown_NoContent_SaysSo(t *testing.T) {
-	want := "## Orbit DSL\n\nNo Orbit DSL data returned.\n" +
+// TestFormatDSLMarkdown_NoQueryCommand_PointsAtTheSchema verifies that an
+// answer describing no query command renders a sentence rather than an empty
+// card, and ends on the action that lists what a query is built from, which is
+// what a caller of orbit.dsl is told whatever GitLab answered.
+func TestFormatDSLMarkdown_NoQueryCommand_PointsAtTheSchema(t *testing.T) {
+	want := "## Orbit Query Language\n\nGitLab described no query command, so no query language was returned.\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- Use action 'orbit.schema' to read the node and edge names a query names\n"
+		"- Use action 'orbit.schema' to read the entities, properties and relationship types a query names\n"
 
-	if got := FormatDSLMarkdown(DSLOutput{}); got != want {
+	if got := FormatDSLMarkdown(DSLOutput{ResponseFormat: "raw"}); got != want {
 		t.Errorf("FormatDSLMarkdown() =\n%q\nwant\n%q", got, want)
 	}
 }
