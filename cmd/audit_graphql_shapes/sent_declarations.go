@@ -343,7 +343,27 @@ func epicIssueDeclarations() []sentDeclaration {
 // table. The branch rules, CI catalog, custom emoji and security attribute and
 // category domains keep theirs in [domainSentDeclarations], and the GitLab
 // client's tier probe its own in [tierProbeSentDeclarations].
-var declaredSent = slices.Concat(epicSentDeclarations(), securitySentDeclarations(), domainSentDeclarations(), tierProbeSentDeclarations()) //nolint:gochecknoglobals // the adjudication table this repository answers with
+var declaredSent = slices.Concat(epicSentDeclarations(), securitySentDeclarations(), domainSentDeclarations(), tierProbeSentDeclarations(), transferReasonSentDeclarations()) //nolint:gochecknoglobals // the adjudication table this repository answers with
+
+// transferReasonSentDeclarations answers what the transfer failure reason
+// document leaves out (internal/tools/waitpoll.TransferFailureReason, issue
+// 1222). project.transfer and group.transfer send it once a transfer is found
+// failed, and what leaves it is the reason quoted in their error.
+func transferReasonSentDeclarations() []sentDeclaration {
+	return []sentDeclaration{
+		{
+			Package:    "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/waitpoll",
+			SchemaType: "Todo",
+			Field:      declaredSegment,
+			Category:   categoryNotThisResponse,
+			Reason: "TransferFailureReason names the transfer_failed to-do item by the id the REST listing gave it " +
+				"(waitpoll.TransferFailed) only to read the reason GitLab 19.5 keeps on it, which the REST to-do entity " +
+				"does not carry. The item's other fields are the to-do domain's surface, which user.todo_list publishes; " +
+				"its body is the destination the error already names, and transferFailedRetryUrl is the web form that " +
+				"retries the move, which the transfer action itself is.",
+		},
+	}
+}
 
 // tierProbeSentDeclarations answers what the tier probe's membership document
 // leaves out (internal/gitlab.MembershipTierQuery, issue 1224). The client
