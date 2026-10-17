@@ -3117,6 +3117,209 @@ func TestVersionRefusedError_NamesTheRefusalAndNotGitLabsSentence(t *testing.T) 
 	}
 }
 
+// releaseInstance is a stand-in GitLab whose version endpoint answers what the
+// test last set, counting every read of it. Every other path is not found.
+type releaseInstance struct {
+	url    string
+	status atomic.Int64
+	body   atomic.Pointer[string]
+	reads  atomic.Int32
+}
+
+// newReleaseInstance starts a [releaseInstance] answering the version endpoint
+// with status and body.
+func newReleaseInstance(t *testing.T, status int, body string) *releaseInstance {
+	t.Helper()
+	instance := &releaseInstance{}
+	instance.answer(status, body)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != versionAPIPath {
+			http.NotFound(w, r)
+			return
+		}
+		instance.reads.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(int(instance.status.Load()))
+		_, _ = w.Write([]byte(*instance.body.Load()))
+	}))
+	t.Cleanup(srv.Close)
+	instance.url = srv.URL
+	return instance
+}
+
+// answer sets what the version endpoint answers from now on.
+func (i *releaseInstance) answer(status int, body string) {
+	i.status.Store(int64(status))
+	i.body.Store(&body)
+}
+
+// newReleaseClient returns a client of the instance at url that has read
+// nothing yet.
+func newReleaseClient(t *testing.T, url string) *Client {
+	t.Helper()
+	client, err := NewClient(newTestConfig(url, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	return client
+}
+
+// TestAtLeast_ReleasesAroundNineteenFive verifies the answer for the releases
+// on either side of 19.5, the release that added cancel_auto_merge: a release
+// of 19.5 or later is at least 19.5 whatever its edition suffix, a prerelease
+// counts as the minor it names (GitLab.com reports 19.6.0-pre, and reported
+// 19.5.0-pre while 19.5 was being built), a later major counts whatever its
+// minor, and 19.4.1-ee and an older major with a higher minor do not.
+func TestAtLeast_ReleasesAroundNineteenFive(t *testing.T) {
+	tests := []struct {
+		version string
+		want    bool
+	}{
+		{version: "19.5.0-ee", want: true},
+		{version: "19.6.0-pre", want: true},
+		{version: "19.5.0-pre", want: true},
+		{version: "20.0.0", want: true},
+		{version: "19.4.1-ee", want: false},
+		{version: "18.11.0", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.version, func(t *testing.T) {
+			instance := newReleaseInstance(t, http.StatusOK, `{"version":"`+tt.version+`"}`)
+			client := newReleaseClient(t, instance.url)
+			if got := client.AtLeast(t.Context(), 19, 5); got != tt.want {
+				t.Errorf("AtLeast(19, 5) on %s = %v, want %v", tt.version, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestVersionAtLeast_ReadsTheMajorAndTheMinor holds the comparison itself,
+// including what a version GitLab could send and no int can hold reads as:
+// not known, and so not at least anything.
+func TestVersionAtLeast_ReadsTheMajorAndTheMinor(t *testing.T) {
+	tests := []struct {
+		name    string
+		version string
+		want    bool
+	}{
+		{name: "the release itself", version: "19.5.0-ee", want: true},
+		{name: "a later minor", version: "19.6.0", want: true},
+		{name: "an earlier minor", version: "19.4.1-ee", want: false},
+		{name: "a later major with a lower minor", version: "20.0.0", want: true},
+		{name: "an earlier major with a higher minor", version: "18.11.0", want: false},
+		{name: "no version", version: "", want: false},
+		{name: "a major no int holds", version: "99999999999999999999.6.0", want: false},
+		{name: "a minor no int holds", version: "19.99999999999999999999.0", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := versionAtLeast(tt.version, 19, 5); got != tt.want {
+				t.Errorf("versionAtLeast(%q, 19, 5) = %v, want %v", tt.version, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAtLeast_AClientThatHasNotAsked_ReadsTheVersionOnce verifies that an
+// empty version is asked for rather than read as an old instance, since an
+// HTTP pool entry whose tier was pinned or read from the license or the
+// namespace plans never asked, and that the answer is kept: a second call
+// sends nothing.
+func TestAtLeast_AClientThatHasNotAsked_ReadsTheVersionOnce(t *testing.T) {
+	instance := newReleaseInstance(t, http.StatusOK, `{"version":"19.5.0-ee"}`)
+	client := newReleaseClient(t, instance.url)
+
+	for call := range 2 {
+		if !client.AtLeast(t.Context(), 19, 5) {
+			t.Errorf("call %d: AtLeast(19, 5) = false on 19.5.0-ee", call+1)
+		}
+	}
+	if got := instance.reads.Load(); got != 1 {
+		t.Errorf("the version endpoint was read %d times, want once", got)
+	}
+}
+
+// TestAtLeast_AVersionAlreadyRead_SendsNothing verifies that a version an
+// earlier read kept, here the start's, answers without a request.
+func TestAtLeast_AVersionAlreadyRead_SendsNothing(t *testing.T) {
+	instance := newReleaseInstance(t, http.StatusOK, `{"version":"19.4.1-ee"}`)
+	client := newReleaseClient(t, instance.url)
+	if _, err := client.Initialize(t.Context()); err != nil {
+		t.Fatalf("Initialize() error = %v", err)
+	}
+
+	if client.AtLeast(t.Context(), 19, 5) {
+		t.Error("AtLeast(19, 5) = true on 19.4.1-ee")
+	}
+	if got := instance.reads.Load(); got != 1 {
+		t.Errorf("the version endpoint was read %d times, want once, by the start", got)
+	}
+}
+
+// TestAtLeast_ARefusal_IsNotKnownAndNotAskedAgain verifies a token GitLab
+// refuses the version endpoint for want of Metadata: Read: the release is not
+// known, so the answer is false, and the refusal is not asked again, since a
+// grant cannot change after the token is created. The first call learns the
+// refusal and the second reads it off the client.
+func TestAtLeast_ARefusal_IsNotKnownAndNotAskedAgain(t *testing.T) {
+	instance := newVersionRefusingInstance(t)
+	client := newReleaseClient(t, instance.url)
+
+	for call := range 2 {
+		if client.AtLeast(t.Context(), 19, 5) {
+			t.Errorf("call %d: AtLeast(19, 5) = true for a token refused the version", call+1)
+		}
+	}
+	if got := instance.versions.Load(); got != 1 {
+		t.Errorf("the version endpoint was asked %d times, want once", got)
+	}
+}
+
+// TestAtLeast_NoAnswer_IsNotKnownAndAskedAgain verifies an instance that did
+// not answer: the release is not known and the answer is false, and the next
+// call asks again rather than keeping the silence, so the instance's answer
+// is read as soon as it gives one, and kept from then on.
+func TestAtLeast_NoAnswer_IsNotKnownAndAskedAgain(t *testing.T) {
+	instance := newReleaseInstance(t, http.StatusBadGateway, `{"message":"502 Bad Gateway"}`)
+	client := newReleaseClient(t, instance.url)
+
+	for call := range 2 {
+		if client.AtLeast(t.Context(), 19, 5) {
+			t.Errorf("call %d: AtLeast(19, 5) = true for an instance that did not answer", call+1)
+		}
+	}
+	if got := instance.reads.Load(); got != 2 {
+		t.Fatalf("the version endpoint was read %d times, want twice: once per call while it does not answer", got)
+	}
+
+	instance.answer(http.StatusOK, `{"version":"19.5.0-ee"}`)
+	for call := range 2 {
+		if !client.AtLeast(t.Context(), 19, 5) {
+			t.Errorf("call %d after the answer: AtLeast(19, 5) = false on 19.5.0-ee", call+1)
+		}
+	}
+	if got := instance.reads.Load(); got != 3 {
+		t.Errorf("the version endpoint was read %d times, want three: the answer is kept", got)
+	}
+}
+
+// TestAtLeast_AnUnreadableVersion_IsNotKnownAndNotAskedAgain verifies an
+// instance that answered with something that is not a version: it answered,
+// so it is not asked again, and what it answered is no release to compare.
+func TestAtLeast_AnUnreadableVersion_IsNotKnownAndNotAskedAgain(t *testing.T) {
+	instance := newReleaseInstance(t, http.StatusOK, `{"version":"latest and greatest"}`)
+	client := newReleaseClient(t, instance.url)
+
+	for call := range 2 {
+		if client.AtLeast(t.Context(), 19, 5) {
+			t.Errorf("call %d: AtLeast(19, 5) = true for a version that is not one", call+1)
+		}
+	}
+	if got := instance.reads.Load(); got != 1 {
+		t.Errorf("the version endpoint was read %d times, want once", got)
+	}
+}
+
 // TestClientWaits_HoldWhatTheyAreFor states what the client's fixed waits have
 // to be rather than repeating what they are. Every other test reads each of
 // them through the code that uses it, so a wait that collapsed to zero would

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -649,6 +650,50 @@ func (c *Client) ReadVersion(ctx context.Context) (string, bool) {
 		return "", false
 	}
 	return c.Version(), true
+}
+
+// AtLeast reports whether the instance is known to run release major.minor or
+// a later one: true only when it reported a version that is. A prerelease
+// counts as the minor it names, so GitLab.com's 19.6.0-pre is past 19.5.
+//
+// It is for a handler that sends a route GitLab added in a known release and
+// keeps the older route for an instance that may predate it, so the answer
+// errs towards false: a version the instance refused this token (Metadata:
+// Read, [Client.VersionRefusal]), one it did not answer, and one that is not a
+// version are all "not known", which is false.
+//
+// It reads [Client.Version], and asks [Client.ReadVersion] when no read has
+// answered yet, since an empty version is the common case rather than an old
+// instance: an HTTP pool entry asks only to read a fine-grained token's
+// authority or when its tier fell back to Free unpinned. An answer is kept, so
+// a client asks at most once while the instance answers, a refusal is not
+// asked again (a token's grant cannot change after it is created), and an
+// instance that did not answer is asked again by the next call. ctx bounds
+// the read.
+func (c *Client) AtLeast(ctx context.Context, major, minor int) bool {
+	if version := c.version.Load(); version != nil {
+		return versionAtLeast(*version, major, minor)
+	}
+	if _, refused := c.VersionRefusal(); refused {
+		return false
+	}
+	version, _ := c.ReadVersion(ctx)
+	return versionAtLeast(version, major, minor)
+}
+
+// versionAtLeast reports whether version, as [validVersion] keeps one, names
+// release major.minor or a later one. It compares the major.minor bucket a
+// fine-grained table is chosen by ([finegrained.Bucket]), so a prerelease or
+// an edition suffix reads as the minor it carries, and it is false for no
+// version and for a number no int holds.
+func versionAtLeast(version string, major, minor int) bool {
+	majorText, minorText, _ := strings.Cut(finegrained.Bucket(version), ".")
+	gotMajor, majorErr := strconv.Atoi(majorText)
+	gotMinor, minorErr := strconv.Atoi(minorText)
+	if majorErr != nil || minorErr != nil {
+		return false
+	}
+	return gotMajor > major || gotMajor == major && gotMinor >= minor
 }
 
 // versionPattern is the shape of a version GitLab reports: three numbers and
