@@ -117,8 +117,8 @@ env:
   # Pinned exactly, not by range: goreleaser-action and sbom-action download
   # these binaries at run time into a job that holds the signing identity, so
   # SHA-pinning the action alone leaves the code that actually runs unpinned.
-  GORELEASER_VERSION: "v2.18.2"
-  SYFT_VERSION: "v1.52.0"
+  GORELEASER_VERSION: "v2.18.3"
+  SYFT_VERSION: "v1.54.0"
 
 jobs:
   # The one check that has to run before anything else spends a runner. The
@@ -513,7 +513,9 @@ jobs:
       # job holds the OIDC identity the attestation store trusts. The bytes are
       # pinned by SHA256 and cosign proves they came from anchore's release
       # workflow, whose certificate identity ends in refs/heads/main because
-      # syft releases from main rather than from the tag.
+      # syft releases from main rather than from the tag. From 1.54.0 syft
+      # signs its checksum file with a sigstore bundle and publishes no
+      # separate certificate and signature, so the bundle is what is verified.
       #
       # Not gated on the rehearsal switch. This install, the scan and the
       # package-count guard below are every run: block of the SBOM feature,
@@ -522,7 +524,7 @@ jobs:
       # after the image was already pushed.
       - name: Install syft
         env:
-          SYFT_SHA256: "caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d"
+          SYFT_SHA256: "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860"
         run: |
           set -euo pipefail
           TARBALL="syft_${SYFT_VERSION#v}_linux_amd64.tar.gz"
@@ -530,19 +532,16 @@ jobs:
           curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o "${TARBALL}" "${BASE}/${TARBALL}"
           echo "${SYFT_SHA256}  ${TARBALL}" | sha256sum -c -
           curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o syft-checksums.txt "${BASE}/syft_${SYFT_VERSION#v}_checksums.txt"
-          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o syft-checksums.pem "${BASE}/syft_${SYFT_VERSION#v}_checksums.txt.pem"
-          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o syft-checksums.sig "${BASE}/syft_${SYFT_VERSION#v}_checksums.txt.sig"
-          base64 -d syft-checksums.pem > syft-checksums.decoded.pem
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o syft-checksums.sigstore.json "${BASE}/syft_${SYFT_VERSION#v}_checksums.txt.sigstore.json"
           cosign verify-blob \
-            --certificate syft-checksums.decoded.pem \
-            --signature syft-checksums.sig \
+            --bundle syft-checksums.sigstore.json \
             --certificate-identity "https://github.com/anchore/syft/.github/workflows/release.yaml@refs/heads/main" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             syft-checksums.txt
           grep " ${TARBALL}\$" syft-checksums.txt | sha256sum -c -
           tar xzf "${TARBALL}" syft
           install -m 0755 syft /usr/local/bin/syft
-          rm -f "${TARBALL}" syft-checksums.txt syft-checksums.pem syft-checksums.decoded.pem syft-checksums.sig syft
+          rm -f "${TARBALL}" syft-checksums.txt syft-checksums.sigstore.json syft
           syft --version
 
       # Scanned from ghcr.io alone: the two registries hold the byte-identical
@@ -1098,10 +1097,11 @@ jobs:
       # may be resolved at run time. The bytes are pinned by SHA256 here;
       # cosign additionally proves they came from anchore's release workflow.
       # Its certificate identity ends in refs/heads/main because syft releases
-      # from main rather than from the tag, and the asset is base64-wrapped.
+      # from main rather than from the tag, and from 1.54.0 the signature and
+      # its certificate arrive together as one sigstore bundle.
       - name: Install syft
         env:
-          SYFT_SHA256: "caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d"
+          SYFT_SHA256: "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860"
         run: |
           set -euo pipefail
           TARBALL="syft_${SYFT_VERSION#v}_linux_amd64.tar.gz"
@@ -1109,19 +1109,16 @@ jobs:
           curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o "${TARBALL}" "${BASE}/${TARBALL}"
           echo "${SYFT_SHA256}  ${TARBALL}" | sha256sum -c -
           curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o checksums.txt "${BASE}/syft_${SYFT_VERSION#v}_checksums.txt"
-          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o checksums.pem "${BASE}/syft_${SYFT_VERSION#v}_checksums.txt.pem"
-          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o checksums.sig "${BASE}/syft_${SYFT_VERSION#v}_checksums.txt.sig"
-          base64 -d checksums.pem > checksums.decoded.pem
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o checksums.sigstore.json "${BASE}/syft_${SYFT_VERSION#v}_checksums.txt.sigstore.json"
           cosign verify-blob \
-            --certificate checksums.decoded.pem \
-            --signature checksums.sig \
+            --bundle checksums.sigstore.json \
             --certificate-identity "https://github.com/anchore/syft/.github/workflows/release.yaml@refs/heads/main" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             checksums.txt
           grep " ${TARBALL}\$" checksums.txt | sha256sum -c -
           tar xzf "${TARBALL}" syft
           install -m 0755 syft /usr/local/bin/syft
-          rm -f "${TARBALL}" checksums.txt checksums.pem checksums.decoded.pem checksums.sig syft
+          rm -f "${TARBALL}" checksums.txt checksums.sigstore.json syft
           syft --version
 
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
@@ -1318,7 +1315,7 @@ jobs:
           NPM_DIST_TAG: ${{ needs.preflight.outputs.npm_dist_tag }}
         run: |
           set -euo pipefail
-          npm install -g npm@11.19.1
+          npm install -g npm@11.21.0
           if [ "$REHEARSAL" = "true" ]; then
             # npm publish --dry-run packs every tarball and validates it
             # against the registry without uploading, so the rehearsal runs
@@ -1429,13 +1426,13 @@ jobs:
         run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist
 
       # An exact SDK version rather than 10.0.x: dnx's behaviour is an SDK
-      # property (10.0.401 installs without asking when stdin is not a
+      # property (10.0.402 installs without asking when stdin is not a
       # terminal and accepts --yes without needing it, which the docs rely
       # on), and the digest `make validate-nuget` pins is the container image
       # of this same SDK. Bump the two together.
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: "10.0.401"
+          dotnet-version: "10.0.402"
 
       # A pointer package plus six runtime-identifier packages, each carrying
       # the native binary as the tool's entry point (the .NET 10 tool layout).
