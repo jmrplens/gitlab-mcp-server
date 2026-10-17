@@ -20,11 +20,18 @@ import (
 // (the TypeScript SDK's default request timeout). A wait that ran into that
 // timeout would hand the model a client-side failure instead of the answer
 // that says the move is still queued, which is the one it can act on.
+//
+// Both are written as nanoseconds rather than as products of time.Second: a
+// product at package level is an arithmetic mutant no coverage profile
+// reaches, so gremlins reports it as never covered although every test that
+// reads the bound reads it.
 const (
-	// TransferBound is how long a transfer handler waits for the move.
-	TransferBound = 45 * time.Second
-	// TransferInterval is the time between two reads of the moved object.
-	TransferInterval = 2 * time.Second
+	// TransferBound is how long a transfer handler waits for the move, 45
+	// seconds.
+	TransferBound time.Duration = 45e9
+	// TransferInterval is the time between two reads of the moved object, 2
+	// seconds.
+	TransferInterval time.Duration = 2e9
 )
 
 // UntilOptions configures [Until]: how to read an object GitLab changes in the
