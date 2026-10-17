@@ -209,8 +209,9 @@ const (
 		"the Commit entity already sends as web_url, which CommitItem publishes, so the key would say web_url again."
 	reasonContextCommitOptions = "lib/api/entities/commit_with_link.rb exposes prev_commit_id and next_commit_id as " +
 		"options[:prev_commit_id] and options[:next_commit_id], and pipeline_status_path only when options[:pipeline_ref] " +
-		"is set. The list route presents with type, request and nothing else, so under type: :full the three keys arrive " +
-		"null on every commit, and no request parameter of the route can set the options."
+		"is set. The list route presents with type, request and nothing else, so type: :full holds and the three blocks " +
+		"return nil whatever the commit: the keys arrive null on every commit, and no request parameter of the route can " +
+		"set the options."
 	reasonContextCommitSignature = "lib/api/entities/commit_with_link.rb renders signature_html through " +
 		"CommitPresenter#signature_html, which is nil for a commit without a signature, and every commit of this route is " +
 		"one: MergeRequestContextCommit#to_commit rebuilds it with Commit.from_hash from the row GitLab stored, and " +
@@ -1041,9 +1042,9 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: commitsPkg, Type: "DetailOutput", Entity: commitWithLinkEntity, Field: declaredSegment, Category: categorySDKRouteFillsAnotherType, Reason: reasonContextCommitsFillAnotherType},
 	{Package: mrContextCommitsPkg, Type: "CommitItem", Entity: commitWithLinkEntity, Field: "commit_url", Category: categoryEntityPublishedElsewhere, Reason: reasonContextCommitURL},
 	{Package: mrContextCommitsPkg, Type: "CommitItem", Entity: commitWithLinkEntity, Field: "commit_path", Category: categoryEntityPublishedElsewhere, Reason: reasonContextCommitURL},
-	{Package: mrContextCommitsPkg, Type: "CommitItem", Entity: commitWithLinkEntity, Field: "prev_commit_id", Category: categoryOptionNeverPassed, Reason: reasonContextCommitOptions},
-	{Package: mrContextCommitsPkg, Type: "CommitItem", Entity: commitWithLinkEntity, Field: "next_commit_id", Category: categoryOptionNeverPassed, Reason: reasonContextCommitOptions},
-	{Package: mrContextCommitsPkg, Type: "CommitItem", Entity: commitWithLinkEntity, Field: "pipeline_status_path", Category: categoryOptionNeverPassed, Reason: reasonContextCommitOptions},
+	{Package: mrContextCommitsPkg, Type: "CommitItem", Entity: commitWithLinkEntity, Field: "prev_commit_id", Category: categoryConstantEmpty, Reason: reasonContextCommitOptions},
+	{Package: mrContextCommitsPkg, Type: "CommitItem", Entity: commitWithLinkEntity, Field: "next_commit_id", Category: categoryConstantEmpty, Reason: reasonContextCommitOptions},
+	{Package: mrContextCommitsPkg, Type: "CommitItem", Entity: commitWithLinkEntity, Field: "pipeline_status_path", Category: categoryConstantEmpty, Reason: reasonContextCommitOptions},
 	{Package: mrContextCommitsPkg, Type: "CommitItem", Entity: commitWithLinkEntity, Field: "signature_html", Category: categoryConstantEmpty, Reason: reasonContextCommitSignature},
 
 	// The groups a group can be transferred to, whose route annotates a whole
@@ -1109,6 +1110,23 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	// commit to name beside the pipeline the list returned.
 	{Package: pipelinesPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonLatestPipelineDefaultBranch},
 	{Package: pipelinesPkg, Entity: commitDetailEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonLatestPipelineHead},
+
+	// The failed jobs a pipeline wait lists to name them in its error, and
+	// the to-do items a transfer reads to learn whether the transfer failed.
+	{Package: pipelinesPkg, Entity: "API::Entities::Ci::Job", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPipelineWaitFailedJobs},
+	{Package: groupsPkg, Entity: todoEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonTransferFailureTodos},
+	{Package: toolsDir + "/projects", Entity: todoEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonTransferFailureTodos},
+
+	// The release link the dynamic surface's own test creates through
+	// gitlab_execute_action, which answers with the release link package's
+	// output.
+	{
+		Package: toolsDir + "/dynamic", Entity: "API::Entities::Releases::Link", Field: declaredSegment, Category: categoryEntityPublishedElsewhere,
+		Reason: "the dynamic package records POST /projects/:id/releases/:tag_name/assets/links only because " +
+			"TestExecute_NormalizesActionScopedParameterAliases runs release.link_create through the registry, which calls " +
+			"internal/tools/releaselinks and answers with its output, the type that publishes the link; the dynamic package " +
+			"has no type of its own for a link and never answers with one.",
+	},
 
 	// The existence probes: three list actions read the project, and the LDAP
 	// link listing the group, only to tell a missing object from one with
@@ -1194,6 +1212,18 @@ const reasonSubmoduleSuperproject = "internal/tools/repositorysubmodules reads t
 	"newSubmoduleResolver) only for its path_with_namespace, which a relative submodule URL resolves against, and its SSH " +
 	"clone URL, whose prefix tells a URL on this instance from one on another, and publishes the projects it resolves to " +
 	"rather than the superproject. project.get is the action that answers with a project."
+
+// reasonPipelineWaitFailedJobs answers the failed jobs a pipeline wait lists.
+const reasonPipelineWaitFailedJobs = "internal/tools/pipelines lists a failed pipeline's failed jobs (GET " +
+	"/projects/:id/pipelines/:pipeline_id/jobs with scope failed, in pipelineFailure) only to name each one, with its ID, " +
+	"stage and failure_reason, in the error the wait answers with, and publishes no job. job.list is the action that " +
+	"answers with a pipeline's jobs."
+
+// reasonTransferFailureTodos answers the to-do items a transfer reads.
+const reasonTransferFailureTodos = "a project or group transfer reads the caller's pending to-do items (GET /todos, filtered " +
+	"to the transfer_failed action and the object moved, in waitpoll.TransferFailed) only to learn whether GitLab's " +
+	"background worker failed the transfer, which since 19.4 only such an item reports, and publishes the destination it " +
+	"names rather than the item. user.todo_list is the action that answers with to-do items."
 
 // reasonTerraformStateProjectPath answers the project the Terraform state
 // package reads to name it to GraphQL.

@@ -157,7 +157,7 @@ var committedWithoutObject = map[string]string{
 	"achievement.user_achievement_reorder":   "achievements: toolutil.UnconfirmedWrite",
 	"achievement.user_achievement_update":    "achievements: toolutil.UnconfirmedWrite",
 	"custom_emoji.create":                    "customemoji.Create: the authority at the missing emoji",
-	"custom_emoji.delete":                    "customemoji.Delete selects the errors alone and answers success, which a deletion GitLab ran is",
+	"custom_emoji.delete":                    "customemoji.Delete reads the errors alone and answers success, which a deletion GitLab ran is",
 	"group.epic_create":                      "epics.Create: toolutil.UnconfirmedWrite",
 	"group.epic_discussion_update_note":      "toolutil.ExecGraphQLNoteMutation: the authority at the missing note",
 	"group.epic_note_update":                 "toolutil.ExecGraphQLNoteMutation: the authority at the missing note",

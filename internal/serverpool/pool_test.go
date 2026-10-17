@@ -5856,8 +5856,8 @@ type fineGrainedGitLab struct {
 
 // The releases the fine-grained stand-in reports, read from the table this
 // tree compiles in so that re-recording the table moves them with it: the
-// release it was recorded from, a later patch of that release, and one past
-// every table, two majors on.
+// release it was recorded from, a later patch of that release, and a major
+// far past any release a table here will be recorded from.
 var (
 	recordedRelease      = actiongrants.Table().Version
 	recordedPatchRelease = actiongrants.Table().Bucket + ".9-ee"

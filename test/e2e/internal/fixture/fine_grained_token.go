@@ -101,7 +101,9 @@ type fineGrainedTokenAnswer struct {
 }
 
 // NewFineGrainedToken mints a fine-grained personal access token for user
-// carrying exactly the given scopes, and registers its revocation on the Env.
+// carrying the given scopes, merged where GitLab counts two as one
+// ([mergeScopes]), which is the same grant, and registers its revocation on
+// the Env.
 //
 // The classic token it is created with is minted through NewToken and is
 // revoked with the rest of the test's state. A run whose token is not an

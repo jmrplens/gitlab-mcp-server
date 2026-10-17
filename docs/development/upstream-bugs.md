@@ -95,7 +95,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The Link header parser reads rel only from the first parameter](#the-link-header-parser-reads-rel-only-from-the-first-parameter)
   - [The wiki search decodes GitLab's blobs into wiki pages](#the-wiki-search-decodes-gitlabs-blobs-into-wiki-pages)
   - [SearchOptions models neither num_context_lines nor regex](#searchoptions-models-neither-num_context_lines-nor-regex)
-  - [Six response keys GitLab 19.5 added that client-go does not model](#six-response-keys-gitlab-195-added-that-client-go-does-not-model)
+  - [Seven response keys and twelve parameters GitLab 19.5 added that client-go does not model](#seven-response-keys-and-twelve-parameters-gitlab-195-added-that-client-go-does-not-model)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -330,7 +330,7 @@ readable without opening the tracker:
 | 85 | gitlab-org/gitlab | [The fine-grained refusal can name a deprecated permission's label](#the-fine-grained-refusal-can-name-a-deprecated-permissions-label) | Yes, [gitlab-org/gitlab#633316](https://gitlab.com/gitlab-org/gitlab/-/issues/633316), reproduced on a running instance | Yes, [gitlab-org/gitlab!261671](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261671), open, closing that issue; the backend reviewer's two suggestions went in on 2026-10-14 and it waits on that review again | No | No | None taken |
 | 86 | gitlab-org/gitlab | [A token's own description omits its granular scopes](#a-tokens-own-description-omits-its-granular-scopes) | Yes, by GitLab, [gitlab-org/gitlab#629849](https://gitlab.com/gitlab-org/gitlab/-/issues/629849) | Yes, [gitlab-org/gitlab!259764](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259764), merged; its two follow-ups for the other token routes, [gitlab-org/gitlab!260276](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260276) and [gitlab-org/gitlab!260277](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260277), merged, with their history lines moved to 19.5 by [gitlab-org/gitlab!260930](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260930), merged; a third, for the service account rotate routes, [gitlab-org/gitlab!260929](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260929), merged, in milestone 19.5, with a test-only follow-up its reviewer asked for, [gitlab-org/gitlab!261218](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261218), merged; a fourth, for the service account token list routes, [gitlab-org/gitlab!261673](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261673), open, closing [gitlab-org/gitlab#633317](https://gitlab.com/gitlab-org/gitlab/-/issues/633317), approved and set to merge on 2026-10-16, waiting on us to resolve a conflict with `master` | **Yes, 19.5.0**: the merge, its two follow-ups for the other token routes and the one for the service account rotate routes; the test-only follow-up is deployed to GitLab.com since 17:06 UTC on 2026-10-13 and due in 19.6 | No | Yes, a second request by the token's id; since 19.5.0 it is needed only for an instance before 19.5 |
 | 87 | gitlab-org/gitlab | [GraphQL types and mutations this server reaches declare no fine-grained permission](#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission) | GitLab tracks them on its own pending list, and plans part of them in [gitlab-org/gitlab#631631](https://gitlab.com/gitlab-org/gitlab/-/issues/631631); nothing raised by us | Partly, theirs: another contributor's for `CustomEmoji`, [gitlab-org/gitlab!260586](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260586), merged; GitLab's own for `Namespace`, `Discussion` and `WikiPage`, marking `WorkItemType` and the other child types as authorized by their parent, [gitlab-org/gitlab!261599](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261599), open in milestone 19.6, and older changes for `WorkItemType`, open; none by us | **Partly, 19.5.0**: the `CustomEmoji` entry, by another contributor, one of five on the table's second line, which this server's table adopted when the live record was taken from 19.5.0-ee | Yes, for a fine-grained token: 36 actions withheld, 8 served with parts empty | Withheld with the reason, and a note on the parts; [issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054) |
-| 88 | gitlab-org/gitlab | [A declared mutation whose payload type declares nothing commits the write and answers null](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null) | No; a merge request proposing a visible error is written and goes out after a second review of its text | No | No | Yes, for a fine-grained token, on 19 writes | Withheld with the reason; the handlers answer such a write as probably committed for a table that stops withholding one, and six served writes whose object a grant can leave out answer so today |
+| 88 | gitlab-org/gitlab | [A declared mutation whose payload type declares nothing commits the write and answers null](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null) | No; a merge request proposing a visible error is written and goes out after a second review of its text | No | No | Yes, for a fine-grained token, on 19 writes | Withheld with the reason; the handlers answer such a write as probably committed for a table that stops withholding one, and eight served writes whose object a grant can leave out answer so today |
 | 89 | gitlab-org/gitlab | [WorkItem declares the project boundary only, so a group's work item is null to a fine-grained token](#workitem-declares-the-project-boundary-only-so-a-groups-work-item-is-null-to-a-fine-grained-token) | Yes, by another user, [gitlab-org/gitlab#630483](https://gitlab.com/gitlab-org/gitlab/-/issues/630483) | Yes, [gitlab-org/gitlab!259765](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259765), merged; the issue it closes was closed as completed on 2026-10-12 | **Yes, 19.5.0**: merged on 2026-10-11 before the 19.5 cut, although its milestone says 19.6 | No longer: the permission table is taken from 19.5.0-ee, and the epic actions are withheld by `Namespace` (row 87) and `WorkItemType` (row 88) instead | Retired |
 | 90 | gitlab-org/gitlab | [The pending-permission check exempts every type named `*Edge` or `*Payload`](#the-pending-permission-check-exempts-every-type-named-edge-or-payload) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260959](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260959), merged | **Yes, unreleased**: merged on 2026-10-15 in milestone 19.6 and deployed to GitLab.com at 13:47 UTC that day | No | Not needed; the live record computes the undeclared set itself |
 | 91 | gitlab-org/gitlab | [`available_for_permission` ignores `available_for`](#available_for_permission-ignores-available_for) | No | No | No | No | Not needed; the live record names the first permission a token can be granted |
@@ -375,7 +375,7 @@ readable without opening the tracker:
 | 130 | client-go | [The wiki search decodes GitLab's blobs into wiki pages](#the-wiki-search-decodes-gitlabs-blobs-into-wiki-pages) | No | No | No | No | Yes, `search.wiki` reads its page from the captured response |
 | 131 | gitlab-org/gitlab | [The REST code search answers an exact-search name match with the path as its snippet](#the-rest-code-search-answers-an-exact-search-name-match-with-the-path-as-its-snippet) | No; the search page's version of it was closed | No | No | No | Yes, the code and wiki search Markdown reads a result whose snippet is its own path as a path match and fences nothing |
 | 132 | client-go | [SearchOptions models neither num_context_lines nor regex](#searchoptions-models-neither-num_context_lines-nor-regex) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes, `search.code` adds both to the query through a request option, each only when set |
-| 133 | client-go | [Six response keys GitLab 19.5 added that client-go does not model](#six-response-keys-gitlab-195-added-that-client-go-does-not-model) | No | No | No | No | Yes, all six read from the captured response |
+| 133 | client-go | [Seven response keys and twelve parameters GitLab 19.5 added](#seven-response-keys-and-twelve-parameters-gitlab-195-added-that-client-go-does-not-model) | No | No | No | No | Partial: six keys read from the captured response; the merge request author's `bot` and the parameters not yet |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -6887,7 +6887,7 @@ and could not widen the context around a match either.
 **Effort**: small: two pointer fields with `url` tags and `omitempty`, and a
 test that each reaches the query only when set.
 
-### Six response keys GitLab 19.5 added that client-go does not model
+### Seven response keys and twelve parameters GitLab 19.5 added that client-go does not model
 
 - **Reported**: no. They belong in the joint merge request
   [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
@@ -6898,8 +6898,17 @@ test that each reaches the query only when set.
 - **Merged**: no. Neither v3.15.0, the version this server pins, nor v3.25.0,
   the newest when read on 2026-10-17, models any of them.
 - **Blocking**: no.
-- **Workaround**: yes, all six are read from the captured response beside
-  the SDK's decode
+- **Workaround**: partial. The merge request author's `bot` is not published
+  yet: every merge request route renders its author through the new
+  `API::Entities::MergeRequestAuthor`, `UserBasic` plus `bot`, and this
+  server fills the author with the user shape every other object shares, so
+  publishing it wants a merge request author shape of its own; the sent
+  report did not name it, since it judges a type against the entities its
+  routes annotate and not the entity a nested field renders with. None for
+  the twelve parameters, which this server does not offer, as with entry
+  58's three: taking them would mean building the request outside the SDK's
+  option struct. The other six keys are read from the captured response
+  beside the SDK's decode
   ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)):
   through `toolutil.CapturedProject` for the project, `CapturedGroup` and
   `CapturedGroups` for the group, `CapturedServiceAccount` and
@@ -6937,19 +6946,40 @@ client-go declares none of them.
   `lib/api/entities/ci/runner_details.rb` exposes to a caller allowed to read
   the runner's sensitive data. `Runner` declares it, for the answer to a
   registration, and `RunnerDetails` does not embed `Runner`.
+- `BasicUser` (`users.go`), which every merge request struct uses for its
+  author, declares no `bot`, which `lib/api/entities/merge_request_author.rb`
+  adds to `UserBasic` on every merge request author.
+
+The parameters, each declared on its route in the 19.5.0-ee record and on no
+client-go option struct:
+
+- `UpdateGroupOptions` lacks `require_sha_for_merge`,
+  `lock_require_sha_for_merge`, `duo_code_review_decisions_enabled` and
+  `duo_auto_mode_availability` (`PUT /groups/:id`), and `CreateGroupOptions`
+  the last (`POST /groups`).
+- `CreateProjectOptions`, `CreateProjectForUserOptions`, `EditProjectOptions`
+  and the import overrides lack `duo_code_review_decisions_enabled`.
+- `CreateServiceAccountUserOptions` and `UpdateServiceAccountOptions` lack
+  `external` (`POST /service_accounts`, `PATCH /service_accounts/:user_id`).
+- `SearchOptions` lacks the merge request filters the group and project search
+  routes take: `author_username`, `label_name`, `source_branch`,
+  `target_branch` and the `not[author_username]`, `not[source_branch]` and
+  `not[target_branch]` negations.
 
 **How we found it**: the sent dimension of the 1:1 audit
 (`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`),
 which reported 41 undeclared findings as soon as the live record was
 re-pinned to 19.5.0-ee
 ([issue 1023](https://github.com/jmrplens/gitlab-mcp-server/issues/1023));
-the keys above are ten of them, published where a type carries the entity
-whole, and the other 31 are answered by declarations (the context commit
-list's six keys, the commit types the same route reaches through client-go,
-a share's confirmation, and two compact rows).
+ten of them are the six keys above that are published where a type carries
+the entity whole, and the other 31 are answered by declarations (the context
+commit list's six keys, the commit types the same route reaches through
+client-go, a share's confirmation, and two compact rows). The merge request
+author's `bot` and the parameters came from a review of the diff between the
+two records, which no gate reads.
 
-**Effort**: small. Scalar members with `json` tags on six structs, a pointer
-for each key an older instance leaves out.
+**Effort**: small. Scalar members with `json` and `url` tags on eleven
+structs, a pointer for each key an older instance leaves out.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
@@ -12632,13 +12662,15 @@ leaves nothing for us to do, so it has no row of its own.
   the write was probably committed and to check before repeating it
   (`toolutil.UnconfirmedWrite`, worded by
   `finegrained.Authority.UnconfirmedWrite`). Nineteen handlers changed;
-  `custom_emoji.delete` selects the errors alone and already answered a
+  `custom_emoji.delete`'s handler reads the errors alone and already answered a
   deletion GitLab ran as the success it is. The class is wider than the
   declarations, since a type GitLab declares and a grant does not hold answers
-  the same way, and six writes the table serves reach it today: the four
-  vulnerability state changes, whose Vulnerability: Update does not grant
-  `read_vulnerability`, and the two epic note edits, whose Work Item: Update
-  does not grant `read_note`. Their handlers answer the same way, and
+  the same way, and eight writes the 19.5.0 table serves reach it today: the
+  four vulnerability state changes, whose Vulnerability: Update does not grant
+  `read_vulnerability`, the two epic note edits, whose Work Item: Update does
+  not grant `read_note`, and the two custom emoji writes, since 19.5 declares
+  `CustomEmoji` and Custom Emoji: Create and Delete do not grant
+  `read_custom_emoji`. Their handlers answer the same way, and
   `TestTable_WritesAnsweredWithoutTheirObject_AreEachAnswered` holds the list
   of such writes to the table. A classic token keeps the answer it had, and
   so does a fine-grained token whose kind the server could not learn, which

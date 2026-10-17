@@ -414,8 +414,8 @@ const (
 
 // phaseBRelease is the release the fine-grained stand-ins report: the one the
 // table this tree compiles in was recorded from, read from the table so that
-// re-recording it moves the stand-ins with it. releaseOutsideTheTable is one
-// past every table, two majors on.
+// re-recording it moves the stand-ins with it. releaseOutsideTheTable is a
+// major far past any release a table here will be recorded from.
 var phaseBRelease = actiongrants.Table().Version
 
 const releaseOutsideTheTable = "99.0.0-ee"
