@@ -95,6 +95,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The Link header parser reads rel only from the first parameter](#the-link-header-parser-reads-rel-only-from-the-first-parameter)
   - [The wiki search decodes GitLab's blobs into wiki pages](#the-wiki-search-decodes-gitlabs-blobs-into-wiki-pages)
   - [SearchOptions models neither num_context_lines nor regex](#searchoptions-models-neither-num_context_lines-nor-regex)
+  - [Six response keys GitLab 19.5 added that client-go does not model](#six-response-keys-gitlab-195-added-that-client-go-does-not-model)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -280,7 +281,7 @@ readable without opening the tracker:
 | 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | In part in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300), whole in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Partial |
 | 37 | client-go | [The User struct models one user entity and GitLab serves six](#the-user-struct-models-one-user-entity-and-gitlab-serves-six) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 38 | gitlab-org/gitlab | [Three job token scope endpoints declare a response entity they do not send](#three-job-token-scope-endpoints-declare-a-response-entity-they-do-not-send) | Yes | Yes, [gitlab-org/gitlab!254698](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254698), merged | **Yes, 19.4.0** | No | No, retired when the live record was taken from 19.4.1-ee |
-| 39 | gitlab-org/gitlab | [Two project group listings are annotated with the whole Group entity](#two-project-group-listings-are-annotated-with-the-whole-group-entity) | Yes | Yes, [gitlab-org/gitlab!254699](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254699), merged | **Yes, 19.5.0** | No | Yes, until the live record is taken from 19.5.0-ee |
+| 39 | gitlab-org/gitlab | [Two project group listings are annotated with the whole Group entity](#two-project-group-listings-are-annotated-with-the-whole-group-entity) | Yes | Yes, [gitlab-org/gitlab!254699](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254699), merged | **Yes, 19.5.0** | No | Retired: the live record is taken from 19.5.0-ee |
 | 40 | client-go | [Ten modelled fields that no Grape entity exposes](#ten-modelled-fields-that-no-grape-entity-exposes-removed-from-this-servers-output) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Not needed |
 | 41 | client-go | [IssueRelation models an issue basic where GitLab renders a whole issue](#issuerelation-models-an-issue-basic-where-gitlab-renders-a-whole-issue) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 42 | client-go | [MemberRole models twenty of the forty-five permissions GitLab sends](#memberrole-models-twenty-of-the-forty-five-permissions-gitlab-sends) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
@@ -318,7 +319,7 @@ readable without opening the tracker:
 | 74 | gitlab-org/gitlab | [The Orbit API page's query examples predate version 12 of the query DSL](#the-orbit-api-pages-query-examples-predate-version-12-of-the-query-dsl) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258241](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258241), merged | **Yes, 19.5.0** | No | Yes, `orbit.query`'s own guidance and the site's Orbit page teach version 12, with [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031) |
 | 75 | gitlab-org/orbit/knowledge-graph | [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types) | Yes, [gitlab-org/orbit/knowledge-graph#1329](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1329), closed by the merge | Yes, [gitlab-org/orbit/knowledge-graph!2650](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2650), merged; the follow-up making the schema require it, [gitlab-org/orbit/knowledge-graph!2691](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2691), merged | **Yes, Orbit v0.137.0**, which GitLab.com served on 2026-10-05; it serves 0.145.0 on 2026-10-16 | No | Not needed: GitLab.com serves the corrected schema, and `orbit.query`'s guidance states the rule too, with [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031) |
 | 76 | gitlab-org/orbit/knowledge-graph | [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both) | Yes, [gitlab-org/orbit/knowledge-graph#1330](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1330), closed by the merge | Yes, [gitlab-org/orbit/knowledge-graph!2651](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2651), merged | **Yes, Orbit v0.137.0**, which GitLab.com served on 2026-10-05; it serves 0.145.0 on 2026-10-16 | No; a result could be silently incomplete until then | Not needed: GitLab.com serves the corrected schema, and `orbit.query`'s guidance says the default is `outgoing` too, with [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031) |
-| 77 | gitlab-org/gitlab | [The context commit list is annotated with `Commit` and presents `CommitWithLink`](#the-context-commit-list-is-annotated-with-commit-and-presents-commitwithlink) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260487](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260487), merged | **Yes, 19.5.0** | No | Yes, until the live record is taken from 19.5.0-ee |
+| 77 | gitlab-org/gitlab | [The context commit list is annotated with `Commit` and presents `CommitWithLink`](#the-context-commit-list-is-annotated-with-commit-and-presents-commitwithlink) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260487](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260487), merged | **Yes, 19.5.0** | No | Audit half retired: the live record is taken from 19.5.0-ee; the captured read stays for client-go |
 | 78 | gitlab-org/gitlab | [An unknown severity on a pipeline's findings list answers 500](#an-unknown-severity-on-a-pipelines-findings-list-answers-500) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260459](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260459), open, with row 79, the GraphQL reference approved and the backend reviewer's suggestion added on 2026-10-14, waiting on that review again | No | No | Yes |
 | 79 | gitlab-org/gitlab | [An unknown report type on a pipeline's findings list is dropped and filters out every finding](#an-unknown-report-type-on-a-pipelines-findings-list-is-dropped-and-filters-out-every-finding) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260459](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260459), open, with row 78, the GraphQL reference approved and the backend reviewer's suggestion added on 2026-10-14, waiting on that review again | No | No | Yes |
 | 80 | gitlab-org/gitlab | [The scan profile attach mutation drops the reason it refused a name](#the-scan-profile-attach-mutation-drops-the-reason-it-refused-a-name) | No | No | No | No | Yes |
@@ -328,9 +329,9 @@ readable without opening the tracker:
 | 84 | client-go | [No client-go helper returns the RFC 6750 fields of a token refusal](#no-client-go-helper-returns-the-rfc-6750-fields-of-a-token-refusal) | No, drafted in its section; waits on this project deciding to adopt the helper | No | No | No | Not needed; this server decodes the body itself |
 | 85 | gitlab-org/gitlab | [The fine-grained refusal can name a deprecated permission's label](#the-fine-grained-refusal-can-name-a-deprecated-permissions-label) | Yes, [gitlab-org/gitlab#633316](https://gitlab.com/gitlab-org/gitlab/-/issues/633316), reproduced on a running instance | Yes, [gitlab-org/gitlab!261671](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261671), open, closing that issue; the backend reviewer's two suggestions went in on 2026-10-14 and it waits on that review again | No | No | None taken |
 | 86 | gitlab-org/gitlab | [A token's own description omits its granular scopes](#a-tokens-own-description-omits-its-granular-scopes) | Yes, by GitLab, [gitlab-org/gitlab#629849](https://gitlab.com/gitlab-org/gitlab/-/issues/629849) | Yes, [gitlab-org/gitlab!259764](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259764), merged; its two follow-ups for the other token routes, [gitlab-org/gitlab!260276](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260276) and [gitlab-org/gitlab!260277](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260277), merged, with their history lines moved to 19.5 by [gitlab-org/gitlab!260930](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260930), merged; a third, for the service account rotate routes, [gitlab-org/gitlab!260929](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260929), merged, in milestone 19.5, with a test-only follow-up its reviewer asked for, [gitlab-org/gitlab!261218](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261218), merged; a fourth, for the service account token list routes, [gitlab-org/gitlab!261673](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261673), open, closing [gitlab-org/gitlab#633317](https://gitlab.com/gitlab-org/gitlab/-/issues/633317), approved and set to merge on 2026-10-16, waiting on us to resolve a conflict with `master` | **Yes, 19.5.0**: the merge, its two follow-ups for the other token routes and the one for the service account rotate routes; the test-only follow-up is deployed to GitLab.com since 17:06 UTC on 2026-10-13 and due in 19.6 | No | Yes, a second request by the token's id; since 19.5.0 it is needed only for an instance before 19.5 |
-| 87 | gitlab-org/gitlab | [GraphQL types and mutations this server reaches declare no fine-grained permission](#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission) | GitLab tracks them on its own pending list, and plans part of them in [gitlab-org/gitlab#631631](https://gitlab.com/gitlab-org/gitlab/-/issues/631631); nothing raised by us | Partly, theirs: another contributor's for `CustomEmoji`, [gitlab-org/gitlab!260586](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260586), merged; GitLab's own for `Namespace`, `Discussion` and `WikiPage`, marking `WorkItemType` and the other child types as authorized by their parent, [gitlab-org/gitlab!261599](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261599), open in milestone 19.6, and older changes for `WorkItemType`, open; none by us | **Partly, 19.5.0**: the `CustomEmoji` entry, by another contributor, one of five on the table's second line, which this server's table adopts when the live record is taken from 19.5.0-ee | Yes, for a fine-grained token: 37 actions withheld, 8 served with parts empty | Withheld with the reason, and a note on the parts; [issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054) |
-| 88 | gitlab-org/gitlab | [A declared mutation whose payload type declares nothing commits the write and answers null](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null) | No; a merge request proposing a visible error is written and goes out after a second review of its text | No | No | Yes, for a fine-grained token, on 20 writes | Withheld with the reason; the handlers answer such a write as probably committed for a table that stops withholding one, and six served writes whose object a grant can leave out answer so today |
-| 89 | gitlab-org/gitlab | [WorkItem declares the project boundary only, so a group's work item is null to a fine-grained token](#workitem-declares-the-project-boundary-only-so-a-groups-work-item-is-null-to-a-fine-grained-token) | Yes, by another user, [gitlab-org/gitlab#630483](https://gitlab.com/gitlab-org/gitlab/-/issues/630483) | Yes, [gitlab-org/gitlab!259765](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259765), merged; the issue it closes was closed as completed on 2026-10-12 | **Yes, 19.5.0**: merged on 2026-10-11 before the 19.5 cut, although its milestone says 19.6 | Yes, for a fine-grained token, on the epic actions, until the permission table is taken from 19.5.0-ee | Withheld with the reason |
+| 87 | gitlab-org/gitlab | [GraphQL types and mutations this server reaches declare no fine-grained permission](#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission) | GitLab tracks them on its own pending list, and plans part of them in [gitlab-org/gitlab#631631](https://gitlab.com/gitlab-org/gitlab/-/issues/631631); nothing raised by us | Partly, theirs: another contributor's for `CustomEmoji`, [gitlab-org/gitlab!260586](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260586), merged; GitLab's own for `Namespace`, `Discussion` and `WikiPage`, marking `WorkItemType` and the other child types as authorized by their parent, [gitlab-org/gitlab!261599](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261599), open in milestone 19.6, and older changes for `WorkItemType`, open; none by us | **Partly, 19.5.0**: the `CustomEmoji` entry, by another contributor, one of five on the table's second line, which this server's table adopted when the live record was taken from 19.5.0-ee | Yes, for a fine-grained token: 36 actions withheld, 8 served with parts empty | Withheld with the reason, and a note on the parts; [issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054) |
+| 88 | gitlab-org/gitlab | [A declared mutation whose payload type declares nothing commits the write and answers null](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null) | No; a merge request proposing a visible error is written and goes out after a second review of its text | No | No | Yes, for a fine-grained token, on 19 writes | Withheld with the reason; the handlers answer such a write as probably committed for a table that stops withholding one, and six served writes whose object a grant can leave out answer so today |
+| 89 | gitlab-org/gitlab | [WorkItem declares the project boundary only, so a group's work item is null to a fine-grained token](#workitem-declares-the-project-boundary-only-so-a-groups-work-item-is-null-to-a-fine-grained-token) | Yes, by another user, [gitlab-org/gitlab#630483](https://gitlab.com/gitlab-org/gitlab/-/issues/630483) | Yes, [gitlab-org/gitlab!259765](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259765), merged; the issue it closes was closed as completed on 2026-10-12 | **Yes, 19.5.0**: merged on 2026-10-11 before the 19.5 cut, although its milestone says 19.6 | No longer: the permission table is taken from 19.5.0-ee, and the epic actions are withheld by `Namespace` (row 87) and `WorkItemType` (row 88) instead | Retired |
 | 90 | gitlab-org/gitlab | [The pending-permission check exempts every type named `*Edge` or `*Payload`](#the-pending-permission-check-exempts-every-type-named-edge-or-payload) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260959](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260959), merged | **Yes, unreleased**: merged on 2026-10-15 in milestone 19.6 and deployed to GitLab.com at 13:47 UTC that day | No | Not needed; the live record computes the undeclared set itself |
 | 91 | gitlab-org/gitlab | [`available_for_permission` ignores `available_for`](#available_for_permission-ignores-available_for) | No | No | No | No | Not needed; the live record names the first permission a token can be granted |
 | 92 | gitlab-org/gitlab | [The REST API page does not say a non-GET request to a moved project's old path is answered 405](#the-rest-api-page-does-not-say-a-non-get-request-to-a-moved-projects-old-path-is-answered-405) | Yes, by the merge request | Yes, [gitlab-org/gitlab!259297](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259297), merged | **Yes, 19.5.0** | No | Not yet, with [issue 1133](https://github.com/jmrplens/gitlab-mcp-server/issues/1133) |
@@ -374,6 +375,7 @@ readable without opening the tracker:
 | 130 | client-go | [The wiki search decodes GitLab's blobs into wiki pages](#the-wiki-search-decodes-gitlabs-blobs-into-wiki-pages) | No | No | No | No | Yes, `search.wiki` reads its page from the captured response |
 | 131 | gitlab-org/gitlab | [The REST code search answers an exact-search name match with the path as its snippet](#the-rest-code-search-answers-an-exact-search-name-match-with-the-path-as-its-snippet) | No; the search page's version of it was closed | No | No | No | Yes, the code and wiki search Markdown reads a result whose snippet is its own path as a path match and fences nothing |
 | 132 | client-go | [SearchOptions models neither num_context_lines nor regex](#searchoptions-models-neither-num_context_lines-nor-regex) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes, `search.code` adds both to the query through a request option, each only when set |
+| 133 | client-go | [Six response keys GitLab 19.5 added that client-go does not model](#six-response-keys-gitlab-195-added-that-client-go-does-not-model) | No | No | No | No | Yes, all six read from the captured response |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -6885,6 +6887,70 @@ and could not widen the context around a match either.
 **Effort**: small: two pointer fields with `url` tags and `omitempty`, and a
 test that each reaches the query only when set.
 
+### Six response keys GitLab 19.5 added that client-go does not model
+
+- **Reported**: no. They belong in the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes, as the 19.4 keys of
+  [entry 58](#five-response-keys-and-three-parameters-gitlab-194-added-that-v3140-does-not-model)
+  went into it.
+- **In review**: no.
+- **Merged**: no. Neither v3.15.0, the version this server pins, nor v3.25.0,
+  the newest when read on 2026-10-17, models any of them.
+- **Blocking**: no.
+- **Workaround**: yes, all six are read from the captured response beside
+  the SDK's decode
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)):
+  through `toolutil.CapturedProject` for the project, `CapturedGroup` and
+  `CapturedGroups` for the group, `CapturedServiceAccount` and
+  `CapturedServiceAccounts` in the group and project service account
+  packages and `users`' own capture for the instance one,
+  `CapturedSSHCertificate` and `CapturedSSHCertificates` for a group's SSH
+  certificates, and `CapturedRunner` for a runner's details. Each is absent
+  from an older instance's answer rather than published as off or empty. They
+  retire when the structs carry the keys.
+
+**What**: every key below is absent from the 19.4.1-ee live record and
+present in the 19.5.0-ee one (`docs/development/gitlab-api-live.json`), and
+client-go declares none of them.
+
+- `Project` (`projects.go`) and `Group` (`groups.go`) declare no
+  `duo_code_review_decisions_enabled`, which `ee/lib/ee/api/entities/project.rb`
+  and `ee/lib/ee/api/entities/group.rb` expose while the
+  `duo_code_review_decisions` feature flag is on and Duo code review is
+  available, the group's to a caller who may administer it. projects.md calls
+  it Ultimate only and dates it to 19.5, behind a flag that is off by default.
+- `Group` declares no `require_sha_for_merge` or `lock_require_sha_for_merge`,
+  which `lib/api/entities/group_detail.rb` exposes on every group read on its
+  own: whether the group's merge requests need a valid commit SHA on the
+  merge route, and whether that setting is enforced on every descendant group
+  (groups.md).
+- `GroupServiceAccount` (`group_serviceaccounts.go`), `ProjectServiceAccount`
+  (`project_serviceaccounts.go`) and `ServiceAccount` (`users.go`) declare no
+  `external`, which `lib/api/entities/service_account.rb` exposes on every
+  account.
+- `GroupSSHCertificate` (`group_ssh_certificates.go`) declares no
+  `fingerprint`, which `lib/api/entities/ssh_certificate.rb` exposes on every
+  certificate as the SHA256 fingerprint of the certificate authority's key,
+  with its `SHA256:` prefix.
+- `RunnerDetails` (`runners.go`) declares no `token_expires_at`, which
+  `lib/api/entities/ci/runner_details.rb` exposes to a caller allowed to read
+  the runner's sensitive data. `Runner` declares it, for the answer to a
+  registration, and `RunnerDetails` does not embed `Runner`.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`),
+which reported 41 undeclared findings as soon as the live record was
+re-pinned to 19.5.0-ee
+([issue 1023](https://github.com/jmrplens/gitlab-mcp-server/issues/1023));
+the keys above are ten of them, published where a type carries the entity
+whole, and the other 31 are answered by declarations (the context commit
+list's six keys, the commit types the same route reaches through client-go,
+a share's confirmation, and two compact rows).
+
+**Effort**: small. Scalar members with `json` tags on six structs, a pointer
+for each key an older instance leaves out.
+
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
 Nine of the entries here were filed upstream together on 2026-09-13, one issue
@@ -9375,14 +9441,15 @@ reviewer, the annotation half is in review as its follow-up since 2026-10-09
   tagged on 2026-10-15 and published as the `19.5.0-ee.0` image that day.
 - **Blocking**: no. Our output type is already the right shape; only the audit
   was misled.
-- **Workaround**: yes, a declaration. `cmd/audit_1to1/internal/paths/sent_declarations.go`
-  answers the 49 findings this raised against `projects.ProjectGroupOutput`
-  under `documented-response-is-not-the-one-sent`. It retires when
-  `cmd/gen_api_live` is run against a release that carries the merge, since
-  the stale-declaration check then fails on it. That release exists now:
-  `docs/development/gitlab-api-live.json` is still taken from `19.4.1-ee`,
-  and taking it again from `19.5.0-ee` is the follow-up that retires the
-  declaration.
+- **Workaround**: retired. A declaration in
+  `cmd/audit_1to1/internal/paths/sent_declarations.go` answered the 49
+  findings this raised against `projects.ProjectGroupOutput` under
+  `documented-response-is-not-the-one-sent`, until the live record was taken
+  from `19.5.0-ee` on 2026-10-17
+  ([issue 1023](https://github.com/jmrplens/gitlab-mcp-server/issues/1023)):
+  that record holds both routes under `PublicGroupDetails`, the
+  stale-declaration check failed on the declaration as this entry said it
+  would, and it was removed.
 
 **Where**: `lib/api/projects.rb`, the `desc` blocks for
 `GET :id/share_locations` and `GET :id/invited_groups`.
@@ -9446,25 +9513,32 @@ OpenAPI document, where the change is a single `$ref`, because
   milestone 19.5; the release tooling had not marked it deployed when read on
   2026-10-10, and it reached GitLab.com's production stage at 05:34 UTC on
   2026-10-12. It is in **19.5.0**, tagged on 2026-10-15 and published as the
-  `19.5.0-ee.0` image that day. The audit declarations below retire when the
-  live record is taken from a release that carries it, which `19.5.0-ee`
-  now is; the record is still taken from `19.4.1-ee`.
+  `19.5.0-ee.0` image that day. The live record has been taken from
+  `19.5.0-ee` since 2026-10-17
+  ([issue 1023](https://github.com/jmrplens/gitlab-mcp-server/issues/1023)),
+  and holds the route under `CommitWithLink`.
 - **Blocking**: no. The keys arrive; only the route's description, and
-  everything generated from it, says they do not.
-- **Workaround**: yes, two halves. `mrcontextcommits.List` reads the commits
-  off the captured response (ADR-0021), which it already did for
-  `extended_trailers` (row 69), and publishes four of the keys the presented
-  entity adds: `author`, `author_gravatar_url`, `description_html` and
-  `title_html`, on `mrcontextcommits.CommitItem`, whose doc comment says why
-  each of the others is left out. The audit half is four declarations in
+  everything generated from it, said they do not.
+- **Workaround**: the audit half retired, the read stays.
+  `mrcontextcommits.List` reads the commits off the captured response
+  (ADR-0021), which it already did for `extended_trailers` (row 69), and
+  publishes four of the keys the presented entity adds: `author`,
+  `author_gravatar_url`, `description_html` and `title_html`, on
+  `mrcontextcommits.CommitItem`, whose doc comment says why each of the
+  others is left out; that stays, since client-go's `Commit` models none of
+  the four. The audit half was four declarations in
   `cmd/audit_1to1/internal/paths/shape_declarations.go` under
   `route-annotation-names-another-entity-than-the-handler-presents`, one per
-  key, since the record holds the route under `Commit` and so reports every
-  one of them as a key no response carries. They retire when
-  `cmd/gen_api_live` is run against a release that carries the fix: the
-  stale-declaration check then fails on all four, and the sent direction
-  starts reporting the six keys this server does not publish, which will want
-  declarations of their own in `sent_declarations.go`.
+  key, since the record held the route under `Commit`. Taken from `19.5.0-ee`
+  the record failed the stale-declaration check on all four, as this entry
+  said it would, and they were removed; the sent direction then reported the
+  six keys this server does not publish, now answered one by one in
+  `sent_declarations.go` (`commit_url` and `commit_path` as `web_url` again,
+  `prev_commit_id`, `next_commit_id` and `pipeline_status_path` as options the
+  route never passes, `signature_html` as a block that is nil on every commit
+  of the route), and against `commits.Output` and `commits.DetailOutput`, which
+  meet the route only through client-go's shared `Commit`, as a route that
+  fills another type.
 
 **Where**: `lib/api/merge_requests.rb`, the `desc` block of
 `GET :id/merge_requests/:merge_request_iid/context_commits` (lines 576 to 591
@@ -12347,13 +12421,17 @@ argument, and carry it into row 85's change.
   epic actions.
 - **Merged**: the `CustomEmoji` entry alone, by another contributor, in
   **19.5.0**: read on 2026-10-16, `gitlab-org/gitlab!260586` is in
-  `v19.5.0-ee`, tagged on 2026-10-15. This server's table changes for it when
-  the live record is taken from `19.5.0-ee`; it is still taken from
-  `19.4.1-ee`. The four other types on its line, and every other line, no.
+  `v19.5.0-ee`, tagged on 2026-10-15. This server's table adopted it when the
+  live record was taken from `19.5.0-ee` on 2026-10-17
+  ([issue 1023](https://github.com/jmrplens/gitlab-mcp-server/issues/1023)):
+  `custom_emoji.list`, `custom_emoji.create` and `custom_emoji.delete` left the
+  withheld set, which `make audit-1to1-grants-report` then counted at 55 of
+  1098 actions against the 58 of 19.4.1. The four other types on its line,
+  and every other line, no.
 - **Blocking**: yes, for a fine-grained personal access token, whatever its
-  grant: 37 actions cannot be served it and 8 are served with parts of their
-  answer empty. A classic token is unaffected.
-- **Workaround**: yes. The 37 are withheld from every fine-grained session
+  grant: at 19.5.0, 36 actions cannot be served it and 8 are served with
+  parts of their answer empty. A classic token is unaffected.
+- **Workaround**: yes. The 36 are withheld from every fine-grained session
   with the reason, the GitLab release the verdict comes from and the way out,
   a classic token (register row `AUT-007`), so a model is never handed an
   empty answer that reads as "nothing there"; the 8 are served with a note
@@ -12377,17 +12455,18 @@ object is answered `null`, or left out of a connection, with no error
 
 **What**: the undeclared types and mutations on a path this server's
 documents reach, as `go run ./cmd/audit_1to1/ -scope=grants` reports them at
-19.4.1:
+19.5.0 (at 19.4.1 the second line named `CustomEmoji` too, withholding
+`custom_emoji.list`):
 
-| Type or mutation                                                                                           | What a fine-grained token gets                    | Actions                                                                                                                      |
-| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `Namespace`                                                                                                | `null` for every root `namespace(fullPath:)` read | 24: 14 epic actions, the work item reads and writes and the saved view reads, `achievement.list` and two more                |
-| `UserAchievement`, `CustomEmoji`, `BranchRule`, `ProjectTargetBranchRule`, `PipelineSecurityReportFinding` | The items removed from the list                   | `achievement.user_list`, `custom_emoji.list`, `branch.rule_list`, `project.target_branch_rule_list`, `security_finding.list` |
-| `CiCatalogResource`, `SecurityReportSummary`, `VulnerabilitySeveritiesCount`                               | `null`                                            | `ci_catalog.get`, `ci_catalog.list`, `vulnerability.pipeline_security_summary`, `vulnerability.severity_count`               |
-| `ScanProfileProjectStatus`                                                                                 | A list of non-null items answered `null` whole    | `security_scan_profile.list_project_statuses`                                                                                |
-| `bulkUpdateSecurityAttributes`, `securityScanProfileAttach`, `securityScanProfileDetach`                   | Refused, nothing runs                             | `security_attribute.bulk_update`, `security_scan_profile.attach`, `security_scan_profile.detach`                             |
-| `VulnerabilityIssueLink`, `VulnerabilityFindingTokenStatus`, `VulnerableKubernetesResource`                | Those fields empty, the rest served               | `vulnerability.get`, `vulnerability.list` and the four state mutations                                                       |
-| `QuickActionsStatus`                                                                                       | That payload field empty, the note served         | `group.epic_note_update`, `group.epic_discussion_update_note`                                                                |
+| Type or mutation                                                                            | What a fine-grained token gets                    | Actions                                                                                                        |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `Namespace`                                                                                 | `null` for every root `namespace(fullPath:)` read | 24: 14 epic actions, the work item reads and writes and the saved view reads, `achievement.list` and two more  |
+| `UserAchievement`, `BranchRule`, `ProjectTargetBranchRule`, `PipelineSecurityReportFinding` | The items removed from the list                   | `achievement.user_list`, `branch.rule_list`, `project.target_branch_rule_list`, `security_finding.list`        |
+| `CiCatalogResource`, `SecurityReportSummary`, `VulnerabilitySeveritiesCount`                | `null`                                            | `ci_catalog.get`, `ci_catalog.list`, `vulnerability.pipeline_security_summary`, `vulnerability.severity_count` |
+| `ScanProfileProjectStatus`                                                                  | A list of non-null items answered `null` whole    | `security_scan_profile.list_project_statuses`                                                                  |
+| `bulkUpdateSecurityAttributes`, `securityScanProfileAttach`, `securityScanProfileDetach`    | Refused, nothing runs                             | `security_attribute.bulk_update`, `security_scan_profile.attach`, `security_scan_profile.detach`               |
+| `VulnerabilityIssueLink`, `VulnerabilityFindingTokenStatus`, `VulnerableKubernetesResource` | Those fields empty, the rest served               | `vulnerability.get`, `vulnerability.list` and the four state mutations                                         |
+| `QuickActionsStatus`                                                                        | That payload field empty, the note served         | `group.epic_note_update`, `group.epic_discussion_update_note`                                                  |
 
 The probes of `test/e2e/gitlab` measured the shapes on a 19.4.1 instance: a
 `namespace(fullPath:)` read answers `null`, a project's `branchRules` loses
@@ -12458,7 +12537,7 @@ for their elements,
 `TestFineGrainedProbes_UndeclaredGraphQLTypes_AreEmptyWithNoError` and
 `TestFineGrainedProbes_SeverityCount_IsNullWithNoError`, and the
 `group-work-item` declarations of `cmd/gen_action_grants/grant_declarations.go`
-go with row 89. The cost is ADR-0024's NEG-001: the withheld set is the newest
+went with row 89 when the record was taken from 19.5.0. The cost is ADR-0024's NEG-001: the withheld set is the newest
 record's, so an instance older than the release that carries a declaration is
 served an action it answers with a silent `null`. Re-pinning the record at
 each minor is
@@ -12533,19 +12612,23 @@ leaves nothing for us to do, so it has no row of its own.
   other child and value types as authorized by their parent, which would
   retire the `WorkItemType` line below too.
 - **Merged**: no.
-- **Blocking**: yes, for a fine-grained personal access token: 20 writes
-  cannot be served it.
-- **Workaround**: yes. The 20 are withheld from every fine-grained session
+- **Blocking**: yes, for a fine-grained personal access token: at 19.5.0,
+  19 writes cannot be served it (20 at 19.4.1; the two custom emoji writes
+  left with the `CustomEmoji` declaration below, and `group.epic_create`
+  joined when `WorkItem` gained the group boundary of row 89 and its answer
+  stopped at `WorkItemType`).
+- **Workaround**: yes. The 19 are withheld from every fine-grained session
   with the reason (register row `AUT-007`), and the reason says that GitLab
   commits such a write and answers null. Serving them would be worse than
   withholding them: a client that reads a null payload as "not done" and
   retries repeats a write GitLab already made. With the table recorded from
-  19.4.1 no session that carries an authority reaches one of the 20, in any
+  19.5.0 no session that carries an authority reaches one of the 19, in any
   phase and on any release. Since issue 1103 their handlers answer the case
   all the same, for a table recorded from a later release that stops
-  withholding one while a grant can still leave its object out (with the
-  `CustomEmoji` declaration below, a token granted Custom Emoji: Create alone,
-  or such a table on an instance older than the declaration): an error saying
+  withholding one while a grant can still leave its object out (as the 19.5.0
+  table now does for the custom emoji writes, served to a token granted
+  Custom Emoji: Create alone, or such a table on an instance older than the
+  declaration): an error saying
   the write was probably committed and to check before repeating it
   (`toolutil.UnconfirmedWrite`, worded by
   `finegrained.Authority.UnconfirmedWrite`). Nineteen handlers changed;
@@ -12569,20 +12652,21 @@ objects of the payload are authorized after, each against its own type, and
 an enforced type with no directive denies every fine-grained token, so the
 payload field comes back `null` with no error.
 
-**What**: the payload types that declare nothing and the writes that answer
-with them: `Achievement` (`achievement.create`, `achievement.update`,
+**What**: the payload types that declare nothing at 19.5.0 and the writes
+that answer with them: `Achievement` (`achievement.create`, `achievement.update`,
 `achievement.delete`), `UserAchievement` (`achievement.award`,
 `achievement.revoke` and the three `achievement.user_achievement_*` writes),
-`CustomEmoji` (`custom_emoji.create`, `custom_emoji.delete`),
-`WorkItemType` (`issue.work_item_create`, through `WorkItem.workItemType`, a
-non-null field whose null takes the work item with it),
+`WorkItemType` (`issue.work_item_create` and `group.epic_create`, through
+`WorkItem.workItemType`, a non-null field whose null takes the work item with
+it),
 `WorkItemSavedViewType` (the four saved view writes),
 `ProjectTargetBranchRule` (`project.target_branch_rule_create`),
 `SecurityAttribute` (`security_attribute.create`, `security_attribute.update`)
 and `SecurityCategory` (`security_category.create`,
-`security_category.update`). The write is not refused, so a token that holds
-the mutation's permission changes GitLab and is told nothing it can tell from
-a write that did not happen.
+`security_category.update`). At 19.4.1 the list held `CustomEmoji` too
+(`custom_emoji.create`, `custom_emoji.delete`), which 19.5 declares. The write
+is not refused, so a token that holds the mutation's permission changes GitLab
+and is told nothing it can tell from a write that did not happen.
 
 Read from the source. The same answer, a committed write and a `null`
 payload with no error, was measured on a 19.4.1 instance for the group work
@@ -12617,8 +12701,8 @@ object is untested rather than designed.
 Two things moved on `master` since 19.4.1.
 [gitlab-org/gitlab!260586](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260586)
 declares `CustomEmoji` with Custom Emoji: Read at the group boundary, so
-`custom_emoji.create` leaves the withheld set once the table is recorded from
-19.5, and a token granted Custom Emoji: Create alone still commits the emoji
+`custom_emoji.create` left the withheld set when the table was recorded from
+19.5.0, and a token granted Custom Emoji: Create alone still commits the emoji
 and reads `null`, which is the case the handlers' answer is for. And
 `GranularScopeAuthorization#authorized?` now also judges a legacy token that
 `subject_to_granular_enforcement?` (a classic token under a namespace that
@@ -12707,21 +12791,27 @@ issue until it is opened.
   issue stayed open after its community merge. At 11:51 UTC that day we
   wrote on it that the merge request fixed it and asked @imand3r to close it
   as completed, and he set its status to Complete at 14:36 UTC, which closed
-  it. The epic actions stay withheld until the permission table is taken
-  from `19.5.0-ee`, the release that carries it (it is still taken from
-  `19.4.1-ee`), and `Namespace` (row 87) still decides 14 of the 15 first.
-- **Blocking**: yes, for a fine-grained personal access token: the 15 epic
-  actions it withholds, and the GraphQL way of `group.epic_list`, whose REST
-  way is served. `Namespace` (row 87) decides 14 of the 15 and that way
-  first, so declaring `Namespace` alone would not serve them.
-- **Workaround**: yes. Every epic position the epic actions reach is declared
-  in `cmd/gen_action_grants/grant_declarations.go` (category
-  `group-work-item`) as one no fine-grained token passes, and the actions are
-  withheld with the reason (register row `AUT-007`). Since issue 1103 the
-  epic creation's handler also answers a creation GitLab ran and answered
-  without the epic as probably committed, as the writes of
-  [row 88](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null)
-  do, for a table that stops withholding it.
+  it. The permission table has been taken from `19.5.0-ee` since 2026-10-17
+  ([issue 1023](https://github.com/jmrplens/gitlab-mcp-server/issues/1023)),
+  and its record declares `WorkItem` at the group boundary through the
+  `namespace` association beside the project one.
+- **Blocking**: no longer. Up to the 19.4.1 table it withheld the 15 epic
+  actions from a fine-grained personal access token, and the GraphQL way of
+  `group.epic_list`. From the 19.5.0 table `Namespace`
+  ([row 87](#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission))
+  withholds 14 of them and that way, as it already did first, and
+  `group.epic_create` stops at the `WorkItemType` its answer selects, which
+  declares nothing
+  ([row 88](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null)).
+- **Workaround**: retired. Every epic position the epic actions reach was
+  declared in `cmd/gen_action_grants/grant_declarations.go` (category
+  `group-work-item`) as one no fine-grained token passes, and the declarations
+  were removed with the re-pin; the derivation could not have reported them
+  stale, since a boundary declaration is stale only when the action's
+  documents stop selecting its position. Since issue 1103 the epic creation's
+  handler answers a creation GitLab ran and answered without the epic as
+  probably committed, which stays for the `WorkItemType` answer row 88
+  describes.
 
 **Where**: `app/graphql/types/work_item_type.rb` at `v19.4.1-ee` declares
 `authorize_granular_token permissions: :read_work_item, boundary: :project,
@@ -12737,9 +12827,12 @@ mutation `workItemUpdate` declares both the project and the group boundary
 and Work Item: Update on the epic's group: `workItem(id:)` of the epic
 answers `null` with no error where a classic token reads it, and
 `workItemUpdate` on it renames the epic and answers `workItem: null` with no
-error (`TestFineGrainedProbes_GroupWorkItem_ResolvesNoBoundary` in
-`test/e2e/gitlab/ee`). A grant on the group can therefore change an epic and
-never read it.
+error. A grant on the group could therefore change an epic and never read
+it. The probe in `test/e2e/gitlab/ee` holds the fixed behaviour since the
+table was recorded from 19.5.0
+(`TestFineGrainedProbes_GroupWorkItem_ResolvesTheGroupBoundary`): the read
+answers the epic as the classic token reads it, and the write answers the
+renamed epic.
 
 **How we found it**: issue 952's derivation, read from the source, then the
 probe above, which also showed the write committing where the source reading
