@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	pathpkg "path"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -26,9 +27,10 @@ import (
 // advanced search, while a basic-search hunk has no upper bound, since git
 // grep merges the context of nearby matches. With the default context every
 // backend puts the match within the first three lines it sends, so the head is
-// the part worth showing. That holds only because this server sends no
-// num_context_lines: passing it through would put the match up to 20 lines
-// down, and the cap would then have to keep the lines around the match.
+// the part shown. A num_context_lines the caller sets can put it up to 20
+// lines down, so the lines shown are a window around the lines that can hold
+// the match ([snippetWindow]), which is the head whenever those lines are
+// within it and never fewer lines than they span.
 const maxSnippetLines = 10
 
 // maxSnippetLineRunes bounds one line of a snippet. GitLab sends whole lines
@@ -90,6 +92,14 @@ type blobListing struct {
 type foundBlob struct {
 	BlobOutput
 	groupID int64
+	// context is how GitLab cut the snippet, which a wiki result does not
+	// say.
+	context snippetContext
+}
+
+// snippet is what the Markdown shows of the result's data.
+func (bl foundBlob) snippet() codeSnippet {
+	return shapeSnippet(bl.Data, bl.context, bl.Startline)
 }
 
 // codeListing renders the code scope.
@@ -144,11 +154,12 @@ func wikiSlug(path string) string {
 	return strings.TrimSuffix(path, pathpkg.Ext(path))
 }
 
-// foundCode is a page of code search results as the listing renders them.
-func foundCode(blobs []BlobOutput) []foundBlob {
+// foundCode is a page of code search results as the listing renders them,
+// each carrying how GitLab cut the page's snippets.
+func foundCode(blobs []BlobOutput, ctx snippetContext) []foundBlob {
 	out := make([]foundBlob, len(blobs))
 	for i, bl := range blobs {
-		out[i] = foundBlob{BlobOutput: bl}
+		out[i] = foundBlob{BlobOutput: bl, context: ctx}
 	}
 	return out
 }
@@ -166,44 +177,73 @@ func foundWiki(pages []WikiBlobOutput) []foundBlob {
 	return out
 }
 
-// snippetLineEndings turns every line ending into a line feed. CommonMark
-// reads a lone carriage return as a line ending too, so counting lines by the
-// line feed alone would count fewer than a renderer shows.
-var snippetLineEndings = strings.NewReplacer("\r\n", "\n", "\r", "\n")
+// snippetLine is the text of one line of a snippet, the line ending GitLab
+// sent dropped, a CRLF's carriage return included. GitLab counts a snippet's
+// lines by the line feed alone (Ruby's String#lines on advanced search, the
+// line count of zoekt's context on exact search, git grep on basic search), so
+// the window is placed on those lines and a carriage return left inside one
+// moves none of them. shapeSnippet then shows such a carriage return as a line
+// feed, which is how CommonMark reads a lone one and no response may carry.
+func snippetLine(line string) string {
+	return strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r")
+}
 
 // codeSnippet is what the Markdown shows of one result's data.
 type codeSnippet struct {
-	// text is the head of the data, one line feed after each line kept.
+	// text is the lines of the data the window keeps, one line feed after
+	// each.
 	text string
-	// lines is how many lines GitLab sent.
+	// lines is how many lines GitLab sent, counted as GitLab counts them.
 	lines int
+	// first is the first line kept, counted from 0, and shown how many of
+	// GitLab's lines text holds.
+	first, shown int
+	// startline is the line of the file the snippet starts on, as GitLab
+	// reports it.
+	startline int64
 	// longLines reports whether a kept line was cut to maxSnippetLineRunes.
 	longLines bool
 }
 
 // cut reports whether the snippet shows less than GitLab sent.
 func (s codeSnippet) cut() bool {
-	return s.lines > maxSnippetLines || s.longLines
+	return s.shown < s.lines || s.longLines
 }
 
-// shapeSnippet keeps the first maxSnippetLines lines of data, each cut to
-// maxSnippetLineRunes, and counts the lines it was sent. Empty data shapes to
-// no text and is never cut.
-func shapeSnippet(data string) codeSnippet {
-	data = strings.ToValidUTF8(snippetLineEndings.Replace(data), string(utf8.RuneError))
-	s := codeSnippet{lines: strings.Count(data, "\n")}
-	if !strings.HasSuffix(data, "\n") {
-		s.lines++
+// windowNote says which of the lines GitLab sent the snippet shows, or is
+// empty when it shows them all: the first ones, or a run around the match
+// further down, which it names by the file's own line numbers, those of the
+// start line the section's heading gives, since the fence no longer starts on
+// that line.
+func windowNote(s codeSnippet) string {
+	if s.shown == s.lines {
+		return ""
 	}
+	if s.first == 0 {
+		return fmt.Sprintf("Showing the first %d of the %d lines GitLab sent for this result.", s.shown, s.lines)
+	}
+	from := s.startline + int64(s.first)
+	return fmt.Sprintf("Showing lines %d to %d of the file, around the match, of lines %d to %d that GitLab sent for this result.",
+		from, from+int64(s.shown)-1, s.startline, s.startline+int64(s.lines)-1)
+}
+
+// shapeSnippet keeps the lines of data that snippetWindow places around the
+// lines that can hold the match, as ctx reads them for a snippet starting on
+// startline, each cut to maxSnippetLineRunes, and counts the lines it was
+// sent as GitLab counts them. With the context GitLab applies by default that
+// is the first maxSnippetLines lines. Empty data shapes to no text and is never
+// cut.
+func shapeSnippet(data string, ctx snippetContext, startline int64) codeSnippet {
+	all := slices.Collect(strings.Lines(strings.ToValidUTF8(data, string(utf8.RuneError))))
+	s := codeSnippet{lines: len(all), startline: startline}
+	lo, hi := ctx.matchSpan(startline, len(all))
+	s.first, s.shown = snippetWindow(lo, hi, len(all))
 	var b strings.Builder
-	rest := data
-	for kept := 0; kept < maxSnippetLines && rest != ""; kept++ {
-		line, after, _ := strings.Cut(rest, "\n")
-		head, cut := cutSnippetLine(line)
+	for _, line := range all[s.first : s.first+s.shown] {
+		head, cut := cutSnippetLine(snippetLine(line))
 		s.longLines = s.longLines || cut
-		b.WriteString(head)
+		b.WriteString(strings.ReplaceAll(head, "\r", "\n"))
 		b.WriteString("\n")
-		rest = after
 	}
 	s.text = b.String()
 	return s
@@ -297,8 +337,8 @@ func writeSnippetSection(c *toolutil.Card, n int, owner string, bl BlobOutput, s
 		section.Note("The snippet GitLab sent for this result is empty.")
 		return
 	}
-	if s.lines > maxSnippetLines {
-		section.Note(fmt.Sprintf("Showing the first %d of the %d lines GitLab sent for this result.", maxSnippetLines, s.lines))
+	if note := windowNote(s); note != "" {
+		section.Note(note)
 	}
 	if s.longLines {
 		section.Note(fmt.Sprintf("Lines longer than %d characters are cut.", maxSnippetLineRunes))
@@ -461,7 +501,7 @@ func (l blobListing) sectionFitsAlone(n int, bl foundBlob, p toolutil.Pagination
 	var b strings.Builder
 	b.WriteString(l.row(bl))
 	used := deliveredBytes(l.heading(1, p)) + len(l.header) + deliveredBytes(b.String())
-	return fitsCodeMarkdown(used, snippetSectionBytes(&b, n, l.owner(bl), bl.BlobOutput, shapeSnippet(bl.Data)))
+	return fitsCodeMarkdown(used, snippetSectionBytes(&b, n, l.owner(bl), bl.BlobOutput, bl.snippet()))
 }
 
 // writeSnippetSections writes the section of each of blobs, the results the
@@ -474,7 +514,7 @@ func (l blobListing) writeSnippetSections(b *strings.Builder, c *toolutil.Card, 
 	cut := false
 	for i, bl := range blobs {
 		n := i + 1
-		s := shapeSnippet(bl.Data)
+		s := bl.snippet()
 		owner := l.owner(bl)
 		section := snippetSectionBytes(b, n, owner, bl.BlobOutput, s)
 		if !fitsCodeMarkdown(used, section) {
@@ -533,9 +573,10 @@ func (l blobListing) format(blobs []foundBlob, p toolutil.PaginationOutput) stri
 // FormatCodeMarkdown renders a paginated list of code search results through
 // codeListing: a table naming each result, its project and the line its
 // snippet starts on, then each snippet under a heading of its own, cut to a
-// bounded head and held with the table to maxCodeMarkdownBytes.
+// bounded window around its match and held with the table to
+// maxCodeMarkdownBytes.
 func FormatCodeMarkdown(out CodeOutput) string {
-	return codeListing.format(foundCode(out.Blobs), out.Pagination)
+	return codeListing.format(foundCode(out.Blobs, out.snippets), out.Pagination)
 }
 
 // FormatMRsMarkdown renders a paginated list of merge request search results.

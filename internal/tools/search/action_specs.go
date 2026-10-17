@@ -68,11 +68,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 
 func searchCodeSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := searchReadOptions("gitlab_search_code")
-	options.Usage = "Search code blobs and file contents. Use for text, symbols, snippets, or filenames inside repositories. Do not use for project or repository name discovery."
+	options.Usage = "Search code blobs and file contents. Use for text, symbols, snippets, or filenames inside repositories. Do not use for project or repository name discovery. num_context_lines asks advanced or exact search for more or fewer lines around each match, and regex chooses a regular expression or literal text on exact search."
 	options.Aliases = []string{"code search", "file content search", "find code", "search repository files"}
 	options.Tags = append(options.Tags, "code", "blob", "file_content")
 	options.RelatedActions = []string{actionSearchProjects, "repository.file_get", "repository.tree"}
-	options.IndividualTool.Description = "Search code blobs across global, group, or project scope. Returns: matching blobs with file path, basename, ref, the line the snippet starts on, the snippet, project ID, and pagination metadata. On basic search a file that matched by its path also carries its blob ID, and its snippet is the start of the file rather than the lines around a match. On exact search such a file carries its path in place of a snippet. See also: gitlab_search_projects, gitlab_file_get, gitlab_repository_tree."
+	options.IndividualTool.Description = "Search code blobs across global, group, or project scope. Returns: matching blobs with file path, basename, ref, the line the snippet starts on, the snippet, project ID, and pagination metadata. On basic search a file that matched by its path also carries its blob ID, and its snippet is the start of the file rather than the lines around a match. On exact search such a file carries its path in place of a snippet. num_context_lines (0 to 20) sets the lines around each match on advanced and exact search, and regex chooses between a regular expression and literal text on exact search. See also: gitlab_search_projects, gitlab_file_get, gitlab_repository_tree."
 	return toolutil.NewReadActionSpec(specCode, searchRoute(client, Code), options)
 }
 

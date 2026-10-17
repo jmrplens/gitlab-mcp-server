@@ -31,6 +31,10 @@ func searchInputSchema[T any]() *jsonschema.Schema {
 		property.Description = searchTypeSchemaDescription
 		property.Enum = searchTypeEnumValues()
 	}
+	if property := schema.Properties["num_context_lines"]; property != nil {
+		property.Minimum = new(0.0)
+		property.Maximum = new(float64(maxContextLines))
+	}
 	return schema
 }
 

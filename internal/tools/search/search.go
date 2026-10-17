@@ -93,6 +93,13 @@ type scopedSearchArgs[T any] struct {
 	projectSearch scopedSearchFunc[T]
 	groupSearch   scopedSearchFunc[T]
 	globalSearch  globalSearchFunc[T]
+	// options are request options sent after the context, for parameters
+	// client-go's SearchOptions does not model.
+	options []gl.RequestOptionFunc
+	// refusalHint is the hint for a 400 the search can explain from what it
+	// sent, and the empty string for one it cannot, which keeps the hint
+	// every search shares. Nil for a search that explains none.
+	refusalHint func(error) string
 	// capturesPage marks a caller that reads the page from the captured
 	// response (ADR-0021) rather than from what client-go decoded. client-go
 	// failing to decode an answer GitLab gave ([commits.MisreadByClientGo])
@@ -116,21 +123,34 @@ func runScopedSearch[T any](ctx context.Context, args scopedSearchArgs[T]) ([]T,
 
 	items, resp, err := args.search(ctx, opts)
 	if err != nil && (!args.capturesPage || !commits.MisreadByClientGo(err)) {
-		return nil, nil, wrapSearchErr(args.operation, err)
+		return nil, nil, args.wrap(err)
 	}
 	return items, resp, nil
+}
+
+// wrap is the error a failed search returns: a 400 the search's own
+// refusalHint explains with that hint, and anything else with the hints
+// every search shares.
+func (args scopedSearchArgs[T]) wrap(err error) error {
+	if args.refusalHint != nil && toolutil.IsHTTPStatus(err, 400) {
+		if hint := args.refusalHint(err); hint != "" {
+			return toolutil.WrapErrWithHint(args.operation, err, hint)
+		}
+	}
+	return wrapSearchErr(args.operation, err)
 }
 
 // search sends the query to the narrowest scope the caller named: the
 // project, else the group, else the whole instance.
 func (args scopedSearchArgs[T]) search(ctx context.Context, opts *gl.SearchOptions) ([]T, *gl.Response, error) {
+	options := append([]gl.RequestOptionFunc{gl.WithContext(ctx)}, args.options...)
 	if args.projectID != "" {
-		return args.projectSearch(string(args.projectID), args.query, opts, gl.WithContext(ctx))
+		return args.projectSearch(string(args.projectID), args.query, opts, options...)
 	}
 	if args.groupID != "" {
-		return args.groupSearch(string(args.groupID), args.query, opts, gl.WithContext(ctx))
+		return args.groupSearch(string(args.groupID), args.query, opts, options...)
 	}
-	return args.globalSearch(args.query, opts, gl.WithContext(ctx))
+	return args.globalSearch(args.query, opts, options...)
 }
 
 func convertSearchResults[T, O any](items []T, convert func(T) O) []O {
@@ -156,10 +176,12 @@ func searchPagination(resp *gl.Response, itemCount int) toolutil.PaginationOutpu
 // when group_id is provided it is scoped to that group;
 // otherwise a global search is performed.
 type CodeInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id,omitempty" jsonschema:"Project ID or URL-encoded path (optional)"`
-	GroupID   toolutil.StringOrInt `json:"group_id,omitempty"   jsonschema:"Group ID or URL-encoded path (optional)"`
-	Query     string               `json:"query"                jsonschema:"Search query text (param 'query' not 'search'),required"`
-	Ref       string               `json:"ref,omitempty"        jsonschema:"Branch or tag name to search in (default: default branch)"`
+	ProjectID       toolutil.StringOrInt `json:"project_id,omitempty" jsonschema:"Project ID or URL-encoded path (optional)"`
+	GroupID         toolutil.StringOrInt `json:"group_id,omitempty"   jsonschema:"Group ID or URL-encoded path (optional)"`
+	Query           string               `json:"query"                jsonschema:"Search query text (param 'query' not 'search'),required"`
+	Ref             string               `json:"ref,omitempty"        jsonschema:"Branch or tag name to search in (default: default branch)"`
+	NumContextLines *int64               `json:"num_context_lines,omitempty" jsonschema:"Lines of context GitLab sends around a code match, up to this many on each side, 0 to 20. Honored by advanced and exact code search (search_type advanced or zoekt), which send 2 and 1 by default, though exact search only from GitLab 19.5. GitLab Enterprise 18.11 and later refuses it on basic search, which a project search of a ref other than the default branch always runs, unless the token carries the mcp scope. Earlier releases and Community Edition ignore it"`
+	Regex           *bool                `json:"regex,omitempty"             jsonschema:"Search the query as a regular expression (true) or as literal text (false). Honored by exact code search alone (search_type zoekt), which reads the query as a regular expression when this is left out. GitLab Enterprise 18.9 and later refuses it on any other backend, false included, and so on a project search of a ref other than the default branch, which always runs basic search, unless the token carries the mcp scope. Earlier releases and Community Edition ignore it"`
 	TypeInput
 	toolutil.PaginationInput
 }
@@ -196,16 +218,30 @@ type CodeOutput struct {
 	toolutil.HintableOutput
 	Blobs      []BlobOutput              `json:"blobs"`
 	Pagination toolutil.PaginationOutput `json:"pagination"`
+
+	// snippets is how GitLab cut the snippets of this page: the backend that
+	// answered and the context the request asked for, which together say
+	// where in each snippet the match is. The Markdown reads it to show the
+	// lines around the match. It is unexported so that nothing about the
+	// published shape moves: GitLab sends the backend in a header and no
+	// entity field, and the context is the caller's own input.
+	snippets snippetContext
 }
 
 // Code searches for code (blobs) in GitLab. Scope priority:
 // project_id > group_id > global.
 func Code(ctx context.Context, client *gitlabclient.Client, input CodeInput) (CodeOutput, error) {
+	if err := validateCodeSearchParams(input.NumContextLines); err != nil {
+		return CodeOutput{}, err
+	}
 	searchClient := client.GL().Search
+	//gitlab:request alternatives: the search goes to exactly one of the project, group and instance routes, the narrowest scope the caller named, and refusalHint, a function in the same literal, sends nothing and only explains a refusal
 	blobs, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Blob]{
 		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, ref: input.Ref, page: input.Page, perPage: input.PerPage,
 		searchType: input.SearchType, operation: "searchCode", projectSearch: searchClient.BlobsByProject,
 		groupSearch: searchClient.BlobsByGroup, globalSearch: searchClient.Blobs,
+		options:     []gl.RequestOptionFunc{codeSearchParams(input.NumContextLines, input.Regex)},
+		refusalHint: newCodeRefusal(input).hint,
 	})
 	if err != nil {
 		return CodeOutput{}, err
@@ -224,7 +260,10 @@ func Code(ctx context.Context, client *gitlabclient.Client, input CodeInput) (Co
 			ProjectID: b.ProjectID,
 		}
 	}
-	return CodeOutput{Blobs: out, Pagination: searchPagination(resp, len(out))}, nil
+	return CodeOutput{
+		Blobs: out, Pagination: searchPagination(resp, len(out)),
+		snippets: snippetContext{backend: searchBackend(resp), contextLines: input.NumContextLines},
+	}, nil
 }
 
 // ---------------------------------------------------------------------------

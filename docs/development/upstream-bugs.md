@@ -94,6 +94,7 @@ for the fork, branch, fix, test and MR workflow.
   - [A nil SearchOptions panics in every search method but one](#a-nil-searchoptions-panics-in-every-search-method-but-one)
   - [The Link header parser reads rel only from the first parameter](#the-link-header-parser-reads-rel-only-from-the-first-parameter)
   - [The wiki search decodes GitLab's blobs into wiki pages](#the-wiki-search-decodes-gitlabs-blobs-into-wiki-pages)
+  - [SearchOptions models neither num_context_lines nor regex](#searchoptions-models-neither-num_context_lines-nor-regex)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -372,6 +373,7 @@ readable without opening the tracker:
 | 129 | client-go | [The Link header parser reads rel only from the first parameter](#the-link-header-parser-reads-rel-only-from-the-first-parameter) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3143](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3143), open | No | No; GitLab writes `rel` as the only parameter, so only a proxy that rewrites the header reaches it | None taken |
 | 130 | client-go | [The wiki search decodes GitLab's blobs into wiki pages](#the-wiki-search-decodes-gitlabs-blobs-into-wiki-pages) | No | No | No | No | Yes, `search.wiki` reads its page from the captured response |
 | 131 | gitlab-org/gitlab | [The REST code search answers an exact-search name match with the path as its snippet](#the-rest-code-search-answers-an-exact-search-name-match-with-the-path-as-its-snippet) | No; the search page's version of it was closed | No | No | No | Yes, the code and wiki search Markdown reads a result whose snippet is its own path as a path match and fences nothing |
+| 132 | client-go | [SearchOptions models neither num_context_lines nor regex](#searchoptions-models-neither-num_context_lines-nor-regex) | No; for the joint merge request | No | No | No | Yes, `search.code` adds both to the query through a request option, each only when set |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -6834,6 +6836,53 @@ because it had nothing to assert.
 **Effort**: small: a `WikiBlob` type (`Blob` plus `GroupID`) returned by the
 three methods, a breaking change for callers, so it waits for a major version
 or three parallel methods.
+
+### SearchOptions models neither num_context_lines nor regex
+
+- **Reported**: no. It belongs with the option struct commits of the joint
+  merge request,
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  which is the change that retires it, and is not in it yet.
+- **In review**: no.
+- **Merged**: no. v3.25.0, the head of main on 2026-10-15, carries the same
+  struct.
+- **Blocking**: no.
+- **Workaround**: yes. `search.code` takes `num_context_lines` and `regex` and
+  adds each to the query client-go has encoded through a request option of
+  its own (`codeSearchParams` in `internal/tools/search/search_params.go`),
+  only when the caller set it, and refuses a `num_context_lines` outside 0 to
+  20 before any request. It retires when the struct carries both fields with
+  `omitempty`.
+
+**Where**: `search.go`, `SearchOptions`, which every `SearchService` method
+encodes into the query of `GET /search`, `GET /groups/:id/-/search` or
+`GET /projects/:id/-/search`. At v3.15.0 it carries `ListOptions`, `Ref` and
+`SearchType` and nothing else.
+
+**What**: GitLab Enterprise declares both parameters on the three routes
+(`ee/lib/ee/api/search.rb`), `regex` from 18.9 and `num_context_lines` from
+18.11: `num_context_lines`, an integer from 0 to 20, the lines of context
+advanced and exact code search put around each match (exact search only from
+19.5), and `regex`, a boolean that tells exact code search whether the query
+is a regular expression, which is how it reads the query when the parameter
+is left out. Both are refused with 400 on a backend that does not take them,
+on their presence rather than their value, so a struct carrying them has to
+leave an unset one out of the query rather than send its zero. The backend is
+the one that would answer, and a project search of a ref other than the
+default branch is always answered by basic search
+(`ee/app/services/ee/search/project_service.rb`), so either is refused there
+whatever `search_type` says. A token carrying the `mcp` scope is never
+refused: the check returns early for it, and the parameter is then ignored
+where it does not apply. Community Edition, and Enterprise before the release
+that declares a parameter, drop it.
+
+**How we found it**: issue 1392. Exact code search over the API reads every
+query as a regular expression unless `regex=false` is sent, so a caller
+searching for literal text with a `.` or a `(` in it could not ask for it,
+and could not widen the context around a match either.
+
+**Effort**: small: two pointer fields with `url` tags and `omitempty`, and a
+test that each reaches the query only when set.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

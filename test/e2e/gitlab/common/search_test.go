@@ -471,6 +471,134 @@ func TestSearchType_PublishedSchema_EnumeratesTheValues(t *testing.T) {
 	})
 }
 
+// contextFixture is a project holding one file whose path does not carry the
+// token, so a search for the token matches the file's content alone, with the
+// token on a line far enough from both ends that any context GitLab could add
+// stays inside the file.
+type contextFixture struct {
+	project fixture.Project
+	token   string
+	path    string
+}
+
+// contextFixtureLines is the length of the context fixture's file, and
+// contextFixtureMatch the line its token is on.
+const (
+	contextFixtureLines = 31
+	contextFixtureMatch = 16
+)
+
+// buildContextFixture creates the project and commits the file.
+func buildContextFixture(e *harness.Env) contextFixture {
+	e.T.Helper()
+
+	project := fixture.NewProject(e, fixture.WithNamePrefix("searchctx"))
+	token := e.Name("ctx")
+	var content strings.Builder
+	for line := 1; line <= contextFixtureLines; line++ {
+		if line == contextFixtureMatch {
+			content.WriteString("The token is " + token + ".\n")
+			continue
+		}
+		content.WriteString("Line " + strconv.Itoa(line) + " of the context fixture.\n")
+	}
+	path := "search/context.txt"
+	fixture.CommitFile(e, project, project.DefaultBranch, path, content.String(), "docs: add the context fixture")
+	return contextFixture{project: project, token: token, path: path}
+}
+
+// TestSearchCode_ContextLinesAndRegexOnBasicSearch_FollowTheEdition sends
+// num_context_lines and regex to basic search, the one backend a Docker
+// instance runs, on every surface. Enterprise refuses either there, regex=false
+// included, and the refusal reaches the caller naming the backend each needs;
+// Community Edition declares neither and answers as if they had not been sent,
+// and the text answer still fences the line the file matched on. Advanced and
+// exact search, the backends that honor them, need Elasticsearch or Zoekt,
+// which no instance of this suite runs, so the snippets they cut are held by
+// the unit tests to the shapes GitLab's source builds.
+func TestSearchCode_ContextLinesAndRegexOnBasicSearch_FollowTheEdition(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, buildContextFixture, func(e *harness.Env, surface harness.Surface, f contextFixture) {
+		s := e.On(surface)
+		basic := map[string]any{"project_id": f.project.IDParam(), "query": f.token, "search_type": "basic"}
+		withContext := withParams(basic, map[string]any{"num_context_lines": 5})
+		literal := withParams(basic, map[string]any{"regex": false})
+
+		if e.Runtime().Enterprise {
+			harness.ExpectToolError(s, actionSearchCode, withContext, "num_context_lines needs advanced or exact code search")
+			harness.ExpectToolError(s, actionSearchCode, literal, "regex needs exact code search")
+			return
+		}
+		assertContentMatchShown(e, s, withContext, f)
+		assertContentMatchShown(e, s, literal, f)
+	})
+}
+
+// assertContentMatchShown waits until a code search finds the context
+// fixture's file and checks that its text answer fences the line the file
+// matched on.
+func assertContentMatchShown(e *harness.Env, s *harness.Session, params map[string]any, f contextFixture) {
+	e.T.Helper()
+	found := harness.Eventually(s, actionSearchCode, params, searchInterval, searchWait,
+		func(out search.CodeOutput) bool { return blobFound(out, f.path) })
+	e.T.Logf("code search for %v found %d blob(s)", params, len(found.Blobs))
+	_, said := harness.DoAnswer[search.CodeOutput](s, actionSearchCode, params)
+	if line := "The token is " + f.token + ".\n"; !strings.Contains(said, line) {
+		e.T.Errorf("the code search text for %v does not show the matched line %q:\n%s", params, line, said)
+	}
+}
+
+// TestSearchCode_ContextLinesOutOfRange_IsRefusedNamingTheBound sends a
+// num_context_lines past the 20 GitLab accepts on every surface and reads a
+// refusal naming the parameter and the bound. The individual tool's schema
+// publishes the bound, so the SDK refuses the argument there, while the
+// dispatchers leave it to the handler, which refuses it before any request.
+func TestSearchCode_ContextLinesOutOfRange_IsRefusedNamingTheBound(t *testing.T) {
+	e := harness.New(t)
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		params := map[string]any{"query": "anything", "num_context_lines": 21}
+
+		var refusal string
+		if surface == harness.SurfaceIndividual {
+			refusal = harness.Refused(s, actionSearchCode, params, harness.FailureInvalidParams)
+		} else {
+			refusal = harness.ExpectToolError(s, actionSearchCode, params, "num_context_lines")
+		}
+		assertMentions(e, "the refusal of num_context_lines=21", refusal, "num_context_lines", "20")
+	})
+}
+
+// TestSearchCode_PublishedSchema_BoundsTheContextLines reads the code scope's
+// entry of the tools manifest on every surface and checks that the input
+// schema it publishes bounds num_context_lines to the 0 to 20 GitLab
+// Enterprise accepts: the schema is what a client validates against before
+// calling, and on the individual surface what refuses a value past the bound,
+// so a projection that dropped the bound would leave such a value to be
+// refused only by the handler.
+func TestSearchCode_PublishedSchema_BoundsTheContextLines(t *testing.T) {
+	e := harness.New(t)
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+
+		detail := readToolManifestEntry(e, s, string(actionSearchCode), searchCodeTool)
+		properties, ok := schemaObject(e, detail.InputSchema)["properties"].(map[string]any)
+		if !ok {
+			e.T.Fatalf("the schema of %s publishes no properties", detail.ID)
+		}
+		contextLines, ok := properties["num_context_lines"].(map[string]any)
+		if !ok {
+			e.T.Fatalf("the schema of %s publishes no num_context_lines: %v", detail.ID, properties)
+		}
+		if contextLines["minimum"] != float64(0) || contextLines["maximum"] != float64(20) {
+			e.T.Errorf("the schema of %s publishes num_context_lines as %v, want minimum 0 and maximum 20", detail.ID, contextLines)
+		}
+	})
+}
+
 // readToolManifestEntry reads the detail resource of the manifest entry
 // that runs an action on this session's surface, and then its own detail
 // URI. The dispatcher surfaces' entries name the action they run; the

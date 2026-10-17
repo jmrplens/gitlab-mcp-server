@@ -1173,6 +1173,27 @@ func TestCentralTierFilter_OutputSchemasArePrunedLenientlyPerTier(t *testing.T) 
 	}
 }
 
+// TestCentralTierFilter_SearchCodeContextBound_SurvivesEveryTier verifies that
+// the bound the code search input publishes for num_context_lines, the 0 to 20
+// GitLab Enterprise accepts, reaches the catalog every surface projects from,
+// at each tier. The input schema is pruned per tier, and a pruning that
+// rebuilt the property would lose the bound: a client would then send 21,
+// which the handler refuses only once it is called and the individual tool's
+// schema no longer refuses at all.
+func TestCentralTierFilter_SearchCodeContextBound_SurvivesEveryTier(t *testing.T) {
+	const id = actioncatalog.ActionID("search.code")
+	for _, tier := range []edition.Tier{edition.Free, edition.Premium, edition.Ultimate} {
+		t.Run(tier.String(), func(t *testing.T) {
+			catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: tier, IncludeMCP: true})
+			properties, _ := actionInputSchema(t, catalog, id)["properties"].(map[string]any)
+			contextLines, _ := properties["num_context_lines"].(map[string]any)
+			if contextLines["minimum"] != float64(0) || contextLines["maximum"] != float64(20) {
+				t.Errorf("%s publishes num_context_lines as %v on %s, want minimum 0 and maximum 20", id, contextLines, tier)
+			}
+		})
+	}
+}
+
 // actionOutputSchema returns the named action's output schema from a catalog.
 func actionOutputSchema(t *testing.T, catalog *actioncatalog.Catalog, id actioncatalog.ActionID) map[string]any {
 	t.Helper()
