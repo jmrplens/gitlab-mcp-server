@@ -62,10 +62,10 @@ func fixtureQuery(namespace string) string {
 // `component.metrics.to_h`, so its keys are metric names.
 func callSpecs() []callSpec {
 	return []callSpec{
-		{id: orbitrecord.CallID{Action: "orbit.status", Variant: "raw"}, verbatim: []string{"system.components[].metrics"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.StatusAction, Variant: "raw"}, verbatim: []string{"system.components[].metrics"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.Status(ctx, client, orbit.StatusInput{ResponseFormatInput: formatted("raw")})
 		}},
-		{id: orbitrecord.CallID{Action: "orbit.status", Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.StatusAction, Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.Status(ctx, client, orbit.StatusInput{ResponseFormatInput: formatted("llm")})
 		}},
 		{id: orbitrecord.CallID{Action: orbitrecord.SchemaAction, Variant: "raw"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
@@ -77,28 +77,28 @@ func callSpecs() []callSpec {
 		{id: orbitrecord.CallID{Action: orbitrecord.SchemaAction, Variant: "expand"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.Schema(ctx, client, orbit.SchemaInput{Expand: []string{"Project"}, Format: "raw"})
 		}},
-		{id: orbitrecord.CallID{Action: "orbit.tools", Variant: "default"}, verbatim: []string{"[].parameters"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.ToolsAction, Variant: "default"}, verbatim: []string{"[].parameters"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.Tools(ctx, client, orbit.ToolsInput{})
 		}},
-		{id: orbitrecord.CallID{Action: "orbit.dsl", Variant: "raw"}, verbatim: []string{"[].parameters"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.DSLAction, Variant: "raw"}, verbatim: []string{"[].parameters"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormatInput: formatted("raw")})
 		}},
-		{id: orbitrecord.CallID{Action: "orbit.dsl", Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.DSLAction, Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormatInput: formatted("llm")})
 		}},
-		{id: orbitrecord.CallID{Action: "orbit.query", Variant: "raw"}, verbatim: []string{"result.edges[]", "result.nodes[]"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.QueryAction, Variant: "raw"}, verbatim: []string{"result.edges[]", "result.nodes[]"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
 			return orbit.Query(ctx, client, orbit.QueryInput{Query: fixtureQuery(namespace), ResponseFormat: "raw"})
 		}},
-		{id: orbitrecord.CallID{Action: "orbit.query", Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.QueryAction, Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
 			return orbit.Query(ctx, client, orbit.QueryInput{Query: fixtureQuery(namespace), ResponseFormat: "llm"})
 		}},
-		{id: orbitrecord.CallID{Action: "orbit.query", Variant: "gql"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.QueryAction, Variant: "gql"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
 			return orbit.Query(ctx, client, orbit.QueryInput{Query: fixtureQuery(namespace), ResponseFormat: "gql"})
 		}},
-		{id: orbitrecord.CallID{Action: "orbit.graph_status", Variant: "raw"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.GraphStatusAction, Variant: "raw"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
 			return orbit.GraphStatus(ctx, client, orbit.GraphStatusInput{FullPath: namespace, ResponseFormatInput: formatted("raw")})
 		}},
-		{id: orbitrecord.CallID{Action: "orbit.graph_status", Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.GraphStatusAction, Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
 			return orbit.GraphStatus(ctx, client, orbit.GraphStatusInput{FullPath: namespace, ResponseFormatInput: formatted("llm")})
 		}},
 	}

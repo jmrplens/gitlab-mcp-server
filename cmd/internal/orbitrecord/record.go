@@ -151,29 +151,36 @@ func (id CallID) String() string { return id.Action + " (" + id.Variant + ")" }
 // ID is the call's identity in the record.
 func (c Call) ID() CallID { return CallID{Action: c.Action, Variant: c.Variant} }
 
-// SchemaAction is the one action a record holds three calls of, one per way
-// its schema is asked for, spelled once here and in the generator that makes
-// the calls.
-const SchemaAction = "orbit.schema"
+// The six Orbit actions a record holds calls of, spelled once here and read by
+// the generator that makes the calls, since most of them are called once per
+// response format.
+const (
+	StatusAction      = "orbit.status"
+	SchemaAction      = "orbit.schema"
+	ToolsAction       = "orbit.tools"
+	DSLAction         = "orbit.dsl"
+	QueryAction       = "orbit.query"
+	GraphStatusAction = "orbit.graph_status"
+)
 
 // ExpectedCalls is every call a whole record holds, in the order the
 // generator makes them. The status call comes first because it carries the
 // version the record is stamped with.
 func ExpectedCalls() []CallID {
 	return []CallID{
-		{Action: "orbit.status", Variant: "raw"},
-		{Action: "orbit.status", Variant: "llm"},
+		{Action: StatusAction, Variant: "raw"},
+		{Action: StatusAction, Variant: "llm"},
 		{Action: SchemaAction, Variant: "raw"},
 		{Action: SchemaAction, Variant: "llm"},
 		{Action: SchemaAction, Variant: "expand"},
-		{Action: "orbit.tools", Variant: "default"},
-		{Action: "orbit.dsl", Variant: "raw"},
-		{Action: "orbit.dsl", Variant: "llm"},
-		{Action: "orbit.query", Variant: "raw"},
-		{Action: "orbit.query", Variant: "llm"},
-		{Action: "orbit.query", Variant: "gql"},
-		{Action: "orbit.graph_status", Variant: "raw"},
-		{Action: "orbit.graph_status", Variant: "llm"},
+		{Action: ToolsAction, Variant: "default"},
+		{Action: DSLAction, Variant: "raw"},
+		{Action: DSLAction, Variant: "llm"},
+		{Action: QueryAction, Variant: "raw"},
+		{Action: QueryAction, Variant: "llm"},
+		{Action: QueryAction, Variant: "gql"},
+		{Action: GraphStatusAction, Variant: "raw"},
+		{Action: GraphStatusAction, Variant: "llm"},
 	}
 }
 

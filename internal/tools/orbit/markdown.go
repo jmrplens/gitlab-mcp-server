@@ -11,15 +11,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name, the one form every surface resolves.
-const (
-	actionStatus      = "orbit.status"
-	actionSchema      = "orbit.schema"
-	actionDSL         = "orbit.dsl"
-	actionQuery       = "orbit.query"
-	actionGraphStatus = "orbit.graph_status"
-)
-
 // hintGraphStatus is the next step the status card ends on, whichever of its
 // three shapes it takes: cluster health says nothing about one namespace.
 const hintGraphStatus = "inspect indexing status for a namespace or project"
@@ -73,13 +64,13 @@ func FormatStatusMarkdown(out StatusOutput) string {
 
 	if facts.formattedText != "" {
 		c.Fence("", "text", facts.formattedText)
-		c.End(toolutil.HintAction(actionGraphStatus, hintGraphStatus))
+		c.End(toolutil.HintAction(orbitActionGraphStatus, hintGraphStatus))
 		return b.String()
 	}
 
 	if out.User == nil && facts.empty() {
 		c.Note("No Orbit status data returned.")
-		c.End(toolutil.HintAction(actionGraphStatus, hintGraphStatus))
+		c.End(toolutil.HintAction(orbitActionGraphStatus, hintGraphStatus))
 		return b.String()
 	}
 
@@ -104,7 +95,7 @@ func FormatStatusMarkdown(out StatusOutput) string {
 		}
 	}
 
-	c.End(toolutil.HintAction(actionGraphStatus, hintGraphStatus))
+	c.End(toolutil.HintAction(orbitActionGraphStatus, hintGraphStatus))
 	return b.String()
 }
 
@@ -191,8 +182,8 @@ func replicaCell(replicas *StatusReplicas) string {
 func FormatSchemaMarkdown(out SchemaOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Orbit Schema")
-	dslHint := toolutil.HintAction(actionDSL, "read the grammar a query is written in")
-	queryHint := toolutil.HintAction(actionQuery, "run a query naming the node and edge types listed here")
+	dslHint := toolutil.HintAction(orbitActionDSL, "read the grammar a query is written in")
+	queryHint := toolutil.HintAction(orbitActionQuery, "run a query naming the node and edge types listed here")
 	if out.FormattedText != "" {
 		c.Fence("", "text", out.FormattedText)
 		c.End(dslHint, queryHint)
@@ -228,7 +219,7 @@ func FormatSchemaMarkdown(out SchemaOutput) string {
 	}
 	hints := []string{dslHint}
 	if len(out.Nodes) > 0 && len(expanded) == 0 {
-		hints = append(hints, toolutil.HintAction(actionSchema,
+		hints = append(hints, toolutil.HintAction(orbitActionSchema,
 			"read the properties and edges of the node types a query reads: name them in expand, or set format=llm for the whole ontology as compact text"))
 	}
 	c.End(append(hints, queryHint)...)
@@ -337,8 +328,8 @@ func FormatToolsMarkdown(out ToolsOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
-		toolutil.HintAction(actionDSL, "read the grammar a graph query is written in"),
-		toolutil.HintAction(actionSchema, "read the node and edge names a graph query names"))
+		toolutil.HintAction(orbitActionDSL, "read the grammar a graph query is written in"),
+		toolutil.HintAction(orbitActionSchema, "read the node and edge names a graph query names"))
 	return b.String()
 }
 
@@ -354,8 +345,8 @@ func FormatToolsMarkdown(out ToolsOutput) string {
 func FormatDSLMarkdown(out DSLOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Orbit Query Language")
-	schemaHint := toolutil.HintAction(actionSchema, "read the entities, properties and relationship types a query names")
-	queryHint := toolutil.HintAction(actionQuery, "run a query written in this language, sent as text")
+	schemaHint := toolutil.HintAction(orbitActionSchema, "read the entities, properties and relationship types a query names")
+	queryHint := toolutil.HintAction(orbitActionQuery, "run a query written in this language, sent as text")
 	if out.FormattedText != "" {
 		c.Fence("", "text", out.FormattedText)
 		c.End(queryHint, schemaHint)
@@ -384,8 +375,8 @@ func FormatQueryMarkdown(out QueryOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Orbit Query Result")
 	hints := []string{
-		toolutil.HintAction(actionGraphStatus, "check indexing when a result looks stale or incomplete"),
-		toolutil.HintAction(actionDSL, "read the grammar the next query is written in"),
+		toolutil.HintAction(orbitActionGraphStatus, "check indexing when a result looks stale or incomplete"),
+		toolutil.HintAction(orbitActionDSL, "read the grammar the next query is written in"),
 	}
 
 	if out.FormattedText != "" {
@@ -416,8 +407,8 @@ func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Orbit Graph Status")
 	hints := []string{
-		toolutil.HintAction(actionQuery, "query the graph once indexing reaches a healthy state"),
-		toolutil.HintAction(actionStatus, "check the cluster itself when indexing never starts"),
+		toolutil.HintAction(orbitActionQuery, "query the graph once indexing reaches a healthy state"),
+		toolutil.HintAction(orbitActionStatus, "check the cluster itself when indexing never starts"),
 	}
 
 	if out.FormattedText != "" {

@@ -7,10 +7,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical Orbit action IDs. They are referenced from the
-// RelatedActions slices of every spec, so a single source of truth
-// keeps the cross-links consistent and makes the chain (schema →
-// dsl → query → graph_status → query) easy to audit.
+// Canonical Orbit action IDs, the one form every surface resolves. They
+// are referenced from the RelatedActions slices of every spec and from the
+// next steps the Markdown cards end on, so a single source of truth keeps
+// the cross-links consistent and makes the chain (schema → dsl → query →
+// graph_status → query) easy to audit.
 const (
 	orbitActionStatus      = "orbit.status"
 	orbitActionSchema      = "orbit.schema"
@@ -31,31 +32,52 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		orbitReadSpec("status", orbitReadRoute(client, Status, "GitLab Orbit Status", "cluster status"), "gitlab_orbit_status",
 			"Inspect GitLab Orbit (Knowledge Graph) cluster health on GitLab.com.",
 			[]string{orbitActionStatus},
-			[]string{"kg.status", "knowledge_graph.status", "orbit.health", "kg.health"}, nil),
+			[]string{"kg.status", "knowledge_graph.status", "orbit.health", "kg.health"}, orbitInput{}),
 		orbitReadSpec("schema", orbitReadRoute(client, Schema, "GitLab Orbit Schema", "graph ontology"), "gitlab_orbit_schema",
 			"Inspect the GitLab Orbit (Knowledge Graph) ontology: domains, node types, edge types.",
 			[]string{orbitActionSchema, orbitActionDSL},
-			[]string{"kg.schema", "knowledge_graph.schema", "kg.ontology", "knowledge_graph.ontology"}, nil),
+			[]string{"kg.schema", "knowledge_graph.schema", "kg.ontology", "knowledge_graph.ontology"}, orbitInput{}),
 		orbitReadSpec("tools", orbitReadRoute(client, Tools, "GitLab Orbit Tools", "tool manifest"), "gitlab_orbit_tools",
 			"List the GitLab Orbit (Knowledge Graph) MCP tool manifest and parameter schemas.",
 			[]string{orbitActionTools},
-			[]string{"kg.tools", "knowledge_graph.tools", "kg.manifest", "knowledge_graph.manifest"}, nil),
+			[]string{"kg.tools", "knowledge_graph.tools", "kg.manifest", "knowledge_graph.manifest"}, orbitInput{}),
 		orbitReadSpec("dsl", orbitReadRoute(client, DSL, "GitLab Orbit Query Language", queryCommand+" command"), "gitlab_orbit_dsl",
 			"Read the GitLab Orbit (Knowledge Graph) query language GitLab.com compiles queries in, GQL, "+
 				"as Orbit's query command describes it: its grammar and the JSON Schema of its input, or the same as compact text.",
 			[]string{orbitActionDSL, orbitActionQuery},
-			[]string{"kg.dsl", "knowledge_graph.dsl", "kg.grammar", "knowledge_graph.grammar"}, nil),
+			[]string{"kg.dsl", "knowledge_graph.dsl", "kg.grammar", "knowledge_graph.grammar"}, orbitInput{}),
 		orbitReadSpec("query", orbitReadRoute(client, Query, "GitLab Orbit Query", "submitted query"), "gitlab_orbit_query",
 			"Execute a read-only GitLab Orbit (Knowledge Graph) query in GQL, the language orbit.dsl describes, naming what orbit.schema lists. "+
 				"A query is one MATCH ... RETURN statement sent as text, with at least one node bounded by its id or a literal property, "+
 				"and a refused query is corrected from the message GitLab answers with.",
 			[]string{orbitActionSchema, orbitActionDSL, orbitActionGraphStatus},
-			[]string{"kg.query", "knowledge_graph.query", "orbit.search", "kg.search", "knowledge_graph.search"},
-			queryGuidance(), toolutil.SchemaPropertyOverride("query", map[string]any{"type": []any{"string", "object"}, "examples": []any{queryExampleGQL}})),
+			[]string{"kg.query", "knowledge_graph.query", "orbit.search", "kg.search", "knowledge_graph.search"}, queryInput()),
 		orbitReadSpec("graph_status", orbitReadRoute(client, GraphStatus, "GitLab Orbit Graph Status", "requested namespace, project, or full_path"), "gitlab_orbit_graph_status",
 			"Inspect GitLab Orbit (Knowledge Graph) indexing status for one namespace, project, or full_path.",
 			[]string{orbitActionQuery},
-			[]string{"kg.indexing", "kg.index_status", "knowledge_graph.indexing", "knowledge_graph.index_status"}, nil),
+			[]string{"kg.indexing", "kg.index_status", "knowledge_graph.indexing", "knowledge_graph.index_status"}, orbitInput{}),
+	}
+}
+
+// orbitInput is what an Orbit action says about its parameters beyond what
+// reflection reads off its input struct. guidance is the action's parameter
+// guidance, nil for an action whose parameters need none, and overrides patch
+// the reflected input schema where it cannot say what the action takes.
+type orbitInput struct {
+	guidance  map[string]toolutil.ParameterGuidance
+	overrides []toolutil.InputSchemaOverride
+}
+
+// queryInput is what orbit.query says about its parameters: its guidance, and
+// an override of the query property, which is GQL text or a JSON object that a
+// Go field typed any reflects as no type at all, and whose one example is a
+// GQL statement, which reflection has no way to offer.
+func queryInput() orbitInput {
+	return orbitInput{
+		guidance: queryGuidance(),
+		overrides: []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("query", map[string]any{"type": []any{"string", "object"}, "examples": []any{queryExampleGQL}}),
+		},
 	}
 }
 
@@ -113,13 +135,10 @@ func orbitReadRoute[T, R any](client *gitlabclient.Client, fn func(context.Conte
 // `kg.*` / `knowledge_graph.*` shorthands so the dynamic find tool can resolve common
 // natural-language queries such as "kg status" or "knowledge graph query". The
 // relatedActions slice is surfaced as `RelatedActions` so the LLM can chain calls
-// (e.g. schema → dsl → query) without re-discovering the catalog. guidance is
-// the action's parameter guidance, nil for an action whose parameters need
-// none, and overrides patch the reflected input schema where it cannot say
-// what the action takes: the query of orbit.query is GQL text or a JSON
-// object, which a Go field typed any reflects as no type at all, and its one
-// example is a GQL statement, which reflection has no way to offer.
-func orbitReadSpec(name string, route toolutil.ActionRoute, individualTool, usage string, relatedActions, extraAliases []string, guidance map[string]toolutil.ParameterGuidance, overrides ...toolutil.InputSchemaOverride) toolutil.ActionSpec {
+// (e.g. schema → dsl → query) without re-discovering the catalog. input is
+// what the action says about its parameters beyond what reflection reads off
+// its struct, the zero value for an action that says nothing more.
+func orbitReadSpec(name string, route toolutil.ActionRoute, individualTool, usage string, relatedActions, extraAliases []string, input orbitInput) toolutil.ActionSpec {
 	aliases := make([]string, 0, 1+len(extraAliases))
 	aliases = append(aliases, individualTool)
 	aliases = append(aliases, extraAliases...)
@@ -128,8 +147,8 @@ func orbitReadSpec(name string, route toolutil.ActionRoute, individualTool, usag
 		Tags:                 []string{"orbit", "knowledge_graph"},
 		Usage:                usage,
 		RelatedActions:       relatedActions,
-		ParameterGuidance:    guidance,
-		InputSchemaOverrides: overrides,
+		ParameterGuidance:    input.guidance,
+		InputSchemaOverrides: input.overrides,
 		OpenWorld:            true,
 		Edition:              "premium",
 		GitLabDotComOnly:     true,
