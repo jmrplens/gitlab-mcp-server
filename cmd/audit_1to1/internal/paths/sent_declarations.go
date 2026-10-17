@@ -177,7 +177,41 @@ const (
 	groupMilestonesPkg = toolsDir + "/groupmilestones"
 	commitsPkg         = toolsDir + "/commits"
 	issueBasicEntity   = "API::Entities::IssueBasic"
-	mrBasicEntity      = "API::Entities::MergeRequestBasic"
+	// mrContextCommitsPkg and commitWithLinkEntity name the context commit
+	// row and the entity its list route presents, spelled once because the
+	// keys the row does not publish are declared one by one.
+	mrContextCommitsPkg  = toolsDir + "/mrcontextcommits"
+	commitWithLinkEntity = "API::Entities::CommitWithLink"
+	mrBasicEntity        = "API::Entities::MergeRequestBasic"
+)
+
+// The context commit answers: why the commit types meet the list's entity at
+// all, and why the row leaves out the six keys it does not publish. The list
+// route presents `with: Entities::CommitWithLink, type: :full, request:
+// merge_request` (lib/api/merge_requests.rb), and GitLab annotates it so from
+// 19.5 (gitlab-org/gitlab!260487); the four keys the row does publish are
+// read off the captured response, as mrcontextcommits.CommitItem records.
+const (
+	reasonContextCommitsFillAnotherType = "client-go's MergeRequestContextCommits.ListMergeRequestContextCommits answers " +
+		"with gl.Commit, the struct this type decodes, so the union in front of it takes in " +
+		"GET /projects/:id/merge_requests/:merge_request_iid/context_commits, which GitLab annotates with " +
+		"Entities::CommitWithLink from 19.5, the entity its handler presents. This repository calls that route only from " +
+		"internal/tools/mrcontextcommits, into CommitItem, which publishes what the list sends; no handler of the commits " +
+		"package calls it, and every other route in the union presents Entities::Commit or Entities::CommitDetail, which " +
+		"send none of the keys CommitWithLink adds."
+	reasonContextCommitURL = "lib/api/entities/commit_with_link.rb renders commit_url as project_commit_url(request.project, " +
+		"commit) and commit_path as the same address's path, and the route passes the merge request as the request, whose " +
+		"project is the one the context commit was rebuilt in (MergeRequestContextCommit#to_commit). That is the address " +
+		"the Commit entity already sends as web_url, which CommitItem publishes, so the key would say web_url again."
+	reasonContextCommitOptions = "lib/api/entities/commit_with_link.rb exposes prev_commit_id and next_commit_id as " +
+		"options[:prev_commit_id] and options[:next_commit_id], and pipeline_status_path only when options[:pipeline_ref] " +
+		"is set. The list route presents with type, request and nothing else, so under type: :full the three keys arrive " +
+		"null on every commit, and no request parameter of the route can set the options."
+	reasonContextCommitSignature = "lib/api/entities/commit_with_link.rb renders signature_html through " +
+		"CommitPresenter#signature_html, which is nil for a commit without a signature, and every commit of this route is " +
+		"one: MergeRequestContextCommit#to_commit rebuilds it with Commit.from_hash from the row GitLab stored, and " +
+		"Commit#raw_signature_type reads the signature off a Gitaly commit the hash does not carry. On this route the " +
+		"block returns nil whatever the commit."
 )
 
 // The milestone rows' answers: what the row keeps, and why the rest is the
@@ -670,20 +704,6 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 			"pending-invitation object is what the GET at the same path lists. The shape declaration for the other " +
 			"direction of this join records the same thing.",
 	},
-	{
-		Package:  toolsDir + "/projects",
-		Entity:   groupEntity,
-		Field:    declaredSegment,
-		Category: categoryDocumentedNotSent,
-		Reason: "lib/api/projects.rb describes GET :id/share_locations and GET :id/invited_groups as answering with " +
-			"Entities::Group, and both call present_groups, the helper defined in the same file, which presents " +
-			"Entities::PublicGroupDetails. Their sibling GET :id/groups calls the same helper and is annotated " +
-			"PublicGroupDetails, correctly. PublicGroupDetails is BasicGroupDetails plus avatar_url, full_name and " +
-			"full_path, which is six keys, and all three endpoints answer with exactly those six on GitLab.com: id, " +
-			"name, avatar_url, web_url, full_name, full_path. ProjectGroupOutput publishes all six, so the type is " +
-			"already 1:1 and the 49 fields read against it are the whole Group entity arriving through the wrong " +
-			"annotation. Recorded in docs/development/upstream-bugs.md; the fix is gitlab-org/gitlab!254699.",
-	},
 	// The ten membership keys the billable members list is read against.
 	// Named one by one rather than with a splat: internal/tools/groupmembers
 	// also publishes API::Entities::Member on its own Output, where a finding
@@ -1009,6 +1029,19 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: commitsPkg, Entity: mrBasicEntity, Field: "title_html", Category: categoryOptionNeverPassed, Reason: reasonCommitRenderHTMLNeverPassed},
 	{Package: commitsPkg, Entity: mrBasicEntity, Field: "description_html", Category: categoryOptionNeverPassed, Reason: reasonCommitRenderHTMLNeverPassed},
 
+	// The merge request context commits, the one route GitLab annotates
+	// CommitWithLink (since 19.5, gitlab-org/gitlab!260487). The commit types
+	// meet it only through client-go; the context commit row publishes what
+	// the route sends and answers the rest key by key.
+	{Package: commitsPkg, Type: "Output", Entity: commitWithLinkEntity, Field: declaredSegment, Category: categorySDKRouteFillsAnotherType, Reason: reasonContextCommitsFillAnotherType},
+	{Package: commitsPkg, Type: "DetailOutput", Entity: commitWithLinkEntity, Field: declaredSegment, Category: categorySDKRouteFillsAnotherType, Reason: reasonContextCommitsFillAnotherType},
+	{Package: mrContextCommitsPkg, Type: "CommitItem", Entity: commitWithLinkEntity, Field: "commit_url", Category: categoryEntityPublishedElsewhere, Reason: reasonContextCommitURL},
+	{Package: mrContextCommitsPkg, Type: "CommitItem", Entity: commitWithLinkEntity, Field: "commit_path", Category: categoryEntityPublishedElsewhere, Reason: reasonContextCommitURL},
+	{Package: mrContextCommitsPkg, Type: "CommitItem", Entity: commitWithLinkEntity, Field: "prev_commit_id", Category: categoryOptionNeverPassed, Reason: reasonContextCommitOptions},
+	{Package: mrContextCommitsPkg, Type: "CommitItem", Entity: commitWithLinkEntity, Field: "next_commit_id", Category: categoryOptionNeverPassed, Reason: reasonContextCommitOptions},
+	{Package: mrContextCommitsPkg, Type: "CommitItem", Entity: commitWithLinkEntity, Field: "pipeline_status_path", Category: categoryOptionNeverPassed, Reason: reasonContextCommitOptions},
+	{Package: mrContextCommitsPkg, Type: "CommitItem", Entity: commitWithLinkEntity, Field: "signature_html", Category: categoryConstantEmpty, Reason: reasonContextCommitSignature},
+
 	// The groups a group can be transferred to, whose route annotates a whole
 	// group and presents six keys of one.
 	{Package: groupsPkg, Type: "TransferLocationOutput", Entity: groupEntity, Field: declaredSegment, Category: categoryDocumentedNotSent, Reason: reasonTransferLocationsPresented},
@@ -1062,6 +1095,8 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	// each event. The license and custom attribute keys of that project stay
 	// answered by the option declarations above, which come first.
 	{Package: toolsDir + "/repositorysubmodules", Entity: "API::Entities::TreeObject", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonSubmoduleTreeLookup},
+	{Package: toolsDir + "/repositorysubmodules", Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonSubmoduleSuperproject},
+	{Package: toolsDir + "/terraformstates", Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonTerraformStateProjectPath},
 	{Package: eventsPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonEventProjectLookup},
 	{Package: usersPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonEventProjectLookup},
 
@@ -1148,6 +1183,20 @@ const reasonSubmoduleTreeLookup = "internal/tools/repositorysubmodules lists the
 	"(GET /projects/:id/repository/tree, every page of it) only to find the tree node of type commit at the submodule's " +
 	"path, whose id is the commit the parent repository pins, and publishes that id as commit_sha and nothing else of " +
 	"the answer. repository.tree is the action that answers with a tree."
+
+// reasonSubmoduleSuperproject answers the superproject the submodule package
+// reads to resolve each submodule's URL.
+const reasonSubmoduleSuperproject = "internal/tools/repositorysubmodules reads the superproject (GET /projects/:id, in " +
+	"newSubmoduleResolver) only for its path_with_namespace, which a relative submodule URL resolves against, and its SSH " +
+	"clone URL, whose prefix tells a URL on this instance from one on another, and publishes the projects it resolves to " +
+	"rather than the superproject. project.get is the action that answers with a project."
+
+// reasonTerraformStateProjectPath answers the project the Terraform state
+// package reads to name it to GraphQL.
+const reasonTerraformStateProjectPath = "internal/tools/terraformstates reads the project (GET /projects/:id, in " +
+	"stateProjectPath) only when project_id is numeric, for the path_with_namespace GitLab's GraphQL project field needs, " +
+	"since that field takes no ID, and publishes nothing else of the answer. project.get is the action that answers with a " +
+	"project."
 
 // reasonEventProjectLookup answers the project the two contribution listings
 // read for each event.
@@ -1277,15 +1326,18 @@ func declaredConfirmations() []sentDeclaration {
 			"archived", "auto_ban_user_on_excessive_projects_download", "auto_devops_enabled",
 			"auto_duo_code_review_enabled", "avatar_url", "built_in_project_templates_enabled", "created_at",
 			"crm_enabled", "default_branch", "default_branch_protection", "default_branch_protection_defaults",
-			"duo_core_features_enabled", "duo_features_enabled", "duo_namespace_access_rules", "emails_disabled",
+			"duo_code_review_decisions_enabled", "duo_core_features_enabled", "duo_features_enabled",
+			"duo_namespace_access_rules", "emails_disabled",
 			"emails_enabled", "experiment_features_enabled", "extra_shared_runners_minutes_limit",
 			"file_template_project_id", "ip_restriction_ranges", "ldap_access", "ldap_cn", "ldap_group_links",
 			"lfs_enabled", "lock_built_in_project_templates_enabled", "lock_duo_features_enabled",
-			"lock_math_rendering_limits_enabled", "lock_resource_access_token_notify_inherited", "marked_for_deletion_on",
+			"lock_math_rendering_limits_enabled", "lock_require_sha_for_merge",
+			"lock_resource_access_token_notify_inherited", "marked_for_deletion_on",
 			"math_rendering_limits_enabled", "max_artifacts_size", "membership_lock", "mentions_disabled",
 			"only_allow_merge_if_all_discussions_are_resolved", "only_allow_merge_if_pipeline_succeeds",
 			"organization_id", "parent_id", "prevent_forking_outside_group", "prevent_sharing_groups_outside_hierarchy",
-			"project_creation_level", "repository_storage", "request_access_enabled", "require_two_factor_authentication",
+			"project_creation_level", "repository_storage", "request_access_enabled", "require_sha_for_merge",
+			"require_two_factor_authentication",
 			"resource_access_token_notify_inherited", "saml_group_links", "service_access_tokens_expiration_enforced",
 			"share_with_group_lock", "shared_runners_minutes_limit", "shared_runners_setting",
 			"show_diff_preview_in_email", "subgroup_creation_level", "two_factor_grace_period",
@@ -1359,8 +1411,9 @@ func declaredCompactRows() []sentDeclaration {
 			"ci_push_repository_for_job_token_allowed", "ci_restrict_pipeline_cancellation_role", "ci_separated_caches",
 			"ci_skip_branch_pipelines_for_mrs", "compliance_frameworks", "container_expiration_policy",
 			"container_registry_access_level", "container_registry_enabled", "container_registry_image_prefix",
-			"creator_id", "custom_attributes", "description_html", "duo_dependency_bump_breaking_changes_enabled",
-			"duo_foundational_flows_enabled", "duo_remote_flows_enabled", "duo_sast_fp_detection_enabled",
+			"creator_id", "custom_attributes", "description_html", "duo_code_review_decisions_enabled",
+			"duo_dependency_bump_breaking_changes_enabled", "duo_foundational_flows_enabled", "duo_remote_flows_enabled",
+			"duo_sast_fp_detection_enabled",
 			"duo_sast_vr_workflow_enabled", "duo_secret_detection_fp_enabled", "emails_disabled", "emails_enabled",
 			"empty_repo", "enforce_auth_checks_on_uploads", "environments_access_level",
 			"external_authorization_classification_label", "feature_flags_access_level", "forked_from_project",
@@ -1401,7 +1454,8 @@ func declaredCompactRows() []sentDeclaration {
 			"ci_restrict_pipeline_cancellation_role", "ci_separated_caches", "ci_skip_branch_pipelines_for_mrs",
 			"cicd_catalog_enabled", "compliance_frameworks", "container_expiration_policy", "container_registry_access_level",
 			"container_registry_enabled", "container_registry_image_prefix", "created_at", "creator_id", "description_html",
-			"duo_dependency_bump_breaking_changes_enabled", "duo_foundational_flows_enabled", "duo_remote_flows_enabled",
+			"duo_code_review_decisions_enabled", "duo_dependency_bump_breaking_changes_enabled",
+			"duo_foundational_flows_enabled", "duo_remote_flows_enabled",
 			"duo_sast_fp_detection_enabled", "duo_sast_vr_workflow_enabled", "duo_secret_detection_fp_enabled",
 			"emails_disabled", "emails_enabled", "empty_repo", "enforce_auth_checks_on_uploads", "environments_access_level",
 			"external_authorization_classification_label", "feature_flags_access_level", "forked_from_project",

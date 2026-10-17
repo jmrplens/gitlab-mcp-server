@@ -29,9 +29,11 @@ import (
 // lib/api/entities/commit_with_link.rb adds, so the list fills them and the
 // answer to create_context_commits never does. The list route presents
 // `with: Entities::CommitWithLink, type: :full, request: merge_request`
-// (lib/api/merge_requests.rb) while its desc annotates Entities::Commit, which
-// is why GitLab's generated reference, and the record R-PATH reads, know none
-// of them. The rest of what CommitWithLink adds is left out on purpose:
+// (lib/api/merge_requests.rb), and until GitLab 19.5 its desc annotated
+// Entities::Commit, which is why GitLab's generated reference knew none of
+// them; the record R-PATH reads holds the route under CommitWithLink since it
+// was taken from 19.5.0. The rest of what CommitWithLink adds is left out on
+// purpose, each declared in cmd/audit_1to1/internal/paths:
 // commit_url is web_url again and commit_path is its path, and signature_html,
 // prev_commit_id, next_commit_id and pipeline_status_path are null on every
 // commit of this route. The last three read presenter options the route does
