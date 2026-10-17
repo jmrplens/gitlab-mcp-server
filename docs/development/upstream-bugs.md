@@ -10307,16 +10307,17 @@ a fix we carry upstream in our name.
   `transfer_queued` set. `TestTransfer_MoveLandsLater_AnswersTheMovedProject`,
   `TestTransfer_MoveFailsInTheBackground_AnswersTheFailure` and their group
   twins hold the wait, `TestTransferFailed_CountsOnlyAnItemOfThisTransfer`
-  holds the dating, and the two e2e scenarios hold that an empty object's
-  move is seen to land. `user.todo_list` offers `transfer_failed` in its
+  holds the dating, two e2e scenarios hold that an empty object's move is
+  seen to land, and a third that a project's move fails in the background on
+  19.5 (the paragraph of 2026-10-17 below). `user.todo_list` offers `transfer_failed` in its
   `action` enum, read from `Todo.action_names` rather than from the API page.
   What retires the workaround is nothing on GitLab's side: the API is
   asynchronous by design since 19.4, and the entry records only that its
   reference pages do not say so. From 19.5 the failure's reason is readable
-  over GraphQL (below), and reading it when the wait finds the move failed,
-  so that the error carries GitLab's reason rather than the list of checks
-  the hints give, is
-  [issue 1222](https://github.com/jmrplens/gitlab-mcp-server/issues/1222).
+  over GraphQL (below), and since
+  [issue 1222](https://github.com/jmrplens/gitlab-mcp-server/issues/1222)
+  the error quotes it when the wait finds the move failed (the paragraph of
+  2026-10-17 below).
 
 **Where**: `lib/api/projects.rb` (`put ":id/transfer"`, `enqueue_async_transfer`)
 and `lib/api/groups.rb` (`post ':id/transfer'`, `enqueue_async_transfer`),
@@ -10446,6 +10447,61 @@ opened on 2026-10-06. The release tooling labelled
 [gitlab-org/gitlab!251614](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/251614)
 `workflow::production` at 05:55 UTC on 2026-10-07, so GitLab.com runs it; no
 tag carries it yet.
+
+**The reason is read from 2026-10-17 (issue 1222).** Read at `v19.5.0-ee`:
+the worker repeats `ensure_allowed_transfer`, so a project that takes the
+name or path after the request still fails the move in the background. The
+group worker also meets failures the request cannot see while it moves the
+group: `Groups::TransferService#execute` rescues a Service Desk address
+conflict (`AddressSlugConflictError`, raised while the routes are renamed), a
+record GitLab cannot save and a path it cannot update. The reason is the
+namespace's `transfer_last_error`, cut to 500 characters when it is stored
+(`TRANSFER_ERROR_MAX_LENGTH`) and written just after the to-do item, in a
+write of its own, and cleared whenever the transfer is scheduled again. A
+transfer that fails on an exception is stored with "The transfer failed
+unexpectedly", and its worker raises again so Sidekiq retries it up to three
+times (`retry: 3` on both workers), which can still move the object after
+the action has answered. When the wait finds the move failed,
+`waitpoll.TransferFailed` now hands back the item's id with its destination,
+and `waitpoll.TransferFailureReason`
+(`internal/tools/waitpoll/transfer_failure.go`) reads
+`todo(id:) { transferFailureReason }` over GraphQL with the caller's
+context, and once more a second later when GitLab answers the item without
+a reason, which is what a read between the worker's two writes finds. It
+asks an instance known to run 19.5 or later and one whose
+release is not known (a version endpoint that did not answer, refused the
+token Metadata: Read, or named no version), through `Client.AtLeast` and
+`Client.Version`, and sends no document to one known to run an older release,
+which refuses a field it does not have. Every way the read gives nothing (a
+GraphQL failure, an unknown field, a fine-grained refusal, a null item or
+reason) leaves the error the handler answered before, so a failed read never
+changes which error a failed transfer is reported with. The reason is
+cleaned to one line of at most 500 characters and quoted ahead of the hint:
+`hintTransferFailedReason` or `hintSubGroupTransferFailedReason` when it was
+read, which say to read the object back first and not to send a transfer
+GitLab is retrying again, and otherwise `hintTransferFailed` or
+`hintSubGroupTransferFailed`, which no longer say GitLab gives no reason and
+keep the worker's failures (the group's Service Desk address conflict among
+them) for an instance that cannot give one. The project collision hint no
+longer covers the pending deletion case: GitLab's "recently deleted"
+refusal, which only an instance that transfers inline answers with the
+request, gets `hintTransferPendingDeletion`, which names the `full_path` a
+permanent delete needs. The derivation records the read as an optional
+GraphQL request needing Todo: Read at user, beside the optional version read,
+and `user.todo_list` does not surface the reason, which would cost one
+GraphQL read per item. Pinned by the `TestTransferFailureReason_*` tests,
+`TestTransfer_MoveFailsInTheBackground_AnswersTheFailure` and its group twin,
+and on a real instance by
+`TestProjectTransfer_NpmPackageOfTheOldTopLevelGroup_AnswersGitLabsReason`,
+which moves a project holding an npm package scoped to its top-level group
+into another top-level group: GitLab 19.5.0 accepts the transfer, its worker
+refuses it, and the action answers with the reason quoted ahead of the hint
+on every surface. A group's failure is held by the unit tests alone, since
+the Docker fixtures make none of the group worker's own failures on demand.
+What retires the GraphQL read is the REST to-do entity carrying the reason: a
+merge request to gitlab-org/gitlab adding `transfer_failure_reason` to
+`lib/api/entities/todo.rb` is planned after a second review, and none is open
+yet.
 
 ### A saved view create or subscribe from a token answers 500, and the create has already saved the view
 
