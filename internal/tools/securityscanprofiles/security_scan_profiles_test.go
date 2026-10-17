@@ -613,8 +613,8 @@ func TestActionSpecs_ActionIDs_NameActionsThatExist(t *testing.T) {
 
 // scanTypesRefusedByName are the SecurityScanProfileType values GitLab defines
 // no default profile for, each with the evidence, read from GitLab's source at
-// the pinned 19.5.0-pre (5041f73d695) and at every stable branch from 18-7 to
-// 19-4. Attach refuses them by name, so [DefaultProfileNames] leaves them out
+// 19.5.0-pre (5041f73d695) and at every stable branch from 18-7 to 19-4.
+// Attach refuses them by name, so [DefaultProfileNames] leaves them out
 // and the description names them instead. A value added here that the enum no
 // longer holds fails the test below, so the table cannot outlive its reason.
 var scanTypesRefusedByName = map[string]string{

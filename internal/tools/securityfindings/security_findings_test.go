@@ -1033,8 +1033,9 @@ func TestList_KnownFilterValues_InAnyCase_ReachGitLabLowercased(t *testing.T) {
 }
 
 // reportTypesScansDoNotHave are the VulnerabilityReportType values
-// Security::Scan has no scan type for at the pinned 19.5.0-pre (5041f73d695),
-// so the finder drops them and [findingReportTypes] leaves them out. Each is a
+// Security::Scan has no scan type for at the pinned 19.6.0-pre (6d76e28bfe7),
+// as at 19.5.0-pre (5041f73d695), so the finder drops them and
+// [findingReportTypes] leaves them out. Each is a
 // declaration the test below holds to the schema, so it fails once the enum no
 // longer has the value or once the list offers it.
 var reportTypesScansDoNotHave = map[string]string{

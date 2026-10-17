@@ -6080,7 +6080,7 @@ without its object from one it refused, for each of the 20 writes of row 88.
 
 **What**: the two documents select a state's name, its four timestamps and
 its latest version's serial, download path and two timestamps. The pinned
-schema (19.5.0-pre) offers more, and nothing reaches a caller:
+schema (19.6.0-pre) offers more, and nothing reaches a caller:
 
 - `TerraformState.versions(...)`, every version of the state, which GitLab
   added in 19.5.

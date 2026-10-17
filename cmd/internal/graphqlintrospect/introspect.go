@@ -21,12 +21,12 @@ const (
 	// of megabytes of JSON and gitlab.com takes seconds to produce it.
 	FetchTimeout = 3 * time.Minute
 	// MinimumTypes is the floor a GitLab schema has to clear before anything
-	// is judged against it. gitlab.com answered with 4331 types at 19.4.0-pre
-	// and 4475 at 19.5.0-pre, an unlicensed gitlab/gitlab-ee:latest with 4233
-	// on the day of the first, and the figure grows release over release, so a
-	// count well under that is not a GitLab schema: the introspection was
-	// truncated, or the instance answering is not the GitLab this server
-	// targets.
+	// is judged against it. gitlab.com answered with 4331 types at 19.4.0-pre,
+	// 4475 at 19.5.0-pre and 4568 at 19.6.0-pre, an unlicensed
+	// gitlab/gitlab-ee:latest with 4233 on the day of the first, and the figure
+	// grows release over release, so a count well under that is not a GitLab
+	// schema: the introspection was truncated, or the instance answering is not
+	// the GitLab this server targets.
 	//
 	// The consequence of accepting one is the same wherever it happens. A pin
 	// taken from a truncated answer narrows what every later gate promises, and

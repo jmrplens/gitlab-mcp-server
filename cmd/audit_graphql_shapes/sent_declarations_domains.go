@@ -52,9 +52,9 @@ func terraformStateDeclarations() []sentDeclaration {
 		{
 			Package: terraformStatesPackage, SchemaType: "TerraformState", Field: "versions", Category: categoryNewerThanFloor,
 			Reason: "Every version of the state, a connection GitLab added in 19.5: the 19.4 GraphQL API reference has " +
-				"no versions field on TerraformState and the 19.5.0-pre schema this repository pins does. GitLab refuses " +
-				"a whole document naming a field it does not have, so selecting it would stop the list on every earlier " +
-				"instance, and a list of versions inside every state of a list is a page of its own.",
+				"no versions field on TerraformState and gitlab.com's 19.5.0-pre schema, pinned here on 2026-09-27, " +
+				"does. GitLab refuses a whole document naming a field it does not have, so selecting it would stop the " +
+				"list on every earlier instance, and a list of versions inside every state of a list is a page of its own.",
 		},
 		{
 			Package: terraformStatesPackage, SchemaType: "TerraformState", Field: "permanentDeletionAt", Category: categoryExperiment,
