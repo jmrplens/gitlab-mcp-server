@@ -114,6 +114,10 @@ type DetailsOutput struct {
 	CreatedAt          string                    `json:"created_at,omitempty"`
 	CreatedBy          *toolutil.UserBasicOutput `json:"created_by,omitempty"`
 	JobExecutionStatus string                    `json:"job_execution_status,omitempty"`
+	// TokenExpiresAt is when the runner's authentication token expires, which
+	// lib/api/entities/ci/runner_details.rb sends from 19.5 to a caller allowed
+	// to read the runner's sensitive data, also read from the capture.
+	TokenExpiresAt string `json:"token_expires_at,omitempty"`
 	// Active mirrors the deprecated gl.RunnerDetails.Active flag.
 	Active bool `json:"active"`
 	// Architecture mirrors the deprecated gl.RunnerDetails.Architecture.
@@ -222,6 +226,7 @@ func toDetailsOutput(d *gl.RunnerDetails, extra toolutil.RunnerExtra) DetailsOut
 		CreatedAt:          toolutil.FormatTimePtr(extra.CreatedAt),
 		CreatedBy:          extra.CreatedBy,
 		JobExecutionStatus: extra.JobExecutionStatus,
+		TokenExpiresAt:     toolutil.FormatTimePtr(extra.TokenExpiresAt),
 	}
 	for _, g := range d.Groups {
 		out.Groups = append(out.Groups, RunnerDetailsGroupOutput{

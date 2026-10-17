@@ -27,6 +27,11 @@ type Output struct {
 	UnconfirmedEmail string `json:"unconfirmed_email,omitempty"`
 	// PublicEmail is the address the account shows publicly.
 	PublicEmail string `json:"public_email,omitempty"`
+	// External is whether the account is an external user, who can reach
+	// only the projects and groups it is a member of. GitLab sends it on
+	// every account from 19.5, and it is absent from an older instance's
+	// answer rather than reported as internal.
+	External *bool `json:"external,omitempty"`
 }
 
 // ListOutput holds a paginated list of project service accounts.
@@ -75,6 +80,7 @@ func toOutput(account *gl.ProjectServiceAccount, extra toolutil.ServiceAccountEx
 		Email:            account.Email,
 		UnconfirmedEmail: account.UnconfirmedEmail,
 		PublicEmail:      extra.PublicEmail,
+		External:         extra.External,
 	}
 }
 

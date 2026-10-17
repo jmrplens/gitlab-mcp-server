@@ -1041,7 +1041,8 @@ func TestProjectServiceAccounts_UnreadableCapturedPublicEmail(t *testing.T) {
 func TestAccountOutput_EachFieldComesFromItsOwnSource(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":7,"name":"Service Account","username":"svc-user",`+
-			`"email":"svc@example.com","unconfirmed_email":"pending@example.com","public_email":"public@example.com"}`)
+			`"email":"svc@example.com","unconfirmed_email":"pending@example.com","public_email":"public@example.com",`+
+			`"external":true}`)
 	}))
 
 	out, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Name: "Service Account"})
@@ -1058,6 +1059,7 @@ func TestAccountOutput_EachFieldComesFromItsOwnSource(t *testing.T) {
 		{"email", out.Email, "svc@example.com"},
 		{"unconfirmed_email", out.UnconfirmedEmail, "pending@example.com"},
 		{"public_email", out.PublicEmail, "public@example.com"},
+		{"external", out.External != nil && *out.External, true},
 	} {
 		t.Run(tt.field, func(t *testing.T) {
 			if tt.got != tt.want {

@@ -53,11 +53,14 @@ func CapturedKeys(capture *gitlabclient.ResponseCapture, decoded int) ([]KeyExtr
 // RunnerExtra is what lib/api/entities/ci/runner.rb sends on a runner that
 // client-go's Runner and RunnerDetails do not carry: when it was created,
 // who created it, sent to a caller allowed to read that user, and the job
-// execution status.
+// execution status. TokenExpiresAt is what lib/api/entities/ci/runner_details.rb
+// adds from GitLab 19.5 for a caller allowed to read the runner's sensitive
+// data, so a list row never carries it and RunnerDetails does not model it.
 type RunnerExtra struct {
 	CreatedAt          *time.Time       `json:"created_at"`
 	CreatedBy          *UserBasicOutput `json:"created_by"`
 	JobExecutionStatus string           `json:"job_execution_status"`
+	TokenExpiresAt     *time.Time       `json:"token_expires_at"`
 }
 
 // CapturedRunner reads, off the captured answer to a request for one
@@ -740,16 +743,20 @@ func CapturedStorageMoves(capture *gitlabclient.ResponseCapture, decoded int) ([
 }
 
 // ServiceAccountExtra is what GitLab's service account entity sends beside the
-// name and username: the public email always, and the unconfirmed one while a
-// change of address is waiting to be confirmed.
+// name and username that client-go's account structs do not all model: the
+// public email always, the unconfirmed one while a change of address is
+// waiting to be confirmed, and from 19.5 whether the account is external.
 //
-// Only the public email is read here, and only for the project endpoint:
-// client-go's ProjectServiceAccount models the unconfirmed address and not the
-// public one, while GroupServiceAccount gained both in v3.12.0 and the group
-// package now reads them from the SDK. The same GitLab entity, modeled twice
-// upstream and unevenly.
+// The public email is read here only for the project endpoint: client-go's
+// ProjectServiceAccount models the unconfirmed address and not the public
+// one, while GroupServiceAccount gained both in v3.12.0 and the group package
+// reads them from the SDK. The same GitLab entity, modeled twice upstream and
+// unevenly. Neither struct models external, so both packages read it here.
 type ServiceAccountExtra struct {
 	PublicEmail string `json:"public_email"`
+	// External is a pointer so an older instance's answer, which carries no
+	// such key, reads as absent rather than as an internal account.
+	External *bool `json:"external"`
 }
 
 // CapturedServiceAccount reads them off the captured answer to a request for
@@ -762,6 +769,26 @@ func CapturedServiceAccount(capture *gitlabclient.ResponseCapture) (ServiceAccou
 // account in order, the count held to what the SDK decoded.
 func CapturedServiceAccounts(capture *gitlabclient.ResponseCapture, decoded int) ([]ServiceAccountExtra, error) {
 	return capturedList[ServiceAccountExtra](capture, decoded, "service accounts")
+}
+
+// SSHCertificateExtra is what lib/api/entities/ssh_certificate.rb sends on a
+// group SSH certificate that client-go's GroupSSHCertificate does not carry:
+// from GitLab 19.5, the SHA256 fingerprint of the certificate authority's
+// public key, written with its SHA256: prefix, on every certificate.
+type SSHCertificateExtra struct {
+	Fingerprint string `json:"fingerprint"`
+}
+
+// CapturedSSHCertificate reads it off the captured answer to a request for
+// one certificate.
+func CapturedSSHCertificate(capture *gitlabclient.ResponseCapture) (SSHCertificateExtra, error) {
+	return capturedOne[SSHCertificateExtra](capture)
+}
+
+// CapturedSSHCertificates reads the same off a list answer, one extra per
+// certificate in order, the count held to what the SDK decoded.
+func CapturedSSHCertificates(capture *gitlabclient.ResponseCapture, decoded int) ([]SSHCertificateExtra, error) {
+	return capturedList[SSHCertificateExtra](capture, decoded, "SSH certificates")
 }
 
 // DeployKeyProjectOutput is one project a deploy key reaches, rendered as the
@@ -1246,6 +1273,7 @@ type GroupExtra struct {
 	LockResourceAccessTokenNotifyInherited bool                           `json:"lock_resource_access_token_notify_inherited"`
 	DuoCoreFeaturesEnabled                 *bool                          `json:"duo_core_features_enabled"`
 	AutoDuoCodeReviewEnabled               *bool                          `json:"auto_duo_code_review_enabled"`
+	DuoCodeReviewDecisionsEnabled          *bool                          `json:"duo_code_review_decisions_enabled"`
 	WebBasedCommitSigningEnabled           *bool                          `json:"web_based_commit_signing_enabled"`
 	AllowPersonalSnippets                  *bool                          `json:"allow_personal_snippets"`
 	BuiltInProjectTemplatesEnabled         *bool                          `json:"built_in_project_templates_enabled"`
@@ -1257,8 +1285,16 @@ type GroupExtra struct {
 // adds, which is what a request for one group renders. A list row never
 // carries these, which is why they are a type of their own rather than more
 // fields on the one above.
+//
+// The two SHA settings are exposed unconditionally from GitLab 19.5: whether
+// the group's merge requests need a valid commit SHA on the merge route, and
+// whether that setting is enforced on every descendant group (groups.md).
+// They are pointers so an older instance's answer, which carries neither,
+// reads as absent rather than off.
 type GroupDetailExtra struct {
 	GroupExtra
+	RequireSHAForMerge                     *bool             `json:"require_sha_for_merge"`
+	LockRequireSHAForMerge                 *bool             `json:"lock_require_sha_for_merge"`
 	StepUpAuthRequiredOAuthProvider        string            `json:"step_up_auth_required_oauth_provider"`
 	ServiceAccessTokensExpirationEnforced  *bool             `json:"service_access_tokens_expiration_enforced"`
 	AISettings                             *AISettingsOutput `json:"ai_settings"`
@@ -1383,6 +1419,12 @@ type ProjectExtra struct {
 	// lib/api/entities/project.rb sends only to a caller holding admin_project
 	// on the project, and GitLab sends it from 19.4 (projects.md).
 	CISkipBranchPipelinesForMRs *bool `json:"ci_skip_branch_pipelines_for_mrs"`
+	// DuoCodeReviewDecisionsEnabled is whether GitLab Duo may approve a merge
+	// request or ask for changes on it after reviewing it, which
+	// ee/lib/ee/api/entities/project.rb sends from 19.5 only while the
+	// duo_code_review_decisions feature flag is on for the project and its
+	// Duo code review is available (Ultimate, projects.md).
+	DuoCodeReviewDecisionsEnabled *bool `json:"duo_code_review_decisions_enabled"`
 }
 
 // CapturedProject reads, off the captured answer to a request that renders the

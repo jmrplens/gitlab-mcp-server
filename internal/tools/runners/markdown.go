@@ -105,6 +105,7 @@ func FormatDetailsMarkdown(out DetailsOutput) string {
 	if out.CreatedBy != nil {
 		c.Markdown("Created By", toolutil.MdUserLink(out.CreatedBy.Username, out.CreatedBy.WebURL))
 	}
+	c.Time("Token Expires", out.TokenExpiresAt)
 	writeProjects(c, out.Projects)
 	writeGroups(c, out.Groups)
 	c.End(

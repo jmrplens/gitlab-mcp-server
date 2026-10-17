@@ -417,8 +417,17 @@ func tailReaderCases() []capturedReaderCase {
 		{
 			name: "service account",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedServiceAccount(c) },
-			body: `{"id":1,"public_email":"svc@example"}`,
-			want: func(v any) bool { e, _ := v.(ServiceAccountExtra); return e.PublicEmail == "svc@example" },
+			body: `{"id":1,"public_email":"svc@example","external":true}`,
+			want: func(v any) bool {
+				e, _ := v.(ServiceAccountExtra)
+				return e.PublicEmail == "svc@example" && e.External != nil && *e.External
+			},
+		},
+		{
+			name: "SSH certificate",
+			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedSSHCertificate(c) },
+			body: `{"id":1,"fingerprint":"SHA256:abc"}`,
+			want: func(v any) bool { e, _ := v.(SSHCertificateExtra); return e.Fingerprint == "SHA256:abc" },
 		},
 		{
 			name: "runner manager",
@@ -695,6 +704,10 @@ func TestCapturedTailListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 		}},
 		{"service accounts", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
 			x, e := CapturedServiceAccounts(c, n)
+			return len(x), e
+		}},
+		{"SSH certificates", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
+			x, e := CapturedSSHCertificates(c, n)
 			return len(x), e
 		}},
 		{"deploy keys", func(c *gitlabclient.ResponseCapture, n int) (int, error) {

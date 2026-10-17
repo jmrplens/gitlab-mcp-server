@@ -5133,6 +5133,41 @@ func TestGet_TheTwoMergeSettingsGitLab194Sends(t *testing.T) {
 	}
 }
 
+// TestGet_DuoCodeReviewDecisionsEnabled_KeepsUnsentApartFromOff verifies the
+// project setting ee/lib/ee/api/entities/project.rb sends from GitLab 19.5,
+// which client-go's Project does not model, reaches the output read from the
+// captured response, and that a project GitLab sends no key for (the feature
+// flag off, or Duo code review unavailable) keeps it absent rather than off.
+func TestGet_DuoCodeReviewDecisionsEnabled_KeepsUnsentApartFromOff(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		want    *bool
+	}{
+		{"on", `{"id":42,"name":"test","duo_code_review_decisions_enabled":true}`, new(true)},
+		{"off", `{"id":42,"name":"test","duo_code_review_decisions_enabled":false}`, new(false)},
+		{"not sent", `{"id":42,"name":"test"}`, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == pathProject42 {
+					testutil.RespondJSON(w, http.StatusOK, tt.payload)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			out, err := Get(context.Background(), client, GetInput{ProjectID: "42"})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !reflect.DeepEqual(out.DuoCodeReviewDecisionsEnabled, tt.want) {
+				t.Errorf("DuoCodeReviewDecisionsEnabled = %v, want %v", out.DuoCodeReviewDecisionsEnabled, tt.want)
+			}
+		})
+	}
+}
+
 // TestUpdate_AutomaticRebaseEnabled_ReachesTheOptionOnlyWhenGiven verifies the
 // automatic rebase setting is sent as the caller gave it, false included, and
 // left out of the options when the caller did not name it, so an update of

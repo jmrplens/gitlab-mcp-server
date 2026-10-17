@@ -37,10 +37,16 @@ type DeleteInput struct {
 // Output represents an SSH certificate.
 type Output struct {
 	toolutil.HintableOutput
-	ID        int64  `json:"id"`
-	Title     string `json:"title"`
-	Key       string `json:"key"`
-	CreatedAt string `json:"created_at,omitempty"`
+	ID    int64  `json:"id"`
+	Title string `json:"title"`
+	Key   string `json:"key"`
+	// Fingerprint is the SHA256 fingerprint of the certificate authority's
+	// public key, prefixed SHA256:, which GitLab sends on every certificate
+	// from 19.5. client-go's GroupSSHCertificate does not model it, so it is
+	// read off the captured response (ADR-0021), and an older instance leaves
+	// it out.
+	Fingerprint string `json:"fingerprint,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
 }
 
 // ListOutput holds the list response: one page of a group's certificates and
@@ -51,14 +57,15 @@ type ListOutput struct {
 	Pagination   toolutil.PaginationOutput `json:"pagination"`
 }
 
-func toOutput(c *gl.GroupSSHCertificate) Output {
+func toOutput(c *gl.GroupSSHCertificate, extra toolutil.SSHCertificateExtra) Output {
 	if c == nil {
 		return Output{}
 	}
 	o := Output{
-		ID:    c.ID,
-		Title: c.Title,
-		Key:   c.Key,
+		ID:          c.ID,
+		Title:       c.Title,
+		Key:         c.Key,
+		Fingerprint: extra.Fingerprint,
 	}
 	if c.CreatedAt != nil {
 		o.CreatedAt = c.CreatedAt.Format("2006-01-02T15:04:05Z")
@@ -98,6 +105,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	if in.GroupID.String() == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	certs, resp, err := client.GL().GroupSSHCertificates.ListGroupSSHCertificates(
 		in.GroupID.String(),
 		gl.WithContext(ctx),
@@ -107,12 +115,16 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	if err != nil {
 		return ListOutput{}, wrapSSHCertificateErr("list group SSH certificates", err, http.StatusNotFound, "verify group_id. Requires Owner role or admin access")
 	}
+	extras, err := toolutil.CapturedSSHCertificates(captured, len(certs))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("list group SSH certificates", err)
+	}
 	out := ListOutput{
 		Certificates: make([]Output, 0, len(certs)),
 		Pagination:   toolutil.PaginationFromResponse(resp),
 	}
-	for _, c := range certs {
-		out.Certificates = append(out.Certificates, toOutput(c))
+	for i, c := range certs {
+		out.Certificates = append(out.Certificates, toOutput(c, extras[i]))
 	}
 	return out, nil
 }
@@ -161,11 +173,16 @@ func Create(ctx context.Context, client *gitlabclient.Client, in CreateInput) (O
 		Key:   new(in.Key),
 		Title: new(in.Title),
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	cert, _, err := client.GL().GroupSSHCertificates.CreateGroupSSHCertificate(in.GroupID.String(), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, wrapSSHCertificateErr("create group SSH certificate", err, http.StatusBadRequest, "verify the SSH certificate key is valid PEM format")
 	}
-	return toOutput(cert), nil
+	extra, err := toolutil.CapturedSSHCertificate(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("create group SSH certificate", err)
+	}
+	return toOutput(cert, extra), nil
 }
 
 // Delete removes an SSH certificate from a group.

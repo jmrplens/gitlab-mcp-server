@@ -20,8 +20,8 @@ import (
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestToOutput_NilInput(t *testing.T) {
-	out := toOutput(nil)
-	if out.ID != 0 || out.Title != "" || out.Key != "" || out.CreatedAt != "" {
+	out := toOutput(nil, toolutil.SSHCertificateExtra{Fingerprint: "SHA256:abc"})
+	if out.ID != 0 || out.Title != "" || out.Key != "" || out.Fingerprint != "" || out.CreatedAt != "" {
 		t.Errorf("expected zero Output for nil input, got %+v", out)
 	}
 }
@@ -35,7 +35,7 @@ func TestToOutput_NilCreatedAt(t *testing.T) {
 		Title: "test-cert",
 		Key:   "ssh-rsa AAAA",
 	}
-	out := toOutput(cert)
+	out := toOutput(cert, toolutil.SSHCertificateExtra{})
 	if out.ID != 42 {
 		t.Errorf("ID = %d, want 42", out.ID)
 	}
@@ -80,8 +80,8 @@ func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/mygroup/ssh_certificates" {
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"id":1,"title":"cert-1","key":"ssh-rsa AAAA1","created_at":"2026-01-01T00:00:00Z"},
-				{"id":2,"title":"cert-2","key":"ssh-rsa AAAA2","created_at":"2026-02-01T00:00:00Z"}
+				{"id":1,"title":"cert-1","key":"ssh-rsa AAAA1","fingerprint":"SHA256:first","created_at":"2026-01-01T00:00:00Z"},
+				{"id":2,"title":"cert-2","key":"ssh-rsa AAAA2","fingerprint":"SHA256:second","created_at":"2026-02-01T00:00:00Z"}
 			]`)
 			return
 		}
@@ -102,6 +102,9 @@ func TestList_Success(t *testing.T) {
 	}
 	if out.Certificates[1].ID != 2 {
 		t.Errorf("expected id 2, got %d", out.Certificates[1].ID)
+	}
+	if got := []string{out.Certificates[0].Fingerprint, out.Certificates[1].Fingerprint}; got[0] != "SHA256:first" || got[1] != "SHA256:second" {
+		t.Errorf("fingerprints = %q, want each certificate's own, in order", got)
 	}
 }
 
@@ -258,7 +261,7 @@ func TestList_APIError(t *testing.T) {
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/groups/mygroup/ssh_certificates" {
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"title":"new-cert","key":"ssh-rsa NEWKEY","created_at":"2026-03-01T00:00:00Z"}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"title":"new-cert","key":"ssh-rsa NEWKEY","fingerprint":"SHA256:new","created_at":"2026-03-01T00:00:00Z"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -277,6 +280,40 @@ func TestCreate_Success(t *testing.T) {
 	}
 	if out.Title != "new-cert" {
 		t.Errorf("expected title new-cert, got %s", out.Title)
+	}
+	if out.Fingerprint != "SHA256:new" {
+		t.Errorf("Fingerprint = %q, want SHA256:new", out.Fingerprint)
+	}
+}
+
+// TestHandlers_UnreadableCapturedFingerprint_IsAnError verifies that the list
+// and the creation report a fingerprint GitLab sent as something that is not a
+// string, rather than publishing the certificate without it. client-go's
+// GroupSSHCertificate does not read the key, so the captured decode is the one
+// that refuses it.
+func TestHandlers_UnreadableCapturedFingerprint_IsAnError(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"list", `[{"id":1,"title":"cert","key":"ssh-rsa A","fingerprint":7}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{GroupID: toolutil.StringOrInt("mygroup")})
+			return err
+		}},
+		{"create", `{"id":1,"title":"cert","key":"ssh-rsa A","fingerprint":7}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{GroupID: toolutil.StringOrInt("mygroup"), Key: "ssh-rsa A", Title: "cert"})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
 	}
 }
 

@@ -1073,6 +1073,73 @@ func TestGroupServiceAccounts_UnreadableCapturedPublicEmail(t *testing.T) {
 	}
 }
 
+// TestAccountHandlers_External_IsReadOffTheCapture verifies that each handler
+// answering with an account publishes the external flag GitLab sends on every
+// account from 19.5, which client-go's GroupServiceAccount does not model, so
+// the value comes from the captured response; and that a value the flag cannot
+// hold is an error rather than an account published as internal. The SDK does
+// not read the key, so the captured decode is the one that refuses it.
+func TestAccountHandlers_External_IsReadOffTheCapture(t *testing.T) {
+	handlers := []struct {
+		name string
+		list bool
+		call func(context.Context, *gitlabclient.Client) ([]Output, error)
+	}{
+		{"list", true, func(ctx context.Context, c *gitlabclient.Client) ([]Output, error) {
+			out, err := List(ctx, c, ListInput{GroupID: "7"})
+			return out.Accounts, err
+		}},
+		{"get", false, func(ctx context.Context, c *gitlabclient.Client) ([]Output, error) {
+			out, err := Get(ctx, c, GetInput{GroupID: "7", ServiceAccountID: 1})
+			return []Output{out}, err
+		}},
+		{"create", false, func(ctx context.Context, c *gitlabclient.Client) ([]Output, error) {
+			out, err := Create(ctx, c, CreateInput{GroupID: "7", Name: "Service"})
+			return []Output{out}, err
+		}},
+		{"update", false, func(ctx context.Context, c *gitlabclient.Client) ([]Output, error) {
+			out, err := Update(ctx, c, UpdateInput{GroupID: "7", ServiceAccountID: 1, Name: "Renamed"})
+			return []Output{out}, err
+		}},
+	}
+	for _, h := range handlers {
+		for _, tt := range []struct {
+			name    string
+			field   string
+			want    *bool
+			wantErr bool
+		}{
+			{name: "external", field: `,"external":true`, want: new(true)},
+			{name: "internal", field: `,"external":false`, want: new(false)},
+			{name: "not sent by an older instance", field: ""},
+			{name: "unreadable", field: `,"external":"yes"`, wantErr: true},
+		} {
+			t.Run(h.name+"/"+tt.name, func(t *testing.T) {
+				body := `{"id":1,"username":"svc","name":"Service"` + tt.field + `}`
+				if h.list {
+					body = "[" + body + "]"
+				}
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusOK, body)
+				}))
+				accounts, err := h.call(context.Background(), client)
+				if tt.wantErr {
+					if err == nil {
+						t.Fatal("error = nil, want the captured decode to refuse the value")
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if len(accounts) != 1 || !reflect.DeepEqual(accounts[0].External, tt.want) {
+					t.Errorf("accounts = %+v, want one with External %v", accounts, tt.want)
+				}
+			})
+		}
+	}
+}
+
 // TestFormatListPATMarkdownString verifies the whole list a page of service
 // account tokens renders: every flag through the emoji and the expiry through
 // the display layout rather than as GitLab spelled it.

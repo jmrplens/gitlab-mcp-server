@@ -57,6 +57,38 @@ func TestGet_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 	}
 }
 
+// TestGet_TokenExpiresAt_IsReadOffTheCaptureWhenSent verifies the token
+// expiry lib/api/entities/ci/runner_details.rb sends from GitLab 19.5, which
+// gl.RunnerDetails does not model, reaches the output and its card, and that a
+// runner GitLab sent no expiry for (a caller not allowed the runner's
+// sensitive data, or an older instance) carries none.
+func TestGet_TokenExpiresAt_IsReadOffTheCaptureWhenSent(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "sent", body: `{"id":10,"token_expires_at":"2026-12-31T23:59:59.000Z"}`, want: "2026-12-31T23:59:59Z"},
+		{name: "not sent", body: `{"id":10}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			out, err := Get(context.Background(), client, GetInput{RunnerID: 10})
+			if err != nil {
+				t.Fatalf("Get() unexpected error: %v", err)
+			}
+			if out.TokenExpiresAt != tt.want {
+				t.Errorf("TokenExpiresAt = %q, want %q", out.TokenExpiresAt, tt.want)
+			}
+			if card := FormatDetailsMarkdown(out); strings.Contains(card, "Token Expires") != (tt.want != "") {
+				t.Errorf("card names a token expiry %t, want %t:\n%s", strings.Contains(card, "Token Expires"), tt.want != "", card)
+			}
+		})
+	}
+}
+
 // TestList_ReadsWhatTheSDKDoesNotModel verifies a runner list pairs each row
 // with the captured fields by position, and leaves created_by nil on a row
 // GitLab sent without it.

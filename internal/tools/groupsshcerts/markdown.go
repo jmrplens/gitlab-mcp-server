@@ -21,6 +21,7 @@ func FormatOutputMarkdown(o Output) string {
 	// is truncated here rather than constrained.
 	c.Field("Title", o.Title)
 	c.Code("Key", truncateKey(o.Key))
+	c.Code("Fingerprint", o.Fingerprint)
 	c.Time("Created", o.CreatedAt)
 	c.End(
 		toolutil.HintAction(actionDelete, "revoke this certificate"),

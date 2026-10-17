@@ -7,7 +7,7 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
-	"slices"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -367,8 +367,8 @@ func TestListServiceAccounts_EveryFieldIsReadFromItsOwnKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{
 			"id":7,"username":"build-bot","name":"Build Bot",
-			"email":"bot@x.test","public_email":"public@x.test","unconfirmed_email":"pending@x.test"
-		},{"id":8,"username":"deploy-bot","name":"Deploy Bot","public_email":"deploy@x.test"}]`)
+			"email":"bot@x.test","public_email":"public@x.test","unconfirmed_email":"pending@x.test","external":true
+		},{"id":8,"username":"deploy-bot","name":"Deploy Bot","public_email":"deploy@x.test","external":false}]`)
 	}))
 
 	out, err := ListServiceAccounts(context.Background(), client, ListServiceAccountsInput{})
@@ -383,10 +383,11 @@ func TestListServiceAccounts_EveryFieldIsReadFromItsOwnKey(t *testing.T) {
 			Email:            "bot@x.test",
 			PublicEmail:      "public@x.test",
 			UnconfirmedEmail: "pending@x.test",
+			External:         new(true),
 		},
-		{ID: 8, Username: "deploy-bot", Name: "Deploy Bot", PublicEmail: "deploy@x.test"},
+		{ID: 8, Username: "deploy-bot", Name: "Deploy Bot", PublicEmail: "deploy@x.test", External: new(false)},
 	}
-	if !slices.Equal(out.Accounts, want) {
+	if !reflect.DeepEqual(out.Accounts, want) {
 		t.Errorf("accounts = %+v, want %+v", out.Accounts, want)
 	}
 }
@@ -640,7 +641,8 @@ func TestUpdateInstanceServiceAccount_Success(t *testing.T) {
 				"name":"Updated Service",
 				"email":"updated@example.com",
 				"public_email":"shown@example.com",
-				"unconfirmed_email":"new@example.com"
+				"unconfirmed_email":"new@example.com",
+				"external":true
 			}`)
 			return
 		}
@@ -673,6 +675,9 @@ func TestUpdateInstanceServiceAccount_Success(t *testing.T) {
 	}
 	if out.PublicEmail != "shown@example.com" {
 		t.Errorf("out.PublicEmail = %q, want shown@example.com", out.PublicEmail)
+	}
+	if out.External == nil || !*out.External {
+		t.Errorf("out.External = %v, want the true GitLab sent", out.External)
 	}
 }
 

@@ -423,6 +423,10 @@ type Output struct {
 	// CISkipBranchPipelinesForMRs is one of the CI/CD settings GitLab sends
 	// only to a caller holding admin_project on the project, from 19.4.
 	CISkipBranchPipelinesForMRs *bool `json:"ci_skip_branch_pipelines_for_mrs,omitempty"`
+	// DuoCodeReviewDecisionsEnabled is whether GitLab Duo may approve a merge
+	// request or ask for changes after reviewing it, sent from 19.5 while the
+	// duo_code_review_decisions feature flag is on for the project.
+	DuoCodeReviewDecisionsEnabled *bool `json:"duo_code_review_decisions_enabled,omitempty" tier:"ultimate"`
 }
 
 // GetInput defines parameters for retrieving a project.
@@ -872,6 +876,7 @@ func ToOutput(p *gl.Project, extra toolutil.ProjectExtra) Output {
 		SecurityPolicyPipelineMustSucceed:      extra.SecurityPolicyPipelineMustSucceed,
 		SPPRepositoryPipelineAccess:            extra.SPPRepositoryPipelineAccess,
 		CISkipBranchPipelinesForMRs:            extra.CISkipBranchPipelinesForMRs,
+		DuoCodeReviewDecisionsEnabled:          extra.DuoCodeReviewDecisionsEnabled,
 	}
 	if p.MarkedForDeletionOn != nil {
 		out.MarkedForDeletionOn = time.Time(*p.MarkedForDeletionOn).Format(time.DateOnly)

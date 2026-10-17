@@ -32,6 +32,12 @@ type Output struct {
 	// UnconfirmedEmail the one waiting to be confirmed after a change.
 	PublicEmail      string `json:"public_email,omitempty"`
 	UnconfirmedEmail string `json:"unconfirmed_email,omitempty"`
+	// External is whether the account is an external user, who can reach
+	// only the projects and groups it is a member of. GitLab sends it on
+	// every account from 19.5 and client-go's GroupServiceAccount does not
+	// model it, so it is read off the captured response (ADR-0021), and is
+	// absent from an older instance's answer rather than reported internal.
+	External *bool `json:"external,omitempty"`
 }
 
 // ListOutput holds a paginated list of group service accounts.
@@ -73,8 +79,9 @@ type ListPATOutput struct {
 // DeleteOutput confirms the deletion of a resource.
 type DeleteOutput = toolutil.DeleteOutput
 
-// toOutput converts the GitLab API response to the tool output format.
-func toOutput(sa *gl.GroupServiceAccount) Output {
+// toOutput converts the GitLab API response to the tool output format, filling
+// from the decoded account and from what the capture read beside it.
+func toOutput(sa *gl.GroupServiceAccount, extra toolutil.ServiceAccountExtra) Output {
 	return Output{
 		ID:               sa.ID,
 		Name:             sa.Name,
@@ -82,7 +89,19 @@ func toOutput(sa *gl.GroupServiceAccount) Output {
 		Email:            sa.Email,
 		PublicEmail:      sa.PublicEmail,
 		UnconfirmedEmail: sa.UnconfirmedEmail,
+		External:         extra.External,
 	}
+}
+
+// capturedOutput finishes a handler that answers with one account: it reads
+// what client-go's GroupServiceAccount does not model off the captured answer
+// and pairs it with what the SDK decoded.
+func capturedOutput(op string, sa *gl.GroupServiceAccount, captured *gitlabclient.ResponseCapture) (Output, error) {
+	extra, err := toolutil.CapturedServiceAccount(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(op, err)
+	}
+	return toOutput(sa, extra), nil
 }
 
 func toPATOutput(pat *gl.PersonalAccessToken, extra toolutil.TokenExtra) PATOutput {
@@ -133,13 +152,18 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Sort != "" {
 		opts.Sort = &input.Sort
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	accounts, resp, err := client.GL().Groups.ListServiceAccounts(input.GroupID, opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return ListOutput{}, fmt.Errorf("list group service accounts: %w", err)
 	}
+	extras, err := toolutil.CapturedServiceAccounts(captured, len(accounts))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("list group service accounts", err)
+	}
 	out := make([]Output, len(accounts))
 	for i, sa := range accounts {
-		out[i] = toOutput(sa)
+		out[i] = toOutput(sa, extras[i])
 	}
 	return ListOutput{
 		Accounts:   out,
@@ -166,12 +190,13 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.ServiceAccountID == 0 {
 		return Output{}, toolutil.ErrFieldRequired("service_account_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	sa, _, err := client.GL().Groups.GetServiceAccount(input.GroupID, input.ServiceAccountID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get group service account", err, http.StatusBadRequest,
 			"service_account_id names a user of this group who is not a service account; take the ID from group.service_account_list")
 	}
-	return toOutput(sa), nil
+	return capturedOutput("get group service account", sa, captured)
 }
 
 // CreateInput holds parameters for creating a group service account.
@@ -197,11 +222,12 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Email != "" {
 		opts.Email = &input.Email
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	sa, _, err := client.GL().Groups.CreateServiceAccount(input.GroupID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, fmt.Errorf("create group service account: %w", err)
 	}
-	return toOutput(sa), nil
+	return capturedOutput("create group service account", sa, captured)
 }
 
 // UpdateInput holds parameters for updating a group service account.
@@ -231,11 +257,12 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Email != "" {
 		opts.Email = &input.Email
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	sa, _, err := client.GL().Groups.UpdateServiceAccount(input.GroupID, input.ServiceAccountID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, fmt.Errorf("update group service account: %w", err)
 	}
-	return toOutput(sa), nil
+	return capturedOutput("update group service account", sa, captured)
 }
 
 // DeleteInput holds parameters for deleting a group service account.

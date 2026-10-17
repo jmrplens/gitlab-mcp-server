@@ -53,15 +53,17 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		{
 			name: "all fields with short key",
 			input: Output{
-				ID:        1,
-				Title:     "deploy-key",
-				Key:       "ssh-rsa AAAA1234",
-				CreatedAt: "2026-01-15T10:30:00Z",
+				ID:          1,
+				Title:       "deploy-key",
+				Key:         "ssh-rsa AAAA1234",
+				Fingerprint: "SHA256:1CrrRznEotAVn+wfXVzYlDCaVcGoTvHIup4eNWBPK2k",
+				CreatedAt:   "2026-01-15T10:30:00Z",
 			},
 			want: "## SSH Certificate #1\n\n" +
 				"- **ID**: 1\n" +
 				"- **Title**: deploy-key\n" +
 				"- **Key**: `ssh-rsa AAAA1234`\n" +
+				"- **Fingerprint**: `SHA256:1CrrRznEotAVn+wfXVzYlDCaVcGoTvHIup4eNWBPK2k`\n" +
 				"- **Created**: 15 Jan 2026 10:30 UTC\n" +
 				certCardHints,
 		},
