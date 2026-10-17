@@ -24,7 +24,7 @@
 | Unit test functions                                   | 20,176 |
 | E2E test functions                                    |  1,544 |
 | cmd test functions                                    |  4,817 |
-| Test files (internal/)                                |    717 |
+| Test files (internal/)                                |    719 |
 | Test files (cmd/)                                     |    336 |
 | Test files (test/e2e/)                                |    416 |
 | Tool sub-packages tested                              |    180 |
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          4,014 |        237 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            414 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (180) |         10,931 |        464 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (180) |         10,931 |        466 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,544 |        416 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          4,817 |        336 | server entry point and developer command utilities                                              |
-| **Total**               |     **21,720** |  **1,469** |                                                                                                 |
+| **Total**               |     **21,720** |  **1,471** |                                                                                                 |
 
 ### Core Packages
 
@@ -227,7 +227,7 @@
 | issues                  |        293 |          4 |   100.0% |        21 |
 | issuestatistics         |         54 |          2 |   100.0% |         3 |
 | iterationdata           |         12 |          1 |   100.0% |         0 |
-| jobs                    |        171 |          6 |   100.0% |        17 |
+| jobs                    |        171 |          8 |   100.0% |        17 |
 | jobtokenscope           |         46 |          2 |   100.0% |         8 |
 | keys                    |         30 |          2 |   100.0% |         2 |
 | labeldata               |         17 |          1 |   100.0% |         0 |
@@ -310,7 +310,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        136 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **10,931** |    **464** |          | **1,190** |
+| **Total**               | **10,931** |    **466** |          | **1,190** |
 
 </details>
 
