@@ -677,6 +677,7 @@ func (c *Client) AtLeast(ctx context.Context, major, minor int) bool {
 	if _, refused := c.VersionRefusal(); refused {
 		return false
 	}
+	//gitlab:request optional: the version is asked only while no read of it has answered, and is kept from the first answer on
 	version, _ := c.ReadVersion(ctx)
 	return versionAtLeast(version, major, minor)
 }

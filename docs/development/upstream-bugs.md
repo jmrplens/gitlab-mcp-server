@@ -9974,6 +9974,30 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
   the action can move to it once client-go has the method or through a
   request of the handler's own; the old endpoint stays for older instances.
 
+  **The action moved on 2026-10-17 (issue 1401).** `CancelAutoMerge` asks
+  the instance's release through `Client.AtLeast` in
+  `internal/gitlab/client.go`, which reads the version the client holds and
+  reads `/api/v4/version` once when no read has answered yet. On 19.5 or
+  later it posts to `cancel_auto_merge` with a request of its own
+  (`cancelAutoMergeRoute`, the `invites.postInvitation` pattern) and returns
+  the merge request GitLab answers with, with no read-back, hinting a `409`
+  as a merge request with nothing to cancel and a `403` as the role the
+  cancel needs. An instance older than 19.5, or one whose release is not
+  known because its version endpoint did not answer or refused the token
+  Metadata: Read, is sent the deprecated route with the read-back above,
+  which stays the workaround there. The derivation records the two routes as
+  the action's two ways of running, each needing `api` and Merge Request:
+  Merge, and the version read as an optional request needing Metadata: Read,
+  declared in `cmd/gen_action_grants/request_declarations.go` because the
+  client's health client reads it outside client-go. Pinned by
+  `TestCancelAutoMerge_NineteenFiveOrLater_PostsToCancelAutoMergeOnly` and
+  `TestCancelAutoMerge_OlderOrUnknownInstance_KeepsTheDeprecatedRoute`. What
+  retires the rest: a client-go release carrying
+  [gitlab-org/api/client-go!3101](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3101)
+  moves the new route to `MergeRequests.CancelAutoMerge` in a change of its
+  own, and the deprecated route and its read-back go once no instance this
+  server supports predates 19.5.
+
 **What**: `POST /projects/:id/merge_requests/:iid/cancel_merge_when_pipeline_succeeds`
 is annotated `success Entities::MergeRequest` in `lib/api/merge_requests.rb`,
 which is what the API documentation publishes and what `cmd/gen_api_live`

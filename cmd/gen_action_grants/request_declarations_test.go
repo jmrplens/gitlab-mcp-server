@@ -418,6 +418,57 @@ func driveFollowedAction(t *testing.T, id string, standIn *redirectingStandIn) [
 	return standIn.requests()
 }
 
+// sendsDrivers call each function a declaration says sends outside client-go,
+// with a client of the stand-in.
+var sendsDrivers = map[string]func(context.Context, *gitlabclient.Client){
+	"gitlab.Client.ReadVersion": func(ctx context.Context, client *gitlabclient.Client) { _, _ = client.ReadVersion(ctx) },
+}
+
+// TestRequestDeclarations_OutsideClientGo_NameWhatTheFunctionSends calls
+// every function a declaration says sends outside client-go, against a
+// stand-in, and holds the declaration to what the function sent: every
+// declared request, in order, and nothing else. The walk reads nothing of
+// these requests, which is why they are declared, so this is what tells a
+// function that came to send something else from a declaration still telling
+// the truth.
+func TestRequestDeclarations_OutsideClientGo_NameWhatTheFunctionSends(t *testing.T) {
+	ran := 0
+	for _, declaration := range requestDeclarations {
+		if declaration.Sends == "" {
+			continue
+		}
+		ran++
+		t.Run(declaration.Sends, func(t *testing.T) {
+			drive, driven := sendsDrivers[declaration.Sends]
+			if !driven {
+				t.Fatalf("nothing calls %s; add it to sendsDrivers", declaration.Sends)
+			}
+			standIn := &redirectingStandIn{}
+			srv := httptest.NewServer(standIn)
+			t.Cleanup(srv.Close)
+			client, err := gitlabclient.NewClient(&config.Config{GitLabURL: srv.URL, GitLabToken: "test-token", DisableRetries: true})
+			if err != nil {
+				t.Fatalf("build the client: %v", err)
+			}
+
+			drive(t.Context(), client)
+			var sent, declared []string
+			for _, seen := range standIn.requests() {
+				sent = append(sent, seen.method+" "+seen.path)
+			}
+			for _, request := range declaration.Requests {
+				declared = append(declared, request.Method+" "+request.Path)
+			}
+			if !slices.Equal(sent, declared) {
+				t.Errorf("%s sent %q, and its declaration says %q", declaration.Sends, sent, declared)
+			}
+		})
+	}
+	if ran != len(sendsDrivers) {
+		t.Errorf("sendsDrivers calls %d functions and %d are declared; drop the drivers no declaration needs", len(sendsDrivers), ran)
+	}
+}
+
 // TestRouteMatches_HoldsARequestToItsRoute verifies a route matches a request
 // of its method and shape, a ":" taking any one segment, and nothing of
 // another method, length or literal.

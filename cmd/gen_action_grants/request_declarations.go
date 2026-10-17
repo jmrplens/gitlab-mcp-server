@@ -29,6 +29,10 @@ const (
 	// another of its API routes, which the HTTP client follows with the same
 	// credential, so GitLab judges the credential on both.
 	categoryFollowsRedirect = "follows-redirect"
+	// categoryOutsideClientGo is a function of ours that sends its request
+	// through an HTTP client of its own rather than client-go, which the walk
+	// reads nothing of.
+	categoryOutsideClientGo = "outside-client-go"
 )
 
 // userCoreBasic is client-go's UserCoreBasic template (users.go), which every
@@ -168,6 +172,11 @@ var requestDeclarations = []derive.Declaration{
 	},
 	workItemListDeclaration("group.epic_list", listEpicsDocument),
 	workItemListDeclaration("issue.work_item_list", listWorkItemsDocument),
+	{
+		Sends: "gitlab.Client.ReadVersion", Category: categoryOutsideClientGo,
+		Reason:   "it reads /api/v4/version through the client's health client, which bypasses client-go so the version can be read while the client initializes; Client.AtLeast calls it only while no read has answered, which its directive declares optional",
+		Requests: []derive.Request{rest("GET", "/version")},
+	},
 }
 
 // workItemListDeclaration declares the document client-go's ListWorkItems

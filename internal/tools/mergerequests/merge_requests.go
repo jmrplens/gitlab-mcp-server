@@ -30,8 +30,20 @@ const hintMergeRefused = "merging needs the right to push to the merge request's
 
 // hintCancelAutoMergeRefused is what a refused auto-merge cancel needs:
 // GitLab lets the merge request's author or anyone who may merge it cancel,
-// and refuses everyone else with 401 (lib/api/merge_requests.rb:945).
+// and refuses everyone else, with 401 on the deprecated route and 403 on
+// cancel_auto_merge (lib/api/merge_requests.rb:957 and :979 at v19.5.0-ee).
 const hintCancelAutoMergeRefused = "only the merge request's author or a user who may merge it into its target branch can cancel auto-merge; check the author and the branch's protection with merge_request.get and branch.get_protected"
+
+// hintNoAutoMergeToCancel is what a cancel GitLab found nothing to cancel
+// needs. cancel_auto_merge refuses it 409 with "Can't cancel the automatic
+// merge". The deprecated route documents 405 and 406 for it but answers 201
+// with the service's error hash (lib/api/merge_requests.rb:954 and
+// app/services/auto_merge_service.rb at v19.5.0-ee), which the read-back turns
+// into the merge request as it is, so the hint is kept on those two statuses
+// only because the route's page names them. merge_when_pipeline_succeeds is
+// the field merge_request.get publishes the setting in: GitLab's entity
+// exposes it, under the column its model aliases as auto_merge_enabled.
+const hintNoAutoMergeToCancel = "the MR may already be merged/closed, or auto-merge was not enabled. Use merge_request.get to check state and merge_when_pipeline_succeeds"
 
 // CreateInput defines parameters for creating a merge request.
 type CreateInput struct {
@@ -1865,18 +1877,38 @@ func listMergeRequestIssues(ctx context.Context, args mergeRequestItemsListArgs,
 // Cancel auto-merge
 // ---------------------------------------------------------------------------.
 
+// opCancelAutoMerge names the auto-merge cancel in its errors.
+const opCancelAutoMerge = "mrCancelAutoMerge"
+
+// The release that added cancel_auto_merge (gitlab-org/gitlab!255702, in
+// v19.5.0-ee), the first an auto-merge cancel is sent to it on.
+const (
+	cancelAutoMergeSinceMajor = 19
+	cancelAutoMergeSinceMinor = 5
+)
+
 // CancelAutoMerge cancels the "merge when pipeline succeeds" (auto-merge)
 // setting on a merge request. Returns the updated merge request.
 //
-// GitLab does not send one back. The route's Grape annotation names
-// API::Entities::MergeRequest, which is what the API documentation and
-// docs/development/gitlab-api-live.json both record, but the endpoint ends in
-// AutoMergeService#cancel and renders that service's status hash instead, so
-// the body is {"status":"success"} with no merge request in it. client-go
-// decodes that into a zero-valued struct and reports no error, and this
-// handler used to hand the model an empty object: no IID, no state, no title.
-// A cancel that answers nothing is read back the way toggleSubscription reads
-// back a 304, with a Get of the merge request the caller named.
+// It has two routes, chosen by the instance's release (register row 46 of
+// docs/development/upstream-bugs.md). From 19.5 on it posts to
+// cancel_auto_merge, which answers 201 with the merge request, 409 when there
+// is nothing to cancel and 403 to a caller who may not cancel it
+// ([cancelAutoMergeRoute]). An instance older than that, or one whose release
+// is not known because its version endpoint did not answer or refused this
+// token, is sent the deprecated cancel_merge_when_pipeline_succeeds, as every
+// instance used to be.
+//
+// The deprecated route does not send the merge request back. Its Grape
+// annotation names API::Entities::MergeRequest, which is what the API
+// documentation and docs/development/gitlab-api-live.json both record, but the
+// endpoint ends in AutoMergeService#cancel and renders that service's status
+// hash instead, so the body is {"status":"success"} with no merge request in
+// it. client-go decodes that into a zero-valued struct and reports no error,
+// and this handler used to hand the model an empty object: no IID, no state,
+// no title. A cancel that answers nothing is read back the way
+// toggleSubscription reads back a 304, with a Get of the merge request the
+// caller named.
 func CancelAutoMerge(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -1885,22 +1917,19 @@ func CancelAutoMerge(ctx context.Context, client *gitlabclient.Client, input Get
 		return Output{}, errors.New("mrCancelAutoMerge: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mrCancelAutoMerge", "merge_request_iid")
+		return Output{}, toolutil.ErrRequiredInt64(opCancelAutoMerge, "merge_request_iid")
+	}
+	if client.AtLeast(ctx, cancelAutoMergeSinceMajor, cancelAutoMergeSinceMinor) {
+		//gitlab:request alternatives: an instance on 19.5 or later is sent cancel_auto_merge and the deprecated route below is not sent
+		return cancelAutoMergeRoute(ctx, client, input)
 	}
 	// The capture rides its own context so the fall-back Get below starts from
 	// the caller's, with a capture of its own.
 	callCtx, captured := gitlabclient.WithResponseCapture(ctx)
+	//gitlab:request alternatives: an instance older than 19.5, or one whose release is not known, is sent the deprecated route instead of cancel_auto_merge
 	mr, _, err := client.GL().MergeRequests.CancelMergeWhenPipelineSucceeds(string(input.ProjectID), input.MRIID, gl.WithContext(callCtx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusMethodNotAllowed) || toolutil.IsHTTPStatus(err, http.StatusNotAcceptable) {
-			return Output{}, toolutil.WrapErrWithHint("mrCancelAutoMerge", err,
-				"the MR may already be merged/closed, or auto-merge was not enabled. Use merge_request.get to check state and auto_merge_enabled")
-		}
-		if toolutil.IsPermissionRefusal(err) {
-			return Output{}, toolutil.WrapErrWithHint("mrCancelAutoMerge", err, hintCancelAutoMergeRefused)
-		}
-		return Output{}, toolutil.WrapErrWithStatusHint("mrCancelAutoMerge", err, http.StatusNotFound,
-			hintVerifyMR)
+		return Output{}, cancelAutoMergeFailure(err, http.StatusMethodNotAllowed, http.StatusNotAcceptable)
 	}
 	// An instance that answered with its service's status hash rather than the
 	// merge request leaves nothing to hand back. Read it instead, so the caller
@@ -1908,7 +1937,57 @@ func CancelAutoMerge(ctx context.Context, client *gitlabclient.Client, input Get
 	if mr == nil || mr.IID == 0 {
 		return Get(ctx, client, input)
 	}
-	return mergeRequestOutput("mrCancelAutoMerge", mr, captured)
+	return mergeRequestOutput(opCancelAutoMerge, mr, captured)
+}
+
+// cancelAutoMergeRoute cancels an auto-merge through cancel_auto_merge, the
+// route GitLab 19.5 added, which answers with the merge request, so nothing is
+// read back.
+//
+// client-go has no method for it yet (gitlab-org/api/client-go!3101 adds
+// MergeRequests.CancelAutoMerge, and no release carries it), so the request is
+// the handler's own, the way invites.postInvitation makes one; it moves to the
+// method in its own change once a client-go release carries it.
+func cancelAutoMergeRoute(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
+	return postCancelAutoMerge(ctx, client,
+		fmt.Sprintf("projects/%s/merge_requests/%d/cancel_auto_merge", gl.PathEscape(string(input.ProjectID)), input.MRIID))
+}
+
+// postCancelAutoMerge posts the cancel to path and converts the merge request
+// it answers with, the fields client-go does not model read off the captured
+// answer. The path is a parameter so a test can hand it one client-go cannot
+// build a request for, which no input reaches: gl.PathEscape has escaped the
+// project, and the IID is a number.
+func postCancelAutoMerge(ctx context.Context, client *gitlabclient.Client, path string) (Output, error) {
+	callCtx, captured := gitlabclient.WithResponseCapture(ctx)
+	req, err := client.GL().NewRequest(http.MethodPost, path, nil, []gl.RequestOptionFunc{gl.WithContext(callCtx)})
+	if err != nil {
+		return Output{}, toolutil.WrapErr(opCancelAutoMerge, err)
+	}
+	mr := new(gl.MergeRequest)
+	if _, err = client.GL().Do(req, mr); err != nil {
+		return Output{}, cancelAutoMergeFailure(err, http.StatusConflict)
+	}
+	return mergeRequestOutput(opCancelAutoMerge, mr, captured)
+}
+
+// cancelAutoMergeFailure is the error of a cancel GitLab refused: the
+// nothing-to-cancel hint for the statuses the route answers that with, the
+// role hint for a refusal of the caller's permission, and the merge request
+// hint for a 404. Each route names its own nothing-to-cancel statuses: 409 on
+// cancel_auto_merge, and on the deprecated route the 405 and 406 its page
+// documents, which it does not answer with (it sends 201 and its error hash),
+// and which say nothing about a cancel on the new route.
+func cancelAutoMergeFailure(err error, nothingToCancel ...int) error {
+	for _, status := range nothingToCancel {
+		if toolutil.IsHTTPStatus(err, status) {
+			return toolutil.WrapErrWithHint(opCancelAutoMerge, err, hintNoAutoMergeToCancel)
+		}
+	}
+	if toolutil.IsPermissionRefusal(err) {
+		return toolutil.WrapErrWithHint(opCancelAutoMerge, err, hintCancelAutoMergeRefused)
+	}
+	return toolutil.WrapErrWithStatusHint(opCancelAutoMerge, err, http.StatusNotFound, hintVerifyMR)
 }
 
 // ---------------------------------------------------------------------------

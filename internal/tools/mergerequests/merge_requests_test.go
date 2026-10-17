@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1861,6 +1862,306 @@ func TestMRCancelAutoMerge_MissingProject(t *testing.T) {
 	_, err := CancelAutoMerge(context.Background(), client, GetInput{MRIID: 1})
 	if err == nil {
 		t.Fatal("CancelAutoMerge() expected error for missing project_id, got nil")
+	}
+}
+
+// The routes an auto-merge cancel can reach, the merge request each answers
+// with, and GitLab's refusal of the version endpoint to a fine-grained token
+// without Metadata: Read.
+const (
+	pathVersion             = "/api/v4/version"
+	pathCancelAutoMerge     = pathMR1 + "/cancel_auto_merge"
+	pathCancelWhenSucceeds  = pathMR1 + "/cancel_merge_when_pipeline_succeeds"
+	mrAfterCancelJSON       = `{"id":100,"iid":1,"title":"feat: add login","state":"opened","source_branch":"feature/login","target_branch":"develop","merge_when_pipeline_succeeds":false}`
+	versionMetadataRefusal  = `{"error":"insufficient_granular_scope","error_description":"Access denied: This operation requires a fine-grained personal access token with the following instance permissions: [Metadata: Read]."}`
+	cancelStatusHashSuccess = `{"status":"success"}`
+)
+
+// wantAutoMergeFieldHint is the part of the nothing-to-cancel hint that names
+// the field merge_request.get publishes whether an auto-merge is set in.
+// GitLab's merge request entity exposes merge_when_pipeline_succeeds, which
+// GitLab's model aliases as auto_merge_enabled, and no auto_merge_enabled of
+// its own, so a hint naming that sent the model looking for a field no answer
+// carries. It is matched with the words around it because the deprecated
+// route's path carries the field's name too, and so does every error of it.
+const wantAutoMergeFieldHint = "check state and merge_when_pipeline_succeeds"
+
+// autoMergeAnswer is one status and body a stand-in answers with. The zero
+// answer is a route the test does not expect, answered not found.
+type autoMergeAnswer struct {
+	status int
+	body   string
+}
+
+// write answers r with the answer, or not found when none was set.
+func (a autoMergeAnswer) write(w http.ResponseWriter, r *http.Request) {
+	if a.status == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	testutil.RespondJSON(w, a.status, a.body)
+}
+
+// autoMergeStandIn answers every request an auto-merge cancel can send: the
+// version endpoint, the route GitLab 19.5 added, the deprecated route and the
+// read-back of the merge request, recording each request by method and path.
+// It runs on the httptest server's goroutine, so it records under a lock and
+// never stops the test.
+type autoMergeStandIn struct {
+	version, newRoute, oldRoute autoMergeAnswer
+
+	mu   sync.Mutex
+	seen []string
+}
+
+// ServeHTTP records the request and answers it.
+func (s *autoMergeStandIn) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.seen = append(s.seen, r.Method+" "+r.URL.Path)
+	s.mu.Unlock()
+	switch {
+	case r.Method == http.MethodGet && r.URL.Path == pathVersion:
+		s.version.write(w, r)
+	case r.Method == http.MethodPost && r.URL.Path == pathCancelAutoMerge:
+		s.newRoute.write(w, r)
+	case r.Method == http.MethodPost && r.URL.Path == pathCancelWhenSucceeds:
+		s.oldRoute.write(w, r)
+	case r.Method == http.MethodGet && r.URL.Path == pathMR1:
+		testutil.RespondJSON(w, http.StatusOK, mrAfterCancelJSON)
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+// requests returns the requests recorded so far.
+func (s *autoMergeStandIn) requests() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.seen)
+}
+
+// forget drops what was recorded, so a test can read what one call sent.
+func (s *autoMergeStandIn) forget() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.seen = nil
+}
+
+// versionAnswer is the version endpoint's answer naming version.
+func versionAnswer(version string) autoMergeAnswer {
+	return autoMergeAnswer{status: http.StatusOK, body: `{"version":"` + version + `"}`}
+}
+
+// TestCancelAutoMerge_NineteenFiveOrLater_PostsToCancelAutoMergeOnly verifies
+// the route an instance on 19.5 or later is sent: cancel_auto_merge, which
+// answers with the merge request, and nothing else, so the merge request is
+// not read back. 19.6.0-pre is what GitLab.com reports, and a prerelease
+// counts as the minor it names.
+func TestCancelAutoMerge_NineteenFiveOrLater_PostsToCancelAutoMergeOnly(t *testing.T) {
+	for _, version := range []string{"19.5.0-ee", "19.6.0-pre"} {
+		t.Run(version, func(t *testing.T) {
+			standIn := &autoMergeStandIn{
+				version:  versionAnswer(version),
+				newRoute: autoMergeAnswer{status: http.StatusCreated, body: mrAfterCancelJSON},
+			}
+			client := testutil.NewTestClient(t, standIn)
+			if _, answered := client.ReadVersion(t.Context()); !answered {
+				t.Fatal("the stand-in's version was not read")
+			}
+			standIn.forget()
+
+			out, err := CancelAutoMerge(t.Context(), client, GetInput{ProjectID: testProjectID, MRIID: 1})
+			if err != nil {
+				t.Fatalf("CancelAutoMerge() error = %v", err)
+			}
+			if got, want := standIn.requests(), []string{http.MethodPost + " " + pathCancelAutoMerge}; !slices.Equal(got, want) {
+				t.Errorf("CancelAutoMerge() sent %q, want %q", got, want)
+			}
+			if out.IID != 1 || out.Title != "feat: add login" || out.MergeWhenPipelineSucceeds {
+				t.Errorf("CancelAutoMerge() answered %+v, want the merge request cancel_auto_merge answered with", out)
+			}
+		})
+	}
+}
+
+// TestCancelAutoMerge_NineteenFiveOrLater_EscapesANamespacedProject verifies
+// that the request of the handler's own carries a project named by its path
+// as one escaped segment, the way client-go's methods send it: GitLab reads an
+// unescaped group/project as two segments of the route and answers 404, which
+// a numeric project ID, the only kind the other tests send, never shows. The
+// escaped path is read off the raw request, since r.URL.Path decodes %2F.
+func TestCancelAutoMerge_NineteenFiveOrLater_EscapesANamespacedProject(t *testing.T) {
+	const want = "/api/v4/projects/my-group%2Fmy-project/merge_requests/1/cancel_auto_merge"
+	var (
+		mu   sync.Mutex
+		sent []string
+	)
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathVersion {
+			testutil.RespondJSON(w, http.StatusOK, `{"version":"19.5.0-ee"}`)
+			return
+		}
+		mu.Lock()
+		sent = append(sent, r.Method+" "+r.URL.EscapedPath())
+		mu.Unlock()
+		if r.URL.EscapedPath() != want {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusCreated, mrAfterCancelJSON)
+	}))
+
+	_, err := CancelAutoMerge(t.Context(), client, GetInput{ProjectID: "my-group/my-project", MRIID: 1})
+	if err != nil {
+		t.Fatalf("CancelAutoMerge() error = %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if wantSent := []string{http.MethodPost + " " + want}; !slices.Equal(sent, wantSent) {
+		t.Errorf("CancelAutoMerge() sent %q, want %q", sent, wantSent)
+	}
+}
+
+// TestCancelAutoMerge_AClientThatHasNotAsked_ReadsTheVersionFirst verifies a
+// client that holds no version, which is what an HTTP pool entry whose tier
+// was pinned holds: it reads the version once and then sends the route that
+// version names.
+func TestCancelAutoMerge_AClientThatHasNotAsked_ReadsTheVersionFirst(t *testing.T) {
+	standIn := &autoMergeStandIn{
+		version:  versionAnswer("19.5.0-ee"),
+		newRoute: autoMergeAnswer{status: http.StatusCreated, body: mrAfterCancelJSON},
+	}
+	client := testutil.NewTestClient(t, standIn)
+
+	if _, err := CancelAutoMerge(t.Context(), client, GetInput{ProjectID: testProjectID, MRIID: 1}); err != nil {
+		t.Fatalf("CancelAutoMerge() error = %v", err)
+	}
+	want := []string{http.MethodGet + " " + pathVersion, http.MethodPost + " " + pathCancelAutoMerge}
+	if got := standIn.requests(); !slices.Equal(got, want) {
+		t.Errorf("CancelAutoMerge() sent %q, want %q", got, want)
+	}
+}
+
+// TestCancelAutoMerge_OlderOrUnknownInstance_KeepsTheDeprecatedRoute
+// verifies every instance the new route cannot be assumed on: one older than
+// 19.5, one whose version endpoint did not answer, and one that refused the
+// token the version. Each is sent the deprecated route exactly as before,
+// with the read-back of the status hash it answers.
+func TestCancelAutoMerge_OlderOrUnknownInstance_KeepsTheDeprecatedRoute(t *testing.T) {
+	tests := []struct {
+		name    string
+		version autoMergeAnswer
+	}{
+		{name: "19.4.1-ee", version: versionAnswer("19.4.1-ee")},
+		{name: "a version endpoint that did not answer", version: autoMergeAnswer{status: http.StatusBadGateway, body: `{"message":"502 Bad Gateway"}`}},
+		{name: "a token refused Metadata: Read", version: autoMergeAnswer{status: http.StatusForbidden, body: versionMetadataRefusal}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			standIn := &autoMergeStandIn{
+				version:  tt.version,
+				oldRoute: autoMergeAnswer{status: http.StatusCreated, body: cancelStatusHashSuccess},
+			}
+			client := testutil.NewTestClient(t, standIn)
+
+			out, err := CancelAutoMerge(t.Context(), client, GetInput{ProjectID: testProjectID, MRIID: 1})
+			if err != nil {
+				t.Fatalf("CancelAutoMerge() error = %v", err)
+			}
+			want := []string{
+				http.MethodGet + " " + pathVersion,
+				http.MethodPost + " " + pathCancelWhenSucceeds,
+				http.MethodGet + " " + pathMR1,
+			}
+			if got := standIn.requests(); !slices.Equal(got, want) {
+				t.Errorf("CancelAutoMerge() sent %q, want %q", got, want)
+			}
+			if out.IID != 1 || out.Title != "feat: add login" {
+				t.Errorf("CancelAutoMerge() answered %+v, want the merge request read back", out)
+			}
+		})
+	}
+}
+
+// TestCancelAutoMerge_NewRouteRefusals_AreHintedByWhatTheyMean verifies the
+// hints of the route 19.5 added, which refuses differently from the old one:
+// 409 when the merge request has no auto-merge to cancel, where the old route
+// answered a status hash, and 403 to a caller who may not cancel it. A 405 is
+// not read as nothing to cancel there, and a 404 keeps the merge request hint.
+func TestCancelAutoMerge_NewRouteRefusals_AreHintedByWhatTheyMean(t *testing.T) {
+	const gitLabSaid = `{"message":"as GitLab said"}`
+	tests := []struct {
+		name         string
+		answer       autoMergeAnswer
+		want, reject string
+	}{
+		{name: "nothing to cancel", answer: autoMergeAnswer{status: http.StatusConflict, body: `{"message":"409 Conflict: Can't cancel the automatic merge"}`}, want: wantAutoMergeFieldHint, reject: hintCancelAutoMergeRefused},
+		{name: "a caller without the permission", answer: autoMergeAnswer{status: http.StatusForbidden, body: gitLabSaid}, want: hintCancelAutoMergeRefused, reject: hintNoAutoMergeToCancel},
+		{name: "no such merge request", answer: autoMergeAnswer{status: http.StatusNotFound, body: gitLabSaid}, want: hintVerifyMR, reject: hintCancelAutoMergeRefused},
+		{name: "a 405 is not nothing to cancel", answer: autoMergeAnswer{status: http.StatusMethodNotAllowed, body: gitLabSaid}, want: "as GitLab said", reject: hintNoAutoMergeToCancel},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			standIn := &autoMergeStandIn{version: versionAnswer("19.5.0-ee"), newRoute: tt.answer}
+			client := testutil.NewTestClient(t, standIn)
+
+			_, err := CancelAutoMerge(t.Context(), client, GetInput{ProjectID: testProjectID, MRIID: 1})
+			if err == nil {
+				t.Fatalf("CancelAutoMerge() error = nil, want the %d reported", tt.answer.status)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %q, want it to carry %q", err, tt.want)
+			}
+			if strings.Contains(err.Error(), tt.reject) {
+				t.Errorf("error = %q, must not carry %q", err, tt.reject)
+			}
+			if slices.Contains(standIn.requests(), http.MethodPost+" "+pathCancelWhenSucceeds) {
+				t.Error("a refusal of the new route fell back to the deprecated one")
+			}
+		})
+	}
+}
+
+// TestCancelAutoMerge_VersionUnknown_TheVersionReadCarriesTheCallersContext
+// verifies that the read of the version, the first request a client holding
+// none sends, carries the caller's context, so an abandoned call ends there:
+// the read is abandoned with it, and the cancel after it is never sent.
+func TestCancelAutoMerge_VersionUnknown_TheVersionReadCarriesTheCallersContext(t *testing.T) {
+	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"version":"19.5.0-ee"}`)
+	})
+
+	_, err := CancelAutoMerge(ctx, client, GetInput{ProjectID: testProjectID, MRIID: 1})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("CancelAutoMerge() error = %v, want context.Canceled", err)
+	}
+}
+
+// TestCancelAutoMergeRoute_CarriesTheCallersContext verifies the request of
+// the handler's own that cancel_auto_merge is sent as carries the caller's
+// context. It is called directly because through the handler it is never the
+// first request on a client that holds no version.
+func TestCancelAutoMergeRoute_CarriesTheCallersContext(t *testing.T) {
+	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, mrAfterCancelJSON)
+	})
+
+	_, err := cancelAutoMergeRoute(ctx, client, GetInput{ProjectID: testProjectID, MRIID: 1})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelAutoMergeRoute() error = %v, want context.Canceled", err)
+	}
+}
+
+// TestPostCancelAutoMerge_AnUnbuildablePath_SendsNothing verifies that a path
+// client-go cannot build a request for is the operation's error and sends
+// nothing. No input reaches it, since the project is escaped and the IID is a
+// number, so the test hands the path in.
+func TestPostCancelAutoMerge_AnUnbuildablePath_SendsNothing(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+	_, err := postCancelAutoMerge(t.Context(), client, "projects/%zz/merge_requests/1/cancel_auto_merge")
+	if err == nil || !strings.HasPrefix(err.Error(), opCancelAutoMerge+":") {
+		t.Fatalf("postCancelAutoMerge() error = %v, want the operation's error", err)
 	}
 }
 
@@ -5527,8 +5828,8 @@ func TestUnapprove_APIError(t *testing.T) {
 }
 
 // TestCancelAutoMerge_MethodNotAllowed verifies that CancelAutoMerge
-// surfaces an auto_merge_enabled hint in the error message when the
-// GitLab API responds with 405 Method Not Allowed.
+// surfaces the nothing-to-cancel hint, naming the field merge_request.get
+// publishes, when the GitLab API responds with 405 Method Not Allowed.
 func TestCancelAutoMerge_MethodNotAllowed(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusMethodNotAllowed, `{"message":"405"}`)
@@ -5537,8 +5838,8 @@ func TestCancelAutoMerge_MethodNotAllowed(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "auto_merge_enabled") {
-		t.Errorf("expected auto_merge hint, got: %v", err)
+	if !strings.Contains(err.Error(), wantAutoMergeFieldHint) {
+		t.Errorf("expected the nothing-to-cancel hint naming %q, got: %v", wantAutoMergeFieldHint, err)
 	}
 }
 
@@ -7679,9 +7980,9 @@ func TestStatusHints_EachStatusEarnsItsOwnHint(t *testing.T) {
 		{"create dependency 422", http.StatusUnprocessableEntity, createDependency, "cycle", ""},
 		{"create dependency 400", http.StatusBadRequest, createDependency, "cycle", ""},
 		{"create dependency 500 keeps GitLab's message", http.StatusInternalServerError, createDependency, "as GitLab said", "cycle"},
-		{"cancel auto merge 405", http.StatusMethodNotAllowed, cancelAutoMerge, "auto_merge_enabled", ""},
-		{"cancel auto merge 406", http.StatusNotAcceptable, cancelAutoMerge, "auto_merge_enabled", ""},
-		{"cancel auto merge 401", http.StatusUnauthorized, cancelAutoMerge, hintCancelAutoMergeRefused, "auto_merge_enabled"},
+		{"cancel auto merge 405", http.StatusMethodNotAllowed, cancelAutoMerge, wantAutoMergeFieldHint, ""},
+		{"cancel auto merge 406", http.StatusNotAcceptable, cancelAutoMerge, wantAutoMergeFieldHint, ""},
+		{"cancel auto merge 401", http.StatusUnauthorized, cancelAutoMerge, hintCancelAutoMergeRefused, hintNoAutoMergeToCancel},
 		{"cancel auto merge 404 is not a refusal", http.StatusNotFound, cancelAutoMerge, hintVerifyMR, hintCancelAutoMergeRefused},
 		{"merge 401", http.StatusUnauthorized, merge, hintMergeRefused, ""},
 		{"merge 403", http.StatusForbidden, merge, hintMergeRefused, ""},
