@@ -2591,7 +2591,10 @@ func TestMRGenericErrorBranches(t *testing.T) {
 
 // TestBuildUpdateOpts_LabelBranches verifies label update options are populated.
 func TestBuildUpdateOpts_LabelBranches(t *testing.T) {
-	opts := buildUpdateOpts(UpdateInput{Labels: []string{testLabelBug, "critical"}, AddLabels: []string{"security"}})
+	opts, _, err := buildUpdateOpts(UpdateInput{Labels: []string{testLabelBug, "critical"}, AddLabels: []string{"security"}})
+	if err != nil {
+		t.Fatalf("buildUpdateOpts() error = %v", err)
+	}
 	if opts.Labels == nil || len(*opts.Labels) != 2 {
 		t.Fatalf("Labels = %#v, want two labels", opts.Labels)
 	}
@@ -3947,6 +3950,34 @@ func TestCreateDependency_MissingProject(t *testing.T) {
 	_, err := CreateDependency(context.Background(), client, DependencyInput{MRIID: 1, BlockingMergeRequestID: 100})
 	if err == nil {
 		t.Fatal(testutil.MsgErrEmptyProjectID)
+	}
+}
+
+// TestCreateDependency_TheBlockingMergeRequest_IsNamedExactlyOnce verifies the
+// refusals ee/lib/api/merge_request_dependencies.rb would answer with 400,
+// made before any request: GitLab takes exactly one of
+// blocking_merge_request_id and blocking_merge_request_iid, and reads
+// blocking_project_id only beside the IID, so a project beside the ID would be
+// ignored rather than refused.
+func TestCreateDependency_TheBlockingMergeRequest_IsNamedExactlyOnce(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	tests := []struct {
+		name  string
+		input DependencyInput
+		want  string
+	}{
+		{"neither", DependencyInput{}, "one of blocking_merge_request_id and blocking_merge_request_iid is required"},
+		{"both", DependencyInput{BlockingMergeRequestID: 100, BlockingMergeRequestIID: 7}, "blocking_merge_request_id and blocking_merge_request_iid are mutually exclusive"},
+		{"project beside the ID", DependencyInput{BlockingMergeRequestID: 100, BlockingProjectID: "group/other"}, "blocking_project_id is read only beside blocking_merge_request_iid"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.input.ProjectID, tt.input.MRIID = testProjectID, 1
+			_, err := CreateDependency(context.Background(), client, tt.input)
+			if err == nil || !strings.Contains(err.Error(), tt.want) || !strings.HasPrefix(err.Error(), "mrCreateDependency: ") {
+				t.Errorf("CreateDependency() error = %v, want the mrCreateDependency refusal %q", err, tt.want)
+			}
+		})
 	}
 }
 
@@ -7368,11 +7399,61 @@ func TestCreate_OptionalFields_ReachTheBody(t *testing.T) {
 			"labels": `"bug,critical"`, "milestone_id": "11", "target_project_id": "12", "approvals_before_merge": "13",
 			"remove_source_branch": "true", "squash": "false", "allow_collaboration": "true",
 		}},
+		{"milestone by title and a merge time", CreateInput{Milestone: "v1.0", MergeAfter: "2026-12-31T23:00:00Z"}, map[string]string{
+			"milestone": `"v1.0"`, "merge_after": `"2026-12-31T23:00:00Z"`,
+		}},
+		{"merge_after as a date", CreateInput{MergeAfter: "2026-12-31"}, map[string]string{"merge_after": `"2026-12-31T00:00:00Z"`}},
 		{"nothing optional", CreateInput{}, map[string]string{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assertBodyKeys(t, createBody(t, tt.input), withRequired(createRequired, tt.want))
+		})
+	}
+}
+
+// TestCreateAndUpdate_RefusedBeforeAnyRequest holds the two refusals the
+// milestone title and merge_after brought: a milestone named both by title
+// and by ID, which lib/api/merge_requests.rb declares mutually exclusive and
+// answers 400 for, and a merge_after that is not a timestamp. Each is refused
+// before any request, naming the fields.
+func TestCreateAndUpdate_RefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	tests := []struct {
+		name string
+		call func() error
+		want string
+	}{
+		{"create with both milestones", func() error {
+			_, err := Create(context.Background(), client, CreateInput{
+				ProjectID: testProjectID, SourceBranch: testBranchFeat, TargetBranch: testBranchMain, Title: "t",
+				Milestone: "v1.0", MilestoneID: 11,
+			})
+			return err
+		}, "milestone and milestone_id are mutually exclusive"},
+		{"update with both milestones", func() error {
+			_, err := Update(context.Background(), client, UpdateInput{
+				ProjectID: testProjectID, MRIID: 1, Milestone: "v1.0", MilestoneID: new(int64(0)),
+			})
+			return err
+		}, "milestone and milestone_id are mutually exclusive"},
+		{"create with an unreadable merge_after", func() error {
+			_, err := Create(context.Background(), client, CreateInput{
+				ProjectID: testProjectID, SourceBranch: testBranchFeat, TargetBranch: testBranchMain, Title: "t",
+				MergeAfter: "tomorrow",
+			})
+			return err
+		}, "merge_after must be"},
+		{"update with an unreadable merge_after", func() error {
+			_, err := Update(context.Background(), client, UpdateInput{ProjectID: testProjectID, MRIID: 1, MergeAfter: new("tomorrow")})
+			return err
+		}, "merge_after must be"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.call(); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %v, want one containing %q", err, tt.want)
+			}
 		})
 	}
 }
@@ -7443,6 +7524,12 @@ func TestUpdate_OptionalFields_ReachTheBody(t *testing.T) {
 			"discussion_locked": "true", "allow_collaboration": "false",
 		}},
 		{"milestone_id zero unassigns", UpdateInput{MilestoneID: new(int64(0))}, map[string]string{"milestone_id": "0"}},
+		{"milestone by title and a merge time", UpdateInput{Milestone: "v2.0", MergeAfter: new("2027-01-02T03:04:05Z")}, map[string]string{
+			"milestone": `"v2.0"`, "merge_after": `"2027-01-02T03:04:05Z"`,
+		}},
+		// GitLab removes the merge schedule for a blank merge_after, which
+		// client-go's *time.Time cannot send, so it goes out as null.
+		{"merge_after empty removes the schedule", UpdateInput{MergeAfter: new("")}, map[string]string{"merge_after": "null"}},
 		{"nothing set", UpdateInput{}, map[string]string{}},
 	}
 	for _, tt := range tests {
@@ -7630,6 +7717,24 @@ func TestDependencyHandlers_BlockingID_ReachesTheRequest(t *testing.T) {
 		}
 		assertBodyKeys(t, body, map[string]string{"blocking_merge_request_id": "100"})
 	})
+	t.Run("create sends the blocking merge request's IID and project", func(t *testing.T) {
+		var body map[string]json.RawMessage
+		client := testutil.NewTestClient(t, captureJSONBody(t, http.MethodPost, pathMR1+pathSuffixBlocks, http.StatusCreated, dependencyJSONCoverage, &body))
+		if _, err := CreateDependency(context.Background(), client, DependencyInput{
+			ProjectID: testProjectID, MRIID: 1, BlockingMergeRequestIID: 7, BlockingProjectID: "group/other",
+		}); err != nil {
+			t.Fatalf("CreateDependency() unexpected error: %v", err)
+		}
+		assertBodyKeys(t, body, map[string]string{"blocking_merge_request_iid": "7", "blocking_project_id": `"group/other"`})
+	})
+	t.Run("create sends the blocking IID alone in this project", func(t *testing.T) {
+		var body map[string]json.RawMessage
+		client := testutil.NewTestClient(t, captureJSONBody(t, http.MethodPost, pathMR1+pathSuffixBlocks, http.StatusCreated, dependencyJSONCoverage, &body))
+		if _, err := CreateDependency(context.Background(), client, DependencyInput{ProjectID: testProjectID, MRIID: 1, BlockingMergeRequestIID: 7}); err != nil {
+			t.Fatalf("CreateDependency() unexpected error: %v", err)
+		}
+		assertBodyKeys(t, body, map[string]string{"blocking_merge_request_iid": "7"})
+	})
 	t.Run("delete addresses the dependency by id", func(t *testing.T) {
 		var path string
 		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -7662,10 +7767,16 @@ func TestDependencyHandlers_NoBlockingID_AreRefusedWithoutReachingGitLab(t *test
 	}))
 	_, createErr := CreateDependency(t.Context(), client, DependencyInput{ProjectID: testProjectID, MRIID: 1})
 	deleteErr := DeleteDependency(t.Context(), client, DeleteDependencyInput{ProjectID: testProjectID, MRIID: 1})
-	for name, err := range map[string]error{"create": createErr, "delete": deleteErr} {
+	for name, tt := range map[string]struct {
+		err  error
+		want string
+	}{
+		"create": {createErr, "one of blocking_merge_request_id and blocking_merge_request_iid is required"},
+		"delete": {deleteErr, "blocking_merge_request_id is required"},
+	} {
 		t.Run(name, func(t *testing.T) {
-			if err == nil || !strings.Contains(err.Error(), "blocking_merge_request_id is required") {
-				t.Errorf("error = %v, want one naming blocking_merge_request_id as required", err)
+			if tt.err == nil || !strings.Contains(tt.err.Error(), tt.want) {
+				t.Errorf("error = %v, want one containing %q", tt.err, tt.want)
 			}
 		})
 	}
@@ -7674,18 +7785,28 @@ func TestDependencyHandlers_NoBlockingID_AreRefusedWithoutReachingGitLab(t *test
 	}
 }
 
-// TestActionSpecs_Dependencies_RequireTheBlockingID asserts both dependency
-// actions publish blocking_merge_request_id as required on the route schema
-// all three surfaces read, since GitLab's delete route has it as its last
-// path segment and the create, of the two alternatives GitLab takes, can send
-// only this one.
-func TestActionSpecs_Dependencies_RequireTheBlockingID(t *testing.T) {
+// TestActionSpecs_Dependencies_RequireTheBlockingIDWhereGitLabDoes asserts the
+// delete publishes blocking_merge_request_id as required on the route schema
+// all three surfaces read, since GitLab's delete route has it as its last path
+// segment, and that the create requires neither of the two alternatives
+// GitLab takes exactly one of, which the handler refuses itself.
+func TestActionSpecs_Dependencies_RequireTheBlockingIDWhereGitLabDoes(t *testing.T) {
 	byTool := mergeRequestSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t))))
-	for _, tool := range []string{"gitlab_mr_dependency_create", "gitlab_mr_dependency_delete"} {
-		t.Run(tool, func(t *testing.T) {
-			required, _ := byTool[tool].Route.InputSchema["required"].([]string)
-			if !slices.Contains(required, "blocking_merge_request_id") {
-				t.Errorf("required = %v, want it to hold blocking_merge_request_id", required)
+	tests := []struct {
+		tool     string
+		required bool
+	}{
+		{"gitlab_mr_dependency_create", false},
+		{"gitlab_mr_dependency_delete", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			required, _ := byTool[tt.tool].Route.InputSchema["required"].([]string)
+			if got := slices.Contains(required, "blocking_merge_request_id"); got != tt.required {
+				t.Errorf("required = %v, want blocking_merge_request_id required: %v", required, tt.required)
+			}
+			if slices.Contains(required, "blocking_merge_request_iid") {
+				t.Errorf("required = %v, want blocking_merge_request_iid optional", required)
 			}
 		})
 	}

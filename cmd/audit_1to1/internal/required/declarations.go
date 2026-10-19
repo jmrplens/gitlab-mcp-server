@@ -116,12 +116,6 @@ func declaredRequiredness() map[declarationKey]declaration {
 				"carry, and PersonalAccessToken validates the presence of scopes, so a token created without them is refused",
 		},
 		{action: "group.group_label_update", field: "label_id"}: {DirectionGitLabOptional, categorySDKPositional, reasonLabelPath},
-		{action: "merge_request.dependency_create", field: "blocking_merge_request_id"}: {
-			DirectionGitLabOptional, categoryOneAlternative,
-			"POST /projects/:id/merge_requests/:merge_request_iid/blocks takes exactly one of blocking_merge_request_id and " +
-				"blocking_merge_request_iid (ee/lib/api/merge_request_dependencies.rb); client-go's " +
-				"CreateMergeRequestDependencyOptions carries the first alone, so it is the one this action sends",
-		},
 
 		// A null client-go writes in place of a key left out.
 		{action: "pipeline.schedule_edit_variable", field: "value"}: {

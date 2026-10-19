@@ -5479,6 +5479,8 @@ func TestCreate_OptionalInputs_EachReachesItsOwnBodyKey(t *testing.T) {
 		DiscussionToResolve:                "d78",
 		Labels:                             []string{"bug", "regression"},
 		DueDate:                            "2026-02-03",
+		StartDate:                          "2026-01-30",
+		Severity:                           "high",
 		CreatedAt:                          "2026-01-04T05:06:07Z",
 		Confidential:                       &confidential,
 	})
@@ -5499,6 +5501,8 @@ func TestCreate_OptionalInputs_EachReachesItsOwnBodyKey(t *testing.T) {
 		{"discussion_to_resolve", `"d78"`},
 		{"labels", `"bug,regression"`},
 		{"due_date", `"2026-02-03"`},
+		{"start_date", `"2026-01-30"`},
+		{"severity", `"high"`},
 		{"created_at", `"2026-01-04T05:06:07Z"`},
 		{"confidential", "true"},
 	} {
@@ -5525,9 +5529,10 @@ func TestCreate_UnsetOptionalInputs_SendNoKeyAtAll(t *testing.T) {
 		t.Fatalf(fmtCreateErr, err)
 	}
 	for _, key := range []string{
-		"iid", "description", "assignee_id", "assignee_ids", "milestone_id",
+		"iid", "description", "assignee_id", "assignee_ids", "milestone_id", "milestone",
 		"issue_type", "weight", "epic_id", "merge_request_to_resolve_discussions_of",
-		"discussion_to_resolve", "labels", "due_date", "created_at", "confidential",
+		"discussion_to_resolve", "labels", "due_date", "start_date", "severity",
+		"created_at", "confidential",
 	} {
 		t.Run(key, func(t *testing.T) {
 			if _, present := body[key]; present {
@@ -5537,6 +5542,74 @@ func TestCreate_UnsetOptionalInputs_SendNoKeyAtAll(t *testing.T) {
 	}
 	if body["title"] != testIssueTitle {
 		t.Errorf("create body title = %v, want %q", body["title"], testIssueTitle)
+	}
+}
+
+// TestCreate_MilestoneTitle_ReachesTheBodyAlone checks that a milestone named
+// by title is sent as milestone, the param lib/api/issues.rb resolves to a
+// project or ancestor-group milestone, and that no milestone_id goes with it.
+func TestCreate_MilestoneTitle_ReachesTheBodyAlone(t *testing.T) {
+	client, body := captureCreateBody(t)
+	if _, err := Create(context.Background(), client, CreateInput{
+		ProjectID: testProjectID, Title: testIssueTitle, Milestone: "v1.0",
+	}); err != nil {
+		t.Fatalf(fmtCreateErr, err)
+	}
+	if got := encodedBodyValue(t, body, "milestone"); got != `"v1.0"` {
+		t.Errorf("create body milestone = %s, want \"v1.0\"", got)
+	}
+	if _, present := body["milestone_id"]; present {
+		t.Errorf("create body carries milestone_id = %v beside a milestone title", body["milestone_id"])
+	}
+}
+
+// TestCreateAndUpdate_MilestoneAndMilestoneID_AreRefusedTogether checks that
+// a milestone named both by title and by ID is refused before any request,
+// naming both fields: GitLab declares the two mutually exclusive on both
+// routes and answers 400 for the pair, so the refusal says which to drop
+// instead of spending a request on it.
+func TestCreateAndUpdate_MilestoneAndMilestoneID_AreRefusedTogether(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{"create", func() error {
+			_, err := Create(context.Background(), client, CreateInput{
+				ProjectID: testProjectID, Title: testIssueTitle, Milestone: "v1.0", MilestoneID: 7,
+			})
+			return err
+		}},
+		{"update", func() error {
+			_, err := Update(context.Background(), client, UpdateInput{
+				ProjectID: testProjectID, IssueIID: 10, Milestone: "v1.0", MilestoneID: new(int64(0)),
+			})
+			return err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.call()
+			if err == nil || !strings.Contains(err.Error(), "milestone and milestone_id are mutually exclusive") {
+				t.Errorf("error = %v, want the refusal naming milestone and milestone_id", err)
+			}
+		})
+	}
+}
+
+// TestCreateAndUpdate_UnparsableStartDate_IsRefused checks that a start date
+// that is not YYYY-MM-DD is refused before any request, naming the field.
+func TestCreateAndUpdate_UnparsableStartDate_IsRefused(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	if _, err := Create(context.Background(), client, CreateInput{
+		ProjectID: testProjectID, Title: testIssueTitle, StartDate: "next week",
+	}); err == nil || !strings.Contains(err.Error(), "start_date") {
+		t.Errorf("Create() error = %v, want the refusal of start_date", err)
+	}
+	if _, err := Update(context.Background(), client, UpdateInput{
+		ProjectID: testProjectID, IssueIID: 10, StartDate: new("31/12/2026"),
+	}); err == nil || !strings.Contains(err.Error(), "start_date") {
+		t.Errorf("Update() error = %v, want the refusal of start_date", err)
 	}
 }
 
@@ -5907,6 +5980,10 @@ func TestUpdate_ClearingValues_ReachTheBody(t *testing.T) {
 		{"weight 3", UpdateInput{Weight: new(int64(3))}, map[string]string{"weight": "3"}},
 		{"description empty", UpdateInput{Description: new("")}, map[string]string{"description": `""`}},
 		{"due_date empty", UpdateInput{DueDate: new("")}, map[string]string{"due_date": "null"}},
+		{"start_date empty", UpdateInput{StartDate: new("")}, map[string]string{"start_date": "null"}},
+		{"start_date set", UpdateInput{StartDate: new("2026-05-01")}, map[string]string{"start_date": `"2026-05-01"`}},
+		{"severity", UpdateInput{Severity: "critical"}, map[string]string{"severity": `"critical"`}},
+		{"milestone title", UpdateInput{Milestone: "v2.0"}, map[string]string{"milestone": `"v2.0"`}},
 		{"assignee_ids empty", UpdateInput{AssigneeIDs: []int64{}}, map[string]string{"assignee_ids": "[]"}},
 		{"labels empty", UpdateInput{Labels: []string{}}, map[string]string{"labels": `""`}},
 	}

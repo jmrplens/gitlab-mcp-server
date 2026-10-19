@@ -1248,6 +1248,7 @@ const (
 	reasonCommitMetadata    = "describes the commit the update makes, not a value stored on the object"
 	reasonHookSecret        = "a secret GitLab only ever replaces"
 	reasonLabelOperation    = "labels to add or remove, an operation rather than a stored list"
+	reasonMilestoneTitle    = "a title lib/api/helpers/milestones_helpers.rb resolves to a milestone and skips when blank, so an empty one names nothing; milestone_id 0 is what unassigns the milestone"
 	reasonEpicLookup        = "the handler reads the epic's global ID before it sends the mutation, which the probe's generic answer cannot give; the epics package's tests hold its clears (issue 1302)"
 	reasonWorkItemLookup    = "the handler reads the work item's global ID, or asks for confirmation, before it sends the mutation, which the probe cannot give; the workitems package's tests hold its clears (issue 1303)"
 	reasonWebhookURL        = "a webhook delivers to its URL, which GitLab requires"
@@ -1365,6 +1366,7 @@ var clearingDeclarations = map[string]clearingDeclaration{
 	"group.wiki_edit.title":                                          clearRequired("a wiki page has a title"),
 	"issue.discussion_update_note.created_at":                        clearNotStored(reasonAdminMoment),
 	"issue.update.add_labels":                                        clearNotStored(reasonLabelOperation),
+	"issue.update.milestone":                                         clearNotStored(reasonMilestoneTitle),
 	"issue.update.remove_labels":                                     clearNotStored(reasonLabelOperation),
 	"issue.update.title":                                             clearRequired("an issue has a title"),
 	"issue.update.updated_at":                                        clearNotStored(reasonAdminMoment),
@@ -1387,6 +1389,7 @@ var clearingDeclarations = map[string]clearingDeclaration{
 	"merge_request.approval_rule_update.name":                        clearRequired("an approval rule has a name"),
 	"merge_request.approval_rule_update.user_ids":                    clearUnverified,
 	"merge_request.update.add_labels":                                clearNotStored(reasonLabelOperation),
+	"merge_request.update.milestone":                                 clearNotStored(reasonMilestoneTitle),
 	"merge_request.update.remove_labels":                             clearNotStored(reasonLabelOperation),
 	"merge_request.update.target_branch":                             clearRequired("a merge request targets a branch"),
 	"merge_request.update.title":                                     clearRequired("a merge request has a title"),

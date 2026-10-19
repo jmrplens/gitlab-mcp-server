@@ -59,12 +59,14 @@ type CreateInput struct {
 	AssigneeIDs []int64  `json:"assignee_ids,omitempty" jsonschema:"User IDs to assign"`
 	ReviewerIDs []int64  `json:"reviewer_ids,omitempty" jsonschema:"User IDs to add as reviewers"`
 	Labels      []string `json:"labels,omitempty" jsonschema:"Label names to apply"`
-	MilestoneID int64    `json:"milestone_id,omitempty" jsonschema:"Milestone ID to associate with the merge request"`
+	MilestoneID int64    `json:"milestone_id,omitempty" jsonschema:"Milestone ID to associate with the merge request. Mutually exclusive with milestone"`
+	Milestone   string   `json:"milestone,omitempty" jsonschema:"Title of a project or ancestor-group milestone to associate, matched exactly (case-sensitive). GitLab leaves the merge request without a milestone when no milestone has that title. Mutually exclusive with milestone_id"`
 
 	// Merge behavior
-	RemoveSourceBranch *bool `json:"remove_source_branch,omitempty" jsonschema:"Delete source branch after merge. Only set if explicitly requested by the user. Omit to preserve repository defaults"`
-	Squash             *bool `json:"squash,omitempty" jsonschema:"Squash commits on merge. Only set if explicitly requested by the user. Omit to preserve repository defaults"`
-	AllowCollaboration *bool `json:"allow_collaboration,omitempty" jsonschema:"Allow commits from upstream members who can merge to target branch"`
+	MergeAfter         string `json:"merge_after,omitempty" jsonschema:"Earliest instant the merge request can be merged, an ISO 8601 timestamp such as 2026-12-31T23:00:00Z. A date such as 2026-12-31 is read as midnight UTC. GitLab reads it from 17.8"`
+	RemoveSourceBranch *bool  `json:"remove_source_branch,omitempty" jsonschema:"Delete source branch after merge. Only set if explicitly requested by the user. Omit to preserve repository defaults"`
+	Squash             *bool  `json:"squash,omitempty" jsonschema:"Squash commits on merge. Only set if explicitly requested by the user. Omit to preserve repository defaults"`
+	AllowCollaboration *bool  `json:"allow_collaboration,omitempty" jsonschema:"Allow commits from upstream members who can merge to target branch"`
 
 	// Cross-project
 	TargetProjectID int64 `json:"target_project_id,omitempty" jsonschema:"Target project ID (for cross-project/fork MRs)"`
@@ -413,7 +415,9 @@ type UpdateInput struct {
 	Labels             []string             `json:"labels,omitempty"               jsonschema:"Label names that replace all labels on the merge request. Pass [] to remove every label. Omit the field to leave them untouched"`
 	AddLabels          []string             `json:"add_labels,omitempty"          jsonschema:"Label names to add without removing existing"`
 	RemoveLabels       []string             `json:"remove_labels,omitempty"       jsonschema:"Label names to remove"`
-	MilestoneID        *int64               `json:"milestone_id,omitempty"        jsonschema:"Milestone ID (0 to unset)"`
+	MilestoneID        *int64               `json:"milestone_id,omitempty"        jsonschema:"Milestone ID (0 to unset). Mutually exclusive with milestone"`
+	Milestone          string               `json:"milestone,omitempty"           jsonschema:"Title of a project or ancestor-group milestone to assign, matched exactly (case-sensitive). GitLab leaves the milestone unchanged when no milestone has that title. Use milestone_id 0 to unset. Mutually exclusive with milestone_id"`
+	MergeAfter         *string              `json:"merge_after,omitempty"         jsonschema:"Earliest instant the merge request can be merged, an ISO 8601 timestamp such as 2026-12-31T23:00:00Z. A date such as 2026-12-31 is read as midnight UTC. Pass an empty string to remove the schedule. Omit the field to leave it untouched. GitLab reads it from 17.8"`
 	RemoveSourceBranch *bool                `json:"remove_source_branch,omitempty" jsonschema:"Delete source branch after merge. Only set if explicitly requested"`
 	Squash             *bool                `json:"squash,omitempty"              jsonschema:"Squash commits on merge. Only set if explicitly requested"`
 	DiscussionLocked   *bool                `json:"discussion_locked,omitempty"   jsonschema:"Lock discussions on the merge request"`
@@ -621,10 +625,21 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.ProjectID == "" {
 		return Output{}, errors.New("mrCreate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
+	if err := checkMilestoneChoice("mrCreate", input.Milestone, input.MilestoneID != 0); err != nil {
+		return Output{}, err
+	}
+	mergeAfter, err := toolutil.ParseTimeField("merge_after", input.MergeAfter)
+	if err != nil {
+		return Output{}, fmt.Errorf("mrCreate: %w", err)
+	}
 	opts := &gl.CreateMergeRequestOptions{
 		SourceBranch: new(input.SourceBranch),
 		TargetBranch: new(input.TargetBranch),
 		Title:        new(input.Title),
+		MergeAfter:   mergeAfter,
+	}
+	if input.Milestone != "" {
+		opts.Milestone = new(input.Milestone)
 	}
 	if input.Description != "" {
 		opts.Description = new(toolutil.NormalizeText(input.Description))
@@ -776,9 +791,29 @@ func projectMergeRequestListTarget(opts *gl.ListProjectMergeRequestsOptions) mer
 }
 
 // buildUpdateOpts maps UpdateInput fields to the GitLab API update options,
-// applying only non-zero values so that unset fields are omitted.
-func buildUpdateOpts(input UpdateInput) *gl.UpdateMergeRequestOptions {
+// applying only non-zero values so that unset fields are omitted, and returns
+// the body edit for the one value the options cannot carry: an empty
+// merge_after, which GitLab reads as removing the merge schedule
+// (MergeRequests::UpdateMergeScheduleService destroys it for a blank value)
+// and client-go's *time.Time tagged omitempty cannot send, so it goes out as
+// null. It refuses a milestone named both by title and by ID, and a
+// merge_after that is not a timestamp, before any request.
+func buildUpdateOpts(input UpdateInput) (*gl.UpdateMergeRequestOptions, toolutil.BodyEdit, error) {
+	var nulls toolutil.BodyEdit
+	if err := checkMilestoneChoice("mrUpdate", input.Milestone, input.MilestoneID != nil); err != nil {
+		return nil, nulls, err
+	}
 	opts := &gl.UpdateMergeRequestOptions{}
+	if mergeAfter := toolutil.NullWhenZero(input.MergeAfter, "merge_after", &nulls); mergeAfter != nil {
+		at, err := toolutil.ParseTimeField("merge_after", *mergeAfter)
+		if err != nil {
+			return nil, nulls, fmt.Errorf("mrUpdate: %w", err)
+		}
+		opts.MergeAfter = at
+	}
+	if input.Milestone != "" {
+		opts.Milestone = new(input.Milestone)
+	}
 	if input.Title != "" {
 		opts.Title = new(input.Title)
 	}
@@ -831,7 +866,18 @@ func buildUpdateOpts(input UpdateInput) *gl.UpdateMergeRequestOptions {
 	if input.AllowCollaboration != nil {
 		opts.AllowCollaboration = input.AllowCollaboration
 	}
-	return opts
+	return opts, nulls, nil
+}
+
+// checkMilestoneChoice refuses a milestone named both by title and by ID
+// before any request. lib/api/merge_requests.rb declares milestone and
+// milestone_id mutually exclusive and answers 400 for the pair, so the refusal
+// names both and says to keep one.
+func checkMilestoneChoice(op, title string, idSet bool) error {
+	if title != "" && idSet {
+		return fmt.Errorf("%s: milestone and milestone_id are mutually exclusive, so pass the milestone's title or its ID, not both", op)
+	}
+	return nil
 }
 
 // Update modifies an existing merge request. Only non-zero fields in the
@@ -848,9 +894,13 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.MRIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mrUpdate", "merge_request_iid")
 	}
-	opts := buildUpdateOpts(input)
+	opts, nulls, err := buildUpdateOpts(input)
+	if err != nil {
+		return Output{}, err
+	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	mr, _, err := client.GL().MergeRequests.UpdateMergeRequest(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
+	mr, _, err := client.GL().MergeRequests.UpdateMergeRequest(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx),
+		toolutil.EditJSONBody(nulls))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return Output{}, toolutil.WrapErrWithHint("mrUpdate", err,
@@ -2344,10 +2394,15 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 // ---------------------------------------------------------------------------.
 
 // DependencyInput defines parameters for creating a merge request dependency.
+// The blocking merge request is named exactly once, by its global ID or by its
+// IID, and the IID may name a merge request of another project
+// (ee/lib/api/merge_request_dependencies.rb).
 type DependencyInput struct {
-	ProjectID              toolutil.StringOrInt `json:"project_id"                jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID                  int64                `json:"merge_request_iid"                    jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
-	BlockingMergeRequestID int64                `json:"blocking_merge_request_id" jsonschema:"ID of the merge request that blocks this one,required"`
+	ProjectID               toolutil.StringOrInt `json:"project_id"                           jsonschema:"Project ID or URL-encoded path,required"`
+	MRIID                   int64                `json:"merge_request_iid"                    jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	BlockingMergeRequestID  int64                `json:"blocking_merge_request_id,omitempty"  jsonschema:"Global ID of the merge request that blocks this one. Pass it or blocking_merge_request_iid, not both"`
+	BlockingMergeRequestIID int64                `json:"blocking_merge_request_iid,omitempty" jsonschema:"IID of the merge request that blocks this one, in this project or in blocking_project_id. Pass it or blocking_merge_request_id, not both"`
+	BlockingProjectID       toolutil.StringOrInt `json:"blocking_project_id,omitempty"        jsonschema:"ID or full path (group/project) of the project the blocking merge request named by blocking_merge_request_iid belongs to. Defaults to this project"`
 }
 
 // DependencyOutput mirrors gl.MergeRequestDependency. The blocking merge
@@ -2422,12 +2477,12 @@ func CreateDependency(ctx context.Context, client *gitlabclient.Client, input De
 	if input.MRIID <= 0 {
 		return DependencyOutput{}, toolutil.ErrRequiredInt64("mrCreateDependency", "merge_request_iid")
 	}
-	if input.BlockingMergeRequestID <= 0 {
-		return DependencyOutput{}, toolutil.ErrRequiredInt64("mrCreateDependency", "blocking_merge_request_id")
+	opts, err := dependencyOptions(input)
+	if err != nil {
+		return DependencyOutput{}, err
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	dep, _, err := client.GL().MergeRequests.CreateMergeRequestDependency(string(input.ProjectID), input.MRIID,
-		gl.CreateMergeRequestDependencyOptions{BlockingMergeRequestID: new(input.BlockingMergeRequestID)}, gl.WithContext(ctx))
+	dep, _, err := client.GL().MergeRequests.CreateMergeRequestDependency(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return DependencyOutput{}, toolutil.WrapErrWithHint("mrCreateDependency", err,
@@ -2438,13 +2493,38 @@ func CreateDependency(ctx context.Context, client *gitlabclient.Client, input De
 				"dependency would create a cycle, the blocking MR does not exist, or this dependency already exists. Use merge_request.dependencies_list to inspect current dependencies")
 		}
 		return DependencyOutput{}, toolutil.WrapErrWithStatusHint("mrCreateDependency", err, http.StatusNotFound,
-			"verify project_id and merge_request_iid with merge_request.get; blocking_merge_request_id is a global database ID, not an IID")
+			"verify project_id and merge_request_iid with merge_request.get; blocking_merge_request_id is a global database ID, not an IID, and an IID goes in blocking_merge_request_iid")
 	}
 	var extra dependencyExtra
 	if decodeErr := captured.Decode(&extra); decodeErr != nil {
 		return DependencyOutput{}, toolutil.WrapErr("mrCreateDependency", decodeErr)
 	}
 	return dependencyToOutput(dep, extra), nil
+}
+
+// dependencyOptions builds the create options from the one way the caller
+// named the blocking merge request, refusing what
+// ee/lib/api/merge_request_dependencies.rb would answer 400 for: neither or
+// both of the ID and the IID. A project beside the ID is refused too: GitLab
+// reads blocking_project_id only to resolve an IID, so it would be ignored.
+func dependencyOptions(input DependencyInput) (gl.CreateMergeRequestDependencyOptions, error) {
+	byID, byIID := input.BlockingMergeRequestID > 0, input.BlockingMergeRequestIID > 0
+	switch {
+	case byID && byIID:
+		return gl.CreateMergeRequestDependencyOptions{}, errors.New("mrCreateDependency: blocking_merge_request_id and blocking_merge_request_iid are mutually exclusive, so pass one of them")
+	case byID && input.BlockingProjectID != "":
+		return gl.CreateMergeRequestDependencyOptions{}, errors.New("mrCreateDependency: blocking_project_id is read only beside blocking_merge_request_iid, so pass the IID with it or leave the project out")
+	case byID:
+		return gl.CreateMergeRequestDependencyOptions{BlockingMergeRequestID: new(input.BlockingMergeRequestID)}, nil
+	case byIID:
+		opts := gl.CreateMergeRequestDependencyOptions{BlockingMergeRequestIID: new(input.BlockingMergeRequestIID)}
+		if input.BlockingProjectID != "" {
+			opts.BlockingProjectID = string(input.BlockingProjectID)
+		}
+		return opts, nil
+	default:
+		return gl.CreateMergeRequestDependencyOptions{}, errors.New("mrCreateDependency: one of blocking_merge_request_id and blocking_merge_request_iid is required: the global ID from merge_request.get, or the IID with blocking_project_id when the blocking merge request is in another project")
+	}
 }
 
 // DeleteDependencyInput defines parameters for deleting a merge request dependency.

@@ -34,10 +34,13 @@ type CreateInput struct {
 	AssigneeID  int64    `json:"assignee_id,omitempty" jsonschema:"Single user ID to assign (use assignee_ids for multiple)"`
 	AssigneeIDs []int64  `json:"assignee_ids,omitempty" jsonschema:"User IDs to assign"`
 	Labels      []string `json:"labels,omitempty" jsonschema:"Label names to apply"`
-	MilestoneID int64    `json:"milestone_id,omitempty" jsonschema:"Milestone ID to associate"`
+	MilestoneID int64    `json:"milestone_id,omitempty" jsonschema:"Milestone ID to associate. Mutually exclusive with milestone"`
+	Milestone   string   `json:"milestone,omitempty" jsonschema:"Title of a project or ancestor-group milestone to associate, matched exactly (case-sensitive). GitLab leaves the issue without a milestone when no milestone has that title. Mutually exclusive with milestone_id"`
 	EpicID      int64    `json:"epic_id,omitempty" tier:"premium" jsonschema:"Epic ID to associate the issue with"`
 	Weight      *int64   `json:"weight,omitempty" tier:"premium" jsonschema:"Issue weight, 0 or higher"`
 	DueDate     string   `json:"due_date,omitempty" jsonschema:"Due date in YYYY-MM-DD format"`
+	StartDate   string   `json:"start_date,omitempty" jsonschema:"Start date in YYYY-MM-DD format. GitLab reads it from 19.1"`
+	Severity    string   `json:"severity,omitempty" jsonschema:"Severity of an incident (unknown, low, medium, high, critical). GitLab applies it to incidents only"`
 
 	// Behavior flags
 	Confidential *bool  `json:"confidential,omitempty" jsonschema:"Mark issue as confidential"`
@@ -201,8 +204,11 @@ type UpdateInput struct {
 	AddLabels        []string             `json:"add_labels,omitempty"    jsonschema:"Label names to add without removing existing"`
 	RemoveLabels     []string             `json:"remove_labels,omitempty" jsonschema:"Label names to remove"`
 	EpicID           *int64               `json:"epic_id,omitempty"       tier:"premium" jsonschema:"Epic ID to associate. Pass 0 to take the issue out of its epic. Omit the field to leave it untouched"`
-	MilestoneID      *int64               `json:"milestone_id,omitempty"  jsonschema:"New milestone ID (0 to unset. Omit to leave unchanged)"`
+	MilestoneID      *int64               `json:"milestone_id,omitempty"  jsonschema:"New milestone ID (0 to unset. Omit to leave unchanged). Mutually exclusive with milestone"`
+	Milestone        string               `json:"milestone,omitempty"     jsonschema:"Title of a project or ancestor-group milestone to assign, matched exactly (case-sensitive). GitLab leaves the milestone unchanged when no milestone has that title. Use milestone_id 0 to unset. Mutually exclusive with milestone_id"`
 	DueDate          *string              `json:"due_date,omitempty"      jsonschema:"New due date in YYYY-MM-DD format. Pass an empty string to remove the due date. Omit the field to leave it untouched"`
+	StartDate        *string              `json:"start_date,omitempty"    jsonschema:"New start date in YYYY-MM-DD format. Pass an empty string to remove the start date. Omit the field to leave it untouched. GitLab reads it from 19.1"`
+	Severity         string               `json:"severity,omitempty"      jsonschema:"New severity of an incident (unknown, low, medium, high, critical). GitLab applies it to incidents only"`
 	Confidential     *bool                `json:"confidential,omitempty"  jsonschema:"Update confidential flag"`
 	IssueType        string               `json:"issue_type,omitempty"    jsonschema:"Issue type (issue, incident, test_case, task)"`
 	Weight           *int64               `json:"weight,omitempty"        tier:"premium" jsonschema:"Issue weight, 0 or higher. 0 is a weight of its own. Omit the field to leave it untouched"`
@@ -421,6 +427,9 @@ func buildCreateOpts(input CreateInput) (*gl.CreateIssueOptions, error) {
 	if err := checkWeight("issueCreate", input.Weight); err != nil {
 		return nil, err
 	}
+	if err := checkMilestoneChoice("issueCreate", input.Milestone, input.MilestoneID != 0); err != nil {
+		return nil, err
+	}
 	opts := &gl.CreateIssueOptions{
 		Title: new(input.Title),
 	}
@@ -446,6 +455,13 @@ func buildCreateOpts(input CreateInput) (*gl.CreateIssueOptions, error) {
 			return nil, err
 		}
 		opts.DueDate = d
+	}
+	if input.StartDate != "" {
+		d, err := toolutil.ParseDateField("start_date", input.StartDate)
+		if err != nil {
+			return nil, err
+		}
+		opts.StartDate = d
 	}
 	applyCreateExtraOpts(opts, input)
 	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
@@ -474,6 +490,23 @@ func applyCreateExtraOpts(opts *gl.CreateIssueOptions, input CreateInput) {
 	if input.EpicID > 0 {
 		opts.EpicID = new(input.EpicID)
 	}
+	if input.Milestone != "" {
+		opts.Milestone = new(input.Milestone)
+	}
+	if input.Severity != "" {
+		opts.Severity = new(input.Severity)
+	}
+}
+
+// checkMilestoneChoice refuses a milestone named both by title and by ID
+// before any request. lib/api/issues.rb declares milestone and milestone_id
+// mutually exclusive and answers 400 for the pair, so the refusal names both
+// and says to keep one.
+func checkMilestoneChoice(op, title string, idSet bool) error {
+	if title != "" && idSet {
+		return fmt.Errorf("%s: milestone and milestone_id are mutually exclusive, so pass the milestone's title or its ID, not both", op)
+	}
+	return nil
 }
 
 // checkWeight refuses a weight below 0 before any request, naming the field
@@ -608,11 +641,16 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // A field the caller left out is left unset. The fields an update can empty
 // decide presence by nil rather than by their value, so the value that
 // empties each one reaches GitLab (issue 1297): a description of "" is sent
-// as "", a due date of "" as null through client-go's ResetDueDate, an empty
-// assignee list as [], an empty label list as "", and a weight of 0 as 0.
-// Returns an error if due_date does not parse or the weight is negative.
+// as "", a due date or start date of "" as null through client-go's
+// ResetDueDate and ResetStartDate, an empty assignee list as [], an empty
+// label list as "", and a weight of 0 as 0. Returns an error if due_date or
+// start_date does not parse, the weight is negative, or the milestone is named
+// both by title and by ID.
 func buildUpdateOpts(input UpdateInput) (*gl.UpdateIssueOptions, error) {
 	if err := checkWeight("issueUpdate", input.Weight); err != nil {
+		return nil, err
+	}
+	if err := checkMilestoneChoice("issueUpdate", input.Milestone, input.MilestoneID != nil); err != nil {
 		return nil, err
 	}
 	opts := &gl.UpdateIssueOptions{}
@@ -643,6 +681,9 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateIssueOptions, error) {
 	if input.MilestoneID != nil {
 		opts.MilestoneID = input.MilestoneID
 	}
+	if input.Milestone != "" {
+		opts.Milestone = new(input.Milestone)
+	}
 	if input.DueDate != nil {
 		d, err := parseDueDate(*input.DueDate)
 		if err != nil {
@@ -651,11 +692,24 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateIssueOptions, error) {
 		opts.DueDate = d
 		opts.ResetDueDate = d == nil
 	}
+	// An empty start date is the caller removing it, which client-go sends
+	// as null through ResetStartDate, as it does the due date.
+	if input.StartDate != nil {
+		d, err := toolutil.ParseDateField("start_date", *input.StartDate)
+		if err != nil {
+			return nil, err
+		}
+		opts.StartDate = d
+		opts.ResetStartDate = d == nil
+	}
 	if input.Confidential != nil {
 		opts.Confidential = input.Confidential
 	}
 	if input.IssueType != "" {
 		opts.IssueType = new(input.IssueType)
+	}
+	if input.Severity != "" {
+		opts.Severity = new(input.Severity)
 	}
 	opts.Weight = input.Weight
 	opts.EpicID = input.EpicID

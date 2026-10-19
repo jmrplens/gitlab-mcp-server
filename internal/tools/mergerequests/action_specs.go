@@ -382,7 +382,7 @@ func mergeRequestActionMetadataTable() map[string]mergeRequestActionMetadata {
 			description: "Create a to-do for a merge request for the caller. Returns: the created to-do item with action, target title and URL, project name, author, body, state and created and updated times. See also: gitlab_mr_get, gitlab_mr_subscribe.",
 		},
 		"dependency_create": {
-			usage:       "Add a blocking dependency so this merge request cannot merge until the specified blocking MR is merged.",
+			usage:       "Add a blocking dependency so this merge request cannot merge until the specified blocking MR is merged. Name the blocking MR once, by its global ID (blocking_merge_request_id) or by its IID (blocking_merge_request_iid), with blocking_project_id when it belongs to another project.",
 			aliases:     []string{"create merge request dependency", "add mr dependency", "block mr on another mr"},
 			related:     []string{"merge_request.dependency_delete", actionMRDependencies, actionMRMerge},
 			description: "Add a blocking dependency to a merge request. Returns: the created dependency linking the MR to its blocking MR. See also: gitlab_mr_dependency_delete, gitlab_mr_dependencies_list.",

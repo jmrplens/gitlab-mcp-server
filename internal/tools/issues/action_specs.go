@@ -449,6 +449,7 @@ func issueCreateSpec(name string, route toolutil.ActionRoute, individualTool str
 		toolutil.SchemaPropertyOverride("issue_type", map[string]any{
 			"enum": []any{"issue", "incident", "test_case", "task"},
 		}),
+		severityEnumOverride(),
 	}
 	return toolutil.NewCreateActionSpec(name, route, options)
 }
@@ -496,8 +497,18 @@ func issueUpdateActionSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 		toolutil.SchemaPropertyOverride("issue_type", map[string]any{
 			"enum": []any{"issue", "incident", "test_case", "task"},
 		}),
+		severityEnumOverride(),
 	}
 	return toolutil.NewUpdateActionSpec(specUpdate, toolutil.RouteAction(client, Update), options)
+}
+
+// severityEnumOverride constrains severity to the values
+// IssuableSeverity.severities declares, the ones lib/api/issues.rb accepts on
+// create and update.
+func severityEnumOverride() toolutil.InputSchemaOverride {
+	return toolutil.SchemaPropertyOverride("severity", map[string]any{
+		"enum": []any{"unknown", "low", "medium", "high", "critical"},
+	})
 }
 
 // issueDeleteSpec builds a destructive [toolutil.ActionSpec] for an issue
