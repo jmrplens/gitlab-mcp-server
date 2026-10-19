@@ -92,10 +92,17 @@ type UpdateOutput struct {
 // for, which is the condition this repository states for preferring a refusal
 // to a decode that fails open.
 //
+// The same patch is half applied when GitLab drops a key rather than
+// encoding/json, which is what happens to the settings the struct models and
+// the route does not declare ([undeclaredSettingKeys]): client-go sends them,
+// the route hands its handler the params it declares and no others, and the
+// rest of the patch is applied and answered 200. Those keys are refused with
+// the others, in the same refusal.
+//
 // The answer is read from the captured response for the reason [Get] is.
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (output UpdateOutput, err error) {
-	if unmodeled := unmodeledSettingKeys(input.Settings); len(unmodeled) > 0 {
-		return output, unmodeledSettingsError(len(input.Settings), unmodeled)
+	if unmodeled, undeclared := unsendableSettingKeys(input.Settings); len(unmodeled)+len(undeclared) > 0 {
+		return output, unsendableSettingsError(len(input.Settings), unmodeled, undeclared)
 	}
 
 	raw, err := json.Marshal(input.Settings)
@@ -147,37 +154,98 @@ func capturedSettings(capture *gitlabclient.ResponseCapture) (map[string]any, er
 	return values, nil
 }
 
-// maxNamedUnmodeledKeys bounds how many keys a refusal spells out. A patch
-// naming hundreds of unmodeled settings would otherwise answer with a wall of
-// names a model pays to read, and the first twenty are enough to show what the
-// refusal is about.
+// maxNamedUnmodeledKeys bounds how many keys of each kind a refusal spells
+// out. A patch naming hundreds of unmodeled settings would otherwise answer
+// with a wall of names a model pays to read, and the first twenty are enough
+// to show what the refusal is about.
 const maxNamedUnmodeledKeys = 20
 
-// unmodeledSettingsError is the refusal, naming what would have been dropped
-// and what to do about it.
-func unmodeledSettingsError(patched int, unmodeled []string) error {
-	named, tail := unmodeled, ""
+// unsendableSettingsError is the refusal, naming what would have been dropped,
+// under the reason each key would have been dropped for, and what to do about
+// it.
+func unsendableSettingsError(patched int, unmodeled, undeclared []string) error {
+	var named strings.Builder
+	if len(unmodeled) > 0 {
+		fmt.Fprintf(&named, " Keys the GitLab API client this server sends with does not model: %s.", namedSettingKeys(unmodeled))
+	}
+	if len(undeclared) > 0 {
+		fmt.Fprintf(&named, " Keys GitLab's update route does not take, which it drops although the client models them: %s.", namedSettingKeys(undeclared))
+	}
+	return fmt.Errorf("settings_update: %d of the %d keys in this patch would be dropped without a word, so nothing was sent: sending it would have applied the other keys and reported success for all of them.%s Remove them to apply the rest; a setting the client does not carry, or the update route does not take, cannot be set through this tool",
+		len(unmodeled)+len(undeclared), patched, named.String())
+}
+
+// namedSettingKeys spells out up to [maxNamedUnmodeledKeys] of keys and counts
+// the rest.
+func namedSettingKeys(keys []string) string {
+	named, tail := keys, ""
 	if len(named) > maxNamedUnmodeledKeys {
 		tail = fmt.Sprintf(" and %d more", len(named)-maxNamedUnmodeledKeys)
 		named = named[:maxNamedUnmodeledKeys]
 	}
-	return fmt.Errorf("settings_update: the GitLab API client this server sends with does not model %d of the %d keys in this patch, so nothing was sent: sending it would have applied the other keys and reported success for all of them. Keys it does not model: %s%s. Remove them to apply the rest; a setting the client does not carry cannot be set through this tool",
-		len(unmodeled), patched, strings.Join(named, ", "), tail)
+	return strings.Join(named, ", ") + tail
 }
 
-// unmodeledSettingKeys returns, sorted, the keys of a patch that
-// [gl.UpdateSettingsOptions] does not model and that a decode into it would
-// therefore discard.
-func unmodeledSettingKeys(patch map[string]any) []string {
+// unsendableSettingKeys returns, each sorted, the keys of a patch that
+// [gl.UpdateSettingsOptions] does not model, which a decode into it would
+// discard, and the keys it models that the update route does not declare
+// ([undeclaredSettingKeys]), which GitLab would discard.
+func unsendableSettingKeys(patch map[string]any) (unmodeled, undeclared []string) {
 	modeled := modeledSettingKeys()
-	var unmodeled []string
 	for key := range patch {
-		if _, ok := modeled[strings.ToLower(key)]; !ok {
+		name := strings.ToLower(key)
+		if _, ok := modeled[name]; !ok {
 			unmodeled = append(unmodeled, key)
+			continue
+		}
+		if _, ok := undeclaredSettingKeys[name]; ok {
+			undeclared = append(undeclared, key)
 		}
 	}
 	slices.Sort(unmodeled)
-	return unmodeled
+	slices.Sort(undeclared)
+	return unmodeled, undeclared
+}
+
+// undeclaredSettingKeys are the settings client-go's update options model and
+// GitLab's PUT /application/settings does not declare, as the pinned live
+// record of GitLab 19.5.0 and client-go v3.29.0 have them (upstream register
+// row 135). GitLab's handler reads the declared params alone, so a patch
+// naming one of these beside a setting it takes is applied without it and
+// answered 200.
+//
+// The list is written out because the server does not carry the record, and
+// TestUndeclaredSettingKeys_AreTheModeledKeysTheUpdateRouteDoesNotDeclare
+// holds it to both: a client-go release that models another such setting, or
+// a GitLab release that declares or retires one, fails that test until the
+// list follows. It retires when client-go stops modeling them.
+var undeclaredSettingKeys = map[string]struct{}{
+	"autocomplete_users":                                   {},
+	"autocomplete_users_unauthenticated":                   {},
+	"ci_partitions_size_limit":                             {},
+	"container_registry_import_created_before":             {},
+	"container_registry_import_max_retries":                {},
+	"container_registry_import_max_step_duration":          {},
+	"container_registry_import_max_tags_count":             {},
+	"container_registry_import_start_max_retries":          {},
+	"container_registry_import_target_plan":                {},
+	"delayed_group_deletion":                               {},
+	"delayed_project_deletion":                             {},
+	"enforce_pat_expiration":                               {},
+	"enforce_ssh_key_expiration":                           {},
+	"help_text":                                            {},
+	"housekeeping_bitmaps_enabled":                         {},
+	"in_product_marketing_emails_enabled":                  {},
+	"pseudonymizer_enabled":                                {},
+	"repository_storages":                                  {},
+	"send_user_confirmation_email":                         {},
+	"sign_in_text":                                         {},
+	"suggest_pipeline_enabled":                             {},
+	"throttle_unauthenticated_git_lfs_enabled":             {},
+	"throttle_unauthenticated_git_lfs_period_in_seconds":   {},
+	"throttle_unauthenticated_git_lfs_requests_per_period": {},
+	"user_email_lookup_limit":                              {},
+	"web_ide_clientside_preview_enabled":                   {},
 }
 
 // modeledSettingKeys is the set of setting names client-go's update options

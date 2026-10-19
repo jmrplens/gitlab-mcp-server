@@ -11,6 +11,8 @@ import (
 	"maps"
 	"math"
 	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -907,6 +909,129 @@ func TestUpdate_ManyKeysTheClientDoesNotModel_NamesTwentyAndCountsTheRest(t *tes
 				t.Errorf("Update() error = %q, want it to say the whole patch was outside what the client models", err)
 			}
 		})
+	}
+}
+
+// TestUpdate_KeyTheRouteDoesNotDeclare_RefusedBeforeAnythingIsSent verifies
+// that a patch naming a setting client-go models and GitLab's PUT route does
+// not declare is refused by name, and that GitLab is not asked at all.
+//
+// The client sends such a key, so the refusal of the keys it does not model
+// let it through, and GitLab dropped it instead: the route hands the handler
+// its declared params alone, the rest of the patch was applied, the answer was
+// a 200, and the model reported the whole patch applied. The half-applied
+// patch is the same whoever drops the key, so the refusal is the same too.
+func TestUpdate_KeyTheRouteDoesNotDeclare_RefusedBeforeAnythingIsSent(t *testing.T) {
+	var asked atomic.Bool
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		asked.Store(true)
+		testutil.RespondJSON(w, http.StatusOK, settingsJSON)
+	}))
+
+	_, err := Update(t.Context(), client, UpdateInput{Settings: map[string]any{
+		"signup_enabled":         false,
+		"enforce_pat_expiration": true,
+	}})
+	if err == nil {
+		t.Fatal("Update() = nil error, want a refusal naming the key the update route does not declare")
+	}
+	if asked.Load() {
+		t.Error("Update() reached GitLab; a patch GitLab would apply in part is refused before the request")
+	}
+
+	for _, want := range []string{
+		"settings_update: ",
+		"enforce_pat_expiration",
+		"nothing was sent",
+		"1 of the 2 keys",
+		"update route does not take",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("Update() error = %q, want it to contain %q", err, want)
+			}
+		})
+	}
+	if strings.Contains(err.Error(), "signup_enabled") {
+		t.Errorf("Update() error = %q, want it to name only the keys that would be dropped", err)
+	}
+}
+
+// TestUpdate_KeysOfBothKinds_AreNamedInOneRefusal verifies that a patch
+// carrying a key the client does not model and one the route does not declare
+// is answered with one refusal naming each under the reason it would be
+// dropped for, so a model fixes the patch in one round rather than two.
+func TestUpdate_KeysOfBothKinds_AreNamedInOneRefusal(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+
+	_, err := Update(t.Context(), client, UpdateInput{Settings: map[string]any{
+		"signup_enabled":      false,
+		"allow_possible_spam": true,
+		"help_text":           "Ask the admins",
+	}})
+	if err == nil {
+		t.Fatal("Update() = nil error, want a refusal")
+	}
+
+	msg := err.Error()
+	unmodeled := strings.Contains(msg, "does not model: allow_possible_spam.")
+	undeclared := strings.Contains(msg, "update route does not take, which it drops although the client models them: help_text.")
+	if !unmodeled || !undeclared {
+		t.Fatalf("Update() error = %q, want allow_possible_spam named as unmodeled and help_text as undeclared", msg)
+	}
+	if !strings.Contains(msg, "2 of the 3 keys") {
+		t.Errorf("Update() error = %q, want it to count both kinds together", msg)
+	}
+}
+
+// TestUndeclaredSettingKeys_AreTheModeledKeysTheUpdateRouteDoesNotDeclare
+// holds the list of settings the update refuses although client-go models
+// them to the two things it is derived from: the options struct this server
+// sends with, and the params the pinned live record says GitLab's PUT
+// /application/settings declares.
+//
+// The list is written out because the server does not carry the record, and
+// held here because both halves move: a client-go release models settings the
+// route never took (v3.17.0 added autocomplete_users), and a GitLab release
+// declares or retires them. Either fails this test until the list says what
+// the pair says, which is what upstream register row 135 records.
+func TestUndeclaredSettingKeys_AreTheModeledKeysTheUpdateRouteDoesNotDeclare(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "development", "gitlab-api-live.json"))
+	if err != nil {
+		t.Fatalf("read the live record: %v", err)
+	}
+	var record struct {
+		Routes []struct {
+			Method string                     `json:"method"`
+			Path   string                     `json:"path"`
+			Params map[string]json.RawMessage `json:"params"`
+		} `json:"routes"`
+	}
+	if err = json.Unmarshal(raw, &record); err != nil {
+		t.Fatalf("decode the live record: %v", err)
+	}
+
+	var declared map[string]json.RawMessage
+	for _, route := range record.Routes {
+		if route.Method == http.MethodPut && route.Path == "/api/:version/application/settings" {
+			declared = route.Params
+		}
+	}
+	if len(declared) < 400 {
+		t.Fatalf("the live record declares %d params on PUT /application/settings, want the several hundred GitLab takes", len(declared))
+	}
+
+	var want []string
+	for key := range modeledSettingKeys() {
+		if _, ok := declared[key]; !ok {
+			want = append(want, key)
+		}
+	}
+	slices.Sort(want)
+	got := slices.Sorted(maps.Keys(undeclaredSettingKeys))
+
+	if !slices.Equal(got, want) {
+		t.Errorf("undeclaredSettingKeys = %v\nwant the keys client-go models and the route does not declare: %v", got, want)
 	}
 }
 

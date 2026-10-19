@@ -379,7 +379,7 @@ readable without opening the tracker:
 | 132 | client-go | [SearchOptions models neither num_context_lines nor regex](#searchoptions-models-neither-num_context_lines-nor-regex) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes, `search.code` adds both to the query through a request option, each only when set |
 | 133 | client-go | [Seven response keys and twelve parameters GitLab 19.5 added](#seven-response-keys-and-twelve-parameters-gitlab-195-added-that-client-go-does-not-model) | No | No | No | No | Partial: six keys read from the captured response; the merge request author's `bot` and the parameters not yet |
 | 134 | client-go | [The rate limit backoff ignores `Retry-After` on a 429](#the-rate-limit-backoff-ignores-retry-after-on-a-429) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3147](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3147), open; GitLab Duo requested changes on 2026-10-17, for a large negative `Retry-After` that overflows `time.Duration` | No | No; this server replaces client-go's backoff with its own | Not needed |
-| 135 | client-go | [`UpdateSettingsOptions` models twenty-six settings the update route does not take](#updatesettingsoptions-models-twenty-six-settings-the-update-route-does-not-take) | No | No | No | No | Not yet: `admin.settings_update` sends them, and a patch naming one beside a setting GitLab takes is reported as applied, a defect of this server's not fixed here |
+| 135 | client-go | [`UpdateSettingsOptions` models twenty-six settings the update route does not take](#updatesettingsoptions-models-twenty-six-settings-the-update-route-does-not-take) | No | No | No | No | Yes, `admin.settings_update` refuses them by name before anything is sent, as it refuses a key client-go does not model |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -7197,15 +7197,19 @@ instead. A table test of `rateLimitBackoff` and a client test against an
   never accepted ..."), which v3.15.0 does not carry and v3.17.0 does, beside
   the `_limit` settings they point to. The other twenty-three carry none.
 - **Blocking**: no.
-- **Workaround**: none yet, and this server carries a defect of its own
-  here, not fixed yet. `admin.settings_update` refuses, by name and before
-  anything is sent, a key client-go does not model (`unmodeledSettingKeys` in
-  `internal/tools/settings/settings.go`), and client-go models these
-  twenty-six, so the action sends them. A patch that names one of them beside
-  a setting the route takes is answered 200 with the rest applied and is
-  reported as applied whole, which is the half-applied patch that refusal
-  exists to prevent. The fix is to refuse these keys the same way, and that
-  refusal retires when client-go stops modeling them.
+- **Workaround**: yes. `admin.settings_update` refuses, by name and before
+  anything is sent, a key client-go does not model, and since this pin it
+  refuses these twenty-six the same way, in the same refusal
+  (`unsendableSettingKeys` and `undeclaredSettingKeys` in
+  `internal/tools/settings/settings.go`). Until then client-go modeled them,
+  so the action sent them, and a patch naming one beside a setting the route
+  takes was answered 200 with the rest applied and reported as applied
+  whole, the half-applied patch the refusal exists to prevent. The list is
+  written out, since the server does not carry the live record, and
+  `TestUndeclaredSettingKeys_AreTheModeledKeysTheUpdateRouteDoesNotDeclare`
+  holds it to the struct and the record, so a bump or a re-record that moves
+  either fails until it follows. The refusal retires when client-go stops
+  modeling them.
 
 **Where**: `settings.go`, `UpdateSettingsOptions` (lines 596 to 1086 at
 v3.29.0), which `UpdateSettings` sends to `PUT /application/settings`. Of
