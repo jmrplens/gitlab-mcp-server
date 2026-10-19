@@ -1250,6 +1250,10 @@ type bridgeStandIn struct {
 	versionBody   string
 	listStatus    int
 	body          string
+	// triggerJobsMissing answers trigger_jobs 404 as a release before 19.2
+	// does, whatever listStatus says, as one node of an instance in the middle
+	// of a rolling upgrade can.
+	triggerJobsMissing bool
 
 	mu   sync.Mutex
 	seen []bridgeRequest
@@ -1264,6 +1268,8 @@ func (s *bridgeStandIn) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == pathVersion && s.versionStatus != 0:
 		testutil.RespondJSON(w, s.versionStatus, s.versionBody)
+	case r.Method == http.MethodGet && r.URL.Path == pathTriggerJobs && s.triggerJobsMissing:
+		testutil.RespondJSON(w, http.StatusNotFound, `{"error":"404 Not Found"}`)
 	case isList && s.listStatus != 0:
 		testutil.RespondJSON(w, s.listStatus, s.body)
 	case isList:
@@ -1431,16 +1437,18 @@ func TestListBridges_NoFilter_SendsNoParameter(t *testing.T) {
 
 // TestListBridges_TriggerJobsRefusal_CarriesTheHintOnNotFoundOnly verifies
 // that the trigger_jobs route's refusals are answered as the bridges route's
-// are: a 404 with the pipeline hint, and a 403 without it.
+// are: a 404 with the pipeline hint, once the bridges route has answered 404
+// too, and a 403 without it and without asking the bridges route.
 func TestListBridges_TriggerJobsRefusal_CarriesTheHintOnNotFoundOnly(t *testing.T) {
 	const hint = "Bridges only exist"
 	tests := []struct {
 		name     string
 		status   int
+		routes   []string
 		wantHint bool
 	}{
-		{"404 carries the hint", http.StatusNotFound, true},
-		{"403 does not", http.StatusForbidden, false},
+		{"404 carries the hint", http.StatusNotFound, []string{pathVersion, pathTriggerJobs, pathBridges}, true},
+		{"403 does not", http.StatusForbidden, []string{pathVersion, pathTriggerJobs}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1452,11 +1460,40 @@ func TestListBridges_TriggerJobsRefusal_CarriesTheHintOnNotFoundOnly(t *testing.
 			if err == nil {
 				t.Fatal(errExpectedAPI)
 			}
-			standIn.assertRoutes(t, pathVersion, pathTriggerJobs)
+			standIn.assertRoutes(t, tt.routes...)
 			if got := strings.Contains(err.Error(), hint); got != tt.wantHint {
 				t.Errorf("error %q carries the hint %q: %t, want %t", err, hint, got, tt.wantHint)
 			}
 		})
+	}
+}
+
+// TestListBridges_TriggerJobsNotFound_AsksTheBridgesRoute verifies that a
+// list sent to trigger_jobs and answered 404 is asked once more through the
+// bridges route every release serves, with the same parameters, and answers
+// with what that route sent.
+//
+// The release is read once per client and kept, and an instance upgraded one
+// node at a time behind a balancer can answer the version read from a node on
+// 19.2 and the list from one still before it, which has no trigger_jobs
+// route. A pipeline that is not there answers 404 on both routes, which the
+// refusal test above holds.
+func TestListBridges_TriggerJobsNotFound_AsksTheBridgesRoute(t *testing.T) {
+	standIn := atVersion("19.5.0-ee", fmt.Sprintf("[%s]", bridgeJSON))
+	standIn.triggerJobsMissing = true
+	client := testutil.NewTestClient(t, standIn)
+
+	out, err := ListBridges(t.Context(), client, filteredBridgeInput)
+	if err != nil {
+		t.Fatalf("ListBridges() error = %v", err)
+	}
+	standIn.assertRoutes(t, pathVersion, pathTriggerJobs, pathBridges)
+	assertFilteredBridgeQuery(t, standIn.lastQuery(t))
+	if len(out.Bridges) != 1 || out.Bridges[0].ID != 200 {
+		t.Errorf("ListBridges() answered %+v, want the bridge the bridges route answered with", out.Bridges)
+	}
+	if out.Pagination != filteredBridgePage {
+		t.Errorf("Pagination = %+v, want %+v", out.Pagination, filteredBridgePage)
 	}
 }
 

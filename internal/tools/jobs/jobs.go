@@ -673,8 +673,9 @@ const (
 // is asked through GET /projects/:id/pipelines/:pipeline_id/trigger_jobs, the
 // route that release added, and any other, older or of a release the server
 // cannot read, through GET /projects/:id/pipelines/:pipeline_id/bridges, which
-// the same release deprecated and every release serves. Both are one helper
-// in GitLab and answer with the same entity. Bridges only exist on pipelines
+// the same release deprecated and every release serves, which a trigger_jobs
+// 404 is asked through as well ([listTriggerJobs]). Both are one helper in
+// GitLab and answer with the same entity. Bridges only exist on pipelines
 // that trigger downstream or multi-project pipelines.
 func ListBridges(ctx context.Context, client *gitlabclient.Client, input BridgeListInput) (BridgeListOutput, error) {
 	if err := ctx.Err(); err != nil {
@@ -687,7 +688,7 @@ func ListBridges(ctx context.Context, client *gitlabclient.Client, input BridgeL
 		return BridgeListOutput{}, toolutil.ErrRequiredInt64(opListBridges, "pipeline_id")
 	}
 	if client.AtLeast(ctx, triggerJobsSinceMajor, triggerJobsSinceMinor) {
-		//gitlab:request alternatives: an instance on 19.2 or later is sent trigger_jobs and the deprecated bridges route below is not sent
+		//gitlab:request alternatives: an instance on 19.2 or later is sent trigger_jobs in place of the deprecated bridges route below, which it is sent only after trigger_jobs answered 404
 		return listTriggerJobs(ctx, client, input)
 	}
 	//gitlab:request alternatives: an instance older than 19.2, or one whose release is not known, is sent the deprecated bridges route instead of trigger_jobs
@@ -698,13 +699,24 @@ func ListBridges(ctx context.Context, client *gitlabclient.Client, input BridgeL
 // route client-go v3.24.0 added ListPipelineTriggerJobs for. Its options
 // carry the route's scope, page and per_page, and include_retried goes on
 // through [includeRetried].
+//
+// A 404 is asked again through the bridges route. The release is read once per
+// client and kept, and an instance upgraded one node at a time behind a
+// balancer can answer that read from a node on 19.2 and the list from one
+// still before it, which has no trigger_jobs route; a pipeline that is not
+// there answers 404 on both routes, and the bridges route's refusal is the one
+// reported.
 func listTriggerJobs(ctx context.Context, client *gitlabclient.Client, input BridgeListInput) (BridgeListOutput, error) {
 	opts := &gl.ListPipelineTriggerJobsOptions{Scope: scopeStates(input.Scope)}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	captureCtx, captured := gitlabclient.WithResponseCapture(ctx)
 	jobs, resp, err := client.GL().Jobs.ListPipelineTriggerJobs(string(input.ProjectID), input.PipelineID, opts,
-		gl.WithContext(ctx), includeRetried(input.IncludeRetried))
+		gl.WithContext(captureCtx), includeRetried(input.IncludeRetried))
+	if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+		//gitlab:request optional: the bridges route is asked only when trigger_jobs answered 404, as a node before 19.2 does while an instance is upgraded one node at a time
+		return listBridgesRoute(ctx, client, input)
+	}
 	if err != nil {
 		return BridgeListOutput{}, bridgeListError(err)
 	}
