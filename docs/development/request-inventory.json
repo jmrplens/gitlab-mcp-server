@@ -13914,6 +13914,16 @@
       "package": "internal/tools/orbit",
       "kind": "rest",
       "method": "GET",
+      "path": "/orbit/agent/commands",
+      "query": [
+        "command_names",
+        "response_format"
+      ]
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "rest",
+      "method": "GET",
       "path": "/orbit/graph_status",
       "query": [
         "full_path",
@@ -13939,15 +13949,6 @@
       "path": "/orbit/schema",
       "query": [
         "expand",
-        "response_format"
-      ]
-    },
-    {
-      "package": "internal/tools/orbit",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/orbit/schema/dsl",
-      "query": [
         "response_format"
       ]
     },

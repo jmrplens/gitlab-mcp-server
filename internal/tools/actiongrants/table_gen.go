@@ -4372,7 +4372,7 @@ var table = finegrained.Table{
 		{Name: "GET /projects/:id/merge_requests/:noteable_id/notes", Classic: finegrained.ClassicReadAPI, Groups: []uint32{473}},
 		{Name: "PUT /projects/:id/merge_requests/:noteable_id/notes/:note_id", Classic: finegrained.ClassicAPI, Groups: []uint32{474}},
 		{Name: "GET /projects/:id/merge_requests/:merge_request_iid/raw_diffs", Classic: finegrained.ClassicReadAPI, Groups: []uint32{475}},
-		{Name: "GET /orbit/schema/dsl", Classic: finegrained.ClassicReadAPI, Groups: []uint32{476}},
+		{Name: "GET /orbit/agent/commands", Classic: finegrained.ClassicReadAPI, Groups: []uint32{476}},
 		{Name: "GET /orbit/graph_status", Classic: finegrained.ClassicReadAPI, Groups: []uint32{476}},
 		{Name: "POST /orbit/query", Classic: finegrained.ClassicReadAPI, Groups: []uint32{476}},
 		{Name: "GET /orbit/schema", Classic: finegrained.ClassicReadAPI, Groups: []uint32{476}},

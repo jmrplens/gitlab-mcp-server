@@ -17866,14 +17866,11 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /orbit/schema/dsl",
+          "route": "GET /orbit/agent/commands",
           "class": "mandatory",
           "classic": "read_api",
           "sites": [
-            "orbit.DSL"
-          ],
-          "sdk_methods": [
-            "Orbit.GetDsl"
+            "orbit.getAgentCommands"
           ]
         }
       ],

@@ -20,10 +20,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 21,758 |
-| Unit test functions                                   | 20,207 |
+| Total test functions                                  | 21,781 |
+| Unit test functions                                   | 20,230 |
 | E2E test functions                                    |  1,551 |
-| cmd test functions                                    |  4,819 |
+| cmd test functions                                    |  4,821 |
 | Test files (internal/)                                |    719 |
 | Test files (cmd/)                                     |    336 |
 | Test files (test/e2e/)                                |    417 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,350 | 61.4% |
+| `TestFunc_Scenario` (2-part)           | 13,351 | 61.3% |
 | `TestFunc` (no underscore)             |    908 |  4.2% |
-| `TestFunc_Scenario_Expected` (3+ part) |  7,500 | 34.5% |
+| `TestFunc_Scenario_Expected` (3+ part) |  7,522 | 34.5% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          4,021 |        237 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            414 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (180) |         10,953 |        466 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (180) |         10,974 |        466 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,551 |        417 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          4,819 |        336 | server entry point and developer command utilities                                              |
-| **Total**               |     **21,758** |  **1,472** |                                                                                                 |
+| cmd packages            |          4,821 |        336 | server entry point and developer command utilities                                              |
+| **Total**               |     **21,781** |  **1,472** |                                                                                                 |
 
 ### Core Packages
 
@@ -100,7 +100,7 @@
 | projects          |   495 |   100.0% |    57 |
 | mergerequests     |   341 |   100.0% |    30 |
 | groups            |   317 |   100.0% |    37 |
-| dynamic           |   308 |   100.0% |     2 |
+| dynamic           |   310 |   100.0% |     2 |
 | issues            |   293 |   100.0% |    21 |
 | users             |   270 |   100.0% |    38 |
 | packages          |   177 |   100.0% |    10 |
@@ -172,7 +172,7 @@
 | deploytokens            |         71 |          2 |   100.0% |         9 |
 | dockerfiletemplates     |         25 |          3 |   100.0% |         2 |
 | dorametrics             |         17 |          2 |   100.0% |         2 |
-| dynamic                 |        308 |          9 |   100.0% |         2 |
+| dynamic                 |        310 |          9 |   100.0% |         2 |
 | dynamiccatalog          |         13 |          1 |   100.0% |         0 |
 | elicitationtools        |         73 |          2 |   100.0% |         4 |
 | enterpriseusers         |         41 |          3 |   100.0% |         4 |
@@ -251,7 +251,7 @@
 | mrnotes                 |         52 |          4 |   100.0% |         5 |
 | namespaces              |         52 |          2 |   100.0% |         4 |
 | notifications           |         39 |          2 |   100.0% |         6 |
-| orbit                   |         73 |          3 |   100.0% |         6 |
+| orbit                   |         92 |          3 |   100.0% |         6 |
 | packages                |        177 |          6 |   100.0% |        10 |
 | pages                   |         65 |          2 |   100.0% |         9 |
 | pipelines               |        149 |          5 |   100.0% |        12 |
@@ -310,7 +310,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        136 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **10,953** |    **466** |          | **1,190** |
+| **Total**               | **10,974** |    **466** |          | **1,190** |
 
 </details>
 

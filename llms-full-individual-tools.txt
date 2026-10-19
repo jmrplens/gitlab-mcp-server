@@ -10479,7 +10479,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_dsl
 
-Retrieve the GitLab Orbit (Knowledge Graph) query DSL schema or LLM grammar.
+Read the GitLab Orbit (Knowledge Graph) query language GitLab.com compiles queries in, GQL, as Orbit's query command describes it: its grammar and the JSON Schema of its input, or the same as compact text.
 
 **Parameters:**
 
@@ -10502,12 +10502,12 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_query
 
-Execute a read-only GitLab Orbit (Knowledge Graph) query in the version 12 DSL orbit.dsl serves, naming the entities and relationship types orbit.schema lists. Every query has a query_type (traversal, aggregation, neighbors, or path_finding) and lists its nodes in a nodes array, and a refused query is corrected from the message GitLab answers with.
+Execute a read-only GitLab Orbit (Knowledge Graph) query in GQL, the language orbit.dsl describes, naming what orbit.schema lists. A query is one MATCH ... RETURN statement sent as text, with at least one node bounded by its id or a literal property, and a refused query is corrected from the message GitLab answers with.
 
 **Parameters:**
 
-- `query` (object) (required): Orbit query in the version 12 DSL that orbit.dsl serves, as a JSON object. Required: query_type (traversal, aggregation, neighbors or path_finding) and nodes, a list of node selectors {id, entity, columns, filters, node_ids, id_range} even for one node. A filter is a bare value for equality or an object keyed by operators such as {"starts_with": "gitlab-org/"}, never {op, value}. A traversal or aggregation query needs node_ids or filters on a node. A neighbors query takes one node and neighbors {direction, rel_types}, where direction defaults to outgoing (pass both for every relationship). A path_finding query takes two nodes and path {type: shortest, from, to, max_depth 1 to 3, rel_types} with rel_types required (* for any). Aggregations are {count: "mr", as: "n"}, order_by is "node.property" ("-node.property" descending). orbit.schema lists the entities, properties and relationship types. GitLab refuses a query it cannot compile with a message naming the fault.
-- `response_format` (string): Response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies.
+- `query` (string or object) (required): Orbit query as GQL text, the read-only openCypher 9 based language GitLab.com compiles (orbit.dsl describes it). One statement: MATCH pattern [WHERE predicates] RETURN projections [ORDER BY key [ASC or DESC]] [LIMIT n or PAGE n [AFTER cursor]]. Label every node and anchor at least one by its id or a literal property, as in MATCH (p:Project {full_path: 'gitlab-org/gitlab'}) RETURN p.id, p.full_path LIMIT 1. A relationship type follows a colon, -[:IN_PROJECT]->, and a repeat is bounded, *1..3 at most. WHERE takes AND and NOT, never OR. count, sum, avg, min and max aggregate, and every other RETURN item groups: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC. orbit.schema lists the entities, properties and relationship types a query names. A JSON object is forwarded as written, and GitLab.com refuses it while it reads queries as GQL. GitLab refuses a query it cannot compile with a message naming the fault.
+- `response_format` (string): Response format: raw (structured JSON, the default here), llm (compact text) or gql (the result as a graph pattern table). json is read as raw.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
