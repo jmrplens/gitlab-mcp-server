@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 type pollItem struct {
@@ -16,13 +18,33 @@ type pollItem struct {
 	Value  int
 }
 
-func fastDuration(int) time.Duration { return time.Millisecond }
+// baseIntervalSeconds and baseTimeoutSeconds are what pollOptions asks for.
+// Poll raises the interval to toolutil.PollDefaultInterval and keeps the
+// timeout, so the two reach the duration function as different seconds.
+const (
+	baseIntervalSeconds = 1
+	baseTimeoutSeconds  = 1
+)
+
+// fastDuration gives the base options a deadline no test reaches and a
+// one-millisecond interval. It used to answer a millisecond for both, which
+// gave every test expecting a terminal status on its first poll a
+// one-millisecond deadline: a loaded runner can pass that before the first
+// poll starts, the wait then ends as timed out with no error, and
+// TestPoll_TerminalFailureReturnsPartialResult failed that way in CI. A test
+// that wants the deadline to fire sets its own duration function.
+func fastDuration(seconds int) time.Duration {
+	if seconds == toolutil.ClampPollTimeout(baseTimeoutSeconds) {
+		return time.Hour
+	}
+	return time.Millisecond
+}
 
 func pollOptions(statuses ...string) (Options[pollItem], *int) {
 	attempts := 0
 	opts := Options[pollItem]{
-		IntervalSeconds: 1,
-		TimeoutSeconds:  1,
+		IntervalSeconds: baseIntervalSeconds,
+		TimeoutSeconds:  baseTimeoutSeconds,
 		PollDuration:    fastDuration,
 		ProgressMessage: func(attempt int) string { return "attempt" },
 		Poll: func(context.Context) (pollItem, error) {
@@ -207,10 +229,10 @@ func TestPoll_TickerContinuesUntilTerminal(t *testing.T) {
 // once, so a status is always read before the deadline, with no I/O to lose the
 // race to.
 //
-// The durations are keyed on the seconds value rather than left to
-// fastDuration, which returns a millisecond for both and so left the ticker and
-// the deadline racing: whenever the ticker won, a second poll ran and Value was
-// 2. Making the interval an hour is what the assertion on Value = 1 means.
+// The durations are its own rather than fastDuration's, whose deadline is an
+// hour: this test needs the deadline to fire, and before the ticker does, since
+// whenever the ticker won a second poll ran and Value was 2. Making the
+// interval an hour is what the assertion on Value = 1 means.
 func TestPoll_TimeoutReturnsLastItem(t *testing.T) {
 	opts, _ := pollOptions("running")
 	opts.IntervalSeconds = 60
