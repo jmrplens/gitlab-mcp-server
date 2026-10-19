@@ -3608,6 +3608,35 @@ change took it off this server's two user inputs, where a caller who set it
 changed nothing, and the R-INPUT diff's report of the SDK field those inputs
 no longer offer is answered in `acceptedMissingInputs`.
 
+The container expiration policy is the same gap on both sides. client-go
+v3.16.2 deprecated `ContainerExpirationPolicy.NameRegexDelete` as a key
+GitLab does not return (`lib/api/entities/container_expiration_policy.rb`
+exposes `name_regex` and `name_regex_keep` and no third), and
+`ContainerExpirationPolicyAttributes.NameRegexDelete` as a parameter GitLab
+ignores, which it copies into `name_regex` when that is unset. This server
+published the first as an empty `name_regex_delete` on every project and
+offered the second as the only way to set the deletion regex. At the v3.29.0
+pin the output publishes `name_regex` alone and the input takes
+`name_regex`, the key `lib/api/helpers/projects_helpers.rb` declares, so the
+R-OUTPUT diff reports the SDK field as one more row answered here.
+
+`CreateProjectOptions` carries a second request-side class: nine options
+that only `PUT /projects/:id` declares, `ci_forward_deployment_enabled` and
+`protect_merge_request_pipelines` among the update params of
+`lib/api/helpers/projects_helpers.rb`, and `issues_template`,
+`merge_requests_template`, `merge_pipelines_enabled`, `merge_trains_enabled`,
+`merge_trains_skip_train_allowed`, `merge_train_enforcement` (added in
+v3.27.0) and `reviewer_assignment_strategy` among those of
+`ee/lib/ee/api/helpers/projects_helpers.rb`, whose license filter says of the
+last that it is edit-only. `lib/api/projects.rb` builds a create from
+`declared_params`, so Grape drops each of them, and `POST
+/projects/user/:user_id` declares none of them either. `project.create` and
+`project.create_for_user` offered the first eight, telling a caller the
+project was created with a setting GitLab never applied, until the v3.29.0
+pin took them off; `project.update` offers
+all nine, and the R-INPUT diff's report of the create input is answered in
+`acceptedMissingInputs`.
+
 ### The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity
 
 - **Reported**: in part, in the Geo block of the umbrella issue

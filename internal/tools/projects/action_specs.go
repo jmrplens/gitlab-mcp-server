@@ -740,16 +740,20 @@ var projectSettingsEnumOverrides = []toolutil.InputSchemaOverride{
 		"enum":        []any{"unordered", "oldest_first", "newest_first", "newest_ready_first"},
 		"description": "Default process mode for resource groups: unordered (run in parallel), oldest_first, newest_first, or newest_ready_first.",
 	}),
-	// dap_powered was removed as an input in GitLab 19.4; it can still be read
-	// back from projects configured before then, so the output keeps it.
-	toolutil.SchemaEnumOverride("reviewer_assignment_strategy", "disabled", "code_owners"),
 }
 
-// projectUpdateEnumOverrides extends the shared settings enums with the two
-// CI/CD role parameters that only the update input carries.
+// projectUpdateEnumOverrides extends the shared settings enums with the
+// parameters that only the update input carries, because GitLab's update
+// route alone declares them.
 var projectUpdateEnumOverrides = slices.Concat(projectSettingsEnumOverrides, []toolutil.InputSchemaOverride{
 	toolutil.SchemaEnumOverride("ci_restrict_pipeline_cancellation_role", "developer", "maintainer", "no_one"),
 	toolutil.SchemaEnumOverride("ci_pipeline_variables_minimum_override_role", "owner", "maintainer", "developer", "no_one_allowed"),
+	// dap_powered was removed as an input in GitLab 19.4; it can still be read
+	// back from projects configured before then, so the output keeps it.
+	toolutil.SchemaEnumOverride("reviewer_assignment_strategy", "disabled", "code_owners"),
+	// The values ee/lib/ee/api/helpers/projects_helpers.rb declares, which
+	// client-go v3.27.0 names as MergeTrainEnforcementValue.
+	toolutil.SchemaEnumOverride("merge_train_enforcement", "allow_bypass", "enforce_for_all_users", "enforce_with_owner_override"),
 })
 
 // projectHookTestEventOverride pins the webhook test trigger to the event names

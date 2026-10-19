@@ -43,14 +43,14 @@ func TestUpdate_EmptyValues_ReachTheBody(t *testing.T) {
 		"project_id":                             "42",
 		"topics":                                 []any{},
 		"tag_list":                               []any{},
-		"container_expiration_policy_attributes": map[string]any{"name_regex_delete": "", "name_regex_keep": ""},
+		"container_expiration_policy_attributes": map[string]any{"name_regex": "", "name_regex_keep": ""},
 	}
-	// client-go copies name_regex_delete into name_regex, the one GitLab
-	// reads, when name_regex is unset, so the empty value reaches both.
+	// name_regex is the key GitLab reads, and no name_regex_delete goes
+	// with it any more.
 	want := map[string]string{
 		"topics":                                 `[]`,
 		"tag_list":                               `[]`,
-		"container_expiration_policy_attributes": `{"name_regex":"","name_regex_keep":"","name_regex_delete":""}`,
+		"container_expiration_policy_attributes": `{"name_regex":"","name_regex_keep":""}`,
 	}
 	for _, name := range texts {
 		params[name] = ""
@@ -751,39 +751,61 @@ func TestProjectUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestProjectCreate_ReviewerAssignmentStrategy_SentAndMapped verifies that a
-// non-empty reviewer_assignment_strategy (client-go v2.46.0, Premium) is sent
-// in the create request body and round-trips into the output.
-func TestProjectCreate_ReviewerAssignmentStrategy_SentAndMapped(t *testing.T) {
-	var capturedBody string
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == pathProjects {
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				t.Errorf("read request body: %v", err)
-				http.Error(w, "read request body", http.StatusInternalServerError)
-				return
-			}
-			capturedBody = string(body)
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":42,"name":"my-repo","path_with_namespace":"jmrplens/my-repo","visibility":"private","reviewer_assignment_strategy":"code_owners"}`)
-			return
-		}
-		http.NotFound(w, r)
-	}))
+// updateOnlyProjectParams are the parameters client-go's CreateProjectOptions
+// carries that POST /projects does not declare: GitLab's update route alone
+// takes them (lib/api/helpers/projects_helpers.rb and
+// ee/lib/ee/api/helpers/projects_helpers.rb, the update param groups), and
+// Grape drops them from a create, which reads declared_params only.
+var updateOnlyProjectParams = []string{
+	"ci_forward_deployment_enabled", "protect_merge_request_pipelines", "issues_template",
+	"merge_requests_template", "merge_pipelines_enabled", "merge_trains_enabled",
+	"merge_trains_skip_train_allowed", "merge_train_enforcement", "reviewer_assignment_strategy",
+}
 
-	out, err := Create(context.Background(), client, CreateInput{
-		Name:                       testRepoName,
-		ReviewerAssignmentStrategy: "code_owners",
-	})
-	if err != nil {
-		t.Fatalf("Create() unexpected error: %v", err)
+// TestActionSpecs_UpdateOnlyParams_AreOfferedByUpdateAlone verifies that the
+// two create actions offer none of the parameters GitLab's create routes do
+// not declare, where a caller who set one used to be told the project was
+// created with a setting GitLab never applied, and that project.update offers
+// every one of them.
+func TestActionSpecs_UpdateOnlyParams_AreOfferedByUpdateAlone(t *testing.T) {
+	byTool := projectSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), true))
+	tests := []struct {
+		tool    string
+		offered bool
+	}{
+		{"gitlab_project_create", false},
+		{"gitlab_project_create_for_user", false},
+		{"gitlab_project_update", true},
 	}
-	assertJSONKeys(t, capturedBody, "reviewer_assignment_strategy")
-	if !strings.Contains(capturedBody, `"code_owners"`) {
-		t.Errorf("request body = %s, want reviewer_assignment_strategy value code_owners", capturedBody)
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			props, _ := byTool[tt.tool].Route.InputSchema["properties"].(map[string]any)
+			for _, param := range updateOnlyProjectParams {
+				if _, has := props[param]; has != tt.offered {
+					t.Errorf("%s offers %s: %v, want %v", tt.tool, param, has, tt.offered)
+				}
+			}
+		})
 	}
-	if out.ReviewerAssignmentStrategy != "code_owners" {
-		t.Errorf("out.ReviewerAssignmentStrategy = %q, want code_owners", out.ReviewerAssignmentStrategy)
+}
+
+// TestProjectUpdate_MergeTrainEnforcement_ReachesTheBody verifies that the
+// enforcement level client-go v3.27.0 added to EditProjectOptions is sent as
+// the string GitLab declares, and that the schema offers exactly its three
+// values.
+func TestProjectUpdate_MergeTrainEnforcement_ReachesTheBody(t *testing.T) {
+	client, recorder := testutil.RecordWrites(t, `{}`, projectJSON)
+	if _, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", MergeTrainEnforcement: "enforce_with_owner_override"}); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"merge_train_enforcement": `"enforce_with_owner_override"`})
+
+	byTool := projectSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), true))
+	props, _ := byTool["gitlab_project_update"].Route.InputSchema["properties"].(map[string]any)
+	prop, _ := props["merge_train_enforcement"].(map[string]any)
+	want := []any{"allow_bypass", "enforce_for_all_users", "enforce_with_owner_override"}
+	if got, _ := prop["enum"].([]any); !reflect.DeepEqual(got, want) {
+		t.Errorf("merge_train_enforcement enum = %v, want %v", got, want)
 	}
 }
 
@@ -1290,7 +1312,6 @@ func TestProjectCreate_EnrichedFeatureOpts(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	ciForward := true
 	sharedRunners := true
 	publicBuilds := false
 	packages := true
@@ -1298,7 +1319,6 @@ func TestProjectCreate_EnrichedFeatureOpts(t *testing.T) {
 		Name:                         "feature-proj",
 		ImportURL:                    testImportURL,
 		BuildTimeout:                 3600,
-		CIForwardDeploymentEnabled:   &ciForward,
 		SharedRunnersEnabled:         &sharedRunners,
 		PublicBuilds:                 &publicBuilds,
 		PackagesEnabled:              &packages,
@@ -4159,7 +4179,6 @@ func TestBuildCreateOpts_AllOptionalFields(t *testing.T) {
 	lfsEnabled := true
 	requestAccess := true
 	allowSkipped := false
-	protectMRPipelines := true
 	removeBranch := true
 	autoclose := true
 
@@ -4184,7 +4203,6 @@ func TestBuildCreateOpts_AllOptionalFields(t *testing.T) {
 		RequestAccessEnabled:         &requestAccess,
 		CIConfigPath:                 ".gitlab-ci.yml",
 		AllowMergeOnSkippedPipeline:  &allowSkipped,
-		ProtectMergeRequestPipelines: &protectMRPipelines,
 		RemoveSourceBranchAfterMerge: &removeBranch,
 		AutocloseReferencedIssues:    &autoclose,
 	}
@@ -4277,8 +4295,8 @@ func assertCreateProjectToggleOpts(t *testing.T, opts *gl.CreateProjectOptions) 
 	if opts.AllowMergeOnSkippedPipeline == nil || *opts.AllowMergeOnSkippedPipeline {
 		t.Error("AllowMergeOnSkippedPipeline not set correctly")
 	}
-	if opts.ProtectMergeRequestPipelines == nil || !*opts.ProtectMergeRequestPipelines {
-		t.Error("ProtectMergeRequestPipelines not set")
+	if opts.ProtectMergeRequestPipelines != nil {
+		t.Error("ProtectMergeRequestPipelines set on a create, which POST /projects does not declare")
 	}
 	if opts.RemoveSourceBranchAfterMerge == nil || !*opts.RemoveSourceBranchAfterMerge {
 		t.Error("RemoveSourceBranchAfterMerge not set")
@@ -8258,9 +8276,6 @@ func TestBuildCreateOpts_AdditiveFields_AllMapped(t *testing.T) {
 		OnlyAllowMergeIfAllStatusChecksPassed:    new(true),
 		ResolveOutdatedDiffDiscussions:           new(true),
 		PrintingMergeRequestLinkEnabled:          new(true),
-		MergePipelinesEnabled:                    new(true),
-		MergeTrainsEnabled:                       new(true),
-		MergeTrainsSkipTrainAllowed:              new(true),
 		MergeCommitTemplate:                      "mct",
 		SquashCommitTemplate:                     "sct",
 		MRDefaultTitleTemplate:                   "mdtt",
@@ -8280,7 +8295,6 @@ func TestBuildCreateOpts_AdditiveFields_AllMapped(t *testing.T) {
 		BuildGitStrategy:                         "fetch",
 		AutoCancelPendingPipelines:               "enabled",
 		CICDCatalogEnabled:                       new(true),
-		CIForwardDeploymentEnabled:               new(true),
 		ResourceGroupDefaultProcessMode:          "oldest_first",
 		GroupRunnersEnabled:                      new(true),
 		PublicJobs:                               new(true),
@@ -8288,13 +8302,34 @@ func TestBuildCreateOpts_AdditiveFields_AllMapped(t *testing.T) {
 		MirrorTriggerBuilds:                      new(true),
 		EnforceAuthChecksOnUploads:               new(true),
 		ExternalAuthorizationClassificationLabel: "label",
-		IssuesTemplate:                           "it",
-		MergeRequestsTemplate:                    "mrt",
 		TagList:                                  []string{"a"},
 	}
 	opts := buildCreateOpts(input)
 	assertCreateAdditiveScalars(t, opts)
 	assertCreateAdditiveBools(t, opts)
+	assertCreateSendsNoUpdateOnlyParam(t, opts)
+}
+
+// assertCreateSendsNoUpdateOnlyParam checks that a create carries none of the
+// options POST /projects does not declare, whatever else is set.
+func assertCreateSendsNoUpdateOnlyParam(t *testing.T, opts *gl.CreateProjectOptions) {
+	t.Helper()
+	set := map[string]bool{
+		"CIForwardDeploymentEnabled":   opts.CIForwardDeploymentEnabled != nil,
+		"ProtectMergeRequestPipelines": opts.ProtectMergeRequestPipelines != nil,
+		"IssuesTemplate":               opts.IssuesTemplate != nil,
+		"MergeRequestsTemplate":        opts.MergeRequestsTemplate != nil,
+		"MergePipelinesEnabled":        opts.MergePipelinesEnabled != nil,
+		"MergeTrainsEnabled":           opts.MergeTrainsEnabled != nil,
+		"MergeTrainsSkipTrainAllowed":  opts.MergeTrainsSkipTrainAllowed != nil,
+		"MergeTrainEnforcement":        opts.MergeTrainEnforcement != nil,
+		"ReviewerAssignmentStrategy":   opts.ReviewerAssignmentStrategy != nil,
+	}
+	for name, isSet := range set {
+		if isSet {
+			t.Errorf("%s set on a create, which POST /projects does not declare", name)
+		}
+	}
 }
 
 func assertCreateAdditiveScalars(t *testing.T, opts *gl.CreateProjectOptions) {
@@ -8316,8 +8351,6 @@ func assertCreateAdditiveScalars(t *testing.T, opts *gl.CreateProjectOptions) {
 		{"AutoCancelPendingPipelines", opts.AutoCancelPendingPipelines, "enabled"},
 		{"AutoDevopsDeployStrategy", opts.AutoDevopsDeployStrategy, "manual"},
 		{"ExternalAuthorizationClassificationLabel", opts.ExternalAuthorizationClassificationLabel, "label"},
-		{"IssuesTemplate", opts.IssuesTemplate, "it"},
-		{"MergeRequestsTemplate", opts.MergeRequestsTemplate, "mrt"},
 	}
 	for _, c := range checks {
 		if c.got == nil || *c.got != c.want {
@@ -8348,16 +8381,12 @@ func assertCreateAdditiveBools(t *testing.T, opts *gl.CreateProjectOptions) {
 		"OnlyAllowMergeIfAllStatusChecksPassed": opts.OnlyAllowMergeIfAllStatusChecksPassed,
 		"ResolveOutdatedDiffDiscussions":        opts.ResolveOutdatedDiffDiscussions,
 		"PrintingMergeRequestLinkEnabled":       opts.PrintingMergeRequestLinkEnabled,
-		"MergePipelinesEnabled":                 opts.MergePipelinesEnabled,
-		"MergeTrainsEnabled":                    opts.MergeTrainsEnabled,
-		"MergeTrainsSkipTrainAllowed":           opts.MergeTrainsSkipTrainAllowed,
 		"ServiceDeskEnabled":                    opts.ServiceDeskEnabled,
 		"EmailsEnabled":                         opts.EmailsEnabled,
 		"EmailsDisabled":                        opts.EmailsDisabled, //nolint:staticcheck // 1:1 parity test.
 		"ShowDefaultAwardEmojis":                opts.ShowDefaultAwardEmojis,
 		"AutoDevopsEnabled":                     opts.AutoDevopsEnabled,
 		"CICDCatalogEnabled":                    opts.CICDCatalogEnabled,
-		"CIForwardDeploymentEnabled":            opts.CIForwardDeploymentEnabled,
 		"GroupRunnersEnabled":                   opts.GroupRunnersEnabled,
 		"PublicJobs":                            opts.PublicJobs,
 		"Mirror":                                opts.Mirror,
@@ -8441,12 +8470,12 @@ func TestContainerExpirationPolicyInput_ToGL(t *testing.T) {
 	}
 	keep := int64(5)
 	p := &ContainerExpirationPolicyInput{
-		Cadence:         "7d",
-		KeepN:           &keep,
-		OlderThan:       "30d",
-		NameRegexDelete: new("del"),
-		NameRegexKeep:   new("keep"),
-		Enabled:         new(true),
+		Cadence:       "7d",
+		KeepN:         &keep,
+		OlderThan:     "30d",
+		NameRegex:     new("del"),
+		NameRegexKeep: new("keep"),
+		Enabled:       new(true),
 	}
 	got := p.toGL()
 	if got == nil {
@@ -8461,8 +8490,11 @@ func TestContainerExpirationPolicyInput_ToGL(t *testing.T) {
 	if got.OlderThan == nil || *got.OlderThan != "30d" {
 		t.Error("OlderThan not set")
 	}
-	if got.NameRegexDelete == nil || *got.NameRegexDelete != "del" { //nolint:staticcheck // SA1019: the field toGL still sets.
-		t.Error("NameRegexDelete not set")
+	if got.NameRegex == nil || *got.NameRegex != "del" {
+		t.Error("NameRegex not set")
+	}
+	if got.NameRegexDelete != nil { //nolint:staticcheck // SA1019: asserting the deprecated field stays unset.
+		t.Error("NameRegexDelete set, a key GitLab does not declare")
 	}
 	if got.NameRegexKeep == nil || *got.NameRegexKeep != "keep" {
 		t.Error("NameRegexKeep not set")

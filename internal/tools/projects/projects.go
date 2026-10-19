@@ -50,12 +50,12 @@ func mergeTrainEnforcement(v gl.MergeTrainEnforcementValue) *string {
 // [gl.ContainerExpirationPolicyAttributes] options for configuring the
 // container registry cleanup policy when creating or updating a project.
 type ContainerExpirationPolicyInput struct {
-	Cadence         string  `json:"cadence,omitempty" jsonschema:"Cleanup cadence (1d, 7d, 14d, 1month, 3month)"`
-	KeepN           *int64  `json:"keep_n,omitempty" jsonschema:"Number of most recent tags to always keep per image name"`
-	OlderThan       string  `json:"older_than,omitempty" jsonschema:"Only tags older than this duration are eligible for deletion (7d, 14d, 30d, 90d)"`
-	NameRegexDelete *string `json:"name_regex_delete,omitempty" jsonschema:"Regex matching tag names to delete. On an update, pass an empty string to remove it. Omit the field to leave it untouched"`
-	NameRegexKeep   *string `json:"name_regex_keep,omitempty" jsonschema:"Regex matching tag names to always keep. On an update, pass an empty string to remove it. Omit the field to leave it untouched"`
-	Enabled         *bool   `json:"enabled,omitempty" jsonschema:"Enable the container expiration policy"`
+	Cadence       string  `json:"cadence,omitempty" jsonschema:"Cleanup cadence (1d, 7d, 14d, 1month, 3month)"`
+	KeepN         *int64  `json:"keep_n,omitempty" jsonschema:"Number of most recent tags to always keep per image name"`
+	OlderThan     string  `json:"older_than,omitempty" jsonschema:"Only tags older than this duration are eligible for deletion (7d, 14d, 30d, 90d)"`
+	NameRegex     *string `json:"name_regex,omitempty" jsonschema:"Regex matching tag names to delete. On an update, pass an empty string to remove it. Omit the field to leave it untouched"`
+	NameRegexKeep *string `json:"name_regex_keep,omitempty" jsonschema:"Regex matching tag names to always keep. On an update, pass an empty string to remove it. Omit the field to leave it untouched"`
+	Enabled       *bool   `json:"enabled,omitempty" jsonschema:"Enable the container expiration policy"`
 }
 
 // toGL converts the input into the GitLab
@@ -81,11 +81,11 @@ func (c *ContainerExpirationPolicyInput) toGL() *gl.ContainerExpirationPolicyAtt
 	}
 	// The two regexes decide by presence, never by emptiness: an empty one is
 	// the caller removing it (issue 1306).
-	if c.NameRegexDelete != nil {
-		// client-go v3.16.2 deprecated name_regex_delete, which GitLab never
-		// read, and copies it into name_regex when that is unset, so the
-		// request GitLab reads is the one it was.
-		out.NameRegexDelete = c.NameRegexDelete //nolint:staticcheck // SA1019: still the input's only field; see above.
+	// name_regex is the key lib/api/helpers/projects_helpers.rb declares.
+	// The input used to be name_regex_delete, which GitLab never read and
+	// client-go copied into name_regex; client-go v3.16.2 deprecated it.
+	if c.NameRegex != nil {
+		out.NameRegex = c.NameRegex
 		set = true
 	}
 	if c.NameRegexKeep != nil {
@@ -103,7 +103,15 @@ func (c *ContainerExpirationPolicyInput) toGL() *gl.ContainerExpirationPolicyAtt
 }
 
 // CreateInput defines parameters for creating a GitLab project. Fields mirror
-// the GitLab [gl.CreateProjectOptions] options 1:1.
+// the GitLab [gl.CreateProjectOptions] options 1:1, except the nine that
+// struct carries and POST /projects does not declare, which GitLab's update
+// route alone takes and Grape drops from a create: ci_forward_deployment_enabled
+// and protect_merge_request_pipelines (lib/api/helpers/projects_helpers.rb,
+// optional_update_params_ce), and issues_template, merge_requests_template,
+// merge_pipelines_enabled, merge_trains_enabled,
+// merge_trains_skip_train_allowed, merge_train_enforcement and
+// reviewer_assignment_strategy (ee/lib/ee/api/helpers/projects_helpers.rb,
+// optional_update_params_ee). project.update offers each of them.
 type CreateInput struct {
 	// Basic metadata
 	Name                 string   `json:"name,omitempty" jsonschema:"Project name, derived from the path when left out. Provide name, path or both"`
@@ -130,14 +138,10 @@ type CreateInput struct {
 	OnlyAllowMergeIfAllDiscussionsAreResolved bool   `json:"only_allow_merge_if_all_discussions_are_resolved,omitempty" jsonschema:"Only allow merge when all discussions are resolved"`
 	OnlyAllowMergeIfAllStatusChecksPassed     *bool  `json:"only_allow_merge_if_all_status_checks_passed,omitempty" tier:"ultimate" jsonschema:"Only allow merge when all external status checks pass"`
 	AllowMergeOnSkippedPipeline               *bool  `json:"allow_merge_on_skipped_pipeline,omitempty" jsonschema:"Allow merge when pipeline is skipped"`
-	ProtectMergeRequestPipelines              *bool  `json:"protect_merge_request_pipelines,omitempty" jsonschema:"Prevent merge request pipeline settings from being modified by users with lower permissions"`
 	RemoveSourceBranchAfterMerge              *bool  `json:"remove_source_branch_after_merge,omitempty" jsonschema:"Remove source branch after merge by default"`
 	AutocloseReferencedIssues                 *bool  `json:"autoclose_referenced_issues,omitempty" jsonschema:"Auto-close referenced issues on merge"`
 	ResolveOutdatedDiffDiscussions            *bool  `json:"resolve_outdated_diff_discussions,omitempty" jsonschema:"Auto-resolve outdated diff discussions"`
 	PrintingMergeRequestLinkEnabled           *bool  `json:"printing_merge_request_link_enabled,omitempty" jsonschema:"Show the create-merge-request link after pushing"`
-	MergePipelinesEnabled                     *bool  `json:"merge_pipelines_enabled,omitempty" jsonschema:"Enable merged results pipelines"`
-	MergeTrainsEnabled                        *bool  `json:"merge_trains_enabled,omitempty" jsonschema:"Enable merge trains"`
-	MergeTrainsSkipTrainAllowed               *bool  `json:"merge_trains_skip_train_allowed,omitempty" jsonschema:"Allow skipping the merge train"`
 	MergeCommitTemplate                       string `json:"merge_commit_template,omitempty" jsonschema:"Template for merge commit messages"`
 	SquashCommitTemplate                      string `json:"squash_commit_template,omitempty" jsonschema:"Template for squash commit messages"`
 	MRDefaultTitleTemplate                    string `json:"mr_default_title_template,omitempty" jsonschema:"Template for default merge request titles"`
@@ -146,7 +150,6 @@ type CreateInput struct {
 	ApprovalsBeforeMerge                      int64  `json:"approvals_before_merge,omitempty" tier:"premium" jsonschema:"Number of approvals required before merge (deprecated: use Merge Request Approvals API)"`
 	MergeRequestTitleRegex                    string `json:"merge_request_title_regex,omitempty" jsonschema:"Regex that MR titles must match"`
 	MergeRequestTitleRegexDescription         string `json:"merge_request_title_regex_description,omitempty" jsonschema:"Human-readable description for the MR title regex"`
-	ReviewerAssignmentStrategy                string `json:"reviewer_assignment_strategy,omitempty" tier:"premium" jsonschema:"Strategy used to automatically assign reviewers to merge requests: disabled or code_owners. The former dap_powered value was removed in GitLab 19.4 and only appears in responses of projects configured before then"`
 
 	// Feature toggles
 	IssuesEnabled              *bool  `json:"issues_enabled,omitempty" jsonschema:"Enable issues feature (deprecated: use issues_access_level)"`
@@ -173,7 +176,6 @@ type CreateInput struct {
 	BuildTimeout                    int64  `json:"build_timeout,omitempty" jsonschema:"Build timeout in seconds"`
 	BuildGitStrategy                string `json:"build_git_strategy,omitempty" jsonschema:"Git strategy for builds (fetch, clone)"`
 	AutoCancelPendingPipelines      string `json:"auto_cancel_pending_pipelines,omitempty" jsonschema:"Auto-cancel pending pipelines (enabled, disabled)"`
-	CIForwardDeploymentEnabled      *bool  `json:"ci_forward_deployment_enabled,omitempty" jsonschema:"Enable CI/CD forward deployment (deprecated: no longer supported in recent versions)"`
 	ResourceGroupDefaultProcessMode string `json:"resource_group_default_process_mode,omitempty" jsonschema:"Default resource group process mode (unordered, oldest_first, newest_first)"`
 	SharedRunnersEnabled            *bool  `json:"shared_runners_enabled,omitempty" jsonschema:"Enable shared runners"`
 	GroupRunnersEnabled             *bool  `json:"group_runners_enabled,omitempty" jsonschema:"Enable group runners"`
@@ -213,10 +215,8 @@ type CreateInput struct {
 	ModelExperimentsAccessLevel      string `json:"model_experiments_access_level,omitempty" jsonschema:"Model experiments access level (disabled, private, enabled)"`
 	ModelRegistryAccessLevel         string `json:"model_registry_access_level,omitempty" jsonschema:"Model registry access level (disabled, private, enabled)"`
 
-	// Deprecated template fields surfaced for 1:1 SDK parity
-	IssuesTemplate        string   `json:"issues_template,omitempty" jsonschema:"Default issue description template (deprecated: no longer supported in recent versions)"`
-	MergeRequestsTemplate string   `json:"merge_requests_template,omitempty" jsonschema:"Default merge request description template (deprecated: no longer supported in recent versions)"`
-	TagList               []string `json:"tag_list,omitempty" jsonschema:"Project tags (deprecated: use topics)"`
+	// Deprecated fields surfaced for 1:1 SDK parity
+	TagList []string `json:"tag_list,omitempty" jsonschema:"Project tags (deprecated: use topics)"`
 }
 
 // BasicOutput is a project as API::Entities::BasicProjectDetails renders it:
@@ -578,6 +578,7 @@ type UpdateInput struct {
 	PreventMergeWithoutJiraIssue          *bool   `json:"prevent_merge_without_jira_issue,omitempty" jsonschema:"Require an associated Jira issue before merge"`
 	MergeRequestDefaultTargetSelf         *bool   `json:"mr_default_target_self,omitempty" jsonschema:"Default merge request target to the project itself (for forks)"`
 	MergeTrainsSkipTrainAllowed           *bool   `json:"merge_trains_skip_train_allowed,omitempty" jsonschema:"Allow skipping the merge train"`
+	MergeTrainEnforcement                 string  `json:"merge_train_enforcement,omitempty" tier:"premium" jsonschema:"Who may merge a merge request around the merge train: allow_bypass, enforce_for_all_users or enforce_with_owner_override. It has no effect unless merge trains are enabled"`
 	PrintingMergeRequestLinkEnabled       *bool   `json:"printing_merge_request_link_enabled,omitempty" jsonschema:"Show the create-merge-request link after pushing"`
 	SuggestionCommitMessage               *string `json:"suggestion_commit_message,omitempty" jsonschema:"Default commit message for suggestions. Pass an empty string to go back to the default message. Omit the field to leave it untouched"`
 	IssueBranchTemplate                   *string `json:"issue_branch_template,omitempty" jsonschema:"Template for branch names created from issues. Pass an empty string to go back to the default template. Omit the field to leave it untouched"`
@@ -1040,9 +1041,6 @@ func applyCreatePipelineOpts(opts *gl.CreateProjectOptions, input CreateInput) {
 	if input.AutoCancelPendingPipelines != "" {
 		opts.AutoCancelPendingPipelines = new(input.AutoCancelPendingPipelines)
 	}
-	if input.CIForwardDeploymentEnabled != nil {
-		opts.CIForwardDeploymentEnabled = input.CIForwardDeploymentEnabled
-	}
 	if input.ResourceGroupDefaultProcessMode != "" {
 		opts.ResourceGroupDefaultProcessMode = new(gl.ResourceGroupProcessMode(input.ResourceGroupDefaultProcessMode))
 	}
@@ -1074,12 +1072,6 @@ func applyCreateTemplateOpts(opts *gl.CreateProjectOptions, input CreateInput) {
 	if input.GroupWithProjectTemplatesID != 0 {
 		opts.GroupWithProjectTemplatesID = new(input.GroupWithProjectTemplatesID)
 	}
-	if input.IssuesTemplate != "" {
-		opts.IssuesTemplate = new(input.IssuesTemplate)
-	}
-	if input.MergeRequestsTemplate != "" {
-		opts.MergeRequestsTemplate = new(input.MergeRequestsTemplate)
-	}
 	if len(input.TagList) > 0 {
 		opts.TagList = &input.TagList //nolint:staticcheck // 1:1 SDK parity; prefer topics.
 	}
@@ -1093,9 +1085,6 @@ func applyCreateMergeOpts(opts *gl.CreateProjectOptions, input CreateInput) {
 	if input.AllowMergeOnSkippedPipeline != nil {
 		opts.AllowMergeOnSkippedPipeline = input.AllowMergeOnSkippedPipeline
 	}
-	if input.ProtectMergeRequestPipelines != nil {
-		opts.ProtectMergeRequestPipelines = input.ProtectMergeRequestPipelines
-	}
 	if input.RemoveSourceBranchAfterMerge != nil {
 		opts.RemoveSourceBranchAfterMerge = input.RemoveSourceBranchAfterMerge
 	}
@@ -1107,15 +1096,6 @@ func applyCreateMergeOpts(opts *gl.CreateProjectOptions, input CreateInput) {
 	}
 	if input.PrintingMergeRequestLinkEnabled != nil {
 		opts.PrintingMergeRequestLinkEnabled = input.PrintingMergeRequestLinkEnabled
-	}
-	if input.MergePipelinesEnabled != nil {
-		opts.MergePipelinesEnabled = input.MergePipelinesEnabled
-	}
-	if input.MergeTrainsEnabled != nil {
-		opts.MergeTrainsEnabled = input.MergeTrainsEnabled
-	}
-	if input.MergeTrainsSkipTrainAllowed != nil {
-		opts.MergeTrainsSkipTrainAllowed = input.MergeTrainsSkipTrainAllowed
 	}
 	applyCreateMergeTemplateOpts(opts, input)
 }
@@ -1145,9 +1125,6 @@ func applyCreateMergeTemplateOpts(opts *gl.CreateProjectOptions, input CreateInp
 	}
 	if input.MergeRequestTitleRegexDescription != "" {
 		opts.MergeRequestTitleRegexDescription = new(input.MergeRequestTitleRegexDescription)
-	}
-	if input.ReviewerAssignmentStrategy != "" {
-		opts.ReviewerAssignmentStrategy = new(gl.ReviewerAssignmentStrategyValue(input.ReviewerAssignmentStrategy))
 	}
 }
 
@@ -1672,6 +1649,9 @@ func applyUpdateComplianceOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	}
 	if input.MergeTrainsSkipTrainAllowed != nil {
 		opts.MergeTrainsSkipTrainAllowed = input.MergeTrainsSkipTrainAllowed
+	}
+	if input.MergeTrainEnforcement != "" {
+		opts.MergeTrainEnforcement = new(gl.MergeTrainEnforcementValue(input.MergeTrainEnforcement))
 	}
 	if input.PrintingMergeRequestLinkEnabled != nil {
 		opts.PrintingMergeRequestLinkEnabled = input.PrintingMergeRequestLinkEnabled

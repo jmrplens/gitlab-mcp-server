@@ -997,15 +997,20 @@ func TestCentralTierFilter_Invariants(t *testing.T) {
 		})
 	}
 
-	// reviewer_assignment_strategy (client-go v2.46.0) is Premium: pruned from
-	// the Free project.create/project.update input schemas, present on Premium.
-	for _, id := range []actioncatalog.ActionID{"project.create", "project.update"} {
-		t.Run(string(id), func(t *testing.T) {
-			if actionHasInputProp(t, free, id, "reviewer_assignment_strategy") {
-				t.Errorf("Free %s schema must not advertise Premium field reviewer_assignment_strategy", id)
+	// reviewer_assignment_strategy (client-go v2.46.0) and
+	// merge_train_enforcement (client-go v3.27.0) are Premium: pruned from the
+	// Free project.update input schema, present on Premium. project.create
+	// offers neither, since POST /projects declares neither.
+	for _, field := range []string{"reviewer_assignment_strategy", "merge_train_enforcement"} {
+		t.Run(field, func(t *testing.T) {
+			if actionHasInputProp(t, free, "project.update", field) {
+				t.Errorf("Free project.update schema must not advertise Premium field %s", field)
 			}
-			if !actionHasInputProp(t, premium, id, "reviewer_assignment_strategy") {
-				t.Errorf("Premium %s schema must include field reviewer_assignment_strategy", id)
+			if !actionHasInputProp(t, premium, "project.update", field) {
+				t.Errorf("Premium project.update schema must include field %s", field)
+			}
+			if actionHasInputProp(t, premium, "project.create", field) {
+				t.Errorf("project.create schema advertises %s, which POST /projects does not declare", field)
 			}
 		})
 	}

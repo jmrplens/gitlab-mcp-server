@@ -141,7 +141,6 @@ func buildAcceptedEnumGaps() map[string]string {
 		"groups.CreateInput.project_creation_level=owner":                  projectCreationOwner,
 		"groups.UpdateInput.project_creation_level=owner":                  projectCreationOwner,
 		"groups.UpdateInput.shared_runners_setting=disabled_with_override": "doc/api/groups.md#options-for-shared_runners_setting marks disabled_with_override deprecated in favor of disabled_and_overridable, which is offered",
-		"projects.CreateInput.reviewer_assignment_strategy=dap_powered":    reviewerStrategyDAP,
 		"projects.UpdateInput.reviewer_assignment_strategy=dap_powered":    reviewerStrategyDAP,
 
 		// --- Documented values client-go has no constant for (extras) ---

@@ -226,17 +226,20 @@ func licenseOutput(l *gl.ProjectLicense) *LicenseOutput {
 	}
 }
 
-// ContainerExpirationPolicyOutput mirrors gl.ContainerExpirationPolicy, the
-// container_expiration_policy object.
+// ContainerExpirationPolicyOutput mirrors the container_expiration_policy
+// object lib/api/entities/container_expiration_policy.rb renders: the seven
+// keys it exposes, name_regex among them. It no longer publishes
+// name_regex_delete, which client-go's ContainerExpirationPolicy still
+// carries and v3.16.2 deprecated, since no entity sends it and it was always
+// empty.
 type ContainerExpirationPolicyOutput struct {
-	Cadence         string `json:"cadence"`
-	KeepN           int64  `json:"keep_n"`
-	OlderThan       string `json:"older_than"`
-	NameRegexDelete string `json:"name_regex_delete"`
-	NameRegexKeep   string `json:"name_regex_keep"`
-	Enabled         bool   `json:"enabled"`
-	NextRunAt       string `json:"next_run_at,omitempty"`
-	NameRegex       string `json:"name_regex,omitempty"`
+	Cadence       string `json:"cadence"`
+	KeepN         int64  `json:"keep_n"`
+	OlderThan     string `json:"older_than"`
+	NameRegex     string `json:"name_regex"`
+	NameRegexKeep string `json:"name_regex_keep"`
+	Enabled       bool   `json:"enabled"`
+	NextRunAt     string `json:"next_run_at,omitempty"`
 }
 
 func containerExpirationPolicyOutput(p *gl.ContainerExpirationPolicy) *ContainerExpirationPolicyOutput {
@@ -245,11 +248,10 @@ func containerExpirationPolicyOutput(p *gl.ContainerExpirationPolicy) *Container
 	}
 	return &ContainerExpirationPolicyOutput{
 		Cadence: p.Cadence, KeepN: p.KeepN, OlderThan: p.OlderThan,
-		NameRegexDelete: p.NameRegexDelete, //nolint:staticcheck // SA1019: client-go v3.16.2 deprecated it as a key GitLab never sends.
-		NameRegexKeep:   p.NameRegexKeep,
-		Enabled:         p.Enabled,
-		NextRunAt:       toolutil.FormatTimePtr(p.NextRunAt),
-		NameRegex:       p.NameRegex,
+		NameRegex:     p.NameRegex,
+		NameRegexKeep: p.NameRegexKeep,
+		Enabled:       p.Enabled,
+		NextRunAt:     toolutil.FormatTimePtr(p.NextRunAt),
 	}
 }
 

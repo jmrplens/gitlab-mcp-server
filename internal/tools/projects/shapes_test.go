@@ -131,8 +131,8 @@ func TestShapeConverters_SingleObjects(t *testing.T) {
 		&LicenseOutput{Key: "mit", Name: "MIT", Nickname: "n", HTMLURL: "h", SourceURL: "s"})
 
 	checkEqual(t, "containerExpirationPolicyOutput",
-		containerExpirationPolicyOutput(&gl.ContainerExpirationPolicy{Cadence: "1d", KeepN: 5, OlderThan: "30d", NameRegexDelete: "d", NameRegexKeep: "k", Enabled: true, NextRunAt: &now, NameRegex: "r"}), //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
-		&ContainerExpirationPolicyOutput{Cadence: "1d", KeepN: 5, OlderThan: "30d", NameRegexDelete: "d", NameRegexKeep: "k", Enabled: true, NextRunAt: rfc, NameRegex: "r"})
+		containerExpirationPolicyOutput(&gl.ContainerExpirationPolicy{Cadence: "1d", KeepN: 5, OlderThan: "30d", NameRegexDelete: "d", NameRegexKeep: "k", Enabled: true, NextRunAt: &now, NameRegex: "r"}), //nolint:staticcheck // SA1019: the deprecated field is set to show the output leaves it out.
+		&ContainerExpirationPolicyOutput{Cadence: "1d", KeepN: 5, OlderThan: "30d", NameRegexKeep: "k", Enabled: true, NextRunAt: rfc, NameRegex: "r"})
 }
 
 // TestShapeConverters_Collections verifies the slice converters map elements

@@ -182,6 +182,10 @@ const (
 	// projectParamGitLabDropped is the reason a project option client-go still
 	// carries is absent from the project inputs.
 	projectParamGitLabDropped = "not declared by POST /projects or PUT /projects/:id in GitLab 19.3.1 (lib/api/helpers/projects_helpers.rb at v19.3.1-ee) or 19.4.1 (gitlab-api-live.json), so GitLab drops the value; client-go keeps the field"
+	// projectParamUpdateOnly is the reason the project create input offers an
+	// option client-go's CreateProjectOptions carries and GitLab's update
+	// route alone takes.
+	projectParamUpdateOnly = "declared by PUT /projects/:id and not by POST /projects in GitLab 19.5.0 (gitlab-api-live.json; the update param groups of lib/api/helpers/projects_helpers.rb and ee/lib/ee/api/helpers/projects_helpers.rb), so a create drops the value; project.update offers it, and client-go's CreateProjectOptions keeps the field"
 	// mrApprovalRulesOffsetOnly is the reason the approval rules list offers
 	// no ordering or keyset field of the gl.ListOptions it pages with.
 	mrApprovalRulesOffsetOnly = "GET /projects/:id/merge_requests/:merge_request_iid/approval_rules declares only page and per_page (gitlab-api-live.json, 19.4.1-ee); gl.ListOptions ordering and keyset fields are unused plumbing there"
@@ -991,6 +995,19 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	"projects.CreateInput.operations_access_level": projectParamGitLabDropped,
 	"projects.UpdateInput.build_coverage_regex":    projectParamGitLabDropped,
 	"projects.UpdateInput.operations_access_level": projectParamGitLabDropped,
+
+	// Nine options client-go's CreateProjectOptions carries that only the
+	// update route declares: POST /projects reads declared_params alone, so
+	// Grape drops each of them from a create. project.update offers them.
+	"projects.CreateInput.ci_forward_deployment_enabled":   projectParamUpdateOnly,
+	"projects.CreateInput.protect_merge_request_pipelines": projectParamUpdateOnly,
+	"projects.CreateInput.issues_template":                 projectParamUpdateOnly,
+	"projects.CreateInput.merge_requests_template":         projectParamUpdateOnly,
+	"projects.CreateInput.merge_pipelines_enabled":         projectParamUpdateOnly,
+	"projects.CreateInput.merge_trains_enabled":            projectParamUpdateOnly,
+	"projects.CreateInput.merge_trains_skip_train_allowed": projectParamUpdateOnly,
+	"projects.CreateInput.merge_train_enforcement":         projectParamUpdateOnly,
+	"projects.CreateInput.reviewer_assignment_strategy":    projectParamUpdateOnly,
 
 	// A file upload offered in the shape every upload here takes rather than
 	// as the SDK's *GraphQLUpload: avatar_filename and avatar_content_type
