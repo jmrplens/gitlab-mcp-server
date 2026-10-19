@@ -1997,15 +1997,17 @@ func TestActionSpecs_GroupMilestoneGetRoute(t *testing.T) {
 	}
 }
 
-// TestGroupMilestones_UnreadableCapturedWebURL verifies that every group
+// TestGroupMilestones_UnreadableCapturedProjectID verifies that every group
 // milestone handler returns an error rather than a half-filled milestone when
-// GitLab sends web_url as something that is not a string. The SDK ignores the
-// key its own GroupMilestone does not model, so the read of the captured
-// response is the only thing that can notice.
-func TestGroupMilestones_UnreadableCapturedWebURL(t *testing.T) {
+// GitLab sends project_id as something that is not a number. The SDK ignores
+// the key its own GroupMilestone does not model, so the read of the captured
+// response is the only thing that can notice. web_url, the other key the
+// capture reads, is modeled by client-go as of v3.26.0, whose decoder refuses
+// an unreadable one before the capture is read.
+func TestGroupMilestones_UnreadableCapturedProjectID(t *testing.T) {
 	const (
-		one  = `{"id":1,"iid":10,"title":"v1","web_url":42}`
-		many = `[{"id":1,"iid":10,"title":"v1","web_url":42}]`
+		one  = `{"id":1,"iid":10,"title":"v1","project_id":"x"}`
+		many = `[{"id":1,"iid":10,"title":"v1","project_id":"x"}]`
 	)
 	// A collection GET is either the list itself or the IID-to-ID lookup Get
 	// and Update make before their own request; everything else is the request

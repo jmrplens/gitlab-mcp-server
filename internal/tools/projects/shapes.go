@@ -245,10 +245,11 @@ func containerExpirationPolicyOutput(p *gl.ContainerExpirationPolicy) *Container
 	}
 	return &ContainerExpirationPolicyOutput{
 		Cadence: p.Cadence, KeepN: p.KeepN, OlderThan: p.OlderThan,
-		NameRegexDelete: p.NameRegexDelete, NameRegexKeep: p.NameRegexKeep,
-		Enabled:   p.Enabled,
-		NextRunAt: toolutil.FormatTimePtr(p.NextRunAt),
-		NameRegex: p.NameRegex, //nolint:staticcheck // 1:1 SDK parity; deprecated field surfaced additively.
+		NameRegexDelete: p.NameRegexDelete, //nolint:staticcheck // SA1019: client-go v3.16.2 deprecated it as a key GitLab never sends.
+		NameRegexKeep:   p.NameRegexKeep,
+		Enabled:         p.Enabled,
+		NextRunAt:       toolutil.FormatTimePtr(p.NextRunAt),
+		NameRegex:       p.NameRegex,
 	}
 }
 

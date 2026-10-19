@@ -45,12 +45,12 @@ func TestUpdate_EmptyValues_ReachTheBody(t *testing.T) {
 		"tag_list":                               []any{},
 		"container_expiration_policy_attributes": map[string]any{"name_regex_delete": "", "name_regex_keep": ""},
 	}
-	// client-go copies name_regex_delete into the deprecated name_regex the
-	// API still reads, so the empty value reaches both.
+	// client-go copies name_regex_delete into name_regex, the one GitLab
+	// reads, when name_regex is unset, so the empty value reaches both.
 	want := map[string]string{
 		"topics":                                 `[]`,
 		"tag_list":                               `[]`,
-		"container_expiration_policy_attributes": `{"name_regex_delete":"","name_regex_keep":"","name_regex":""}`,
+		"container_expiration_policy_attributes": `{"name_regex":"","name_regex_keep":"","name_regex_delete":""}`,
 	}
 	for _, name := range texts {
 		params[name] = ""
@@ -8314,8 +8314,8 @@ func assertCreateAdditiveScalars(t *testing.T, opts *gl.CreateProjectOptions) {
 		{"AutoCancelPendingPipelines", opts.AutoCancelPendingPipelines, "enabled"},
 		{"AutoDevopsDeployStrategy", opts.AutoDevopsDeployStrategy, "manual"},
 		{"ExternalAuthorizationClassificationLabel", opts.ExternalAuthorizationClassificationLabel, "label"},
-		{"IssuesTemplate", opts.IssuesTemplate, "it"},                //nolint:staticcheck // 1:1 parity test.
-		{"MergeRequestsTemplate", opts.MergeRequestsTemplate, "mrt"}, //nolint:staticcheck // 1:1 parity test.
+		{"IssuesTemplate", opts.IssuesTemplate, "it"},
+		{"MergeRequestsTemplate", opts.MergeRequestsTemplate, "mrt"},
 	}
 	for _, c := range checks {
 		if c.got == nil || *c.got != c.want {
@@ -8349,13 +8349,13 @@ func assertCreateAdditiveBools(t *testing.T, opts *gl.CreateProjectOptions) {
 		"MergePipelinesEnabled":                 opts.MergePipelinesEnabled,
 		"MergeTrainsEnabled":                    opts.MergeTrainsEnabled,
 		"MergeTrainsSkipTrainAllowed":           opts.MergeTrainsSkipTrainAllowed,
-		"ServiceDeskEnabled":                    opts.ServiceDeskEnabled, //nolint:staticcheck // 1:1 parity test.
+		"ServiceDeskEnabled":                    opts.ServiceDeskEnabled,
 		"EmailsEnabled":                         opts.EmailsEnabled,
 		"EmailsDisabled":                        opts.EmailsDisabled, //nolint:staticcheck // 1:1 parity test.
 		"ShowDefaultAwardEmojis":                opts.ShowDefaultAwardEmojis,
 		"AutoDevopsEnabled":                     opts.AutoDevopsEnabled,
 		"CICDCatalogEnabled":                    opts.CICDCatalogEnabled,
-		"CIForwardDeploymentEnabled":            opts.CIForwardDeploymentEnabled, //nolint:staticcheck // 1:1 parity test.
+		"CIForwardDeploymentEnabled":            opts.CIForwardDeploymentEnabled,
 		"GroupRunnersEnabled":                   opts.GroupRunnersEnabled,
 		"PublicJobs":                            opts.PublicJobs,
 		"Mirror":                                opts.Mirror,
@@ -8459,7 +8459,7 @@ func TestContainerExpirationPolicyInput_ToGL(t *testing.T) {
 	if got.OlderThan == nil || *got.OlderThan != "30d" {
 		t.Error("OlderThan not set")
 	}
-	if got.NameRegexDelete == nil || *got.NameRegexDelete != "del" {
+	if got.NameRegexDelete == nil || *got.NameRegexDelete != "del" { //nolint:staticcheck // SA1019: the field toGL still sets.
 		t.Error("NameRegexDelete not set")
 	}
 	if got.NameRegexKeep == nil || *got.NameRegexKeep != "keep" {

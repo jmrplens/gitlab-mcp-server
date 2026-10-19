@@ -71,7 +71,10 @@ func (c *ContainerExpirationPolicyInput) toGL() *gl.ContainerExpirationPolicyAtt
 	// The two regexes decide by presence, never by emptiness: an empty one is
 	// the caller removing it (issue 1306).
 	if c.NameRegexDelete != nil {
-		out.NameRegexDelete = c.NameRegexDelete
+		// client-go v3.16.2 deprecated name_regex_delete, which GitLab never
+		// read, and copies it into name_regex when that is unset, so the
+		// request GitLab reads is the one it was.
+		out.NameRegexDelete = c.NameRegexDelete //nolint:staticcheck // SA1019: still the input's only field; see above.
 		set = true
 	}
 	if c.NameRegexKeep != nil {
@@ -971,7 +974,7 @@ func applyCreateFeatureToggles(opts *gl.CreateProjectOptions, input CreateInput)
 		opts.LFSEnabled = input.LFSEnabled
 	}
 	if input.ServiceDeskEnabled != nil {
-		opts.ServiceDeskEnabled = input.ServiceDeskEnabled //nolint:staticcheck // 1:1 SDK parity; no longer supported in recent versions.
+		opts.ServiceDeskEnabled = input.ServiceDeskEnabled
 	}
 	if input.EmailsEnabled != nil {
 		opts.EmailsEnabled = input.EmailsEnabled
@@ -1027,7 +1030,7 @@ func applyCreatePipelineOpts(opts *gl.CreateProjectOptions, input CreateInput) {
 		opts.AutoCancelPendingPipelines = new(input.AutoCancelPendingPipelines)
 	}
 	if input.CIForwardDeploymentEnabled != nil {
-		opts.CIForwardDeploymentEnabled = input.CIForwardDeploymentEnabled //nolint:staticcheck // 1:1 SDK parity; no longer supported in recent versions.
+		opts.CIForwardDeploymentEnabled = input.CIForwardDeploymentEnabled
 	}
 	if input.ResourceGroupDefaultProcessMode != "" {
 		opts.ResourceGroupDefaultProcessMode = new(gl.ResourceGroupProcessMode(input.ResourceGroupDefaultProcessMode))
@@ -1061,10 +1064,10 @@ func applyCreateTemplateOpts(opts *gl.CreateProjectOptions, input CreateInput) {
 		opts.GroupWithProjectTemplatesID = new(input.GroupWithProjectTemplatesID)
 	}
 	if input.IssuesTemplate != "" {
-		opts.IssuesTemplate = new(input.IssuesTemplate) //nolint:staticcheck // 1:1 SDK parity; no longer supported in recent versions.
+		opts.IssuesTemplate = new(input.IssuesTemplate)
 	}
 	if input.MergeRequestsTemplate != "" {
-		opts.MergeRequestsTemplate = new(input.MergeRequestsTemplate) //nolint:staticcheck // 1:1 SDK parity; no longer supported in recent versions.
+		opts.MergeRequestsTemplate = new(input.MergeRequestsTemplate)
 	}
 	if len(input.TagList) > 0 {
 		opts.TagList = &input.TagList //nolint:staticcheck // 1:1 SDK parity; prefer topics.

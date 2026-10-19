@@ -1697,18 +1697,18 @@ func TestListSSHKeys_AKeyWithoutTimestampsLeavesThemEmpty(t *testing.T) {
 	}
 }
 
-// TestListSSHKeys_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
-// failure the captured response adds to a key list: GitLab's answer decodes
-// for the SDK and not for the key fields read beside it, and the handler
-// reports it rather than returning keys whose last_used_at is silently empty.
-func TestListSSHKeys_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+// TestListSSHKeys_AnUnreadableKey_IsRefused verifies that a key list refuses a
+// key whose usage_type is not a string rather than returning a half-filled
+// one. client-go models every field of the key the handler publishes as of
+// v3.19.0, so its decoder is the one that refuses it.
+func TestListSSHKeys_AnUnreadableKey_IsRefused(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"title":"laptop","last_used_at":"whenever"}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"title":"laptop","usage_type":7}]`)
 	}))
 
 	_, err := ListSSHKeys(context.Background(), client, ListSSHKeysInput{})
-	if err == nil || !strings.Contains(err.Error(), "decode the captured response") {
-		t.Errorf("ListSSHKeys() error = %v, want the capture's decode failure", err)
+	if err == nil || !strings.Contains(err.Error(), "cannot unmarshal") {
+		t.Errorf("ListSSHKeys() error = %v, want the decode failure", err)
 	}
 }
 

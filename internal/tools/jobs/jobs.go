@@ -676,7 +676,10 @@ func ListBridges(ctx context.Context, client *gitlabclient.Client, input BridgeL
 	applyListOpts(opts, input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	bridges, resp, err := client.GL().Jobs.ListPipelineBridges(string(input.ProjectID), input.PipelineID, opts, gl.WithContext(ctx))
+	// client-go v3.24.0 deprecated ListPipelineBridges for
+	// ListPipelineTriggerJobs, whose trigger_jobs route GitLab mounts only
+	// from 19.2, so an older instance still needs this one.
+	bridges, resp, err := client.GL().Jobs.ListPipelineBridges(string(input.ProjectID), input.PipelineID, opts, gl.WithContext(ctx)) //nolint:staticcheck // SA1019: see above.
 	if err != nil {
 		return BridgeListOutput{}, toolutil.WrapErrWithStatusHint("jobListBridges", err, http.StatusNotFound,
 			"verify pipeline_id with pipeline.list. Bridges only exist for pipelines that trigger downstream/multi-project pipelines")

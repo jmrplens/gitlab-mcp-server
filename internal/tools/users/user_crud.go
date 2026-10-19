@@ -211,7 +211,7 @@ func buildCreateUserOptions(input CreateInput) *gl.CreateUserOptions {
 		ViewDiffsFileByFile:            input.ViewDiffsFileByFile,
 		Bio:                            strPtr(input.Bio),
 		Location:                       strPtr(input.Location),
-		JobTitle:                       strPtr(input.JobTitle),
+		JobTitle:                       strPtr(input.JobTitle), //nolint:staticcheck // SA1019: client-go v3.18.0 deprecated it as a param GitLab ignores.
 		Organization:                   strPtr(input.Organization),
 		Pronouns:                       strPtr(input.Pronouns),
 		CommitEmail:                    strPtr(input.CommitEmail),
@@ -250,7 +250,7 @@ func buildModifyUserOptions(input ModifyInput) *gl.ModifyUserOptions {
 		// removing it (issue 1306).
 		Bio:                 input.Bio,
 		Location:            strPtr(input.Location),
-		JobTitle:            strPtr(input.JobTitle),
+		JobTitle:            strPtr(input.JobTitle), //nolint:staticcheck // SA1019: client-go v3.18.0 deprecated it as a param GitLab ignores.
 		Organization:        strPtr(input.Organization),
 		ProjectsLimit:       input.ProjectsLimit,
 		Note:                strPtr(input.Note),

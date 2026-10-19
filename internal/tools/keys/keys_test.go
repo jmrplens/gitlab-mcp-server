@@ -67,25 +67,24 @@ func TestGetKeyWithUser_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 	}
 }
 
-// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
-// failure the captured response adds to both handlers: GitLab's answer
-// decodes for the SDK and not for the fields read beside it, and the
-// handler reports it rather than swallowing it, attributed to the call that
-// really ran.
+// TestHandlers_AnUnreadableKey_IsRefused verifies that both handlers refuse a
+// key whose usage_type is not a string rather than publishing a half-filled
+// one, attributed to the call that really ran. client-go models usage_type on
+// its own Key as of v3.19.0, so its decoder is the one that refuses it.
 //
 // The shared assertion is a single substring test over both handlers, so it
 // holds that each reported a decode failure and nothing about which handler
 // the failure is blamed on. That left the two operation labels on this branch
-// free to trade places: both errors would still name the captured response,
-// both cases would still pass, and a caller who asked for a key by ID would be
+// free to trade places: both errors would still name a decode failure, both
+// cases would still pass, and a caller who asked for a key by ID would be
 // told the fingerprint lookup was the call that could not read GitLab's
 // answer. Each error is therefore kept and held to its own label afterwards.
-func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+func TestHandlers_AnUnreadableKey_IsRefused(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id":42,"title":"My Key","key":"ssh-rsa AAAA...","usage_type":7,"user":{"id":1}}`)
 	}))
 	reported := make(map[string]error, 2)
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+	testutil.AssertUnreadableBodyRefused(t, []testutil.CapturedCase{
 		{Name: "by id", Call: func() error {
 			_, err := GetKeyWithUser(t.Context(), client, GetByIDInput{KeyID: 42})
 			reported["key_get"] = err
@@ -101,7 +100,7 @@ func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
 		t.Run(operation, func(t *testing.T) {
 			err := reported[operation]
 			if err == nil || !strings.HasPrefix(err.Error(), operation+": ") {
-				t.Errorf("captured decode failure %v is not attributed to %s", err, operation)
+				t.Errorf("decode failure %v is not attributed to %s", err, operation)
 			}
 		})
 	}

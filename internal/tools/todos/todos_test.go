@@ -843,16 +843,15 @@ func TestDecorateTodoMeta_AnEntryThatFillsNothing_KeepsTheGenericMetadata(t *tes
 // ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestList_UnreadableCapturedGroup verifies that the todo list handler returns
-// an error rather than a half-filled list when GitLab sends the group object as
-// something that is not an object. The SDK ignores the key its own Todo does
-// not model, so the read of the captured response is the only thing that can
-// notice.
-func TestList_UnreadableCapturedGroup(t *testing.T) {
+// TestList_UnreadableGroup verifies that the todo list handler returns an
+// error rather than a half-filled list when GitLab sends the group object as
+// something that is not an object. client-go models the group on its own Todo
+// as of v3.20.0, so its decoder is the one that refuses it.
+func TestList_UnreadableGroup(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"action_name":"assigned","state":"pending","group":"not-an-object"}]`)
 	}))
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+	testutil.AssertUnreadableBodyRefused(t, []testutil.CapturedCase{
 		{Name: "list", Call: func() error {
 			_, err := List(context.Background(), client, ListInput{})
 			return err

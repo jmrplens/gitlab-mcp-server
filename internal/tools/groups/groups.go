@@ -1083,7 +1083,7 @@ type CreateInput struct {
 	AutoDevopsEnabled               *bool                          `json:"auto_devops_enabled,omitempty"                jsonschema:"Enable Auto DevOps for projects in this group"`
 	DefaultBranchProtection         *int64                         `json:"default_branch_protection,omitempty"          jsonschema:"Deprecated: default branch protection level (0=none,1=partial,2=full,3=initial push,4=fully protected). Prefer default_branch_protection_defaults"`
 	DefaultBranchProtectionDefaults *BranchProtectionDefaultsInput `json:"default_branch_protection_defaults,omitempty" jsonschema:"Default branch protection settings object"`
-	DuoAvailability                 string                         `json:"duo_availability,omitempty"                   jsonschema:"GitLab Duo availability (default_on, default_off, never_on)"`
+	DuoAvailability                 string                         `json:"duo_availability,omitempty"                   jsonschema:"GitLab Duo availability (always_on, default_on, default_off, never_on). always_on and never_on also lock the setting for every subgroup and project"`
 	EmailsEnabled                   *bool                          `json:"emails_enabled,omitempty"                     jsonschema:"Enable email notifications"`
 	EmailsDisabled                  *bool                          `json:"emails_disabled,omitempty"                    jsonschema:"Deprecated: disable email notifications. Prefer emails_enabled"`
 	EnabledGitAccessProtocol        string                         `json:"enabled_git_access_protocol,omitempty"        jsonschema:"Allowed Git access protocol (ssh, http, all)"`
@@ -1124,7 +1124,7 @@ type UpdateInput struct {
 	AutoDevopsEnabled               *bool                          `json:"auto_devops_enabled,omitempty"                jsonschema:"Enable Auto DevOps for projects in this group"`
 	DefaultBranchProtection         *int64                         `json:"default_branch_protection,omitempty"          jsonschema:"Deprecated: default branch protection level (0=none,1=partial,2=full,3=initial push,4=fully protected). Prefer default_branch_protection_defaults"`
 	DefaultBranchProtectionDefaults *BranchProtectionDefaultsInput `json:"default_branch_protection_defaults,omitempty" jsonschema:"Default branch protection settings object"`
-	DuoAvailability                 string                         `json:"duo_availability,omitempty"                   jsonschema:"GitLab Duo availability (default_on, default_off, never_on)"`
+	DuoAvailability                 string                         `json:"duo_availability,omitempty"                   jsonschema:"GitLab Duo availability (always_on, default_on, default_off, never_on). always_on and never_on also lock the setting for every subgroup and project"`
 	DuoFeaturesEnabled              *bool                          `json:"duo_features_enabled,omitempty"               jsonschema:"Enable GitLab Duo features"`
 	LockDuoFeaturesEnabled          *bool                          `json:"lock_duo_features_enabled,omitempty"          jsonschema:"Prevent subgroups from changing the Duo features setting"`
 	EmailsEnabled                   *bool                          `json:"emails_enabled,omitempty"                     jsonschema:"Enable email notifications"`

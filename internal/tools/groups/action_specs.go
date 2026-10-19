@@ -506,7 +506,7 @@ func groupCreateUpdateEnumOverrides(includeUpdateOnly bool) []toolutil.InputSche
 			"enum": []any{"owner", "maintainer"},
 		}),
 		toolutil.SchemaPropertyOverride("duo_availability", map[string]any{
-			"enum": []any{"default_on", "default_off", "never_on"},
+			"enum": []any{"always_on", "default_on", "default_off", "never_on"},
 		}),
 		toolutil.SchemaPropertyOverride("enabled_git_access_protocol", map[string]any{
 			"enum": []any{"ssh", "http", "all"},

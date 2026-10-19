@@ -78,8 +78,7 @@ var declaredServices = map[string]declaration{
 	"Version":          {supersededUpstream, "GET /version is 'deprecated in 15.5. We recommend you instead use the Metadata API' (lib/api/metadata.rb), which serves the same Entities::Metadata on GET /metadata; client-go's Version struct decodes two of its four keys and Metadata all of them. internal/tools/health and internal/tools/metadata call Metadata.GetMetadata instead. The decision covers the tool surface: outside it, internal/gitlab's Client.Ping, which only the e2e harness calls, still reads the version through Version.GetVersion, and the startup probe and the edition detection read /api/v4/version with requests of their own"},
 
 	// UNWRAPPED_TRACKED
-	// (none: SecurityDependencyFirewall was the last one, and
-	// internal/tools/dependencyfirewall now calls EvaluatePackage.)
+	"WorkItemsREST": {unwrappedTracked, "client-go v3.22.0's experimental WorkItemsREST (GetWorkItem only) reads the work items REST API, which GitLab serves only behind the work_item_rest_api feature flag and answers 404 while it is off; the flag's rollout has no milestone. issue.work_item_get stays on the GraphQL WorkItems service, and serving it over REST once the flag ships is https://github.com/jmrplens/gitlab-mcp-server/issues/1054"},
 }
 
 // GraphQL operation decisions.

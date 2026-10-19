@@ -50,11 +50,11 @@ const (
 	// lib/api/entities/member.rb and printed on neither page.
 	docGroupMembersList   = "group_members.md#list-all-group-members"
 	docProjectMembersList = "project_members.md#list-all-members-of-a-project"
-	// The pages for the six structs the review found short by a field each
-	// print that field in their example bodies, except that the lint page
-	// prints the jobs array on the existing-configuration example alone and
-	// the runner pages print job_execution_status and never created_by.
-	docKeysByID        = "keys.md#retrieve-user-by-ssh-key-id"
+	// The pages for the structs the review found short by a field each print
+	// that field in their example bodies, except that the lint page prints
+	// the jobs array on the existing-configuration example alone and the
+	// runner pages print job_execution_status and never created_by. The key
+	// page left the list when client-go v3.19.0 modeled the key's three.
 	docRunnersList     = "runners.md#list-all-runners"
 	docRunnersDetails  = "runners.md#retrieve-runners-details"
 	docLintExisting    = "lint.md#validate-existing-cicd-configuration"
@@ -505,14 +505,10 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	"members.Output.group_scim_identity":      docProjectMembersList,
 	"members.Output.override":                 docProjectMembersList,
 
-	// keys, runners, cilint, labels, pipelines — one field each (three on a
-	// key and on a runner) that the entity sends on every object and the
-	// client-go struct does not declare, read from the captured response
-	// (ADR-0021, the readers in toolutil/sent_shapes.go). Recorded in
-	// docs/development/upstream-bugs.md.
-	"keys.Output.expires_at":                     docKeysByID,
-	"keys.Output.last_used_at":                   docKeysByID,
-	"keys.Output.usage_type":                     docKeysByID,
+	// runners, cilint, labels, pipelines: one field each (three on a runner)
+	// that the entity sends on every object and the client-go struct does not
+	// declare, read from the captured response (ADR-0021, the readers in
+	// toolutil/sent_shapes.go). Recorded in docs/development/upstream-bugs.md.
 	"runners.Output.created_at":                  docRunnersList,
 	"runners.Output.created_by":                  docRunnersList,
 	"runners.Output.job_execution_status":        docRunnersList,
@@ -583,7 +579,6 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	"projects.Output.duo_sast_vr_workflow_enabled":                 docProjectsGet,
 	"projects.Output.duo_secret_detection_fp_enabled":              docProjectsGet,
 	"projects.Output.max_pipelines_per_merge_train":                docProjectsGet,
-	"projects.Output.merge_train_enforcement":                      docProjectsGet,
 	"projects.Output.only_allow_merge_if_all_status_checks_passed": docProjectsGet,
 	"projects.Output.repository_object_format":                     docProjectsGet,
 	"projects.Output.secret_push_protection_enabled":               docProjectsGet,
