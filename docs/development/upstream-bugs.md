@@ -288,7 +288,7 @@ readable without opening the tracker:
 | 41 | client-go | [IssueRelation models an issue basic where GitLab renders a whole issue](#issuerelation-models-an-issue-basic-where-gitlab-renders-a-whole-issue) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 42 | client-go | [MemberRole models twenty of the forty-five permissions GitLab sends](#memberrole-models-twenty-of-the-forty-five-permissions-gitlab-sends) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 43 | client-go | [PipelineInfo decodes two entities and models only the smaller one](#pipelineinfo-decodes-two-entities-and-models-only-the-smaller-one) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
-| 44 | client-go | [Group, Project and Issue each model one entity where GitLab renders two](#group-project-and-issue-each-model-one-entity-where-gitlab-renders-two) | In part in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300), whole in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
+| 44 | client-go | [Group, Project and Issue each model one entity where GitLab renders two](#group-project-and-issue-each-model-one-entity-where-gitlab-renders-two) | In part in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300), whole in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | Partly, by [gitlab-org/api/client-go!3141](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3141), not ours, **v3.27.0**: `Project.MergeTrainEnforcement` | No | Yes, for the rest; retired for `merge_train_enforcement` at the v3.29.0 pin |
 | 45 | client-go | [The work item get, create and update documents select licensed fields](#the-work-item-get-create-and-update-documents-select-licensed-fields) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | Yes, on Community Edition | None possible |
 | 46 | gitlab-org/gitlab | [Cancelling an auto-merge answers a status hash under a merge request annotation](#cancelling-an-auto-merge-answers-a-status-hash-under-a-merge-request-annotation) | Yes | Yes, [gitlab-org/gitlab!255702](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255702) and [gitlab-org/gitlab!255704](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255704), both merged; [gitlab-org/gitlab!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239) closed unmerged | **Yes, 19.5.0**: both halves | Was yes | Yes |
 | 47 | gitlab-org/gitlab | [A revoked GPG UID still verifies commits](#a-revoked-gpg-uid-is-still-offered-for-verification-and-still-verifies-commits) | Yes, by another user, [gitlab-org/gitlab#24572](https://gitlab.com/gitlab-org/gitlab/-/work_items/24572), closed as completed on 2026-10-12 | Yes, [gitlab-org/gitlab!255300](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255300), merged | **Yes, 19.5.0** | No | None possible |
@@ -4156,12 +4156,25 @@ want the shapes above rather than the nearest existing struct, and the nested
   namespace access rules as new types. It leaves out `epic_iid`, which GitLab
   deprecates in favour of the `epic` `Issue` already models, and it does not
   split the three structs into one type per entity, since that would change
-  what the methods return.
-- **Merged**: no.
+  what the methods return. Since the merge request was rebased onto
+  client-go's `main` past v3.29.0 and force-pushed at 14:44 UTC on
+  2026-10-19, the commit, `643b8c3e`, adds sixteen of the seventeen keys on
+  `Project` and leaves `merge_train_enforcement` to the merge below.
+- **Merged**: for `merge_train_enforcement` on `Project`, yes, not by us:
+  [gitlab-org/api/client-go!3141](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3141)
+  ("feat(projects): add merge_train_enforcement to project structs"),
+  another contributor's, merged at 23:32 UTC on 2026-10-17 and first in
+  **v3.27.0**, which models it as a `MergeTrainEnforcementValue`. For the
+  rest, no: read on 2026-10-19 at v3.29.0, the version `go.mod` pins, no
+  other key this entry names is modeled.
 - **Blocking**: no. Every key is worked around.
-- **Workaround**: yes. All of them are read from the captured response beside
-  the SDK's decode (ADR-0021), through `toolutil.CapturedGroup`,
-  `CapturedProject`, `CapturedIssue` and their list siblings.
+- **Workaround**: yes, for every key but `merge_train_enforcement`. They are
+  read from the captured response beside the SDK's decode (ADR-0021),
+  through `toolutil.CapturedGroup`, `CapturedProject`, `CapturedIssue` and
+  their list siblings; the project keys land in `toolutil.ProjectExtra`.
+  `merge_train_enforcement` retired when the pin moved to v3.29.0: the
+  project converter (`ToOutput` in `internal/tools/projects/projects.go`)
+  reads it off the SDK's `Project`, and `ProjectExtra` no longer captures it.
 
 **What**: three of the structs this server uses most model fewer keys than the
 Grape entity their routes render, and in each case the gap is bigger than a
@@ -4172,7 +4185,7 @@ inherits it on the routes that answer with a single object.
 | Struct    | Narrow entity                             | Wider entity                   | Keys neither models |
 | --------- | ----------------------------------------- | ------------------------------ | ------------------- |
 | `Group`   | `Entities::Group`                         | `Entities::GroupDetail`        | 10 + 8              |
-| `Project` | `Entities::BasicProjectDetails` (24 keys) | `Entities::Project` (159 keys) | 17                  |
+| `Project` | `Entities::BasicProjectDetails` (24 keys) | `Entities::Project` (159 keys) | 16                  |
 | `Issue`   | `Entities::IssueBasic`                    | `Entities::Issue`              | 3 + 6               |
 
 The project row is the one worth reading twice. `BasicProjectDetails` is not a
@@ -4183,17 +4196,19 @@ answers with, and what every route through `present_projects` narrows to when
 the caller passes `simple=true`. One Go struct decodes both, so a client cannot
 tell from the type which of the two it is holding.
 
-**The seventeen on `Project`**: `description_html`, `repository_object_format`,
+**The sixteen on `Project`**: `description_html`, `repository_object_format`,
 `show_diff_preview_in_email`, `warn_about_potentially_unwanted_characters`,
 `secret_push_protection_enabled`, `web_based_commit_signing_enabled`,
-`merge_train_enforcement`, `max_pipelines_per_merge_train`,
+`max_pipelines_per_merge_train`,
 `duo_remote_flows_enabled`, `duo_foundational_flows_enabled`,
 `only_allow_merge_if_all_status_checks_passed`, `duo_sast_fp_detection_enabled`,
 `duo_sast_vr_workflow_enabled`, `duo_secret_detection_fp_enabled`,
 `duo_dependency_bump_breaking_changes_enabled`,
 `security_policy_pipeline_must_succeed` and `spp_repository_pipeline_access`.
 Four are unconditional on the entity; the rest are gated on a licensed feature,
-on the `read_secret_push_protection_info` ability, or on GitLab.com.
+on the `read_secret_push_protection_info` ability, or on GitLab.com. There
+were seventeen until v3.27.0, which models the seventeenth,
+`merge_train_enforcement`, gated on licensed merge trains.
 `secret_push_protection_enabled` is not new data: it is the newer spelling of
 `pre_receive_secret_detection_enabled`, which the SDK does model, exposed twice
 from `project.security_setting`.
@@ -4231,7 +4246,7 @@ upstream rather than local.
 **One caution for whoever writes the merge request.** `gen_api_live` captures a
 condition as source text over a line range, and in
 `ee/lib/ee/api/entities/project.rb` the text of each `expose` runs on into the
-next one, so two of the seventeen read as gated by their neighbour's feature.
+next one, so two of the sixteen read as gated by their neighbour's feature.
 `max_pipelines_per_merge_train` gates on `merge_trains` (Premium) and
 `duo_foundational_flows_enabled` on `ai_workflows` (Premium); the record
 resolves both to Ultimate from the next expose's `external_status_checks` and
