@@ -232,6 +232,22 @@ func assertVisibilityRoundTrip(t *testing.T, s *harness.Session, award int64) {
 	if hidden.UserAchievement.ShowOnProfile {
 		t.Errorf("award %d still shows on the profile after being hidden", award)
 	}
+
+	// The award message is the other field an update changes (client-go
+	// v3.18.0): set, then removed with an empty string, and the visibility
+	// left as the call before set it.
+	const message = "e2e award message"
+	noted := harness.Do[achievements.UserAchievementMutationOutput](s, actionAchievementUserAchievementUpdate,
+		map[string]any{"user_achievement_id": award, "award_message": message})
+	if noted.UserAchievement.AwardMessage != message || noted.UserAchievement.ShowOnProfile {
+		t.Errorf("award %d after setting its message = {award_message:%q show_on_profile:%v}, want {%q false}",
+			award, noted.UserAchievement.AwardMessage, noted.UserAchievement.ShowOnProfile, message)
+	}
+	cleared := harness.Do[achievements.UserAchievementMutationOutput](s, actionAchievementUserAchievementUpdate,
+		map[string]any{"user_achievement_id": award, "award_message": ""})
+	if cleared.UserAchievement.AwardMessage != "" {
+		t.Errorf("award %d still carries the message %q after it was removed", award, cleared.UserAchievement.AwardMessage)
+	}
 }
 
 // assertAwardOrder fails unless the reorder took effect, and answers by

@@ -711,6 +711,7 @@ func TestPackageGroupList_Success(t *testing.T) {
 		GroupID:            "99",
 		ExcludeSubgroups:   true,
 		PackageName:        testPackageName,
+		PackageVersion:     "1.0.0",
 		PackageType:        "generic",
 		OrderBy:            "project_path",
 		Sort:               "desc",
@@ -725,6 +726,9 @@ func TestPackageGroupList_Success(t *testing.T) {
 	}
 	if gotQuery.Get("exclude_subgroups") != "true" {
 		t.Errorf("exclude_subgroups query = %q, want true", gotQuery.Get("exclude_subgroups"))
+	}
+	if gotQuery.Get("package_version") != "1.0.0" {
+		t.Errorf("package_version query = %q, want 1.0.0", gotQuery.Get("package_version"))
 	}
 	if gotQuery.Get("order_by") != "project_path" {
 		t.Errorf("order_by query = %q, want project_path", gotQuery.Get("order_by"))

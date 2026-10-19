@@ -155,8 +155,8 @@ func revokeSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 
 func userAchievementUpdateSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	opts := achievementOptions(toolUserAchievementUpdate)
-	opts.Usage = "Change one award, which today means whether the recipient's profile displays it. This edits an award, not the badge behind it, so use achievement.update to rename or re-illustrate the achievement everyone holds. " + noteTwoIDs
-	opts.Aliases = append(opts.Aliases, "hide an award from a profile", "show award on profile", "change award visibility")
+	opts.Usage = "Change one award: whether the recipient's profile displays it, and the note shown alongside it. This edits an award, not the badge behind it, so use achievement.update to rename or re-illustrate the achievement everyone holds. " + noteTwoIDs
+	opts.Aliases = append(opts.Aliases, "hide an award from a profile", "show award on profile", "change award visibility", "change award message")
 	opts.RelatedActions = []string{actionUserList, actionUserAchievementReorder, actionUpdate}
 	opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		"user_achievement_id": userAchievementIDGuidance(),
@@ -165,8 +165,13 @@ func userAchievementUpdateSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 			ExampleBinding:   "params.show_on_profile:false",
 			CommonConfusions: []string{"Omitting the field leaves the current visibility alone rather than hiding the award."},
 		},
+		"award_message": {
+			ValueSource:      "The note to show alongside the award, up to 200 characters.",
+			ExampleBinding:   `params.award_message:"Thanks for the review"`,
+			CommonConfusions: []string{"An empty string removes the note, and omitting the field leaves it alone."},
+		},
 	}
-	opts.IndividualTool.Description = "Change one award, which today means its show_on_profile visibility. Returns: the updated award with id, achievement_id, user_id, priority, show_on_profile, and timestamps. See also: gitlab_achievement_user_list, gitlab_achievement_user_achievement_reorder, gitlab_achievement_update."
+	opts.IndividualTool.Description = "Change one award: its show_on_profile visibility and its award message. Returns: the updated award with id, achievement_id, user_id, priority, show_on_profile, award message, and timestamps. See also: gitlab_achievement_user_list, gitlab_achievement_user_achievement_reorder, gitlab_achievement_update."
 	return toolutil.NewUpdateActionSpec("user_achievement_update", route, opts)
 }
 

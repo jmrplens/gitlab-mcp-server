@@ -177,8 +177,9 @@ type RevokeInput struct {
 
 // UserAchievementUpdateInput defines the input for changing an award.
 type UserAchievementUpdateInput struct {
-	UserAchievementID int64 `json:"user_achievement_id" jsonschema:"Numeric ID of the award to change,required"`
-	ShowOnProfile     *bool `json:"show_on_profile,omitempty" jsonschema:"Whether the recipient's profile displays this award. Omit to leave the current visibility unchanged"`
+	UserAchievementID int64   `json:"user_achievement_id" jsonschema:"Numeric ID of the award to change,required"`
+	ShowOnProfile     *bool   `json:"show_on_profile,omitempty" jsonschema:"Whether the recipient's profile displays this award. Omit to leave the current visibility unchanged"`
+	AwardMessage      *string `json:"award_message,omitempty" jsonschema:"New note shown alongside the award, up to 200 characters. Pass an empty string to remove it. Omit the field to leave it untouched"`
 }
 
 // UserAchievementDeleteInput defines the input for deleting an award.
@@ -351,8 +352,8 @@ func Revoke(ctx context.Context, client *gitlabclient.Client, input RevokeInput)
 	}, nil
 }
 
-// UserAchievementUpdate changes an award, which today means its profile
-// visibility.
+// UserAchievementUpdate changes an award: its profile visibility and the
+// message shown alongside it, each sent only when the caller set it.
 func UserAchievementUpdate(ctx context.Context, client *gitlabclient.Client, input UserAchievementUpdateInput) (UserAchievementOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return UserAchievementOutput{}, err
@@ -361,11 +362,11 @@ func UserAchievementUpdate(ctx context.Context, client *gitlabclient.Client, inp
 		return UserAchievementOutput{}, toolutil.ErrRequiredInt64(opUserAchievementUpdate, "user_achievement_id")
 	}
 
-	opts := &gl.UpdateUserAchievementOptions{ShowOnProfile: input.ShowOnProfile}
+	opts := &gl.UpdateUserAchievementOptions{ShowOnProfile: input.ShowOnProfile, AwardMessage: input.AwardMessage}
 
 	award, resp, err := client.GL().Achievements.UpdateUserAchievement(input.UserAchievementID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return UserAchievementOutput{}, writeErr(client, resp, opUserAchievementUpdate, objectAward, err, hintUserAchievementID)
+		return UserAchievementOutput{}, writeErr(client, resp, opUserAchievementUpdate, objectAward, err, hintUserAchievementID+", and that award_message stays within 200 characters")
 	}
 	return UserAchievementOutput{UserAchievement: toUserAchievement(award)}, nil
 }

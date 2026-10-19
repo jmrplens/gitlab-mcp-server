@@ -733,6 +733,40 @@ func TestUserAchievementUpdate_Success(t *testing.T) {
 	}
 }
 
+// TestUserAchievementUpdate_AwardMessage_IsSentOnlyWhenSet verifies that the
+// award message client-go v3.18.0 added to UpdateUserAchievementOptions is
+// sent as awardMessage when the caller set it, an empty one included, which
+// clears the message, and left out otherwise, so an update of the visibility
+// alone keeps the message the award carries.
+func TestUserAchievementUpdate_AwardMessage_IsSentOnlyWhenSet(t *testing.T) {
+	tests := []struct {
+		name    string
+		message *string
+		want    any
+		sent    bool
+	}{
+		{"set", new("Thanks for the review"), "Thanks for the review", true},
+		{"empty clears it", new(""), "", true},
+		{"left out", nil, nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var vars map[string]any
+			client := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{
+				keyUAUpdate: respond(t, `{"data":{"userAchievementsUpdate":{"userAchievement":`+userAchievementNode+`,"errors":[]}}}`, &vars),
+			}))
+			if _, err := UserAchievementUpdate(t.Context(), client, UserAchievementUpdateInput{UserAchievementID: 88, AwardMessage: tt.message}); err != nil {
+				t.Fatalf("UserAchievementUpdate() error = %v", err)
+			}
+			input, _ := vars["input"].(map[string]any)
+			got, sent := input["awardMessage"]
+			if sent != tt.sent || got != tt.want {
+				t.Errorf("awardMessage = %v (sent: %v), want %v (sent: %v)", got, sent, tt.want, tt.sent)
+			}
+		})
+	}
+}
+
 // TestUserAchievementUpdate_ValidationAndErrors verifies the guard, the
 // cancellation check, and the wrapped API error.
 func TestUserAchievementUpdate_ValidationAndErrors(t *testing.T) {

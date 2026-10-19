@@ -142,6 +142,37 @@ func TestList_WithSearch(t *testing.T) {
 	}
 }
 
+// TestList_WithoutProjects_IsSentOnlyWhenSet verifies List sends
+// without_projects=true when the caller asks for the topics no project uses,
+// the filter GET /topics declares and client-go v3.16.0 added, and no such key
+// otherwise.
+func TestList_WithoutProjects_IsSentOnlyWhenSet(t *testing.T) {
+	tests := []struct {
+		name  string
+		input ListInput
+		want  string
+		sent  bool
+	}{
+		{"set", ListInput{WithoutProjects: true}, "true", true},
+		{"unset", ListInput{}, "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var query url.Values
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				query = r.URL.Query()
+				testutil.RespondJSON(w, http.StatusOK, `[`+topicJSON+`]`)
+			}))
+			if _, err := List(t.Context(), client, tt.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if got, sent := query.Get("without_projects"), query.Has("without_projects"); got != tt.want || sent != tt.sent {
+				t.Errorf("without_projects = %q (sent: %v), want %q (sent: %v)", got, sent, tt.want, tt.sent)
+			}
+		})
+	}
+}
+
 // TestList_KeysetPagination verifies List forwards per_page, keyset,
 // page_token, order_by, sort and search to the GitLab API. All six are driven
 // at once with values none of them shares, so a handler that writes one

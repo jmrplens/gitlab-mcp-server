@@ -468,6 +468,7 @@ type GroupListInput struct {
 	GroupID            toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	ExcludeSubgroups   bool                 `json:"exclude_subgroups,omitempty" jsonschema:"Exclude packages from subgroups (only return packages from the group's direct projects)"`
 	PackageName        string               `json:"package_name,omitempty" jsonschema:"Filter by package name"`
+	PackageVersion     string               `json:"package_version,omitempty" jsonschema:"Filter by package version. With include_versionless, versionless packages are not returned"`
 	PackageType        string               `json:"package_type,omitempty" jsonschema:"Filter by type (generic, npm, maven, etc.)"`
 	OrderBy            string               `json:"order_by,omitempty" jsonschema:"Order by: name, created_at, version, type, project_path"`
 	Sort               string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
@@ -506,6 +507,9 @@ func buildGroupListOptions(input GroupListInput) *gl.ListGroupPackagesOptions {
 	}
 	if input.PackageName != "" {
 		opts.PackageName = &input.PackageName
+	}
+	if input.PackageVersion != "" {
+		opts.PackageVersion = &input.PackageVersion
 	}
 	if input.PackageType != "" {
 		opts.PackageType = &input.PackageType

@@ -40,9 +40,10 @@ func topicToItem(t *gl.Topic) TopicItem {
 type ListInput struct {
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
-	Search  string `json:"search,omitempty" jsonschema:"Filter topics by search query"`
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
-	Sort    string `json:"sort,omitempty" jsonschema:"Sort order for keyset-paginated results: 'asc' or 'desc'"`
+	Search          string `json:"search,omitempty" jsonschema:"Filter topics by search query"`
+	WithoutProjects bool   `json:"without_projects,omitempty" jsonschema:"Return only the topics no project is assigned to"`
+	OrderBy         string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
+	Sort            string `json:"sort,omitempty" jsonschema:"Sort order for keyset-paginated results: 'asc' or 'desc'"`
 }
 
 // ListOutput is the output for listing topics.
@@ -64,6 +65,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	if input.Search != "" {
 		opts.Search = new(input.Search)
+	}
+	if input.WithoutProjects {
+		opts.WithoutProjects = new(true)
 	}
 	topics, resp, err := client.GL().Topics.ListTopics(opts, gl.WithContext(ctx))
 	if err != nil {
