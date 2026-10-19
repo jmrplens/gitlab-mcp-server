@@ -74,9 +74,8 @@ type MarkAllDoneOutput struct {
 	Message string `json:"message"`
 }
 
-// toOutput converts a GitLab API [gl.Todo] to MCP output format, filling from
-// the decoded to-do and from what the capture read beside it.
-func toOutput(t *gl.Todo, extra toolutil.TodoExtra) Output {
+// toOutput converts a GitLab API [gl.Todo] to MCP output format.
+func toOutput(t *gl.Todo) Output {
 	out := Output{
 		ID:         t.ID,
 		Project:    basicProjectOut(t.Project),
@@ -87,13 +86,32 @@ func toOutput(t *gl.Todo, extra toolutil.TodoExtra) Output {
 		TargetURL:  t.TargetURL,
 		Body:       t.Body,
 		State:      t.State,
-		UpdatedAt:  toolutil.FormatTimePtr(extra.UpdatedAt),
-		Group:      extra.Group,
+		UpdatedAt:  toolutil.FormatTimePtr(t.UpdatedAt),
+		Group:      namespaceBasicOut(t.Group),
 	}
 	if t.CreatedAt != nil {
 		out.CreatedAt = t.CreatedAt.Format("2006-01-02T15:04:05Z07:00")
 	}
 	return out
+}
+
+// namespaceBasicOut converts the group a to-do raised in a group carries, the
+// NamespaceBasic entity client-go decodes into a [gl.ProjectNamespace], and
+// returns nil for a to-do raised in a project, which carries none.
+func namespaceBasicOut(g *gl.ProjectNamespace) *toolutil.NamespaceBasicOutput {
+	if g == nil {
+		return nil
+	}
+	return &toolutil.NamespaceBasicOutput{
+		ID:        g.ID,
+		Name:      g.Name,
+		Path:      g.Path,
+		Kind:      g.Kind,
+		FullPath:  g.FullPath,
+		ParentID:  g.ParentID,
+		AvatarURL: g.AvatarURL,
+		WebURL:    g.WebURL,
+	}
 }
 
 // List retrieves to-do items for the authenticated user with optional filters.
@@ -130,19 +148,14 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		opts.Type = new(input.Type)
 	}
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	todos, resp, err := client.GL().Todos.ListTodos(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("todoList", err, http.StatusForbidden, "verify your token has read_api scope")
 	}
-	extras, err := toolutil.CapturedTodos(captured, len(todos))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErr("todoList", err)
-	}
 
 	out := make([]Output, len(todos))
 	for i, t := range todos {
-		out[i] = toOutput(t, extras[i])
+		out[i] = toOutput(t)
 	}
 	return ListOutput{
 		Todos:      out,

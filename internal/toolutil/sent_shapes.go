@@ -514,7 +514,8 @@ func CapturedResourceMilestoneEvents(capture *gitlabclient.ResponseCapture, deco
 }
 
 // NamespaceBasicOutput mirrors lib/api/entities/namespace_basic.rb, the group
-// object GitLab renders on a todo raised in a group rather than a project.
+// object GitLab renders on a todo raised in a group rather than a project,
+// which client-go decodes into a ProjectNamespace.
 type NamespaceBasicOutput struct {
 	ID        int64  `json:"id"`
 	Name      string `json:"name"`
@@ -527,26 +528,17 @@ type NamespaceBasicOutput struct {
 }
 
 // TodoExtra is what GitLab's todo entity sends that client-go's Todo does not
-// carry: when the todo last changed, the group it belongs to, which is present
-// only on a todo raised in a group rather than a project, and the two keys of
-// its author's UserBasic that client-go's BasicUser leaves out, which
-// [UserBasicFrom] completes the author with.
+// carry: the two keys of its author's UserBasic that client-go's BasicUser
+// leaves out, which [UserBasicFrom] completes the author with. client-go's
+// Todo decodes the todo's own updated_at and group as of v3.20.0.
 type TodoExtra struct {
-	UpdatedAt *time.Time            `json:"updated_at"`
-	Group     *NamespaceBasicOutput `json:"group"`
-	Author    UserBasicExtra        `json:"author"`
+	Author UserBasicExtra `json:"author"`
 }
 
-// CapturedTodo reads them off the captured answer to a request that returned
+// CapturedTodo reads it off the captured answer to a request that returned
 // one todo.
 func CapturedTodo(capture *gitlabclient.ResponseCapture) (TodoExtra, error) {
 	return capturedOne[TodoExtra](capture)
-}
-
-// CapturedTodos reads the same off a list answer, one extra per todo in order,
-// the count held to what the SDK decoded.
-func CapturedTodos(capture *gitlabclient.ResponseCapture, decoded int) ([]TodoExtra, error) {
-	return capturedList[TodoExtra](capture, decoded, "todos")
 }
 
 // BasicGroupDetailsOutput is the group reference GitLab renders on a board,

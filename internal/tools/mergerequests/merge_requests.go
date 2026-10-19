@@ -2328,7 +2328,7 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 		Body:       todo.Body,
 		State:      todo.State,
 		CreatedAt:  toolutil.RFC3339Ptr(todo.CreatedAt),
-		UpdatedAt:  toolutil.RFC3339Ptr(extra.UpdatedAt),
+		UpdatedAt:  toolutil.RFC3339Ptr(todo.UpdatedAt),
 	}
 	if todo.Target != nil {
 		out.TargetTitle = todo.Target.Title

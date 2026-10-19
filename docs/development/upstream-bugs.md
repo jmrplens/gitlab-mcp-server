@@ -278,7 +278,7 @@ readable without opening the tracker:
 | 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open; and for `Key` and `SSHKey` another contributor's [gitlab-org/api/client-go!3106](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3106), merged | Partly, by [gitlab-org/api/client-go!3106](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3106), not ours, **v3.19.0**: `Key` and `SSHKey` | No | Yes, for the other four; retired for `Key` and `SSHKey` at the v3.29.0 pin |
 | 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None |
-| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, the gaps held back in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) and five of those recorded after it in [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), both open, the second with two documentation merge requests its review asked for, both merged | **14 of 14; all released, v3.1.0 to v3.15.0** | No | Retired for all 14, the last, `systemhooks`, at the v3.15.0 pin; the to-do capture can go at a pin of v3.20.0 or later, which carries another contributor's merge request with both fields |
+| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, the gaps held back in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) and five of those recorded after it in [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), both open, the second with two documentation merge requests its review asked for, both merged | **14 of 14; all released, v3.1.0 to v3.15.0** | No | Retired for all 14, the last, `systemhooks`, at the v3.15.0 pin; the to-do capture retired at the v3.29.0 pin, which carries another contributor's merge request with both fields (v3.20.0) |
 | 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | In part in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300), whole in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Partial |
 | 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | In part in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300), whole in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Partial |
 | 37 | client-go | [The User struct models one user entity and GitLab serves six](#the-user-struct-models-one-user-entity-and-gitlab-serves-six) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
@@ -3369,9 +3369,9 @@ and it was, with its `Deprecated:` paragraph and its fixture key, in
 than ten. Read on 2026-10-16 it has 13 commits, a green pipeline, three of its
 seven threads unresolved, no approval and milestone 19.6.
 
-- `Todo` has no `updated_at`, which `lib/api/entities/todo.rb` exposes with no
+- `Todo` had no `updated_at`, which `lib/api/entities/todo.rb` exposes with no
   condition, and no `group`, which it exposes on a to-do raised in a group
-  (`if: ->(todo, _) { todo.group_id }`). `internal/tools/todos` reads both off
+  (`if: ->(todo, _) { todo.group_id }`). `internal/tools/todos` read both off
   the to-do list's captured answer (`toolutil.CapturedTodos`), and the issue
   and merge request `create_todo` handlers read `updated_at`; a to-do those two
   routes create belongs to a project and never carries `group`. Read on
@@ -3404,10 +3404,11 @@ seven threads unresolved, no approval and milestone 19.6.
   The capture in `internal/tools/todos` stays until a release carries both.
   It merged at 01:15 UTC on 2026-10-14, through @PatrickRice's merge train,
   and is first in **v3.20.0**, with `Group` decoded as `*ProjectNamespace` and
-  the `UpdatedAt` our comment proposed, so the capture in
-  `internal/tools/todos`, and the `updated_at` the two `create_todo` handlers
-  read, can come off the struct at a client-go pin of v3.20.0 or later; the
-  pin here is still v3.15.0. On glab's merge request, @phikai asked at 17:47
+  the `UpdatedAt` our comment proposed. When the pin moved to v3.29.0 the
+  capture in `internal/tools/todos` retired, with `toolutil.CapturedTodos`,
+  and the two `create_todo` handlers read `updated_at` off the struct; their
+  capture stays for the author's `public_email` and `locked`, the `BasicUser`
+  bullet above. On glab's merge request, @phikai asked at 17:47
   UTC on 2026-10-13 for its wrapper to be dropped in favour of client-go's
   `Group`, with the table falling back to the group's `full_path`, and
   @jhebden pointed at this merge request at 00:39 UTC on 2026-10-14; it is

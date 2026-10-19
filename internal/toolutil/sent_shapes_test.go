@@ -338,12 +338,10 @@ func tailReaderCases() []capturedReaderCase {
 		{
 			name: "todo",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedTodo(c) },
-			body: `{"id":1,"updated_at":"2026-04-07T00:00:00.000Z","group":{"id":4,"name":"Acme","path":"acme","kind":"group","full_path":"acme"},` +
-				`"author":{"id":2,"username":"ada","locked":true,"public_email":"ada@example.com"}}`,
+			body: `{"id":1,"author":{"id":2,"username":"ada","locked":true,"public_email":"ada@example.com"}}`,
 			want: func(v any) bool {
 				e, _ := v.(TodoExtra)
-				return e.UpdatedAt != nil && e.Group != nil && e.Group.FullPath == "acme" && e.Group.Kind == "group" &&
-					e.Author.Locked && e.Author.PublicEmail == "ada@example.com"
+				return e.Author.Locked && e.Author.PublicEmail == "ada@example.com"
 			},
 		},
 		{
@@ -655,10 +653,6 @@ func TestCapturedTailListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 		}},
 		{"resource milestone events", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
 			x, e := CapturedResourceMilestoneEvents(c, n)
-			return len(x), e
-		}},
-		{"todos", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedTodos(c, n)
 			return len(x), e
 		}},
 		{"boards", func(c *gitlabclient.ResponseCapture, n int) (int, error) {

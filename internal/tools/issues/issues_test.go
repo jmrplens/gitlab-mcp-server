@@ -1551,16 +1551,17 @@ func TestCreateTodo_ResponseWithoutHTTPResponse_IsTheOperationError(t *testing.T
 }
 
 // TestCreateTodo_AnAnswerTheCaptureCannotHold_IsAnError verifies that a to-do
-// whose updated_at is not a time fails the call rather than losing the key:
-// client-go's Todo has no field for it, so only the captured read refuses.
+// whose author's locked flag is not a boolean fails the call rather than
+// losing the key: client-go's BasicUser has no field for it, so only the
+// captured read refuses.
 func TestCreateTodo_AnAnswerTheCaptureCannotHold_IsAnError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"updated_at":"yesterday"}`)
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"author":{"id":2,"locked":"yes"}}`)
 	}))
 
 	_, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, IssueIID: 10})
-	if err == nil || !strings.Contains(err.Error(), "issueCreateTodo") {
-		t.Fatalf("CreateTodo() error = %v, want the operation's error for an undecodable answer", err)
+	if err == nil || !strings.Contains(err.Error(), "issueCreateTodo") || !strings.Contains(err.Error(), "decode the captured response") {
+		t.Fatalf("CreateTodo() error = %v, want the operation's error for the capture's decode failure", err)
 	}
 }
 

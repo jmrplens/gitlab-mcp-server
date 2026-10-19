@@ -3787,11 +3787,10 @@ func TestCreateTodo_Success(t *testing.T) {
 	}
 }
 
-// TestCreateTodo_TheAuthorBodyAndUpdateTime_ReachTheOutput verifies the three
-// keys of the to-do the route sends beside the ones client-go decodes: its
-// author, whole, with the two UserBasic keys BasicUser lacks read off the
-// captured answer, its body and the instant it last changed, which client-go's
-// Todo does not model either.
+// TestCreateTodo_TheAuthorBodyAndUpdateTime_ReachTheOutput verifies three
+// keys of the to-do the route sends: its author, whole, with the two
+// UserBasic keys BasicUser lacks read off the captured answer, its body, and
+// the instant it last changed, which client-go's Todo decodes as of v3.20.0.
 func TestCreateTodo_TheAuthorBodyAndUpdateTime_ReachTheOutput(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"action_name":"marked","target_type":"MergeRequest",
@@ -3818,16 +3817,17 @@ func TestCreateTodo_TheAuthorBodyAndUpdateTime_ReachTheOutput(t *testing.T) {
 }
 
 // TestCreateTodo_AnAnswerTheCaptureCannotHold_IsAnError verifies that a to-do
-// whose updated_at is not a time fails the call rather than losing the key:
-// client-go's Todo has no field for it, so only the captured read refuses.
+// whose author's locked flag is not a boolean fails the call rather than
+// losing the key: client-go's BasicUser has no field for it, so only the
+// captured read refuses.
 func TestCreateTodo_AnAnswerTheCaptureCannotHold_IsAnError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"updated_at":"yesterday"}`)
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"author":{"id":2,"locked":"yes"}}`)
 	}))
 
 	_, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, MRIID: 1})
-	if err == nil || !strings.Contains(err.Error(), "mrCreateTodo") {
-		t.Fatalf("CreateTodo() error = %v, want the operation's error for an undecodable answer", err)
+	if err == nil || !strings.Contains(err.Error(), "mrCreateTodo") || !strings.Contains(err.Error(), "decode the captured response") {
+		t.Fatalf("CreateTodo() error = %v, want the operation's error for the capture's decode failure", err)
 	}
 }
 

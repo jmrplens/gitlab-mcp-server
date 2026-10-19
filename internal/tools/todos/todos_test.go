@@ -314,7 +314,7 @@ func TestTodoList_AllFilters(t *testing.T) {
 // TestToOutput_NilTargetProjectAuthorCreatedAt verifies ToOutput when nil target project author created at.
 func TestToOutput_NilTargetProjectAuthorCreatedAt(t *testing.T) {
 	todo := todoWithNils()
-	out := toOutput(&todo, toolutil.TodoExtra{})
+	out := toOutput(&todo)
 	if out.Target != nil {
 		t.Errorf("expected nil Target, got %+v", out.Target)
 	}
@@ -417,6 +417,13 @@ func TestToOutput_EveryField_ComesFromItsOwnSource(t *testing.T) {
 		Body:       "todo body",
 		State:      "pending",
 		CreatedAt:  &todoCreated,
+		UpdatedAt:  &todoUpdated,
+		Group: &gl.ProjectNamespace{
+			ID: 91, Name: "group name", Path: "group-path", Kind: "group",
+			FullPath: "org/group-path", ParentID: 92,
+			AvatarURL: "https://gitlab.example.com/avatar/group.png",
+			WebURL:    "https://gitlab.example.com/org/group-path",
+		},
 		Project: &gl.BasicProject{
 			ID: 3, Description: "project description", Name: "project name",
 			NameWithNamespace: "Org / project name", Path: "project-path",
@@ -488,16 +495,6 @@ func TestToOutput_EveryField_ComesFromItsOwnSource(t *testing.T) {
 			ImageURL:                  "https://gitlab.example.com/design.png",
 		},
 	}
-	extra := toolutil.TodoExtra{
-		UpdatedAt: &todoUpdated,
-		Group: &toolutil.NamespaceBasicOutput{
-			ID: 91, Name: "group name", Path: "group-path", Kind: "group",
-			FullPath: "org/group-path", ParentID: 92,
-			AvatarURL: "https://gitlab.example.com/avatar/group.png",
-			WebURL:    "https://gitlab.example.com/org/group-path",
-		},
-	}
-
 	want := Output{
 		ID: 7,
 		Project: &BasicProjectOut{
@@ -575,10 +572,15 @@ func TestToOutput_EveryField_ComesFromItsOwnSource(t *testing.T) {
 		State:     "pending",
 		CreatedAt: "2026-01-15T10:00:00Z",
 		UpdatedAt: "2026-01-09T09:00:00Z",
-		Group:     extra.Group,
+		Group: &toolutil.NamespaceBasicOutput{
+			ID: 91, Name: "group name", Path: "group-path", Kind: "group",
+			FullPath: "org/group-path", ParentID: 92,
+			AvatarURL: "https://gitlab.example.com/avatar/group.png",
+			WebURL:    "https://gitlab.example.com/org/group-path",
+		},
 	}
 
-	if got := toOutput(todo, extra); !reflect.DeepEqual(got, want) {
+	if got := toOutput(todo); !reflect.DeepEqual(got, want) {
 		t.Errorf("toOutput():\n got %+v\nwant %+v", got, want)
 	}
 }
@@ -625,7 +627,7 @@ func TestTodoTargetOut_EachFlag_ComesFromItsOwnField(t *testing.T) {
 func TestMilestoneOut_NilDates(t *testing.T) {
 	out := toOutput(&gl.Todo{
 		Target: &gl.TodoTarget{Milestone: &gl.Milestone{ID: 1, Title: "M"}},
-	}, toolutil.TodoExtra{})
+	})
 	if out.Target == nil || out.Target.Milestone == nil {
 		t.Fatal("expected milestone")
 	}
@@ -859,15 +861,12 @@ func TestList_UnreadableGroup(t *testing.T) {
 	})
 }
 
-// TestList_CapturedFields_ArePairedWithTheirOwnTodo verifies that the two
-// fields client-go's Todo does not model are read off the captured answer per
-// item and in order: each to-do's own updated_at, and the group object GitLab
-// renders only on a to-do raised in a group rather than a project.
-//
-// Nothing drove the success path of that read before, only its failure, so a
-// handler pairing item i with another item's capture published one to-do's
-// group and timestamp on another and no assertion could see it.
-func TestList_CapturedFields_ArePairedWithTheirOwnTodo(t *testing.T) {
+// TestList_UpdatedAtAndGroup_ArePairedWithTheirOwnTodo verifies that a list
+// publishes each to-do's own updated_at, and the group object GitLab renders
+// only on a to-do raised in a group rather than a project, both of which
+// client-go's Todo decodes as of v3.20.0. A converter that took one to-do's
+// group or timestamp for another would publish them on the wrong row.
+func TestList_UpdatedAtAndGroup_ArePairedWithTheirOwnTodo(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
 			{
