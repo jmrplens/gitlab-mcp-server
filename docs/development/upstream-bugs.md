@@ -96,6 +96,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The wiki search decodes GitLab's blobs into wiki pages](#the-wiki-search-decodes-gitlabs-blobs-into-wiki-pages)
   - [SearchOptions models neither num_context_lines nor regex](#searchoptions-models-neither-num_context_lines-nor-regex)
   - [Seven response keys and twelve parameters GitLab 19.5 added that client-go does not model](#seven-response-keys-and-twelve-parameters-gitlab-195-added-that-client-go-does-not-model)
+  - [The rate limit backoff ignores Retry-After on a 429](#the-rate-limit-backoff-ignores-retry-after-on-a-429)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -376,6 +377,7 @@ readable without opening the tracker:
 | 131 | gitlab-org/gitlab | [The REST code search answers an exact-search name match with the path as its snippet](#the-rest-code-search-answers-an-exact-search-name-match-with-the-path-as-its-snippet) | No; the search page's version of it was closed | No | No | No | Yes, the code and wiki search Markdown reads a result whose snippet is its own path as a path match and fences nothing |
 | 132 | client-go | [SearchOptions models neither num_context_lines nor regex](#searchoptions-models-neither-num_context_lines-nor-regex) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes, `search.code` adds both to the query through a request option, each only when set |
 | 133 | client-go | [Seven response keys and twelve parameters GitLab 19.5 added](#seven-response-keys-and-twelve-parameters-gitlab-195-added-that-client-go-does-not-model) | No | No | No | No | Partial: six keys read from the captured response; the merge request author's `bot` and the parameters not yet |
+| 134 | client-go | [The rate limit backoff ignores `Retry-After` on a 429](#the-rate-limit-backoff-ignores-retry-after-on-a-429) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3147](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3147), open; GitLab Duo requested changes on 2026-10-17, for a large negative `Retry-After` that overflows `time.Duration` | No | No; this server replaces client-go's backoff with its own | Not needed |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -1318,8 +1320,11 @@ of the GitLab changes rows 87 and 88 follow, the MCP custom tools half
 merged on 2026-10-16, the GraphQL half and the Duo types' directives were
 approved, the second set to merge, and the other contributor's was asked to
 fix its conflicts. Rows 53, 55 and 111 each had a reminder from us on
-2026-10-17 and no answer. The other rows with gitlab.com references were
-read and are unchanged.
+2026-10-17 and no answer. Row 134 is new: a client-go fix of ours this
+register did not record, opened on 2026-10-16 for a 429 that carries only
+`Retry-After`, in review with a change GitLab Duo asked for, and costing
+this server nothing, since it replaces client-go's backoff with its own. The
+other rows with gitlab.com references were read and are unchanged.
 
 Read on 2026-10-19 for the rows whose upstream is not gitlab.com, against
 GitHub, Gerrit and the tags, through GET requests only. go-sdk v1.8.0 is
@@ -7091,6 +7096,72 @@ two records, which no gate reads.
 
 **Effort**: small. Scalar members with `json` and `url` tags on eleven
 structs, a pointer for each key an older instance leaves out.
+
+### The rate limit backoff ignores Retry-After on a 429
+
+- **Reported**: yes, by the merge request below, with no issue first.
+- **In review**: yes,
+  [gitlab-org/api/client-go!3147](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3147)
+  ("fix(client): honor Retry-After when backing off from a 429"), opened by
+  this project's maintainer at 23:40 UTC on 2026-10-16 (one commit,
+  `20b24175`) and readied for @PatrickRice at 23:43 UTC; its fork pipeline
+  passed at 23:47 UTC. It is related to
+  [gitlab-org/api/client-go#1311](https://gitlab.com/gitlab-org/api/client-go/-/issues/1311),
+  closed, where the wait the client already takes from `Ratelimit-Reset`
+  looked like a hang. @heidi.berry asked GitLab Duo for a review at 22:53
+  UTC on 2026-10-17, which requested changes at 22:55 UTC with one finding:
+  the guard against a value too large for a `time.Duration` covers only large
+  positive values, so a large negative `Retry-After`, such as
+  `-10000000000`, wraps to a wait of about 267 years, passes the `wait > 0`
+  check and holds the request until its context ends, where the description
+  promises the exponential fallback for a negative value. Read at 10:24 UTC
+  on 2026-10-19 it is open on `20b24175` with no approval, that thread is
+  unresolved, and nothing has been pushed since.
+- **Merged**: no. v3.29.0, the newest tag on 2026-10-19, still reads
+  `Ratelimit-Reset` alone.
+- **Blocking**: no. This server never runs client-go's backoff:
+  `retryOptions` in `internal/gitlab/retry.go` replaces it through
+  `gl.WithCustomBackoff` with one that keeps the `RateLimit-Reset` reading,
+  caps every wait at five seconds and retries twice (register row
+  `RTC-006`), so the merge changes nothing here.
+- **Workaround**: not needed. That backoff reads `RateLimit-Reset` alone as
+  well, so a 429 carrying only `Retry-After` is retried after about 0.7 and
+  1.4 seconds and then handed to the caller. Taking `Retry-After` there
+  would still stop at the five-second ceiling, short of the minute most of
+  these limits run for, and handing the 429 back rather than waiting past
+  the ceiling is the choice that ceiling's comment sets out.
+
+**Where**: `gitlab.go`, `rateLimitBackoff`, which on a 429 takes its wait
+from `Ratelimit-Reset` alone and, without it, falls back to the exponential
+backoff that starts at `RetryWaitMin`, 100 ms by default
+([gitlab.go lines 848 to 869](https://gitlab.com/gitlab-org/api/client-go/-/blob/26ff1abf03ce5ce5433e396b14ff0bae8a2aacae/gitlab.go#L848-L869)
+at v3.25.0, and the same function at v3.29.0).
+
+**What**: since GitLab 18.5 the application rate limits the REST API checks
+(`check_rate_limit!`, which hands the period of the limit to
+`too_many_requests!`) answer a 429 with `Retry-After` and no
+`RateLimit-Reset`: project and group export and import, note creation, tag
+creation, search, listing projects and reading a user, among others. The
+five default retries then wait less than five seconds in all, every one
+lands inside the same window, and the caller gets the 429 back with its
+retries spent. Rack::Attack throttles send both headers and are not
+affected.
+
+**How we found it**: reading client-go's 429 backoff, the one
+`internal/gitlab/retry.go` replaces while keeping its intent. Nothing here
+runs it, so no failure of this server led to it.
+
+**Fix in review**: `rateLimitBackoff` takes `Retry-After`, in seconds or as
+an HTTP date, as the minimum wait when `Ratelimit-Reset` is absent, with the
+usual jitter on top; `Ratelimit-Reset` keeps its precedence, and the
+exponential backoff stays the fallback when neither gives a usable wait. No
+exported name changes, but the timing does: a caller whose deadline comes
+before the end of the wait now gets the context error at its deadline
+instead of the 429 after a few seconds. The description names the options
+that keep the fast failure (`WithCustomBackoff`, `WithCustomRetryMax` and
+`WithoutRetries`) and offers to put the change behind a client option
+instead. A table test of `rateLimitBackoff` and a client test against an
+`httptest` server that answers `Retry-After: 1` once cover it.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
