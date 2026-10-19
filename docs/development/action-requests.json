@@ -26844,6 +26844,60 @@
       ]
     },
     {
+      "id": "runner.reset_token_by_token",
+      "handlers": [
+        "runners.ResetAuthTokenByToken"
+      ],
+      "classic": "other-credential",
+      "requests": [
+        {
+          "kind": "rest",
+          "route": "POST /runners/reset_authentication_token",
+          "class": "mandatory",
+          "classic": "other-credential",
+          "classic_declaration": "credential-not-read",
+          "sites": [
+            "runners.ResetAuthTokenByToken"
+          ],
+          "sdk_methods": [
+            "Runners.ResetRunnerAuthenticationTokenByToken"
+          ]
+        }
+      ],
+      "paths": [
+        [
+          0
+        ]
+      ]
+    },
+    {
+      "id": "runner.router_discovery",
+      "handlers": [
+        "runners.RouterDiscovery"
+      ],
+      "classic": "other-credential",
+      "requests": [
+        {
+          "kind": "rest",
+          "route": "GET /runners/router/discovery",
+          "class": "mandatory",
+          "classic": "other-credential",
+          "classic_declaration": "credential-not-read",
+          "sites": [
+            "runners.RouterDiscovery"
+          ],
+          "sdk_methods": [
+            "Runners.GetRunnerRouterDiscovery"
+          ]
+        }
+      ],
+      "paths": [
+        [
+          0
+        ]
+      ]
+    },
+    {
       "id": "runner.update",
       "handlers": [
         "runners.Update"
