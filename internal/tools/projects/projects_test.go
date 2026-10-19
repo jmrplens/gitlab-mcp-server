@@ -67,6 +67,64 @@ func TestUpdate_EmptyValues_ReachTheBody(t *testing.T) {
 	recorder.AssertMembers(t, want)
 }
 
+// TestUpdate_NameRegexDelete_StillSetsTheDeletionRegex verifies that a
+// deletion regex sent under name_regex_delete, the name this input gave it
+// until name_regex replaced it, still reaches GitLab as name_regex, the key
+// GitLab reads, and that name_regex_delete itself is never sent. A caller who
+// sends both is sent name_regex, the rule client-go applied while it copied
+// the one into the other. The project update and both create actions share
+// the cleanup policy input, so this holds all three.
+func TestUpdate_NameRegexDelete_StillSetsTheDeletionRegex(t *testing.T) {
+	tests := []struct {
+		name   string
+		policy map[string]any
+		want   string
+	}{
+		{"former name alone", map[string]any{"name_regex_delete": "v.*"}, `{"name_regex":"v.*"}`},
+		{"former name empty removes the regex", map[string]any{"name_regex_delete": ""}, `{"name_regex":""}`},
+		{"both names, name_regex is sent", map[string]any{"name_regex": "kept", "name_regex_delete": "dropped"}, `{"name_regex":"kept"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
+				"project_id":                             "42",
+				"container_expiration_policy_attributes": tt.policy,
+			})
+			if err != nil {
+				t.Fatalf("UnmarshalParams() error: %v", err)
+			}
+			client, recorder := testutil.RecordWrites(t, `{}`, projectJSON)
+			if _, err = Update(t.Context(), client, input); err != nil {
+				t.Fatalf("Update() error: %v", err)
+			}
+			recorder.AssertMembers(t, map[string]string{"container_expiration_policy_attributes": tt.want})
+		})
+	}
+}
+
+// TestActionSpecs_NameRegexDelete_IsOfferedAsTheDeprecatedNameOfNameRegex
+// verifies that the three actions taking a cleanup policy still accept
+// name_regex_delete, so a call written against the input before the rename
+// is not refused by the schema, and that its description sends a caller to
+// name_regex.
+func TestActionSpecs_NameRegexDelete_IsOfferedAsTheDeprecatedNameOfNameRegex(t *testing.T) {
+	byTool := projectSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), true))
+	for _, tool := range []string{"gitlab_project_create", "gitlab_project_create_for_user", "gitlab_project_update"} {
+		t.Run(tool, func(t *testing.T) {
+			props, _ := byTool[tool].Route.InputSchema["properties"].(map[string]any)
+			policy, _ := props["container_expiration_policy_attributes"].(map[string]any)
+			policyProps, _ := policy["properties"].(map[string]any)
+			field, offered := policyProps["name_regex_delete"].(map[string]any)
+			if !offered {
+				t.Fatalf("%s does not offer container_expiration_policy_attributes.name_regex_delete", tool)
+			}
+			if description, _ := field["description"].(string); !strings.Contains(description, "Deprecated") || !strings.Contains(description, "name_regex") {
+				t.Errorf("name_regex_delete description = %q, want it marked deprecated and naming name_regex", description)
+			}
+		})
+	}
+}
+
 // TestUpdate_ZeroSettings_ReachTheBody holds a 0 for each integer setting
 // GitLab stores 0 for, or refuses with a reason, to the body: no approvals
 // before a merge, a full clone for CI, and a mirror user of nobody are values
@@ -781,9 +839,11 @@ func TestActionSpecs_UpdateOnlyParams_AreOfferedByUpdateAlone(t *testing.T) {
 		t.Run(tt.tool, func(t *testing.T) {
 			props, _ := byTool[tt.tool].Route.InputSchema["properties"].(map[string]any)
 			for _, param := range updateOnlyProjectParams {
-				if _, has := props[param]; has != tt.offered {
-					t.Errorf("%s offers %s: %v, want %v", tt.tool, param, has, tt.offered)
-				}
+				t.Run(param, func(t *testing.T) {
+					if _, has := props[param]; has != tt.offered {
+						t.Errorf("%s offers %s: %v, want %v", tt.tool, param, has, tt.offered)
+					}
+				})
 			}
 		})
 	}
@@ -8326,9 +8386,11 @@ func assertCreateSendsNoUpdateOnlyParam(t *testing.T, opts *gl.CreateProjectOpti
 		"ReviewerAssignmentStrategy":   opts.ReviewerAssignmentStrategy != nil,
 	}
 	for name, isSet := range set {
-		if isSet {
-			t.Errorf("%s set on a create, which POST /projects does not declare", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if isSet {
+				t.Errorf("%s set on a create, which POST /projects does not declare", name)
+			}
+		})
 	}
 }
 

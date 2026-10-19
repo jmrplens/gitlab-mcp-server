@@ -1,6 +1,7 @@
 package projects
 
 import (
+	"cmp"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -56,6 +57,13 @@ type ContainerExpirationPolicyInput struct {
 	NameRegex     *string `json:"name_regex,omitempty" jsonschema:"Regex matching tag names to delete. On an update, pass an empty string to remove it. Omit the field to leave it untouched"`
 	NameRegexKeep *string `json:"name_regex_keep,omitempty" jsonschema:"Regex matching tag names to always keep. On an update, pass an empty string to remove it. Omit the field to leave it untouched"`
 	Enabled       *bool   `json:"enabled,omitempty" jsonschema:"Enable the container expiration policy"`
+	// NameRegexDelete is the name this input gave name_regex before the field
+	// took GitLab's name, kept so that a call written against it still sets
+	// the regex. It is
+	// sent as name_regex, and only when name_regex is left out, which is the
+	// rule client-go applied while it copied the one into the other. It goes
+	// at the next major version, with the other compatibility fields.
+	NameRegexDelete *string `json:"name_regex_delete,omitempty" jsonschema:"Deprecated: the former name of name_regex, read only when name_regex is left out. Use name_regex"`
 }
 
 // toGL converts the input into the GitLab
@@ -83,9 +91,11 @@ func (c *ContainerExpirationPolicyInput) toGL() *gl.ContainerExpirationPolicyAtt
 	// the caller removing it (issue 1306).
 	// name_regex is the key lib/api/helpers/projects_helpers.rb declares.
 	// The input used to be name_regex_delete, which GitLab never read and
-	// client-go copied into name_regex; client-go v3.16.2 deprecated it.
-	if c.NameRegex != nil {
-		out.NameRegex = c.NameRegex
+	// client-go copied into name_regex; client-go v3.16.2 deprecated it. A
+	// caller still using the old name is sent name_regex, never
+	// name_regex_delete.
+	if regex := cmp.Or(c.NameRegex, c.NameRegexDelete); regex != nil {
+		out.NameRegex = regex
 		set = true
 	}
 	if c.NameRegexKeep != nil {
