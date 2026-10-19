@@ -4,7 +4,9 @@
 package resourcegroups
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"reflect"
@@ -246,6 +248,165 @@ func TestListUpcomingJobs_UnreadableCapturedAnswer_IsAnError(t *testing.T) {
 	}
 }
 
+// TestCurrentJob_TheJobHoldingTheLock verifies the job GitLab names as the
+// holder of the group's lock is converted into the row the queue uses, its
+// pipeline's five unmodeled keys read off the captured answer like the
+// queue's.
+func TestCurrentJob_TheJobHoldingTheLock(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/1/resource_groups/production/current_job" || r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"name":"deploy-to-prod","status":"running","stage":"release","ref":"v1.0",`+
+			`"tag":true,"allow_failure":true,"started_at":"2026-01-05T00:01:00Z",`+
+			`"pipeline":{"id":77,"iid":7,"project_id":1,"ref":"v1.0","sha":"abc123","status":"running","source":"push",`+
+			`"created_at":"2026-01-04T00:00:00Z","updated_at":"2026-01-04T12:00:00Z","web_url":"https://gitlab.example.com/g/p/-/pipelines/77"},`+
+			`"web_url":"https://gitlab.example.com/-/jobs/10","created_at":"2026-01-05T00:00:00Z"}`)
+	}))
+	out, err := CurrentJob(t.Context(), client, CurrentJobInput{ProjectID: "1", Key: "production"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	want := &JobItem{
+		ID: 10, Name: "deploy-to-prod", Status: "running", Stage: "release", Ref: "v1.0", Tag: true, AllowFailure: true,
+		Pipeline: &JobPipelineItem{
+			ID: 77, IID: 7, ProjectID: 1, Ref: "v1.0", SHA: "abc123", Status: "running", Source: "push",
+			CreatedAt: "2026-01-04T00:00:00Z", UpdatedAt: "2026-01-04T12:00:00Z",
+			WebURL: "https://gitlab.example.com/g/p/-/pipelines/77",
+		},
+		WebURL: "https://gitlab.example.com/-/jobs/10", CreatedAt: "2026-01-05T00:00:00Z",
+	}
+	if !reflect.DeepEqual(out.Job, want) {
+		t.Errorf("CurrentJob job = %+v, want %+v", out.Job, want)
+	}
+}
+
+// TestCurrentJob_NoHolder_IsNoJob verifies the answer GitLab gives when no job
+// holds the lock: Ci::ResourceGroup#current_processable finds nothing, Grape
+// renders the nil as a 200 whose body is null, and the output carries no job
+// rather than an error or a job with ID zero.
+func TestCurrentJob_NoHolder_IsNoJob(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `null`)
+	}))
+	out, err := CurrentJob(t.Context(), client, CurrentJobInput{ProjectID: "1", Key: "production"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Job != nil {
+		t.Errorf("CurrentJob job = %+v, want none", out.Job)
+	}
+	data, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v", err)
+	}
+	if strings.Contains(string(data), `"job"`) {
+		t.Errorf("CurrentJob output = %s, want no job key", data)
+	}
+}
+
+// TestCurrentJob_Refusals verifies a 404 names both reasons GitLab gives one,
+// an unknown key and an instance older than 18.6, which has no such route,
+// and that a captured answer the extras cannot read is an error rather than a
+// pipeline read off nothing.
+func TestCurrentJob_Refusals(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		want   string
+	}{
+		{name: "an unknown key or an older instance", status: http.StatusNotFound, body: `{"message":"404 Not Found"}`, want: "GitLab added this route in 18.6"},
+		{name: "a pipeline whose number is not a number", status: http.StatusOK, body: `{"id":10,"pipeline":{"id":77,"iid":"seven"}}`, want: "resource group current job"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, tt.body)
+			}))
+			_, err := CurrentJob(t.Context(), client, CurrentJobInput{ProjectID: "1", Key: "x"})
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("CurrentJob() error = %v, want one carrying %q", err, tt.want)
+			}
+		})
+	}
+}
+
+// TestCurrentJob_CarriesTheContext verifies the request carries the caller's
+// context.
+func TestCurrentJob_CarriesTheContext(t *testing.T) {
+	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `null`)
+	})
+	if _, err := CurrentJob(ctx, client, CurrentJobInput{ProjectID: "1", Key: "production"}); !errors.Is(err, context.Canceled) {
+		t.Errorf("CurrentJob() error = %v, want context.Canceled", err)
+	}
+}
+
+// TestFormatCurrentJobMarkdown verifies the two answers: the holder as the
+// card of one job, linked, with its pipeline, and a sentence saying no job
+// holds the lock when GitLab named none.
+func TestFormatCurrentJobMarkdown(t *testing.T) {
+	tests := []struct {
+		name string
+		in   CurrentJobOutput
+		want string
+	}{
+		{
+			name: "a job holds the lock",
+			in: CurrentJobOutput{Job: &JobItem{
+				ID: 10, Name: "deploy|prod", Status: "running", Stage: "release", Ref: "main", AllowFailure: true,
+				Pipeline: &JobPipelineItem{ID: 77, WebURL: "https://gitlab.example.com/g/p/-/pipelines/77"},
+				WebURL:   "https://gitlab.example.com/-/jobs/10", CreatedAt: "2026-01-05T00:00:00Z",
+			}},
+			want: "## Current Job: deploy|prod\n\n" +
+				"- **ID**: 10\n" +
+				"- **Status**: 🔵 running\n" +
+				"- **Stage**: release\n" +
+				"- **Ref**: main\n" +
+				"- **Allowed to fail**\n" +
+				"- **Pipeline**: [#77](https://gitlab.example.com/g/p/-/pipelines/77)\n" +
+				"- **Created**: 5 Jan 2026 00:00 UTC\n" +
+				"- **URL**: [https://gitlab.example.com/-/jobs/10](https://gitlab.example.com/-/jobs/10)\n" +
+				"\n---\n💡 **Next steps:**\n" +
+				"- Use action 'job.get' to read this job in full, with when it started and who ran it\n" +
+				"- Use action 'job.trace' to read its log\n" +
+				"- Use action 'pipeline.resource_group_upcoming_jobs' to see the jobs waiting for the lock\n",
+		},
+		{
+			// A job GitLab rendered without a pipeline, a status or a page
+			// leaves those rows out rather than writing them empty, and a tag
+			// ref is flagged.
+			name: "a holder GitLab rendered without a pipeline",
+			in:   CurrentJobOutput{Job: &JobItem{ID: 11, Name: "release", Stage: "deploy", Ref: "v1.0", Tag: true}},
+			want: "## Current Job: release\n\n" +
+				"- **ID**: 11\n" +
+				"- **Stage**: deploy\n" +
+				"- **Ref**: v1.0\n" +
+				"- **Tag**\n" +
+				"\n---\n💡 **Next steps:**\n" +
+				"- Use action 'job.get' to read this job in full, with when it started and who ran it\n" +
+				"- Use action 'job.trace' to read its log\n" +
+				"- Use action 'pipeline.resource_group_upcoming_jobs' to see the jobs waiting for the lock\n",
+		},
+		{
+			name: "no job holds the lock",
+			in:   CurrentJobOutput{},
+			want: "No job holds this resource group's lock.\n" +
+				"\n---\n💡 **Next steps:**\n" +
+				"- Use action 'pipeline.resource_group_upcoming_jobs' to see the jobs waiting for the lock\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := FormatCurrentJobMarkdown(tt.in); got != tt.want {
+				t.Errorf("FormatCurrentJobMarkdown()\n got %q\nwant %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestListUpcomingJobs_Error verifies ListUpcomingJobs when error.
 func TestListUpcomingJobs_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -392,6 +553,7 @@ func TestFormatGroupMarkdown(t *testing.T) {
 		"- **Created**: 2 Jan 2026 03:04 UTC\n" +
 		"- **Updated**: 3 Feb 2026 04:05 UTC\n" +
 		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'pipeline.resource_group_current_job' to see the job holding its lock\n" +
 		"- Use action 'pipeline.resource_group_upcoming_jobs' to see the jobs waiting on this group\n" +
 		"- Use action 'pipeline.resource_group_edit' to change its process mode\n"
 	if md != want {
@@ -569,8 +731,8 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}))
 	specs := ActionSpecs(client)
 	specByTool := resourceGroupSpecsByTool(specs)
-	if len(specs) != 4 {
-		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
+	if len(specs) != 5 {
+		t.Fatalf("len(ActionSpecs) = %d, want 5", len(specs))
 	}
 	seenAlias := map[string]string{}
 	for _, spec := range specs {
@@ -603,7 +765,7 @@ func registeredActionIDs(t *testing.T) []string {
 	return ids
 }
 
-// TestActionSpecs_CanonicalIDConstantsMatchTheRegisteredSpecs pins the four
+// TestActionSpecs_CanonicalIDConstantsMatchTheRegisteredSpecs pins the
 // canonical IDs to the names ActionSpecs really registers under, so renaming an
 // action cannot leave a related entry or a Markdown hint pointing at the old
 // one. The constants used to be written out by hand in two files and had
@@ -611,6 +773,7 @@ func registeredActionIDs(t *testing.T) []string {
 func TestActionSpecs_CanonicalIDConstantsMatchTheRegisteredSpecs(t *testing.T) {
 	want := registeredActionIDs(t)
 	got := []string{
+		actionResourceGroupCurrentJob,
 		actionResourceGroupEdit,
 		actionResourceGroupGet,
 		actionResourceGroupList,
@@ -651,7 +814,7 @@ func TestActionSpecs_RelatedActionsNameActionsThatExist(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ActionSpec route execution for all 4 individual tools
+// ActionSpec route execution for every individual tool
 // ---------------------------------------------------------------------------.
 
 // TestActionSpecs_CallRoutes validates resource group canonical routes.
@@ -667,6 +830,7 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 		{"get", "gitlab_get_resource_group", map[string]any{"project_id": "1", "key": "production"}},
 		{"edit", "gitlab_edit_resource_group", map[string]any{"project_id": "1", "key": "production", "process_mode": "newest_first"}},
 		{"list_upcoming_jobs", "gitlab_list_resource_group_upcoming_jobs", map[string]any{"project_id": "1", "key": "production"}},
+		{"current_job", "gitlab_resource_group_current_job", map[string]any{"project_id": "1", "key": "production"}},
 	}
 
 	for _, tt := range tools {
@@ -710,6 +874,7 @@ func TestActionSpecs_CallRouteErrors(t *testing.T) {
 		{"get_error", "gitlab_get_resource_group", map[string]any{"project_id": "1", "key": "x"}},
 		{"edit_error", "gitlab_edit_resource_group", map[string]any{"project_id": "1", "key": "x", "process_mode": "bad"}},
 		{"jobs_error", "gitlab_list_resource_group_upcoming_jobs", map[string]any{"project_id": "1", "key": "x"}},
+		{"current_job_error", "gitlab_resource_group_current_job", map[string]any{"project_id": "1", "key": "x"}},
 	}
 
 	for _, tt := range tools {
@@ -751,6 +916,10 @@ func covNewResourceGroupsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec
 
 	handler.HandleFunc("GET /api/v4/projects/1/resource_groups/production/upcoming_jobs", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"name":"deploy","status":"pending","stage":"deploy"}]`)
+	})
+
+	handler.HandleFunc("GET /api/v4/projects/1/resource_groups/production/current_job", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":9,"name":"deploy","status":"running","stage":"deploy"}`)
 	})
 
 	client := testutil.NewTestClient(t, handler)

@@ -172,6 +172,13 @@ func ListUpcomingJobs(ctx context.Context, client *gitlabclient.Client, input Li
 	if err != nil {
 		return ListUpcomingJobsOutput{}, toolutil.WrapErr("gitlab_list_resource_group_upcoming_jobs", err)
 	}
+	return ListUpcomingJobsOutput{Jobs: jobItems(jobs, extras), Pagination: toolutil.PaginationFromResponse(resp)}, nil
+}
+
+// jobItems builds the row of each job a resource group names, the jobs
+// waiting on it and the one holding its lock alike, pairing every job with
+// the extras read off the same position of the captured answer.
+func jobItems(jobs []*gl.Job, extras []upcomingJobExtra) []JobItem {
 	items := make([]JobItem, 0, len(jobs))
 	for i, j := range jobs {
 		item := JobItem{
@@ -204,7 +211,48 @@ func ListUpcomingJobs(ctx context.Context, client *gitlabclient.Client, input Li
 		}
 		items = append(items, item)
 	}
-	return ListUpcomingJobsOutput{Jobs: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return items
+}
+
+// CurrentJob.
+
+// CurrentJobInput defines parameters for reading the job that holds a
+// resource group's lock.
+type CurrentJobInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	Key       string               `json:"key" jsonschema:"Resource group key,required"`
+}
+
+// CurrentJobOutput is the job holding a resource group's lock, in the row the
+// group's queue uses, or no job when none holds it. GitLab answers that case
+// with a 200 whose body is null: Ci::ResourceGroup#current_processable finds
+// no resource with a job, and Grape renders the nil it presents as null.
+type CurrentJobOutput struct {
+	toolutil.HintableOutput
+	Job *JobItem `json:"job,omitempty"`
+}
+
+// opCurrentJob names the current job read in the errors it returns.
+const opCurrentJob = "resource group current job"
+
+// CurrentJob reads the job that holds a resource group's lock
+// (GET /projects/:id/resource_groups/:key/current_job), a route GitLab added
+// in 18.6.
+func CurrentJob(ctx context.Context, client *gitlabclient.Client, input CurrentJobInput) (CurrentJobOutput, error) {
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	job, _, err := client.GL().ResourceGroup.GetCurrentJobForAResourceGroup(string(input.ProjectID), input.Key, gl.WithContext(ctx))
+	if err != nil {
+		return CurrentJobOutput{}, toolutil.WrapErrWithStatusHint(opCurrentJob, err, http.StatusNotFound,
+			"verify the resource group key with pipeline.resource_group_list. GitLab added this route in 18.6, and an older instance answers 404 for every key")
+	}
+	if job == nil {
+		return CurrentJobOutput{}, nil
+	}
+	extra, err := capturedCurrentJob(captured)
+	if err != nil {
+		return CurrentJobOutput{}, toolutil.WrapErr(opCurrentJob, err)
+	}
+	return CurrentJobOutput{Job: &jobItems([]*gl.Job{job}, []upcomingJobExtra{extra})[0]}, nil
 }
 
 // formatters.

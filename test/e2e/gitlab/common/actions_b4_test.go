@@ -131,6 +131,7 @@ const (
 	actionPipelineResourceGroupGet          harness.ActionID = "pipeline.resource_group_get"
 	actionPipelineResourceGroupEdit         harness.ActionID = "pipeline.resource_group_edit"
 	actionPipelineResourceGroupUpcomingJobs harness.ActionID = "pipeline.resource_group_upcoming_jobs"
+	actionPipelineResourceGroupCurrentJob   harness.ActionID = "pipeline.resource_group_current_job"
 )
 
 // A pipeline schedule's lifecycle, its variables, and what runs it.

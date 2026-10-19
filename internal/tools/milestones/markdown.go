@@ -181,10 +181,57 @@ func FormatMergeRequestsMarkdown(v MilestoneMergeRequestsOutput) *mcp.CallToolRe
 	return toolutil.ToolResultWithMarkdown(FormatMergeRequestsMarkdownString(v))
 }
 
+// FormatPromoteMarkdown renders a promotion as a confirmation card. GitLab
+// answers a promotion with no milestone, so the next step is the group
+// milestone list, where the new milestone is found by the title the card
+// names.
+func FormatPromoteMarkdown(v PromoteOutput) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Milestone promoted: "+v.Title)
+	c.Field("Title", v.Title)
+	c.Note(v.Message)
+	c.End(toolutil.HintAction(actionGroupMilestoneList, "find the group milestone by its title"))
+	return b.String()
+}
+
+// FormatBurndownChartEventsMarkdownString renders a milestone's burndown
+// chart events as a Markdown table.
+func FormatBurndownChartEventsMarkdownString(v BurndownChartEventsOutput) string {
+	if len(v.Events) == 0 {
+		return toolutil.EmptyMessage("burndown chart events")
+	}
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Burndown Chart Events", len(v.Events), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("Created At", "Weight", "Action"))
+	for _, e := range v.Events {
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.FormatTime(e.CreatedAt),
+			weightCell(e.Weight),
+			toolutil.EscapeMdTableCell(e.Action),
+		))
+	}
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction(actionMilestoneIssues, "see the issues whose weight these events moved"),
+	)
+	return b.String()
+}
+
+// weightCell renders a burndown event's weight, and a dash for an event whose
+// issue carries no weight, which GitLab sends as null. A weight of 0 is a
+// weight the team set, and is printed as 0.
+func weightCell(weight *int64) string {
+	if weight == nil {
+		return "-"
+	}
+	return strconv.FormatInt(*weight, 10)
+}
+
 func init() {
 	toolutil.RegisterMarkdownResult(formatMilestoneNotFound)
 	toolutil.RegisterMarkdown(FormatMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdownString)
 	toolutil.RegisterMarkdown(FormatIssuesMarkdownString)
 	toolutil.RegisterMarkdown(FormatMergeRequestsMarkdownString)
+	toolutil.RegisterMarkdown(FormatPromoteMarkdown)
+	toolutil.RegisterMarkdown(FormatBurndownChartEventsMarkdownString)
 }

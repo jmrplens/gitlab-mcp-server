@@ -2,8 +2,8 @@
 
 // resourcegroups_test.go covers a project's resource groups, which GitLab
 // materializes when a pipeline instantiates a job bound to one: the listing
-// before and after, the read by key, the change of the process mode, and
-// the upcoming jobs of the group.
+// before and after, the read by key, the change of the process mode, the
+// upcoming jobs of the group, and the job holding its lock.
 
 package common
 
@@ -102,5 +102,40 @@ func TestResourceGroup_Lifecycle_ListGetEditUpcomingJobs(t *testing.T) {
 			}
 		}
 		e.T.Logf("resource group %s has %d upcoming job(s)", resourceGroupKey, len(upcoming.Jobs))
+	})
+}
+
+// TestResourceGroup_CurrentJob_IsTheBoundJobOrNone reads the job holding a
+// resource group's lock once a pipeline has materialized the group. Whether
+// the lock is held depends on whether a runner has taken the job yet, so the
+// answer is asserted on its shape: no job, or the one job the configuration
+// bound to the group. GitLab added the route in 18.6.
+func TestResourceGroup_CurrentJob_IsTheBoundJobOrNone(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.GitLabAtLeast(18, 6)))
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		project := fixture.NewProject(e, fixture.WithNamePrefix("resgrpholder"))
+		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, resourceGroupCIYAML, "ci: bind a job to a resource group")
+		return project
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		params := map[string]any{"project_id": project.IDParam()}
+		byKey := withParams(params, map[string]any{"key": resourceGroupKey})
+
+		created := harness.Do[pipelines.DetailOutput](s, actionPipelineCreate, withParams(params, map[string]any{"ref": project.DefaultBranch}))
+		if created.ID == 0 {
+			e.T.Fatalf("pipeline create answered %+v, want a pipeline with an ID", created)
+		}
+		materialized := harness.Eventually(s, actionPipelineResourceGroupGet, byKey, resourceGroupPollInterval, resourceGroupPollTimeout,
+			func(out resourcegroups.ResourceGroupItem) bool { return out.Key == resourceGroupKey })
+		if materialized.ID == 0 {
+			e.T.Fatalf("resource group get answered %+v, want %s with an ID", materialized, resourceGroupKey)
+		}
+
+		current := harness.Do[resourcegroups.CurrentJobOutput](s, actionPipelineResourceGroupCurrentJob, byKey)
+		if current.Job != nil && current.Job.Name != "deploy-job" {
+			e.T.Errorf("the job holding %s is %q, and only deploy-job is bound to it", resourceGroupKey, current.Job.Name)
+		}
+		e.T.Logf("resource group %s is held by %+v", resourceGroupKey, current.Job)
 	})
 }

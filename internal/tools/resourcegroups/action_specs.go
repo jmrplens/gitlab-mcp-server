@@ -18,9 +18,10 @@ const (
 	specResourceGroupGet          = "resource_group_get"
 	specResourceGroupEdit         = "resource_group_edit"
 	specResourceGroupUpcomingJobs = "resource_group_upcoming_jobs"
+	specResourceGroupCurrentJob   = "resource_group_current_job"
 )
 
-// The canonical catalog IDs those four actions resolve to, which is what a
+// The canonical catalog IDs those actions resolve to, which is what a
 // RelatedActions entry and a Markdown hint have to name. This block and one in
 // markdown.go each held a copy, and the two had drifted: every RelatedActions
 // entry named a resource_group.* domain the catalog has never held, so a model
@@ -33,6 +34,7 @@ const (
 	actionResourceGroupGet          = "pipeline.resource_group_get"
 	actionResourceGroupEdit         = "pipeline.resource_group_edit"
 	actionResourceGroupUpcomingJobs = "pipeline.resource_group_upcoming_jobs"
+	actionResourceGroupCurrentJob   = "pipeline.resource_group_current_job"
 )
 
 // Actions of the gitlab_job group that this package's hints and related
@@ -52,6 +54,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		resourceGroupReadSpec(specResourceGroupGet, toolutil.RouteAction(client, Get), "gitlab_get_resource_group"),
 		resourceGroupUpdateSpec(specResourceGroupEdit, toolutil.RouteAction(client, Edit), "gitlab_edit_resource_group"),
 		resourceGroupReadSpec(specResourceGroupUpcomingJobs, toolutil.RouteAction(client, ListUpcomingJobs), "gitlab_list_resource_group_upcoming_jobs"),
+		resourceGroupReadSpec(specResourceGroupCurrentJob, toolutil.RouteAction(client, CurrentJob), "gitlab_resource_group_current_job"),
 	}
 }
 
@@ -112,11 +115,27 @@ func resourceGroupMetaFor(actionName string) resourceGroupMeta {
 				"show jobs queued behind resource group concurrency lock",
 				"resource group pending job queue",
 			},
-			related: []string{actionResourceGroupGet, actionResourceGroupList, actionJobList},
+			related: []string{actionResourceGroupGet, actionResourceGroupCurrentJob, actionResourceGroupList, actionJobList},
 			description: "List the upcoming CI jobs queued for one resource group by key. Returns: each pending job's ID, name, " +
 				"status, stage, ref, tag and allow-failure flags, pipeline, web URL, and creation time, ordered as they will run " +
 				"under the resource group's process mode, with pagination metadata. " +
 				"See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_job_list.",
+		}
+	case specResourceGroupCurrentJob:
+		return resourceGroupMeta{
+			usage: "Get the job that holds a resource group's lock by key, or learn that no job holds it. " +
+				"Needs GitLab 18.6 or later, which is where GitLab added the route. On an older instance, " +
+				"read the queue with pipeline.resource_group_upcoming_jobs instead.",
+			aliases: []string{
+				"current job of resource group",
+				"which job holds the resource group lock",
+				"resource group lock holder",
+			},
+			related: []string{actionResourceGroupUpcomingJobs, actionResourceGroupGet, actionJobGet},
+			description: "Get the CI job that currently holds one resource group's lock by key (GitLab 18.6 or later). " +
+				"Returns: the job's ID, name, status, stage, ref, tag and allow-failure flags, pipeline, web URL, and creation time, " +
+				"or no job when none holds the lock. " +
+				"See also: gitlab_list_resource_group_upcoming_jobs, gitlab_get_resource_group, gitlab_job_get.",
 		}
 	default: // specResourceGroupList
 		return resourceGroupMeta{

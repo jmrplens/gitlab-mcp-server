@@ -92,6 +92,16 @@ var declaredUnpaginatedCollections = []paginationDeclaration{
 			"user list of the same package, which is paginated.",
 	},
 	{
+		Package:  toolsDir + "/milestones",
+		Action:   "project.milestone_burndown",
+		Category: categoryEndpointNotPaginated,
+		Reason: "GET /projects/:id/milestones/:milestone_id/burndown_events declares no page and no per_page, and its " +
+			"handler presents Burndown.new(issues, start_date, due_date).as_json without paginate " +
+			"(ee/lib/ee/api/milestone_responses.rb): GitLab sends every event of the milestone in one array. The " +
+			"endpoints that matched are the milestone list and the milestone's issues and merge requests, which the " +
+			"same package reads and GitLab paginates.",
+	},
+	{
 		Package:  toolsDir + "/pipelines",
 		Action:   "pipeline.variables",
 		Category: categoryEndpointNotPaginated,

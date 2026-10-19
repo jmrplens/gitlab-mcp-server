@@ -45,6 +45,7 @@ func FormatGroupMarkdown(g ResourceGroupItem) string {
 	c.Time("Created", g.CreatedAt)
 	c.Time("Updated", g.UpdatedAt)
 	c.End(
+		toolutil.HintAction(actionResourceGroupCurrentJob, "see the job holding its lock"),
 		toolutil.HintAction(actionResourceGroupUpcomingJobs, "see the jobs waiting on this group"),
 		toolutil.HintAction(actionResourceGroupEdit, "change its process mode"),
 	)
@@ -79,13 +80,52 @@ func FormatJobsMarkdown(out ListUpcomingJobsOutput) string {
 	return b.String()
 }
 
+// FormatCurrentJobMarkdown renders the job holding a resource group's lock as
+// the card of one job, or says that no job holds it when GitLab named none.
+// The row leaves a job's timing and user to job.get, which the first hint
+// names.
+func FormatCurrentJobMarkdown(out CurrentJobOutput) string {
+	upcoming := toolutil.HintAction(actionResourceGroupUpcomingJobs, "see the jobs waiting for the lock")
+	var b strings.Builder
+	if out.Job == nil {
+		b.WriteString("No job holds this resource group's lock.\n")
+		toolutil.WriteHints(&b, upcoming)
+		return b.String()
+	}
+	j := out.Job
+	c := toolutil.NewCard(&b, "Current Job: "+j.Name)
+	c.Int("ID", j.ID)
+	c.Field("Status", jobStatusText(j.Status))
+	c.Field("Stage", j.Stage)
+	c.Field("Ref", j.Ref)
+	c.Flag("", "Tag", j.Tag)
+	c.Flag("", "Allowed to fail", j.AllowFailure)
+	if j.Pipeline != nil {
+		c.Link("Pipeline", "#"+strconv.FormatInt(j.Pipeline.ID, 10), j.Pipeline.WebURL)
+	}
+	c.Time("Created", j.CreatedAt)
+	c.URL(j.WebURL)
+	c.End(
+		toolutil.HintAction(actionJobGet, "read this job in full, with when it started and who ran it"),
+		toolutil.HintAction(actionJobTrace, "read its log"),
+		upcoming,
+	)
+	return b.String()
+}
+
 // jobStatusCell renders a job status with the glyph every job row in the tree
 // shows, and nothing when GitLab sent no status.
 func jobStatusCell(status string) string {
+	return toolutil.EscapeMdTableCell(jobStatusText(status))
+}
+
+// jobStatusText is [jobStatusCell] unescaped, for a card row, which escapes
+// the value itself. The glyph carries nothing the escaper changes.
+func jobStatusText(status string) string {
 	if strings.TrimSpace(status) == "" {
 		return ""
 	}
-	return toolutil.PipelineStatusEmoji(status) + " " + toolutil.EscapeMdTableCell(status)
+	return toolutil.PipelineStatusEmoji(status) + " " + status
 }
 
 // pipelineCell names the pipeline a waiting job belongs to, linked to its page
@@ -101,4 +141,5 @@ func init() {
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 	toolutil.RegisterMarkdown(FormatGroupMarkdown)
 	toolutil.RegisterMarkdown(FormatJobsMarkdown)
+	toolutil.RegisterMarkdown(FormatCurrentJobMarkdown)
 }

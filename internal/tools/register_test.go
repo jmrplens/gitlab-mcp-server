@@ -348,14 +348,17 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		// 1088 = 1086 + group.service_account_get and
+		// 1091 = 1088 + project.milestone_promote,
+		// pipeline.resource_group_current_job (Free) and
+		// project.milestone_burndown (Premium), client-go v3.18.0 and
+		// v3.19.0. The 1088 was 1086 + group.service_account_get and
 		// project.service_account_get (Free, GitLab 19.4). The 1086 was
 		// 1085 + package.get (Free, client-go v3.14.0), the 1085 was
 		// 1073 + 12 achievement actions (Free, client-go v2.64.0), and the
 		// 1073 was 1065 + 7 work item saved view actions (get/list/create/
 		// update/delete/subscribe/unsubscribe, Free, client-go v2.62.0)
 		// + 1 Dependency Firewall package evaluation (Premium).
-		const expectedTools = 1088
+		const expectedTools = 1091
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -371,7 +374,9 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 			t.Fatalf(fmtListToolsErr, err)
 		}
 		t.Logf("CE tool count: %d", len(result.Tools))
-		// 868 = 866 + group.service_account_get and
+		// 870 = 868 + project.milestone_promote and
+		// pipeline.resource_group_current_job (Free, client-go v3.18.0 and
+		// v3.19.0). The 868 was 866 + group.service_account_get and
 		// project.service_account_get (Free, GitLab 19.4). The 866 was
 		// 865 + package.get (Free, client-go v3.14.0), and the 865 was
 		// 866 −1 group board delete gated to Premium (group_boards.md
@@ -381,7 +386,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		// (group_webhooks.md and merge request dependencies are
 		// Premium/Ultimate). See cmd/audit_edition_tier. The base moved from
 		// 861 with the 7 work item saved view actions, which are Free.
-		const expectedTools = 868
+		const expectedTools = 870
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -1170,6 +1175,12 @@ var knownNonKeywordDestructive = map[string]struct{}{
 	// take from untrusted text. See mirrorAddSpec in
 	// internal/tools/projectmirrors/action_specs.go.
 	"mirror_add": {},
+	// milestone_promote creates a group milestone, and what makes it
+	// destructive is what it removes on the way: GitLab deletes the promoted
+	// milestone and every milestone of its title in the group's projects, and
+	// no route demotes it back. See milestonePromoteSpec in
+	// internal/tools/milestones/action_specs.go.
+	"milestone_promote": {},
 }
 
 var knownRouteDestructiveExceptions = map[string]struct{}{

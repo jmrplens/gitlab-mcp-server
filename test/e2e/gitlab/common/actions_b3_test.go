@@ -74,12 +74,14 @@ const (
 	actionProjectLabelPromote     harness.ActionID = "project.label_promote"
 )
 
-// A project milestone and the two listings scoped to one.
+// A project milestone, the two listings scoped to one, and its promotion to
+// the project's group.
 const (
 	actionProjectMilestoneCreate        harness.ActionID = "project.milestone_create"
 	actionProjectMilestoneList          harness.ActionID = "project.milestone_list"
 	actionProjectMilestoneIssues        harness.ActionID = "project.milestone_issues"
 	actionProjectMilestoneMergeRequests harness.ActionID = "project.milestone_merge_requests"
+	actionProjectMilestonePromote       harness.ActionID = "project.milestone_promote"
 )
 
 // A project's direct members and the inherited membership read.

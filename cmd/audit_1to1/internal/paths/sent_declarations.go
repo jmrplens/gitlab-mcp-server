@@ -275,7 +275,9 @@ const (
 		"the pipeline, web URL and creation time, which is what tells the jobs waiting on the group apart and where each " +
 		"comes from. The user, commit and project are job.get's, which returns the whole job, and the fields of a run " +
 		"(started_at, finished_at, erased_at, duration, queued_duration, coverage and failure_reason) describe a job that " +
-		"has run, which a job waiting on the resource group has not."
+		"has run, which a job waiting on the resource group has not. GET /projects/:id/resource_groups/:key/current_job " +
+		"presents the same entity for the one job holding the lock, in the same row: that job is running or about to, so " +
+		"its card sends a model to job.get for when it started, who ran it and how long it has taken."
 )
 
 // The member-family package paths, spelled once because several declarations

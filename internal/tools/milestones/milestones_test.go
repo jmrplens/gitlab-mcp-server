@@ -5,6 +5,7 @@ package milestones
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -1564,8 +1565,8 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	specs := ActionSpecs(client)
 	byTool := milestoneSpecsByTool(t, specs)
 
-	if len(specs) != 7 {
-		t.Fatalf("len(ActionSpecs) = %d, want 7", len(specs))
+	if len(specs) != 9 {
+		t.Fatalf("len(ActionSpecs) = %d, want 9", len(specs))
 	}
 	if len(byTool) != len(specs) {
 		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
@@ -1589,6 +1590,34 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	create := byTool["gitlab_milestone_create"]
 	if create.Usage == "" || len(create.Aliases) == 0 {
 		t.Fatalf("gitlab_milestone_create metadata incomplete: usage=%q aliases=%d", create.Usage, len(create.Aliases))
+	}
+}
+
+// TestActionSpecs_PromoteAndBurndown_Classification holds the two actions
+// client-go v3.18.0 added to what each does to GitLab. A promotion deletes
+// the project milestone and every milestone of its title in the group's
+// projects, which no route undoes, so it asks for confirmation; a second call
+// finds nothing left to promote, so it is idempotent. The burndown is a read
+// GitLab serves from Premium.
+func TestActionSpecs_PromoteAndBurndown_Classification(t *testing.T) {
+	byTool := milestoneSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
+
+	promote := byTool["gitlab_milestone_promote"]
+	if promote.Name != "milestone_promote" || !promote.Destructive || promote.ReadOnly || !promote.Idempotent || promote.Edition != "" {
+		t.Errorf("gitlab_milestone_promote = name %q destructive %v read-only %v idempotent %v edition %q, want milestone_promote, destructive, idempotent, Free",
+			promote.Name, promote.Destructive, promote.ReadOnly, promote.Idempotent, promote.Edition)
+	}
+	burndown := byTool["gitlab_milestone_burndown_events"]
+	if burndown.Name != "milestone_burndown" || burndown.Destructive || !burndown.ReadOnly || burndown.Edition != "premium" {
+		t.Errorf("gitlab_milestone_burndown_events = name %q destructive %v read-only %v edition %q, want milestone_burndown, a read, premium",
+			burndown.Name, burndown.Destructive, burndown.ReadOnly, burndown.Edition)
+	}
+	for _, spec := range []toolutil.ActionSpec{promote, burndown} {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			if !strings.Contains(spec.IndividualTool.Description, "Returns:") || !strings.Contains(spec.IndividualTool.Description, "See also:") {
+				t.Errorf("description = %q, want the Returns: and See also: form", spec.IndividualTool.Description)
+			}
+		})
 	}
 }
 
@@ -1628,6 +1657,12 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, covMRJSON,
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	})
+	mux.HandleFunc("POST "+milestonePath+"/1/promote", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `200`)
+	})
+	mux.HandleFunc("GET "+milestonePath+"/1/burndown_events", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"created_at":"2026-03-01T10:00:00Z","weight":1,"action":"created"}]`)
+	})
 
 	client := testutil.NewTestClient(t, mux)
 	byTool := milestoneSpecsByTool(t, ActionSpecs(client))
@@ -1643,6 +1678,8 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		{"gitlab_milestone_delete", map[string]any{"project_id": "42", "milestone_iid": float64(1)}},
 		{"gitlab_milestone_issues", map[string]any{"project_id": "42", "milestone_iid": float64(1)}},
 		{"gitlab_milestone_merge_requests", map[string]any{"project_id": "42", "milestone_iid": float64(1)}},
+		{"gitlab_milestone_promote", map[string]any{"project_id": "42", "milestone_iid": float64(1)}},
+		{"gitlab_milestone_burndown_events", map[string]any{"project_id": "42", "milestone_iid": float64(1)}},
 	}
 
 	for _, tc := range tools {
@@ -1916,5 +1953,345 @@ func TestGetMergeRequests_OrderBySortAndKeyset(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// ---------- Promote ----------.
+
+// promoteListJSON is the IID lookup's answer for milestone 3 of project 42,
+// whose global ID (77) differs from its IID so that a promotion addressed by
+// the IID would reach no route of the mock.
+const promoteListJSON = `[{"id":77,"iid":3,"project_id":42,"title":"Sprint 9","state":"active"}]`
+
+// TestPromote_PromotesTheResolvedMilestone_AndNamesItsTitle verifies that the
+// promotion is sent for the global ID the IID resolves to, as a POST with no
+// body, and that the confirmation carries the title the lookup read, since
+// GitLab answers the promotion with no milestone.
+func TestPromote_PromotesTheResolvedMilestone_AndNamesItsTitle(t *testing.T) {
+	var promoted bool
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones:
+			if got := r.URL.Query()["iids[]"]; !reflect.DeepEqual(got, []string{"3"}) {
+				t.Errorf("lookup iids[] = %v, want [3]", got)
+			}
+			testutil.RespondJSON(w, http.StatusOK, promoteListJSON)
+		case r.Method == http.MethodPost && r.URL.Path == pathProjectMilestones+"/77/promote":
+			promoted = true
+			// GitLab's route sets the status and presents nothing.
+			testutil.RespondJSON(w, http.StatusOK, `200`)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+
+	out, err := Promote(t.Context(), client, PromoteInput{ProjectID: "42", MilestoneIID: 3})
+	if err != nil {
+		t.Fatalf("Promote() error: %v", err)
+	}
+	if !promoted {
+		t.Fatal("Promote() returned without sending the promotion")
+	}
+	want := PromoteOutput{
+		Status: "success",
+		Title:  "Sprint 9",
+		Message: "Project milestone 3 (Sprint 9) is now a milestone of the project's group. GitLab moved its issues and " +
+			"merge requests to the group milestone and deleted every milestone of that title in the projects directly under the group.",
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("Promote() = %#v, want %#v", out, want)
+	}
+}
+
+// TestPromote_MissingParams verifies both required inputs are refused before
+// any request is sent.
+func TestPromote_MissingParams(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		http.NotFound(w, r)
+	}))
+	tests := []struct {
+		name  string
+		input PromoteInput
+		want  string
+	}{
+		{name: "project_id", input: PromoteInput{MilestoneIID: 3}, want: "project_id is required"},
+		{name: "milestone_iid", input: PromoteInput{ProjectID: "42"}, want: "milestone_iid"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Promote(t.Context(), client, tt.input)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("Promote(%+v) error = %v, want one naming %q", tt.input, err, tt.want)
+			}
+		})
+	}
+}
+
+// TestPromote_UnknownIID_IsRefusedBeforeThePromotion verifies an IID the
+// project does not hold stops the action at the lookup, naming the IID.
+func TestPromote_UnknownIID_IsRefusedBeforeThePromotion(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones {
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		http.NotFound(w, r)
+	}))
+	_, err := Promote(t.Context(), client, PromoteInput{ProjectID: "42", MilestoneIID: 3})
+	if err == nil || !strings.Contains(err.Error(), "milestonePromote: milestone with IID 3 not found") {
+		t.Errorf("Promote() error = %v, want the lookup's not-found", err)
+	}
+}
+
+// TestPromote_Refusals verifies what each refusal tells a model: a permission
+// refusal names the group the project has to belong to and the role it takes
+// there, whatever status GitLab chose for it, and any other refusal carries
+// GitLab's own message without that hint.
+func TestPromote_Refusals(t *testing.T) {
+	const roleHint = "the project to belong to a group and the Planner role or higher in that group"
+	tests := []struct {
+		name     string
+		status   int
+		body     string
+		want     string
+		wantHint bool
+	}{
+		{name: "a personal project or a missing role", status: http.StatusForbidden, body: `{"message":"403 Forbidden"}`, want: "403", wantHint: true},
+		{name: "a refused promotion", status: http.StatusBadRequest, body: `{"message":"Promotion failed - Title has already been taken"}`, want: "Promotion failed - Title has already been taken"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet {
+					testutil.RespondJSON(w, http.StatusOK, promoteListJSON)
+					return
+				}
+				testutil.RespondJSON(w, tt.status, tt.body)
+			}))
+			_, err := Promote(t.Context(), client, PromoteInput{ProjectID: "42", MilestoneIID: 3})
+			if err == nil {
+				t.Fatal(errExpectedNil)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("Promote() error = %q, want it to carry %q", err, tt.want)
+			}
+			if got := strings.Contains(err.Error(), roleHint); got != tt.wantHint {
+				t.Errorf("Promote() error = %q, carries the role hint = %v, want %v", err, got, tt.wantHint)
+			}
+		})
+	}
+}
+
+// TestPromote_CarriesTheContext verifies the first request, the IID lookup,
+// carries the caller's context, so an abandoned call stops there rather than
+// going on to promote.
+func TestPromote_CarriesTheContext(t *testing.T) {
+	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, promoteListJSON)
+	})
+	if _, err := Promote(ctx, client, PromoteInput{ProjectID: "42", MilestoneIID: 3}); !errors.Is(err, context.Canceled) {
+		t.Errorf("Promote() error = %v, want context.Canceled", err)
+	}
+}
+
+// TestFormatPromoteMarkdown verifies the confirmation says what GitLab did and
+// sends a model to the group milestone list for the milestone GitLab did not
+// return, with the title escaped like any value GitLab authored.
+func TestFormatPromoteMarkdown(t *testing.T) {
+	md := FormatPromoteMarkdown(PromoteOutput{
+		Status:  "success",
+		Title:   "Sprint | 9",
+		Message: "Project milestone 3 (Sprint | 9) is now a milestone of the project's group.",
+	})
+	// A heading is escaped for a heading, where a pipe is no cell boundary.
+	want := "## Milestone promoted: Sprint | 9\n\n" +
+		"- **Title**: Sprint &#124; 9\n\n" +
+		"Project milestone 3 (Sprint | 9) is now a milestone of the project's group.\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'group.group_milestone_list' to find the group milestone by its title\n"
+	if md != want {
+		t.Errorf("FormatPromoteMarkdown()\n got %q\nwant %q", md, want)
+	}
+}
+
+// ---------- Burndown chart events ----------.
+
+// TestGetBurndownChartEvents_ReadsEveryEvent verifies the events are read
+// from the global ID the IID resolves to with no paging parameter, since
+// GitLab presents the whole burndown and pages nothing, and that each event
+// keeps what GitLab sent: a null weight stays absent and a weight of 0 stays
+// 0.
+func TestGetBurndownChartEvents_ReadsEveryEvent(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones:
+			testutil.RespondJSON(w, http.StatusOK, promoteListJSON)
+		case r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones+"/77/burndown_events":
+			if r.URL.RawQuery != "" {
+				t.Errorf("burndown query = %q, want none", r.URL.RawQuery)
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"created_at":"2026-03-01T10:00:00Z","weight":3,"action":"created"},
+				{"created_at":"2026-03-02T11:00:00Z","weight":null,"action":"closed"},
+				{"created_at":"2026-03-03T12:00:00Z","weight":0,"action":"reopened"}
+			]`)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+
+	out, err := GetBurndownChartEvents(t.Context(), client, GetBurndownChartEventsInput{ProjectID: "42", MilestoneIID: 3})
+	if err != nil {
+		t.Fatalf("GetBurndownChartEvents() error: %v", err)
+	}
+	three, zero := int64(3), int64(0)
+	want := []BurndownChartEventItem{
+		{CreatedAt: "2026-03-01T10:00:00Z", Weight: &three, Action: "created"},
+		{CreatedAt: "2026-03-02T11:00:00Z", Action: "closed"},
+		{CreatedAt: "2026-03-03T12:00:00Z", Weight: &zero, Action: "reopened"},
+	}
+	if !reflect.DeepEqual(out.Events, want) {
+		t.Errorf("GetBurndownChartEvents() events = %+v, want %+v", out.Events, want)
+	}
+}
+
+// TestGetBurndownChartEvents_MissingFields verifies an event GitLab sent
+// without a time or an action converts to empty strings rather than failing.
+func TestGetBurndownChartEvents_MissingFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathProjectMilestones {
+			testutil.RespondJSON(w, http.StatusOK, promoteListJSON)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"weight":2}]`)
+	}))
+	out, err := GetBurndownChartEvents(t.Context(), client, GetBurndownChartEventsInput{ProjectID: "42", MilestoneIID: 3})
+	if err != nil {
+		t.Fatalf("GetBurndownChartEvents() error: %v", err)
+	}
+	two := int64(2)
+	if want := []BurndownChartEventItem{{Weight: &two}}; !reflect.DeepEqual(out.Events, want) {
+		t.Errorf("GetBurndownChartEvents() events = %+v, want %+v", out.Events, want)
+	}
+}
+
+// TestGetBurndownChartEvents_MissingParams verifies both required inputs are
+// refused before any request is sent.
+func TestGetBurndownChartEvents_MissingParams(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		http.NotFound(w, r)
+	}))
+	tests := []struct {
+		name  string
+		input GetBurndownChartEventsInput
+		want  string
+	}{
+		{name: "project_id", input: GetBurndownChartEventsInput{MilestoneIID: 3}, want: "project_id is required"},
+		{name: "milestone_iid", input: GetBurndownChartEventsInput{ProjectID: "42"}, want: "milestone_iid"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := GetBurndownChartEvents(t.Context(), client, tt.input)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("GetBurndownChartEvents(%+v) error = %v, want one naming %q", tt.input, err, tt.want)
+			}
+		})
+	}
+}
+
+// TestGetBurndownChartEvents_UnknownIID_IsRefusedAtTheLookup verifies an IID
+// the project does not hold stops the action before the burndown route.
+func TestGetBurndownChartEvents_UnknownIID_IsRefusedAtTheLookup(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathProjectMilestones {
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		http.NotFound(w, r)
+	}))
+	_, err := GetBurndownChartEvents(t.Context(), client, GetBurndownChartEventsInput{ProjectID: "42", MilestoneIID: 3})
+	if err == nil || !strings.Contains(err.Error(), "milestoneBurndownEvents: milestone with IID 3 not found") {
+		t.Errorf("GetBurndownChartEvents() error = %v, want the lookup's not-found", err)
+	}
+}
+
+// TestGetBurndownChartEvents_Refusals verifies the hint each refusal carries:
+// GitLab answers 405 where the license draws no burndown chart, a Free
+// instance has no such route and answers 404, and any other failure carries
+// neither hint.
+func TestGetBurndownChartEvents_Refusals(t *testing.T) {
+	const licenseHint = "GitLab draws a burndown chart only where the license includes milestone charts and issue weights"
+	const routeHint = "a Free instance has no burndown route and answers 404"
+	tests := []struct {
+		name   string
+		status int
+		hint   string
+	}{
+		{name: "license without milestone charts", status: http.StatusMethodNotAllowed, hint: licenseHint},
+		{name: "a Free instance", status: http.StatusNotFound, hint: routeHint},
+		{name: "an instance failure", status: http.StatusInternalServerError},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == pathProjectMilestones {
+					testutil.RespondJSON(w, http.StatusOK, promoteListJSON)
+					return
+				}
+				testutil.RespondJSON(w, tt.status, `{"message":"refused"}`)
+			}))
+			_, err := GetBurndownChartEvents(t.Context(), client, GetBurndownChartEventsInput{ProjectID: "42", MilestoneIID: 3})
+			if err == nil {
+				t.Fatal(errExpectedNil)
+			}
+			if got, want := strings.Contains(err.Error(), licenseHint), tt.hint == licenseHint; got != want {
+				t.Errorf("GetBurndownChartEvents() error = %q, carries the license hint = %v, want %v", err, got, want)
+			}
+			if got, want := strings.Contains(err.Error(), routeHint), tt.hint == routeHint; got != want {
+				t.Errorf("GetBurndownChartEvents() error = %q, carries the Free instance hint = %v, want %v", err, got, want)
+			}
+		})
+	}
+}
+
+// TestGetBurndownChartEvents_CarriesTheContext verifies the first request
+// carries the caller's context.
+func TestGetBurndownChartEvents_CarriesTheContext(t *testing.T) {
+	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, promoteListJSON)
+	})
+	if _, err := GetBurndownChartEvents(ctx, client, GetBurndownChartEventsInput{ProjectID: "42", MilestoneIID: 3}); !errors.Is(err, context.Canceled) {
+		t.Errorf("GetBurndownChartEvents() error = %v, want context.Canceled", err)
+	}
+}
+
+// TestFormatBurndownChartEventsMarkdownString verifies the events table: the
+// time formatted, a weight GitLab sent as null shown as a dash rather than as
+// a weight of 0, a weight of 0 shown as 0, and the action escaped for a cell.
+func TestFormatBurndownChartEventsMarkdownString(t *testing.T) {
+	zero := int64(0)
+	md := FormatBurndownChartEventsMarkdownString(BurndownChartEventsOutput{Events: []BurndownChartEventItem{
+		{CreatedAt: "2026-03-01T10:00:00Z", Weight: &zero, Action: "created"},
+		{CreatedAt: "2026-03-02T11:00:00Z", Action: "closed|x"},
+	}})
+	want := "## Burndown Chart Events (2)\n\n" +
+		"| Created At | Weight | Action |\n" +
+		"| --- | --- | --- |\n" +
+		"| 1 Mar 2026 10:00 UTC | 0 | created |\n" +
+		"| 2 Mar 2026 11:00 UTC | - | closed&#124;x |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'project.milestone_issues' to see the issues whose weight these events moved\n"
+	if md != want {
+		t.Errorf("FormatBurndownChartEventsMarkdownString()\n got %q\nwant %q", md, want)
+	}
+	const wantEmpty = "No burndown chart events found.\n"
+	if got := FormatBurndownChartEventsMarkdownString(BurndownChartEventsOutput{}); got != wantEmpty {
+		t.Errorf("FormatBurndownChartEventsMarkdownString(empty) = %q, want %q", got, wantEmpty)
 	}
 }

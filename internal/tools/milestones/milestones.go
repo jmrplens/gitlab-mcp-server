@@ -266,6 +266,17 @@ type MilestoneMergeRequestsOutput struct {
 // needed by the GitLab API. The GitLab milestone endpoints use the global ID in the
 // URL path, but users naturally work with IIDs (like issues and merge requests).
 func resolveIID(ctx context.Context, client *gitlabclient.Client, projectID toolutil.StringOrInt, iid int64) (int64, error) {
+	milestone, err := resolveMilestone(ctx, client, projectID, iid)
+	if err != nil {
+		return 0, err
+	}
+	return milestone.ID, nil
+}
+
+// resolveMilestone looks a milestone up by its project-scoped IID and returns
+// it whole, for an action that needs more of it than the global ID: the
+// promotion names the title GitLab does not send back.
+func resolveMilestone(ctx context.Context, client *gitlabclient.Client, projectID toolutil.StringOrInt, iid int64) (*gl.Milestone, error) {
 	iids := []int64{iid}
 	opts := &gl.ListMilestonesOptions{
 		IIDs: &iids,
@@ -273,12 +284,12 @@ func resolveIID(ctx context.Context, client *gitlabclient.Client, projectID tool
 	//gitlab:request mandatory: the action is addressed by IID and GitLab's milestone routes by ID, so this lookup runs before the action's own request on every call
 	milestones, _, err := client.GL().Milestones.ListMilestones(string(projectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return 0, fmt.Errorf("resolving milestone IID %d: %w", iid, err)
+		return nil, fmt.Errorf("resolving milestone IID %d: %w", iid, err)
 	}
 	if len(milestones) == 0 {
-		return 0, fmt.Errorf("milestone with IID %d not found in project %s", iid, projectID)
+		return nil, fmt.Errorf("milestone with IID %d not found in project %s", iid, projectID)
 	}
-	return milestones[0].ID, nil
+	return milestones[0], nil
 }
 
 // ---------- Handlers ----------.
@@ -520,6 +531,150 @@ func GetMergeRequests(ctx context.Context, client *gitlabclient.Client, input Ge
 		}
 	}
 	return MilestoneMergeRequestsOutput{MergeRequests: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+}
+
+// ---------- Promote ----------.
+
+// PromoteInput defines parameters for promoting a project milestone to a
+// milestone of the project's group.
+type PromoteInput struct {
+	ProjectID    toolutil.StringOrInt `json:"project_id"     jsonschema:"Project ID or URL-encoded path. The project must belong to a group,required"`
+	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (project-scoped). Use project.milestone_list to find IIDs,required"`
+}
+
+// PromoteOutput confirms a promotion. GitLab answers one with no milestone:
+// POST /projects/:id/milestones/:milestone_id/promote sets the status and
+// presents nothing (lib/api/project_milestones.rb), and client-go returns the
+// response alone. The title is therefore the one the IID lookup read before
+// the call, which is the group milestone's title too, since
+// Milestones::PromoteService copies the title, description, dates and state
+// into the group milestone it creates.
+type PromoteOutput struct {
+	toolutil.HintableOutput
+	Status  string `json:"status"`
+	Message string `json:"message"`
+	Title   string `json:"title"`
+}
+
+// Promote turns a project milestone into a milestone of the project's group
+// via the GitLab Milestones API
+// (POST /projects/:id/milestones/:milestone_id/promote). The IID is resolved
+// first, which also reads the title GitLab does not send back.
+//
+// GitLab creates the group milestone in the group the project sits in, moves
+// to it the issues, merge requests and milestone events of every milestone of
+// that title in the group's own projects, and deletes those milestones, the
+// promoted one included (app/services/milestones/promote_service.rb). It
+// refuses a project outside a group, and a caller without the Planner role in
+// that group, as it refuses any missing permission.
+func Promote(ctx context.Context, client *gitlabclient.Client, input PromoteInput) (PromoteOutput, error) {
+	if input.ProjectID == "" {
+		return PromoteOutput{}, errors.New("milestonePromote: project_id is required")
+	}
+	if input.MilestoneIID == 0 {
+		return PromoteOutput{}, toolutil.ErrRequiredInt64("milestonePromote", paramMilestoneIID)
+	}
+
+	milestone, err := resolveMilestone(ctx, client, input.ProjectID, input.MilestoneIID)
+	if err != nil {
+		return PromoteOutput{}, fmt.Errorf("milestonePromote: %w", err)
+	}
+
+	_, err = client.GL().Milestones.PromoteMilestone(string(input.ProjectID), milestone.ID, gl.WithContext(ctx))
+	if err != nil {
+		if toolutil.IsPermissionRefusal(err) {
+			return PromoteOutput{}, toolutil.WrapErrWithHint("milestonePromote", err,
+				"promoting a milestone needs the project to belong to a group and the Planner role or higher in that group; a project in a personal namespace has no group to promote to")
+		}
+		return PromoteOutput{}, toolutil.WrapErrWithMessage("milestonePromote", err)
+	}
+	return promotedOutput(input.MilestoneIID, milestone.Title), nil
+}
+
+// promotedOutput composes the confirmation of a promotion from the IID the
+// caller named and the title the lookup read. It is no rendering of a
+// milestone GitLab answered with, since the promotion answers with none, which
+// is why it takes the two values rather than the milestone they came from.
+func promotedOutput(iid int64, title string) PromoteOutput {
+	return PromoteOutput{
+		Status: "success",
+		Title:  title,
+		Message: fmt.Sprintf("Project milestone %d (%s) is now a milestone of the project's group. GitLab moved its issues and "+
+			"merge requests to the group milestone and deleted every milestone of that title in the projects directly under the group.",
+			iid, title),
+	}
+}
+
+// ---------- Burndown chart events ----------.
+
+// GetBurndownChartEventsInput defines parameters for listing the burndown
+// chart events of a project milestone. Nothing pages them: the route declares
+// no page, per_page, order_by or sort, and GitLab presents the whole burndown
+// in one answer (ee/lib/ee/api/milestone_responses.rb), so the paging fields
+// client-go's options struct carries would be sent and ignored.
+type GetBurndownChartEventsInput struct {
+	ProjectID    toolutil.StringOrInt `json:"project_id"     jsonschema:"Project ID or URL-encoded path,required"`
+	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (project-scoped). Use project.milestone_list to find IIDs,required"`
+}
+
+// BurndownChartEventItem is one event of a milestone's burndown chart, as
+// GitLab derives it from an issue of the milestone: when it happened, the
+// issue's weight, which GitLab sends as null for an issue without one, and
+// what happened (created, closed or reopened).
+type BurndownChartEventItem struct {
+	CreatedAt string `json:"created_at"`
+	Weight    *int64 `json:"weight,omitempty"`
+	Action    string `json:"action"`
+}
+
+// BurndownChartEventsOutput holds every burndown chart event of a milestone.
+type BurndownChartEventsOutput struct {
+	toolutil.HintableOutput
+	Events []BurndownChartEventItem `json:"events"`
+}
+
+// GetBurndownChartEvents lists the burndown chart events of a project
+// milestone via the GitLab Milestones API
+// (GET /projects/:id/milestones/:milestone_id/burndown_events), a Premium and
+// Ultimate route. The IID is resolved to the global ID before the call.
+//
+// GitLab answers 405 when the license does not include milestone charts and
+// issue weights, and an empty list for a milestone without both a start date
+// and a due date (ee/app/models/burndown.rb).
+func GetBurndownChartEvents(ctx context.Context, client *gitlabclient.Client, input GetBurndownChartEventsInput) (BurndownChartEventsOutput, error) {
+	if input.ProjectID == "" {
+		return BurndownChartEventsOutput{}, errors.New("milestoneBurndownEvents: project_id is required")
+	}
+	if input.MilestoneIID == 0 {
+		return BurndownChartEventsOutput{}, toolutil.ErrRequiredInt64("milestoneBurndownEvents", paramMilestoneIID)
+	}
+
+	globalID, err := resolveIID(ctx, client, input.ProjectID, input.MilestoneIID)
+	if err != nil {
+		return BurndownChartEventsOutput{}, fmt.Errorf("milestoneBurndownEvents: %w", err)
+	}
+
+	opts := &gl.GetMilestoneBurndownChartEventsOptions{}
+	events, _, err := client.GL().Milestones.GetMilestoneBurndownChartEvents(string(input.ProjectID), globalID, opts, gl.WithContext(ctx))
+	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusMethodNotAllowed) {
+			return BurndownChartEventsOutput{}, toolutil.WrapErrWithHint("milestoneBurndownEvents", err,
+				"GitLab draws a burndown chart only where the license includes milestone charts and issue weights (Premium or Ultimate)")
+		}
+		return BurndownChartEventsOutput{}, toolutil.WrapErrWithStatusHint("milestoneBurndownEvents", err, http.StatusNotFound,
+			"burndown events need GitLab Premium or Ultimate, and a Free instance has no burndown route and answers 404; verify milestone_iid with project.milestone_list")
+	}
+
+	items := make([]BurndownChartEventItem, len(events))
+	for i, e := range events {
+		// client-go models the weight as a pointer, so the null of an issue
+		// without a weight arrives as nil and stays so.
+		items[i] = BurndownChartEventItem{CreatedAt: toolutil.RFC3339Ptr(e.CreatedAt), Weight: e.Weight}
+		if e.Action != nil {
+			items[i].Action = *e.Action
+		}
+	}
+	return BurndownChartEventsOutput{Events: items}, nil
 }
 
 // ---------- Formatters ----------.

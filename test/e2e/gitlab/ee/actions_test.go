@@ -326,6 +326,10 @@ const (
 // its Community group file.
 const actionGroupMilestoneBurndown harness.ActionID = "group.group_milestone_burndown"
 
+// The project milestone burndown, the licensed read of the project milestone
+// family client-go v3.18.0 added.
+const actionProjectMilestoneBurndown harness.ActionID = "project.milestone_burndown"
+
 // Protected environments and the deployment approval they gate.
 const (
 	actionProtectedEnvProtect       harness.ActionID = "environment.protected_protect"

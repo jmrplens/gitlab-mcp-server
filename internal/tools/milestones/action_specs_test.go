@@ -11,12 +11,15 @@
 package milestones_test
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/hints"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/milestones"
 )
 
 const (
@@ -71,6 +74,23 @@ func TestMilestoneRelatedActions_EveryPublishedID_ResolvesInTheCatalog(t *testin
 	}
 	if owned == 0 {
 		t.Fatalf("the catalog holds no action owned by %q; the join this test rests on is broken", ownerPackage)
+	}
+}
+
+// TestMilestoneActionSpecs_EverySpec_IsAnActionOfTheProjectGroup holds the
+// other direction of the join: every spec this package builds is served as an
+// action of the project catalog group, under the ID its constants spell, the
+// Premium burndown included at the tier this catalog is built for.
+//
+// It is also the import of this package that gobco's bridge for an external
+// test package reads the package's path from; without one, the condition
+// coverage run could not instrument the package at all.
+func TestMilestoneActionSpecs_EverySpec_IsAnActionOfTheProjectGroup(t *testing.T) {
+	catalog := ultimateCatalog(t)
+	for _, spec := range milestones.ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())) {
+		t.Run(spec.Name, func(t *testing.T) {
+			assertResolves(t, catalog, "ActionSpecs", "project."+spec.Name)
+		})
 	}
 }
 

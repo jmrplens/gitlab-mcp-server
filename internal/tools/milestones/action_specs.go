@@ -21,6 +21,11 @@ const (
 	actionMilestoneDelete        = "project.milestone_delete"
 	actionMilestoneIssues        = "project.milestone_issues"
 	actionMilestoneMergeRequests = "project.milestone_merge_requests"
+	actionMilestonePromote       = "project.milestone_promote"
+	actionMilestoneBurndown      = "project.milestone_burndown"
+
+	// A promoted milestone lives on in the group, read from the group catalog.
+	actionGroupMilestoneList = "group.group_milestone_list"
 
 	actionProjectGet       = "project.get"
 	actionIssueList        = "issue.list"
@@ -33,8 +38,9 @@ const (
 
 // ActionSpecs returns canonical specs for project milestone actions
 // exposed as MCP tools. The list, get, create, update, delete, issues,
-// and merge_requests routes are projected into the dynamic, meta,
-// individual, and audit surfaces by the action catalog (ADR-0004).
+// merge_requests, promote and burndown routes are projected into the
+// dynamic, meta, individual, and audit surfaces by the action catalog
+// (ADR-0004).
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		// gitlab_milestone_list — list project milestones with optional filters.
@@ -52,7 +58,34 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		milestoneReadSpec("milestone_issues", toolutil.RouteAction(client, GetIssues), "gitlab_milestone_issues"),
 		// gitlab_milestone_merge_requests — list MRs assigned to a milestone.
 		milestoneReadSpec("milestone_merge_requests", toolutil.RouteAction(client, GetMergeRequests), "gitlab_milestone_merge_requests"),
+		// gitlab_milestone_promote — promote a project milestone to its group (destructive).
+		milestonePromoteSpec("milestone_promote", toolutil.DestructiveAction(client, Promote), "gitlab_milestone_promote"),
+		// gitlab_milestone_burndown_events — list a milestone's burndown chart events (Premium).
+		milestoneBurndownSpec("milestone_burndown", toolutil.RouteAction(client, GetBurndownChartEvents), "gitlab_milestone_burndown_events"),
 	}
+}
+
+// milestonePromoteSpec builds the promotion's [toolutil.ActionSpec]. It is an
+// update that is destructive: GitLab deletes the promoted milestone and every
+// milestone of its title in the group's projects, moving their issues and
+// merge requests to the new group milestone, and no route demotes it back, so
+// the confirmation guard asks first. A second call finds nothing left to
+// promote, which is why it stays idempotent. Destructive is declared here as
+// well as carried by the route so the spec's agreement check reads both
+// sides of the same intent.
+func milestonePromoteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := milestoneOptionsForAction(name, individualTool)
+	options.Destructive = true
+	return toolutil.NewUpdateActionSpec(name, route, options)
+}
+
+// milestoneBurndownSpec builds the burndown events read. The route is
+// Premium and Ultimate (milestones.md, "Tier: Premium, Ultimate" on the
+// burndown section), so the whole action is tier-gated.
+func milestoneBurndownSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := milestoneOptionsForAction(name, individualTool)
+	options.Edition = "premium"
+	return toolutil.NewReadActionSpec(name, route, options)
 }
 
 // milestoneGetRoute wraps the [Get] route so a 404 response is
@@ -138,7 +171,7 @@ func milestoneOptionsForAction(actionName, individualTool string) toolutil.Actio
 	case "milestone_update":
 		options.Usage = "Update an existing milestone's title, description, dates, or state (close/activate) by milestone_iid."
 		options.Aliases = []string{"update milestone", "edit milestone", "close milestone", "reopen milestone"}
-		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneList, actionMilestoneDelete}
+		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneList, actionMilestoneDelete, actionMilestonePromote}
 		options.IndividualTool.Description = "Update an existing milestone's title, description, start/due dates, or state (state_event close/activate) by milestone IID. Returns: the updated milestone with state, dates, and web URL. See also: gitlab_milestone_get, gitlab_milestone_delete, gitlab_milestone_list."
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("state_event", map[string]any{"enum": []any{"close", "activate"}}),
@@ -151,13 +184,23 @@ func milestoneOptionsForAction(actionName, individualTool string) toolutil.Actio
 	case "milestone_issues":
 		options.Usage = "List the issues assigned to a milestone by milestone_iid, with ordering and pagination."
 		options.Aliases = []string{"list milestone issues", "issues in milestone", "show milestone issues"}
-		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneMergeRequests, actionIssueList}
+		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneMergeRequests, actionIssueList, actionMilestoneBurndown}
 		options.IndividualTool.Description = "List issues assigned to a single milestone with ordering and pagination. Returns: assigned issues with IID, project, title, state, labels, author, assignees, confidentiality, weight, due date, web URL, timestamps, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_merge_requests, gitlab_issue_list."
 	case "milestone_merge_requests":
 		options.Usage = "List the merge requests assigned to a milestone by milestone_iid, with ordering and pagination."
 		options.Aliases = []string{"list milestone merge requests", "MRs in milestone", "show milestone merge requests"}
 		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneIssues, actionMergeRequestList}
 		options.IndividualTool.Description = "List merge requests assigned to a single milestone with ordering and pagination. Returns: assigned merge requests with IID, project, title, state, draft flag, merge status, source/target branches, labels, author, assignees, reviewers, web URL, timestamps, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_issues, gitlab_mr_list."
+	case "milestone_promote":
+		options.Usage = "Promote a project milestone to a milestone of the project's group by milestone_iid. GitLab creates the group milestone with the same title, description and dates, moves to it the issues and merge requests of every milestone of that title in the group's own projects, and deletes those project milestones, this one included. It cannot be undone. The project must belong to a group, and the caller needs the Planner role or higher in that group."
+		options.Aliases = []string{"promote milestone", "promote milestone to group", "make group milestone", "convert project milestone to group milestone"}
+		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneList, actionGroupMilestoneList}
+		options.IndividualTool.Description = "Promote a project milestone to a group milestone by milestone IID. GitLab deletes the project milestone and every milestone of the same title in the group's projects, moving their issues and merge requests to the new group milestone. Returns: a confirmation naming the promoted title, since GitLab sends back no milestone. See also: gitlab_milestone_get, gitlab_milestone_list, gitlab_group_milestone_list."
+	case "milestone_burndown":
+		options.Usage = "List the burndown chart events of a project milestone by milestone_iid: each issue's creation, closing and reopening with its weight. Requires GitLab Premium or higher. GitLab sends every event in one answer, and none for a milestone without both a start date and a due date."
+		options.Aliases = []string{"milestone burndown", "project milestone burndown events", "milestone burndown chart"}
+		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneIssues, actionMilestoneMergeRequests}
+		options.IndividualTool.Description = "List the burndown chart events of a project milestone (Premium or higher). Returns: every dated event with the issue's weight and the action (created, closed, reopened). See also: gitlab_milestone_get, gitlab_milestone_issues, gitlab_milestone_merge_requests."
 	}
 
 	return options

@@ -108,6 +108,9 @@ var acceptedTierExceptions = map[string]tierException{
 	// Group milestone burndown events — group_milestones.md page is Free but the
 	// burndown-chart-events section carries a Premium override badge.
 	"group.group_milestone_burndown": {tierPremium, "group_milestones.md 'burndown chart events' section = Premium override"},
+	// Project milestone burndown events, the same split on milestones.md: the
+	// page is Free and the burndown chart events section is Premium, Ultimate.
+	"project.milestone_burndown": {tierPremium, "milestones.md 'burndown chart events' section = Premium override"},
 
 	// Epic resource label events — owned via resourceevents (resource_label_events.md
 	// = Free) but epic-scoped events are Premium (epics are Premium).

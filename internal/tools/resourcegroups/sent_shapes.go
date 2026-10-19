@@ -7,9 +7,9 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
-// upcomingJobExtra is what a job waiting on a resource group carries that
-// client-go does not decode, read from the captured response beside the SDK's
-// own decode (ADR-0021).
+// upcomingJobExtra is what a job a resource group names, one waiting on it or
+// the one holding its lock, carries that client-go does not decode, read from
+// the captured response beside the SDK's own decode (ADR-0021).
 //
 // lib/api/entities/ci/job_basic.rb exposes the job's pipeline with
 // Entities::Ci::PipelineBasic, which sends ten keys with no condition, and
@@ -47,4 +47,15 @@ func capturedUpcomingJobs(capture *gitlabclient.ResponseCapture, decoded int) ([
 		return nil, fmt.Errorf("the captured answer holds %d jobs and the SDK decoded %d", len(extras), decoded)
 	}
 	return extras, nil
+}
+
+// capturedCurrentJob reads the extras off the answer naming the job that holds
+// a resource group's lock, which is one job rather than a list. It is read
+// only once the SDK decoded a job, so the answer is that job's object.
+func capturedCurrentJob(capture *gitlabclient.ResponseCapture) (upcomingJobExtra, error) {
+	var extra upcomingJobExtra
+	if err := capture.Decode(&extra); err != nil {
+		return upcomingJobExtra{}, err
+	}
+	return extra, nil
 }
