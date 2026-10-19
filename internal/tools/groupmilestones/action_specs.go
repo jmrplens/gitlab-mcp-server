@@ -174,9 +174,9 @@ var groupMilestoneActionMeta = map[string]groupMilestoneActionMetaEntry{
 		description: "List merge requests assigned to a group milestone. Returns: assigned merge requests with IID, project, title, state, draft flag, merge status, source and target branches, labels, author, assignees, reviewers, web URL, timestamps, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_issues, gitlab_group_milestone_burndown_events.",
 	},
 	"gitlab_group_milestone_burndown_events": {
-		usage:       "List burndown chart events for a group milestone, with ordering and pagination. Requires GitLab Premium or higher.",
+		usage:       "List the burndown chart events of a group milestone by milestone_iid: each issue's creation, closing and reopening with its weight. Requires GitLab Premium or higher. GitLab sends every event in one answer, and none for a milestone without both a start date and a due date.",
 		aliases:     []string{"group milestone burndown", "burndown chart events", "group milestone burndown events"},
 		related:     []string{actionGet, actionIssues, actionMergeRequests},
-		description: "List burndown chart events for a group milestone. Returns: dated burndown events with weight, action, and pagination metadata. Requires GitLab Premium or higher. See also: gitlab_group_milestone_get, gitlab_group_milestone_issues, gitlab_group_milestone_merge_requests.",
+		description: "List the burndown chart events of a group milestone (Premium or higher). Returns: every dated event with the issue's weight and the action (created, closed, reopened). See also: gitlab_group_milestone_get, gitlab_group_milestone_issues, gitlab_group_milestone_merge_requests.",
 	},
 }

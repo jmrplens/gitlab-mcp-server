@@ -93,14 +93,14 @@ type GetMergeRequestsInput struct {
 	toolutil.KeysetPaginationInput
 }
 
-// GetBurndownChartEventsInput defines parameters for listing burndown chart events for a group milestone.
+// GetBurndownChartEventsInput defines parameters for listing the burndown
+// chart events of a group milestone. Nothing pages them: the route declares
+// no page, per_page, order_by or sort, and GitLab presents the whole burndown
+// in one answer (ee/lib/ee/api/milestone_responses.rb), so the paging fields
+// client-go's options struct carries would be sent and ignored.
 type GetBurndownChartEventsInput struct {
 	GroupID      toolutil.StringOrInt `json:"group_id"       jsonschema:"Group ID or URL-encoded path,required"`
 	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs,required"`
-	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Order results by field (e.g. created_at, updated_at)"`
-	Sort         string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
-	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ---------- Output types ----------.
@@ -206,11 +206,11 @@ type BurndownChartEventItem struct {
 	Action    string `json:"action"`
 }
 
-// BurndownChartEventsOutput holds a paginated list of burndown chart events.
+// BurndownChartEventsOutput holds every burndown chart event of a group
+// milestone.
 type BurndownChartEventsOutput struct {
 	toolutil.HintableOutput
-	Events     []BurndownChartEventItem  `json:"events"`
-	Pagination toolutil.PaginationOutput `json:"pagination"`
+	Events []BurndownChartEventItem `json:"events"`
 }
 
 // resolveGroupIID translates a group-scoped milestone IID to the global ID
@@ -618,15 +618,7 @@ func GetBurndownChartEvents(ctx context.Context, client *gitlabclient.Client, in
 	}
 
 	opts := &gl.GetGroupMilestoneBurndownChartEventsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
-	if input.OrderBy != "" {
-		opts.OrderBy = input.OrderBy
-	}
-	if input.Sort != "" {
-		opts.Sort = input.Sort
-	}
-
-	events, resp, err := client.GL().GroupMilestones.GetGroupMilestoneBurndownChartEvents(string(input.GroupID), globalID, opts, gl.WithContext(ctx))
+	events, _, err := client.GL().GroupMilestones.GetGroupMilestoneBurndownChartEvents(string(input.GroupID), globalID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return BurndownChartEventsOutput{}, toolutil.WrapErrWithStatusHint("groupMilestoneGetBurndownChartEvents", err, http.StatusNotFound,
 			"verify milestone_id with group.group_milestone_list; burndown charts require GitLab Premium or higher")
@@ -645,7 +637,7 @@ func GetBurndownChartEvents(ctx context.Context, client *gitlabclient.Client, in
 			items[i].Action = *e.Action
 		}
 	}
-	return BurndownChartEventsOutput{Events: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return BurndownChartEventsOutput{Events: items}, nil
 }
 
 // ---------- Converters ----------.

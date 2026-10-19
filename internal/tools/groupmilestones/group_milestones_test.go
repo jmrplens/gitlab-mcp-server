@@ -665,8 +665,7 @@ func TestFormatMergeRequestsMarkdown(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBurndownChartEventsMarkdown(t *testing.T) {
 	out := BurndownChartEventsOutput{
-		Events:     []BurndownChartEventItem{{CreatedAt: "2026-01-05T00:00:00Z", Weight: new(int64(3)), Action: testActionAdd}},
-		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 20, TotalItems: 1, TotalPages: 1},
+		Events: []BurndownChartEventItem{{CreatedAt: "2026-01-05T00:00:00Z", Weight: new(int64(3)), Action: testActionAdd}},
 	}
 	result := FormatBurndownChartEventsMarkdown(out)
 	if result == nil {
@@ -1324,32 +1323,25 @@ func TestGetBurndownChartEvents_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGetBurndownChartEvents_WithPagination verifies that GetBurndownChartEvents_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
-func TestGetBurndownChartEvents_WithPagination(t *testing.T) {
+// TestGetBurndownChartEvents_ReadsEveryEventWithNoPagingParameter verifies
+// the burndown is read with no query at all and published with no pagination
+// block. GET /groups/:id/milestones/:milestone_id/burndown_events declares no
+// page, per_page, order_by or sort, and GitLab presents the whole burndown
+// without paginate (ee/lib/ee/api/milestone_responses.rb), so a paging field
+// would be sent and ignored and a pagination block would describe a page
+// GitLab never cut.
+func TestGetBurndownChartEvents_ReadsEveryEventWithNoPagingParameter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones && r.URL.Query().Get("iids[]") != "" {
 			testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
 			return
 		}
 		if r.Method == http.MethodGet && r.URL.Path == pathMilestone1+"/burndown_events" {
-			q := r.URL.Query()
-			if q.Get("order_by") != "created_at" {
-				t.Errorf("expected order_by=created_at, got %q", q.Get("order_by"))
+			if r.URL.RawQuery != "" {
+				t.Errorf("burndown query = %q, want none", r.URL.RawQuery)
 			}
-			if q.Get("sort") != "desc" {
-				t.Errorf("expected sort=desc, got %q", q.Get("sort"))
-			}
-			if q.Get("pagination") != "keyset" {
-				t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
-			}
-			if q.Get("page_token") != "80" {
-				t.Errorf("expected page_token=80, got %q", q.Get("page_token"))
-			}
-			testutil.RespondJSONWithPagination(w, http.StatusOK,
-				`[{"created_at":"2026-01-05T00:00:00Z","weight":3,"action":"add"},{"created_at":"2026-01-06T00:00:00Z","weight":2,"action":"remove"}]`,
-				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
+			testutil.RespondJSON(w, http.StatusOK,
+				`[{"created_at":"2026-01-05T00:00:00Z","weight":3,"action":"add"},{"created_at":"2026-01-06T00:00:00Z","weight":2,"action":"remove"}]`)
 			return
 		}
 		http.NotFound(w, r)
@@ -1357,10 +1349,6 @@ func TestGetBurndownChartEvents_WithPagination(t *testing.T) {
 	out, err := GetBurndownChartEvents(context.Background(), client, GetBurndownChartEventsInput{
 		GroupID:      "10",
 		MilestoneIID: 1,
-		OrderBy:      "created_at",
-		Sort:         "desc",
-		Page:         1, PerPage: 20,
-		Pagination: "keyset", PageToken: "80",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1373,6 +1361,17 @@ func TestGetBurndownChartEvents_WithPagination(t *testing.T) {
 	}
 	if out.Events[1].Weight == nil || *out.Events[1].Weight != 2 {
 		t.Errorf("Weight = %v, want 2", out.Events[1].Weight)
+	}
+	published, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("json.Marshal(out) error: %v", err)
+	}
+	var keys map[string]json.RawMessage
+	if err = json.Unmarshal(published, &keys); err != nil {
+		t.Fatalf("json.Unmarshal(published) error: %v", err)
+	}
+	if _, ok := keys["pagination"]; ok {
+		t.Errorf("published burndown = %s, want no pagination key", published)
 	}
 }
 
@@ -1591,7 +1590,6 @@ func TestFormatBurndownChartEventsMarkdown_WithData(t *testing.T) {
 			{CreatedAt: "2026-01-05T00:00:00Z", Weight: new(int64(3)), Action: "add"},
 			{CreatedAt: "2026-01-06T00:00:00Z", Action: "remove"},
 		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
 
 	md := FormatBurndownChartEventsMarkdownString(out)
@@ -1600,9 +1598,8 @@ func TestFormatBurndownChartEventsMarkdown_WithData(t *testing.T) {
 		"| Created At | Weight | Action |\n" +
 		"| --- | --- | --- |\n" +
 		"| 5 Jan 2026 00:00 UTC | 3 | add |\n" +
-		"| 6 Jan 2026 00:00 UTC | - | remove |\n\n" +
-		"Page 1 of 1 | 2 items total | 20 per page\n\n" +
-		"---\n\U0001F4A1 **Next steps:**\n" +
+		"| 6 Jan 2026 00:00 UTC | - | remove |\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'group.group_milestone_issues' to see the issues whose weight these events moved\n"
 	if md != want {
 		t.Errorf("FormatBurndownChartEventsMarkdownString()\n got %q\nwant %q", md, want)
@@ -1612,9 +1609,7 @@ func TestFormatBurndownChartEventsMarkdown_WithData(t *testing.T) {
 // TestFormatBurndownChartEventsMarkdown_Empty pins the whole render of a
 // milestone with no burndown events: one sentence and nothing else.
 func TestFormatBurndownChartEventsMarkdown_Empty(t *testing.T) {
-	md := FormatBurndownChartEventsMarkdownString(BurndownChartEventsOutput{
-		Pagination: toolutil.PaginationOutput{TotalItems: 0},
-	})
+	md := FormatBurndownChartEventsMarkdownString(BurndownChartEventsOutput{})
 	if want := "No burndown chart events found.\n"; md != want {
 		t.Errorf("FormatBurndownChartEventsMarkdownString() = %q, want %q", md, want)
 	}

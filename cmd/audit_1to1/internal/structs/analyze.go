@@ -199,6 +199,9 @@ const (
 	// milestoneBurndownUnpaged is the reason the project milestone burndown
 	// offers none of the gl.ListOptions its options struct embeds.
 	milestoneBurndownUnpaged = "GET /projects/:id/milestones/:milestone_id/burndown_events declares no page, per_page, order_by or sort (gitlab-api-live.json, 19.5.0-ee), and ee/lib/ee/api/milestone_responses.rb presents the whole Burndown without paginate, so every gl.ListOptions field would be sent and ignored"
+	// groupMilestoneBurndownUnpaged is the reason the group milestone burndown
+	// offers none of the gl.ListOptions its options struct embeds.
+	groupMilestoneBurndownUnpaged = "GET /groups/:id/milestones/:milestone_id/burndown_events declares no page, per_page, order_by or sort (gitlab-api-live.json, 19.5.0-ee), and ee/lib/ee/api/group_milestones.rb answers it through milestone_burndown_events_for, which presents the whole Burndown without paginate (ee/lib/ee/api/milestone_responses.rb), so every gl.ListOptions field would be sent and ignored"
 	// achievementAvatarUpload is the reason the avatar upload is absent under
 	// its SDK key.
 	achievementAvatarUpload = "offered as AvatarInput (avatar_filename, avatar_content_type, and avatar_file_path or avatar_content_base64), which the handler assembles into the *gl.GraphQLUpload opts.Avatar takes"
@@ -1053,6 +1056,13 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	"milestones.GetBurndownChartEventsInput.page_token": milestoneBurndownUnpaged,
 	"milestones.GetBurndownChartEventsInput.order_by":   milestoneBurndownUnpaged,
 	"milestones.GetBurndownChartEventsInput.sort":       milestoneBurndownUnpaged,
+	// The group milestone burndown is answered by the same helper.
+	"groupmilestones.GetBurndownChartEventsInput.pagination": groupMilestoneBurndownUnpaged,
+	"groupmilestones.GetBurndownChartEventsInput.per_page":   groupMilestoneBurndownUnpaged,
+	"groupmilestones.GetBurndownChartEventsInput.page":       groupMilestoneBurndownUnpaged,
+	"groupmilestones.GetBurndownChartEventsInput.page_token": groupMilestoneBurndownUnpaged,
+	"groupmilestones.GetBurndownChartEventsInput.order_by":   groupMilestoneBurndownUnpaged,
+	"groupmilestones.GetBurndownChartEventsInput.sort":       groupMilestoneBurndownUnpaged,
 
 	// SDK options fields the route declares and never reads. The deployment
 	// merge request list takes merge_requests_base_params and presents

@@ -184,7 +184,7 @@ func FormatBurndownChartEventsMarkdownString(out BurndownChartEventsOutput) stri
 		return toolutil.EmptyMessage("burndown chart events")
 	}
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "Burndown Chart Events", len(out.Events), out.Pagination)
+	toolutil.WriteListHeading(&b, "Burndown Chart Events", len(out.Events), toolutil.PaginationOutput{})
 	b.WriteString(toolutil.MarkdownTableHeader("Created At", "Weight", "Action"))
 	for _, e := range out.Events {
 		b.WriteString(toolutil.MarkdownTableRow(
@@ -193,7 +193,7 @@ func FormatBurndownChartEventsMarkdownString(out BurndownChartEventsOutput) stri
 			toolutil.EscapeMdTableCell(e.Action),
 		))
 	}
-	toolutil.WriteListFooter(&b, out.Pagination, false,
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
 		toolutil.HintAction(actionIssues, "see the issues whose weight these events moved"),
 	)
 	return b.String()
