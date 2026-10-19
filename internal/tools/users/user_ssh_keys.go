@@ -34,21 +34,15 @@ func ListSSHKeysForUser(ctx context.Context, client *gitlabclient.Client, input 
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	keys, resp, err := client.GL().Users.ListSSHKeysForUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return SSHKeyListOutput{}, toolutil.WrapErrWithStatusHint("list_ssh_keys_for_user", err, http.StatusNotFound,
 			"verify user_id with user.get; the user may have no SSH keys")
 	}
 
-	extras, err := toolutil.CapturedKeys(captured, len(keys))
-	if err != nil {
-		return SSHKeyListOutput{}, toolutil.WrapErr("list_ssh_keys_for_user", err)
-	}
-
 	out := make([]SSHKeyOutput, 0, len(keys))
-	for i, k := range keys {
-		out = append(out, toSSHKeyOutput(k, extras[i]))
+	for _, k := range keys {
+		out = append(out, toSSHKeyOutput(k))
 	}
 	return SSHKeyListOutput{
 		Keys:       out,
@@ -70,17 +64,12 @@ func GetSSHKey(ctx context.Context, client *gitlabclient.Client, input GetSSHKey
 		return SSHKeyOutput{}, err
 	}
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	k, _, err := client.GL().Users.GetSSHKey(input.KeyID, gl.WithContext(ctx))
 	if err != nil {
 		return SSHKeyOutput{}, toolutil.WrapErrWithStatusHint("get_ssh_key", err, http.StatusNotFound,
 			"verify key_id with user.ssh_keys; the key may have been deleted")
 	}
-	extra, err := toolutil.CapturedKey(captured)
-	if err != nil {
-		return SSHKeyOutput{}, toolutil.WrapErr("get_ssh_key", err)
-	}
-	return toSSHKeyOutput(k, extra), nil
+	return toSSHKeyOutput(k), nil
 }
 
 // GetSSHKeyForUserInput holds parameters for retrieving a specific SSH key for a user.
@@ -101,17 +90,12 @@ func GetSSHKeyForUser(ctx context.Context, client *gitlabclient.Client, input Ge
 		return SSHKeyOutput{}, err
 	}
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	k, _, err := client.GL().Users.GetSSHKeyForUser(input.UserID, input.KeyID, gl.WithContext(ctx))
 	if err != nil {
 		return SSHKeyOutput{}, toolutil.WrapErrWithStatusHint("get_ssh_key_for_user", err, http.StatusNotFound,
 			"verify user_id and key_id; admin token may be required to view other users' keys")
 	}
-	extra, err := toolutil.CapturedKey(captured)
-	if err != nil {
-		return SSHKeyOutput{}, toolutil.WrapErr("get_ssh_key_for_user", err)
-	}
-	return toSSHKeyOutput(k, extra), nil
+	return toSSHKeyOutput(k), nil
 }
 
 // AddSSHKeyInput holds parameters for adding an SSH key to the current user.
@@ -139,17 +123,12 @@ func AddSSHKey(ctx context.Context, client *gitlabclient.Client, input AddSSHKey
 		return SSHKeyOutput{}, fmt.Errorf("add_ssh_key: %w", err)
 	}
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	k, _, err := client.GL().Users.AddSSHKey(opts, gl.WithContext(ctx), sendExpiry)
 	if err != nil {
 		return SSHKeyOutput{}, toolutil.WrapErrWithStatusHint("add_ssh_key", err, http.StatusBadRequest,
 			"key must be a valid SSH public key (ssh-rsa/ed25519/ecdsa) and not already used by another user; usage_type must be one of {auth, signing, auth_and_signing}; expires_at must be in the future")
 	}
-	extra, err := toolutil.CapturedKey(captured)
-	if err != nil {
-		return SSHKeyOutput{}, toolutil.WrapErr("add_ssh_key", err)
-	}
-	return toSSHKeyOutput(k, extra), nil
+	return toSSHKeyOutput(k), nil
 }
 
 // AddSSHKeyForUserInput holds parameters for adding an SSH key to a specific user.
@@ -186,17 +165,12 @@ func AddSSHKeyForUser(ctx context.Context, client *gitlabclient.Client, input Ad
 		return SSHKeyOutput{}, fmt.Errorf("add_ssh_key_for_user: %w", err)
 	}
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	k, _, err := client.GL().Users.AddSSHKeyForUser(input.UserID, opts, gl.WithContext(ctx), sendExpiry)
 	if err != nil {
 		return SSHKeyOutput{}, toolutil.WrapErrWithStatusHint("add_ssh_key_for_user", err, http.StatusForbidden,
 			"adding SSH keys for other users requires admin token; key must be valid SSH public key and unique; verify user_id with user.get")
 	}
-	extra, err := toolutil.CapturedKey(captured)
-	if err != nil {
-		return SSHKeyOutput{}, toolutil.WrapErr("add_ssh_key_for_user", err)
-	}
-	return toSSHKeyOutput(k, extra), nil
+	return toSSHKeyOutput(k), nil
 }
 
 // DeleteSSHKeyInput holds parameters for deleting an SSH key from the current user.

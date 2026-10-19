@@ -48,10 +48,10 @@ func TestGetKeyWithUser_Success(t *testing.T) {
 	}
 }
 
-// TestGetKeyWithUser_ReadsWhatTheSDKDoesNotModel verifies a key carries,
-// beside what client-go decoded, the expiry, last use and usage type
-// lib/api/entities/ssh_key.rb sends on every key and gl.Key does not.
-func TestGetKeyWithUser_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
+// TestGetKeyWithUser_PublishesExpiryLastUseAndUsageType verifies a key
+// carries the expiry, last use and usage type lib/api/entities/ssh_key.rb
+// sends on every key, which client-go's Key decodes as of v3.19.0.
+func TestGetKeyWithUser_PublishesExpiryLastUseAndUsageType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id":42,"title":"My Key","key":"ssh-rsa AAAA...","created_at":"2026-01-01T00:00:00Z",`+
 			`"expires_at":"2026-05-05T00:00:00.000Z","last_used_at":"2026-04-07T00:00:00.000Z","usage_type":"auth_and_signing",`+
@@ -63,7 +63,7 @@ func TestGetKeyWithUser_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if out.ExpiresAt != "2026-05-05T00:00:00Z" || out.LastUsedAt != "2026-04-07T00:00:00Z" || out.UsageType != "auth_and_signing" {
-		t.Errorf("GetKeyWithUser() = %+v, want the captured fields", out)
+		t.Errorf("GetKeyWithUser() = %+v, want the expiry, last use and usage type GitLab sent", out)
 	}
 }
 
@@ -371,21 +371,23 @@ func TestGetKeyByFingerprint_NotFound_HintsAtTheFingerprintFormat(t *testing.T) 
 // ---------------------------------------------------------------------------.
 
 // TestToOutput_WithCreatedAt pins every field the converter writes at once,
-// the SDK's and the captured ones together, from a key and an extra that share
-// no value. It is the direct guard on the crossings the handler tests reach
-// only through a round trip: both sources feed one struct literal, so the
-// expiry and the last use are interchangeable there as surely as the title and
-// the public key are, and a converter that assigns a neighbor has no branch
-// for either gate to flip.
+// from a key whose fields share no value. It is the direct guard on the
+// crossings the handler tests reach only through a round trip: every field
+// feeds one struct literal, so the expiry and the last use are
+// interchangeable there as surely as the title and the public key are, and a
+// converter that assigns a neighbor has no branch for either gate to flip.
 func TestToOutput_WithCreatedAt(t *testing.T) {
 	now := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
 	expires := time.Date(2027, 8, 9, 10, 11, 0, 0, time.UTC)
 	lastUsed := time.Date(2026, 4, 5, 6, 7, 0, 0, time.UTC)
 	key := &gl.Key{
-		ID:        1,
-		Title:     "Test",
-		Key:       "ssh-rsa AAAA...",
-		CreatedAt: &now,
+		ID:         1,
+		Title:      "Test",
+		Key:        "ssh-rsa AAAA...",
+		CreatedAt:  &now,
+		ExpiresAt:  &expires,
+		LastUsedAt: &lastUsed,
+		UsageType:  "signing",
 		User: gl.User{
 			ID:       10,
 			Username: "tester",
@@ -393,7 +395,7 @@ func TestToOutput_WithCreatedAt(t *testing.T) {
 		},
 	}
 
-	out := toOutput(key, toolutil.KeyExtra{ExpiresAt: &expires, LastUsedAt: &lastUsed, UsageType: "signing"})
+	out := toOutput(key)
 
 	want := Output{
 		ID:         1,
@@ -423,7 +425,7 @@ func TestToOutput_NilCreatedAt(t *testing.T) {
 		},
 	}
 
-	out := toOutput(key, toolutil.KeyExtra{})
+	out := toOutput(key)
 
 	if out.CreatedAt != "" {
 		t.Errorf("expected empty CreatedAt, got %q", out.CreatedAt)

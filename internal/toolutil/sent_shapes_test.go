@@ -24,15 +24,6 @@ func TestCapturedReaders_ReadWhatTheSDKDoesNotModel(t *testing.T) {
 		want func(any) bool
 	}{
 		{
-			name: "key",
-			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedKey(c) },
-			body: `{"id":1,"expires_at":"2026-05-05T00:00:00.000Z","last_used_at":"2026-04-07T00:00:00.000Z","usage_type":"auth"}`,
-			want: func(v any) bool {
-				k, _ := v.(KeyExtra)
-				return k.ExpiresAt != nil && k.ExpiresAt.Year() == 2026 && k.LastUsedAt != nil && k.LastUsedAt.Month() == 4 && k.UsageType == "auth"
-			},
-		},
-		{
 			name: "runner",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedRunner(c) },
 			body: `{"id":1,"created_at":"2025-05-03T00:00:00.000Z","created_by":{"id":2,"username":"owner","locked":true},"job_execution_status":"idle"}`,
@@ -1106,10 +1097,6 @@ func TestCapturedSplitListReaders_ReadAndHoldTheCount(t *testing.T) {
 		body string
 		read func(*gitlabclient.ResponseCapture, int) (bool, error)
 	}{
-		{"keys", `[{"usage_type":"auth"}]`, func(c *gitlabclient.ResponseCapture, n int) (bool, error) {
-			x, e := CapturedKeys(c, n)
-			return len(x) == 1 && x[0].UsageType == "auth", e
-		}},
 		{"groups", `[{"show_diff_preview_in_email":true}]`, func(c *gitlabclient.ResponseCapture, n int) (bool, error) {
 			x, e := CapturedGroups(c, n)
 			return len(x) == 1 && x[0].ShowDiffPreviewInEmail, e

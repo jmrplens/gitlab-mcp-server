@@ -275,7 +275,7 @@ readable without opening the tracker:
 | 28 | client-go | [The epics wrapper is missing two filters and twelve response fields](#the-epics-wrapper-is-missing-two-filters-and-twelve-response-fields) | Yes | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | Was yes | Yes |
 | 29 | client-go | [The note and discussion structs miss what GitLab sends and declare what it does not](#the-note-and-discussion-structs-miss-what-gitlab-sends-and-declare-what-it-does-not) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 30 | client-go | [The member structs, options and services miss what GitLab sends, accepts and serves](#the-member-structs-options-and-services-miss-what-gitlab-sends-accepts-and-serves) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Partial |
-| 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open; and for `Key` and `SSHKey` another contributor's [gitlab-org/api/client-go!3106](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3106), merged | Partly, by [gitlab-org/api/client-go!3106](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3106), not ours, **v3.19.0**: `Key` and `SSHKey` | No | Yes; the `keys` capture can go at a pin of v3.19.0 or later |
+| 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open; and for `Key` and `SSHKey` another contributor's [gitlab-org/api/client-go!3106](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3106), merged | Partly, by [gitlab-org/api/client-go!3106](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3106), not ours, **v3.19.0**: `Key` and `SSHKey` | No | Yes, for the other four; retired for `Key` and `SSHKey` at the v3.29.0 pin |
 | 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None |
 | 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, the gaps held back in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) and five of those recorded after it in [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), both open, the second with two documentation merge requests its review asked for, both merged | **14 of 14; all released, v3.1.0 to v3.15.0** | No | Retired for all 14, the last, `systemhooks`, at the v3.15.0 pin; the to-do capture can go at a pin of v3.20.0 or later, which carries another contributor's merge request with both fields |
@@ -2159,14 +2159,14 @@ types.
   `ExpiresAt`, `LastUsedAt` and `UsageType` to `Key` and `LastUsedAt` to
   `SSHKey`. The other structs below, no.
 - **Blocking**: no.
-- **Workaround**: yes. Each field is read from the captured response beside
-  the SDK's decode ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)),
-  through the readers in `internal/toolutil/sent_shapes.go`, in `keys`,
-  `runners`, `cilint`, `labeldata` with `labels` and `grouplabels`,
-  `pipelines` and `pipelinetriggers`. They retire when the structs carry the
-  fields: the capture in `keys` can go at a client-go pin of v3.19.0 or later
-  (the pin here is still v3.15.0), and the others wait on the joint merge
-  request.
+- **Workaround**: yes, for four of the six. Each field is read from the
+  captured response beside the SDK's decode ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)),
+  through the readers in `internal/toolutil/sent_shapes.go`, in `runners`,
+  `cilint`, `labeldata` with `labels` and `grouplabels`, `pipelines` and
+  `pipelinetriggers`, and they wait on the joint merge request. The `Key` and
+  `SSHKey` half retired when the pin moved to v3.29.0: `keys` and the six
+  SSH key handlers of `users` read the three fields off the SDK's structs,
+  and `KeyExtra`, `CapturedKey` and `CapturedKeys` are gone.
 
 **What**: one gap per struct, each a field the rendering entity exposes with
 no condition at the pinned commit `1c8ac034` of gitlab-org/gitlab, except where

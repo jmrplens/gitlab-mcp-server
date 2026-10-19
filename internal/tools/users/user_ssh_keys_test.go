@@ -522,6 +522,69 @@ func TestAddSSHKey_UnparsableExpiresAt_IsRefused(t *testing.T) {
 	}
 }
 
+// TestSSHKeyHandlers_PublishTheLastUse verifies that every key handler,
+// ListSSHKeys included, publishes the last use lib/api/entities/ssh_key.rb
+// sends on every key, which client-go's SSHKey decodes as of v3.19.0. One
+// case per handler, because each converts on a line of its own.
+func TestSSHKeyHandlers_PublishTheLastUse(t *testing.T) {
+	const (
+		object = `{"id":1,"title":"my-key","last_used_at":"2026-04-07T08:09:10.000Z"}`
+		want   = "2026-04-07T08:09:10Z"
+	)
+
+	tests := []struct {
+		name     string
+		response string
+		call     func(client *gitlabclient.Client) (SSHKeyOutput, error)
+	}{
+		{"list", `[` + object + `]`, func(c *gitlabclient.Client) (SSHKeyOutput, error) {
+			out, err := ListSSHKeys(context.Background(), c, ListSSHKeysInput{})
+			return firstKey(out), err
+		}},
+		{"list for user", `[` + object + `]`, func(c *gitlabclient.Client) (SSHKeyOutput, error) {
+			out, err := ListSSHKeysForUser(context.Background(), c, ListSSHKeysForUserInput{UserID: 42})
+			return firstKey(out), err
+		}},
+		{"get", object, func(c *gitlabclient.Client) (SSHKeyOutput, error) {
+			return GetSSHKey(context.Background(), c, GetSSHKeyInput{KeyID: 1})
+		}},
+		{"get for user", object, func(c *gitlabclient.Client) (SSHKeyOutput, error) {
+			return GetSSHKeyForUser(context.Background(), c, GetSSHKeyForUserInput{UserID: 42, KeyID: 1})
+		}},
+		{"add", object, func(c *gitlabclient.Client) (SSHKeyOutput, error) {
+			return AddSSHKey(context.Background(), c, AddSSHKeyInput{Title: "my-key", Key: "ssh-rsa AAAA"})
+		}},
+		{"add for user", object, func(c *gitlabclient.Client) (SSHKeyOutput, error) {
+			return AddSSHKeyForUser(context.Background(), c, AddSSHKeyForUserInput{UserID: 42, Title: "my-key", Key: "ssh-rsa AAAA"})
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.response)
+			}))
+
+			out, err := tt.call(client)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if out.LastUsedAt != want {
+				t.Errorf("last_used_at = %q, want %q", out.LastUsedAt, want)
+			}
+		})
+	}
+}
+
+// firstKey returns the first key of a list, or the zero key when the list is
+// empty, so a list handler fits the same table as the single-key ones.
+func firstKey(out SSHKeyListOutput) SSHKeyOutput {
+	if len(out.Keys) == 0 {
+		return SSHKeyOutput{}
+	}
+	return out.Keys[0]
+}
+
 // TestSSHKeyHandlers_AnUnreadableKey_IsRefused verifies that every key
 // handler refuses a key whose usage_type is not a string rather than
 // returning a half-filled one. client-go models every field of the key the

@@ -32,10 +32,9 @@ type UserOutput struct {
 	Name     string `json:"name"`
 }
 
-// Output represents an SSH key with its associated user: what [gl.Key]
-// decodes, plus the expiry, last use and usage type lib/api/entities/ssh_key.rb
-// sends on every key and the SDK does not carry, read from the captured
-// response (ADR-0021).
+// Output represents an SSH key with its associated user, as [gl.Key] decodes
+// it, the expiry, last use and usage type lib/api/entities/ssh_key.rb sends on
+// every key included.
 type Output struct {
 	toolutil.HintableOutput
 	ID         int64      `json:"id"`
@@ -57,17 +56,12 @@ func GetKeyWithUser(ctx context.Context, client *gitlabclient.Client, input GetB
 	if input.KeyID == 0 {
 		return Output{}, toolutil.WrapErrWithMessage("key_get", toolutil.ErrFieldRequired("key_id"))
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	key, _, err := client.GL().Keys.GetKeyWithUser(input.KeyID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("key_get", err, http.StatusNotFound,
 			"verify key_id with user.ssh_keys_for_user. This admin endpoint requires administrator access on self-managed instances")
 	}
-	extra, err := toolutil.CapturedKey(captured)
-	if err != nil {
-		return Output{}, toolutil.WrapErr("key_get", err)
-	}
-	return toOutput(key, extra), nil
+	return toOutput(key), nil
 }
 
 // GetKeyByFingerprint retrieves an SSH key by its fingerprint via the
@@ -78,32 +72,26 @@ func GetKeyByFingerprint(ctx context.Context, client *gitlabclient.Client, input
 		return Output{}, toolutil.WrapErrWithMessage("key_get_by_fingerprint", toolutil.ErrFieldRequired("fingerprint"))
 	}
 	opts := &gl.GetKeyByFingerprintOptions{Fingerprint: input.Fingerprint}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	key, _, err := client.GL().Keys.GetKeyByFingerprint(opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("key_get_by_fingerprint", err, http.StatusNotFound,
 			"fingerprint format must be SHA256:base64 (43 chars, no padding) or MD5:aa:bb:cc:... (32 hex pairs); requires administrator access")
 	}
-	extra, err := toolutil.CapturedKey(captured)
-	if err != nil {
-		return Output{}, toolutil.WrapErr("key_get_by_fingerprint", err)
-	}
-	return toOutput(key, extra), nil
+	return toOutput(key), nil
 }
 
 // Converters.
 
 // toOutput converts a [gl.Key] (with embedded user) into the package's
-// [Output], formatting the timestamps as RFC 3339, and takes the fields the
-// capture read beside the SDK.
-func toOutput(k *gl.Key, extra toolutil.KeyExtra) Output {
+// [Output], formatting the timestamps as RFC 3339.
+func toOutput(k *gl.Key) Output {
 	out := Output{
 		ID:         k.ID,
 		Title:      k.Title,
 		Key:        k.Key,
-		ExpiresAt:  toolutil.FormatTimePtr(extra.ExpiresAt),
-		LastUsedAt: toolutil.FormatTimePtr(extra.LastUsedAt),
-		UsageType:  extra.UsageType,
+		ExpiresAt:  toolutil.FormatTimePtr(k.ExpiresAt),
+		LastUsedAt: toolutil.FormatTimePtr(k.LastUsedAt),
+		UsageType:  k.UsageType,
 		User: UserOutput{
 			ID:       k.User.ID,
 			Username: k.User.Username,
