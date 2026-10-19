@@ -107,9 +107,9 @@ func decorateGroupMilestoneMeta(options *toolutil.ActionSpecOptions, individualT
 	if meta.description != "" {
 		options.IndividualTool.Description = meta.description
 	}
-	if len(meta.inputSchemaOverrides) > 0 {
-		options.InputSchemaOverrides = append(options.InputSchemaOverrides, meta.inputSchemaOverrides...)
-	}
+	// Appending nothing leaves the overrides as they were, so this needs no
+	// guard.
+	options.InputSchemaOverrides = append(options.InputSchemaOverrides, meta.inputSchemaOverrides...)
 }
 
 // groupMilestoneActionMetaEntry is the discovery metadata for one group
