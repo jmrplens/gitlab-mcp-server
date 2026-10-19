@@ -311,6 +311,24 @@ func classicCases() []classicCase {
 			wants: []string{"the table says POST /runners needs api and the live record's skip reason runner_token_auth says GitLab authenticates it by another credential; run `make gen-action-grants`"},
 		},
 		{
+			// GET /runners/router/discovery is the first GET GitLab
+			// authenticates by a runner's token: the skip reason decides
+			// before the method does.
+			name: "a_get_the_runner_token_authenticates",
+			bend: func(table *finegrained.Table, _ *actionrequests.Record, live *apilive.Document) {
+				live.Routes = append(live.Routes, route("GET", "/runners/router/discovery", &apilive.RouteAuthorization{Skip: "runner_token_auth"}))
+				table.Operations = append(table.Operations, finegrained.Operation{Name: "GET /runners/router/discovery", Classic: finegrained.ClassicOtherCredential, Skip: true})
+			},
+		},
+		{
+			name: "a_get_the_runner_token_authenticates_said_to_need_read_api",
+			bend: func(table *finegrained.Table, _ *actionrequests.Record, live *apilive.Document) {
+				live.Routes = append(live.Routes, route("GET", "/runners/router/discovery", &apilive.RouteAuthorization{Skip: "runner_token_auth"}))
+				table.Operations = append(table.Operations, finegrained.Operation{Name: "GET /runners/router/discovery", Classic: finegrained.ClassicReadAPI, Skip: true})
+			},
+			wants: []string{"the table says GET /runners/router/discovery needs read_api and the live record's skip reason runner_token_auth says GitLab authenticates it by another credential; run `make gen-action-grants`"},
+		},
+		{
 			name: "another_credential_said_of_a_route_with_no_such_skip",
 			bend: func(table *finegrained.Table, record *actionrequests.Record, _ *apilive.Document) {
 				tableOp(table, "POST /projects/:id/things").Classic = finegrained.ClassicOtherCredential

@@ -74,8 +74,9 @@ func inconsistencies(table *finegrained.Table, record actionrequests.Record, liv
 var otherCredentialSkips = map[string]bool{"runner_token_auth": true, "trigger_token_auth": true}
 
 // classicOperations reads the classic half of the join back from the table:
-// a REST GET or HEAD needs read_api, a route GitLab authenticates by another
-// credential needs no scope of the token and no other route is said to, a
+// a route GitLab authenticates by another credential needs no scope of the
+// token whatever its method and no other route is said to, a REST GET or HEAD
+// otherwise needs read_api, a
 // mutation needs api, and a query read_api unless the request record names
 // it as one selecting a field GitLab answers only to api. A route that is not
 // a GET may need read_api, which is the derivation's declaration and nothing
@@ -120,15 +121,15 @@ func classicWant(op *finegrained.Operation, route *apilive.Route, apiOnly bool) 
 	if route == nil {
 		return ""
 	}
-	if route.Method == http.MethodGet || route.Method == http.MethodHead {
-		return mustNeed(op.Classic, finegrained.ClassicReadAPI, "GitLab accepts read_api for a "+route.Method)
-	}
 	skip := ""
 	if route.Authorization != nil {
 		skip = route.Authorization.Skip
 	}
 	if otherCredentialSkips[skip] {
 		return mustNeed(op.Classic, finegrained.ClassicOtherCredential, "the live record's skip reason "+skip+" says GitLab authenticates it by another credential")
+	}
+	if route.Method == http.MethodGet || route.Method == http.MethodHead {
+		return mustNeed(op.Classic, finegrained.ClassicReadAPI, "GitLab accepts read_api for a "+route.Method)
 	}
 	if op.Classic != finegrained.ClassicReadAPI && op.Classic != finegrained.ClassicAPI {
 		return fmt.Sprintf("a %s with the skip reason %q needs read_api or api", route.Method, skip)
