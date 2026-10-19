@@ -28,13 +28,13 @@ Runner controllers, the experimental control plane administrators use to manage 
 
 ## Availability
 
-How many of these actions an instance serves at each tier, out of a total of 34:
+How many of these actions an instance serves at each tier, out of a total of 36:
 
-- **Free**: 19
-- **Premium**: 19
-- **Ultimate**: 34
+- **Free**: 21
+- **Premium**: 21
+- **Ultimate**: 36
 
-Read-only actions: 13 of 34, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 15 of the 34.
+Read-only actions: 14 of 36, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 17 of the 36.
 
 ## Actions
 
@@ -74,6 +74,8 @@ The description of each action, and of each of its parameters, is the text the s
 | [`runner.reset_instance_reg_token`](#runnerreset_instance_reg_token)                 | Free     | `gitlab_runner_reset_instance_reg_token`         |
 | [`runner.reset_project_reg_token`](#runnerreset_project_reg_token)                   | Free     | `gitlab_runner_reset_project_reg_token`          |
 | [`runner.reset_token`](#runnerreset_token)                                           | Free     | `gitlab_runner_reset_token`                      |
+| [`runner.reset_token_by_token`](#runnerreset_token_by_token)                         | Free     | `gitlab_runner_reset_token_by_token`             |
+| [`runner.router_discovery`](#runnerrouter_discovery)                                 | Free     | `gitlab_runner_router_discovery`                 |
 | [`runner.update`](#runnerupdate)                                                     | Free     | `gitlab_runner_update`                           |
 | [`runner.verify`](#runnerverify)                                                     | Free     | `gitlab_runner_verify`                           |
 
@@ -633,6 +635,36 @@ No parameters.
 | Parameter   | Type      | Mandatory | Description |
 | ----------- | --------- | --------- | ----------- |
 | `runner_id` | `integer` | yes       | Runner ID   |
+
+### `runner.reset_token_by_token`
+
+> Reset a runner's authentication token with its current authentication token. Returns: the new token and its expiry. See also: [`runner.verify`](#runnerverify), [`runner.reset_token`](#runnerreset_token).
+
+- **Meta-tool**: `gitlab_runner`, action `reset_token_by_token`
+- **Individual tool**: `gitlab_runner_reset_token_by_token`
+- **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`); GitLab authenticates the token this action sends as a parameter and does not judge this one's scope
+- **Fine-grained token**: a request GitLab does not judge by the grant ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Behavior**: writes, idempotent
+
+| Parameter | Type     | Mandatory | Description                                                      |
+| --------- | -------- | --------- | ---------------------------------------------------------------- |
+| `token`   | `string` | yes       | Current runner authentication token, which the reset invalidates |
+
+### `runner.router_discovery`
+
+> Discover the Job Router information for a runner by its authentication token (GitLab 18.7 or later, behind feature flags). Returns: the Job Router server URL. See also: [`runner.verify`](#runnerverify), [`runner.get`](#runnerget).
+
+- **Meta-tool**: `gitlab_runner`, action `router_discovery`
+- **Individual tool**: `gitlab_runner_router_discovery`
+- **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`); GitLab authenticates the token this action sends as a parameter and does not judge this one's scope
+- **Fine-grained token**: a request GitLab does not judge by the grant ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
+- **Behavior**: read-only, idempotent
+
+| Parameter | Type     | Mandatory | Description                                                                                     |
+| --------- | -------- | --------- | ----------------------------------------------------------------------------------------------- |
+| `token`   | `string` | yes       | Runner authentication token, sent as the Runner-Token header GitLab authenticates the runner by |
 
 ### `runner.update`
 

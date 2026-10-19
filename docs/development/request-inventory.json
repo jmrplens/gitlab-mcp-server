@@ -8196,7 +8196,7 @@
         "end_date",
         "iids[]",
         "include_ancestors",
-        "include_descendents",
+        "include_descendants",
         "include_parent_milestones",
         "order_by",
         "page",
@@ -8273,14 +8273,6 @@
       "kind": "rest",
       "method": "GET",
       "path": "/groups/:group_id/milestones/:milestone_id/burndown_events",
-      "query": [
-        "order_by",
-        "page",
-        "page_token",
-        "pagination",
-        "per_page",
-        "sort"
-      ],
       "identifiers": {
         ":group_id": 1,
         ":milestone_id": 1
@@ -11244,7 +11236,10 @@
         "issue_type",
         "labels",
         "merge_request_to_resolve_discussions_of",
+        "milestone",
         "milestone_id",
+        "severity",
+        "start_date",
         "title",
         "weight"
       ],
@@ -11288,7 +11283,10 @@
         "epic_id",
         "issue_type",
         "labels",
+        "milestone",
         "remove_labels",
+        "severity",
+        "start_date",
         "state_event",
         "title",
         "updated_at",
@@ -11777,16 +11775,12 @@
       "path": "/projects/:project_id/pipelines/:pipeline_id/bridges",
       "query": [
         "include_retried",
-        "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
-        "scope[]",
-        "sort"
+        "scope[]"
       ],
       "identifiers": {
-        ":pipeline_id": 2,
+        ":pipeline_id": 1,
         ":project_id": 1
       }
     },
@@ -11809,6 +11803,28 @@
         ":pipeline_id": 1,
         ":project_id": 1
       }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/pipelines/:pipeline_id/trigger_jobs",
+      "query": [
+        "include_retried",
+        "page",
+        "per_page",
+        "scope[]"
+      ],
+      "identifiers": {
+        ":pipeline_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/version"
     },
     {
       "package": "internal/tools/jobtokenscope",
@@ -12519,6 +12535,8 @@
         "assignee_ids",
         "description",
         "labels",
+        "merge_after",
+        "milestone",
         "milestone_id",
         "remove_source_branch",
         "reviewer_ids",
@@ -12570,6 +12588,8 @@
         "description",
         "discussion_locked",
         "labels",
+        "merge_after",
+        "milestone",
         "milestone_id",
         "remove_labels",
         "remove_source_branch",
@@ -12631,7 +12651,9 @@
       "method": "POST",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/blocks",
       "body": [
-        "blocking_merge_request_id"
+        "blocking_merge_request_id",
+        "blocking_merge_request_iid",
+        "blocking_project_id"
       ],
       "identifiers": {
         ":merge_request_id": 1,
@@ -13050,6 +13072,16 @@
       "package": "internal/tools/milestones",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id/milestones/:milestone_id/burndown_events",
+      "identifiers": {
+        ":milestone_id": 2,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/milestones",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/milestones/:milestone_id/issues",
       "query": [
         "order_by",
@@ -13079,6 +13111,16 @@
       ],
       "identifiers": {
         ":milestone_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/milestones",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/milestones/:milestone_id/promote",
+      "identifiers": {
+        ":milestone_id": 2,
         ":project_id": 1
       }
     },
@@ -13978,6 +14020,7 @@
         "order_by",
         "package_name",
         "package_type",
+        "package_version",
         "sort",
         "status"
       ],
@@ -15188,7 +15231,6 @@
       "body": [
         "build_timeout",
         "builds_access_level",
-        "ci_forward_deployment_enabled",
         "container_registry_access_level",
         "import_url",
         "initialize_with_readme",
@@ -15204,7 +15246,6 @@
         "path",
         "public_jobs",
         "remove_source_branch_after_merge",
-        "reviewer_assignment_strategy",
         "shared_runners_enabled",
         "snippets_access_level",
         "squash_option",
@@ -15259,6 +15300,7 @@
         "merge_commit_template",
         "merge_request_title_regex",
         "merge_request_title_regex_description",
+        "merge_train_enforcement",
         "mirror_user_id",
         "mr_default_title_template",
         "name",
@@ -17160,6 +17202,15 @@
       "package": "internal/tools/resourcegroups",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id/resource_groups/production/current_job",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/resourcegroups",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/resource_groups/production/upcoming_jobs",
       "query": [
         "page",
@@ -17186,6 +17237,15 @@
       "body": [
         "process_mode"
       ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/resourcegroups",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/resource_groups/x/current_job",
       "identifiers": {
         ":project_id": 1
       }
@@ -17580,7 +17640,22 @@
       "package": "internal/tools/runners",
       "kind": "rest",
       "method": "POST",
+      "path": "/runners/reset_authentication_token",
+      "body": [
+        "token"
+      ]
+    },
+    {
+      "package": "internal/tools/runners",
+      "kind": "rest",
+      "method": "POST",
       "path": "/runners/reset_registration_token"
+    },
+    {
+      "package": "internal/tools/runners",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/runners/router/discovery"
     },
     {
       "package": "internal/tools/runners",
@@ -18807,7 +18882,8 @@
         "pagination",
         "per_page",
         "search",
-        "sort"
+        "sort",
+        "without_projects"
       ]
     },
     {
@@ -19351,7 +19427,6 @@
         "force_random_password",
         "github",
         "group_id_for_saml",
-        "job_title",
         "linkedin",
         "location",
         "name",
@@ -19408,7 +19483,6 @@
         "email",
         "extern_uid",
         "external",
-        "job_title",
         "linkedin",
         "location",
         "name",

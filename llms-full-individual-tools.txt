@@ -1,10 +1,10 @@
 # gitlab-mcp-server. Individual Tools Reference
 
-> Version 3.2.0 | up to 1094 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 3.2.0 | up to 1099 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 ## Individual Tools
 
-When `GITLAB_MCP_TOOL_SURFACE=individual`, up to 1094 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1088.
+When `GITLAB_MCP_TOOL_SURFACE=individual`, up to 1099 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1093.
 Grouped by domain:
 
 ### access (8 tools)
@@ -245,10 +245,11 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_achievement_user_achievement_update
 
-Change one award, which today means its show_on_profile visibility. Returns: the updated award with id, achievement_id, user_id, priority, show_on_profile, and timestamps. See also: gitlab_achievement_user_list, gitlab_achievement_user_achievement_reorder, gitlab_achievement_update.
+Change one award: its show_on_profile visibility and its award message. Returns: the updated award with id, achievement_id, user_id, priority, show_on_profile, award message, and timestamps. See also: gitlab_achievement_user_list, gitlab_achievement_user_achievement_reorder, gitlab_achievement_update.
 
 **Parameters:**
 
+- `award_message` (string): New note shown alongside the award, up to 200 characters. Pass an empty string to remove it. Omit the field to leave it untouched
 - `show_on_profile` (boolean): Whether the recipient's profile displays this award. Omit to leave the current visibility unchanged
 - `user_achievement_id` (integer) (required): Numeric ID of the award to change
 
@@ -1629,7 +1630,6 @@ Create a user account. Returns: created user identity and profile summary fields
 - `force_random_password` (boolean): Set a random password instead of requiring one
 - `github` (string): GitHub account
 - `group_id_for_saml` (integer): Group ID for SAML provisioning
-- `job_title` (string): User job title
 - `linkedin` (string): LinkedIn account
 - `location` (string): User location
 - `name` (string) (required): The user display name
@@ -4741,7 +4741,7 @@ Create a GitLab group or subgroup. Returns: created group metadata including ID,
 - `default_branch_protection` (integer): Deprecated: default branch protection level (0=none,1=partial,2=full,3=initial push,4=fully protected). Prefer default_branch_protection_defaults
 - `default_branch_protection_defaults` (object): Default branch protection settings object
 - `description` (string): Group description
-- `duo_availability` (string): GitLab Duo availability (default_on, default_off, never_on)
+- `duo_availability` (string): GitLab Duo availability (always_on, default_on, default_off, never_on). always_on and never_on also lock the setting for every subgroup and project
 - `emails_disabled` (boolean): Deprecated: disable email notifications. Prefer emails_enabled
 - `emails_enabled` (boolean): Enable email notifications
 - `enabled_git_access_protocol` (string): Allowed Git access protocol (ssh, http, all)
@@ -5419,18 +5419,12 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_milestone_burndown_events
 
-List burndown chart events for a group milestone. Returns: dated burndown events with weight, action, and pagination metadata. Requires GitLab Premium or higher. See also: gitlab_group_milestone_get, gitlab_group_milestone_issues, gitlab_group_milestone_merge_requests.
+List the burndown chart events of a group milestone (Premium or higher). Returns: every dated event with the issue's weight and the action (created, closed, reopened). See also: gitlab_group_milestone_get, gitlab_group_milestone_issues, gitlab_group_milestone_merge_requests.
 
 **Parameters:**
 
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `milestone_iid` (integer) (required): Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs
-- `order_by` (string): Order results by field (e.g. created_at, updated_at)
-- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `page_token` (string): Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.
-- `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost, and a keyset page names the next one in next_page_token rather than next_page.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `sort` (string): Sort direction (asc, desc)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -5499,7 +5493,7 @@ List milestones in a group with filtering and pagination. Returns: matching grou
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `iids` (array of integers): Filter by milestone IIDs
 - `include_ancestors` (boolean): Include milestones from ancestor groups
-- `include_descendants` (boolean): Include milestones from descendant groups
+- `include_descendants` (boolean): Include milestones from descendant groups and their projects. A project's milestone carries its project_id and no group_id
 - `include_parent_milestones` (boolean): Deprecated (GitLab 16.7): use include_ancestors instead. Include milestones from parent groups
 - `order_by` (string): Order results by field (e.g. created_at, updated_at, due_date, title)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
@@ -6131,7 +6125,7 @@ Update a GitLab group's settings. Returns: the updated group metadata. See also:
 - `default_branch_protection` (integer): Deprecated: default branch protection level (0=none,1=partial,2=full,3=initial push,4=fully protected). Prefer default_branch_protection_defaults
 - `default_branch_protection_defaults` (object): Default branch protection settings object
 - `description` (string): Group description. Pass an empty string to remove it. Omit the field to leave it untouched
-- `duo_availability` (string): GitLab Duo availability (default_on, default_off, never_on)
+- `duo_availability` (string): GitLab Duo availability (always_on, default_on, default_off, never_on). always_on and never_on also lock the setting for every subgroup and project
 - `duo_features_enabled` (boolean): Enable GitLab Duo features
 - `emails_disabled` (boolean): Deprecated: disable email notifications. Prefer emails_enabled
 - `emails_enabled` (boolean): Enable email notifications
@@ -6546,8 +6540,11 @@ Create a new issue in a project. Returns: the created issue with IID, state, lab
 - `issue_type` (string): Issue type (issue, incident, test_case, task)
 - `labels` (array of strings): Label names to apply
 - `merge_request_to_resolve_discussions_of` (integer): MR IID whose unresolved discussions become issues
-- `milestone_id` (integer): Milestone ID to associate
+- `milestone` (string): Title of a project or ancestor-group milestone to associate, matched exactly (case-sensitive). GitLab leaves the issue without a milestone when no milestone has that title. Mutually exclusive with milestone_id
+- `milestone_id` (integer): Milestone ID to associate. Mutually exclusive with milestone
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
+- `severity` (string): Severity of an incident (unknown, low, medium, high, critical). GitLab applies it to incidents only
+- `start_date` (string): Start date in YYYY-MM-DD format. GitLab reads it from 19.1
 - `title` (string) (required): Issue title
 - `weight` (integer): Issue weight, 0 or higher
 
@@ -7249,9 +7246,12 @@ Update a GitLab issue. Supports changing title, description, state (close/reopen
 - `issue_iid` (integer) (required): Issue IID (project-scoped internal ID, not 'issue_id')
 - `issue_type` (string): Issue type (issue, incident, test_case, task)
 - `labels` (array of strings): Label names that replace all labels on the issue. Pass [] to remove every label. Omit the field to leave them untouched
-- `milestone_id` (integer): New milestone ID (0 to unset. Omit to leave unchanged)
+- `milestone` (string): Title of a project or ancestor-group milestone to assign, matched exactly (case-sensitive). GitLab leaves the milestone unchanged when no milestone has that title. Use milestone_id 0 to unset. Mutually exclusive with milestone_id
+- `milestone_id` (integer): New milestone ID (0 to unset. Omit to leave unchanged). Mutually exclusive with milestone
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `remove_labels` (array of strings): Label names to remove
+- `severity` (string): New severity of an incident (unknown, low, medium, high, critical). GitLab applies it to incidents only
+- `start_date` (string): New start date in YYYY-MM-DD format. Pass an empty string to remove the start date. Omit the field to leave it untouched. GitLab reads it from 19.1
 - `state_event` (string): State transition. Set to close or reopen when changing issue state.
 - `title` (string): New title
 - `updated_at` (string): Update timestamp override (ISO 8601/RFC 3339, requires admin permissions)
@@ -7417,20 +7417,16 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_job_list_bridges
 
-List CI bridge (trigger) jobs for one pipeline with keyset pagination. Returns: bridge summaries with status and downstream pipeline references. See also: gitlab_job_list, gitlab_pipeline_get, gitlab_job_get.
+List CI bridge (trigger) jobs for one pipeline with status filters and page-number pagination. Returns: bridge summaries with status and downstream pipeline references. See also: gitlab_job_list, gitlab_pipeline_get, gitlab_job_get.
 
 **Parameters:**
 
 - `include_retried` (boolean): Include retried bridge jobs in the response
-- `order_by` (string): Column to order keyset-paginated results by
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `page_token` (string): Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.
-- `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost, and a keyset page names the next one in next_page_token rather than next_page.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `pipeline_id` (integer) (required): Pipeline ID to list bridge jobs for
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `scope` (array of strings): Filter by job status: created, pending, preparing, waiting_for_resource, waiting_for_callback, running, success, failed, canceled, canceling, skipped, manual, scheduled
-- `sort` (string): Sort order for keyset pagination: asc or desc
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -8206,6 +8202,7 @@ List packages across a group and its descendant projects with optional filters a
 - `order_by` (string): Order by group package registry field: created_at, name, version, type, or project_path.
 - `package_name` (string): Filter by package name
 - `package_type` (string): Filter by package type: composer, conan, generic, golang, helm, maven, npm, nuget, pypi, or terraform_module.
+- `package_version` (string): Filter by package version. With include_versionless, versionless packages are not returned
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost, and a keyset page names the next one in next_page_token rather than next_page.
@@ -8834,6 +8831,7 @@ List instance project topics. Returns: an array of topics with id, name, title, 
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `search` (string): Filter topics by search query
 - `sort` (string): Sort order for keyset-paginated results: 'asc' or 'desc'
+- `without_projects` (boolean): Return only the topics no project is assigned to
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -9010,7 +9008,18 @@ Mark a database migration as complete. Returns: a success status. See also: gitl
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
-### milestone (7 tools)
+### milestone (9 tools)
+
+#### gitlab_milestone_burndown_events
+
+List the burndown chart events of a project milestone (Premium or higher). Returns: every dated event with the issue's weight and the action (created, closed, reopened). See also: gitlab_milestone_get, gitlab_milestone_issues, gitlab_milestone_merge_requests.
+
+**Parameters:**
+
+- `milestone_iid` (integer) (required): Milestone IID (project-scoped). Use project.milestone_list to find IIDs
+- `project_id` (string or integer) (required): Project ID or URL-encoded path
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_milestone_create
 
@@ -9105,6 +9114,18 @@ List merge requests assigned to a single milestone with ordering and pagination.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
+#### gitlab_milestone_promote
+
+Promote a project milestone to a group milestone by milestone IID. GitLab deletes the project milestone and every milestone of the same title in the group's projects, moving their issues and merge requests to the new group milestone. Returns: a confirmation naming the promoted title, since GitLab sends back no milestone. See also: gitlab_milestone_get, gitlab_milestone_list, gitlab_group_milestone_list.
+
+**Parameters:**
+
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
+- `milestone_iid` (integer) (required): Milestone IID (project-scoped). Use project.milestone_list to find IIDs
+- `project_id` (string or integer) (required): Project ID or URL-encoded path. The project must belong to a group
+
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
+
 #### gitlab_milestone_update
 
 Update an existing milestone's title, description, start/due dates, or state (state_event close/activate) by milestone IID. Returns: the updated milestone with state, dates, and web URL. See also: gitlab_milestone_get, gitlab_milestone_delete, gitlab_milestone_list.
@@ -9137,7 +9158,6 @@ Modify an existing user. Returns: the updated user profile metadata. See also: g
 - `email` (string): New email address
 - `extern_uid` (string): External UID for the provider
 - `external` (boolean): Mark or unmark as external
-- `job_title` (string): New job title
 - `linkedin` (string): LinkedIn account
 - `location` (string): New location
 - `name` (string): New display name
@@ -9338,7 +9358,9 @@ Open a new merge request from a source branch into a target branch. Returns: the
 - `assignee_ids` (array of integers): User IDs to assign
 - `description` (string): Merge request description (Markdown supported)
 - `labels` (array of strings): Label names to apply
-- `milestone_id` (integer): Milestone ID to associate with the merge request
+- `merge_after` (string): Earliest instant the merge request can be merged, an ISO 8601 timestamp such as 2026-12-31T23:00:00Z. A date such as 2026-12-31 is read as midnight UTC. GitLab reads it from 17.8
+- `milestone` (string): Title of a project or ancestor-group milestone to associate, matched exactly (case-sensitive). GitLab leaves the merge request without a milestone when no milestone has that title. Mutually exclusive with milestone_id
+- `milestone_id` (integer): Milestone ID to associate with the merge request. Mutually exclusive with milestone
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `remove_source_branch` (boolean): Delete source branch after merge. Only set if explicitly requested by the user. Omit to preserve repository defaults
 - `reviewer_ids` (array of integers): User IDs to add as reviewers
@@ -9403,7 +9425,9 @@ Add a blocking dependency to a merge request. Returns: the created dependency li
 
 **Parameters:**
 
-- `blocking_merge_request_id` (integer) (required): ID of the merge request that blocks this one
+- `blocking_merge_request_id` (integer): Global ID of the merge request that blocks this one. Pass it or blocking_merge_request_iid, not both
+- `blocking_merge_request_iid` (integer): IID of the merge request that blocks this one, in this project or in blocking_project_id. Pass it or blocking_merge_request_id, not both
+- `blocking_project_id` (string or integer): ID or full path (group/project) of the project the blocking merge request named by blocking_merge_request_iid belongs to. Defaults to this project
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
@@ -10294,8 +10318,10 @@ Update an existing merge request's fields or state. Returns: the updated MR with
 - `description` (string): New description. Pass an empty string to remove it. Omit the field to leave it untouched
 - `discussion_locked` (boolean): Lock discussions on the merge request
 - `labels` (array of strings): Label names that replace all labels on the merge request. Pass [] to remove every label. Omit the field to leave them untouched
+- `merge_after` (string): Earliest instant the merge request can be merged, an ISO 8601 timestamp such as 2026-12-31T23:00:00Z. A date such as 2026-12-31 is read as midnight UTC. Pass an empty string to remove the schedule. Omit the field to leave it untouched. GitLab reads it from 17.8
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
-- `milestone_id` (integer): Milestone ID (0 to unset)
+- `milestone` (string): Title of a project or ancestor-group milestone to assign, matched exactly (case-sensitive). GitLab leaves the milestone unchanged when no milestone has that title. Use milestone_id 0 to unset. Mutually exclusive with milestone_id
+- `milestone_id` (integer): Milestone ID (0 to unset). Mutually exclusive with milestone
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `remove_labels` (array of strings): Label names to remove
 - `remove_source_branch` (boolean): Delete source branch after merge. Only set if explicitly requested
@@ -11562,7 +11588,6 @@ Create a new GitLab project. Returns: the created project with id, path_with_nam
 - `build_timeout` (integer): Build timeout in seconds
 - `builds_access_level` (string): CI/CD builds access level (disabled, private, enabled)
 - `ci_config_path` (string): Custom CI/CD configuration file path
-- `ci_forward_deployment_enabled` (boolean): Enable CI/CD forward deployment (deprecated: no longer supported in recent versions)
 - `cicd_catalog_enabled` (boolean): Publish the project as a CI/CD catalog resource
 - `container_expiration_policy_attributes` (object): Container registry cleanup policy attributes
 - `container_registry_access_level` (string): Container registry access level (disabled, private, enabled)
@@ -11584,19 +11609,14 @@ Create a new GitLab project. Returns: the created project with id, path_with_nam
 - `issue_branch_template` (string): Template for branch names created from issues
 - `issues_access_level` (string): Issues access level (disabled, private, enabled)
 - `issues_enabled` (boolean): Enable issues feature (deprecated: use issues_access_level)
-- `issues_template` (string): Default issue description template (deprecated: no longer supported in recent versions)
 - `jobs_enabled` (boolean): Enable CI/CD jobs (deprecated: use builds_access_level)
 - `lfs_enabled` (boolean): Enable Git LFS
 - `merge_commit_template` (string): Template for merge commit messages
 - `merge_method` (string): Merge method: merge (default merge commit), rebase_merge (rebase then merge commit), or ff (fast-forward, no merge commit).
-- `merge_pipelines_enabled` (boolean): Enable merged results pipelines
 - `merge_request_title_regex` (string): Regex that MR titles must match
 - `merge_request_title_regex_description` (string): Human-readable description for the MR title regex
 - `merge_requests_access_level` (string): Merge requests access level (disabled, private, enabled)
 - `merge_requests_enabled` (boolean): Enable merge requests feature (deprecated: use merge_requests_access_level)
-- `merge_requests_template` (string): Default merge request description template (deprecated: no longer supported in recent versions)
-- `merge_trains_enabled` (boolean): Enable merge trains
-- `merge_trains_skip_train_allowed` (boolean): Allow skipping the merge train
 - `mirror` (boolean): Enable pull mirroring from import_url
 - `mirror_trigger_builds` (boolean): Trigger pipelines for mirror updates
 - `model_experiments_access_level` (string): Model experiments access level (disabled, private, enabled)
@@ -11613,7 +11633,6 @@ Create a new GitLab project. Returns: the created project with id, path_with_nam
 - `pages_access_level` (string): Pages access level (disabled, private, enabled, public)
 - `path` (string): Project path slug, derived from the name when left out. Provide name, path or both
 - `printing_merge_request_link_enabled` (boolean): Show the create-merge-request link after pushing
-- `protect_merge_request_pipelines` (boolean): Prevent merge request pipeline settings from being modified by users with lower permissions
 - `public_builds` (boolean): Enable public access to pipelines (deprecated: use public_jobs)
 - `public_jobs` (boolean): Enable public access to pipelines
 - `releases_access_level` (string): Releases access level (disabled, private, enabled)
@@ -11624,7 +11643,6 @@ Create a new GitLab project. Returns: the created project with id, path_with_nam
 - `requirements_access_level` (string): Requirements access level (disabled, private, enabled)
 - `resolve_outdated_diff_discussions` (boolean): Auto-resolve outdated diff discussions
 - `resource_group_default_process_mode` (string): Default process mode for resource groups: unordered (run in parallel), oldest_first, newest_first, or newest_ready_first.
-- `reviewer_assignment_strategy` (string): Strategy used to automatically assign reviewers to merge requests: disabled or code_owners. The former dap_powered value was removed in GitLab 19.4 and only appears in responses of projects configured before then
 - `security_and_compliance_access_level` (string): Security and compliance access level (disabled, private, enabled)
 - `service_desk_enabled` (boolean): Enable Service Desk
 - `shared_runners_enabled` (boolean): Enable shared runners
@@ -11662,7 +11680,6 @@ Create a project on behalf of a user (admin). Returns: the created project with 
 - `build_timeout` (integer): Build timeout in seconds
 - `builds_access_level` (string): CI/CD builds access level (disabled, private, enabled)
 - `ci_config_path` (string): Custom CI/CD configuration file path
-- `ci_forward_deployment_enabled` (boolean): Enable CI/CD forward deployment (deprecated: no longer supported in recent versions)
 - `cicd_catalog_enabled` (boolean): Publish the project as a CI/CD catalog resource
 - `container_expiration_policy_attributes` (object): Container registry cleanup policy attributes
 - `container_registry_access_level` (string): Container registry access level (disabled, private, enabled)
@@ -11684,19 +11701,14 @@ Create a project on behalf of a user (admin). Returns: the created project with 
 - `issue_branch_template` (string): Template for branch names created from issues
 - `issues_access_level` (string): Issues access level (disabled, private, enabled)
 - `issues_enabled` (boolean): Enable issues feature (deprecated: use issues_access_level)
-- `issues_template` (string): Default issue description template (deprecated: no longer supported in recent versions)
 - `jobs_enabled` (boolean): Enable CI/CD jobs (deprecated: use builds_access_level)
 - `lfs_enabled` (boolean): Enable Git LFS
 - `merge_commit_template` (string): Template for merge commit messages
 - `merge_method` (string): Merge method: merge (default merge commit), rebase_merge (rebase then merge commit), or ff (fast-forward, no merge commit).
-- `merge_pipelines_enabled` (boolean): Enable merged results pipelines
 - `merge_request_title_regex` (string): Regex that MR titles must match
 - `merge_request_title_regex_description` (string): Human-readable description for the MR title regex
 - `merge_requests_access_level` (string): Merge requests access level (disabled, private, enabled)
 - `merge_requests_enabled` (boolean): Enable merge requests feature (deprecated: use merge_requests_access_level)
-- `merge_requests_template` (string): Default merge request description template (deprecated: no longer supported in recent versions)
-- `merge_trains_enabled` (boolean): Enable merge trains
-- `merge_trains_skip_train_allowed` (boolean): Allow skipping the merge train
 - `mirror` (boolean): Enable pull mirroring from import_url
 - `mirror_trigger_builds` (boolean): Trigger pipelines for mirror updates
 - `model_experiments_access_level` (string): Model experiments access level (disabled, private, enabled)
@@ -11713,7 +11725,6 @@ Create a project on behalf of a user (admin). Returns: the created project with 
 - `pages_access_level` (string): Pages access level (disabled, private, enabled, public)
 - `path` (string): Project path slug, derived from the name when left out. Provide name, path or both
 - `printing_merge_request_link_enabled` (boolean): Show the create-merge-request link after pushing
-- `protect_merge_request_pipelines` (boolean): Prevent merge request pipeline settings from being modified by users with lower permissions
 - `public_builds` (boolean): Enable public access to pipelines (deprecated: use public_jobs)
 - `public_jobs` (boolean): Enable public access to pipelines
 - `releases_access_level` (string): Releases access level (disabled, private, enabled)
@@ -11724,7 +11735,6 @@ Create a project on behalf of a user (admin). Returns: the created project with 
 - `requirements_access_level` (string): Requirements access level (disabled, private, enabled)
 - `resolve_outdated_diff_discussions` (boolean): Auto-resolve outdated diff discussions
 - `resource_group_default_process_mode` (string): Default process mode for resource groups: unordered (run in parallel), oldest_first, newest_first, or newest_ready_first.
-- `reviewer_assignment_strategy` (string): Strategy used to automatically assign reviewers to merge requests: disabled or code_owners. The former dap_powered value was removed in GitLab 19.4 and only appears in responses of projects configured before then
 - `security_and_compliance_access_level` (string): Security and compliance access level (disabled, private, enabled)
 - `service_desk_enabled` (boolean): Enable Service Desk
 - `shared_runners_enabled` (boolean): Enable shared runners
@@ -12944,6 +12954,7 @@ Update a project's settings. Returns: the updated project with its current confi
 - `merge_requests_access_level` (string): Merge requests access level (disabled, private, enabled)
 - `merge_requests_enabled` (boolean): Enable merge requests feature
 - `merge_requests_template` (string): Default merge request description template
+- `merge_train_enforcement` (string): Who may merge a merge request around the merge train: allow_bypass, enforce_for_all_users or enforce_with_owner_override. It has no effect unless merge trains are enabled
 - `merge_trains_enabled` (boolean): Enable merge trains
 - `merge_trains_skip_train_allowed` (boolean): Allow skipping the merge train
 - `mirror` (boolean): Enable pull mirroring from import_url
@@ -13857,6 +13868,19 @@ Resolve a vulnerability after it is fixed. Returns: the updated vulnerability wi
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
+### resource (1 tool)
+
+#### gitlab_resource_group_current_job
+
+Get the CI job that currently holds one resource group's lock by key (GitLab 18.6 or later). Returns: the job's ID, name, status, stage, ref, tag and allow-failure flags, pipeline, web URL, and creation time, or no job when none holds the lock. See also: gitlab_list_resource_group_upcoming_jobs, gitlab_get_resource_group, gitlab_job_get.
+
+**Parameters:**
+
+- `key` (string) (required): Resource group key
+- `project_id` (string or integer) (required): Project ID or URL-encoded path
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
 ### retrieve (6 tools)
 
 #### gitlab_retrieve_all_group_storage_moves
@@ -14017,7 +14041,7 @@ Revoke an impersonation token for a user by token id. Returns: a confirmation na
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
-### runner (34 tools)
+### runner (36 tools)
 
 #### gitlab_runner_controller_create
 
@@ -14421,6 +14445,26 @@ Reset a runner's authentication token by runner_id. Returns: the new token and i
 - `runner_id` (integer) (required): Runner ID
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_runner_reset_token_by_token
+
+Reset a runner's authentication token with its current authentication token. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_reset_token.
+
+**Parameters:**
+
+- `token` (string) (required): Current runner authentication token, which the reset invalidates
+
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_runner_router_discovery
+
+Discover the Job Router information for a runner by its authentication token (GitLab 18.7 or later, behind feature flags). Returns: the Job Router server URL. See also: gitlab_runner_verify, gitlab_runner_get.
+
+**Parameters:**
+
+- `token` (string) (required): Runner authentication token, sent as the Runner-Token header GitLab authenticates the runner by
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_runner_update
 

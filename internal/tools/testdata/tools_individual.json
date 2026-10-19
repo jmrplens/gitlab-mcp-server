@@ -2286,10 +2286,17 @@
   },
   {
     "name": "gitlab_achievement_user_achievement_update",
-    "description": "Change one award, which today means its show_on_profile visibility. Returns: the updated award with id, achievement_id, user_id, priority, show_on_profile, and timestamps. See also: gitlab_achievement_user_list, gitlab_achievement_user_achievement_reorder, gitlab_achievement_update.",
+    "description": "Change one award: its show_on_profile visibility and its award message. Returns: the updated award with id, achievement_id, user_id, priority, show_on_profile, award message, and timestamps. See also: gitlab_achievement_user_list, gitlab_achievement_user_achievement_reorder, gitlab_achievement_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "award_message": {
+          "description": "New note shown alongside the award, up to 200 characters. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
         "show_on_profile": {
           "description": "Whether the recipient's profile displays this award. Omit to leave the current visibility unchanged",
           "type": [
@@ -20149,10 +20156,6 @@
             "null",
             "integer"
           ]
-        },
-        "job_title": {
-          "description": "User job title",
-          "type": "string"
         },
         "linkedin": {
           "description": "LinkedIn account",
@@ -57812,8 +57815,9 @@
           "type": "string"
         },
         "duo_availability": {
-          "description": "GitLab Duo availability (default_on, default_off, never_on)",
+          "description": "GitLab Duo availability (always_on, default_on, default_off, never_on). always_on and never_on also lock the setting for every subgroup and project",
           "enum": [
+            "always_on",
             "default_on",
             "default_off",
             "never_on"
@@ -67419,7 +67423,7 @@
   },
   {
     "name": "gitlab_group_milestone_burndown_events",
-    "description": "List burndown chart events for a group milestone. Returns: dated burndown events with weight, action, and pagination metadata. Requires GitLab Premium or higher. See also: gitlab_group_milestone_get, gitlab_group_milestone_issues, gitlab_group_milestone_merge_requests.",
+    "description": "List the burndown chart events of a group milestone (Premium or higher). Returns: every dated event with the issue's weight and the action (created, closed, reopened). See also: gitlab_group_milestone_get, gitlab_group_milestone_issues, gitlab_group_milestone_merge_requests.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -67433,37 +67437,6 @@
         "milestone_iid": {
           "description": "Milestone IID (group-scoped). Use group.group_milestone_list to find IIDs",
           "type": "integer"
-        },
-        "order_by": {
-          "description": "Order results by field (e.g. created_at, updated_at)",
-          "type": "string"
-        },
-        "page": {
-          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
-          "minimum": 1,
-          "type": "integer"
-        },
-        "page_token": {
-          "description": "Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.",
-          "type": "string"
-        },
-        "pagination": {
-          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost, and a keyset page names the next one in next_page_token rather than next_page.",
-          "type": "string"
-        },
-        "per_page": {
-          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
-          "maximum": 100,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "sort": {
-          "description": "Sort direction (asc, desc)",
-          "enum": [
-            "asc",
-            "desc"
-          ],
-          "type": "string"
         }
       },
       "required": [
@@ -67511,50 +67484,10 @@
             "null",
             "array"
           ]
-        },
-        "pagination": {
-          "additionalProperties": false,
-          "properties": {
-            "has_more": {
-              "type": "boolean"
-            },
-            "next_page": {
-              "type": "integer"
-            },
-            "next_page_token": {
-              "type": "string"
-            },
-            "page": {
-              "type": "integer"
-            },
-            "per_page": {
-              "type": "integer"
-            },
-            "prev_page": {
-              "type": "integer"
-            },
-            "total_items": {
-              "type": "integer"
-            },
-            "total_pages": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "page",
-            "per_page",
-            "total_items",
-            "total_pages",
-            "next_page",
-            "prev_page",
-            "has_more"
-          ],
-          "type": "object"
         }
       },
       "required": [
-        "events",
-        "pagination"
+        "events"
       ],
       "type": "object"
     },
@@ -68134,7 +68067,7 @@
           "type": "boolean"
         },
         "include_descendants": {
-          "description": "Include milestones from descendant groups",
+          "description": "Include milestones from descendant groups and their projects. A project's milestone carries its project_id and no group_id",
           "type": "boolean"
         },
         "include_parent_milestones": {
@@ -78378,8 +78311,9 @@
           ]
         },
         "duo_availability": {
-          "description": "GitLab Duo availability (default_on, default_off, never_on)",
+          "description": "GitLab Duo availability (always_on, default_on, default_off, never_on). always_on and never_on also lock the setting for every subgroup and project",
           "enum": [
+            "always_on",
             "default_on",
             "default_off",
             "never_on"
@@ -84506,9 +84440,6 @@
             "name_regex": {
               "type": "string"
             },
-            "name_regex_delete": {
-              "type": "string"
-            },
             "name_regex_keep": {
               "type": "string"
             },
@@ -84523,7 +84454,7 @@
             "cadence",
             "keep_n",
             "older_than",
-            "name_regex_delete",
+            "name_regex",
             "name_regex_keep",
             "enabled"
           ],
@@ -85810,8 +85741,12 @@
           "description": "MR IID whose unresolved discussions become issues",
           "type": "integer"
         },
+        "milestone": {
+          "description": "Title of a project or ancestor-group milestone to associate, matched exactly (case-sensitive). GitLab leaves the issue without a milestone when no milestone has that title. Mutually exclusive with milestone_id",
+          "type": "string"
+        },
         "milestone_id": {
-          "description": "Milestone ID to associate",
+          "description": "Milestone ID to associate. Mutually exclusive with milestone",
           "type": "integer"
         },
         "project_id": {
@@ -85820,6 +85755,22 @@
             "string",
             "integer"
           ]
+        },
+        "severity": {
+          "description": "Severity of an incident (unknown, low, medium, high, critical). GitLab applies it to incidents only",
+          "enum": [
+            "unknown",
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ],
+          "type": "string"
+        },
+        "start_date": {
+          "description": "Start date in YYYY-MM-DD format. GitLab reads it from 19.1",
+          "format": "date",
+          "type": "string"
         },
         "title": {
           "description": "Issue title",
@@ -102460,8 +102411,12 @@
             "array"
           ]
         },
+        "milestone": {
+          "description": "Title of a project or ancestor-group milestone to assign, matched exactly (case-sensitive). GitLab leaves the milestone unchanged when no milestone has that title. Use milestone_id 0 to unset. Mutually exclusive with milestone_id",
+          "type": "string"
+        },
         "milestone_id": {
-          "description": "New milestone ID (0 to unset. Omit to leave unchanged)",
+          "description": "New milestone ID (0 to unset. Omit to leave unchanged). Mutually exclusive with milestone",
           "type": [
             "null",
             "integer"
@@ -102482,6 +102437,24 @@
           "type": [
             "null",
             "array"
+          ]
+        },
+        "severity": {
+          "description": "New severity of an incident (unknown, low, medium, high, critical). GitLab applies it to incidents only",
+          "enum": [
+            "unknown",
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ],
+          "type": "string"
+        },
+        "start_date": {
+          "description": "New start date in YYYY-MM-DD format. Pass an empty string to remove the start date. Omit the field to leave it untouched. GitLab reads it from 19.1",
+          "type": [
+            "null",
+            "string"
           ]
         },
         "state_event": {
@@ -106009,7 +105982,7 @@
   },
   {
     "name": "gitlab_job_list_bridges",
-    "description": "List CI bridge (trigger) jobs for one pipeline with keyset pagination. Returns: bridge summaries with status and downstream pipeline references. See also: gitlab_job_list, gitlab_pipeline_get, gitlab_job_get.",
+    "description": "List CI bridge (trigger) jobs for one pipeline with status filters and page-number pagination. Returns: bridge summaries with status and downstream pipeline references. See also: gitlab_job_list, gitlab_pipeline_get, gitlab_job_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -106017,22 +105990,10 @@
           "description": "Include retried bridge jobs in the response",
           "type": "boolean"
         },
-        "order_by": {
-          "description": "Column to order keyset-paginated results by",
-          "type": "string"
-        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "minimum": 1,
           "type": "integer"
-        },
-        "page_token": {
-          "description": "Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.",
-          "type": "string"
-        },
-        "pagination": {
-          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost, and a keyset page names the next one in next_page_token rather than next_page.",
-          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -106060,14 +106021,6 @@
             "null",
             "array"
           ]
-        },
-        "sort": {
-          "description": "Sort order for keyset pagination: asc or desc",
-          "enum": [
-            "asc",
-            "desc"
-          ],
-          "type": "string"
         }
       },
       "required": [
@@ -117762,6 +117715,10 @@
           ],
           "type": "string"
         },
+        "package_version": {
+          "description": "Filter by package version. With include_versionless, versionless packages are not returned",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "minimum": 1,
@@ -127833,6 +127790,10 @@
             "desc"
           ],
           "type": "string"
+        },
+        "without_projects": {
+          "description": "Return only the topics no project is assigned to",
+          "type": "boolean"
         }
       },
       "type": "object"
@@ -130688,6 +130649,83 @@
     }
   },
   {
+    "name": "gitlab_milestone_burndown_events",
+    "description": "List the burndown chart events of a project milestone (Premium or higher). Returns: every dated event with the issue's weight and the action (created, closed, reopened). See also: gitlab_milestone_get, gitlab_milestone_issues, gitlab_milestone_merge_requests.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "milestone_iid": {
+          "description": "Milestone IID (project-scoped). Use project.milestone_list to find IIDs",
+          "type": "integer"
+        },
+        "project_id": {
+          "description": "Project ID or URL-encoded path",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "milestone_iid",
+        "project_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "weight": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              }
+            },
+            "required": [
+              "created_at",
+              "action"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "events"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "gitlab_milestone_create",
     "description": "Create a new milestone in a project with title and optional description, start date, and due date. Returns: the created milestone with IID, state, dates, and web URL. See also: gitlab_milestone_get, gitlab_milestone_update, gitlab_milestone_list.",
     "inputSchema": {
@@ -131766,6 +131804,71 @@
     }
   },
   {
+    "name": "gitlab_milestone_promote",
+    "description": "Promote a project milestone to a group milestone by milestone IID. GitLab deletes the project milestone and every milestone of the same title in the group's projects, moving their issues and merge requests to the new group milestone. Returns: a confirmation naming the promoted title, since GitLab sends back no milestone. See also: gitlab_milestone_get, gitlab_milestone_list, gitlab_group_milestone_list.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
+        "milestone_iid": {
+          "description": "Milestone IID (project-scoped). Use project.milestone_list to find IIDs",
+          "type": "integer"
+        },
+        "project_id": {
+          "description": "Project ID or URL-encoded path. The project must belong to a group",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "milestone_iid",
+        "project_id"
+      ],
+      "type": "object",
+      "x_destructive": true
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "title"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
     "name": "gitlab_milestone_update",
     "description": "Update an existing milestone's title, description, start/due dates, or state (state_event close/activate) by milestone IID. Returns: the updated milestone with state, dates, and web URL. See also: gitlab_milestone_get, gitlab_milestone_delete, gitlab_milestone_list.",
     "inputSchema": {
@@ -131949,10 +132052,6 @@
             "null",
             "boolean"
           ]
-        },
-        "job_title": {
-          "description": "New job title",
-          "type": "string"
         },
         "linkedin": {
           "description": "LinkedIn account",
@@ -136778,8 +136877,16 @@
             "array"
           ]
         },
+        "merge_after": {
+          "description": "Earliest instant the merge request can be merged, an ISO 8601 timestamp such as 2026-12-31T23:00:00Z. A date such as 2026-12-31 is read as midnight UTC. GitLab reads it from 17.8",
+          "type": "string"
+        },
+        "milestone": {
+          "description": "Title of a project or ancestor-group milestone to associate, matched exactly (case-sensitive). GitLab leaves the merge request without a milestone when no milestone has that title. Mutually exclusive with milestone_id",
+          "type": "string"
+        },
         "milestone_id": {
-          "description": "Milestone ID to associate with the merge request",
+          "description": "Milestone ID to associate with the merge request. Mutually exclusive with milestone",
           "type": "integer"
         },
         "project_id": {
@@ -139377,8 +139484,19 @@
       "additionalProperties": false,
       "properties": {
         "blocking_merge_request_id": {
-          "description": "ID of the merge request that blocks this one",
+          "description": "Global ID of the merge request that blocks this one. Pass it or blocking_merge_request_iid, not both",
           "type": "integer"
+        },
+        "blocking_merge_request_iid": {
+          "description": "IID of the merge request that blocks this one, in this project or in blocking_project_id. Pass it or blocking_merge_request_id, not both",
+          "type": "integer"
+        },
+        "blocking_project_id": {
+          "description": "ID or full path (group/project) of the project the blocking merge request named by blocking_merge_request_iid belongs to. Defaults to this project",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
@@ -139393,7 +139511,6 @@
         }
       },
       "required": [
-        "blocking_merge_request_id",
         "merge_request_iid",
         "project_id"
       ],
@@ -158740,12 +158857,23 @@
             "array"
           ]
         },
+        "merge_after": {
+          "description": "Earliest instant the merge request can be merged, an ISO 8601 timestamp such as 2026-12-31T23:00:00Z. A date such as 2026-12-31 is read as midnight UTC. Pass an empty string to remove the schedule. Omit the field to leave it untouched. GitLab reads it from 17.8",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
         },
+        "milestone": {
+          "description": "Title of a project or ancestor-group milestone to assign, matched exactly (case-sensitive). GitLab leaves the milestone unchanged when no milestone has that title. Use milestone_id 0 to unset. Mutually exclusive with milestone_id",
+          "type": "string"
+        },
         "milestone_id": {
-          "description": "Milestone ID (0 to unset)",
+          "description": "Milestone ID (0 to unset). Mutually exclusive with milestone",
           "type": [
             "null",
             "integer"
@@ -174426,9 +174554,6 @@
             "name_regex": {
               "type": "string"
             },
-            "name_regex_delete": {
-              "type": "string"
-            },
             "name_regex_keep": {
               "type": "string"
             },
@@ -174443,7 +174568,7 @@
             "cadence",
             "keep_n",
             "older_than",
-            "name_regex_delete",
+            "name_regex",
             "name_regex_keep",
             "enabled"
           ],
@@ -175371,13 +175496,6 @@
           "description": "Custom CI/CD configuration file path",
           "type": "string"
         },
-        "ci_forward_deployment_enabled": {
-          "description": "Enable CI/CD forward deployment (deprecated: no longer supported in recent versions)",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
         "cicd_catalog_enabled": {
           "description": "Publish the project as a CI/CD catalog resource",
           "type": [
@@ -175407,7 +175525,7 @@
                 "integer"
               ]
             },
-            "name_regex_delete": {
+            "name_regex": {
               "description": "Regex matching tag names to delete. On an update, pass an empty string to remove it. Omit the field to leave it untouched",
               "type": [
                 "null",
@@ -175525,10 +175643,6 @@
             "boolean"
           ]
         },
-        "issues_template": {
-          "description": "Default issue description template (deprecated: no longer supported in recent versions)",
-          "type": "string"
-        },
         "jobs_enabled": {
           "description": "Enable CI/CD jobs (deprecated: use builds_access_level)",
           "type": [
@@ -175556,13 +175670,6 @@
           ],
           "type": "string"
         },
-        "merge_pipelines_enabled": {
-          "description": "Enable merged results pipelines",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
         "merge_request_title_regex": {
           "description": "Regex that MR titles must match",
           "type": "string"
@@ -175577,24 +175684,6 @@
         },
         "merge_requests_enabled": {
           "description": "Enable merge requests feature (deprecated: use merge_requests_access_level)",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
-        "merge_requests_template": {
-          "description": "Default merge request description template (deprecated: no longer supported in recent versions)",
-          "type": "string"
-        },
-        "merge_trains_enabled": {
-          "description": "Enable merge trains",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
-        "merge_trains_skip_train_allowed": {
-          "description": "Allow skipping the merge train",
           "type": [
             "null",
             "boolean"
@@ -175679,13 +175768,6 @@
             "boolean"
           ]
         },
-        "protect_merge_request_pipelines": {
-          "description": "Prevent merge request pipeline settings from being modified by users with lower permissions",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
         "public_builds": {
           "description": "Enable public access to pipelines (deprecated: use public_jobs)",
           "type": [
@@ -175744,14 +175826,6 @@
             "oldest_first",
             "newest_first",
             "newest_ready_first"
-          ],
-          "type": "string"
-        },
-        "reviewer_assignment_strategy": {
-          "description": "Strategy used to automatically assign reviewers to merge requests: disabled or code_owners. The former dap_powered value was removed in GitLab 19.4 and only appears in responses of projects configured before then",
-          "enum": [
-            "disabled",
-            "code_owners"
           ],
           "type": "string"
         },
@@ -176039,9 +176113,6 @@
             "name_regex": {
               "type": "string"
             },
-            "name_regex_delete": {
-              "type": "string"
-            },
             "name_regex_keep": {
               "type": "string"
             },
@@ -176056,7 +176127,7 @@
             "cadence",
             "keep_n",
             "older_than",
-            "name_regex_delete",
+            "name_regex",
             "name_regex_keep",
             "enabled"
           ],
@@ -176972,13 +177043,6 @@
           "description": "Custom CI/CD configuration file path",
           "type": "string"
         },
-        "ci_forward_deployment_enabled": {
-          "description": "Enable CI/CD forward deployment (deprecated: no longer supported in recent versions)",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
         "cicd_catalog_enabled": {
           "description": "Publish the project as a CI/CD catalog resource",
           "type": [
@@ -177008,7 +177072,7 @@
                 "integer"
               ]
             },
-            "name_regex_delete": {
+            "name_regex": {
               "description": "Regex matching tag names to delete. On an update, pass an empty string to remove it. Omit the field to leave it untouched",
               "type": [
                 "null",
@@ -177126,10 +177190,6 @@
             "boolean"
           ]
         },
-        "issues_template": {
-          "description": "Default issue description template (deprecated: no longer supported in recent versions)",
-          "type": "string"
-        },
         "jobs_enabled": {
           "description": "Enable CI/CD jobs (deprecated: use builds_access_level)",
           "type": [
@@ -177157,13 +177217,6 @@
           ],
           "type": "string"
         },
-        "merge_pipelines_enabled": {
-          "description": "Enable merged results pipelines",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
         "merge_request_title_regex": {
           "description": "Regex that MR titles must match",
           "type": "string"
@@ -177178,24 +177231,6 @@
         },
         "merge_requests_enabled": {
           "description": "Enable merge requests feature (deprecated: use merge_requests_access_level)",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
-        "merge_requests_template": {
-          "description": "Default merge request description template (deprecated: no longer supported in recent versions)",
-          "type": "string"
-        },
-        "merge_trains_enabled": {
-          "description": "Enable merge trains",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
-        "merge_trains_skip_train_allowed": {
-          "description": "Allow skipping the merge train",
           "type": [
             "null",
             "boolean"
@@ -177280,13 +177315,6 @@
             "boolean"
           ]
         },
-        "protect_merge_request_pipelines": {
-          "description": "Prevent merge request pipeline settings from being modified by users with lower permissions",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
         "public_builds": {
           "description": "Enable public access to pipelines (deprecated: use public_jobs)",
           "type": [
@@ -177345,14 +177373,6 @@
             "oldest_first",
             "newest_first",
             "newest_ready_first"
-          ],
-          "type": "string"
-        },
-        "reviewer_assignment_strategy": {
-          "description": "Strategy used to automatically assign reviewers to merge requests: disabled or code_owners. The former dap_powered value was removed in GitLab 19.4 and only appears in responses of projects configured before then",
-          "enum": [
-            "disabled",
-            "code_owners"
           ],
           "type": "string"
         },
@@ -177648,9 +177668,6 @@
             "name_regex": {
               "type": "string"
             },
-            "name_regex_delete": {
-              "type": "string"
-            },
             "name_regex_keep": {
               "type": "string"
             },
@@ -177665,7 +177682,7 @@
             "cadence",
             "keep_n",
             "older_than",
-            "name_regex_delete",
+            "name_regex",
             "name_regex_keep",
             "enabled"
           ],
@@ -178705,9 +178722,6 @@
             "name_regex": {
               "type": "string"
             },
-            "name_regex_delete": {
-              "type": "string"
-            },
             "name_regex_keep": {
               "type": "string"
             },
@@ -178722,7 +178736,7 @@
             "cadence",
             "keep_n",
             "older_than",
-            "name_regex_delete",
+            "name_regex",
             "name_regex_keep",
             "enabled"
           ],
@@ -180854,9 +180868,6 @@
             "name_regex": {
               "type": "string"
             },
-            "name_regex_delete": {
-              "type": "string"
-            },
             "name_regex_keep": {
               "type": "string"
             },
@@ -180871,7 +180882,7 @@
             "cadence",
             "keep_n",
             "older_than",
-            "name_regex_delete",
+            "name_regex",
             "name_regex_keep",
             "enabled"
           ],
@@ -181927,9 +181938,6 @@
             "name_regex": {
               "type": "string"
             },
-            "name_regex_delete": {
-              "type": "string"
-            },
             "name_regex_keep": {
               "type": "string"
             },
@@ -181944,7 +181952,7 @@
             "cadence",
             "keep_n",
             "older_than",
-            "name_regex_delete",
+            "name_regex",
             "name_regex_keep",
             "enabled"
           ],
@@ -185410,9 +185418,6 @@
                   "name_regex": {
                     "type": "string"
                   },
-                  "name_regex_delete": {
-                    "type": "string"
-                  },
                   "name_regex_keep": {
                     "type": "string"
                   },
@@ -185427,7 +185432,7 @@
                   "cadence",
                   "keep_n",
                   "older_than",
-                  "name_regex_delete",
+                  "name_regex",
                   "name_regex_keep",
                   "enabled"
                 ],
@@ -186883,9 +186888,6 @@
                   "name_regex": {
                     "type": "string"
                   },
-                  "name_regex_delete": {
-                    "type": "string"
-                  },
                   "name_regex_keep": {
                     "type": "string"
                   },
@@ -186900,7 +186902,7 @@
                   "cadence",
                   "keep_n",
                   "older_than",
-                  "name_regex_delete",
+                  "name_regex",
                   "name_regex_keep",
                   "enabled"
                 ],
@@ -189058,9 +189060,6 @@
                   "name_regex": {
                     "type": "string"
                   },
-                  "name_regex_delete": {
-                    "type": "string"
-                  },
                   "name_regex_keep": {
                     "type": "string"
                   },
@@ -189075,7 +189074,7 @@
                   "cadence",
                   "keep_n",
                   "older_than",
-                  "name_regex_delete",
+                  "name_regex",
                   "name_regex_keep",
                   "enabled"
                 ],
@@ -190579,9 +190578,6 @@
                   "name_regex": {
                     "type": "string"
                   },
-                  "name_regex_delete": {
-                    "type": "string"
-                  },
                   "name_regex_keep": {
                     "type": "string"
                   },
@@ -190596,7 +190592,7 @@
                   "cadence",
                   "keep_n",
                   "older_than",
-                  "name_regex_delete",
+                  "name_regex",
                   "name_regex_keep",
                   "enabled"
                 ],
@@ -192100,9 +192096,6 @@
                   "name_regex": {
                     "type": "string"
                   },
-                  "name_regex_delete": {
-                    "type": "string"
-                  },
                   "name_regex_keep": {
                     "type": "string"
                   },
@@ -192117,7 +192110,7 @@
                   "cadence",
                   "keep_n",
                   "older_than",
-                  "name_regex_delete",
+                  "name_regex",
                   "name_regex_keep",
                   "enabled"
                 ],
@@ -195503,9 +195496,6 @@
             "name_regex": {
               "type": "string"
             },
-            "name_regex_delete": {
-              "type": "string"
-            },
             "name_regex_keep": {
               "type": "string"
             },
@@ -195520,7 +195510,7 @@
             "cadence",
             "keep_n",
             "older_than",
-            "name_regex_delete",
+            "name_regex",
             "name_regex_keep",
             "enabled"
           ],
@@ -198783,9 +198773,6 @@
             "name_regex": {
               "type": "string"
             },
-            "name_regex_delete": {
-              "type": "string"
-            },
             "name_regex_keep": {
               "type": "string"
             },
@@ -198800,7 +198787,7 @@
             "cadence",
             "keep_n",
             "older_than",
-            "name_regex_delete",
+            "name_regex",
             "name_regex_keep",
             "enabled"
           ],
@@ -199947,9 +199934,6 @@
             "name_regex": {
               "type": "string"
             },
-            "name_regex_delete": {
-              "type": "string"
-            },
             "name_regex_keep": {
               "type": "string"
             },
@@ -199964,7 +199948,7 @@
             "cadence",
             "keep_n",
             "older_than",
-            "name_regex_delete",
+            "name_regex",
             "name_regex_keep",
             "enabled"
           ],
@@ -201003,9 +200987,6 @@
             "name_regex": {
               "type": "string"
             },
-            "name_regex_delete": {
-              "type": "string"
-            },
             "name_regex_keep": {
               "type": "string"
             },
@@ -201020,7 +201001,7 @@
             "cadence",
             "keep_n",
             "older_than",
-            "name_regex_delete",
+            "name_regex",
             "name_regex_keep",
             "enabled"
           ],
@@ -202055,9 +202036,6 @@
             "name_regex": {
               "type": "string"
             },
-            "name_regex_delete": {
-              "type": "string"
-            },
             "name_regex_keep": {
               "type": "string"
             },
@@ -202072,7 +202050,7 @@
             "cadence",
             "keep_n",
             "older_than",
-            "name_regex_delete",
+            "name_regex",
             "name_regex_keep",
             "enabled"
           ],
@@ -203125,7 +203103,7 @@
                 "integer"
               ]
             },
-            "name_regex_delete": {
+            "name_regex": {
               "description": "Regex matching tag names to delete. On an update, pass an empty string to remove it. Omit the field to leave it untouched",
               "type": [
                 "null",
@@ -203326,6 +203304,15 @@
         },
         "merge_requests_template": {
           "description": "Default merge request description template",
+          "type": "string"
+        },
+        "merge_train_enforcement": {
+          "description": "Who may merge a merge request around the merge train: allow_bypass, enforce_for_all_users or enforce_with_owner_override. It has no effect unless merge trains are enabled",
+          "enum": [
+            "allow_bypass",
+            "enforce_for_all_users",
+            "enforce_with_owner_override"
+          ],
           "type": "string"
         },
         "merge_trains_enabled": {
@@ -203833,9 +203820,6 @@
             "name_regex": {
               "type": "string"
             },
-            "name_regex_delete": {
-              "type": "string"
-            },
             "name_regex_keep": {
               "type": "string"
             },
@@ -203850,7 +203834,7 @@
             "cadence",
             "keep_n",
             "older_than",
-            "name_regex_delete",
+            "name_regex",
             "name_regex_keep",
             "enabled"
           ],
@@ -204976,9 +204960,6 @@
             "name_regex": {
               "type": "string"
             },
-            "name_regex_delete": {
-              "type": "string"
-            },
             "name_regex_keep": {
               "type": "string"
             },
@@ -204993,7 +204974,7 @@
             "cadence",
             "keep_n",
             "older_than",
-            "name_regex_delete",
+            "name_regex",
             "name_regex_keep",
             "enabled"
           ],
@@ -215487,6 +215468,140 @@
     }
   },
   {
+    "name": "gitlab_resource_group_current_job",
+    "description": "Get the CI job that currently holds one resource group's lock by key (GitLab 18.6 or later). Returns: the job's ID, name, status, stage, ref, tag and allow-failure flags, pipeline, web URL, and creation time, or no job when none holds the lock. See also: gitlab_list_resource_group_upcoming_jobs, gitlab_get_resource_group, gitlab_job_get.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "description": "Resource group key",
+          "type": "string"
+        },
+        "project_id": {
+          "description": "Project ID or URL-encoded path",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "key",
+        "project_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "additionalProperties": false,
+          "properties": {
+            "allow_failure": {
+              "type": "boolean"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "pipeline": {
+              "additionalProperties": false,
+              "properties": {
+                "created_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "iid": {
+                  "type": "integer"
+                },
+                "project_id": {
+                  "type": "integer"
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "sha": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string"
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "project_id",
+                "ref",
+                "sha",
+                "status"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "ref": {
+              "type": "string"
+            },
+            "stage": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "tag": {
+              "type": "boolean"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "status",
+            "stage"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "gitlab_retrieve_all_group_storage_moves",
     "description": "List all group repository storage moves across the instance. Returns: storage moves with state, source and destination storage names, group reference, creation time, and pagination metadata. See also: gitlab_retrieve_group_storage_moves, gitlab_get_group_storage_move, gitlab_schedule_all_group_storage_moves.",
     "inputSchema": {
@@ -221223,6 +221338,99 @@
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
+    }
+  },
+  {
+    "name": "gitlab_runner_reset_token_by_token",
+    "description": "Reset a runner's authentication token with its current authentication token. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_reset_token.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "token": {
+          "description": "Current runner authentication token, which the reset invalidates",
+          "type": "string",
+          "writeOnly": true
+        }
+      },
+      "required": [
+        "token"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "token": {
+          "type": "string"
+        },
+        "token_expires_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "token"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "name": "gitlab_runner_router_discovery",
+    "description": "Discover the Job Router information for a runner by its authentication token (GitLab 18.7 or later, behind feature flags). Returns: the Job Router server URL. See also: gitlab_runner_verify, gitlab_runner_get.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "token": {
+          "description": "Runner authentication token, sent as the Runner-Token header GitLab authenticates the runner by",
+          "type": "string",
+          "writeOnly": true
+        }
+      },
+      "required": [
+        "token"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "server_url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_url"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
     }
   },
   {

@@ -30,7 +30,7 @@ Las programaciones de pipelines (con sus variables, ejecutar una ahora y quedars
 
 Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
 
-Acciones de solo lectura: 15 de 33, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 16 de las 33.
+Acciones de solo lectura: 16 de 34, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 17 de las 34.
 
 ## Acciones
 
@@ -44,6 +44,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | [`pipeline.get`](#pipelineget)                                                             | `gitlab_pipeline_get`                               |
 | [`pipeline.latest`](#pipelinelatest)                                                       | `gitlab_pipeline_latest`                            |
 | [`pipeline.list`](#pipelinelist)                                                           | `gitlab_pipeline_list`                              |
+| [`pipeline.resource_group_current_job`](#pipelineresource_group_current_job)               | `gitlab_resource_group_current_job`                 |
 | [`pipeline.resource_group_edit`](#pipelineresource_group_edit)                             | `gitlab_edit_resource_group`                        |
 | [`pipeline.resource_group_get`](#pipelineresource_group_get)                               | `gitlab_get_resource_group`                         |
 | [`pipeline.resource_group_list`](#pipelineresource_group_list)                             | `gitlab_list_resource_groups`                       |
@@ -203,6 +204,22 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | `updated_before` | `string`                                                                                                                                                                                                                                                     | no        | Return pipelines updated before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)                                                                                                                                                                                                                                       |
 | `username`       | `string`                                                                                                                                                                                                                                                     | no        | Filter by username that triggered the pipeline                                                                                                                                                                                                                                                                          |
 | `yaml_errors`    | `boolean`                                                                                                                                                                                                                                                    | no        | Return only pipelines with YAML errors                                                                                                                                                                                                                                                                                  |
+
+### `pipeline.resource_group_current_job`
+
+> Get the CI job that currently holds one resource group's lock by key (GitLab 18.6 or later). Returns: the job's ID, name, status, stage, ref, tag and allow-failure flags, pipeline, web URL, and creation time, or no job when none holds the lock. See also: [`pipeline.resource_group_upcoming_jobs`](#pipelineresource_group_upcoming_jobs), [`pipeline.resource_group_get`](#pipelineresource_group_get), [`job.get`](/gitlab-mcp-server/es/reference/tools/job/#jobget).
+
+- **Meta-herramienta**: `gitlab_pipeline`, acción `resource_group_current_job`
+- **Herramienta individual**: `gitlab_resource_group_current_job`
+- **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Job: Read, Resource Group: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#pipeline))
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `key`        | `string`         | sí        | Resource group key             |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
 
 ### `pipeline.resource_group_edit`
 

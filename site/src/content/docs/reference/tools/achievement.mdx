@@ -232,7 +232,7 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `achievement.user_achievement_update`
 
-> Change one award, which today means its show_on_profile visibility. Returns: the updated award with id, achievement_id, user_id, priority, show_on_profile, and timestamps. See also: [`achievement.user_list`](#achievementuser_list), [`achievement.user_achievement_reorder`](#achievementuser_achievement_reorder), [`achievement.update`](#achievementupdate).
+> Change one award: its show_on_profile visibility and its award message. Returns: the updated award with id, achievement_id, user_id, priority, show_on_profile, award message, and timestamps. See also: [`achievement.user_list`](#achievementuser_list), [`achievement.user_achievement_reorder`](#achievementuser_achievement_reorder), [`achievement.update`](#achievementupdate).
 
 - **Meta-tool**: `gitlab_achievement`, action `user_achievement_update`
 - **Individual tool**: `gitlab_achievement_user_achievement_update`
@@ -241,10 +241,11 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `UserAchievement` in the answer, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#achievement))
 - **Behavior**: writes, idempotent
 
-| Parameter             | Type      | Mandatory | Description                                                                                         |
-| --------------------- | --------- | --------- | --------------------------------------------------------------------------------------------------- |
-| `user_achievement_id` | `integer` | yes       | Numeric ID of the award to change                                                                   |
-| `show_on_profile`     | `boolean` | no        | Whether the recipient's profile displays this award. Omit to leave the current visibility unchanged |
+| Parameter             | Type      | Mandatory | Description                                                                                                                       |
+| --------------------- | --------- | --------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `user_achievement_id` | `integer` | yes       | Numeric ID of the award to change                                                                                                 |
+| `award_message`       | `string`  | no        | New note shown alongside the award, up to 200 characters. Pass an empty string to remove it. Omit the field to leave it untouched |
+| `show_on_profile`     | `boolean` | no        | Whether the recipient's profile displays this award. Omit to leave the current visibility unchanged                               |
 
 ### `achievement.user_list`
 

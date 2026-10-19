@@ -32,11 +32,11 @@
 
 </p>
 
-**All of GitLab for your AI assistant.** Up to 1,098 actions over GitLab's REST and GraphQL APIs, from Free to Ultimate and on GitLab.com, in one self-contained binary that works with Claude, Cursor, VS Code, Codex and any other MCP client. You ask in plain language; it does the GitLab work.
+**All of GitLab for your AI assistant.** Up to 1,103 actions over GitLab's REST and GraphQL APIs, from Free to Ultimate and on GitLab.com, in one self-contained binary that works with Claude, Cursor, VS Code, Codex and any other MCP client. You ask in plain language; it does the GitLab work.
 
 <!-- START TOKEN CLAIM -->
 
-**11,343 tokens of startup context by default, the same on every GitLab tier (1,941 with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog, where listing every tool as its own costs from 575,259 to 732,207 tokens. Measured with the cl100k_base tokenizer and checked in CI. [How it is measured](https://docs.jmrp.io/gitlab-mcp-server/tools/dynamic-tools/#how-much-startup-context-does-dynamic-mode-save)
+**11,343 tokens of startup context by default, the same on every GitLab tier (1,941 with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog, where listing every tool as its own costs from 576,302 to 733,196 tokens. Measured with the cl100k_base tokenizer and checked in CI. [How it is measured](https://docs.jmrp.io/gitlab-mcp-server/tools/dynamic-tools/#how-much-startup-context-does-dynamic-mode-save)
 
 <!-- END TOKEN CLAIM -->
 
