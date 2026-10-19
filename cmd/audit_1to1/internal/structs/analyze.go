@@ -193,6 +193,9 @@ const (
 	// mrApprovalRulesOffsetOnly is the reason the approval rules list offers
 	// no ordering or keyset field of the gl.ListOptions it pages with.
 	mrApprovalRulesOffsetOnly = "GET /projects/:id/merge_requests/:merge_request_iid/approval_rules declares only page and per_page (gitlab-api-live.json, 19.4.1-ee); gl.ListOptions ordering and keyset fields are unused plumbing there"
+	// bridgeListOffsetOnly is the reason the bridge list offers no ordering or
+	// keyset field of the gl.ListOptions either of its routes pages with.
+	bridgeListOffsetOnly = "GET /projects/:id/pipelines/:pipeline_id/trigger_jobs and the bridges route it deprecates declare scope, page and per_page and nothing else (gitlab-api-live.json, 19.5.0), and the helper both run pages with offset pagination alone (present_pipeline_trigger_jobs in lib/api/ci/pipelines.rb), so gl.ListOptions ordering and keyset fields reach nothing there"
 	// achievementAvatarUpload is the reason the avatar upload is absent under
 	// its SDK key.
 	achievementAvatarUpload = "offered as AvatarInput (avatar_filename, avatar_content_type, and avatar_file_path or avatar_content_base64), which the handler assembles into the *gl.GraphQLUpload opts.Avatar takes"
@@ -1032,6 +1035,13 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	"mrapprovals.RulesInput.sort":       mrApprovalRulesOffsetOnly,
 	"mrapprovals.RulesInput.pagination": mrApprovalRulesOffsetOnly,
 	"mrapprovals.RulesInput.page_token": mrApprovalRulesOffsetOnly,
+	// The bridge list pages through a gl.ListJobsOptions on the bridges route
+	// and a gl.ListPipelineTriggerJobsOptions on trigger_jobs, and GitLab
+	// pages both by offset and orders neither.
+	"jobs.BridgeListInput.order_by":   bridgeListOffsetOnly,
+	"jobs.BridgeListInput.sort":       bridgeListOffsetOnly,
+	"jobs.BridgeListInput.pagination": bridgeListOffsetOnly,
+	"jobs.BridgeListInput.page_token": bridgeListOffsetOnly,
 
 	// SDK options fields the route declares and never reads. The deployment
 	// merge request list takes merge_requests_base_params and presents

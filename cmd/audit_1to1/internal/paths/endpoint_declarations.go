@@ -110,8 +110,9 @@ var declaredUndocumentedEndpoints = []endpointDeclaration{
 		Shape:    "/projects/*/pipelines/*/bridges",
 		Category: categoryDeprecatedRoute,
 		Reason: "jobs.md deprecated the bridges route in GitLab 19.2 in favor of trigger_jobs and now spells only " +
-			"the new one, while still serving the old. client-go's ListPipelineBridges is what we call, so the " +
-			"move follows the SDK rather than leading it.",
+			"the new one, while still serving the old. job.list_bridges sends trigger_jobs to an instance known to " +
+			"run 19.2 or later and keeps bridges, through client-go's deprecated ListPipelineBridges, for an older " +
+			"instance or one whose release it cannot read, which is the request recorded here.",
 	},
 	{
 		Shape:    "/projects/*/terraform/state/...",

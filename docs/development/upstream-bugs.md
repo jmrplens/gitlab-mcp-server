@@ -6601,7 +6601,8 @@ method leaves out when it is empty, and a routing test.
   [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
   with the other struct gaps of this register.
 - **In review**: no.
-- **Merged**: no. v3.15.0 decodes every one of them as a number.
+- **Merged**: no. v3.29.0, the version `go.mod` pins, decodes every one of
+  them as a number, as v3.15.0 did.
 - **Blocking**: no.
 - **Workaround**: yes, for every one of these but a deployable's. Each
   handler that presents one of them calls the SDK under
@@ -6609,7 +6610,9 @@ method leaves out when it is empty, and a routing test.
   captured answer as a pointer: `toolutil.PipelineMeasures` (through
   `toolutil.PipelineExtra` for a pipeline read or triggered),
   `toolutil.JobMeasures` and `toolutil.CapturedJob`/`CapturedJobs` for the
-  pipeline, trigger, job and bridge handlers and the job resources, the
+  pipeline, trigger, job and bridge handlers and the job resources (the
+  bridge list through `toolutil.CapturedBridges`, on its `trigger_jobs` and
+  `bridges` routes alike), the
   measures of a merge request's head pipeline through
   `toolutil.MergeRequestExtra`, a project board's weight scope through
   `toolutil.BoardExtra`, and a reader of its own in `dorametrics`,
@@ -6620,9 +6623,11 @@ method leaves out when it is empty, and a routing test.
   milestone's burndown events need none of this: client-go already decodes
   their weight as a pointer.
 
-**Where**: at v3.15.0, `DORAMetric.Value` (`float64`, `dora_metrics.go`),
-`Pipeline.Duration` and `Pipeline.QueuedDuration` (`int64`, `pipelines.go`),
-`Job` and `Bridge` `Duration`, `QueuedDuration` and `Coverage` (`float64`,
+**Where**: at v3.15.0 and unchanged at v3.29.0, `DORAMetric.Value`
+(`float64`, `dora_metrics.go`), `Pipeline.Duration` and
+`Pipeline.QueuedDuration` (`int64`, `pipelines.go`), `Job`, `Bridge` and
+`TriggerJob` (added in v3.24.0 for the `trigger_jobs` route, field for field
+`Bridge`) `Duration`, `QueuedDuration` and `Coverage` (`float64`,
 `jobs.go`), `DeploymentDeployable.Duration` and `Coverage` (`float64`,
 `deployments.go`), `MergeTrain.Duration` (`int64`, `merge_trains.go`),
 `IssueBoard.Weight` (`int64`, `boards.go`) and `WeightEvent.Weight` (`int64`,

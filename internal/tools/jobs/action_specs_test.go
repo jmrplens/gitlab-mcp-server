@@ -236,13 +236,14 @@ func TestToOutput_OptionalFields(t *testing.T) {
 	}
 }
 
-// TestBridgeToOutput_OptionalFields verifies that BridgeToOutput populates the
-// optional pointer fields (User, DownstreamPipeline, the four timestamps) when
-// present. The timestamps share one value and are checked for presence only;
-// which lands where is held by TestListBridges_MapsEveryDocumentedField.
-func TestBridgeToOutput_OptionalFields(t *testing.T) {
+// TestTriggerJobToOutput_OptionalFields verifies that TriggerJobToOutput
+// populates the optional pointer fields (User, DownstreamPipeline, the four
+// timestamps) when present. The timestamps share one value and are checked
+// for presence only; which lands where is held by
+// TestListBridges_MapsEveryDocumentedField.
+func TestTriggerJobToOutput_OptionalFields(t *testing.T) {
 	now := time.Now()
-	bridge := &gl.Bridge{
+	bridge := &gl.TriggerJob{
 		ID:     2,
 		Name:   "trigger",
 		Stage:  "deploy",
@@ -257,7 +258,7 @@ func TestBridgeToOutput_OptionalFields(t *testing.T) {
 		FinishedAt: &now,
 		ErasedAt:   &now,
 	}
-	out := BridgeToOutput(bridge, toolutil.BridgeExtra{
+	out := TriggerJobToOutput(bridge, toolutil.BridgeExtra{
 		Project: &toolutil.BridgeProjectOutput{CIJobTokenScopeEnabled: true},
 	})
 

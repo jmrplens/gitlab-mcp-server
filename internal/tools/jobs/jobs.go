@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -40,18 +41,18 @@ const (
 	toolJobTrace = "jobTrace"
 )
 
-// applyScope maps the input scope status strings onto the SDK
-// ListJobsOptions.Scope ([]BuildStateValue under the url tag scope[]),
-// leaving Scope nil when no statuses were requested.
-func applyScope(opts *gl.ListJobsOptions, scope []string) {
+// scopeStates maps the input scope status strings onto the Scope client-go's
+// job list options carry ([]BuildStateValue under the url tag scope[]), and
+// is nil when no statuses were requested, so no scope is sent.
+func scopeStates(scope []string) *[]gl.BuildStateValue {
 	if len(scope) == 0 {
-		return
+		return nil
 	}
 	scopes := make([]gl.BuildStateValue, len(scope))
 	for i, s := range scope {
 		scopes[i] = gl.BuildStateValue(s)
 	}
-	opts.Scope = &scopes
+	return &scopes
 }
 
 // applyListOpts copies offset, keyset, and ordering parameters onto the
@@ -173,8 +174,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.ErrRequiredInt64("jobList", "pipeline_id")
 	}
 
-	opts := &gl.ListJobsOptions{}
-	applyScope(opts, input.Scope)
+	opts := &gl.ListJobsOptions{Scope: scopeStates(input.Scope)}
 	if input.IncludeRetried {
 		opts.IncludeRetried = new(true)
 	}
@@ -550,8 +550,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	if input.ProjectID == "" {
 		return ListOutput{}, errors.New("jobListProject: project_id is required")
 	}
-	opts := &gl.ListJobsOptions{}
-	applyScope(opts, input.Scope)
+	opts := &gl.ListJobsOptions{Scope: scopeStates(input.Scope)}
 	if input.IncludeRetried {
 		opts.IncludeRetried = new(true)
 	}
@@ -569,15 +568,18 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 }
 
 // BridgeListInput defines parameters for listing pipeline bridge (trigger) jobs.
+//
+// It offers no ordering and no keyset pagination: both routes it is sent to
+// declare scope, page and per_page and nothing else, and page them by offset
+// alone (lib/api/ci/pipelines.rb, gitlab-api-live.json at 19.5.0), so an
+// order_by, a sort or a keyset cursor reached nothing. include_retried is
+// declared by neither and read by both, see [includeRetried].
 type BridgeListInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id"  jsonschema:"Project ID or URL-encoded path,required"`
 	PipelineID     int64                `json:"pipeline_id" jsonschema:"Pipeline ID to list bridge jobs for,required"`
 	Scope          []string             `json:"scope,omitempty" jsonschema:"Filter by job status: created, pending, preparing, waiting_for_resource, waiting_for_callback, running, success, failed, canceled, canceling, skipped, manual, scheduled"`
 	IncludeRetried bool                 `json:"include_retried,omitempty" jsonschema:"Include retried bridge jobs in the response"`
-	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order keyset-paginated results by"`
-	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // BridgeOutput represents a pipeline bridge (trigger) job.
@@ -614,12 +616,12 @@ type BridgeListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// BridgeToOutput converts a GitLab API [gl.Bridge] into the package's
+// TriggerJobToOutput converts a GitLab API [gl.TriggerJob] into the package's
 // [BridgeOutput], formatting timestamps as RFC 3339 strings and surfacing
 // the embedded commit, pipeline, user, and downstream_pipeline sub-objects
 // on their canonical keys (nested objects trimmed to the documented Jobs API
 // field set per doc/api/jobs.md).
-func BridgeToOutput(b *gl.Bridge, extra toolutil.BridgeExtra) BridgeOutput {
+func TriggerJobToOutput(b *gl.TriggerJob, extra toolutil.BridgeExtra) BridgeOutput {
 	out := BridgeOutput{
 		ID:                 b.ID,
 		Name:               b.Name,
@@ -654,10 +656,26 @@ func BridgeToOutput(b *gl.Bridge, extra toolutil.BridgeExtra) BridgeOutput {
 	return out
 }
 
-// ListBridges retrieves a paginated list of pipeline bridge (trigger)
-// jobs for a pipeline via the GitLab Jobs API
-// (GET /projects/:id/pipelines/:pipeline_id/bridges). Bridges only
-// exist on pipelines that trigger downstream or multi-project pipelines.
+// opListBridges names the bridge list in its errors.
+const opListBridges = "jobListBridges"
+
+// The release that mounted the trigger_jobs route (gitlab-org/gitlab!241496,
+// in 19.2), the first a pipeline's trigger jobs are listed through it on. The
+// same release deprecated the bridges route, which it and every later release
+// still serve.
+const (
+	triggerJobsSinceMajor = 19
+	triggerJobsSinceMinor = 2
+)
+
+// ListBridges retrieves a paginated list of a pipeline's bridge (trigger)
+// jobs via the GitLab Jobs API. An instance known to run GitLab 19.2 or later
+// is asked through GET /projects/:id/pipelines/:pipeline_id/trigger_jobs, the
+// route that release added, and any other, older or of a release the server
+// cannot read, through GET /projects/:id/pipelines/:pipeline_id/bridges, which
+// the same release deprecated and every release serves. Both are one helper
+// in GitLab and answer with the same entity. Bridges only exist on pipelines
+// that trigger downstream or multi-project pipelines.
 func ListBridges(ctx context.Context, client *gitlabclient.Client, input BridgeListInput) (BridgeListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return BridgeListOutput{}, err
@@ -666,31 +684,100 @@ func ListBridges(ctx context.Context, client *gitlabclient.Client, input BridgeL
 		return BridgeListOutput{}, errors.New("jobListBridges: project_id is required")
 	}
 	if input.PipelineID <= 0 {
-		return BridgeListOutput{}, toolutil.ErrRequiredInt64("jobListBridges", "pipeline_id")
+		return BridgeListOutput{}, toolutil.ErrRequiredInt64(opListBridges, "pipeline_id")
 	}
-	opts := &gl.ListJobsOptions{}
-	applyScope(opts, input.Scope)
+	if client.AtLeast(ctx, triggerJobsSinceMajor, triggerJobsSinceMinor) {
+		//gitlab:request alternatives: an instance on 19.2 or later is sent trigger_jobs and the deprecated bridges route below is not sent
+		return listTriggerJobs(ctx, client, input)
+	}
+	//gitlab:request alternatives: an instance older than 19.2, or one whose release is not known, is sent the deprecated bridges route instead of trigger_jobs
+	return listBridgesRoute(ctx, client, input)
+}
+
+// listTriggerJobs lists a pipeline's trigger jobs through trigger_jobs, the
+// route client-go v3.24.0 added ListPipelineTriggerJobs for. Its options
+// carry the route's scope, page and per_page, and include_retried goes on
+// through [includeRetried].
+func listTriggerJobs(ctx context.Context, client *gitlabclient.Client, input BridgeListInput) (BridgeListOutput, error) {
+	opts := &gl.ListPipelineTriggerJobsOptions{Scope: scopeStates(input.Scope)}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
+
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	jobs, resp, err := client.GL().Jobs.ListPipelineTriggerJobs(string(input.ProjectID), input.PipelineID, opts,
+		gl.WithContext(ctx), includeRetried(input.IncludeRetried))
+	if err != nil {
+		return BridgeListOutput{}, bridgeListError(err)
+	}
+	return bridgeListOutput(captured, resp, jobs)
+}
+
+// listBridgesRoute lists them through the bridges route, for an instance
+// older than 19.2 or one whose release is not known. client-go v3.24.0
+// deprecated ListPipelineBridges for ListPipelineTriggerJobs, and this call
+// retires with the last instance this server serves that predates 19.2.
+func listBridgesRoute(ctx context.Context, client *gitlabclient.Client, input BridgeListInput) (BridgeListOutput, error) {
+	opts := &gl.ListJobsOptions{Scope: scopeStates(input.Scope)}
 	if input.IncludeRetried {
 		opts.IncludeRetried = new(true)
 	}
-	applyListOpts(opts, input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	// client-go v3.24.0 deprecated ListPipelineBridges for
-	// ListPipelineTriggerJobs, whose trigger_jobs route GitLab mounts only
-	// from 19.2, so an older instance still needs this one.
-	bridges, resp, err := client.GL().Jobs.ListPipelineBridges(string(input.ProjectID), input.PipelineID, opts, gl.WithContext(ctx)) //nolint:staticcheck // SA1019: see above.
+	bridges, resp, err := client.GL().Jobs.ListPipelineBridges(string(input.ProjectID), input.PipelineID, opts, gl.WithContext(ctx)) //nolint:staticcheck // SA1019: the one route an instance before 19.2 serves, see above.
 	if err != nil {
-		return BridgeListOutput{}, toolutil.WrapErrWithStatusHint("jobListBridges", err, http.StatusNotFound,
-			"verify pipeline_id with pipeline.list. Bridges only exist for pipelines that trigger downstream/multi-project pipelines")
+		return BridgeListOutput{}, bridgeListError(err)
 	}
-	extras, err := toolutil.CapturedBridges(captured, len(bridges))
-	if err != nil {
-		return BridgeListOutput{}, toolutil.WrapErr("jobListBridges", err)
-	}
-	out := make([]BridgeOutput, len(bridges))
+	// client-go's Bridge and TriggerJob are one struct under two names, so the
+	// bridges are converted as trigger jobs: a field one of them gains and the
+	// other does not stops this from compiling.
+	jobs := make([]*gl.TriggerJob, len(bridges))
 	for i, b := range bridges {
-		out[i] = BridgeToOutput(b, extras[i])
+		jobs[i] = (*gl.TriggerJob)(b)
+	}
+	return bridgeListOutput(captured, resp, jobs)
+}
+
+// includeRetried adds include_retried to the query client-go encoded for the
+// trigger_jobs route, whose options client-go models without it. Neither
+// route declares the parameter and GitLab reads it on both: the helper both
+// routes run hands its params whole to Ci::JobsFinder, whose pipeline_jobs
+// keeps a pipeline's retried jobs when params[:include_retried] is set, and
+// Grape leaves an undeclared parameter in params as the string it arrived as.
+// On the bridges route client-go's ListJobsOptions carries it. When the
+// caller did not ask, it returns no option at all, which client-go skips, so
+// the query goes out exactly as client-go encoded it.
+func includeRetried(include bool) gl.RequestOptionFunc {
+	if !include {
+		return nil
+	}
+	return func(req *retryablehttp.Request) error {
+		query := req.URL.Query()
+		query.Set("include_retried", "true")
+		req.URL.RawQuery = query.Encode()
+		return nil
+	}
+}
+
+// bridgeListError is what a refusal of either route is answered with: a 404
+// names the pipeline, since bridges exist only on a pipeline that triggers
+// another.
+func bridgeListError(err error) error {
+	return toolutil.WrapErrWithStatusHint(opListBridges, err, http.StatusNotFound,
+		"verify pipeline_id with pipeline.list. Bridges only exist for pipelines that trigger downstream/multi-project pipelines")
+}
+
+// bridgeListOutput converts a page of trigger jobs into the list the action
+// publishes, each with what it reads off the captured answer instead: the
+// measures client-go decodes a null of as 0 (upstream register row 116) and
+// the project object neither of its structs models.
+func bridgeListOutput(captured *gitlabclient.ResponseCapture, resp *gl.Response, jobs []*gl.TriggerJob) (BridgeListOutput, error) {
+	extras, err := toolutil.CapturedBridges(captured, len(jobs))
+	if err != nil {
+		return BridgeListOutput{}, toolutil.WrapErr(opListBridges, err)
+	}
+	out := make([]BridgeOutput, len(jobs))
+	for i, job := range jobs {
+		out[i] = TriggerJobToOutput(job, extras[i])
 	}
 	return BridgeListOutput{Bridges: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }

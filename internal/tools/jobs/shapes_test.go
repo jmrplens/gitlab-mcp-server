@@ -240,21 +240,18 @@ func TestApplyListOpts_EmptyKeepsZero(t *testing.T) {
 	}
 }
 
-// TestApplyScope_EmptyAndPopulated verifies applyScope leaves Scope nil for an
-// empty filter and maps status strings to BuildStateValue otherwise.
-func TestApplyScope_EmptyAndPopulated(t *testing.T) {
-	empty := &gl.ListJobsOptions{}
-	applyScope(empty, nil)
-	if empty.Scope != nil {
-		t.Error("applyScope(nil) set Scope")
+// TestScopeStates_EmptyAndPopulated verifies scopeStates is nil for an empty
+// filter and maps status strings to BuildStateValue otherwise.
+func TestScopeStates_EmptyAndPopulated(t *testing.T) {
+	if empty := scopeStates(nil); empty != nil {
+		t.Errorf("scopeStates(nil) = %v, want nil", *empty)
 	}
 
-	populated := &gl.ListJobsOptions{}
-	applyScope(populated, []string{"failed", "success"})
-	if populated.Scope == nil || len(*populated.Scope) != 2 {
-		t.Fatalf("Scope = %v, want 2 entries", populated.Scope)
+	populated := scopeStates([]string{"failed", "success"})
+	if populated == nil || len(*populated) != 2 {
+		t.Fatalf("scopeStates() = %v, want 2 entries", populated)
 	}
-	if (*populated.Scope)[0] != gl.BuildStateValue("failed") {
-		t.Errorf("Scope[0] = %q, want failed", (*populated.Scope)[0])
+	if (*populated)[0] != gl.BuildStateValue("failed") {
+		t.Errorf("scopeStates()[0] = %q, want failed", (*populated)[0])
 	}
 }

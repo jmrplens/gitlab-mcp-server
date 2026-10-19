@@ -11,10 +11,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"reflect"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"unicode/utf8"
@@ -486,18 +489,24 @@ func TestJobMarkdown_UnmeasuredDuration_IsADash(t *testing.T) {
 }
 
 // TestListBridges_Measures_AreWhatGitLabMeasured verifies the same of a
-// bridge job, whose durations client-go decodes as float64 too.
+// bridge job, whose durations client-go decodes as float64 too, on both
+// routes: gl.Bridge and gl.TriggerJob decode them alike, so each route's
+// answer is read off the capture.
 func TestListBridges_Measures_AreWhatGitLabMeasured(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":5,"name":"trigger","stage":"deploy","status":"manual","duration":null,"queued_duration":null,"coverage":null}]`)
-	}))
-	out, err := ListBridges(context.Background(), client, BridgeListInput{ProjectID: "42", PipelineID: 10})
-	if err != nil || len(out.Bridges) != 1 {
-		t.Fatalf("ListBridges() = %+v, %v", out, err)
-	}
-	assertJobMeasures(t, "bridge", jobKeys(t, out.Bridges[0]), false)
-	if md := FormatBridgeListMarkdown(out); strings.Contains(md, "0.0s") {
-		t.Errorf("the bridge list states a duration for a bridge that never ran:\n%s", md)
+	for _, route := range bridgeRoutes {
+		t.Run(route.name, func(t *testing.T) {
+			standIn := atVersion(route.version, `[{"id":5,"name":"trigger","stage":"deploy","status":"manual","duration":null,"queued_duration":null,"coverage":null}]`)
+			client := testutil.NewTestClient(t, standIn)
+			out, err := ListBridges(context.Background(), client, BridgeListInput{ProjectID: "42", PipelineID: 10})
+			if err != nil || len(out.Bridges) != 1 {
+				t.Fatalf("ListBridges() = %+v, %v", out, err)
+			}
+			standIn.assertRoutes(t, pathVersion, route.path)
+			assertJobMeasures(t, "bridge", jobKeys(t, out.Bridges[0]), false)
+			if md := FormatBridgeListMarkdown(out); strings.Contains(md, "0.0s") {
+				t.Errorf("the bridge list states a duration for a bridge that never ran:\n%s", md)
+			}
+		})
 	}
 }
 
@@ -1143,59 +1152,311 @@ const bridgeDistinctJSON = `{
 
 // TestListBridges_MapsEveryDocumentedField holds the whole bridge to a fixture
 // where no two values agree, the way [TestJobGet_MapsEveryDocumentedField]
-// holds the job: BridgeToOutput is a converter of the same shape, and its
-// pipeline and downstream pipeline are the one pair most alike.
+// holds the job: TriggerJobToOutput is a converter of the same shape, and its
+// pipeline and downstream pipeline are the one pair most alike. Both routes
+// answer with GitLab's one bridge entity, so both are held to the same output.
 func TestListBridges_MapsEveryDocumentedField(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/pipelines/10/bridges" {
-			testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf("[%s]", bridgeDistinctJSON))
-			return
-		}
-		http.NotFound(w, r)
-	}))
+	for _, route := range bridgeRoutes {
+		t.Run(route.name, func(t *testing.T) {
+			standIn := atVersion(route.version, fmt.Sprintf("[%s]", bridgeDistinctJSON))
+			client := testutil.NewTestClient(t, standIn)
 
-	out, err := ListBridges(context.Background(), client, BridgeListInput{ProjectID: "42", PipelineID: 10})
-	if err != nil {
-		t.Fatalf("ListBridges() unexpected error: %v", err)
+			out, err := ListBridges(context.Background(), client, BridgeListInput{ProjectID: "42", PipelineID: 10})
+			if err != nil {
+				t.Fatalf("ListBridges() unexpected error: %v", err)
+			}
+			standIn.assertRoutes(t, pathVersion, route.path)
+			if len(out.Bridges) != 1 {
+				t.Fatalf("len(Bridges) = %d, want 1", len(out.Bridges))
+			}
+			if got := out.Bridges[0]; !reflect.DeepEqual(got, wantDistinctBridge) {
+				t.Errorf("bridge output differs\n got %s\nwant %s", renderForDiff(t, got), renderForDiff(t, wantDistinctBridge))
+			}
+		})
 	}
-	if len(out.Bridges) != 1 {
-		t.Fatalf("len(Bridges) = %d, want 1", len(out.Bridges))
+}
+
+// wantDistinctBridge is what [bridgeDistinctJSON] publishes as, every value
+// in the place GitLab sent it.
+var wantDistinctBridge = BridgeOutput{
+	ID: 8002, Name: "trigger-child", Stage: "fan-out", Status: "success", Ref: "topic",
+	Tag: false, AllowFailure: true,
+	Duration: new(4.5), QueuedDuration: new(1.25), Coverage: new(55.5),
+	WebURL:     "https://gitlab.example.com/g/p/-/jobs/8002",
+	CreatedAt:  "2026-03-02T10:00:00Z",
+	StartedAt:  "2026-03-02T10:01:00Z",
+	FinishedAt: "2026-03-02T10:02:00Z",
+	ErasedAt:   "2026-03-06T09:00:00Z",
+	Commit: &CommitObject{
+		ID: "c0ffee0123456789abcdef0123456789abcdef01", ShortID: "c0ffee01", Title: "Add the child pipeline",
+		AuthorName: "Linus", AuthorEmail: "linus@example.com",
+		CreatedAt: "2026-03-02T09:00:00Z", Message: "Add the child pipeline\n",
+	},
+	Pipeline: &PipelineInfoObject{
+		ID: 902, ProjectID: 4242, Status: "pending", Ref: "main",
+		SHA:       "9876543210fedcba9876543210fedcba98765432",
+		WebURL:    "https://gitlab.example.com/g/p/-/pipelines/902",
+		UpdatedAt: "2026-03-02T10:03:00Z", CreatedAt: "2026-03-02T09:59:00Z",
+	},
+	User: &UserObject{
+		ID: 6, Name: "Linus", Username: "linus", State: "blocked",
+		AvatarURL: "https://gitlab.example.com/uploads/user/avatar/6/linus.png",
+		WebURL:    "https://gitlab.example.com/linus",
+	},
+	DownstreamPipeline: &PipelineInfoObject{
+		ID: 903, ProjectID: 4343, Status: "created", Ref: "child",
+		SHA:       "1357913579135791357913579135791357913579",
+		WebURL:    "https://gitlab.example.com/g/child/-/pipelines/903",
+		UpdatedAt: "2026-03-02T10:04:00Z", CreatedAt: "2026-03-02T10:01:30Z",
+	},
+	Project: &ProjectObject{CIJobTokenScopeEnabled: true},
+}
+
+// The routes a pipeline's bridge list can reach: trigger_jobs, which GitLab
+// 19.2 added, and bridges, which the same release deprecated and every release
+// serves, beside the version endpoint the handler chooses between them by.
+const (
+	pathTriggerJobs = "/api/v4/projects/42/pipelines/10/trigger_jobs"
+	pathBridges     = "/api/v4/projects/42/pipelines/10/bridges"
+	pathVersion     = "/api/v4/version"
+	// versionMetadataRefusal is GitLab's refusal of the version endpoint to a
+	// fine-grained token without Metadata: Read.
+	versionMetadataRefusal = `{"error":"insufficient_granular_scope","error_description":"Access denied: This operation requires a fine-grained personal access token with the following instance permissions: [Metadata: Read]."}`
+)
+
+// bridgeRoutes are the two ways a bridge list runs: through bridges on an
+// instance older than 19.2, and through trigger_jobs on 19.2 itself, the
+// release that added it, so a change of the release either way fails.
+var bridgeRoutes = []struct{ name, version, path string }{
+	{"bridges before 19.2", "19.1.3-ee", pathBridges},
+	{"trigger_jobs from 19.2", "19.2.0-ee", pathTriggerJobs},
+}
+
+// bridgeRequest is one request a [bridgeStandIn] saw: its method and path,
+// and the query it carried.
+type bridgeRequest struct {
+	route string
+	query url.Values
+}
+
+// bridgeStandIn answers every request a bridge list can send: the version
+// endpoint with versionStatus and versionBody (not found when versionStatus
+// is zero), either list route with listStatus and body (200 and the
+// pagination of [filteredBridgePage] when listStatus is zero), and anything
+// else not found, recording each request. It runs on the httptest server's
+// goroutine, so it records under a lock and never stops the test.
+type bridgeStandIn struct {
+	versionStatus int
+	versionBody   string
+	listStatus    int
+	body          string
+
+	mu   sync.Mutex
+	seen []bridgeRequest
+}
+
+// ServeHTTP records the request and answers it.
+func (s *bridgeStandIn) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.seen = append(s.seen, bridgeRequest{route: r.Method + " " + r.URL.Path, query: r.URL.Query()})
+	s.mu.Unlock()
+	isList := r.Method == http.MethodGet && (r.URL.Path == pathTriggerJobs || r.URL.Path == pathBridges)
+	switch {
+	case r.Method == http.MethodGet && r.URL.Path == pathVersion && s.versionStatus != 0:
+		testutil.RespondJSON(w, s.versionStatus, s.versionBody)
+	case isList && s.listStatus != 0:
+		testutil.RespondJSON(w, s.listStatus, s.body)
+	case isList:
+		testutil.RespondJSONWithPagination(w, http.StatusOK, s.body, testutil.PaginationHeaders{
+			Page: "2", PerPage: "5", Total: "7", TotalPages: "2", PrevPage: "1",
+		})
+	default:
+		http.NotFound(w, r)
 	}
-	want := BridgeOutput{
-		ID: 8002, Name: "trigger-child", Stage: "fan-out", Status: "success", Ref: "topic",
-		Tag: false, AllowFailure: true,
-		Duration: new(4.5), QueuedDuration: new(1.25), Coverage: new(55.5),
-		WebURL:     "https://gitlab.example.com/g/p/-/jobs/8002",
-		CreatedAt:  "2026-03-02T10:00:00Z",
-		StartedAt:  "2026-03-02T10:01:00Z",
-		FinishedAt: "2026-03-02T10:02:00Z",
-		ErasedAt:   "2026-03-06T09:00:00Z",
-		Commit: &CommitObject{
-			ID: "c0ffee0123456789abcdef0123456789abcdef01", ShortID: "c0ffee01", Title: "Add the child pipeline",
-			AuthorName: "Linus", AuthorEmail: "linus@example.com",
-			CreatedAt: "2026-03-02T09:00:00Z", Message: "Add the child pipeline\n",
-		},
-		Pipeline: &PipelineInfoObject{
-			ID: 902, ProjectID: 4242, Status: "pending", Ref: "main",
-			SHA:       "9876543210fedcba9876543210fedcba98765432",
-			WebURL:    "https://gitlab.example.com/g/p/-/pipelines/902",
-			UpdatedAt: "2026-03-02T10:03:00Z", CreatedAt: "2026-03-02T09:59:00Z",
-		},
-		User: &UserObject{
-			ID: 6, Name: "Linus", Username: "linus", State: "blocked",
-			AvatarURL: "https://gitlab.example.com/uploads/user/avatar/6/linus.png",
-			WebURL:    "https://gitlab.example.com/linus",
-		},
-		DownstreamPipeline: &PipelineInfoObject{
-			ID: 903, ProjectID: 4343, Status: "created", Ref: "child",
-			SHA:       "1357913579135791357913579135791357913579",
-			WebURL:    "https://gitlab.example.com/g/child/-/pipelines/903",
-			UpdatedAt: "2026-03-02T10:04:00Z", CreatedAt: "2026-03-02T10:01:30Z",
-		},
-		Project: &ProjectObject{CIJobTokenScopeEnabled: true},
+}
+
+// requests returns the requests recorded so far.
+func (s *bridgeStandIn) requests() []bridgeRequest {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.seen)
+}
+
+// assertRoutes fails the test unless the stand-in saw exactly a GET of each
+// path, in order.
+func (s *bridgeStandIn) assertRoutes(t *testing.T, paths ...string) {
+	t.Helper()
+	var got, want []string
+	for _, request := range s.requests() {
+		got = append(got, request.route)
 	}
-	if got := out.Bridges[0]; !reflect.DeepEqual(got, want) {
-		t.Errorf("bridge output differs\n got %s\nwant %s", renderForDiff(t, got), renderForDiff(t, want))
+	for _, path := range paths {
+		want = append(want, http.MethodGet+" "+path)
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("ListBridges() sent %q, want %q", got, want)
+	}
+}
+
+// lastQuery is the query of the last request the stand-in saw, the list
+// request in every test here.
+func (s *bridgeStandIn) lastQuery(t *testing.T) url.Values {
+	t.Helper()
+	seen := s.requests()
+	if len(seen) == 0 {
+		t.Fatal("the stand-in saw no request")
+	}
+	return seen[len(seen)-1].query
+}
+
+// atVersion is a stand-in for an instance reporting version, answering
+// either list route with body.
+func atVersion(version, body string) *bridgeStandIn {
+	return &bridgeStandIn{versionStatus: http.StatusOK, versionBody: `{"version":"` + version + `"}`, body: body}
+}
+
+// filteredBridgeInput sets every parameter a bridge list takes, and
+// filteredBridgePage is the pagination the stand-in answers it with.
+var (
+	filteredBridgeInput = BridgeListInput{
+		ProjectID: "42", PipelineID: 10,
+		Scope:          []string{"success", "failed"},
+		IncludeRetried: true,
+		Page:           2, PerPage: 5,
+	}
+	filteredBridgePage = toolutil.PaginationOutput{Page: 2, PerPage: 5, TotalItems: 7, TotalPages: 2, PrevPage: 1}
+)
+
+// assertFilteredBridgeQuery checks that query carries every parameter of
+// [filteredBridgeInput] under GitLab's spelling, and nothing else: GitLab
+// pages either route by offset alone and orders neither.
+func assertFilteredBridgeQuery(t *testing.T, query url.Values) {
+	t.Helper()
+	want := url.Values{
+		"scope[]":         {"success", "failed"},
+		"include_retried": {"true"},
+		"page":            {"2"},
+		"per_page":        {"5"},
+	}
+	if !reflect.DeepEqual(query, want) {
+		t.Errorf("query = %v, want %v", query, want)
+	}
+}
+
+// TestListBridges_NineteenTwoOrLater_ListsThroughTriggerJobs verifies the
+// route an instance known to run GitLab 19.2 or later is sent: trigger_jobs,
+// the route that release added, after the version read and in place of the
+// bridges route the same release deprecated, with the scope, the page and
+// include_retried the caller set. 19.6.0-pre is what GitLab.com reports, and
+// a prerelease counts as the minor it names.
+func TestListBridges_NineteenTwoOrLater_ListsThroughTriggerJobs(t *testing.T) {
+	for _, version := range []string{"19.2.0-ee", "19.5.0-ee", "19.6.0-pre", "20.0.0"} {
+		t.Run(version, func(t *testing.T) {
+			standIn := atVersion(version, fmt.Sprintf("[%s]", bridgeJSON))
+			client := testutil.NewTestClient(t, standIn)
+
+			out, err := ListBridges(t.Context(), client, filteredBridgeInput)
+			if err != nil {
+				t.Fatalf("ListBridges() error = %v", err)
+			}
+			standIn.assertRoutes(t, pathVersion, pathTriggerJobs)
+			assertFilteredBridgeQuery(t, standIn.lastQuery(t))
+			if len(out.Bridges) != 1 || out.Bridges[0].ID != 200 || out.Bridges[0].DownstreamPipeline == nil || out.Bridges[0].DownstreamPipeline.ID != 50 {
+				t.Errorf("ListBridges() answered %+v, want the bridge trigger_jobs answered with", out.Bridges)
+			}
+			if out.Pagination != filteredBridgePage {
+				t.Errorf("Pagination = %+v, want %+v", out.Pagination, filteredBridgePage)
+			}
+		})
+	}
+}
+
+// TestListBridges_OlderOrUnknownRelease_ListsThroughBridges verifies that an
+// instance older than 19.2, or one whose release is not known, is sent the
+// bridges route every release serves, with the same parameters: a version
+// endpoint that did not answer, one that refused this token Metadata: Read and
+// one that named something that is not a version all read as not known.
+func TestListBridges_OlderOrUnknownRelease_ListsThroughBridges(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"19.1.3-ee", http.StatusOK, `{"version":"19.1.3-ee"}`},
+		{"18.11.0", http.StatusOK, `{"version":"18.11.0"}`},
+		{"no answer", http.StatusBadGateway, `{"message":"502 Bad Gateway"}`},
+		{"Metadata: Read refused", http.StatusForbidden, versionMetadataRefusal},
+		{"not a version", http.StatusOK, `{"version":"unknown"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			standIn := &bridgeStandIn{versionStatus: tt.status, versionBody: tt.body, body: fmt.Sprintf("[%s]", bridgeJSON)}
+			client := testutil.NewTestClient(t, standIn)
+
+			out, err := ListBridges(t.Context(), client, filteredBridgeInput)
+			if err != nil {
+				t.Fatalf("ListBridges() error = %v", err)
+			}
+			standIn.assertRoutes(t, pathVersion, pathBridges)
+			assertFilteredBridgeQuery(t, standIn.lastQuery(t))
+			if len(out.Bridges) != 1 || out.Bridges[0].ID != 200 {
+				t.Errorf("ListBridges() answered %+v, want the bridge the bridges route answered with", out.Bridges)
+			}
+			if out.Pagination != filteredBridgePage {
+				t.Errorf("Pagination = %+v, want %+v", out.Pagination, filteredBridgePage)
+			}
+		})
+	}
+}
+
+// TestListBridges_NoFilter_SendsNoParameter verifies that a caller who set
+// no filter sends none on either route, so GitLab applies its own defaults:
+// every status, the latest attempt of each bridge and its first page.
+func TestListBridges_NoFilter_SendsNoParameter(t *testing.T) {
+	for _, route := range bridgeRoutes {
+		t.Run(route.name, func(t *testing.T) {
+			standIn := atVersion(route.version, "[]")
+			client := testutil.NewTestClient(t, standIn)
+
+			if _, err := ListBridges(t.Context(), client, BridgeListInput{ProjectID: "42", PipelineID: 10}); err != nil {
+				t.Fatalf("ListBridges() error = %v", err)
+			}
+			standIn.assertRoutes(t, pathVersion, route.path)
+			if query := standIn.lastQuery(t); len(query) != 0 {
+				t.Errorf("query = %v, want none", query)
+			}
+		})
+	}
+}
+
+// TestListBridges_TriggerJobsRefusal_CarriesTheHintOnNotFoundOnly verifies
+// that the trigger_jobs route's refusals are answered as the bridges route's
+// are: a 404 with the pipeline hint, and a 403 without it.
+func TestListBridges_TriggerJobsRefusal_CarriesTheHintOnNotFoundOnly(t *testing.T) {
+	const hint = "Bridges only exist"
+	tests := []struct {
+		name     string
+		status   int
+		wantHint bool
+	}{
+		{"404 carries the hint", http.StatusNotFound, true},
+		{"403 does not", http.StatusForbidden, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			standIn := atVersion("19.2.0-ee", `{"message":"refused"}`)
+			standIn.listStatus = tt.status
+			client := testutil.NewTestClient(t, standIn)
+
+			_, err := ListBridges(t.Context(), client, BridgeListInput{ProjectID: "42", PipelineID: 10})
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			standIn.assertRoutes(t, pathVersion, pathTriggerJobs)
+			if got := strings.Contains(err.Error(), hint); got != tt.wantHint {
+				t.Errorf("error %q carries the hint %q: %t, want %t", err, hint, got, tt.wantHint)
+			}
+		})
 	}
 }
 
@@ -2277,7 +2538,8 @@ func TestListProject_ForwardsEveryListParameter(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ListBridges: API error, canceled context, with scope and pagination
+// ListBridges: API error, canceled context (the routes, the filters and the
+// pagination are held by the TestListBridges routing tests above)
 // ---------------------------------------------------------------------------.
 
 // TestListBridges_APIError verifies ListBridges when API error.
@@ -2300,53 +2562,6 @@ func TestListBridges_CancelledContext(t *testing.T) {
 	_, err := ListBridges(ctx, client, BridgeListInput{ProjectID: "42", PipelineID: 10})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
-	}
-}
-
-// TestListBridges_WithScopeAndPagination verifies ListBridges when with scope and pagination.
-func TestListBridges_WithScopeAndPagination(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/pipelines/10/bridges" {
-			q := r.URL.Query()
-			scopes := q["scope[]"]
-			if len(scopes) != 1 || scopes[0] != "success" {
-				t.Errorf("expected scope[]=[success], got %v", scopes)
-			}
-			if q.Get("include_retried") != "true" {
-				t.Errorf("expected include_retried=true, got %q", q.Get("include_retried"))
-			}
-			if q.Get("order_by") != "id" || q.Get("sort") != "desc" {
-				t.Errorf("expected order_by=id&sort=desc, got order_by=%q sort=%q", q.Get("order_by"), q.Get("sort"))
-			}
-			if q.Get("pagination") != "keyset" || q.Get("page_token") != "tok" {
-				t.Errorf("expected keyset/tok, got pagination=%q page_token=%q", q.Get("pagination"), q.Get("page_token"))
-			}
-			testutil.RespondJSONWithPagination(w, http.StatusOK, fmt.Sprintf("[%s]", bridgeJSON),
-				testutil.PaginationHeaders{Page: "1", PerPage: "5", Total: "7", TotalPages: "2", NextPage: "2"})
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	out, err := ListBridges(context.Background(), client, BridgeListInput{
-		ProjectID:      "42",
-		PipelineID:     10,
-		Scope:          []string{"success"},
-		IncludeRetried: true,
-		OrderBy:        "id",
-		Sort:           "desc",
-		Page:           1, PerPage: 5,
-		Pagination: "keyset", PageToken: "tok",
-	})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-	if len(out.Bridges) != 1 {
-		t.Fatalf("len(Bridges) = %d, want 1", len(out.Bridges))
-	}
-	wantPage := toolutil.PaginationOutput{Page: 1, PerPage: 5, TotalItems: 7, TotalPages: 2, NextPage: 2, HasMore: true}
-	if out.Pagination != wantPage {
-		t.Errorf("Pagination = %+v, want %+v", out.Pagination, wantPage)
 	}
 }
 
@@ -2907,6 +3122,30 @@ func TestFormatWaitResult_TimedOutMarksError(t *testing.T) {
 	}
 }
 
+// TestFormatWaitResult_FinishedIsNoError verifies a wait that ended before
+// its timeout is an ordinary result, whatever status the job finished in:
+// only running out of time is the tool's failure.
+func TestFormatWaitResult_FinishedIsNoError(t *testing.T) {
+	result := formatWaitResult(WaitOutput{
+		Job:         Output{ID: 100, Name: "build", Status: "failed", Stage: "build", Ref: "main"},
+		FinalStatus: "failed",
+		WaitedFor:   "1s",
+		PollCount:   1,
+	})
+	if result == nil || result.IsError {
+		t.Fatalf("formatWaitResult() = %+v, want a result that is not an error", result)
+	}
+}
+
+// TestFormatOutputMarkdown_CommitWithoutID_OmitsTheRow verifies a commit
+// object carrying no SHA writes no Commit row, rather than an empty code span.
+func TestFormatOutputMarkdown_CommitWithoutID_OmitsTheRow(t *testing.T) {
+	md := FormatOutputMarkdown(Output{ID: 3, Name: "n", Stage: "s", Status: "success", Ref: "r", Commit: &CommitObject{Title: "Add the child pipeline"}})
+	if strings.Contains(md, "**Commit**") {
+		t.Errorf("FormatOutputMarkdown(commit without id) shows a commit row:\n%s", md)
+	}
+}
+
 // TestFormatOutputMarkdown_MinimalFields checks that a job GitLab said little
 // about renders only the rows it answered: no label stands without a value.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
@@ -3274,6 +3513,26 @@ func TestFormatBridgeListMarkdown_LinksTheDownstreamPipeline(t *testing.T) {
 		"[#77](https://gitlab.example.com/downstream/-/pipelines/77) |\n"
 	if !strings.Contains(md, wantRow) {
 		t.Errorf("FormatBridgeListMarkdown() missing %q:\n%s", wantRow, md)
+	}
+}
+
+// TestFormatBridgeListMarkdown_DownstreamWithoutID_LeavesTheCellEmpty checks
+// that a downstream pipeline object with no ID links nothing: a link to #0
+// would name a pipeline that does not exist.
+func TestFormatBridgeListMarkdown_DownstreamWithoutID_LeavesTheCellEmpty(t *testing.T) {
+	const downstreamURL = "https://gitlab.example.com/downstream/-/pipelines/77"
+	md := FormatBridgeListMarkdown(BridgeListOutput{
+		Bridges: []BridgeOutput{{
+			ID: 300, Name: "trigger", Stage: "deploy", Status: "created",
+			WebURL:             "https://gitlab.example.com/-/jobs/300",
+			DownstreamPipeline: &PipelineInfoObject{WebURL: downstreamURL},
+		}},
+	})
+	if strings.Contains(md, "#0") || strings.Contains(md, downstreamURL) {
+		t.Errorf("FormatBridgeListMarkdown(downstream without id) links it:\n%s", md)
+	}
+	if !strings.Contains(md, "[#300](https://gitlab.example.com/-/jobs/300)") {
+		t.Errorf("FormatBridgeListMarkdown() lost the bridge row:\n%s", md)
 	}
 }
 
@@ -3676,15 +3935,15 @@ func TestActionSpecs_JobGetRoute(t *testing.T) {
 // key its own Bridge does not model, so the read of the captured response is
 // the only thing that can notice.
 func TestListBridges_UnreadableCapturedProject(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"trigger","status":"success","project":"not-an-object"}]`)
-	}))
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
-		{Name: "list_bridges", Call: func() error {
-			_, err := ListBridges(context.Background(), client, BridgeListInput{ProjectID: "42", PipelineID: 7})
+	cases := make([]testutil.CapturedCase, 0, len(bridgeRoutes))
+	for _, route := range bridgeRoutes {
+		client := testutil.NewTestClient(t, atVersion(route.version, `[{"id":1,"name":"trigger","status":"success","project":"not-an-object"}]`))
+		cases = append(cases, testutil.CapturedCase{Name: route.name, Call: func() error {
+			_, err := ListBridges(context.Background(), client, BridgeListInput{ProjectID: "42", PipelineID: 10})
 			return err
-		}},
-	})
+		}})
+	}
+	testutil.AssertCapturedDecodeFailures(t, cases)
 }
 
 // jobSpecsByTool supports job specs by tool assertions in jobs tests.
