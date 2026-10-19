@@ -613,33 +613,33 @@ This table judges fine-grained tokens alone. The scope a classic personal access
 
 ## `job`
 
-| Action                                | Needs                                        | Served empty |
-| ------------------------------------- | -------------------------------------------- | ------------ |
-| `job.artifacts`                       | Job Artifact: Read at project                |              |
-| `job.cancel`                          | Job: Update at project                       |              |
-| `job.delete_artifacts`                | Job Artifact: Delete at project              |              |
-| `job.delete_project_artifacts`        | Artifact: Delete at project                  |              |
-| `job.download_artifacts`              | Job Artifact: Read at project                |              |
-| `job.download_single_artifact`        | Job Artifact: Read at project                |              |
-| `job.download_single_artifact_by_ref` | Job Artifact: Read at project                |              |
-| `job.erase`                           | Job: Delete at project                       |              |
-| `job.get`                             | Job: Read at project                         |              |
-| `job.keep_artifacts`                  | Job Artifact: Update at project              |              |
-| `job.list`                            | Pipeline: Read at project                    |              |
-| `job.list_bridges`                    | Pipeline: Read at project                    |              |
-| `job.list_project`                    | Job: Read at project                         |              |
-| `job.play`                            | Job: Run at project                          |              |
-| `job.retry`                           | Job: Run at project                          |              |
-| `job.token_scope_add_group`           | Job Token Scope Allowlist: Create at project |              |
-| `job.token_scope_add_project`         | Job Token Scope Allowlist: Create at project |              |
-| `job.token_scope_get`                 | Job Token Scope: Read at project             |              |
-| `job.token_scope_list_groups`         | Job Token Scope Allowlist: Read at project   |              |
-| `job.token_scope_list_inbound`        | Job Token Scope Allowlist: Read at project   |              |
-| `job.token_scope_patch`               | Job Token Scope: Update at project           |              |
-| `job.token_scope_remove_group`        | Job Token Scope Allowlist: Delete at project |              |
-| `job.token_scope_remove_project`      | Job Token Scope Allowlist: Delete at project |              |
-| `job.trace`                           | Job: Read at project                         |              |
-| `job.wait`                            | Job: Read at project                         |              |
+| Action                                | Needs                                                                       | Served empty |
+| ------------------------------------- | --------------------------------------------------------------------------- | ------------ |
+| `job.artifacts`                       | Job Artifact: Read at project                                               |              |
+| `job.cancel`                          | Job: Update at project                                                      |              |
+| `job.delete_artifacts`                | Job Artifact: Delete at project                                             |              |
+| `job.delete_project_artifacts`        | Artifact: Delete at project                                                 |              |
+| `job.download_artifacts`              | Job Artifact: Read at project                                               |              |
+| `job.download_single_artifact`        | Job Artifact: Read at project                                               |              |
+| `job.download_single_artifact_by_ref` | Job Artifact: Read at project                                               |              |
+| `job.erase`                           | Job: Delete at project                                                      |              |
+| `job.get`                             | Job: Read at project                                                        |              |
+| `job.keep_artifacts`                  | Job Artifact: Update at project                                             |              |
+| `job.list`                            | Pipeline: Read at project                                                   |              |
+| `job.list_bridges`                    | Pipeline: Read at project. Some calls also need: Metadata: Read at instance |              |
+| `job.list_project`                    | Job: Read at project                                                        |              |
+| `job.play`                            | Job: Run at project                                                         |              |
+| `job.retry`                           | Job: Run at project                                                         |              |
+| `job.token_scope_add_group`           | Job Token Scope Allowlist: Create at project                                |              |
+| `job.token_scope_add_project`         | Job Token Scope Allowlist: Create at project                                |              |
+| `job.token_scope_get`                 | Job Token Scope: Read at project                                            |              |
+| `job.token_scope_list_groups`         | Job Token Scope Allowlist: Read at project                                  |              |
+| `job.token_scope_list_inbound`        | Job Token Scope Allowlist: Read at project                                  |              |
+| `job.token_scope_patch`               | Job Token Scope: Update at project                                          |              |
+| `job.token_scope_remove_group`        | Job Token Scope Allowlist: Delete at project                                |              |
+| `job.token_scope_remove_project`      | Job Token Scope Allowlist: Delete at project                                |              |
+| `job.trace`                           | Job: Read at project                                                        |              |
+| `job.wait`                            | Job: Read at project                                                        |              |
 
 ## `member_role`
 
@@ -814,6 +814,7 @@ This table judges fine-grained tokens alone. The scope a classic personal access
 | `pipeline.get`                               | Pipeline: Read at project                                                                          |              |
 | `pipeline.latest`                            | Pipeline: Read at project. Some calls also need: Project: Read at project; Commit: Read at project |              |
 | `pipeline.list`                              | Pipeline: Read at project                                                                          |              |
+| `pipeline.resource_group_current_job`        | Job: Read, Resource Group: Read at project                                                         |              |
 | `pipeline.resource_group_edit`               | Resource Group: Update at project                                                                  |              |
 | `pipeline.resource_group_get`                | Resource Group: Read at project                                                                    |              |
 | `pipeline.resource_group_list`               | Resource Group: Read at project                                                                    |              |
@@ -931,12 +932,14 @@ This table judges fine-grained tokens alone. The scope a classic personal access
 | `project.member_get`                       | Member: Read at project                                                                                                                                            |              |
 | `project.member_inherited`                 | Member: Read at project                                                                                                                                            |              |
 | `project.members`                          | Member: Read at project                                                                                                                                            |              |
+| `project.milestone_burndown`               | Work Item: Read at project                                                                                                                                         |              |
 | `project.milestone_create`                 | Work Item: Create at project                                                                                                                                       |              |
 | `project.milestone_delete`                 | Work Item: Read at project; Work Item: Delete at project                                                                                                           |              |
 | `project.milestone_get`                    | Work Item: Read at project                                                                                                                                         |              |
 | `project.milestone_issues`                 | Work Item: Read at project                                                                                                                                         |              |
 | `project.milestone_list`                   | Work Item: Read at project                                                                                                                                         |              |
 | `project.milestone_merge_requests`         | Work Item: Read at project                                                                                                                                         |              |
+| `project.milestone_promote`                | Work Item: Read at project; Work Item: Update at project                                                                                                           |              |
 | `project.milestone_update`                 | Work Item: Read at project; Work Item: Update at project                                                                                                           |              |
 | `project.mirror_add`                       | Remote Mirror: Create at project                                                                                                                                   |              |
 | `project.mirror_delete`                    | Remote Mirror: Delete at project                                                                                                                                   |              |

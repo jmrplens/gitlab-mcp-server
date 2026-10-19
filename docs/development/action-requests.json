@@ -14964,20 +14964,54 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /projects/:id/pipelines/:pipeline_id/bridges",
-          "class": "mandatory",
+          "route": "GET /version",
+          "class": "optional",
           "classic": "read_api",
           "sites": [
-            "jobs.ListBridges"
+            "gitlab.Client.ReadVersion"
+          ],
+          "directives": [
+            "optional: the version is asked only while no read of it has answered, and is kept from the first answer on"
+          ],
+          "declaration": "outside-client-go"
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/pipelines/:pipeline_id/trigger_jobs",
+          "class": "alternative",
+          "classic": "read_api",
+          "sites": [
+            "jobs.listTriggerJobs"
+          ],
+          "sdk_methods": [
+            "Jobs.ListPipelineTriggerJobs"
+          ],
+          "directives": [
+            "alternatives: an instance on 19.2 or later is sent trigger_jobs and the deprecated bridges route below is not sent"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/pipelines/:pipeline_id/bridges",
+          "class": "alternative",
+          "classic": "read_api",
+          "sites": [
+            "jobs.listBridgesRoute"
           ],
           "sdk_methods": [
             "Jobs.ListPipelineBridges"
+          ],
+          "directives": [
+            "alternatives: an instance older than 19.2, or one whose release is not known, is sent the deprecated bridges route instead of trigger_jobs"
           ]
         }
       ],
       "paths": [
         [
-          0
+          1
+        ],
+        [
+          2
         ]
       ]
     },
@@ -19022,6 +19056,32 @@
       ]
     },
     {
+      "id": "pipeline.resource_group_current_job",
+      "handlers": [
+        "resourcegroups.CurrentJob"
+      ],
+      "classic": "read_api",
+      "requests": [
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/resource_groups/:key/current_job",
+          "class": "mandatory",
+          "classic": "read_api",
+          "sites": [
+            "resourcegroups.CurrentJob"
+          ],
+          "sdk_methods": [
+            "ResourceGroup.GetCurrentJobForAResourceGroup"
+          ]
+        }
+      ],
+      "paths": [
+        [
+          0
+        ]
+      ]
+    },
+    {
       "id": "pipeline.resource_group_edit",
       "handlers": [
         "resourcegroups.Edit"
@@ -22565,6 +22625,48 @@
       ]
     },
     {
+      "id": "project.milestone_burndown",
+      "handlers": [
+        "milestones.GetBurndownChartEvents"
+      ],
+      "classic": "read_api",
+      "requests": [
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/milestones",
+          "class": "mandatory",
+          "classic": "read_api",
+          "sites": [
+            "milestones.resolveMilestone"
+          ],
+          "sdk_methods": [
+            "Milestones.ListMilestones"
+          ],
+          "directives": [
+            "mandatory: the action is addressed by IID and GitLab's milestone routes by ID, so this lookup runs before the action's own request on every call"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/milestones/:milestone_id/burndown_events",
+          "class": "mandatory",
+          "classic": "read_api",
+          "sites": [
+            "milestones.GetBurndownChartEvents"
+          ],
+          "sdk_methods": [
+            "Milestones.GetMilestoneBurndownChartEvents"
+          ]
+        }
+      ],
+      "paths": [
+        [
+          0,
+          1
+        ]
+      ]
+    },
+    {
       "id": "project.milestone_create",
       "handlers": [
         "milestones.Create"
@@ -22603,7 +22705,7 @@
           "class": "mandatory",
           "classic": "read_api",
           "sites": [
-            "milestones.resolveIID"
+            "milestones.resolveMilestone"
           ],
           "sdk_methods": [
             "Milestones.ListMilestones"
@@ -22646,7 +22748,7 @@
           "class": "mandatory",
           "classic": "read_api",
           "sites": [
-            "milestones.resolveIID"
+            "milestones.resolveMilestone"
           ],
           "sdk_methods": [
             "Milestones.ListMilestones"
@@ -22688,7 +22790,7 @@
           "class": "mandatory",
           "classic": "read_api",
           "sites": [
-            "milestones.resolveIID"
+            "milestones.resolveMilestone"
           ],
           "sdk_methods": [
             "Milestones.ListMilestones"
@@ -22756,7 +22858,7 @@
           "class": "mandatory",
           "classic": "read_api",
           "sites": [
-            "milestones.resolveIID"
+            "milestones.resolveMilestone"
           ],
           "sdk_methods": [
             "Milestones.ListMilestones"
@@ -22786,6 +22888,48 @@
       ]
     },
     {
+      "id": "project.milestone_promote",
+      "handlers": [
+        "milestones.Promote"
+      ],
+      "classic": "api",
+      "requests": [
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/milestones",
+          "class": "mandatory",
+          "classic": "read_api",
+          "sites": [
+            "milestones.resolveMilestone"
+          ],
+          "sdk_methods": [
+            "Milestones.ListMilestones"
+          ],
+          "directives": [
+            "mandatory: the action is addressed by IID and GitLab's milestone routes by ID, so this lookup runs before the action's own request on every call"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "POST /projects/:id/milestones/:milestone_id/promote",
+          "class": "mandatory",
+          "classic": "api",
+          "sites": [
+            "milestones.Promote"
+          ],
+          "sdk_methods": [
+            "Milestones.PromoteMilestone"
+          ]
+        }
+      ],
+      "paths": [
+        [
+          0,
+          1
+        ]
+      ]
+    },
+    {
       "id": "project.milestone_update",
       "handlers": [
         "milestones.Update"
@@ -22798,7 +22942,7 @@
           "class": "mandatory",
           "classic": "read_api",
           "sites": [
-            "milestones.resolveIID"
+            "milestones.resolveMilestone"
           ],
           "sdk_methods": [
             "Milestones.ListMilestones"

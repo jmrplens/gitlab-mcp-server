@@ -613,33 +613,33 @@ Esta tabla juzga solo los tokens de grano fino. El scope que necesita para cada 
 
 ## `job`
 
-| Acción                                | Necesita                                      | Se sirve vacío |
-| ------------------------------------- | --------------------------------------------- | -------------- |
-| `job.artifacts`                       | Job Artifact: Read en proyecto                |                |
-| `job.cancel`                          | Job: Update en proyecto                       |                |
-| `job.delete_artifacts`                | Job Artifact: Delete en proyecto              |                |
-| `job.delete_project_artifacts`        | Artifact: Delete en proyecto                  |                |
-| `job.download_artifacts`              | Job Artifact: Read en proyecto                |                |
-| `job.download_single_artifact`        | Job Artifact: Read en proyecto                |                |
-| `job.download_single_artifact_by_ref` | Job Artifact: Read en proyecto                |                |
-| `job.erase`                           | Job: Delete en proyecto                       |                |
-| `job.get`                             | Job: Read en proyecto                         |                |
-| `job.keep_artifacts`                  | Job Artifact: Update en proyecto              |                |
-| `job.list`                            | Pipeline: Read en proyecto                    |                |
-| `job.list_bridges`                    | Pipeline: Read en proyecto                    |                |
-| `job.list_project`                    | Job: Read en proyecto                         |                |
-| `job.play`                            | Job: Run en proyecto                          |                |
-| `job.retry`                           | Job: Run en proyecto                          |                |
-| `job.token_scope_add_group`           | Job Token Scope Allowlist: Create en proyecto |                |
-| `job.token_scope_add_project`         | Job Token Scope Allowlist: Create en proyecto |                |
-| `job.token_scope_get`                 | Job Token Scope: Read en proyecto             |                |
-| `job.token_scope_list_groups`         | Job Token Scope Allowlist: Read en proyecto   |                |
-| `job.token_scope_list_inbound`        | Job Token Scope Allowlist: Read en proyecto   |                |
-| `job.token_scope_patch`               | Job Token Scope: Update en proyecto           |                |
-| `job.token_scope_remove_group`        | Job Token Scope Allowlist: Delete en proyecto |                |
-| `job.token_scope_remove_project`      | Job Token Scope Allowlist: Delete en proyecto |                |
-| `job.trace`                           | Job: Read en proyecto                         |                |
-| `job.wait`                            | Job: Read en proyecto                         |                |
+| Acción                                | Necesita                                                                                    | Se sirve vacío |
+| ------------------------------------- | ------------------------------------------------------------------------------------------- | -------------- |
+| `job.artifacts`                       | Job Artifact: Read en proyecto                                                              |                |
+| `job.cancel`                          | Job: Update en proyecto                                                                     |                |
+| `job.delete_artifacts`                | Job Artifact: Delete en proyecto                                                            |                |
+| `job.delete_project_artifacts`        | Artifact: Delete en proyecto                                                                |                |
+| `job.download_artifacts`              | Job Artifact: Read en proyecto                                                              |                |
+| `job.download_single_artifact`        | Job Artifact: Read en proyecto                                                              |                |
+| `job.download_single_artifact_by_ref` | Job Artifact: Read en proyecto                                                              |                |
+| `job.erase`                           | Job: Delete en proyecto                                                                     |                |
+| `job.get`                             | Job: Read en proyecto                                                                       |                |
+| `job.keep_artifacts`                  | Job Artifact: Update en proyecto                                                            |                |
+| `job.list`                            | Pipeline: Read en proyecto                                                                  |                |
+| `job.list_bridges`                    | Pipeline: Read en proyecto. Algunas llamadas también necesitan: Metadata: Read en instancia |                |
+| `job.list_project`                    | Job: Read en proyecto                                                                       |                |
+| `job.play`                            | Job: Run en proyecto                                                                        |                |
+| `job.retry`                           | Job: Run en proyecto                                                                        |                |
+| `job.token_scope_add_group`           | Job Token Scope Allowlist: Create en proyecto                                               |                |
+| `job.token_scope_add_project`         | Job Token Scope Allowlist: Create en proyecto                                               |                |
+| `job.token_scope_get`                 | Job Token Scope: Read en proyecto                                                           |                |
+| `job.token_scope_list_groups`         | Job Token Scope Allowlist: Read en proyecto                                                 |                |
+| `job.token_scope_list_inbound`        | Job Token Scope Allowlist: Read en proyecto                                                 |                |
+| `job.token_scope_patch`               | Job Token Scope: Update en proyecto                                                         |                |
+| `job.token_scope_remove_group`        | Job Token Scope Allowlist: Delete en proyecto                                               |                |
+| `job.token_scope_remove_project`      | Job Token Scope Allowlist: Delete en proyecto                                               |                |
+| `job.trace`                           | Job: Read en proyecto                                                                       |                |
+| `job.wait`                            | Job: Read en proyecto                                                                       |                |
 
 ## `member_role`
 
@@ -814,6 +814,7 @@ Esta tabla juzga solo los tokens de grano fino. El scope que necesita para cada 
 | `pipeline.get`                               | Pipeline: Read en proyecto                                                                                          |                |
 | `pipeline.latest`                            | Pipeline: Read en proyecto. Algunas llamadas también necesitan: Project: Read en proyecto; Commit: Read en proyecto |                |
 | `pipeline.list`                              | Pipeline: Read en proyecto                                                                                          |                |
+| `pipeline.resource_group_current_job`        | Job: Read, Resource Group: Read en proyecto                                                                         |                |
 | `pipeline.resource_group_edit`               | Resource Group: Update en proyecto                                                                                  |                |
 | `pipeline.resource_group_get`                | Resource Group: Read en proyecto                                                                                    |                |
 | `pipeline.resource_group_list`               | Resource Group: Read en proyecto                                                                                    |                |
@@ -931,12 +932,14 @@ Esta tabla juzga solo los tokens de grano fino. El scope que necesita para cada 
 | `project.member_get`                       | Member: Read en proyecto                                                                                                                                                                |                |
 | `project.member_inherited`                 | Member: Read en proyecto                                                                                                                                                                |                |
 | `project.members`                          | Member: Read en proyecto                                                                                                                                                                |                |
+| `project.milestone_burndown`               | Work Item: Read en proyecto                                                                                                                                                             |                |
 | `project.milestone_create`                 | Work Item: Create en proyecto                                                                                                                                                           |                |
 | `project.milestone_delete`                 | Work Item: Read en proyecto; Work Item: Delete en proyecto                                                                                                                              |                |
 | `project.milestone_get`                    | Work Item: Read en proyecto                                                                                                                                                             |                |
 | `project.milestone_issues`                 | Work Item: Read en proyecto                                                                                                                                                             |                |
 | `project.milestone_list`                   | Work Item: Read en proyecto                                                                                                                                                             |                |
 | `project.milestone_merge_requests`         | Work Item: Read en proyecto                                                                                                                                                             |                |
+| `project.milestone_promote`                | Work Item: Read en proyecto; Work Item: Update en proyecto                                                                                                                              |                |
 | `project.milestone_update`                 | Work Item: Read en proyecto; Work Item: Update en proyecto                                                                                                                              |                |
 | `project.mirror_add`                       | Remote Mirror: Create en proyecto                                                                                                                                                       |                |
 | `project.mirror_delete`                    | Remote Mirror: Delete en proyecto                                                                                                                                                       |                |
