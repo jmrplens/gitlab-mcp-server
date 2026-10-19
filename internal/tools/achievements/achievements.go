@@ -41,7 +41,17 @@ const (
 	hintNamespacePath        = "full_path is the group or project path such as my-group or my-group/my-project, and the namespace must already exist"
 	hintUsername             = "username is the account name without a leading @, as returned by user.list"
 	hintFeatureAvailability  = "achievements are generally available from GitLab 19.3; on an older instance an administrator must enable the achievements feature flag"
+	hintAwardMessageLength   = "award_message is limited to 200 characters, so shorten it and send the call again"
 )
+
+// awardMessageRefused reports whether GitLab refused an award write for its
+// award_message, which it does in two places: the mutation's argument
+// validator names awardMessage and the model's validation "Award message".
+// Only that refusal earns [hintAwardMessageLength]; on any other the message
+// was never the problem, and may not have been sent at all.
+func awardMessageRefused(err error) bool {
+	return toolutil.ContainsAny(err, "awardMessage", "Award message")
+}
 
 // Achievement mirrors gl.Achievement, the badge a namespace defines.
 type Achievement struct {
@@ -327,7 +337,10 @@ func Award(ctx context.Context, client *gitlabclient.Client, input AwardInput) (
 
 	award, resp, err := client.GL().Achievements.AwardAchievement(input.AchievementID, input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return UserAchievementOutput{}, writeErr(client, resp, opAward, objectAward, err, "verify achievement_id and user_id both exist, and that award_message stays within 200 characters")
+		if awardMessageRefused(err) {
+			return UserAchievementOutput{}, writeErr(client, resp, opAward, objectAward, err, hintAwardMessageLength)
+		}
+		return UserAchievementOutput{}, writeErr(client, resp, opAward, objectAward, err, "verify achievement_id and user_id both exist")
 	}
 	return UserAchievementOutput{UserAchievement: toUserAchievement(award)}, nil
 }
@@ -366,7 +379,10 @@ func UserAchievementUpdate(ctx context.Context, client *gitlabclient.Client, inp
 
 	award, resp, err := client.GL().Achievements.UpdateUserAchievement(input.UserAchievementID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return UserAchievementOutput{}, writeErr(client, resp, opUserAchievementUpdate, objectAward, err, hintUserAchievementID+", and that award_message stays within 200 characters")
+		if awardMessageRefused(err) {
+			return UserAchievementOutput{}, writeErr(client, resp, opUserAchievementUpdate, objectAward, err, hintAwardMessageLength)
+		}
+		return UserAchievementOutput{}, writeErr(client, resp, opUserAchievementUpdate, objectAward, err, hintUserAchievementID)
 	}
 	return UserAchievementOutput{UserAchievement: toUserAchievement(award)}, nil
 }

@@ -158,6 +158,31 @@ func TestActionSpecs_ListOrderingGuidance(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_GroupListVersionFilter_SaysHowItMeetsIncludeVersionless
+// verifies that the group list's package_version describes what GitLab does
+// with it beside include_versionless: a version filter matches the packages
+// carrying that version, which no versionless package does, so
+// include_versionless adds nothing to a list filtered by version
+// (Packages::FinderHelper filters by version after include_versionless has
+// let versionless packages in). The description used to say that with
+// include_versionless versionless packages are not returned, which read as
+// the opposite of include_versionless's own description beside it.
+func TestActionSpecs_GroupListVersionFilter_SaysHowItMeetsIncludeVersionless(t *testing.T) {
+	byTool := packageSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, packageActionHandler())))
+	description := schemaPropertyDescription(t, byTool["gitlab_list_group_packages"].Route.InputSchema, "package_version")
+
+	if strings.Contains(description, "are not returned") {
+		t.Errorf("package_version description = %q, want no sentence that contradicts include_versionless", description)
+	}
+	for _, want := range []string{"this version", "include_versionless has no effect"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(description, want) {
+				t.Errorf("package_version description = %q, want it to contain %q", description, want)
+			}
+		})
+	}
+}
+
 // TestActionSpecs_GetRoute_NotFoundIsAResultNotAnError verifies the get route
 // turns GitLab's 404 into the structured not-found output naming the package
 // and the project as the caller gave them, and hands every other refusal back

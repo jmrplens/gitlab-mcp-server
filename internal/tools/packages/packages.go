@@ -468,7 +468,7 @@ type GroupListInput struct {
 	GroupID            toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	ExcludeSubgroups   bool                 `json:"exclude_subgroups,omitempty" jsonschema:"Exclude packages from subgroups (only return packages from the group's direct projects)"`
 	PackageName        string               `json:"package_name,omitempty" jsonschema:"Filter by package name"`
-	PackageVersion     string               `json:"package_version,omitempty" jsonschema:"Filter by package version. With include_versionless, versionless packages are not returned"`
+	PackageVersion     string               `json:"package_version,omitempty" jsonschema:"Return only the packages with this version. A versionless package never matches one, so include_versionless has no effect beside it"`
 	PackageType        string               `json:"package_type,omitempty" jsonschema:"Filter by type (generic, npm, maven, etc.)"`
 	OrderBy            string               `json:"order_by,omitempty" jsonschema:"Order by: name, created_at, version, type, project_path"`
 	Sort               string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`

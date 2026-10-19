@@ -53,7 +53,9 @@ type ListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// List returns all project topics.
+// List returns the instance's project topics, narrowed to those whose name
+// matches search when one is given, and to the topics no project is assigned
+// to when without_projects is set.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	opts := &gl.ListTopicsOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)

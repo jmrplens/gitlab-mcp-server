@@ -656,10 +656,72 @@ func TestAward_ValidationAndErrors(t *testing.T) {
 	t.Run("api error", func(t *testing.T) {
 		failing := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{keyAward: errorResponse}))
 		_, err := Award(t.Context(), failing, AwardInput{AchievementID: 1, UserID: 2})
-		if err == nil || !strings.Contains(err.Error(), "200 characters") {
+		if err == nil || !strings.Contains(err.Error(), "verify achievement_id and user_id both exist") {
 			t.Errorf("Award() error = %v, want the award hint", err)
 		}
 	})
+}
+
+// TestAwardMessageHint_FollowsOnlyGitLabsLengthRefusal verifies that the award
+// and the award update tell a caller about award_message's 200 characters only
+// when GitLab refused the message for its length, and never on another
+// refusal, where the advice would send a model to shorten a message that was
+// never the problem, or one it did not send at all.
+//
+// GitLab refuses an overlong message in two places, both of which reach the
+// caller through client-go: the mutation's argument validator, as a top-level
+// error naming awardMessage, and the model's validation, as an error of the
+// payload naming the attribute in words.
+func TestAwardMessageHint_FollowsOnlyGitLabsLengthRefusal(t *testing.T) {
+	refusals := []struct {
+		name     string
+		body     func(payload string) string
+		isLength bool
+	}{
+		{"argument validator", func(string) string {
+			return `{"errors":[{"message":"awardMessage is too long (maximum is 200)"}]}`
+		}, true},
+		{"model validation", func(payload string) string {
+			return `{"data":{"` + payload + `":{"userAchievement":null,"errors":["Award message is too long (maximum is 200 characters)"]}}}`
+		}, true},
+		{"another refusal", func(string) string {
+			return `{"errors":[{"message":"The resource that you are attempting to access does not exist or you don't have permission to perform this action"}]}`
+		}, false},
+	}
+	calls := []struct {
+		name    string
+		key     string
+		payload string
+		call    func(context.Context, *gitlabclient.Client) error
+	}{
+		{"award", keyAward, "achievementsAward", func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Award(ctx, client, AwardInput{AchievementID: 1, UserID: 2, AwardMessage: strings.Repeat("a", 201)})
+			return err
+		}},
+		{"update", keyUAUpdate, "userAchievementsUpdate", func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := UserAchievementUpdate(ctx, client, UserAchievementUpdateInput{UserAchievementID: 88, AwardMessage: new(strings.Repeat("a", 201))})
+			return err
+		}},
+	}
+	for _, call := range calls {
+		for _, refusal := range refusals {
+			t.Run(call.name+"/"+refusal.name, func(t *testing.T) {
+				body := refusal.body(call.payload)
+				client := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{
+					call.key: func(w http.ResponseWriter, _ *http.Request) { testutil.RespondJSON(w, http.StatusOK, body) },
+				}))
+				err := call.call(t.Context(), client)
+				if err == nil {
+					t.Fatal("call error = nil, want GitLab's refusal")
+				}
+				// GitLab's own words spell the field "Award message" or
+				// awardMessage, so the parameter name is the hint's alone.
+				if got := strings.Contains(err.Error(), "award_message"); got != refusal.isLength {
+					t.Errorf("error = %q, carries the award_message hint: %v, want %v", err, got, refusal.isLength)
+				}
+			})
+		}
+	}
 }
 
 // TestRevoke_Success verifies that Revoke addresses the award, not the
