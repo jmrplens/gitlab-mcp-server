@@ -35,6 +35,17 @@ func accessLevelEnabled(v gl.AccessControlValue) bool {
 	return v != "" && v != gl.DisabledAccessControl
 }
 
+// mergeTrainEnforcement returns the merge train enforcement level client-go
+// decoded, or nil when the answer carried none: ee/lib/ee/api/entities/project.rb
+// sends the key only where merge trains are licensed, and GitLab never sends
+// it empty, so an empty level is the key's absence rather than a value.
+func mergeTrainEnforcement(v gl.MergeTrainEnforcementValue) *string {
+	if v == "" {
+		return nil
+	}
+	return new(string(v))
+}
+
 // ContainerExpirationPolicyInput mirrors the GitLab
 // [gl.ContainerExpirationPolicyAttributes] options for configuring the
 // container registry cleanup policy when creating or updating a project.
@@ -867,7 +878,7 @@ func ToOutput(p *gl.Project, extra toolutil.ProjectExtra) Output {
 		WarnAboutPotentiallyUnwantedCharacters: extra.WarnAboutPotentiallyUnwantedCharacters,
 		SecretPushProtectionEnabled:            extra.SecretPushProtectionEnabled,
 		WebBasedCommitSigningEnabled:           extra.WebBasedCommitSigningEnabled,
-		MergeTrainEnforcement:                  extra.MergeTrainEnforcement,
+		MergeTrainEnforcement:                  mergeTrainEnforcement(p.MergeTrainEnforcement),
 		MaxPipelinesPerMergeTrain:              extra.MaxPipelinesPerMergeTrain,
 		DuoRemoteFlowsEnabled:                  extra.DuoRemoteFlowsEnabled,
 		DuoFoundationalFlowsEnabled:            extra.DuoFoundationalFlowsEnabled,

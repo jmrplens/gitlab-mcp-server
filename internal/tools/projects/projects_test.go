@@ -5052,12 +5052,14 @@ func TestGet_CICDCatalogEnabled_MirrorsPayload(t *testing.T) {
 // project answer decodes and surfaces merge_train_enforcement as the string
 // GitLab sends. The field was first typed as a flag, and every project answer
 // of a licensed instance then failed to decode, which is what took the meta
-// and dynamic project.create down in the enterprise e2e run.
+// and dynamic project.create down in the enterprise e2e run. client-go's
+// Project decodes it as of v3.27.0, as a plain string an unlicensed answer
+// leaves empty.
 func TestGet_MergeTrainEnforcement_IsTheLevelGitLabSpells(t *testing.T) {
 	// want is a pointer so the unlicensed case asserts the field is absent,
-	// not merely empty: a decoder that turned a missing field into a pointer
-	// to "" would pass a string comparison and still publish a level GitLab
-	// never sent.
+	// not merely empty: a converter that turned the SDK's empty string into a
+	// pointer to "" would pass a string comparison and still publish a level
+	// GitLab never sent.
 	tests := []struct {
 		name    string
 		payload string

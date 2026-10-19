@@ -1371,23 +1371,16 @@ type ProjectExtra struct {
 	WarnAboutPotentiallyUnwantedCharacters *bool   `json:"warn_about_potentially_unwanted_characters"`
 	SecretPushProtectionEnabled            *bool   `json:"secret_push_protection_enabled"`
 	WebBasedCommitSigningEnabled           *bool   `json:"web_based_commit_signing_enabled"`
-	// MergeTrainEnforcement is a string and not a flag: GitLab sends one of
-	// allow_bypass, enforce_for_all_users and enforce_with_owner_override
-	// (the live API record types the route's parameter as String). It was
-	// declared a bool at first, and on a licensed instance every project
-	// answer that carried the key failed to decode, which took project.create
-	// down with it on the meta and dynamic surfaces.
-	MergeTrainEnforcement                 *string `json:"merge_train_enforcement"`
-	MaxPipelinesPerMergeTrain             *int64  `json:"max_pipelines_per_merge_train"`
-	DuoRemoteFlowsEnabled                 *bool   `json:"duo_remote_flows_enabled"`
-	DuoFoundationalFlowsEnabled           *bool   `json:"duo_foundational_flows_enabled"`
-	OnlyAllowMergeIfAllStatusChecksPassed *bool   `json:"only_allow_merge_if_all_status_checks_passed"`
-	DuoSastFPDetectionEnabled             *bool   `json:"duo_sast_fp_detection_enabled"`
-	DuoSastVRWorkflowEnabled              *bool   `json:"duo_sast_vr_workflow_enabled"`
-	DuoSecretDetectionFPEnabled           *bool   `json:"duo_secret_detection_fp_enabled"`
-	DuoDependencyBumpBreakingChanges      *bool   `json:"duo_dependency_bump_breaking_changes_enabled"`
-	SecurityPolicyPipelineMustSucceed     *bool   `json:"security_policy_pipeline_must_succeed"`
-	SPPRepositoryPipelineAccess           *bool   `json:"spp_repository_pipeline_access"`
+	MaxPipelinesPerMergeTrain              *int64  `json:"max_pipelines_per_merge_train"`
+	DuoRemoteFlowsEnabled                  *bool   `json:"duo_remote_flows_enabled"`
+	DuoFoundationalFlowsEnabled            *bool   `json:"duo_foundational_flows_enabled"`
+	OnlyAllowMergeIfAllStatusChecksPassed  *bool   `json:"only_allow_merge_if_all_status_checks_passed"`
+	DuoSastFPDetectionEnabled              *bool   `json:"duo_sast_fp_detection_enabled"`
+	DuoSastVRWorkflowEnabled               *bool   `json:"duo_sast_vr_workflow_enabled"`
+	DuoSecretDetectionFPEnabled            *bool   `json:"duo_secret_detection_fp_enabled"`
+	DuoDependencyBumpBreakingChanges       *bool   `json:"duo_dependency_bump_breaking_changes_enabled"`
+	SecurityPolicyPipelineMustSucceed      *bool   `json:"security_policy_pipeline_must_succeed"`
+	SPPRepositoryPipelineAccess            *bool   `json:"spp_repository_pipeline_access"`
 	// CISkipBranchPipelinesForMRs is one of the CI/CD settings
 	// lib/api/entities/project.rb sends only to a caller holding admin_project
 	// on the project, and GitLab sends it from 19.4 (projects.md).
