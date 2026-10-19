@@ -21676,7 +21676,7 @@ List packages across a group and its descendant projects with optional filters a
 - `order_by` (string): Order by group package registry field: created_at, name, version, type, or project_path.
 - `package_name` (string): Filter by package name
 - `package_type` (string): Filter by package type: composer, conan, generic, golang, helm, maven, npm, nuget, pypi, or terraform_module.
-- `package_version` (string): Filter by package version. With include_versionless, versionless packages are not returned
+- `package_version` (string): Return only the packages with this version. A versionless package never matches one, so include_versionless has no effect beside it
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost, and a keyset page names the next one in next_page_token rather than next_page.

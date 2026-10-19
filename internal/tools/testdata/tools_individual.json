@@ -117716,7 +117716,7 @@
           "type": "string"
         },
         "package_version": {
-          "description": "Filter by package version. With include_versionless, versionless packages are not returned",
+          "description": "Return only the packages with this version. A versionless package never matches one, so include_versionless has no effect beside it",
           "type": "string"
         },
         "page": {
@@ -175532,6 +175532,13 @@
                 "string"
               ]
             },
+            "name_regex_delete": {
+              "description": "Deprecated: the former name of name_regex, read only when name_regex is left out. Use name_regex",
+              "type": [
+                "null",
+                "string"
+              ]
+            },
             "name_regex_keep": {
               "description": "Regex matching tag names to always keep. On an update, pass an empty string to remove it. Omit the field to leave it untouched",
               "type": [
@@ -177074,6 +177081,13 @@
             },
             "name_regex": {
               "description": "Regex matching tag names to delete. On an update, pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "name_regex_delete": {
+              "description": "Deprecated: the former name of name_regex, read only when name_regex is left out. Use name_regex",
               "type": [
                 "null",
                 "string"
@@ -203105,6 +203119,13 @@
             },
             "name_regex": {
               "description": "Regex matching tag names to delete. On an update, pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "name_regex_delete": {
+              "description": "Deprecated: the former name of name_regex, read only when name_regex is left out. Use name_regex",
               "type": [
                 "null",
                 "string"

@@ -20,9 +20,9 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 21,833 |
-| Unit test functions                                   | 20,279 |
-| E2E test functions                                    |  1,554 |
+| Total test functions                                  | 21,842 |
+| Unit test functions                                   | 20,287 |
+| E2E test functions                                    |  1,555 |
 | cmd test functions                                    |  4,821 |
 | Test files (internal/)                                |    719 |
 | Test files (cmd/)                                     |    336 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,373 | 61.3% |
+| `TestFunc_Scenario` (2-part)           | 13,376 | 61.2% |
 | `TestFunc` (no underscore)             |    912 |  4.2% |
-| `TestFunc_Scenario_Expected` (3+ part) |  7,548 | 34.6% |
+| `TestFunc_Scenario_Expected` (3+ part) |  7,554 | 34.6% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          4,021 |        237 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            414 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (180) |         11,023 |        466 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,554 |        418 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| Tool sub-packages (180) |         11,031 |        466 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,555 |        418 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          4,821 |        336 | server entry point and developer command utilities                                              |
-| **Total**               |     **21,833** |  **1,473** |                                                                                                 |
+| **Total**               |     **21,842** |  **1,473** |                                                                                                 |
 
 ### Core Packages
 
@@ -97,14 +97,14 @@
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   496 |   100.0% |    57 |
+| projects          |   498 |   100.0% |    57 |
 | mergerequests     |   343 |   100.0% |    30 |
 | groups            |   317 |   100.0% |    37 |
 | dynamic           |   310 |   100.0% |     2 |
 | issues            |   296 |   100.0% |    21 |
 | users             |   272 |   100.0% |    38 |
-| jobs              |   177 |   100.0% |    17 |
-| packages          |   177 |   100.0% |    10 |
+| jobs              |   178 |   100.0% |    17 |
+| packages          |   178 |   100.0% |    10 |
 | search            |   171 |   100.0% |    10 |
 | commits           |   154 |   100.0% |    13 |
 | pipelines         |   149 |   100.0% |    12 |
@@ -132,7 +132,7 @@
 | ----------------------- | ---------: | ---------: | -------: | --------: |
 | accessrequests          |         58 |          4 |   100.0% |         8 |
 | accesstokens            |        108 |          2 |   100.0% |        18 |
-| achievements            |         66 |          3 |   100.0% |        12 |
+| achievements            |         67 |          3 |   100.0% |        12 |
 | actioncatalog           |         71 |          8 |   100.0% |         0 |
 | actioncompat            |         61 |          3 |   100.0% |         1 |
 | actiongrants            |          6 |          1 |   100.0% |         0 |
@@ -227,7 +227,7 @@
 | issues                  |        296 |          4 |   100.0% |        21 |
 | issuestatistics         |         54 |          2 |   100.0% |         3 |
 | iterationdata           |         12 |          1 |   100.0% |         0 |
-| jobs                    |        177 |          8 |   100.0% |        17 |
+| jobs                    |        178 |          8 |   100.0% |        17 |
 | jobtokenscope           |         46 |          2 |   100.0% |         8 |
 | keys                    |         30 |          2 |   100.0% |         2 |
 | labeldata               |         17 |          1 |   100.0% |         0 |
@@ -252,7 +252,7 @@
 | namespaces              |         52 |          2 |   100.0% |         4 |
 | notifications           |         39 |          2 |   100.0% |         6 |
 | orbit                   |         92 |          3 |   100.0% |         6 |
-| packages                |        177 |          6 |   100.0% |        10 |
+| packages                |        178 |          6 |   100.0% |        10 |
 | pages                   |         65 |          2 |   100.0% |         9 |
 | pipelines               |        149 |          5 |   100.0% |        12 |
 | pipelineschedules       |        108 |          4 |   100.0% |        11 |
@@ -263,7 +263,7 @@
 | projectimportexport     |         53 |          2 |   100.0% |         5 |
 | projectiterations       |         24 |          3 |   100.0% |         1 |
 | projectmirrors          |         76 |          2 |   100.0% |         7 |
-| projects                |        496 |          9 |   100.0% |        57 |
+| projects                |        498 |          9 |   100.0% |        57 |
 | projectserviceaccounts  |         25 |          2 |   100.0% |         9 |
 | projectstatistics       |         12 |          2 |   100.0% |         1 |
 | projectstoragemoves     |         21 |          2 |   100.0% |         6 |
@@ -287,7 +287,7 @@
 | securityfindings        |         31 |          1 |   100.0% |         1 |
 | securityscanprofiles    |         26 |          1 |   100.0% |         3 |
 | securitysettings        |         43 |          3 |   100.0% |         3 |
-| settings                |         38 |          1 |   100.0% |         2 |
+| settings                |         41 |          1 |   100.0% |         2 |
 | sidekiq                 |         18 |          1 |   100.0% |         4 |
 | snippetdiscussions      |         42 |          2 |   100.0% |         6 |
 | snippetnotes            |         57 |          2 |   100.0% |         5 |
@@ -310,7 +310,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        136 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,023** |    **466** |          | **1,195** |
+| **Total**               | **11,031** |    **466** |          | **1,195** |
 
 </details>
 

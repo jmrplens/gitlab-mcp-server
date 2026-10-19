@@ -14987,7 +14987,7 @@
             "Jobs.ListPipelineTriggerJobs"
           ],
           "directives": [
-            "alternatives: an instance on 19.2 or later is sent trigger_jobs and the deprecated bridges route below is not sent"
+            "alternatives: an instance on 19.2 or later is sent trigger_jobs in place of the deprecated bridges route below, which it is sent only after trigger_jobs answered 404"
           ]
         },
         {
@@ -15002,7 +15002,8 @@
             "Jobs.ListPipelineBridges"
           ],
           "directives": [
-            "alternatives: an instance older than 19.2, or one whose release is not known, is sent the deprecated bridges route instead of trigger_jobs"
+            "alternatives: an instance older than 19.2, or one whose release is not known, is sent the deprecated bridges route instead of trigger_jobs",
+            "optional: the bridges route is asked only when trigger_jobs answered 404, as a node before 19.2 does while an instance is upgraded one node at a time"
           ]
         }
       ],
