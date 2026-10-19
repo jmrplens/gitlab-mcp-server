@@ -2480,8 +2480,11 @@ func TestMRIIDRequired_Validation(t *testing.T) {
 		assertContains(t, err, wantSubstr)
 	})
 	t.Run("CreateDependency", func(t *testing.T) {
-		_, err := CreateDependency(ctx, client, DependencyInput{ProjectID: pid, MRIID: 0})
-		assertContains(t, err, wantSubstr)
+		// A valid blocking ID, so only the merge_request_iid guard can
+		// refuse: the refusal of a missing blocking merge request names
+		// blocking_merge_request_iid, which carries the same substring.
+		_, err := CreateDependency(ctx, client, DependencyInput{ProjectID: pid, MRIID: 0, BlockingMergeRequestID: 1})
+		assertContains(t, err, "merge_request_iid is required")
 	})
 	t.Run("DeleteDependency", func(t *testing.T) {
 		err := DeleteDependency(ctx, client, DeleteDependencyInput{ProjectID: pid, MRIID: 0})

@@ -2508,23 +2508,23 @@ func CreateDependency(ctx context.Context, client *gitlabclient.Client, input De
 // both of the ID and the IID. A project beside the ID is refused too: GitLab
 // reads blocking_project_id only to resolve an IID, so it would be ignored.
 func dependencyOptions(input DependencyInput) (gl.CreateMergeRequestDependencyOptions, error) {
-	byID, byIID := input.BlockingMergeRequestID > 0, input.BlockingMergeRequestIID > 0
-	switch {
-	case byID && byIID:
-		return gl.CreateMergeRequestDependencyOptions{}, errors.New("mrCreateDependency: blocking_merge_request_id and blocking_merge_request_iid are mutually exclusive, so pass one of them")
-	case byID && input.BlockingProjectID != "":
-		return gl.CreateMergeRequestDependencyOptions{}, errors.New("mrCreateDependency: blocking_project_id is read only beside blocking_merge_request_iid, so pass the IID with it or leave the project out")
-	case byID:
-		return gl.CreateMergeRequestDependencyOptions{BlockingMergeRequestID: new(input.BlockingMergeRequestID)}, nil
-	case byIID:
+	if input.BlockingMergeRequestIID > 0 {
+		if input.BlockingMergeRequestID > 0 {
+			return gl.CreateMergeRequestDependencyOptions{}, errors.New("mrCreateDependency: blocking_merge_request_id and blocking_merge_request_iid are mutually exclusive, so pass one of them")
+		}
 		opts := gl.CreateMergeRequestDependencyOptions{BlockingMergeRequestIID: new(input.BlockingMergeRequestIID)}
 		if input.BlockingProjectID != "" {
 			opts.BlockingProjectID = string(input.BlockingProjectID)
 		}
 		return opts, nil
-	default:
+	}
+	if input.BlockingMergeRequestID <= 0 {
 		return gl.CreateMergeRequestDependencyOptions{}, errors.New("mrCreateDependency: one of blocking_merge_request_id and blocking_merge_request_iid is required: the global ID from merge_request.get, or the IID with blocking_project_id when the blocking merge request is in another project")
 	}
+	if input.BlockingProjectID != "" {
+		return gl.CreateMergeRequestDependencyOptions{}, errors.New("mrCreateDependency: blocking_project_id is read only beside blocking_merge_request_iid, so pass the IID with it or leave the project out")
+	}
+	return gl.CreateMergeRequestDependencyOptions{BlockingMergeRequestID: new(input.BlockingMergeRequestID)}, nil
 }
 
 // DeleteDependencyInput defines parameters for deleting a merge request dependency.
