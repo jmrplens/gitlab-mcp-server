@@ -28,9 +28,11 @@ func TestActionSpecs_CreateAndModify_OfferNoParamGitLabIgnores(t *testing.T) {
 		t.Run(tool, func(t *testing.T) {
 			props, _ := byTool[tool].Route.InputSchema["properties"].(map[string]any)
 			for _, param := range []string{"skype", "job_title"} {
-				if _, offered := props[param]; offered {
-					t.Errorf("%s offers %s, a param GitLab does not declare", tool, param)
-				}
+				t.Run(param, func(t *testing.T) {
+					if _, offered := props[param]; offered {
+						t.Errorf("%s offers %s, a param GitLab does not declare", tool, param)
+					}
+				})
 			}
 		})
 	}
