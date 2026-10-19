@@ -372,7 +372,7 @@ readable without opening the tracker:
 | 125 | client-go | [The issue statistics options type assignee_id as an integer](#the-issue-statistics-options-type-assignee_id-as-an-integer) | No | No | No | No | Yes, the three statistics actions write `None` or `Any` into the query through a request option |
 | 126 | client-go | [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date) | No | No | No | No | Yes, `user.add_ssh_key`, `user.add_ssh_key_for_user`, `snippet.list_all` and the two changelog actions leave the field unset and write the instant given through a request option |
 | 127 | gitlab-org/gitlab | [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text) | No | No | No | No; GitLab's pages leave such a submodule unlinked | Yes, `repository.list_submodules` and `repository.read_submodule_file` resolve a sibling namespace and the other spellings of the instance's clone URLs |
-| 128 | client-go | [A nil SearchOptions panics in every search method but one](#a-nil-searchoptions-panics-in-every-search-method-but-one) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3139](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3139), merged | **Yes, v3.22.1** | No; every search action here passes options | Not needed |
+| 128 | client-go | [A nil SearchOptions panics in every search method but one](#a-nil-searchoptions-panics-in-every-search-method-but-one) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3139](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3139), merged | **Yes, v3.22.1**, in the v3.29.0 pin | No; every search action here passes options | Not needed |
 | 129 | client-go | [The Link header parser reads rel only from the first parameter](#the-link-header-parser-reads-rel-only-from-the-first-parameter) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3143](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3143), open | No | No; GitLab writes `rel` as the only parameter, so only a proxy that rewrites the header reaches it | None taken |
 | 130 | client-go | [The wiki search decodes GitLab's blobs into wiki pages](#the-wiki-search-decodes-gitlabs-blobs-into-wiki-pages) | No | No | No | No | Yes, `search.wiki` reads its page from the captured response |
 | 131 | gitlab-org/gitlab | [The REST code search answers an exact-search name match with the path as its snippet](#the-rest-code-search-answers-an-exact-search-name-match-with-the-path-as-its-snippet) | No; the search page's version of it was closed | No | No | No | Yes, the code and wiki search Markdown reads a result whose snippet is its own path as a path match and fences nothing |
@@ -4656,11 +4656,14 @@ bump does not retire it.
   The rebase onto v3.17.0 on 2026-10-09 changed its hash to `64d142c8`, and
   read on 2026-10-10 it is still the 34th of 35.
 - **Merged**: no. Issue 966 confirmed each of the seven tags at v3.14.0, and
-  read on 2026-10-07 each is unchanged, on the same line, at v3.15.0, the
-  version `go.mod` pins, and v3.16.0, tagged that day:
+  read on 2026-10-07 each is unchanged, on the same line, at v3.15.0 and
+  v3.16.0, tagged that day:
   `dependency_list_export.go:70`,
   `group_boards.go:216`, `group_members.go:198`, `project_members.go:152`,
   `projects.go:1361`, `issue_links.go:121` and `pipeline_schedules.go:267`.
+  Read on 2026-10-19 at v3.29.0, the version `go.mod` pins, each tag is
+  unchanged and six are on the same line; the `project_members.go` one is at
+  line 167, moved by the documentation comments v3.28.0 added above it.
 - **Blocking**: no, field by field in the second table below. For five of the
   seven, GitLab reads a null exactly as it reads the key left out, or never
   receives one. `label_id` is latent: a null would be refused beside another
@@ -5610,8 +5613,8 @@ the group milestone tests.
   decision; `CreateGroupBoardList` refuses an input without `label_id` before
   it sends anything). This entry replaces issue 1101, closed on 2026-10-07.
 
-**Where**: client-go v3.15.0, the version `go.mod` pins, and v3.16.0, tagged
-on 2026-10-07, `group_boards.go:215-217`:
+**Where**: client-go v3.15.0 to v3.29.0, the version `go.mod` pins, which
+leave the file unchanged, `group_boards.go:215-217`:
 
 ```go
 type CreateGroupIssueBoardListOptions struct {
@@ -5704,8 +5707,8 @@ the body only when set.
   struct of this server's own rather than in `gl.UpdateGroupIssueBoardOptions`.
   That struct retires when a release models them.
 
-**Where**: client-go v3.15.0, the version `go.mod` pins, and v3.16.0, tagged
-on 2026-10-07, `group_boards.go:158-164`:
+**Where**: client-go v3.15.0 to v3.29.0, the version `go.mod` pins, which
+leave the file unchanged, `group_boards.go:158-164`:
 
 ```go
 type UpdateGroupIssueBoardOptions struct {
@@ -5797,8 +5800,8 @@ only when set.
   group board requests and the board readers of `sent_shapes.go` go, and
   every handler reads the SDK's structs alone.
 
-**Where**: client-go v3.15.0, the version `go.mod` pins, and v3.16.0,
-`group_boards.go:97-104` and `boards.go:133-142`:
+**Where**: client-go v3.15.0 to v3.29.0, the version `go.mod` pins, which
+leave both files unchanged, `group_boards.go:97-104` and `boards.go:133-142`:
 
 ```go
 type GroupIssueBoard struct {
@@ -6906,8 +6909,8 @@ field.
   ("fix(search): accept nil SearchOptions in every search method"), opened
   by this project's maintainer at 05:14 UTC on 2026-10-14.
 - **Merged**: **yes, v3.22.1**. It merged at 21:32 UTC on 2026-10-14, and
-  v3.22.1 is the first tag that carries it. This server pins v3.15.0, which
-  does not.
+  v3.22.1 is the first tag that carries it. This server pins v3.29.0, which
+  does.
 - **Blocking**: no. Every search action builds its options through
   `searchOpts` in `internal/tools/search/search.go`, which returns a
   non-nil `*gl.SearchOptions` even when no option is set, so no call of

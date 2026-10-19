@@ -824,8 +824,9 @@ func TestFormatGetMarkdown_EveryCuratedKey_RendersUnderTheCategoryThatOwnsIt(t *
 // word, so the patch used to be sent with that key missing, GitLab answered 200
 // for the keys that survived, and the tool rendered a settings card: nothing in
 // the exchange said the change had not been made, and the model reported the
-// instance reconfigured. Measured against the pinned live record, the PUT route
-// declares 660 params and the options struct models 422 of them.
+// instance reconfigured. Measured against the pinned live record (19.5.0), the
+// PUT route declares 677 top-level params and the options struct of client-go
+// v3.29.0 models 447 of them.
 func TestUpdate_KeyTheClientDoesNotModel_RefusedBeforeAnythingIsSent(t *testing.T) {
 	var asked atomic.Bool
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -866,7 +867,7 @@ func TestUpdate_KeyTheClientDoesNotModel_RefusedBeforeAnythingIsSent(t *testing.
 // cannot send than a reader needs to see, that the count still covers all of
 // them, and that a patch sitting exactly on the bound is spelled out whole.
 //
-// 238 of GitLab's settable params are outside the client's options today, so
+// 230 of GitLab's settable params are outside the client's options today, so
 // "all of them" is a wall of names a model pays tokens to read before learning
 // the one thing it has to do, which is drop them. The bound case is here
 // because a cap written with the wrong comparison passes every test that only

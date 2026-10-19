@@ -82,10 +82,10 @@ type UpdateOutput struct {
 // Update modifies application settings (admin-only).
 //
 // It accepts a map of setting keys and values and sends them through
-// client-go's UpdateSettingsOptions. That struct models 422 of the 660 params
-// GitLab's PUT route declares, and encoding/json drops a member the target
-// does not carry without a word, so a patch naming one of the other 238 used
-// to be sent with that key missing, answered 200, and reported to the model as
+// client-go's UpdateSettingsOptions. At client-go v3.29.0 that struct models
+// 447 of the 677 top-level params GitLab 19.5.0's PUT route declares, and
+// encoding/json drops a member the target does not carry without a word, so a
+// patch naming one of the other 230 used to be sent with that key missing, answered 200, and reported to the model as
 // a reconfiguration that never happened. The keys it does not model are
 // therefore named and the whole patch refused before anything is sent: a
 // half-applied patch reported as applied is the one outcome worth refusing
