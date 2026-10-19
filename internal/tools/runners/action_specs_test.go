@@ -15,6 +15,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// domainRunner is the catalog group these specs aggregate into, the prefix of
+// every canonical ID this package names.
+const domainRunner = "runner."
+
 const (
 	actionSpecRunnerJSON         = `{"id":10,"description":"runner-1","name":"r1","paused":false,"is_shared":true,"runner_type":"instance_type","online":true,"status":"online"}`
 	actionSpecRunnerDetailsJSON  = `{"id":10,"description":"runner-1","name":"r1","paused":false,"is_shared":true,"runner_type":"instance_type","online":true,"status":"online","tag_list":["docker"],"run_untagged":true,"locked":false,"access_level":"not_protected","maximum_timeout":3600}`
@@ -137,7 +141,7 @@ func TestMarkdownHints_ActionConstants_NameActionsTheCatalogHolds(t *testing.T) 
 	client := testutil.NewTestClient(t, runnerActionHandler())
 	runnerActions := make(map[string]struct{})
 	for _, spec := range ActionSpecs(client) {
-		runnerActions["runner."+spec.Name] = struct{}{}
+		runnerActions[domainRunner+spec.Name] = struct{}{}
 	}
 	jobActions := make(map[string]struct{})
 	for _, spec := range jobs.ActionSpecs(client) {
@@ -163,6 +167,8 @@ func TestMarkdownHints_ActionConstants_NameActionsTheCatalogHolds(t *testing.T) 
 		{actionRunnerDeleteByToken, runnerActions},
 		{actionRunnerVerify, runnerActions},
 		{actionRunnerResetToken, runnerActions},
+		{actionRunnerResetTokenByToken, runnerActions},
+		{actionRunnerRouterDiscovery, runnerActions},
 		{actionRunnerResetInstanceReg, runnerActions},
 		{actionRunnerResetGroupReg, runnerActions},
 		{actionRunnerResetProjectReg, runnerActions},
@@ -173,6 +179,31 @@ func TestMarkdownHints_ActionConstants_NameActionsTheCatalogHolds(t *testing.T) 
 		t.Run(tt.action, func(t *testing.T) {
 			if _, ok := tt.known[tt.action]; !ok {
 				t.Errorf("hint names %q, which no action spec declares", tt.action)
+			}
+		})
+	}
+}
+
+// TestActionSpecs_TokenActions_Classification holds the two runner-token
+// actions client-go v3.18.0 added to what they do: the reset by token writes,
+// like the reset by ID it mirrors, and the Job Router discovery only reads.
+// Neither is destructive, and both are Free.
+func TestActionSpecs_TokenActions_Classification(t *testing.T) {
+	byTool := runnerSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, runnerActionHandler())))
+	tests := []struct {
+		tool     string
+		name     string
+		readOnly bool
+	}{
+		{tool: "gitlab_runner_reset_token_by_token", name: "reset_token_by_token"},
+		{tool: "gitlab_runner_router_discovery", name: "router_discovery", readOnly: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			spec := byTool[tt.tool]
+			if spec.Name != tt.name || spec.ReadOnly != tt.readOnly || spec.Destructive || spec.Edition != "" {
+				t.Errorf("%s = name %q read-only %v destructive %v edition %q, want %s, read-only %v, not destructive, Free",
+					tt.tool, spec.Name, spec.ReadOnly, spec.Destructive, spec.Edition, tt.name, tt.readOnly)
 			}
 		})
 	}
@@ -200,6 +231,8 @@ func TestActionSpecs_CallRunnerRoutes(t *testing.T) {
 		{"delete_registered", "gitlab_runner_delete_registered", map[string]any{"runner_id": 99}},
 		{"verify", "gitlab_runner_verify", map[string]any{"token": "valid-token"}},
 		{"reset_token", "gitlab_runner_reset_token", map[string]any{"runner_id": 10}},
+		{"reset_token_by_token", "gitlab_runner_reset_token_by_token", map[string]any{"token": "cur-token"}},
+		{"router_discovery", "gitlab_runner_router_discovery", map[string]any{"token": "cur-token"}},
 		{"list_all", "gitlab_runner_list_all", map[string]any{}},
 		{"delete_by_token", "gitlab_runner_delete_by_token", map[string]any{"token": "del-token"}},
 		{"reset_instance_reg_token", "gitlab_runner_reset_instance_reg_token", map[string]any{}},
@@ -397,6 +430,12 @@ func runnerActionHandler() http.Handler {
 	})
 	handler.HandleFunc("POST /api/v4/runners/10/reset_authentication_token", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, actionSpecRunnerTokenJSON)
+	})
+	handler.HandleFunc("POST /api/v4/runners/reset_authentication_token", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, actionSpecRunnerTokenJSON)
+	})
+	handler.HandleFunc("GET /api/v4/runners/router/discovery", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"server_url":"wss://kas.example.com"}`)
 	})
 	handler.HandleFunc("GET /api/v4/runners/all", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[`+actionSpecRunnerJSON+`]`)

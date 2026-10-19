@@ -6,6 +6,7 @@ package runners
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"maps"
 	"net/http"
 	"net/url"
@@ -889,6 +890,232 @@ func TestResetAuthToken_MissingID(t *testing.T) {
 	_, err := ResetAuthToken(context.Background(), client, ResetAuthTokenInput{})
 	if err == nil {
 		t.Fatal(errExpMissingRunnerID)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ResetAuthTokenByToken
+// ---------------------------------------------------------------------------.
+
+// TestResetAuthTokenByToken_SendsTheCurrentToken_AndReturnsTheNewOne verifies
+// the current token travels as the token GitLab authenticates the runner by,
+// in the body of a POST to /runners/reset_authentication_token, and that the
+// new token and its expiry come back.
+func TestResetAuthTokenByToken_SendsTheCurrentToken_AndReturnsTheNewOne(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathRunners+"/reset_authentication_token" || r.Method != http.MethodPost {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decoding the body: %v", err)
+		}
+		if !reflect.DeepEqual(body, map[string]any{"token": "glrt-current"}) {
+			t.Errorf("body = %v, want only the current token", body)
+		}
+		testutil.RespondJSON(w, http.StatusCreated, `{"token":"glrt-rotated","token_expires_at":"2026-12-31T23:59:59Z"}`)
+	}))
+
+	out, err := ResetAuthTokenByToken(t.Context(), client, ResetAuthTokenByTokenInput{Token: "glrt-current"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if want := (AuthTokenOutput{Token: "glrt-rotated", ExpiresAt: "2026-12-31T23:59:59Z"}); !reflect.DeepEqual(out, want) {
+		t.Errorf("ResetAuthTokenByToken() = %+v, want %+v", out, want)
+	}
+}
+
+// TestResetAuthTokenByToken_NoExpiry verifies a token GitLab set no expiry
+// on, which ResetTokenResult leaves out unless the token is expirable, comes
+// back with no expiry rather than a zero time.
+func TestResetAuthTokenByToken_NoExpiry(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"token":"glrt-rotated"}`)
+	}))
+	out, err := ResetAuthTokenByToken(t.Context(), client, ResetAuthTokenByTokenInput{Token: "glrt-current"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if want := (AuthTokenOutput{Token: "glrt-rotated"}); !reflect.DeepEqual(out, want) {
+		t.Errorf("ResetAuthTokenByToken() = %+v, want %+v", out, want)
+	}
+}
+
+// TestResetAuthTokenByToken_MissingToken verifies an empty token is refused
+// before any request is sent.
+func TestResetAuthTokenByToken_MissingToken(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		http.NotFound(w, r)
+	}))
+	if _, err := ResetAuthTokenByToken(t.Context(), client, ResetAuthTokenByTokenInput{}); err == nil || !strings.Contains(err.Error(), "token") {
+		t.Fatalf("ResetAuthTokenByToken() error = %v, want the missing token named", err)
+	}
+}
+
+// TestResetAuthTokenByToken_Refusals verifies a 403, which GitLab answers to a
+// token it does not know and to a runner past its rotation deadline, carries
+// the hint naming both and the reset by ID, and never the token itself; any
+// other refusal carries GitLab's message without that hint.
+func TestResetAuthTokenByToken_Refusals(t *testing.T) {
+	const hint = "token rotation deadline has passed"
+	tests := []struct {
+		name     string
+		status   int
+		body     string
+		want     string
+		wantHint bool
+	}{
+		{name: "an unknown token", status: http.StatusForbidden, body: `{"message":"403 Forbidden"}`, want: "403", wantHint: true},
+		{name: "a record GitLab refused to save", status: http.StatusUnprocessableEntity, body: `{"message":"Validation failed"}`, want: "Validation failed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, tt.body)
+			}))
+			_, err := ResetAuthTokenByToken(t.Context(), client, ResetAuthTokenByTokenInput{Token: "glrt-secret-value"})
+			if err == nil {
+				t.Fatal(errExpectedNil)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %q, want it to carry %q", err, tt.want)
+			}
+			if got := strings.Contains(err.Error(), hint); got != tt.wantHint {
+				t.Errorf("error = %q, carries the deadline hint = %v, want %v", err, got, tt.wantHint)
+			}
+			if strings.Contains(err.Error(), "glrt-secret-value") {
+				t.Errorf("error = %q, which repeats the token", err)
+			}
+		})
+	}
+}
+
+// TestResetAuthTokenByToken_CarriesTheContext verifies the request carries the
+// caller's context.
+func TestResetAuthTokenByToken_CarriesTheContext(t *testing.T) {
+	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"token":"glrt-rotated"}`)
+	})
+	if _, err := ResetAuthTokenByToken(ctx, client, ResetAuthTokenByTokenInput{Token: "glrt-current"}); !errors.Is(err, context.Canceled) {
+		t.Errorf("ResetAuthTokenByToken() error = %v, want context.Canceled", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// RouterDiscovery
+// ---------------------------------------------------------------------------.
+
+// TestRouterDiscovery_SendsTheTokenAsTheRunnerTokenHeader verifies the
+// runner's token travels in the Runner-Token header GitLab's router routes
+// authenticate by, and never in the URL, and that the Job Router's URL comes
+// back.
+func TestRouterDiscovery_SendsTheTokenAsTheRunnerTokenHeader(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathRunners+"/router/discovery" || r.Method != http.MethodGet {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.Header.Get("Runner-Token"); got != "glrt-current" {
+			t.Errorf("Runner-Token = %q, want the runner's token", got)
+		}
+		if r.URL.RawQuery != "" {
+			t.Errorf("query = %q, want none", r.URL.RawQuery)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"server_url":"wss://kas.example.com"}`)
+	}))
+	out, err := RouterDiscovery(t.Context(), client, RouterDiscoveryInput{Token: "glrt-current"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if want := (RouterDiscoveryOutput{ServerURL: "wss://kas.example.com"}); !reflect.DeepEqual(out, want) {
+		t.Errorf("RouterDiscovery() = %+v, want %+v", out, want)
+	}
+}
+
+// TestRouterDiscovery_MissingToken verifies an empty token is refused before
+// any request is sent.
+func TestRouterDiscovery_MissingToken(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		http.NotFound(w, r)
+	}))
+	if _, err := RouterDiscovery(t.Context(), client, RouterDiscoveryInput{}); err == nil || !strings.Contains(err.Error(), "token") {
+		t.Fatalf("RouterDiscovery() error = %v, want the missing token named", err)
+	}
+}
+
+// TestRouterDiscovery_Refusals verifies each refusal names what GitLab meant
+// by it: a 501 is the Job Router switched off, which its feature flags are by
+// default; a 403 is a token GitLab does not know; a 404 is an instance older
+// than 18.7, which has no such route; and any other failure carries none of
+// those hints.
+func TestRouterDiscovery_Refusals(t *testing.T) {
+	const (
+		flagsHint   = "job_router and job_router_instance_runners"
+		tokenHint   = "runner authentication token is invalid"
+		releaseHint = "GitLab added this route in 18.7"
+	)
+	tests := []struct {
+		name   string
+		status int
+		hint   string
+	}{
+		{name: "the Job Router is off", status: http.StatusNotImplemented, hint: flagsHint},
+		{name: "an unknown token", status: http.StatusForbidden, hint: tokenHint},
+		{name: "an older instance", status: http.StatusNotFound, hint: releaseHint},
+		{name: "an instance failure", status: http.StatusInternalServerError},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, `{"message":"refused"}`)
+			}))
+			_, err := RouterDiscovery(t.Context(), client, RouterDiscoveryInput{Token: "glrt-secret-value"})
+			if err == nil {
+				t.Fatal(errExpectedNil)
+			}
+			if got, want := strings.Contains(err.Error(), flagsHint), tt.hint == flagsHint; got != want {
+				t.Errorf("error = %q, carries the feature flag hint = %v, want %v", err, got, want)
+			}
+			if got, want := strings.Contains(err.Error(), tokenHint), tt.hint == tokenHint; got != want {
+				t.Errorf("error = %q, carries the token hint = %v, want %v", err, got, want)
+			}
+			if got, want := strings.Contains(err.Error(), releaseHint), tt.hint == releaseHint; got != want {
+				t.Errorf("error = %q, carries the release hint = %v, want %v", err, got, want)
+			}
+			if strings.Contains(err.Error(), "glrt-secret-value") {
+				t.Errorf("error = %q, which repeats the token", err)
+			}
+		})
+	}
+}
+
+// TestRouterDiscovery_CarriesTheContext verifies the request carries the
+// caller's context.
+func TestRouterDiscovery_CarriesTheContext(t *testing.T) {
+	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"server_url":"wss://kas.example.com"}`)
+	})
+	if _, err := RouterDiscovery(ctx, client, RouterDiscoveryInput{Token: "glrt-current"}); !errors.Is(err, context.Canceled) {
+		t.Errorf("RouterDiscovery() error = %v, want context.Canceled", err)
+	}
+}
+
+// TestFormatRouterDiscoveryMarkdown verifies the card names the Job Router's
+// URL in a code span, since it is a value a runner's configuration copies
+// exactly, and points at the token check.
+func TestFormatRouterDiscoveryMarkdown(t *testing.T) {
+	got := FormatRouterDiscoveryMarkdown(RouterDiscoveryOutput{ServerURL: "wss://kas.example.com"})
+	want := "## Job Router Discovery\n\n" +
+		"- **Server URL**: `wss://kas.example.com`\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'runner.verify' to check the runner token still authenticates\n"
+	if got != want {
+		t.Errorf("FormatRouterDiscoveryMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 

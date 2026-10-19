@@ -939,6 +939,13 @@ func ResetAuthToken(ctx context.Context, client *gitlabclient.Client, input Rese
 			hintRunnerNotFound)
 	}
 
+	return toAuthTokenOutput(t), nil
+}
+
+// toAuthTokenOutput converts the token a reset answers with, by ID or by the
+// current token alike (Entities::Ci::ResetTokenResult, whose expiry GitLab
+// sends only for a token that expires).
+func toAuthTokenOutput(t *gl.RunnerAuthenticationToken) AuthTokenOutput {
 	out := AuthTokenOutput{}
 	if t.Token != nil {
 		out.Token = *t.Token
@@ -946,7 +953,86 @@ func ResetAuthToken(ctx context.Context, client *gitlabclient.Client, input Rese
 	if t.TokenExpiresAt != nil {
 		out.ExpiresAt = t.TokenExpiresAt.Format(time.RFC3339)
 	}
-	return out, nil
+	return out
+}
+
+// ---------------------------------------------------------------------------
+// ResetRunnerAuthenticationTokenByToken
+// ---------------------------------------------------------------------------.
+
+// ResetAuthTokenByTokenInput defines parameters for resetting a runner's
+// authentication token with the token itself.
+type ResetAuthTokenByTokenInput struct {
+	Token string `json:"token" jsonschema:"Current runner authentication token, which the reset invalidates,required"`
+}
+
+// ResetAuthTokenByToken resets a runner's authentication token with the
+// current one (POST /runners/reset_authentication_token). GitLab finds the
+// runner by the token the caller passes rather than by the user, which is
+// what lets a runner rotate its own token, and answers with the new token.
+func ResetAuthTokenByToken(ctx context.Context, client *gitlabclient.Client, input ResetAuthTokenByTokenInput) (AuthTokenOutput, error) {
+	if input.Token == "" {
+		return AuthTokenOutput{}, toolutil.ErrFieldRequired("token")
+	}
+
+	opts := &gl.ResetRunnerAuthenticationTokenByTokenOptions{Token: new(input.Token)}
+	t, _, err := client.GL().Runners.ResetRunnerAuthenticationTokenByToken(opts, gl.WithContext(ctx))
+	if err != nil {
+		return AuthTokenOutput{}, toolutil.WrapErrWithStatusHint("reset runner auth token by token", err, http.StatusForbidden,
+			"the runner authentication token is invalid, expired or already reset, or the runner's token rotation deadline has passed (Premium and Ultimate). Reset it by its ID with runner.reset_token instead")
+	}
+	return toAuthTokenOutput(t), nil
+}
+
+// ---------------------------------------------------------------------------
+// GetRunnerRouterDiscovery
+// ---------------------------------------------------------------------------.
+
+// RouterDiscoveryInput defines parameters for discovering the Job Router a
+// runner connects to.
+type RouterDiscoveryInput struct {
+	Token string `json:"token" jsonschema:"Runner authentication token, sent as the Runner-Token header GitLab authenticates the runner by,required"`
+}
+
+// RouterDiscoveryOutput is the Job Router discovery information
+// (Entities::Ci::JobRouter::DiscoveryInformation), whose one key client-go
+// models.
+type RouterDiscoveryOutput struct {
+	toolutil.HintableOutput
+	ServerURL string `json:"server_url"`
+}
+
+// RouterDiscovery reads the Job Router URL for the runner whose token is
+// passed (GET /runners/router/discovery), a route GitLab added in 18.7 behind
+// the job_router and job_router_instance_runners feature flags.
+func RouterDiscovery(ctx context.Context, client *gitlabclient.Client, input RouterDiscoveryInput) (RouterDiscoveryOutput, error) {
+	if input.Token == "" {
+		return RouterDiscoveryOutput{}, toolutil.ErrFieldRequired("token")
+	}
+
+	d, _, err := client.GL().Runners.GetRunnerRouterDiscovery(input.Token, gl.WithContext(ctx))
+	if err != nil {
+		return RouterDiscoveryOutput{}, routerDiscoveryError(err)
+	}
+	return RouterDiscoveryOutput{ServerURL: d.ServerURL}, nil
+}
+
+// routerDiscoveryError says what GitLab meant by each refusal of the Job
+// Router discovery (lib/api/ci/runner.rb): 501 while the GitLab agent server
+// or the Job Router's feature flags are off, 403 for a token it does not know,
+// and 404 from an instance that has no such route.
+func routerDiscoveryError(err error) error {
+	const op = "runner router discovery"
+	switch {
+	case toolutil.IsHTTPStatus(err, http.StatusNotImplemented):
+		return toolutil.WrapErrWithHint(op, err,
+			"the Job Router is not available on this instance. GitLab serves it only with the GitLab agent server (KAS) enabled and the feature flags job_router and job_router_instance_runners on, which are disabled by default")
+	case toolutil.IsHTTPStatus(err, http.StatusForbidden):
+		return toolutil.WrapErrWithHint(op, err,
+			"the runner authentication token is invalid or expired. Check it with runner.verify")
+	}
+	return toolutil.WrapErrWithStatusHint(op, err, http.StatusNotFound,
+		"GitLab added this route in 18.7, and an older instance answers 404")
 }
 
 // ---------------------------------------------------------------------------

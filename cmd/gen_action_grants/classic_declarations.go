@@ -60,6 +60,14 @@ var classicRoutes = []join.ClassicDeclaration{
 		Reason: "lib/api/ci/runner.rb:140-142 at v19.4.1-ee skips the fine-grained check as runner_token_auth and authenticates with authenticate_runner! alone. Measured on 19.4.1: a read_api token, an api token and no token at all are answered the same",
 	},
 	{
+		Route: "POST /runners/reset_authentication_token", Category: categoryOursNotRead, Scope: finegrained.ClassicOtherCredential,
+		Reason: "lib/api/ci/runner.rb:157-165 at 19.5.0-pre (f23a2b35383) skips the fine-grained check as runner_token_auth and authenticates with authenticate_runner!, which finds the runner by params[:token], the token the caller passes; Ci::Runners::ResetAuthenticationTokenService is run with source :runner_api, which it permits without a user, so nothing on the route asks for one",
+	},
+	{
+		Route: "GET /runners/router/discovery", Category: categoryOursNotRead, Scope: finegrained.ClassicOtherCredential,
+		Reason: "lib/api/ci/runner.rb:167-192 at 19.5.0-pre (f23a2b35383) skips the fine-grained check as runner_token_auth and authenticates in a before block with authenticate_runner_from_header!, which finds the runner by the Runner-Token header the caller's token is sent in (lib/api/ci/helpers/runner.rb:29-34); nothing on the route asks for the user",
+	},
+	{
 		Route: "POST /projects/:id/(ref/:ref/)trigger/pipeline", Category: categoryOursNotRead, Scope: finegrained.ClassicOtherCredential,
 		Reason: "lib/api/ci/triggers.rb:41-57 at v19.4.1-ee skips the fine-grained check as trigger_token_auth, finds the project with find_project rather than find_project!, and runs Ci::PipelineTriggerService.new(project, nil, params), which authenticates the trigger token the caller passes; nothing on the route asks for the user",
 	},
@@ -129,5 +137,9 @@ var annotationDisagreements = []classicDeclaration{
 	{
 		Action: "runner.delete_by_token", Category: categoryAnotherCredential,
 		Reason: "it deletes the runner whose authentication token the caller passes, which GitLab authenticates instead of the token this server holds",
+	},
+	{
+		Action: "runner.reset_token_by_token", Category: categoryAnotherCredential,
+		Reason: "it resets the authentication token of the runner whose current token the caller passes, which GitLab authenticates instead of the token this server holds",
 	},
 }

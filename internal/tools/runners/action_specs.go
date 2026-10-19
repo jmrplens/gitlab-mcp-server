@@ -24,6 +24,8 @@ const (
 	toolRunnerResetGroupReg    = "gitlab_runner_reset_group_reg_token"
 	toolRunnerResetProjectReg  = "gitlab_runner_reset_project_reg_token"
 	toolRunnerListManagers     = "gitlab_runner_list_managers"
+	toolRunnerResetByToken     = "gitlab_runner_reset_token_by_token"
+	toolRunnerRouterDiscovery  = "gitlab_runner_router_discovery"
 )
 
 // Canonical catalog IDs, the one form every surface resolves: what a
@@ -38,32 +40,38 @@ const (
 // of them could be looked up in a listing. The hints had it right from the
 // start, which is what made the split easy to miss: both sets of constants
 // existed, in two files, and only one named IDs.
+//
+// Each ID is spelled out rather than concatenated onto the domain, so it reads
+// as the string a model receives and gives the mutation run no operator to
+// flip in a declaration no test can execute;
+// TestMarkdownHints_ActionConstants_NameActionsTheCatalogHolds holds every one
+// to the name its spec registers.
 const (
-	domainRunner = "runner."
-
 	// actionJobGet belongs to another group, and is named here because a
 	// runner's job list cross-links to it.
 	actionJobGet = "job.get"
 
-	actionRunnerList             = domainRunner + "list"
-	actionRunnerListAll          = domainRunner + "list_all"
-	actionRunnerGet              = domainRunner + "get"
-	actionRunnerUpdate           = domainRunner + "update"
-	actionRunnerRemove           = domainRunner + "remove"
-	actionRunnerJobs             = domainRunner + "jobs"
-	actionRunnerListProject      = domainRunner + "list_project"
-	actionRunnerEnableProject    = domainRunner + "enable_project"
-	actionRunnerDisableProject   = domainRunner + "disable_project"
-	actionRunnerListGroup        = domainRunner + "list_group"
-	actionRunnerRegister         = domainRunner + "register"
-	actionRunnerDeleteRegistered = domainRunner + "delete_registered"
-	actionRunnerDeleteByToken    = domainRunner + "delete_by_token"
-	actionRunnerVerify           = domainRunner + "verify"
-	actionRunnerResetToken       = domainRunner + "reset_token"
-	actionRunnerResetInstanceReg = domainRunner + "reset_instance_reg_token"
-	actionRunnerResetGroupReg    = domainRunner + "reset_group_reg_token"
-	actionRunnerResetProjectReg  = domainRunner + "reset_project_reg_token"
-	actionRunnerListManagers     = domainRunner + "list_managers"
+	actionRunnerList              = "runner.list"
+	actionRunnerListAll           = "runner.list_all"
+	actionRunnerGet               = "runner.get"
+	actionRunnerUpdate            = "runner.update"
+	actionRunnerRemove            = "runner.remove"
+	actionRunnerJobs              = "runner.jobs"
+	actionRunnerListProject       = "runner.list_project"
+	actionRunnerEnableProject     = "runner.enable_project"
+	actionRunnerDisableProject    = "runner.disable_project"
+	actionRunnerListGroup         = "runner.list_group"
+	actionRunnerRegister          = "runner.register"
+	actionRunnerDeleteRegistered  = "runner.delete_registered"
+	actionRunnerDeleteByToken     = "runner.delete_by_token"
+	actionRunnerVerify            = "runner.verify"
+	actionRunnerResetToken        = "runner.reset_token"
+	actionRunnerResetTokenByToken = "runner.reset_token_by_token"
+	actionRunnerRouterDiscovery   = "runner.router_discovery"
+	actionRunnerResetInstanceReg  = "runner.reset_instance_reg_token"
+	actionRunnerResetGroupReg     = "runner.reset_group_reg_token"
+	actionRunnerResetProjectReg   = "runner.reset_project_reg_token"
+	actionRunnerListManagers      = "runner.list_managers"
 )
 
 // ActionSpecs returns canonical specs for runner and runner controller actions.
@@ -84,6 +92,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		runnerUpdateSpec("delete_by_token", toolutil.DestructiveAction(client, deleteByTokenOutput), toolRunnerDeleteByToken),
 		runnerReadSpec("verify", toolutil.RouteAction(client, verifyOutput), "gitlab_runner_verify"),
 		runnerUpdateSpec("reset_token", toolutil.RouteAction(client, ResetAuthToken), "gitlab_runner_reset_token"),
+		runnerUpdateSpec("reset_token_by_token", toolutil.RouteAction(client, ResetAuthTokenByToken), toolRunnerResetByToken),
+		runnerReadSpec("router_discovery", toolutil.RouteAction(client, RouterDiscovery), toolRunnerRouterDiscovery),
 		runnerUpdateSpec("reset_instance_reg_token", toolutil.RouteAction(client, ResetInstanceRegToken), toolRunnerResetInstanceReg),
 		runnerUpdateSpec("reset_group_reg_token", toolutil.RouteAction(client, ResetGroupRegToken), toolRunnerResetGroupReg),
 		runnerUpdateSpec("reset_project_reg_token", toolutil.RouteAction(client, ResetProjectRegToken), toolRunnerResetProjectReg),
@@ -368,6 +378,18 @@ var runnerActionMeta = map[string]runnerActionMetaEntry{
 		aliases:     []string{"reset runner token", "rotate runner authentication token", "renew runner token", "regenerate runner token"},
 		related:     []string{actionRunnerVerify, actionRunnerGet},
 		description: "Reset a runner's authentication token by runner_id. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_get.",
+	},
+	toolRunnerResetByToken: {
+		usage:       "Reset a runner's authentication token with the current token instead of a runner_id, invalidating the current one. GitLab finds the runner by the token passed, which is how a runner rotates its own token. The response returns the new token. Prefer runner.reset_token when you have the runner_id.",
+		aliases:     []string{"reset runner token by token", "rotate runner token with current token", "self rotate runner token", "renew runner token using token"},
+		related:     []string{actionRunnerVerify, actionRunnerResetToken},
+		description: "Reset a runner's authentication token with its current authentication token. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_reset_token.",
+	},
+	toolRunnerRouterDiscovery: {
+		usage:       "Discover the Job Router URL a runner connects to, authenticated by the runner's authentication token. Needs GitLab 18.7 or later with the Job Router on: it sits behind the job_router and job_router_instance_runners feature flags, disabled by default, and GitLab answers 501 while it is off.",
+		aliases:     []string{"runner job router discovery", "discover job router", "job router url for runner", "runner router server url"},
+		related:     []string{actionRunnerVerify, actionRunnerGet},
+		description: "Discover the Job Router information for a runner by its authentication token (GitLab 18.7 or later, behind feature flags). Returns: the Job Router server URL. See also: gitlab_runner_verify, gitlab_runner_get.",
 	},
 	// Deprecated registration-token reset actions.
 	toolRunnerResetInstanceReg: {

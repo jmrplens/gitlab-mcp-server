@@ -857,7 +857,9 @@ func assertCatalogMissingAction(t *testing.T, catalog *actioncatalog.Catalog, ac
 
 const (
 	// expectedBaseDynamicCatalogActions identifies the expected base (Free tier)
-	// dynamic catalog actions. 874 = 872 + project.milestone_promote and
+	// dynamic catalog actions. 876 = 874 + runner.reset_token_by_token and
+	// runner.router_discovery (Free, client-go v3.18.0). The 874 was 872 +
+	// project.milestone_promote and
 	// pipeline.resource_group_current_job (Free, client-go v3.18.0 and
 	// v3.19.0). The 872 was 870 + group.service_account_get and
 	// project.service_account_get (Free, GitLab 19.4). The 870 was 869 +
@@ -869,9 +871,10 @@ const (
 	// 858 was 872 −11 group webhooks −3 MR dependencies gated to Premium
 	// (group_webhooks.md and merge request dependencies are
 	// Premium/Ultimate). See cmd/audit_edition_tier.
-	expectedBaseDynamicCatalogActions = 874
+	expectedBaseDynamicCatalogActions = 876
 	// expectedEnterpriseDynamicCatalogActions identifies the expected enterprise dynamic catalog actions constant used by this package.
-	// 1095 = 1092 + project.milestone_promote,
+	// 1097 = 1095 + runner.reset_token_by_token and runner.router_discovery
+	// (Free, client-go v3.18.0). The 1095 was 1092 + project.milestone_promote,
 	// pipeline.resource_group_current_job (Free) and
 	// project.milestone_burndown (Premium), client-go v3.18.0 and v3.19.0.
 	// The 1092 was 1090 + group.service_account_get and project.service_account_get
@@ -881,9 +884,10 @@ const (
 	// 1069 + 7 work item saved view actions (get/list/create/update/
 	// delete/subscribe/unsubscribe, Free, client-go v2.62.0)
 	// + 1 Dependency Firewall package evaluation (Premium).
-	expectedEnterpriseDynamicCatalogActions = 1095
+	expectedEnterpriseDynamicCatalogActions = 1097
 	// expectedGitLabComEnterpriseCatalogActions identifies the expected GitLab com enterprise catalog actions constant used by this package.
-	// 1101 = 1098 + project.milestone_promote,
+	// 1103 = 1101 + runner.reset_token_by_token and runner.router_discovery
+	// (Free, client-go v3.18.0). The 1101 was 1098 + project.milestone_promote,
 	// pipeline.resource_group_current_job (Free) and
 	// project.milestone_burndown (Premium), client-go v3.18.0 and v3.19.0.
 	// The 1098 was 1096 + group.service_account_get and project.service_account_get
@@ -892,7 +896,7 @@ const (
 	// + 12 achievement actions (Free, client-go v2.64.0), and the 1083 was
 	// 1075 + 7 work item saved view actions (Free, client-go v2.62.0)
 	// + 1 Dependency Firewall package evaluation (Premium).
-	expectedGitLabComEnterpriseCatalogActions = 1101
+	expectedGitLabComEnterpriseCatalogActions = 1103
 )
 
 // TestActionCatalog_BaselineCountsDoNotRegress covers ActionCatalog with table-driven subtests for baseline counts do not regress.

@@ -27,8 +27,10 @@ import (
 
 // TestRunners_ThrowawayLifecycle resets the group and project registration
 // tokens and drives three throwaway runners through the uncovered mutations:
-// runner A through verify, jobs, update, reset_token and delete_by_token,
-// runner B through delete_registered, and runner C through remove.
+// runner A through verify, jobs, update, reset_token, reset_token_by_token
+// (after which its previous token no longer verifies), router_discovery and
+// delete_by_token, runner B through delete_registered, and runner C through
+// remove.
 //
 // Replaces: TestIndividual_RunnerExtras, TestMeta_Runner
 func TestRunners_ThrowawayLifecycle(t *testing.T) {
@@ -63,9 +65,20 @@ func TestRunners_ThrowawayLifecycle(t *testing.T) {
 	if reset.Token == "" {
 		e.T.Fatalf("runner reset_token answered an empty token")
 	}
-	// The reset invalidates the previous auth token, so the delete-by-token
-	// below names the rotated one.
-	harness.DoVoid(s, actionRunnerDeleteByToken, map[string]any{"token": reset.Token})
+	// The runner rotates the token it was just given with that token itself,
+	// and the one it held stops authenticating.
+	rotated := harness.Do[runners.AuthTokenOutput](s, actionRunnerResetTokenByToken, map[string]any{"token": reset.Token})
+	if rotated.Token == "" || rotated.Token == reset.Token {
+		e.T.Fatalf("runner reset_token_by_token answered %q, want a token other than the one it was given", rotated.Token)
+	}
+	refused := harness.ExpectToolError(s, actionRunnerVerify, map[string]any{"token": reset.Token}, "403")
+	e.T.Logf("the token the runner rotated away no longer verifies: %s", firstLine(refused))
+
+	assertRouterDiscovery(e, s, rotated.Token)
+
+	// The resets invalidate each previous auth token, so the delete-by-token
+	// below names the last one.
+	harness.DoVoid(s, actionRunnerDeleteByToken, map[string]any{"token": rotated.Token})
 
 	runnerB := registerThrowawayRunner(e, s, regToken, "e2e-runner-extras-b")
 	harness.DoVoid(s, actionRunnerDeleteRegistered, map[string]any{"runner_id": runnerB.ID})
@@ -86,6 +99,28 @@ func TestRunners_InstanceRegistrationToken(t *testing.T) {
 	token := resetRegistrationToken(e, s, actionRunnerResetInstanceRegTok, nil, "reset instance registration token")
 	if token == "" {
 		e.T.Errorf("reset instance registration token answered an empty token")
+	}
+}
+
+// assertRouterDiscovery asks for the Job Router a runner connects to. The Job
+// Router sits behind feature flags GitLab ships disabled, so an instance as a
+// suite finds it answers 501, which the action names with those flags; one
+// with the flags on answers with the router's URL. Either is asserted, since
+// which one this instance is depends on its configuration and not on the
+// server.
+func assertRouterDiscovery(e *harness.Env, s *harness.Session, token string) {
+	e.T.Helper()
+
+	discovery, err := harness.Try[runners.RouterDiscoveryOutput](s, actionRunnerRouterDiscovery, map[string]any{"token": token})
+	switch {
+	case err == nil && discovery.ServerURL == "":
+		e.T.Errorf("runner router_discovery answered no server URL")
+	case err != nil && !strings.Contains(err.Error(), "job_router"):
+		e.T.Errorf("runner router_discovery was refused without naming the Job Router's feature flags: %v", err)
+	case err != nil:
+		e.T.Logf("the Job Router is off on this instance: %s", firstLine(err.Error()))
+	default:
+		e.T.Logf("the Job Router answers at %s", discovery.ServerURL)
 	}
 }
 

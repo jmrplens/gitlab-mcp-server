@@ -171,6 +171,8 @@ const (
 	actionRunnerJobs                harness.ActionID = "runner.jobs"
 	actionRunnerUpdate              harness.ActionID = "runner.update"
 	actionRunnerResetToken          harness.ActionID = "runner.reset_token"
+	actionRunnerResetTokenByToken   harness.ActionID = "runner.reset_token_by_token"
+	actionRunnerRouterDiscovery     harness.ActionID = "runner.router_discovery"
 	actionRunnerResetGroupRegTok    harness.ActionID = "runner.reset_group_reg_token"
 	actionRunnerResetProjectRegTok  harness.ActionID = "runner.reset_project_reg_token"
 	actionRunnerResetInstanceRegTok harness.ActionID = "runner.reset_instance_reg_token"

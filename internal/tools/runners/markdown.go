@@ -270,6 +270,17 @@ func FormatManagerListMarkdown(out ManagerListOutput) string {
 	return b.String()
 }
 
+// FormatRouterDiscoveryMarkdown renders the Job Router discovery information
+// as a card. The URL is a code span because a runner's configuration copies
+// it exactly.
+func FormatRouterDiscoveryMarkdown(out RouterDiscoveryOutput) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Job Router Discovery")
+	c.Code("Server URL", out.ServerURL)
+	c.End(toolutil.HintAction(actionRunnerVerify, "check the runner token still authenticates"))
+	return b.String()
+}
+
 func init() {
 	toolutil.RegisterMarkdown(FormatOutputMarkdown)
 	toolutil.RegisterMarkdown(FormatDetailsMarkdown)
@@ -278,4 +289,5 @@ func init() {
 	toolutil.RegisterMarkdown(FormatAuthTokenMarkdown)
 	toolutil.RegisterMarkdown(FormatRegTokenMarkdown)
 	toolutil.RegisterMarkdown(FormatManagerListMarkdown)
+	toolutil.RegisterMarkdown(FormatRouterDiscoveryMarkdown)
 }
