@@ -97,6 +97,7 @@ for the fork, branch, fix, test and MR workflow.
   - [SearchOptions models neither num_context_lines nor regex](#searchoptions-models-neither-num_context_lines-nor-regex)
   - [Seven response keys and twelve parameters GitLab 19.5 added that client-go does not model](#seven-response-keys-and-twelve-parameters-gitlab-195-added-that-client-go-does-not-model)
   - [The rate limit backoff ignores Retry-After on a 429](#the-rate-limit-backoff-ignores-retry-after-on-a-429)
+  - [UpdateSettingsOptions models twenty-six settings the update route does not take](#updatesettingsoptions-models-twenty-six-settings-the-update-route-does-not-take)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -378,6 +379,7 @@ readable without opening the tracker:
 | 132 | client-go | [SearchOptions models neither num_context_lines nor regex](#searchoptions-models-neither-num_context_lines-nor-regex) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes, `search.code` adds both to the query through a request option, each only when set |
 | 133 | client-go | [Seven response keys and twelve parameters GitLab 19.5 added](#seven-response-keys-and-twelve-parameters-gitlab-195-added-that-client-go-does-not-model) | No | No | No | No | Partial: six keys read from the captured response; the merge request author's `bot` and the parameters not yet |
 | 134 | client-go | [The rate limit backoff ignores `Retry-After` on a 429](#the-rate-limit-backoff-ignores-retry-after-on-a-429) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3147](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3147), open; GitLab Duo requested changes on 2026-10-17, for a large negative `Retry-After` that overflows `time.Duration` | No | No; this server replaces client-go's backoff with its own | Not needed |
+| 135 | client-go | [`UpdateSettingsOptions` models twenty-six settings the update route does not take](#updatesettingsoptions-models-twenty-six-settings-the-update-route-does-not-take) | No | No | No | No | Not yet: `admin.settings_update` sends them, and a patch naming one beside a setting GitLab takes is reported as applied, a defect of this server's not fixed here |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -1337,6 +1339,21 @@ release, row 81's reminder of 2026-10-14 and its Gerrit change have had no
 answer, and nothing else in this group moved since the reading of
 2026-10-16.
 
+Read on 2026-10-19 for the change that moves this server's client-go pin
+from v3.15.0 to v3.29.0, the newest tag, against the module source of both.
+Rows 6, 52 and 133 named v3.15.0 as the pin and were read again at v3.29.0:
+rows 6 and 52's structs are unchanged on the same lines, and none of row
+133's seven keys or twelve parameters is modeled, so none of the three moved.
+The new pin carries row 128's fix of ours (v3.22.1) and four merges by other
+contributors that rows here wait on or count: the `Key` and `SSHKey` fields
+of row 31 (v3.19.0), the to-do fields of row 34's section (v3.20.0), the
+group milestone's `web_url` of row 95 (v3.26.0) and
+`Project.MergeTrainEnforcement`, one of the keys row 44 counts on `Project`
+(v3.27.0); each of those rows records what the pin retires with the change
+that adopts it. Row 135 is new: twenty-six settings client-go models and the
+application settings update does not take, found while recounting what the
+struct models for the new pin.
+
 ## GitLab client (`gitlab.com/gitlab-org/api/client-go`)
 
 ### Panic unmarshalling an issue with no id
@@ -1440,8 +1457,9 @@ is recorded anywhere this entry could cite.
   2026-10-19 it is the 32nd of 41, as `5837b155` since the merge request's
   rebase and force push of 2026-10-17, and the merge request still has no
   approval.
-- **Merged**: no. The struct is unchanged at v3.15.0, the version `go.mod`
-  pins, and at v3.16.0, tagged on 2026-10-07 (`feature_flags.go:115-125`).
+- **Merged**: no. The struct is unchanged at v3.15.0 and at v3.16.0, tagged
+  on 2026-10-07 (`feature_flags.go:115-125`), and read on 2026-10-19 at
+  v3.29.0, the version `go.mod` pins, it is unchanged on the same lines.
 - **Blocking**: no.
 - **Workaround**: yes, in two places. `internal/tools/features.Set` builds the
   request body itself, and so does `setFeature` in
@@ -4609,9 +4627,10 @@ although a reviewer may prefer both changed for symmetry.
 **How we found it**: the `protectedpackages` sweep, reading what the handler can
 and cannot control. The consequence came from the e2e scenario's own comment,
 which had recorded the 422 without connecting it to the tag. Verified identical
-in v3.0.0, v3.10.0, v3.12.0 and v3.14.0, and on 2026-10-07 in v3.15.0, the
-version `go.mod` pins, and v3.16.0, tagged that day
-(`protected_packages.go:86-87`), so a dependency bump does not retire it.
+in v3.0.0, v3.10.0, v3.12.0 and v3.14.0, on 2026-10-07 in v3.15.0 and
+v3.16.0, tagged that day (`protected_packages.go:86-87`), and on 2026-10-19
+in v3.29.0, the version `go.mod` pins, on the same lines, so a dependency
+bump does not retire it.
 
 **Effort**: small, two struct tags and a test, like
 [`SetFeatureFlagOptions`](#setfeatureflagoptions-fields-lack-omitempty).
@@ -7011,8 +7030,10 @@ test that each reaches the query only when set.
   [entry 58](#five-response-keys-and-three-parameters-gitlab-194-added-that-v3140-does-not-model)
   went into it.
 - **In review**: no.
-- **Merged**: no. Neither v3.15.0, the version this server pins, nor v3.25.0,
-  the newest when read on 2026-10-17, models any of them.
+- **Merged**: no. Neither v3.15.0 nor v3.25.0, the newest when read on
+  2026-10-17, models any of them, and read on 2026-10-19 neither does
+  v3.29.0, the version this server pins: no struct below gained one of the
+  keys, and no option struct one of the parameters.
 - **Blocking**: no.
 - **Workaround**: partial. The merge request author's `bot` is not published
   yet: every merge request route renders its author through the new
@@ -7162,6 +7183,82 @@ that keep the fast failure (`WithCustomBackoff`, `WithCustomRetryMax` and
 `WithoutRetries`) and offers to put the change behind a client option
 instead. A table test of `rateLimitBackoff` and a client test against an
 `httptest` server that answers `Retry-After: 1` once cover it.
+
+### UpdateSettingsOptions models twenty-six settings the update route does not take
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no. All twenty-six are in the struct at v3.15.0 and still are
+  at v3.29.0, the version `go.mod` pins, and each of the 51 settings v3.16.0
+  to v3.29.0 added is one the route declares. Three carry a `Deprecated:`
+  notice at v3.29.0: `housekeeping_bitmaps_enabled` ("Cannot be set through
+  the API, always true"), which v3.15.0 carries already, and
+  `autocomplete_users` and `autocomplete_users_unauthenticated` ("The API
+  never accepted ..."), which v3.15.0 does not carry and v3.17.0 does, beside
+  the `_limit` settings they point to. The other twenty-three carry none.
+- **Blocking**: no.
+- **Workaround**: none yet, and this server carries a defect of its own
+  here, not fixed yet. `admin.settings_update` refuses, by name and before
+  anything is sent, a key client-go does not model (`unmodeledSettingKeys` in
+  `internal/tools/settings/settings.go`), and client-go models these
+  twenty-six, so the action sends them. A patch that names one of them beside
+  a setting the route takes is answered 200 with the rest applied and is
+  reported as applied whole, which is the half-applied patch that refusal
+  exists to prevent. The fix is to refuse these keys the same way, and that
+  refusal retires when client-go stops modeling them.
+
+**Where**: `settings.go`, `UpdateSettingsOptions` (lines 596 to 1086 at
+v3.29.0), which `UpdateSettings` sends to `PUT /application/settings`. Of
+its 473 keys, 447 are among the 677 top-level params the 19.5.0 live record
+declares on that route (`docs/development/gitlab-api-live.json`), and these
+twenty-six are not declared there at all:
+
+- `autocomplete_users` and `autocomplete_users_unauthenticated`;
+- `ci_partitions_size_limit`;
+- six `container_registry_import_*` settings: `created_before`,
+  `max_retries`, `max_step_duration`, `max_tags_count`, `start_max_retries`
+  and `target_plan`;
+- `delayed_group_deletion` and `delayed_project_deletion`;
+- `enforce_pat_expiration` and `enforce_ssh_key_expiration`;
+- `help_text` and `sign_in_text`;
+- `housekeeping_bitmaps_enabled`, `in_product_marketing_emails_enabled`,
+  `pseudonymizer_enabled`, `repository_storages`,
+  `send_user_confirmation_email` and `suggest_pipeline_enabled`;
+- three `throttle_unauthenticated_git_lfs_*` settings: `enabled`,
+  `period_in_seconds` and `requests_per_period`;
+- `user_email_lookup_limit` and `web_ide_clientside_preview_enabled`.
+
+**What**: the route builds the update from
+`declared_params(include_missing: false)`
+([lib/api/settings.rb:661](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.5.0-ee/lib/api/settings.rb#L661)
+at `v19.5.0-ee`), so Grape drops every key it does not declare, and it
+declares none of these. Part of its params come from
+`Helpers::SettingsHelpers.optional_attributes` when the application loads,
+which is why the live record, read from a booted GitLab, is the list to
+compare with and the source is not. A key among them is dropped without a
+word: a patch that names it beside a setting the route takes is answered
+200, the other setting applied and this one not, and one that names nothing
+else is answered 400, since the route requires at least one of the settings its
+`at_least_one_of` lists. Seven of them GitLab still sends on a read, each with a fixed value:
+the six `container_registry_import_*` settings as `0` or `""`, which the
+entity keeps "to be backwards compatible", and `housekeeping_bitmaps_enabled`
+as `true`
+([lib/api/entities/application_setting.rb:55-82](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.5.0-ee/lib/api/entities/application_setting.rb#L55-82)),
+so a caller reads them on every answer and cannot change them. GitLab's own
+API page still lists one of them as a setting a caller can change:
+`ci_partitions_size_limit` is in the available settings of
+`doc/api/settings.md` at `v19.5.0-ee`, while GitLab removed the setting in
+18.11.0
+([gitlab-org/gitlab!227211](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/227211)).
+
+**How we found it**: recounting, for the move of the pin to v3.29.0, how
+many of the route's params the struct models, a figure the settings
+handler's comment and tests state. Read the other way round, the struct's
+473 keys left twenty-six that the route does not declare.
+
+**Effort**: small: a `Deprecated:` notice on each of the twenty-three that
+carry none, saying the API drops it, and the fields' removal at the next
+major version.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
