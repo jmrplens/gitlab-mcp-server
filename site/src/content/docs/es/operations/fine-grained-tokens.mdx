@@ -188,9 +188,13 @@ el proyecto al que llega se juzga por el rol propio del usuario del token allí 
 la concesión, y transferir un proyecto o un grupo (`project.transfer`,
 `group.transfer`) se juzga en el origen de la misma forma. Trata un token de grano fino
 como capaz de escribir dondequiera que estas acciones lleguen para su usuario, y
-quítalas con `--exclude-tools` donde importe. El hueco es de GitLab y está recogido en
-el
-[registro de upstream](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#issue-move-and-clone-and-transfer-are-authorized-at-the-source-boundary-only-for-a-fine-grained-token).
+quítalas con `--exclude-tools` donde importe. Es el diseño de GitLab y no un fallo: sus
+[principios de autorización](https://docs.gitlab.com/development/permissions/granular_access/authorization_principles/)
+comprueban un token de grano fino contra el recurso que nombra la ruta de la petición y
+contra nada más de lo que toque la operación, así que este aviso se mantiene mientras
+GitLab conserve esa regla. El
+[registro de upstream](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#issue-move-and-clone-and-transfer-are-authorized-at-the-source-boundary-only-for-a-fine-grained-token)
+recoge los cambios que lo dejaron así.
 :::
 
 ## Lo que se muestra a una sesión

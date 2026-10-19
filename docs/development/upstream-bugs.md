@@ -259,7 +259,7 @@ readable without opening the tracker:
 | 13 | go-sdk | [The cancellation reason is discarded](#the-cancellation-reason-is-discarded-before-any-handler-sees-it) | Yes, [modelcontextprotocol/go-sdk#1254](https://github.com/modelcontextprotocol/go-sdk/issues/1254) | Yes, [modelcontextprotocol/go-sdk#1255](https://github.com/modelcontextprotocol/go-sdk/pull/1255), merged | **Yes, unreleased** | No | Yes, until it ships |
 | 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | Yes, by another user, [modelcontextprotocol/go-sdk#1234](https://github.com/modelcontextprotocol/go-sdk/issues/1234) | Yes, theirs, [modelcontextprotocol/go-sdk#1242](https://github.com/modelcontextprotocol/go-sdk/pull/1242), merged | **Yes, unreleased** | No | None taken |
 | 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | Yes, [modelcontextprotocol/go-sdk#1260](https://github.com/modelcontextprotocol/go-sdk/issues/1260) | Yes, [modelcontextprotocol/go-sdk#1268](https://github.com/modelcontextprotocol/go-sdk/pull/1268), merged | **Yes, unreleased** | No | None taken |
-| 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, [creativeprojects/go-selfupdate#58](https://github.com/creativeprojects/go-selfupdate/pull/58), open | No | No | Retired |
+| 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, [creativeprojects/go-selfupdate#58](https://github.com/creativeprojects/go-selfupdate/pull/58), merged | **Yes, v1.7.0** | No | Retired |
 | 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes, [openai/codex#38979](https://github.com/openai/codex/issues/38979), and the cause in rmcp, [modelcontextprotocol/rust-sdk#1299](https://github.com/modelcontextprotocol/rust-sdk/issues/1299) | Yes, [modelcontextprotocol/rust-sdk#1300](https://github.com/modelcontextprotocol/rust-sdk/pull/1300), merged | **Yes, rmcp 3.5.0**; Codex 0.163.0, released on 2026-10-15, is the first Codex built on it (rmcp 3.5.1); 0.162.1 and earlier pin 3.3.0 | Was yes | Yes, until a Codex built on the fix is widely deployed, not merely released: retired once ChatGPT.app ships Codex 0.163 or later |
 | 18 | go-sdk | [A receiving middleware cannot read the JSON-RPC id](#a-receiving-middleware-cannot-read-the-json-rpc-request-id) | Yes, [modelcontextprotocol/go-sdk#1264](https://github.com/modelcontextprotocol/go-sdk/issues/1264) | No, proposal first | No | No | None possible |
 | 19 | client-go | [Security mutations discard GraphQL errors](#the-security-attribute-and-category-mutations-discard-graphql-errors) | Yes | Yes, [gitlab-org/api/client-go!3066](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3066), open | No | No | Yes |
@@ -367,7 +367,7 @@ readable without opening the tracker:
 | 121 | client-go | [UpdateReleaseOptions sends the title and the notes as null on every partial update](#updatereleaseoptions-sends-the-title-and-the-notes-as-null-on-every-partial-update) | No | No | No | No | Yes, `release.update` takes the two keys out of the body through a request option whenever the caller did not set them |
 | 122 | client-go | [Seven update option structs cannot send the null or the empty list that clears a field](#seven-update-option-structs-cannot-send-the-null-or-the-empty-list-that-clears-a-field) | No | No | No | No | Yes, the seven update actions write the null or the `[]` into the body through a request option, and the group label actions no longer offer the priority |
 | 123 | gitlab-org/gitlab | [The vulnerability dismissal reason outlives the dismissal](#the-vulnerability-dismissal-reason-outlives-the-dismissal) | No | No | No | No; a confirmed, resolved or redetected vulnerability answered the reason it was dismissed with | Yes, `vulnerabilities` publishes the reason only while the state is `DISMISSED` |
-| 124 | gitlab-org/gitlab | [Issue move and clone, and transfer, are authorized at the source boundary only for a fine-grained token](#issue-move-and-clone-and-transfer-are-authorized-at-the-source-boundary-only-for-a-fine-grained-token) | No public issue | No | No | No | None; the fine-grained tokens page warns that a grant does not bound where these actions write |
+| 124 | gitlab-org/gitlab | [Issue move and clone, and transfer, are authorized at the source boundary only for a fine-grained token](#issue-move-and-clone-and-transfer-are-authorized-at-the-source-boundary-only-for-a-fine-grained-token) | Not needed: GitLab documents the behavior as intended, [gitlab-org/gitlab!254840](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254840), merged on 2026-09-18 | No, and none is coming: [gitlab-org/gitlab!256181](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256181) removed the target checks that existed and [gitlab-org/gitlab!254851](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254851) the `additional_scopes` mechanism, both in 19.5 | No, works as intended upstream | No | None; the fine-grained tokens page warns that a grant does not bound where these actions write, permanently while GitLab keeps this design |
 | 125 | client-go | [The issue statistics options type assignee_id as an integer](#the-issue-statistics-options-type-assignee_id-as-an-integer) | No | No | No | No | Yes, the three statistics actions write `None` or `Any` into the query through a request option |
 | 126 | client-go | [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date) | No | No | No | No | Yes, `user.add_ssh_key`, `user.add_ssh_key_for_user`, `snippet.list_all` and the two changelog actions leave the field unset and write the instant given through a request option |
 | 127 | gitlab-org/gitlab | [SubmoduleHelper compares submodule URLs as text](#submodulehelper-compares-submodule-urls-as-text) | No | No | No | No; GitLab's pages leave such a submodule unlinked | Yes, `repository.list_submodules` and `repository.read_submodule_file` resolve a sibling namespace and the other spellings of the instance's clone URLs |
@@ -14126,10 +14126,31 @@ then traced in the 19.4.1-ee source.
 
 ### Issue move and clone, and transfer, are authorized at the source boundary only for a fine-grained token
 
-- **Reported**: no public issue.
-- **In review**: no.
-- **Merged**: no. Read in 19.4.1 and in the 19.5.0-pre source, which carry the
-  same declarations, and seen on a 19.4.2 instance.
+- **Reported**: not needed. GitLab decided this is the intended design before
+  this entry was written, and documents it:
+  [gitlab-org/gitlab!254840](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254840),
+  merged on 2026-09-18 in milestone 19.5, added
+  [the authorization principles](https://docs.gitlab.com/development/permissions/granular_access/authorization_principles/)
+  for fine-grained tokens, which say the token is checked against the
+  resource named in the request path and not against other resources the
+  operation touches, with issue move as the example, and a section of the
+  user page on
+  [how fine-grained tokens authorize each request](https://docs.gitlab.com/auth/tokens/fine_grained_access_tokens/#how-fine-grained-tokens-authorize-each-request).
+  The thread of that merge request records the decision as argued rather
+  than unanimous: checking the target was proposed, and the cost decided it
+  the other way, since a move target would have to be granted a whole
+  permission group for the token's lifetime with no narrower grant
+  available.
+- **In review**: no, and none is coming.
+  [gitlab-org/gitlab!256181](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256181),
+  merged on 2026-09-18, removed the target checks that the work item bulk
+  move and the project subscription create had shipped with in 19.4, and
+  [gitlab-org/gitlab!254851](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254851),
+  merged on 2026-09-23, removed `additional_scopes` from the authorization of
+  fine-grained tokens. Both are in milestone 19.5.
+- **Merged**: no fix; the behavior is intended upstream. Read in 19.4.1 and
+  in the 19.5.0-pre source, which carry the same declarations, and seen on a
+  19.4.2 instance.
 - **Blocking**: no.
 - **Workaround**: none taken. Holding a move to its target would need the
   namespaces each scope of the grant names and the target's ancestry, and the
@@ -14137,8 +14158,8 @@ then traced in the 19.4.1-ee source.
   ([ADR-0024](adr/adr-0024-fine-grained-token-authority-per-action.md)), so a
   guard here needs that decision amended first. The
   [fine-grained tokens page](https://docs.jmrp.io/gitlab-mcp-server/operations/fine-grained-tokens/)
-  warns that a grant does not bound where these actions write. A fix upstream
-  makes the warning history.
+  warns that a grant does not bound where these actions write, and the
+  warning stays for as long as GitLab keeps this design.
 
 **Where**: `lib/api/issues.rb`, where the move and clone routes declare their
 fine-grained permission with `boundary_type: :project` on `:id`, the project
@@ -14155,7 +14176,9 @@ boundary they declare, so the place they write to is judged by the user's role
 alone: a grant that names only one project does not stop an issue being moved
 or cloned into another project its user can write to, although the same token
 is refused on that project when it calls it directly. Transfer follows the same
-pattern, which GitLab may intend; the entry asks about the class.
+pattern, and the rule GitLab documents covers it as well: the token is judged
+on the resource the request path names and on nothing else the operation
+reaches.
 
 **What it costs this server**: what an operator is told a grant bounds. The
 generated fine-grained table copies GitLab's declarations, so `issue.move`,
@@ -14583,20 +14606,17 @@ branch nor a merged results pipeline.
 ### go-selfupdate depends on the deprecated x/crypto/openpgp
 
 - **Reported**: yes,
-  [creativeprojects/go-selfupdate#57](https://github.com/creativeprojects/go-selfupdate/issues/57).
+  [creativeprojects/go-selfupdate#57](https://github.com/creativeprojects/go-selfupdate/issues/57),
+  closed by the merge below.
 - **In review**: yes,
   [creativeprojects/go-selfupdate#58](https://github.com/creativeprojects/go-selfupdate/pull/58),
-  still open, mergeable, and unreviewed when read on 2026-10-13, one commit
-  behind `main` (a change to the project's workflow file alone), and no check
-  has ever run on it. Its last activity is the maintainer's answer of
-  2026-08-05: the change is breaking by Go's
-  convention and needs a v2 of the module, which they have not had time to
-  prepare. It went unanswered, and deliberately: there is no form of it that
-  breaks nothing, since the type of `PGPValidator.KeyRing` is the import
-  itself and moving it to a subpackage is breaking too, and this server no
-  longer depends on the module, so a reply would only ask them again. Nothing
-  is owed on it.
-- **Merged**: no.
+  merged at 20:18 UTC on 2026-10-19 as `b732e703`, which replaces
+  `golang.org/x/crypto/openpgp` with `github.com/ProtonMail/go-crypto`. The
+  maintainer had answered on 2026-08-05 that the change is breaking by Go's
+  convention and would need a v2 of the module; it went into the v1 module
+  instead.
+- **Merged**: **yes, v1.7.0**, tagged at 21:26 UTC on 2026-10-19, with no
+  GitHub release page for it.
 - **Blocking**: no.
 - **Workaround**: retired. It was the `GO-2026-5932` entry in the govulncheck
   allowlist. Removing the self-update subsystem in 3.0.0 took the openpgp
@@ -14611,8 +14631,7 @@ branch nor a merged results pipeline.
   information (read on 2026-10-13 from the published
   `gitlab-mcp-server-linux-amd64` with `go version -m`, and from its SBOM), and
   `make check-binary-vulns` holds every release binary to the database at
-  that grain. The upstream PR stays worth merging for the module's other
-  users.
+  that grain. The module's other users get the fix with v1.7.0.
 
 ### gobco type-checks every file of a package directory, whatever its build constraints say
 

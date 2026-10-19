@@ -182,8 +182,13 @@ project it arrives in is judged by the token's user's own role there and not by 
 grant, and transferring a project or a group (`project.transfer`, `group.transfer`) is
 judged at the source the same way. Treat a fine-grained token as able to write wherever
 these actions can reach for its user, and remove them with `--exclude-tools` where that
-matters. The gap is GitLab's, recorded in the
-[upstream register](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#issue-move-and-clone-and-transfer-are-authorized-at-the-source-boundary-only-for-a-fine-grained-token).
+matters. This is GitLab's design rather than a defect: its
+[authorization principles](https://docs.gitlab.com/development/permissions/granular_access/authorization_principles/)
+check a fine-grained token against the resource the request path names and nothing
+else the operation touches, so this warning stands for as long as GitLab keeps that
+rule. The
+[upstream register](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#issue-move-and-clone-and-transfer-are-authorized-at-the-source-boundary-only-for-a-fine-grained-token)
+records the changes that settled it.
 :::
 
 ## What a session is shown
