@@ -43,24 +43,24 @@ const (
 // (ADR-0004).
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		// gitlab_milestone_list — list project milestones with optional filters.
+		// gitlab_milestone_list: list project milestones with optional filters.
 		milestoneReadSpec("milestone_list", toolutil.RouteAction(client, List), "gitlab_milestone_list"),
-		// gitlab_milestone_get — fetch a milestone by IID (returns a structured not-found result on 404).
+		// gitlab_milestone_get: fetch a milestone by IID (returns a structured not-found result on 404).
 		milestoneReadSpec("milestone_get", milestoneGetRoute(client), "gitlab_milestone_get").
 			WithEmbeddedResource("gitlab://project/{project_id}/milestone/{milestone_iid}"),
-		// gitlab_milestone_create — create a new milestone.
+		// gitlab_milestone_create: create a new milestone.
 		milestoneCreateSpec("milestone_create", toolutil.RouteAction(client, Create), "gitlab_milestone_create"),
-		// gitlab_milestone_update — update an existing milestone.
+		// gitlab_milestone_update: update an existing milestone.
 		milestoneUpdateSpec("milestone_update", toolutil.RouteAction(client, Update), "gitlab_milestone_update"),
-		// gitlab_milestone_delete — remove a milestone (destructive).
+		// gitlab_milestone_delete: remove a milestone (destructive).
 		milestoneDeleteSpec("milestone_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_milestone_delete"),
-		// gitlab_milestone_issues — list issues assigned to a milestone.
+		// gitlab_milestone_issues: list issues assigned to a milestone.
 		milestoneReadSpec("milestone_issues", toolutil.RouteAction(client, GetIssues), "gitlab_milestone_issues"),
-		// gitlab_milestone_merge_requests — list MRs assigned to a milestone.
+		// gitlab_milestone_merge_requests: list MRs assigned to a milestone.
 		milestoneReadSpec("milestone_merge_requests", toolutil.RouteAction(client, GetMergeRequests), "gitlab_milestone_merge_requests"),
-		// gitlab_milestone_promote — promote a project milestone to its group (destructive).
+		// gitlab_milestone_promote: promote a project milestone to its group (destructive).
 		milestonePromoteSpec("milestone_promote", toolutil.DestructiveAction(client, Promote), "gitlab_milestone_promote"),
-		// gitlab_milestone_burndown_events — list a milestone's burndown chart events (Premium).
+		// gitlab_milestone_burndown_events: list a milestone's burndown chart events (Premium).
 		milestoneBurndownSpec("milestone_burndown", toolutil.RouteAction(client, GetBurndownChartEvents), "gitlab_milestone_burndown_events"),
 	}
 }
