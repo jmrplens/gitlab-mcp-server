@@ -1,6 +1,6 @@
 # GitLab MCP Server
 
-**Connect your AI assistant to GitLab so it can review merge requests, triage pipelines, manage issues, and draft releases, in plain language.** One self-contained binary (or this container), [~870 GitLab tools on Free/CE, up to ~1097 on GitLab.com Ultimate](https://docs.jmrp.io/gitlab-mcp-server/tools/overview/) over the full REST + GraphQL API, working with Claude, Cursor, VS Code, and any MCP client.
+**Connect your AI assistant to GitLab so it can review merge requests, triage pipelines, manage issues, and draft releases, in plain language.** One self-contained binary (or this container), [~872 GitLab tools on Free/CE, up to ~1099 on GitLab.com Ultimate](https://docs.jmrp.io/gitlab-mcp-server/tools/overview/) over the full REST + GraphQL API, working with Claude, Cursor, VS Code, and any MCP client.
 
 You talk to your AI assistant; it does the GitLab work. No project IDs, API endpoints, or JSON to remember.
 
@@ -43,7 +43,7 @@ Images are multi-arch (`linux/amd64`, `linux/arm64`), published for every releas
 ## Why this server
 
 - 🗣️ **Plain-language GitLab.** The AI translates "is MR !15 safe to merge?" into the right API calls. You don't touch endpoints, IDs, or JSON.
-- 🧰 **The whole platform: ~870 tools on Free/CE, up to ~1097 on GitLab.com Ultimate.** Broad GitLab REST v4 + GraphQL coverage: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security, admin, tokens, and more.
+- 🧰 **The whole platform: ~872 tools on Free/CE, up to ~1099 on GitLab.com Ultimate.** Broad GitLab REST v4 + GraphQL coverage: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security, admin, tokens, and more.
 - 🪶 **Low-token by default.** The default **dynamic** surface exposes just 2 tools (`find` + `execute`) while reaching the full catalog — so it fits any client's context window.
 - 🔒 **Safe by design.** Read-only mode, safe mode (dry-run preview of every mutation), TLS options for self-hosted GitLab, and continuous SonarCloud quality/security gates.
 - 🖥️ **Runs anywhere.** One self-contained binary or container; Windows, Linux & macOS; amd64 & arm64; stdio (desktop) and HTTP (remote).

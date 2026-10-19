@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.jmrplens/gitlab-mcp-server",
   "title": "GitLab MCP Server",
-  "description": "Go MCP server for GitLab: 2 dynamic tools reach ~874 actions on Free/CE, up to ~1101 on Ultimate.",
+  "description": "Go MCP server for GitLab: 2 dynamic tools reach ~876 actions on Free/CE, up to ~1103 on Ultimate.",
   "version": "3.2.0",
   "repository": {
     "url": "https://github.com/jmrplens/gitlab-mcp-server",
