@@ -98,6 +98,7 @@ for the fork, branch, fix, test and MR workflow.
   - [Seven response keys and twelve parameters GitLab 19.5 added that client-go does not model](#seven-response-keys-and-twelve-parameters-gitlab-195-added-that-client-go-does-not-model)
   - [The rate limit backoff ignores Retry-After on a 429](#the-rate-limit-backoff-ignores-retry-after-on-a-429)
   - [UpdateSettingsOptions models twenty-six settings the update route does not take](#updatesettingsoptions-models-twenty-six-settings-the-update-route-does-not-take)
+  - [ListTopicsOptions and CreateTopicOptions model no organization_id](#listtopicsoptions-and-createtopicoptions-model-no-organization_id)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -380,6 +381,7 @@ readable without opening the tracker:
 | 133 | client-go | [Seven response keys and twelve parameters GitLab 19.5 added](#seven-response-keys-and-twelve-parameters-gitlab-195-added-that-client-go-does-not-model) | No | No | No | No | Partial: six keys read from the captured response; the merge request author's `bot` and the parameters not yet |
 | 134 | client-go | [The rate limit backoff ignores `Retry-After` on a 429](#the-rate-limit-backoff-ignores-retry-after-on-a-429) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3147](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3147), open; GitLab Duo requested changes on 2026-10-17, for a large negative `Retry-After` that overflows `time.Duration` | No | No; this server replaces client-go's backoff with its own | Not needed |
 | 135 | client-go | [`UpdateSettingsOptions` models twenty-six settings the update route does not take](#updatesettingsoptions-models-twenty-six-settings-the-update-route-does-not-take) | No | No | No | No | Yes, `admin.settings_update` refuses them by name before anything is sent, as it refuses a key client-go does not model |
+| 136 | client-go | [`ListTopicsOptions` and `CreateTopicOptions` model no `organization_id`](#listtopicsoptions-and-createtopicoptions-model-no-organization_id) | No | No | No | No | None; `admin.topic_list` and `admin.topic_create` act on the organization GitLab resolves for the request |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -7366,6 +7368,52 @@ handler's comment and tests state. Read the other way round, the struct's
 **Effort**: small: a `Deprecated:` notice on each of the twenty-three that
 carry none, saying the API drops it, and the fields' removal at the next
 major version.
+
+### ListTopicsOptions and CreateTopicOptions model no organization_id
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no. At v3.29.0, the version `go.mod` pins, `ListTopicsOptions`
+  carries the page, `search` and `without_projects` (added in v3.16.0), and
+  `CreateTopicOptions` carries `name`, `title`, `description` and the avatar.
+  `Topic` already decodes `organization_id`, one of the gaps of
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  that merged.
+- **Blocking**: no. Without the parameter GitLab lists and creates topics in
+  the organization it resolves for the request, which on an instance with
+  only the default organization is the only one there is.
+- **Workaround**: none. `admin.topic_list` and `admin.topic_create` do not
+  offer `organization_id`, so each acts on the organization GitLab resolves
+  for the request. [Issue 1236](https://github.com/jmrplens/gitlab-mcp-server/issues/1236)
+  records offering it on the list once a client-go release carries it.
+
+**Where**: `topics.go`, `ListTopicsOptions` (line 93 at v3.29.0), which
+`ListTopics` sends to `GET /topics`, and `CreateTopicOptions`, which
+`CreateTopic` sends to `POST /topics`.
+
+**What**: both routes declare `organization_id`, an integer that defaults to
+the request's current organization
+([lib/api/topics.rb:29-30](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.5.0-ee/lib/api/topics.rb#L29-30)
+for the list and
+[lines 71 and 72](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.5.0-ee/lib/api/topics.rb#L71-72)
+for the create, at `v19.5.0-ee`), and the 19.5.0 live record holds both. The
+list hands the organization it finds to `Projects::TopicsFinder`, which
+returns that organization's topics and no others
+(`Projects::Topic.in_organization`, `app/finders/projects/topics_finder.rb`
+line 16), and the create saves the topic in the organization the param
+names. A caller of client-go therefore reads and creates topics only in the
+organization GitLab resolves for it and cannot name another, while every
+topic it reads carries its `organization_id`.
+
+**How we found it**: issue 1236, from the 403 hint of `admin.topic_list`,
+which named `without_projects` while the action did not take it. The live
+record declares `organization_id` beside it on `GET /topics`, and client-go
+v3.16.0 added the one and not the other. The create half was found while
+writing this entry.
+
+**Effort**: small: an `OrganizationID *int64` with `url` and `json` tags and
+`omitempty` on both structs, and a test that each reaches the request only
+when set.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
