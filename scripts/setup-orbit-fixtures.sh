@@ -96,10 +96,13 @@ api_get() {
   curl -sS "${H_AUTH[@]}" "$API$1"
 }
 
-# expect_existing_or_new PATH JSON NEW_ID_BASH
-#   Runs GET PATH; if a 200-ish response with a positive integer id is
+# ensure_resource GET_PATH JSON
+#   Runs GET GET_PATH; if a 200-ish response with a positive integer id is
 #   returned, treats the resource as already created and echoes the
-#   existing id. Otherwise POSTs the JSON body and echoes the new id.
+#   existing id. Otherwise POSTs the JSON body to the same collection and
+#   echoes the new id, or prints GitLab's answer and exits when the answer
+#   carries no id, since a caller that went on would report a resource
+#   that was never created.
 ensure_resource() {
   local get_path="$1"
   local post_json="$2"
@@ -113,12 +116,23 @@ except Exception: pass' 2>/dev/null)
     echo "$id"
     return
   fi
-  # Strip the query string before computing the POST path so that
+  # The query string is what finds an existing resource; the collection in
+  # front of it is where a new one is created, so
   # ensure_resource "/projects/$KG_ID/milestones?title=foo" POSTs to
-  # /projects/$KG_ID/milestones rather than to /projects/$KG_ID.
+  # /projects/$KG_ID/milestones.
   local post_path="${get_path%%\?*}"
-  api_post "$(dirname "$post_path")" "$post_json" \
-    | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("id",""))'
+  local resp new_id
+  resp=$(api_post "$post_path" "$post_json")
+  new_id=$(printf '%s' "$resp" | python3 -c 'import sys,json
+try:
+    d = json.load(sys.stdin)
+    if isinstance(d, dict) and d.get("id"): print(d["id"])
+except Exception: pass' 2>/dev/null)
+  if [ -z "$new_id" ]; then
+    echo "    ✗ POST $post_path did not create anything: $resp" >&2
+    exit 1
+  fi
+  echo "$new_id"
 }
 
 # ─── Project creation (pushes local source tree via git) ───────────────
