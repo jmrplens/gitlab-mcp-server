@@ -179,6 +179,16 @@ func GitLabAtLeast(major, minor int) Need {
 	}
 }
 
+// GitLabAtLeast reports whether the instance this test runs on is at least the
+// given GitLab release, by the rule the [GitLabAtLeast] need applies. It is
+// for a scenario that runs on every release and asserts one answer before the
+// release that mounted a route and another from it on, where declaring the
+// need would skip the rest of the scenario on an older instance.
+func (e *Env) GitLabAtLeast(major, minor int) bool {
+	ok, _ := GitLabAtLeast(major, minor).available(e.inst)
+	return ok
+}
+
 // gitLabRelease reads the major and minor release out of the version GET
 // /api/v4/version reports, such as 19.4.0-ee or 19.5.0-pre. The patch and any
 // suffix are ignored, since a route is mounted by a release rather than by a

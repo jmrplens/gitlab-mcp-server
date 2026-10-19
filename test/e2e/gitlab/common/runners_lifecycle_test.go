@@ -108,8 +108,19 @@ func TestRunners_InstanceRegistrationToken(t *testing.T) {
 // with the flags on answers with the router's URL. Either is asserted, since
 // which one this instance is depends on its configuration and not on the
 // server.
+//
+// GitLab mounted the route in 18.7, and an older instance answers 404, which
+// the action names with that release. That answer is asserted there instead,
+// rather than skipping the lifecycle around it: the release is the instance's,
+// and the rest of the lifecycle runs on it all the same.
 func assertRouterDiscovery(e *harness.Env, s *harness.Session, token string) {
 	e.T.Helper()
+
+	if !e.GitLabAtLeast(18, 7) {
+		refused := harness.ExpectToolError(s, actionRunnerRouterDiscovery, map[string]any{"token": token}, "GitLab added this route in 18.7")
+		e.T.Logf("this instance predates the Job Router's discovery route: %s", firstLine(refused))
+		return
+	}
 
 	discovery, err := harness.Try[runners.RouterDiscoveryOutput](s, actionRunnerRouterDiscovery, map[string]any{"token": token})
 	switch {

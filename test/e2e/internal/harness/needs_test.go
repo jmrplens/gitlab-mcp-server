@@ -161,6 +161,32 @@ func TestGitLabAtLeast_ComparesTheReleaseAndRefusesAnUnreadableVersion(t *testin
 	}
 }
 
+// TestEnvGitLabAtLeast_AnswersAsTheNeedJudges checks the question a scenario
+// asks of the instance it already runs on, for an assertion that differs
+// before and after the release that mounted a route: it answers what the
+// GitLabAtLeast need would, a version that does not read as a release
+// included, which is too old.
+func TestEnvGitLabAtLeast_AnswersAsTheNeedJudges(t *testing.T) {
+	cases := []struct {
+		name    string
+		version string
+		want    bool
+	}{
+		{name: "a later release", version: "19.5.0-ee", want: true},
+		{name: "the release itself", version: "18.7.0", want: true},
+		{name: "an earlier release", version: "18.6.2-ee", want: false},
+		{name: "no version", version: "", want: false},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			env := &Env{inst: testInstance(runtimeFacts{Version: testCase.version}, nil)}
+			if got := env.GitLabAtLeast(18, 7); got != testCase.want {
+				t.Errorf("GitLabAtLeast(18, 7) on %q = %v, want %v", testCase.version, got, testCase.want)
+			}
+		})
+	}
+}
+
 // TestNeedRunner_NoClientOutsideDocker_IsUnavailable checks the lookup path a
 // self-hosted run takes.
 //
