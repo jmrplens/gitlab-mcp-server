@@ -809,10 +809,15 @@ func TestList_InvalidEndDate(t *testing.T) {
 func TestList_AllFilterParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones {
+			// include_descendants as lib/api/group_milestones.rb declares it,
+			// and never client-go's include_descendents, which GitLab ignores.
+			if r.URL.Query().Has("include_descendents") {
+				t.Errorf("the query carries include_descendents, a key GitLab does not declare: %s", r.URL.RawQuery)
+			}
 			assertQueryParams(t, r.URL.Query(), map[string]string{
 				"title":                     "v1.0",
 				"search_title":              "v1",
-				"include_descendents":       "true",
+				"include_descendants":       "true",
 				"include_parent_milestones": "true",
 				"start_date":                "2026-01-01",
 				"end_date":                  "2026-12-31",
@@ -1994,6 +1999,93 @@ func TestActionSpecs_GroupMilestoneGetRoute(t *testing.T) {
 	}
 	if out.IID != 5 || out.ID != 100 {
 		t.Fatalf("group milestone output = %#v, want IID 5 ID 100", out)
+	}
+}
+
+// TestGroupMilestones_PublishTheWebURL verifies that every group milestone
+// handler publishes the milestone's own page, which GitLab's milestone entity
+// sends on every milestone and client-go's GroupMilestone decodes as of
+// v3.26.0. One case per handler, because each converts on a line of its own.
+func TestGroupMilestones_PublishTheWebURL(t *testing.T) {
+	const page = "https://gitlab.example.com/groups/team/-/milestones/10"
+	const (
+		one  = `{"id":1,"iid":10,"group_id":42,"title":"v1","web_url":"` + page + `"}`
+		many = `[` + one + `]`
+	)
+	// A collection GET is either the list itself or the IID-to-ID lookup Get
+	// and Update make before their own request; everything else is the request
+	// under test and gets the single milestone.
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/milestones") {
+			testutil.RespondJSON(w, http.StatusOK, many)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, one)
+	}))
+	tests := []struct {
+		name string
+		call func() (Output, error)
+	}{
+		{"list", func() (Output, error) {
+			out, err := List(context.Background(), client, ListInput{GroupID: "42"})
+			if err != nil || len(out.Milestones) != 1 {
+				return Output{}, err
+			}
+			return out.Milestones[0], nil
+		}},
+		{"get", func() (Output, error) {
+			return Get(context.Background(), client, GetInput{GroupID: "42", MilestoneIID: 10})
+		}},
+		{"create", func() (Output, error) {
+			return Create(context.Background(), client, CreateInput{GroupID: "42", Title: "v1"})
+		}},
+		{"update", func() (Output, error) {
+			return Update(context.Background(), client, UpdateInput{GroupID: "42", MilestoneIID: 10, Title: "v2"})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := tt.call()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if out.WebURL != page {
+				t.Errorf("web_url = %q, want %q", out.WebURL, page)
+			}
+		})
+	}
+}
+
+// TestList_DescendantProjectMilestones_PublishTheirProject verifies that a
+// list asked for include_descendants publishes the project a descendant
+// project's milestone belongs to. GitLab answers that list with the
+// milestones of the group's projects as well as its own
+// (lib/api/concerns/milestones/group_project_params.rb), and its milestone
+// entity sends project_id on those alone, which client-go's GroupMilestone
+// does not model, so it is read off the captured answer, per row.
+func TestList_DescendantProjectMilestones_PublishTheirProject(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("include_descendants") != "true" {
+			t.Errorf("include_descendants = %q, want true", r.URL.Query().Get("include_descendants"))
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{"id":1,"iid":10,"group_id":42,"title":"group milestone"},
+			{"id":2,"iid":3,"project_id":7,"title":"project milestone"}
+		]`)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{GroupID: "42", IncludeDescendants: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out.Milestones) != 2 {
+		t.Fatalf("got %d milestones, want 2", len(out.Milestones))
+	}
+	if got := out.Milestones[0]; got.GroupID != 42 || got.ProjectID != 0 {
+		t.Errorf("group milestone = group %d project %d, want group 42 and no project", got.GroupID, got.ProjectID)
+	}
+	if got := out.Milestones[1]; got.GroupID != 0 || got.ProjectID != 7 {
+		t.Errorf("project milestone = group %d project %d, want no group and project 7", got.GroupID, got.ProjectID)
 	}
 }
 

@@ -2282,11 +2282,9 @@ func registerBoardResource(server registrar, base *gitlabclient.Client) {
 // "gitlab://group/{group_id}/milestone/{milestone_iid}" template
 // resource, which returns details for a single group milestone by IID.
 //
-// The web URL is read from the captured response (ADR-0021): client-go's
-// GroupMilestone carries no web_url, while GitLab's milestone entity sends it
-// on every milestone, so the resource published an empty one beside a
-// description naming it (issue 1169). The group milestone tools read the same
-// field the same way.
+// The web URL is the page GitLab's milestone entity sends on every milestone,
+// which client-go's GroupMilestone decodes as of v3.26.0; the resource once
+// published an empty one beside a description naming it (issue 1169).
 func registerGroupMilestoneResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://group/{group_id}/milestone/{milestone_iid}",
@@ -2307,17 +2305,12 @@ func registerGroupMilestoneResource(server registrar, base *gitlabclient.Client)
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		iids := []int64{iid}
-		ctx, captured := gitlabclient.WithResponseCapture(ctx)
 		ms, _, err := client.GL().GroupMilestones.ListGroupMilestones(groupID, &gl.ListGroupMilestonesOptions{IIDs: &iids}, gl.WithContext(ctx))
 		if err != nil {
 			return nil, wrapErr("failed to resolve group milestone IID", err)
 		}
 		if len(ms) == 0 {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		extras, err := toolutil.CapturedMilestones(captured, len(ms))
-		if err != nil {
-			return nil, wrapErr("failed to read the group milestone's web URL", err)
 		}
 		m := ms[0]
 		out := MilestoneResourceOutput{
@@ -2326,7 +2319,7 @@ func registerGroupMilestoneResource(server registrar, base *gitlabclient.Client)
 			Title:       m.Title,
 			Description: m.Description,
 			State:       m.State,
-			WebURL:      extras[0].WebURL,
+			WebURL:      m.WebURL,
 		}
 		if m.DueDate != nil {
 			out.DueDate = m.DueDate.String()

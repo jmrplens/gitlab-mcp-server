@@ -70,7 +70,7 @@ for the fork, branch, fix, test and MR workflow.
   - [Commit declares extended_trailers a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists)
   - [The Orbit schema format is sent as `format`, and its llm answer is not modelled](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled)
   - [OrbitGraphStatusProjects does not model the projects the indexer gave up on](#orbitgraphstatusprojects-does-not-model-the-projects-the-indexer-gave-up-on)
-  - [GroupMilestone does not model the milestone's web URL](#groupmilestone-does-not-model-the-milestones-web-url)
+  - [ListGroupMilestonesOptions misspells include_descendants and GroupMilestone drops the web URL and project](#listgroupmilestonesoptions-misspells-include_descendants-and-groupmilestone-drops-the-web-url-and-project)
   - [CreateGroupIssueBoardListOptions models only label_id where GitLab takes four list types](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types)
   - [UpdateGroupIssueBoardOptions models neither list switch the group board update takes](#updategroupissueboardoptions-models-neither-list-switch-the-group-board-update-takes)
   - [The board structs miss keys GitLab sends on a board and its lists](#the-board-structs-miss-keys-gitlab-sends-on-a-board-and-its-lists)
@@ -339,7 +339,7 @@ readable without opening the tracker:
 | 92 | gitlab-org/gitlab | [The REST API page does not say a non-GET request to a moved project's old path is answered 405](#the-rest-api-page-does-not-say-a-non-get-request-to-a-moved-projects-old-path-is-answered-405) | Yes, by the merge request | Yes, [gitlab-org/gitlab!259297](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259297), merged | **Yes, 19.5.0** | No | Not yet, with [issue 1133](https://github.com/jmrplens/gitlab-mcp-server/issues/1133) |
 | 93 | client-go | [`OrbitGraphStatusProjects` does not model the projects the indexer gave up on](#orbitgraphstatusprojects-does-not-model-the-projects-the-indexer-gave-up-on) | No | No | No | No | Yes |
 | 94 | gitlab-org/gitlab | [A board name GitLab cannot save is answered as a success](#a-board-name-gitlab-cannot-save-is-answered-as-a-success) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260458](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260458), merged | **Yes, 19.5.0** | No | None taken |
-| 95 | client-go | [`GroupMilestone` does not model the milestone's web URL](#groupmilestone-does-not-model-the-milestones-web-url) | No | No | No | No | Yes |
+| 95 | client-go | [`ListGroupMilestonesOptions` misspells `include_descendants` and `GroupMilestone` drops the web URL and project](#listgroupmilestonesoptions-misspells-include_descendants-and-groupmilestone-drops-the-web-url-and-project) | `web_url`: yes, by another contributor; the rest: no | `web_url`: [gitlab-org/api/client-go!3126](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3126), merged | **`web_url`: v3.26.0**, not ours | No | Retired for `web_url` at the v3.29.0 pin; yes for `include_descendants` and `project_id` |
 | 96 | client-go | [`CreateGroupIssueBoardListOptions` models only `label_id` where GitLab takes four list types](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), open, commit 8 | No | No; it narrows `group.group_board_create_list` to label lists | None, by decision |
 | 97 | gobco | [gobco cannot instrument a package whose `export_test.go` feeds its external test package](#gobco-cannot-instrument-a-package-whose-export_testgo-feeds-its-external-test-package) | Yes, [rillig/gobco#42](https://github.com/rillig/gobco/issues/42) | Yes, [rillig/gobco#43](https://github.com/rillig/gobco/pull/43), open | No | No; the condition gate cannot measure a package it reaches | None, by decision |
 | 98 | client-go | [`UpdateGroupIssueBoardOptions` models neither list switch the group board update takes](#updategroupissueboardoptions-models-neither-list-switch-the-group-board-update-takes) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), open, commit 7, beside row 96 | No | No; a group board's Open and Closed lists cannot be hidden or shown through this server | Not yet, with [issue 1241](https://github.com/jmrplens/gitlab-mcp-server/issues/1241) |
@@ -5491,39 +5491,68 @@ reported as a key GitLab sends that the output did not publish.
 **Effort**: small. Add `Gaps int64` with `json:"gaps"` to
 `OrbitGraphStatusProjects`, and the key to the graph status decode test.
 
-### GroupMilestone does not model the milestone's web URL
+### ListGroupMilestonesOptions misspells include_descendants and GroupMilestone drops the web URL and project
 
-- **Reported**: no. It joins the gaps held for the next joint client-go merge
-  request, the one [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
-  describes, and like every item here it waits on the maintainer's approval.
+- **Reported**: for `web_url`, yes, by another contributor, and fixed by them
+  (below). For the misspelled option and `project_id`, no. They join the gaps
+  held for the next joint client-go merge request, the one
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes, and like every item here they wait on the maintainer's approval.
 - **In review**: no.
-- **Merged**: no.
+- **Merged**: for `web_url`, yes, not by us:
+  [gitlab-org/api/client-go!3126](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3126)
+  ("feat(group_milestones): add web_url field to GroupMilestone") merged at
+  01:26 UTC on 2026-10-17 and is first in **v3.26.0**. For the rest, no.
 - **Blocking**: no.
-- **Workaround**: yes. The field is read from the captured response beside
+- **Workaround**: yes, for the misspelled option and for `project_id`. The
+  list handler sends `include_descendants` through a request option of its
+  own (`includeDescendants` in
+  `internal/tools/groupmilestones/group_milestones.go`) and never sets
+  `IncludeDescendents`; `TestList_AllFilterParams` holds the spelling. The
+  four group milestone handlers that return a milestone (`List`, `Get`,
+  `Create` and `Update`) read `project_id` from the captured response beside
   the SDK's decode
   ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)),
   through `toolutil.CapturedMilestone` and `toolutil.CapturedMilestones`
-  (`internal/toolutil/sent_shapes.go`), in two places: the four group
-  milestone handlers that return a milestone (`List`, `Get`, `Create` and
-  `Update` in `internal/tools/groupmilestones/group_milestones.go`), and the
+  (`internal/toolutil/sent_shapes.go`);
+  `TestList_DescendantProjectMilestones_PublishTheirProject` holds the read
+  and `TestGroupMilestones_UnreadableCapturedProjectID` its failure. The
+  `web_url` half retired when the pin moved to v3.29.0: the handlers and the
   `gitlab://group/{group_id}/milestone/{milestone_iid}` resource
-  (`registerGroupMilestoneResource` in `internal/resources/resources.go`).
-  `TestGroupMilestones_UnreadableCapturedWebURL` holds the handlers' failure,
-  and `TestGroupMilestoneResource_PublishesTheWebURLGitLabSends` and
-  `TestGroupMilestoneResource_AnAnswerTheCaptureCannotDecode_IsAnError` the
-  resource's read and its failure. Both retire when the SDK models the field.
+  (`registerGroupMilestoneResource` in `internal/resources/resources.go`)
+  read it off the SDK's struct, and the resource reads nothing from the
+  captured response.
 
-**Where**: `GroupMilestone` in client-go v3.15.0's `group_milestones.go`,
-which models `id`, `iid`, `group_id`, `title`, `description`, `start_date`,
-`due_date`, `state`, `updated_at`, `created_at` and `expired`. The project
-milestone struct, `Milestone` in `milestones.go`, does carry `web_url`.
+**Where**: `ListGroupMilestonesOptions` in client-go's `group_milestones.go`
+declares `IncludeDescendents *bool` with the url tag `include_descendents`,
+unchanged at v3.29.0. `GroupMilestone` in the same file modeled `id`, `iid`,
+`group_id`, `title`, `description`, `start_date`, `due_date`, `state`,
+`updated_at`, `created_at` and `expired` up to v3.25.0, and from v3.26.0
+`web_url` as well, and no `project_id`. The project milestone struct,
+`Milestone` in `milestones.go`, carries both `web_url` and `project_id`.
 
-**What**: every group milestone route (`lib/api/group_milestones.rb`, through
+**What**: `lib/api/group_milestones.rb` declares the list's parameter as
+`include_descendants`, and Grape drops a key it does not declare, so the
+option client-go sends asks for nothing: a caller who sets it is answered
+with the group's own milestones alone, as if it had not been set. This server
+sent it that way, under its own `include_descendants` input, until the pin
+moved to v3.29.0, and its own test asserted the misspelled key. Every group
+milestone route (`lib/api/group_milestones.rb`, through
 `lib/api/milestone_responses.rb`) presents `Entities::Milestone`, and
 `lib/api/entities/milestone.rb` exposes `web_url` with no condition, built by
 `Gitlab::UrlBuilder` (lines 17 to 19 at `v19.4.1-ee`). The live record agrees:
 `API::Entities::Milestone` carries `web_url` with no condition. So every group
-milestone GitLab sends carries its page, and the decode drops it.
+milestone GitLab sends carries its page, and up to v3.25.0 the decode dropped
+it. The same entity exposes `project_id` only when the milestone has one
+(`if: ->(entity, options) { entity&.project_id }`), and a milestone belongs
+to a group or to a project, never both (`Milestone#parent_type_check` in
+`app/models/milestone.rb`). A group's own milestones therefore never carry
+it, but the list route is not limited to them: asked for
+`include_descendants`, `group_finder_params` in
+`lib/api/concerns/milestones/group_project_params.rb` hands
+`MilestonesFinder` the group's projects beside its groups, and GitLab's own
+shared example for the REST and GraphQL lists expects a project milestone in
+that answer. Those rows carry `project_id`, and the decode drops it.
 
 **How we found it**: the sent dimension of the 1:1 audit
 (`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`) during
@@ -5531,9 +5560,18 @@ the field-by-field review, which put the group milestone tools on the
 captured read without a row here; and again for
 [issue 1169](https://github.com/jmrplens/gitlab-mcp-server/issues/1169),
 whose group milestone resource described a web URL it always left empty.
+The `project_id` half and the misspelling were found when the `web_url` half
+retired, by reading the list route's finder for what else its answer can
+hold: a test of the descendant projects' milestones failed because the
+request never asked for them. The 1:1 audit's input table had recorded the
+misspelling as a rename of ours rather than as a key GitLab does not take.
 
-**Effort**: trivial. Add `WebURL string` with `json:"web_url"` to
-`GroupMilestone`, and the key to the group milestone decode tests.
+**Effort**: trivial. Rename the field's url and json tags to
+`include_descendants`, keeping a deprecated `IncludeDescendents` that sends
+the right key for compatibility, and add `ProjectID int64` with
+`json:"project_id"` to `GroupMilestone`, documented as set only on the project
+milestones a list asked for `include_descendants` returns, with the keys in
+the group milestone tests.
 
 ### CreateGroupIssueBoardListOptions models only label_id where GitLab takes four list types
 

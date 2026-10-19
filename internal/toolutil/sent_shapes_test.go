@@ -361,7 +361,7 @@ func tailReaderCases() []capturedReaderCase {
 			body: `{"id":1,"web_url":"https://example/m/1","project_id":9}`,
 			want: func(v any) bool {
 				e, _ := v.(MilestoneExtra)
-				return e.WebURL == "https://example/m/1" && e.ProjectID == 9
+				return e.ProjectID == 9
 			},
 		},
 		{

@@ -2045,10 +2045,9 @@ func TestMilestoneResource_WithDueDate(t *testing.T) {
 // TestGroupMilestoneResource_PublishesTheWebURLGitLabSends holds the group
 // milestone resource to the web URL its description names.
 //
-// client-go's GroupMilestone carries no web_url, so the handler published an
-// empty string for every group milestone while GitLab's milestone entity sends
-// the page on every one. It is read from the captured response beside the
-// SDK's decode, as the group milestone tools already read it (issue 1169).
+// The handler once published an empty string for every group milestone while
+// GitLab's milestone entity sends the page on every one (issue 1169).
+// client-go's GroupMilestone decodes it as of v3.26.0.
 func TestGroupMilestoneResource_PublishesTheWebURLGitLabSends(t *testing.T) {
 	const page = "https://gitlab.example.com/groups/team/-/milestones/5"
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2075,12 +2074,11 @@ func TestGroupMilestoneResource_PublishesTheWebURLGitLabSends(t *testing.T) {
 	}
 }
 
-// TestGroupMilestoneResource_AnAnswerTheCaptureCannotDecode_IsAnError covers
-// the read of the captured response failing where the SDK's decode succeeded.
-// A web_url that is not a string is ignored by client-go, which models no such
-// field, and refused by the capture reader, so the resource reports the fault
-// rather than publishing the milestone without its page.
-func TestGroupMilestoneResource_AnAnswerTheCaptureCannotDecode_IsAnError(t *testing.T) {
+// TestGroupMilestoneResource_AnUnreadableWebURL_IsAnError covers a web_url
+// that is not a string, which client-go's GroupMilestone refuses as of
+// v3.26.0, so the resource reports the fault rather than publishing the
+// milestone without its page.
+func TestGroupMilestoneResource_AnUnreadableWebURL_IsAnError(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/99/milestones" {
 			respondJSON(w, http.StatusOK, `[{"id":100,"iid":5,"title":"v1.0","web_url":5}]`)

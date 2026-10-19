@@ -593,15 +593,17 @@ func CapturedBridges(capture *gitlabclient.ResponseCapture, decoded int) ([]Brid
 }
 
 // MilestoneExtra is what GitLab's milestone entity sends that a group
-// milestone struct does not carry: the milestone's own page, exposed under no
-// condition, and the project a project-scoped milestone belongs to, exposed
-// only when there is one, so a group milestone leaves it zero.
+// milestone struct does not carry: the project a project-scoped milestone
+// belongs to, exposed only when there is one, so a group milestone leaves it
+// zero. A group's milestone list asked for include_descendants returns the
+// milestones of the group's projects as well, which carry it. client-go's
+// GroupMilestone decodes the milestone's own page, the other key this used
+// to read, as of v3.26.0.
 type MilestoneExtra struct {
-	WebURL    string `json:"web_url"`
-	ProjectID int64  `json:"project_id"`
+	ProjectID int64 `json:"project_id"`
 }
 
-// CapturedMilestone reads them off the captured answer to a request for one
+// CapturedMilestone reads it off the captured answer to a request for one
 // milestone.
 func CapturedMilestone(capture *gitlabclient.ResponseCapture) (MilestoneExtra, error) {
 	return capturedOne[MilestoneExtra](capture)

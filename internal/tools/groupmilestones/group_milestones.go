@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -26,7 +27,7 @@ type ListInput struct {
 	Search                  string               `json:"search,omitempty"               jsonschema:"Search milestones by title or description"`
 	SearchTitle             string               `json:"search_title,omitempty"         jsonschema:"Search milestones by title only"`
 	IncludeAncestors        bool                 `json:"include_ancestors,omitempty"    jsonschema:"Include milestones from ancestor groups"`
-	IncludeDescendants      bool                 `json:"include_descendants,omitempty"  jsonschema:"Include milestones from descendant groups"`
+	IncludeDescendants      bool                 `json:"include_descendants,omitempty"  jsonschema:"Include milestones from descendant groups and their projects. A project's milestone carries its project_id and no group_id"`
 	IIDs                    []int64              `json:"iids,omitempty"                 jsonschema:"Filter by milestone IIDs"`
 	UpdatedBefore           string               `json:"updated_before,omitempty"       jsonschema:"Return milestones updated before date (YYYY-MM-DD)"`
 	UpdatedAfter            string               `json:"updated_after,omitempty"        jsonschema:"Return milestones updated after date (YYYY-MM-DD)"`
@@ -119,7 +120,8 @@ type Output struct {
 	UpdatedAt   string `json:"updated_at"`
 	Expired     bool   `json:"expired"`
 	// WebURL is the milestone's own page. ProjectID is set only on a
-	// project-scoped milestone, so a group one leaves it zero.
+	// project-scoped milestone, which a list asked for include_descendants
+	// returns beside the group's own, so a group one leaves it zero.
 	WebURL    string `json:"web_url,omitempty"`
 	ProjectID int64  `json:"project_id,omitempty"`
 }
@@ -247,7 +249,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	milestones, resp, err := client.GL().GroupMilestones.ListGroupMilestones(string(input.GroupID), opts, gl.WithContext(ctx))
+	milestones, resp, err := client.GL().GroupMilestones.ListGroupMilestones(string(input.GroupID), opts, gl.WithContext(ctx),
+		includeDescendants(input.IncludeDescendants))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("groupMilestoneList", err, http.StatusNotFound,
 			"verify group_id with group.get; group milestones differ from project milestones")
@@ -262,6 +265,25 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		out[i] = toOutput(m, extras[i])
 	}
 	return ListOutput{Milestones: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+}
+
+// includeDescendants adds include_descendants to the query client-go encoded,
+// the parameter lib/api/group_milestones.rb declares. client-go's
+// ListGroupMilestonesOptions spells it include_descendents, a key GitLab
+// ignores, so setting that field asked for nothing and the list answered with
+// the group's own milestones alone (upstream register row 95). When the
+// caller did not ask for them it returns no option at all, which client-go
+// skips, so the query goes out exactly as client-go encoded it.
+func includeDescendants(include bool) gl.RequestOptionFunc {
+	if !include {
+		return nil
+	}
+	return func(req *retryablehttp.Request) error {
+		query := req.URL.Query()
+		query.Set("include_descendants", "true")
+		req.URL.RawQuery = query.Encode()
+		return nil
+	}
 }
 
 // buildListOpts handles build list opts and returns [*gl.ListGroupMilestonesOptions].
@@ -291,9 +313,6 @@ func applyListFilters(opts *gl.ListGroupMilestonesOptions, input ListInput) {
 	}
 	if input.IncludeAncestors {
 		opts.IncludeAncestors = new(true)
-	}
-	if input.IncludeDescendants {
-		opts.IncludeDescendents = new(true)
 	}
 	if input.IncludeParentMilestones {
 		//nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
@@ -631,9 +650,9 @@ func GetBurndownChartEvents(ctx context.Context, client *gitlabclient.Client, in
 
 // ---------- Converters ----------.
 
-// toOutput converts a GitLab API [gl.GroupMilestone] to MCP output format.
-// toOutput converts the GitLab API response to the tool output format, filling
-// from the decoded milestone and from what the capture read beside it.
+// toOutput converts a GitLab API [gl.GroupMilestone] to MCP output format,
+// filling from the decoded milestone and from the project the capture read
+// beside it.
 func toOutput(m *gl.GroupMilestone, extra toolutil.MilestoneExtra) Output {
 	out := Output{
 		ID:          m.ID,
@@ -642,7 +661,7 @@ func toOutput(m *gl.GroupMilestone, extra toolutil.MilestoneExtra) Output {
 		Title:       m.Title,
 		Description: m.Description,
 		State:       m.State,
-		WebURL:      extra.WebURL,
+		WebURL:      m.WebURL,
 		ProjectID:   extra.ProjectID,
 	}
 	if m.StartDate != nil {

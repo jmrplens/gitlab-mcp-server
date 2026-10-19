@@ -929,7 +929,7 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	"epics.ListInput.include_ancestor_groups":       "exposed as include_ancestors (wired to opts.IncludeAncestorGroups)",
 	"epics.ListInput.include_descendant_groups":     "exposed as include_descendants (wired to opts.IncludeDescendantGroups)",
 	"epics.ListInput.labels":                        "exposed as label_name []string (wired to opts.Labels)",
-	"groupmilestones.ListInput.include_descendents": "exposed as the doc-correct include_descendants (the SDK url tag has the include_descendents typo); wired to opts.IncludeDescendents",
+	"groupmilestones.ListInput.include_descendents": "exposed as include_descendants, the param GitLab declares, and sent through a request option of its own: the SDK's url tag misspells it include_descendents, which GitLab ignores (upstream register row 95)",
 
 	// Phantom widget inputs: gl.*WorkItemOptions is the options struct of every
 	// work item type, and an Epic carries neither the STATUS, ITERATION nor
