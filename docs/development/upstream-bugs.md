@@ -99,6 +99,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The rate limit backoff ignores Retry-After on a 429](#the-rate-limit-backoff-ignores-retry-after-on-a-429)
   - [UpdateSettingsOptions models twenty-six settings the update route does not take](#updatesettingsoptions-models-twenty-six-settings-the-update-route-does-not-take)
   - [ListTopicsOptions and CreateTopicOptions model no organization_id](#listtopicsoptions-and-createtopicoptions-model-no-organization_id)
+  - [ListPipelineTriggerJobsOptions models no include_retried, which the trigger job routes read and do not declare](#listpipelinetriggerjobsoptions-models-no-include_retried-which-the-trigger-job-routes-read-and-do-not-declare)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -382,6 +383,7 @@ readable without opening the tracker:
 | 134 | client-go | [The rate limit backoff ignores `Retry-After` on a 429](#the-rate-limit-backoff-ignores-retry-after-on-a-429) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3147](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3147), open; GitLab Duo requested changes on 2026-10-17, for a large negative `Retry-After` that overflows `time.Duration` | No | No; this server replaces client-go's backoff with its own | Not needed |
 | 135 | client-go | [`UpdateSettingsOptions` models twenty-six settings the update route does not take](#updatesettingsoptions-models-twenty-six-settings-the-update-route-does-not-take) | No | No | No | No | Yes, `admin.settings_update` refuses them by name before anything is sent, as it refuses a key client-go does not model |
 | 136 | client-go | [`ListTopicsOptions` and `CreateTopicOptions` model no `organization_id`](#listtopicsoptions-and-createtopicoptions-model-no-organization_id) | No | No | No | No | None; `admin.topic_list` and `admin.topic_create` act on the organization GitLab resolves for the request |
+| 137 | client-go and gitlab-org/gitlab | [`ListPipelineTriggerJobsOptions` models no `include_retried`, which the trigger job routes read and do not declare](#listpipelinetriggerjobsoptions-models-no-include_retried-which-the-trigger-job-routes-read-and-do-not-declare) | No | No | No | No | Yes, `job.list_bridges` adds `include_retried` to the `trigger_jobs` query through a request option, only when the caller asked |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -7426,6 +7428,69 @@ writing this entry.
 **Effort**: small: an `OrganizationID *int64` with `url` and `json` tags and
 `omitempty` on both structs, and a test that each reaches the request only
 when set.
+
+### ListPipelineTriggerJobsOptions models no include_retried, which the trigger job routes read and do not declare
+
+- **Reported**: no, on either side.
+- **In review**: no.
+- **Merged**: no. `ListPipelineTriggerJobsOptions`, which v3.24.0 added with
+  `ListPipelineTriggerJobs` through another contributor's
+  [gitlab-org/api/client-go!3134](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3134),
+  carries the page and `scope` and nothing else at v3.29.0, the version
+  `go.mod` pins, while the `ListJobsOptions` the deprecated
+  `ListPipelineBridges` takes carries `include_retried`. GitLab 19.5.0
+  declares the parameter on neither trigger job route.
+- **Blocking**: no.
+- **Workaround**: yes. On an instance on 19.2 or later `job.list_bridges`
+  lists through `trigger_jobs` and adds `include_retried=true` to the query
+  client-go encoded through a request option of its own (`includeRetried` in
+  `internal/tools/jobs/jobs.go`), only when the caller asked;
+  `TestListBridges_NineteenTwoOrLater_ListsThroughTriggerJobs` holds it. On
+  an older instance it lists through `bridges`, where `ListJobsOptions`
+  carries the field, and sets it only when the caller asked, never to
+  `false`. The request option retires when the struct carries the field.
+
+**Where**: `jobs.go`, `ListPipelineTriggerJobsOptions` (line 347 at
+v3.29.0), which `ListPipelineTriggerJobs` sends to
+`GET /projects/:id/pipelines/:pipeline_id/trigger_jobs`; and on GitLab's
+side the declarations of that route and of
+`GET /projects/:id/pipelines/:pipeline_id/bridges` in
+`lib/api/ci/pipelines.rb`.
+
+**What**: at `v19.5.0-ee` both routes declare `pipeline_id`, `scope` and the
+page and nothing else
+([lib/api/ci/pipelines.rb:231-235](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.5.0-ee/lib/api/ci/pipelines.rb#L231-235)
+and
+[257-261](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.5.0-ee/lib/api/ci/pipelines.rb#L257-261)),
+and the 19.5.0 live record agrees, while the pipeline jobs route above them
+declares `include_retried` as a Boolean that defaults to false (line 191).
+Both trigger job routes run `present_pipeline_trigger_jobs`
+([lines 471 to 482](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.5.0-ee/lib/api/ci/pipelines.rb#L471-482)),
+which hands Grape's `params` whole, not its declared params, to
+`Ci::JobsFinder`, and `pipeline_jobs` there keeps a pipeline's retried jobs
+when `params[:include_retried]` is set and only its latest ones otherwise
+([app/finders/ci/jobs_finder.rb:66-72](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.5.0-ee/app/finders/ci/jobs_finder.rb#L66-72)).
+So GitLab honours a parameter the routes do not declare, and its page for
+them (`doc/api/jobs.md`, "List all trigger jobs by pipeline") does not name
+it. Being undeclared, it is not coerced either: the finder reads the string
+it arrived as, which Ruby holds true whatever it says, so, read from the
+source and not measured, `include_retried=false` returns the retried jobs as
+`true` does. client-go's `ListJobsOptions.IncludeRetried` is a `*bool`, so a
+caller of `ListPipelineBridges` who sets it to `false` sends exactly that,
+and a caller of `ListPipelineTriggerJobs` cannot ask for retried trigger
+jobs at all.
+
+**How we found it**: moving `job.list_bridges` onto `trigger_jobs` with the
+v3.29.0 pin. The new options had no field for the `include_retried` the
+action already offered, and reading why the old route honoured it showed
+that neither route declares it.
+
+**Effort**: small on each side. In client-go, an `IncludeRetried *bool`
+with `url` and `json` tags and `omitempty` on
+`ListPipelineTriggerJobsOptions`, and a test that it reaches the query. In
+GitLab, `optional :include_retried, type: Boolean, default: false` on both
+routes, as the pipeline jobs route declares it, which also makes `false`
+mean false, and the parameter in the page's table.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
