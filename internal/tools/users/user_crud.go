@@ -24,6 +24,10 @@ const createUserForbiddenHint = "creating users requires admin token; email and 
 // since 18.4 (app/models/user.rb) and neither POST /users nor PUT /users/:id
 // declares the parameter, so Grape drops the key before anything reads it: a
 // caller who set it was answered with a user carrying no Skype account at all.
+// Nor is there a job_title field, for the same reason: lib/api/users.rb
+// declares no such parameter on either route, though the user entity sends
+// the stored job title, and client-go v3.18.0 deprecated both options as ones
+// GitLab ignores.
 type CreateInput struct {
 	Email                          string `json:"email" jsonschema:"The user email address,required"`
 	Name                           string `json:"name" jsonschema:"The user display name,required"`
@@ -40,7 +44,6 @@ type CreateInput struct {
 	ViewDiffsFileByFile            *bool  `json:"view_diffs_file_by_file,omitempty" jsonschema:"Show whitespace changes in diffs file by file"`
 	Bio                            string `json:"bio,omitempty" jsonschema:"User bio text"`
 	Location                       string `json:"location,omitempty" jsonschema:"User location"`
-	JobTitle                       string `json:"job_title,omitempty" jsonschema:"User job title"`
 	Organization                   string `json:"organization,omitempty" jsonschema:"User organization"`
 	Pronouns                       string `json:"pronouns,omitempty" jsonschema:"User pronouns"`
 	CommitEmail                    string `json:"commit_email,omitempty" jsonschema:"Email used for commits"`
@@ -100,7 +103,6 @@ type ModifyInput struct {
 	SkipReconfirmation  *bool   `json:"skip_reconfirmation,omitempty" jsonschema:"Skip reconfirmation on email change"`
 	Bio                 *string `json:"bio,omitempty" jsonschema:"New bio text. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	Location            string  `json:"location,omitempty" jsonschema:"New location"`
-	JobTitle            string  `json:"job_title,omitempty" jsonschema:"New job title"`
 	Organization        string  `json:"organization,omitempty" jsonschema:"New organization"`
 	ProjectsLimit       *int64  `json:"projects_limit,omitempty" jsonschema:"New maximum projects limit"`
 	Note                string  `json:"note,omitempty" jsonschema:"New admin note"`
@@ -121,7 +123,8 @@ type ModifyInput struct {
 	// options nor the wire: a caller who set it was answered with a user whose
 	// lock state had not moved.
 	//
-	// Nor is there a skype field, for the reason CreateInput gives.
+	// Nor is there a skype or a job_title field, for the reason CreateInput
+	// gives.
 }
 
 // Modify modifies an existing GitLab user (admin only).
@@ -211,7 +214,6 @@ func buildCreateUserOptions(input CreateInput) *gl.CreateUserOptions {
 		ViewDiffsFileByFile:            input.ViewDiffsFileByFile,
 		Bio:                            strPtr(input.Bio),
 		Location:                       strPtr(input.Location),
-		JobTitle:                       strPtr(input.JobTitle), //nolint:staticcheck // SA1019: client-go v3.18.0 deprecated it as a param GitLab ignores.
 		Organization:                   strPtr(input.Organization),
 		Pronouns:                       strPtr(input.Pronouns),
 		CommitEmail:                    strPtr(input.CommitEmail),
@@ -250,7 +252,6 @@ func buildModifyUserOptions(input ModifyInput) *gl.ModifyUserOptions {
 		// removing it (issue 1306).
 		Bio:                 input.Bio,
 		Location:            strPtr(input.Location),
-		JobTitle:            strPtr(input.JobTitle), //nolint:staticcheck // SA1019: client-go v3.18.0 deprecated it as a param GitLab ignores.
 		Organization:        strPtr(input.Organization),
 		ProjectsLimit:       input.ProjectsLimit,
 		Note:                strPtr(input.Note),

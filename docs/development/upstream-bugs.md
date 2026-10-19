@@ -3608,7 +3608,14 @@ first batch's are.
 declares no such parameter on `POST /users` or `PUT /users/:id`. The same
 change took it off this server's two user inputs, where a caller who set it
 changed nothing, and the R-INPUT diff's report of the SDK field those inputs
-no longer offer is answered in `acceptedMissingInputs`.
+no longer offer is answered in `acceptedMissingInputs`. client-go v3.18.0
+([gitlab-org/api/client-go!3113](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3113),
+another contributor's) deprecated `Skype` on both option structs, and
+`JobTitle` beside it, which is the same gap on the request side alone: the
+user entity sends the stored job title, and neither route declares the
+parameter. This server's two user inputs offered `job_title` until the
+v3.29.0 pin took it off, and its report is answered in
+`acceptedMissingInputs` too.
 
 The container expiration policy is the same gap on both sides. client-go
 v3.16.2 deprecated `ContainerExpirationPolicy.NameRegexDelete` as a key

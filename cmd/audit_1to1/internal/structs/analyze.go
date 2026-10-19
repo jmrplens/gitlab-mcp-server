@@ -172,6 +172,10 @@ const (
 	// skypeDiscarded is the reason the user create and modify inputs offer no
 	// skype, which client-go's options still carry.
 	skypeDiscarded = "GitLab discards it: the users.skype column is ignored since 18.4 and neither POST /users nor PUT /users/:id declares the param, so a caller who set it changed nothing"
+	// jobTitleDiscarded is the reason the user create and modify inputs offer
+	// no job_title, which client-go v3.18.0 deprecated as a param GitLab
+	// ignores.
+	jobTitleDiscarded = "GitLab discards it: neither POST /users nor PUT /users/:id declares job_title (lib/api/users.rb; gitlab-api-live.json, 19.5.0), so Grape drops the key and a caller who set it changed nothing; client-go v3.18.0 deprecated the option"
 	// groupLabelPriority is the reason the group label inputs offer no
 	// priority, which client-go's options still carry.
 	groupLabelPriority = "GitLab discards it: neither POST nor PUT /groups/:id/labels declares priority, and the label helper applies one to a project label only, so a caller who set it changed nothing"
@@ -1046,6 +1050,11 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	// in docs/development/upstream-bugs.md.
 	"users.CreateInput.skype": skypeDiscarded,
 	"users.ModifyInput.skype": skypeDiscarded,
+	// job_title is the same gap on the request side alone: the user entity
+	// sends the stored job title, which the user outputs publish, and neither
+	// route declares the param.
+	"users.CreateInput.job_title": jobTitleDiscarded,
+	"users.ModifyInput.job_title": jobTitleDiscarded,
 
 	// Params modeled on a nested object / slice element per the full-nested-object
 	// policy (the auditor flattens the SDK nested options into the parent input).

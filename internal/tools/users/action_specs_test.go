@@ -17,6 +17,25 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestActionSpecs_CreateAndModify_OfferNoParamGitLabIgnores verifies that the
+// user create and modify inputs offer neither skype nor job_title: lib/api/
+// users.rb declares neither on POST /users or PUT /users/:id, so Grape drops
+// both and a caller who set one changed nothing. client-go v3.18.0 deprecated
+// both options for the same reason.
+func TestActionSpecs_CreateAndModify_OfferNoParamGitLabIgnores(t *testing.T) {
+	byTool := userSpecsByTool(t, ActionSpecs(newUserActionSpecClient(t)))
+	for _, tool := range []string{"gitlab_create_user", "gitlab_modify_user"} {
+		t.Run(tool, func(t *testing.T) {
+			props, _ := byTool[tool].Route.InputSchema["properties"].(map[string]any)
+			for _, param := range []string{"skype", "job_title"} {
+				if _, offered := props[param]; offered {
+					t.Errorf("%s offers %s, a param GitLab does not declare", tool, param)
+				}
+			}
+		})
+	}
+}
+
 // TestActionSpecs_CallRoutes exercises user actions through their canonical routes.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	byTool := userSpecsByTool(t, ActionSpecs(newUserActionSpecClient(t)))

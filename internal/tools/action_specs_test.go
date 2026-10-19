@@ -1486,7 +1486,6 @@ var clearingDeclarations = map[string]clearingDeclaration{
 	"user.modify.commit_email":                                       clearUnverified,
 	"user.modify.email":                                              clearRequired("a user has a primary email"),
 	"user.modify.extern_uid":                                         clearNotStored("links an external identity, an operation rather than a stored value"),
-	"user.modify.job_title":                                          clearUnverified,
 	"user.modify.linkedin":                                           clearUnverified,
 	"user.modify.location":                                           clearUnverified,
 	"user.modify.name":                                               clearRequired("a user has a name"),
