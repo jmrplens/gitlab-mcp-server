@@ -40,12 +40,20 @@ const (
 	// run tested, where the scenario names the answer and skips. It goes on
 	// the first release that answers, when the gate reports it stale.
 	skipCategoryGitLabDefect = "gitlab-defect"
+	// skipCategoryOptInProbe is a probe that changes an instance-wide setting,
+	// which runs only when a person sets its switch and which a complete run
+	// must therefore never run: a complete run refuses to start with the switch
+	// set, so it skips the probe every time. It is not a setting the run left
+	// out: the switch exists so that no run turns the change on by being
+	// complete. It goes with the probe.
+	skipCategoryOptInProbe = "opt-in-probe"
 )
 
 // declaredSkipCategories is the set a category must belong to, so a typo
 // does not invent a kind of skip.
 var declaredSkipCategories = map[string]bool{
 	skipCategoryGitLabDefect: true,
+	skipCategoryOptInProbe:   true,
 }
 
 // skipRuntimes are the runs -check-skips judges, one per Docker target.
@@ -60,7 +68,13 @@ var skipRuntimes = map[string]bool{
 // matched no skip of the run it declares for: a declaration left behind after
 // its skip went is a claim a later reader would trust.
 //
-// The table is empty, which is the state it exists to keep. The two complete
+// It holds one entry, the throttle probe of issue 954, which turns GitLab's
+// unauthenticated API throttle on for the whole instance and so runs only when
+// E2E_AUTH_THROTTLE_PROBE is set; a complete run refuses to start with it set,
+// and skips the probe on every one of them.
+//
+// No skip of a scenario that a complete run means to run is declared, which is
+// the state the table exists to keep. The two complete
 // runs of de1ab3b49 ended with eleven skipped tests in seven test functions on
 // CE and ten in five on EE, of which issue 1014 listed five and three; the
 // gate found the rest. Its fixes removed all but the saved view lifecycle's:
@@ -78,4 +92,15 @@ var skipRuntimes = map[string]bool{
 // it, so the scenario now asserts what GitLab does, the view the create left
 // in the listing and a subscribe that recorded nothing, and runs on every
 // release instead of skipping on the one that has the defect.
-var declaredSkips = []skipDeclaration{}
+var declaredSkips = []skipDeclaration{
+	{
+		Runtime: "ce", Package: "ce",
+		Test:     "TestAuthThrottle_InvalidTokens_SpendTheAddressUnauthenticatedAllowance",
+		Because:  "set E2E_AUTH_THROTTLE_PROBE=true to run it alone",
+		Category: skipCategoryOptInProbe,
+		// One literal rather than a concatenation: a package-level
+		// initializer has no statement the coverage profile counts, so the
+		// mutation gate would report each + in it as not covered.
+		Reason: "The probe changes an instance-wide setting, GitLab's unauthenticated API throttle, which issue 954 decided no complete run may do: a run cut short before the probe's cleanup would leave the throttle on for every package that runs after it, and the probe spends minutes waiting for settings and windows. It runs when a person sets its switch, which a complete run refuses to start with.",
+	},
+}

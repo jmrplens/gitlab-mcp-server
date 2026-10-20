@@ -30,22 +30,22 @@ gate_skips() {
     return "${PIPESTATUS[0]}"
 }
 
-# complete_run_external_network prints the E2E_EXTERNAL_NETWORK a complete
-# run is started with: the value the caller gave, looked for where the harness
-# looks and in its order (the process environment, then each dotenv file
-# named, which run-docker-e2e.sh passes as the file E2E_ENV_FILE names and the
-# repository .env), and true when none of them gives one, since the host
-# running a complete run has Internet. An empty value gives none. The script
-# exports what this prints, so the harness reads that value whatever the files
-# say, and a false written in .env is honoured rather than outranked by a
-# default. test/e2e/.env.docker, which the harness reads between the two, is
-# not asked: the setup script writes it afresh and never with this key.
+# complete_run_value prints the value the caller gave a key, looked for where
+# the harness looks and in its order (the process environment, then each
+# dotenv file named, which run-docker-e2e.sh passes as the file E2E_ENV_FILE
+# names and the repository .env), and nothing when none of them gives one. An
+# empty value gives none. test/e2e/.env.docker, which the harness reads
+# between the two files, is not asked: the setup script writes it afresh and
+# never with a key a complete run asks about. The key's name is held in a
+# variable no dotenv file of this repository spells, since the file is sourced
+# in the same shell that reads it back.
 #
-#   complete_run_external_network [dotenv file...]
-complete_run_external_network() {
-    local file value
-    if [ -n "${E2E_EXTERNAL_NETWORK:-}" ]; then
-        printf '%s\n' "${E2E_EXTERNAL_NETWORK}"
+#   complete_run_value <key> [dotenv file...]
+complete_run_value() {
+    local _complete_run_key="$1" file value
+    shift
+    if [ -n "${!_complete_run_key:-}" ]; then
+        printf '%s\n' "${!_complete_run_key}"
         return 0
     fi
     for file in "$@"; do
@@ -53,13 +53,26 @@ complete_run_external_network() {
             continue
         fi
         # shellcheck source=/dev/null
-        value="$(set -a && . "${file}" >/dev/null 2>&1; printf '%s' "${E2E_EXTERNAL_NETWORK:-}")" || value=""
+        value="$(set -a && . "${file}" >/dev/null 2>&1; printf '%s' "${!_complete_run_key:-}")" || value=""
         if [ -n "${value}" ]; then
             printf '%s\n' "${value}"
             return 0
         fi
     done
-    echo true
+}
+
+# complete_run_external_network prints the E2E_EXTERNAL_NETWORK a complete
+# run is started with: the value the caller gave, wherever complete_run_value
+# finds it, and true when the caller gave none, since the host running a
+# complete run has Internet. The script exports what this prints, so the
+# harness reads that value whatever the files say, and a false written in
+# .env is honoured rather than outranked by a default.
+#
+#   complete_run_external_network [dotenv file...]
+complete_run_external_network() {
+    local value
+    value="$(complete_run_value E2E_EXTERNAL_NETWORK "$@")"
+    printf '%s\n' "${value:-true}"
 }
 
 # complete_run_refusal prints, one per line, why a run asked to be complete
@@ -69,13 +82,23 @@ complete_run_external_network() {
 # known before the first. The external network is read the way the harness
 # reads it, case aside; E2E_BITBUCKET the way run-docker-e2e.sh reads it.
 #
-#   complete_run_refusal <E2E_EXTERNAL_NETWORK> <E2E_BITBUCKET>
+# The throttle probe's switch, E2E_AUTH_THROTTLE_PROBE, is refused for a
+# different reason: the probe changes an instance-wide setting, which issue
+# 954 decided no complete run may do, so a complete run must skip it (the one
+# skip the table declares for it) and must never be the run that turns the
+# throttle on. It is read the way the probe reads it, case aside, and may be
+# left out.
+#
+#   complete_run_refusal <E2E_EXTERNAL_NETWORK> <E2E_BITBUCKET> [E2E_AUTH_THROTTLE_PROBE]
 complete_run_refusal() {
     if [[ ! $1 =~ ^[Tt][Rr][Uu][Ee]$ ]]; then
         echo "E2E_EXTERNAL_NETWORK is '$1', so the GitHub, Gists and Bitbucket Cloud importers, which call a public URL, would skip"
     fi
     if [ "$2" != "true" ]; then
         echo "E2E_BITBUCKET is '$2', so the Bitbucket fixture would not start and the Bitbucket Server import would skip"
+    fi
+    if [[ ${3:-} =~ ^[Tt][Rr][Uu][Ee]$ ]]; then
+        echo "E2E_AUTH_THROTTLE_PROBE is '$3', so the throttle probe would turn GitLab's unauthenticated API throttle on for the whole instance, which no complete run may do; run the probe on its own"
     fi
 }
 

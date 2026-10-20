@@ -24,7 +24,7 @@ import unittest
 
 # The variables the functions read, cleared before every case so the
 # developer's own environment is never part of one.
-CLEARED = ("E2E_EXTERNAL_NETWORK", "E2E_GATE_SKIPS", "E2E_BITBUCKET", "E2E_ENV_FILE")
+CLEARED = ("E2E_EXTERNAL_NETWORK", "E2E_GATE_SKIPS", "E2E_BITBUCKET", "E2E_ENV_FILE", "E2E_AUTH_THROTTLE_PROBE")
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 SCRIPT = os.path.join(ROOT, "test", "e2e", "scripts", "skip-gate.sh")
@@ -227,11 +227,60 @@ class CompleteRunExternalNetworkTest(unittest.TestCase):
             self.assertEqual(self.network(broken), ["true"])
 
 
+class CompleteRunValueTest(unittest.TestCase):
+    """What the caller set a key to, looked for where the harness would read
+    it and in its order, and nothing when the caller set it nowhere: the
+    lookup complete_run_external_network defaults and complete_run_refusal
+    judges the throttle probe's switch by."""
+
+    def value(self, *files, **settings):
+        lines = drive("complete_run_value", "E2E_AUTH_THROTTLE_PROBE", *files, **settings)
+        self.assertEqual(lines[-1], "status=0")
+        return lines[:-1]
+
+    def test_no_value_anywhere_is_nothing(self):
+        with tempfile.TemporaryDirectory() as root:
+            env_file = write_env_file(root, ".env", "GH_TOKEN=x\n")
+            self.assertEqual(self.value("", env_file, os.path.join(root, "missing")), [])
+        self.assertEqual(self.value(), [])
+
+    def test_the_environment_wins_over_every_file(self):
+        with tempfile.TemporaryDirectory() as root:
+            env_file = write_env_file(root, ".env", "E2E_AUTH_THROTTLE_PROBE=false\n")
+            self.assertEqual(self.value(env_file, E2E_AUTH_THROTTLE_PROBE="true"), ["true"])
+
+    def test_the_named_file_is_asked_before_the_repository_env(self):
+        with tempfile.TemporaryDirectory() as root:
+            named = write_env_file(root, "named.env", "E2E_AUTH_THROTTLE_PROBE=TRUE\n")
+            repo_env = write_env_file(root, ".env", "E2E_AUTH_THROTTLE_PROBE=false\n")
+            self.assertEqual(self.value(named, repo_env), ["TRUE"])
+            self.assertEqual(self.value(repo_env, named), ["false"])
+
+    def test_a_value_written_in_env_is_found(self):
+        # The switch a person sets for one run and forgets in .env is the one a
+        # later complete run has to see.
+        with tempfile.TemporaryDirectory() as root:
+            env_file = write_env_file(root, ".env", 'GH_TOKEN=x\nE2E_AUTH_THROTTLE_PROBE="true"\n')
+            self.assertEqual(self.value("", env_file), ["true"])
+
+    def test_an_empty_value_gives_none(self):
+        with tempfile.TemporaryDirectory() as root:
+            empty = write_env_file(root, "named.env", "E2E_AUTH_THROTTLE_PROBE=\n")
+            repo_env = write_env_file(root, ".env", "E2E_AUTH_THROTTLE_PROBE=true\n")
+            self.assertEqual(self.value(empty, repo_env, E2E_AUTH_THROTTLE_PROBE=""), ["true"])
+            self.assertEqual(self.value(empty), [])
+
+    def test_the_key_asked_for_is_the_only_one_read(self):
+        with tempfile.TemporaryDirectory() as root:
+            env_file = write_env_file(root, ".env", "E2E_EXTERNAL_NETWORK=false\n")
+            self.assertEqual(self.value(env_file, E2E_EXTERNAL_NETWORK="false"), [])
+
+
 class CompleteRunRefusalTest(unittest.TestCase):
     """Why a run asked to be complete cannot be, one reason per line."""
 
-    def refusal(self, network, bitbucket):
-        lines = drive("complete_run_refusal", network, bitbucket)
+    def refusal(self, network, bitbucket, throttle_probe=""):
+        lines = drive("complete_run_refusal", network, bitbucket, throttle_probe)
         self.assertEqual(lines[-1], "status=0")
         return lines[:-1]
 
@@ -240,6 +289,27 @@ class CompleteRunRefusalTest(unittest.TestCase):
         for network in ("true", "TRUE", "True"):
             with self.subTest(network=network):
                 self.assertEqual(self.refusal(network, "true"), [])
+
+    def test_the_throttle_probe_switch_is_refused(self):
+        # The probe compares its switch with true whatever its case, so every
+        # spelling it would run under is refused, and none it would skip under.
+        for throttle_probe in ("true", "TRUE", "True"):
+            with self.subTest(throttle_probe=throttle_probe):
+                self.assertEqual(
+                    self.refusal("true", "true", throttle_probe),
+                    [
+                        f"E2E_AUTH_THROTTLE_PROBE is '{throttle_probe}', so the throttle probe would turn GitLab's "
+                        "unauthenticated API throttle on for the whole instance, which no complete run may do; "
+                        "run the probe on its own"
+                    ],
+                )
+        for throttle_probe in ("false", "", "1", "yes"):
+            with self.subTest(throttle_probe=throttle_probe):
+                self.assertEqual(self.refusal("true", "true", throttle_probe), [])
+
+    def test_the_throttle_probe_switch_may_be_left_out(self):
+        lines = drive("complete_run_refusal", "true", "true")
+        self.assertEqual(lines, ["status=0"])
 
     def test_no_external_network_is_refused(self):
         for network in ("false", "yes", "1", ""):
@@ -264,8 +334,9 @@ class CompleteRunRefusalTest(unittest.TestCase):
                     ],
                 )
 
-    def test_both_reasons_are_given(self):
+    def test_every_reason_is_given(self):
         self.assertEqual(len(self.refusal("false", "false")), 2)
+        self.assertEqual(len(self.refusal("false", "false", "true")), 3)
 
 
 class RunnerWiringTest(unittest.TestCase):
@@ -291,8 +362,12 @@ class RunnerWiringTest(unittest.TestCase):
             text = handle.read()
         settled = text.index('E2E_EXTERNAL_NETWORK="$(complete_run_external_network "${E2E_ENV_FILE:-}" "${REPO_ROOT}/.env")"')
         exported = text.index("export E2E_EXTERNAL_NETWORK", settled)
-        refused = text.index('complete_run_refusal "${E2E_EXTERNAL_NETWORK}" "${E2E_BITBUCKET:-true}"', exported)
-        self.assertLess(refused, text.index("trap teardown EXIT"))
+        probe = text.index('throttle_probe="$(complete_run_value E2E_AUTH_THROTTLE_PROBE "${E2E_ENV_FILE:-}" "${REPO_ROOT}/.env")"', exported)
+        refused = text.index('complete_run_refusal "${E2E_EXTERNAL_NETWORK}" "${E2E_BITBUCKET:-true}" "${throttle_probe}"', probe)
+        # After the refusal, so a switch the shell saw is refused rather than
+        # quietly turned off, and before anything starts.
+        turned_off = text.index("export E2E_AUTH_THROTTLE_PROBE=false", refused)
+        self.assertLess(turned_off, text.index("trap teardown EXIT"))
 
     def refused_run(self, **settings):
         """Runs the lifecycle script as a complete run with a stand-in
@@ -342,6 +417,87 @@ class RunnerWiringTest(unittest.TestCase):
         self.assertFalse(docker_called)
         self.assertIn("  E2E_BITBUCKET is 'false'", result.stderr)
         self.assertNotIn("E2E_EXTERNAL_NETWORK is", result.stderr)
+
+    def test_a_complete_run_with_the_throttle_probe_switch_is_refused_before_docker(self):
+        # Issue 954: the probe changes an instance-wide setting, which no
+        # complete run may do, whether the switch was given on the command
+        # line or left in the file a person ran the probe with.
+        with tempfile.TemporaryDirectory() as root:
+            named = write_env_file(root, "named.env", "E2E_AUTH_THROTTLE_PROBE=true\n")
+            for settings in ({"E2E_AUTH_THROTTLE_PROBE": "true"}, {"E2E_ENV_FILE": named}):
+                with self.subTest(settings=settings):
+                    result, docker_called = self.refused_run(E2E_EXTERNAL_NETWORK="true", **settings)
+                    self.assertEqual(result.returncode, 2, result.stderr)
+                    self.assertFalse(docker_called)
+                    self.assertIn("  E2E_AUTH_THROTTLE_PROBE is 'true', so the throttle probe would turn", result.stderr)
+                    self.assertNotIn("E2E_EXTERNAL_NETWORK is", result.stderr)
+                    self.assertNotIn("E2E_BITBUCKET is", result.stderr)
+
+    def started_run(self, **settings):
+        """Runs the lifecycle script as a complete run with a stand-in docker
+        that records the throttle probe's switch as each docker call
+        inherits it and then fails, so the run stops at the first step that
+        needs docker to succeed, and returns the result and what was
+        recorded. Every process the script starts, the tests included,
+        inherits what docker does."""
+        with tempfile.TemporaryDirectory() as root:
+            bin_dir = os.path.join(root, "bin")
+            os.mkdir(bin_dir)
+            seen = os.path.join(root, "docker-saw")
+            docker = os.path.join(bin_dir, "docker")
+            with open(docker, "w", encoding="utf-8") as handle:
+                handle.write(
+                    "#!/bin/sh\n"
+                    f'printf \'%s\\n\' "${{E2E_AUTH_THROTTLE_PROBE-unset}}" >>"{seen}"\n'
+                    "exit 1\n"
+                )
+            os.chmod(docker, 0o755)
+            env = {key: value for key, value in os.environ.items() if key not in CLEARED + ("E2E_KEEP_STACK",)}
+            env["PATH"] = bin_dir + os.pathsep + env.get("PATH", "")
+            env["E2E_GATE_SKIPS"] = "true"
+            env["E2E_EXTERNAL_NETWORK"] = "true"
+            env["E2E_REPORT_DIR"] = os.path.join(root, "reports")
+            env.update(settings)
+            result = subprocess.run(
+                ["bash", RUNNER, "ce", "--", "./test/e2e/gitlab/common/"],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            recorded = []
+            if os.path.exists(seen):
+                with open(seen, encoding="utf-8") as handle:
+                    recorded = handle.read().splitlines()
+            return result, recorded
+
+    def test_a_complete_run_hands_on_the_probe_switch_off_whatever_a_file_says(self):
+        # The shell reads a dotenv file by sourcing it and the harness with
+        # godotenv, which also takes KEY: value and KEY = value and reads on
+        # past a reference to a variable nobody set, so a switch the shell
+        # cannot see would still reach the probe. The environment outranks
+        # every file the harness reads, so a complete run that was not
+        # refused starts with the switch off there.
+        with tempfile.TemporaryDirectory() as root:
+            files = {
+                "yaml-style": "E2E_AUTH_THROTTLE_PROBE: true\n",
+                "spaced": "E2E_AUTH_THROTTLE_PROBE = true\n",
+                "an unset reference first": "GH_TOKEN=x\nA=$NOT_SET_ANYWHERE_E2E\nE2E_AUTH_THROTTLE_PROBE=true\n",
+                "no switch at all": "GH_TOKEN=x\n",
+            }
+            for name, text in files.items():
+                named = write_env_file(root, "named.env", text)
+                with self.subTest(file=name):
+                    result, recorded = self.started_run(E2E_ENV_FILE=named)
+                    self.assertNotEqual(result.returncode, 2, result.stderr)
+                    self.assertNotIn("E2E_AUTH_THROTTLE_PROBE is", result.stderr)
+                    self.assertTrue(recorded, result.stderr)
+                    self.assertEqual(set(recorded), {"false"}, result.stderr)
+
+    def test_a_run_not_asked_to_be_complete_keeps_the_probe_switch(self):
+        result, recorded = self.started_run(E2E_GATE_SKIPS="false", E2E_AUTH_THROTTLE_PROBE="true")
+        self.assertTrue(recorded, result.stderr)
+        self.assertEqual(set(recorded), {"true"}, result.stderr)
 
     def test_the_complete_run_targets_ask_for_it_and_leave_the_network_to_the_script(self):
         with open(os.path.join(ROOT, "Makefile"), encoding="utf-8") as handle:

@@ -674,7 +674,7 @@ go test ./internal/prompts/ -count=1 -v                    # Prompts
 
 ### Running E2E tests
 
-The suite drives the **real `cmd/server` binary** over stdio against a real GitLab, so a tool call crosses a process boundary and then the network; read `test/e2e/README.md` before changing any of it. **The package decides the runtime, not a build tag**: `test/e2e/gitlab/common` for what any instance serves (175 test files), `ce` for what only an unlicensed one does (4), `ee` for Premium and Ultimate (48), all three compiled together under the one `e2e` tag. Every target stages the binary first, so none of them is a bare `go test`:
+The suite drives the **real `cmd/server` binary** over stdio against a real GitLab, so a tool call crosses a process boundary and then the network; read `test/e2e/README.md` before changing any of it. **The package decides the runtime, not a build tag**: `test/e2e/gitlab/common` for what any instance serves (175 test files), `ce` for what only an unlicensed one does (5), `ee` for Premium and Ultimate (48), all three compiled together under the one `e2e` tag. Every target stages the binary first, so none of them is a bare `go test`:
 
 ```bash
 make test-e2e        # self-hosted, from .env (GITLAB_URL, GITLAB_TOKEN); a package the instance cannot serve skips

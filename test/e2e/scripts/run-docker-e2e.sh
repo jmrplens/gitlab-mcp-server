@@ -45,8 +45,12 @@
 # E2E_ENV_FILE names or in the repository .env, and refuses to start at all
 # when the caller turned it off or left the Bitbucket fixture out: either skips
 # scenarios nothing declares, so the gate would fail the run an hour later for
-# a reason known before it began. An offline host runs with E2E_GATE_SKIPS=false,
-# which is not a complete run.
+# a reason known before it began. It refuses the throttle probe's switch,
+# E2E_AUTH_THROTTLE_PROBE=true, looked for in the same places, since the probe
+# changes an instance-wide setting no complete run may change, and starts every
+# complete run with that switch off in the environment, which outranks any
+# file the harness reads. An offline host runs with E2E_GATE_SKIPS=false, which
+# is not a complete run.
 #
 # Before the teardown takes the volumes with it, GitLab's exceptions log is
 # copied into the reports, so a 500 a scenario met can be traced to the
@@ -60,6 +64,10 @@
 #                                  run asked to be complete refuses
 #   E2E_EXTERNAL_NETWORK           read by the harness; a run asked to be complete sets
 #                                  it to true unless the caller set it, and refuses false
+#   E2E_AUTH_THROTTLE_PROBE        true lets the throttle probe of test/e2e/gitlab/ce run;
+#                                  a run asked to be complete refuses it, read from the
+#                                  environment, the file E2E_ENV_FILE names or the
+#                                  repository .env, and sets it to false otherwise
 #   E2E_KEEP_STACK                 true leaves the stack up after the run, for a look
 #   E2E_REPORT_DIR                 dist/e2e-reports, resolved from the repository root
 #   E2E_REPORT_NAME                stem of the junit, json and output files: e2e-<runtime>
@@ -130,11 +138,14 @@ derive_fixture_addresses
 # A run asked to be complete calls public URLs unless the caller said not to,
 # wherever the harness would have read that, and is refused before anything
 # starts when it cannot be complete: its gate would fail it for a skip nothing
-# declares, after an hour of tests. The refusal says how to run such a host.
+# declares, after an hour of tests, and a throttle probe switch left on would
+# have it change an instance-wide setting no complete run may change. The
+# refusal says how to run such a host.
 if [ "${E2E_GATE_SKIPS:-false}" = "true" ]; then
     E2E_EXTERNAL_NETWORK="$(complete_run_external_network "${E2E_ENV_FILE:-}" "${REPO_ROOT}/.env")"
     export E2E_EXTERNAL_NETWORK
-    refusal="$(complete_run_refusal "${E2E_EXTERNAL_NETWORK}" "${E2E_BITBUCKET:-true}")"
+    throttle_probe="$(complete_run_value E2E_AUTH_THROTTLE_PROBE "${E2E_ENV_FILE:-}" "${REPO_ROOT}/.env")"
+    refusal="$(complete_run_refusal "${E2E_EXTERNAL_NETWORK}" "${E2E_BITBUCKET:-true}" "${throttle_probe}")"
     if [ -n "${refusal}" ]; then
         {
             echo "ERROR: this run was asked to be complete (E2E_GATE_SKIPS=true) and cannot be:"
@@ -146,6 +157,14 @@ if [ "${E2E_GATE_SKIPS:-false}" = "true" ]; then
         } >&2
         exit 2
     fi
+    # Whatever the files say, a complete run never runs the throttle probe.
+    # The lookup above reads a file by sourcing it, and the harness reads it
+    # with godotenv, which also takes KEY: value and KEY = value and reads on
+    # past a reference to a variable nobody set, so a switch the shell could
+    # not see would still reach the probe. The process environment outranks
+    # every file the harness reads, so the probe skips for the reason the
+    # skip table declares.
+    export E2E_AUTH_THROTTLE_PROBE=false
 fi
 
 E2E_REPORT_DIR="${E2E_REPORT_DIR:-dist/e2e-reports}"
