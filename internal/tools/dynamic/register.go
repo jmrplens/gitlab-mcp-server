@@ -198,10 +198,15 @@ type DescribeOutput struct {
 // bounded the query, and a request body may be 4 MiB, which is hundreds of
 // thousands of words.
 //
-// Measured by BenchmarkFind_PathologicalQuery against the Free catalog, with
-// words that match nothing: two words cost 14 ms and 1.7 MB, eight words
-// 229 ms and 6.8 MB, and a query filling this bound 0.8 s and 20 MB. So the
-// bound is what makes one call's cost a number at all.
+// Measured by BenchmarkFind_PathologicalQuery against the Free catalog, on
+// five cores of a shared machine in October 2026. Words that match nothing
+// cost 6 ms and 2.8 MB for two words, 70 ms and 11 MB for eight, and 0.3 s
+// and 33 MB for a query filling this bound. Plurals of words the catalog
+// spells cost less than that for two words, 2 ms and 1.4 MB, as much time
+// and more memory for eight, 70 ms and 17 MB, and the most of all filling
+// the bound, 0.7 s and 152 MB, since each reaches the actions its singular
+// names and every pass scores a larger candidate set. So the bound is what
+// makes one call's cost a number at all.
 //
 // 256 characters is around forty words, comfortably above every query the
 // tool's own description suggests and above anything a model has been

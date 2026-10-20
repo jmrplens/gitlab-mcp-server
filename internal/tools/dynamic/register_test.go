@@ -8622,25 +8622,46 @@ func TestCompactParamList_EdgeCases(t *testing.T) {
 	}
 }
 
-// BenchmarkFind_PathologicalQuery measures the worst query a caller can now
-// send: words that match nothing, so the lexical pass returns nothing, the
-// fuzzy pass runs over the whole catalog, and the segmented pass runs one more
-// pass per window.
+// BenchmarkFind_PathologicalQuery measures the worst queries a caller can now
+// send, in two shapes. Words that match nothing: the lexical pass returns
+// nothing, the fuzzy pass runs over the whole catalog, and the segmented pass
+// runs one more pass per window. And plurals of words the catalog spells,
+// which cost more memory from a handful of words on and the most of all at
+// the length bound: each reaches a domain or an action through its singular,
+// so every pass is handed a large candidate set, and a plural is shorter than
+// a nonsense word, so more of them fit. Two of them cost less than two
+// nonsense words, which leave the fuzzy pass the whole catalog to edit
+// against.
 //
 // It exists because that cost was unbounded. A query was accepted at whatever
 // length a 4 MiB request body allows, which is hundreds of thousands of words,
 // and the cost grows with the word count times the size of the catalog. The
-// case at [MaxSearchQueryLength] is the ceiling a caller can now reach, and it
-// is here so a change to the scorer cannot quietly raise it: the shorter cases
-// beside it are the shape of the growth.
+// cases at [MaxSearchQueryLength] are the ceiling a caller can now reach, and
+// they are here so a change to the scorer cannot quietly raise it: the shorter
+// cases beside them are the shape of the growth. The plurals were added with
+// the rule that matches a plural to its singular (issue 1121), when they
+// became the costlier shape; a benchmark of the nonsense words alone would
+// have reported a ceiling the tool no longer has.
 func BenchmarkFind_PathologicalQuery(b *testing.B) {
 	registry := benchmarkRegistry(b)
 	ctx := context.Background()
 
 	// Nonsense words of a realistic length, none of which is a catalog token,
-	// so nothing prunes the candidate set at any stage.
-	word := func(i int) string { return fmt.Sprintf("zqx%04dvfh", i) }
-	queryOf := func(words int) string {
+	// so nothing prunes the candidate set at any stage. Each ends in "ies",
+	// so the plural rule tries all three singulars of every word before it
+	// finds none in the catalog: a word that did not end in "s" would leave
+	// that cost out of the ceiling this measures.
+	nonsense := func(i int) string { return fmt.Sprintf("zqx%04dies", i) }
+	// Plurals whose singular is a domain or action word of the Free catalog,
+	// distinct so no window of the segmented pass repeats another.
+	plurals := []string{
+		"issues", "branches", "pipelines", "requests", "projects", "groups", "labels", "milestones",
+		"jobs", "releases", "tags", "tokens", "users", "members", "commits", "notes",
+		"discussions", "runners", "packages", "variables", "environments", "deployments", "snippets", "wikis",
+		"entities", "repositories", "retries", "keys", "hooks", "badges", "boards", "approvals",
+	}
+	plural := func(i int) string { return plurals[i%len(plurals)] }
+	queryOf := func(word func(int) string, words int) string {
 		parts := make([]string, 0, words)
 		for i := range words {
 			parts = append(parts, word(i))
@@ -8650,7 +8671,7 @@ func BenchmarkFind_PathologicalQuery(b *testing.B) {
 	// The longest query the tool accepts, built by filling to the character
 	// bound rather than by counting words, since that bound is what a caller
 	// is held to.
-	atLimit := func() string {
+	atLimit := func(word func(int) string) string {
 		query := ""
 		for i := 0; ; i++ {
 			next := query
@@ -8669,9 +8690,12 @@ func BenchmarkFind_PathologicalQuery(b *testing.B) {
 		name  string
 		query string
 	}{
-		{name: "two_words", query: queryOf(2)},
-		{name: "eight_words", query: queryOf(8)},
-		{name: "at_the_length_limit", query: atLimit()},
+		{name: "two_words", query: queryOf(nonsense, 2)},
+		{name: "eight_words", query: queryOf(nonsense, 8)},
+		{name: "at_the_length_limit", query: atLimit(nonsense)},
+		{name: "two_plurals", query: queryOf(plural, 2)},
+		{name: "eight_plurals", query: queryOf(plural, 8)},
+		{name: "plurals_at_the_length_limit", query: atLimit(plural)},
 	}
 	for _, tc := range cases {
 		b.Run(tc.name, func(b *testing.B) {
