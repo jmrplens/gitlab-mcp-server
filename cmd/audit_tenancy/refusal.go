@@ -659,34 +659,43 @@ func (g *gate) toolErrorProblem(holder *declaration, visited map[string]bool) st
 		if len(ret.Results) <= index {
 			return
 		}
-		expr := ast.Unparen(ret.Results[index])
-		if unary, isUnary := expr.(*ast.UnaryExpr); isUnary && unary.Op == token.AND {
-			expr = ast.Unparen(unary.X)
-		}
-		switch e := expr.(type) {
-		case *ast.CompositeLit:
-			if !g.setsIsError(info, e) {
-				problems = append(problems, fmt.Sprintf("returns a tool result at %s without %s set", g.p.position(e.Pos()), g.rules.isErrorField))
-			}
-		case *ast.CallExpr:
-			var decl *declaration
-			if callee := calleeOf(info, e); callee != nil {
-				decl = g.p.decls[objectKey(callee)]
-			}
-			if decl == nil {
-				problems = append(problems, fmt.Sprintf("returns a tool result from %s, which the gate cannot read", types.ExprString(e.Fun)))
-				return
-			}
-			if msg := g.toolErrorProblem(decl, visited); msg != "" {
-				problems = append(problems, msg)
-			}
-		default:
-			if !info.Types[expr].IsNil() {
-				problems = append(problems, fmt.Sprintf("returns %s, which the gate cannot read as a tool result", types.ExprString(expr)))
-			}
+		if msg := g.returnedResultProblem(info, ret.Results[index], visited); msg != "" {
+			problems = append(problems, msg)
 		}
 	})
 	return strings.Join(problems, "; ")
+}
+
+// returnedResultProblem says why one tool result a holder returns is not
+// flagged as an error, or returns empty when it is, or when it is nil.
+//
+// A call is followed into the function it calls, through toolErrorProblem, so
+// visited is shared with the walk that reached this return.
+func (g *gate) returnedResultProblem(info *types.Info, result ast.Expr, visited map[string]bool) string {
+	expr := ast.Unparen(result)
+	if unary, isUnary := expr.(*ast.UnaryExpr); isUnary && unary.Op == token.AND {
+		expr = ast.Unparen(unary.X)
+	}
+	switch e := expr.(type) {
+	case *ast.CompositeLit:
+		if !g.setsIsError(info, e) {
+			return fmt.Sprintf("returns a tool result at %s without %s set", g.p.position(e.Pos()), g.rules.isErrorField)
+		}
+	case *ast.CallExpr:
+		var decl *declaration
+		if callee := calleeOf(info, e); callee != nil {
+			decl = g.p.decls[objectKey(callee)]
+		}
+		if decl == nil {
+			return fmt.Sprintf("returns a tool result from %s, which the gate cannot read", types.ExprString(e.Fun))
+		}
+		return g.toolErrorProblem(decl, visited)
+	default:
+		if !info.Types[expr].IsNil() {
+			return fmt.Sprintf("returns %s, which the gate cannot read as a tool result", types.ExprString(expr))
+		}
+	}
+	return ""
 }
 
 // setsIsError reports whether a tool result literal sets its error flag to a
