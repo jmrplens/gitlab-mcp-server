@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -22,6 +21,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
 )
 
 // sessionFake is a stateful transport in the test process, with a switch for
@@ -381,44 +382,20 @@ func truncatingServer(t *testing.T) string {
 	return srv.URL
 }
 
-// closedEndpoint is the address of a server that answers nothing: it accepts
-// each connection and closes it before reading a byte, so every request sent
-// there fails before any response, which the code under test handles as it
-// would a server that is gone. The listener holds its port until the test
-// ends. A server that was started and closed again freed its port at once,
-// and whatever was given the port next could answer the request this address
-// exists to see fail: this package's parallel tests start servers of their
-// own, some of which answer any request with 200 (truncatingServer does), and
-// the coverage job runs other test binaries beside this one.
-// TestBenchSession_OpenStream_ReportsWhatItCouldNotOpen once got a stream
-// opened that way.
-func closedEndpoint(t *testing.T) string {
-	t.Helper()
-	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	t.Cleanup(func() { _ = listener.Close() })
-	go func() {
-		for {
-			conn, acceptErr := listener.Accept()
-			if acceptErr != nil {
-				return
-			}
-			_ = conn.Close()
-		}
-	}()
-	return "http://" + listener.Addr().String()
-}
-
 // TestSessionClient_Send_ReportsWhatItCouldNotSend covers a request that could
 // not be built, one that reached no server, and an answer that could not be
-// read.
+// read. The server that is gone is a [netfixture.DeadEndpoint], which keeps
+// its port for the whole test: a server started and closed again freed its
+// port at once, and this package's parallel tests start servers of their own,
+// some of which answer any request with 200 (truncatingServer does), so the
+// port could be given to one that answered.
+// TestBenchSession_OpenStream_ReportsWhatItCouldNotOpen once got a stream
+// opened that way.
 func TestSessionClient_Send_ReportsWhatItCouldNotSend(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct{ name, endpoint, want string }{
 		{"a request it cannot build", "http://[::1", "build POST request"},
-		{"a server that is gone", closedEndpoint(t), methodPing + ": "},
+		{"a server that is gone", netfixture.DeadEndpoint(t), methodPing + ": "},
 		{"an answer cut short", truncatingServer(t), "read " + methodPing + " response"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -515,7 +492,7 @@ func TestBenchSession_OpenStream_ReportsWhatItCouldNotOpen(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct{ name, endpoint, want string }{
 		{"a request it cannot build", "http://[::1", "build GET request"},
-		{"a server that is gone", closedEndpoint(t), methodStream + ": "},
+		{"a server that is gone", netfixture.DeadEndpoint(t), methodStream + ": "},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -533,7 +510,7 @@ func TestSessionClient_Remove_ReportsWhatItCouldNotSend(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct{ name, endpoint, want string }{
 		{"a request it cannot build", "http://[::1", "build DELETE request"},
-		{"a server that is gone", closedEndpoint(t), methodDelete + ": "},
+		{"a server that is gone", netfixture.DeadEndpoint(t), methodDelete + ": "},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -567,7 +544,7 @@ func TestCountLive_StopsAtTheFirstPingNoOneAnswered(t *testing.T) {
 		held = append(held, session)
 	}
 	gone := &benchSession{client: live, id: "not-held"}
-	dead := &benchSession{client: newSessionClient(closedEndpoint(t), "token"), id: "dead"}
+	dead := &benchSession{client: newSessionClient(netfixture.DeadEndpoint(t), "token"), id: "dead"}
 
 	sessions := []*benchSession{held[0], gone, held[1], dead, held[2]}
 	if got := countLive(t.Context(), sessions); got != 2 {

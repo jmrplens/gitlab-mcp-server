@@ -19,6 +19,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
 )
 
 // fastHeldSettling makes a step settle in milliseconds rather than seconds.
@@ -310,7 +312,7 @@ func TestProbeHealth_AnswersTheStatusOrUnanswered(t *testing.T) {
 		t.Errorf("two probes opened %d connections, want one each", connections.Load())
 	}
 
-	closedAddr := strings.TrimPrefix(closedEndpoint(t), "http://")
+	closedAddr := strings.TrimPrefix(netfixture.DeadEndpoint(t), "http://")
 	if status, _ := probeHealth(t.Context(), closedAddr); status != healthUnanswered {
 		t.Errorf("probeHealth of a listener that answers nothing = %q, want %q", status, healthUnanswered)
 	}
