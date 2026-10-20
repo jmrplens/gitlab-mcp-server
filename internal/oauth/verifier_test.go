@@ -20,6 +20,7 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
 )
 
 // TestNewGitLabVerifier_ValidToken verifies that a successful GitLab /user
@@ -149,20 +150,15 @@ func TestNewGitLabVerifier_ServerError(t *testing.T) {
 	}
 }
 
-// TestNewGitLabVerifier_NetworkError verifies that a connection failure to
-// a closed server returns a non-nil error.
+// TestNewGitLabVerifier_NetworkError verifies that an instance that hangs up
+// without answering returns a non-nil error.
 func TestNewGitLabVerifier_NetworkError(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	srv.Close() // close immediately to force connection error
-
-	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
+	verifier := NewGitLabVerifier(netfixture.DeadEndpoint(t), false, 15*time.Minute, nil)
 	_, err := verifier(context.Background(), "token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err == nil {
-		t.Fatal("expected error for closed server")
+		t.Fatal("expected error for an instance that never answers")
 	}
 }
 
@@ -387,13 +383,21 @@ func TestNewGitLabVerifier_InvalidURL(t *testing.T) {
 	}
 }
 
-// TestNewGitLabVerifier_NetworkErrorWithCache verifies that a network
-// failure during re-validation removes the previously cached entry so a
-// stale identity is not served.
+// TestNewGitLabVerifier_NetworkErrorWithCache verifies that once a cached
+// identity has left the cache, a re-verification against an instance that has
+// stopped answering fails rather than admitting the token, and leaves nothing
+// in the cache: the failure is not remembered as an identity.
+//
+// The entry is deleted by hand, standing in for its expiry, since the verifier
+// answers a cached identity without asking the instance at all. The instance
+// is a [netfixture.StoppableServer], which answers the first verification and
+// then hangs up while keeping its port: the verifier is bound to that URL and
+// the cache is keyed on it, so a closed httptest server's freed port, given to
+// a listener that answered, could have admitted the token again.
 func TestNewGitLabVerifier_NetworkErrorWithCache(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := netfixture.NewStoppableServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(gitlabUserResponse{ID: 10, Username: "net"})
 	}))
@@ -409,16 +413,16 @@ func TestNewGitLabVerifier_NetworkErrorWithCache(t *testing.T) {
 		t.Fatal("token should be cached after successful call")
 	}
 
-	srv.Close()
+	srv.Stop()
 
 	cache.Delete(srv.URL, "net-token")
 	_, err = verifier(context.Background(), "net-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err == nil {
-		t.Fatal("expected error for closed server")
+		t.Fatal("expected error for an instance that stopped answering")
 	}
 
 	if _, ok := cache.Get(srv.URL, "net-token"); ok {
-		t.Error("cache entry should be deleted after network error")
+		t.Error("a failed re-verification left an entry in the cache")
 	}
 }
 
@@ -852,16 +856,13 @@ func TestNewGitLabVerifier_UpstreamFailure_IsNotAnInvalidToken(t *testing.T) {
 // TestNewGitLabVerifier_UnreachableInstance_ReportsNoStatus verifies that a
 // transport failure — nothing was ever answered — is classified upstream with
 // a zero status, so a caller can tell "GitLab said 429" from "GitLab said
-// nothing at all" and still not blame the credential.
+// nothing at all" and still not blame the credential. The instance is a
+// [netfixture.DeadEndpoint], which takes the connection and hangs up before
+// any response.
 func TestNewGitLabVerifier_UnreachableInstance_ReportsNoStatus(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	srv.Close() // closed immediately: the connection cannot be made
-
-	verifier := NewGitLabVerifier(srv.URL, false, time.Minute, nil)
+	verifier := NewGitLabVerifier(netfixture.DeadEndpoint(t), false, time.Minute, nil)
 	_, err := verifier(t.Context(), "token", httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody))
 	if err == nil {
 		t.Fatal("expected an error")
@@ -922,18 +923,16 @@ func TestRetryAfter_HTTPDate_RoundsUp(t *testing.T) {
 func TestFetchScopes_UnusableEndpoint_ReportsNoAnswer(t *testing.T) {
 	t.Parallel()
 
-	// A server started and immediately closed yields an address nothing is
-	// listening on, so the request is well-formed and the round trip fails.
-	closed := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	unreachable := closed.URL + "/api/v4/personal_access_tokens/self"
-	closed.Close()
+	// A dead endpoint takes the connection and hangs up before any response,
+	// so the request is well-formed and the round trip fails.
+	unreachable := netfixture.DeadEndpoint(t) + "/api/v4/personal_access_tokens/self"
 
 	tests := []struct {
 		name     string
 		endpoint string
 	}{
 		{"endpoint that cannot be parsed", "://not a url"},
-		{"host that refuses the connection", unreachable},
+		{"host that hangs up without answering", unreachable},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2126,10 +2125,8 @@ func TestNewGitLabVerifier_DuplicateIdentityMember_IsRefusedRatherThanResolved(t
 func TestIntrospectToken_UnreachableInstance_StillAssumesAPI(t *testing.T) {
 	t.Parallel()
 
-	// Closed immediately, so connections are refused rather than answered.
-	down := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	url := down.URL
-	down.Close()
+	// A dead endpoint takes every connection and hangs up before answering.
+	url := netfixture.DeadEndpoint(t)
 
 	got := introspectToken(t.Context(), http.DefaultClient, url, "glpat-whatever")
 
@@ -2780,9 +2777,7 @@ func TestIntrospectToken_SelfReportsTheTokensID_TravelsInTheAdmission(t *testing
 func TestAdmitToken_AssumedScopes_SaySoInTheAdmission(t *testing.T) {
 	t.Parallel()
 	user := gitlabUserResponse{ID: 1, Username: "u"}
-	down := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	url := down.URL
-	down.Close()
+	url := netfixture.DeadEndpoint(t)
 
 	assumed := admitToken(nil, url, "glpat-x", time.Minute, user, introspectToken(t.Context(), http.DefaultClient, url, "glpat-x"))
 	if flag, _ := assumed.Extra[ScopesAssumedKey].(bool); !flag {
