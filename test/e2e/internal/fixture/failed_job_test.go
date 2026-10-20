@@ -32,6 +32,19 @@ func fastFailedJobPolls(t *testing.T) {
 	t.Cleanup(func() { failedJobPollInterval = saved })
 }
 
+// shortFailedJobWait gives the builder's wait the budget a test needs,
+// polling as fast as fastFailedJobPolls does, and restores both afterwards.
+// A test that drives the builder whole sets one too, so a defect that keeps
+// the wait from ending fails the test at that budget rather than holding it
+// for the ten minutes a runner is given.
+func shortFailedJobWait(t *testing.T, wait time.Duration) {
+	t.Helper()
+	fastFailedJobPolls(t)
+	saved := failedJobWait
+	failedJobWait = wait
+	t.Cleanup(func() { failedJobWait = saved })
+}
+
 // jobsPath is where the pipeline's job listing lives.
 const jobsPath = "/api/v4/projects/1/pipelines/5/jobs"
 
@@ -51,6 +64,20 @@ func TestFailingCIYAML_Shape_KeepsTheArtifactOfAJobThatFails(t *testing.T) {
 	}
 }
 
+// failedJobProject is the project the failed job builder is driven against,
+// on a default branch other than the library's own, so a builder that named
+// the library's default rather than the project's would be seen to.
+var failedJobProject = Project{ID: 1, DefaultBranch: "trunk"}
+
+// scriptFailedJob tells the stub to accept what the failed job builder asks
+// for before its wait: the runner it checks for, the configuration's commit
+// and the pipeline, numbered 5 so its jobs are at jobsPath.
+func scriptFailedJob(stub *stubGitLab) {
+	stub.answers(http.MethodGet, "/api/v4/runners", oneRunner)
+	stub.answers(http.MethodPost, "/api/v4/projects/1/repository/commits", stubCreated(map[string]any{"id": "ci-sha", "short_id": "ci-sha"}))
+	stub.answers(http.MethodPost, "/api/v4/projects/1/pipeline", stubCreated(map[string]any{"id": 5, "ref": "trunk", "sha": "ci-sha", "status": "created"}))
+}
+
 // TestNewFailedJob_Detached_SkipsThePushPipelineAndWaitsForTheFailure drives
 // the builder whole: the failing configuration lands on the default branch
 // with a message that keeps the push from running it, the pipeline is asked
@@ -58,17 +85,15 @@ func TestFailingCIYAML_Shape_KeepsTheArtifactOfAJobThatFails(t *testing.T) {
 // artifact path. Without the marker the push ran the failing job a second
 // time, on the one runner a model evaluation run shares.
 func TestNewFailedJob_Detached_SkipsThePushPipelineAndWaitsForTheFailure(t *testing.T) {
-	fastFailedJobPolls(t)
+	shortFailedJobWait(t, 10*time.Second)
 	stub, e := detachedStub(t)
-	stub.answers(http.MethodGet, "/api/v4/runners", oneRunner)
-	stub.answers(http.MethodPost, "/api/v4/projects/1/repository/commits", stubCreated(map[string]any{"id": "ci-sha", "short_id": "ci-sha"}))
-	stub.answers(http.MethodPost, "/api/v4/projects/1/pipeline", stubCreated(map[string]any{"id": 5, "ref": "trunk", "sha": "ci-sha", "status": "created"}))
+	scriptFailedJob(stub)
 	stub.answers(http.MethodGet, jobsPath, stubOK([]any{
 		map[string]any{"id": 71, "name": "failing-fixture", "status": failedJobStatus},
 		map[string]any{"id": 72, "name": "manual-fixture", "status": "manual"},
 	}))
 
-	got := NewFailedJob(e, Project{ID: 1, DefaultBranch: "trunk"})
+	got := NewFailedJob(e, failedJobProject)
 
 	if want := (FailedJob{PipelineID: 5, JobID: 71, ArtifactPath: FailedJobArtifactPath}); got != want {
 		t.Errorf("NewFailedJob() = %+v, want %+v", got, want)
@@ -81,13 +106,14 @@ func TestNewFailedJob_Detached_SkipsThePushPipelineAndWaitsForTheFailure(t *test
 
 // TestWaitForFailedJob_FailsLater_ReturnsTheJobID checks that the wait sits
 // through a listing of running jobs and answers with the one that failed,
-// leaving the manual job beside it alone.
+// leaving the manual job beside it alone and passing over a null row.
 func TestWaitForFailedJob_FailsLater_ReturnsTheJobID(t *testing.T) {
 	fastFailedJobPolls(t)
 	stub, client := newStubGitLab(t)
 	stub.answers(http.MethodGet, jobsPath,
 		stubOK([]any{map[string]any{"id": 71, "name": "failing-fixture", "status": "running"}}),
 		stubOK([]any{
+			nil,
 			map[string]any{"id": 71, "name": "failing-fixture", "status": failedJobStatus},
 			map[string]any{"id": 72, "name": "manual-fixture", "status": "manual"},
 		}),

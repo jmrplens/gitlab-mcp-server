@@ -114,17 +114,20 @@ func CIFile(e *harness.Env, project Project) Commit {
 	return CommitFile(e, project, project.DefaultBranch, CIFilePath, CIYAML, "ci: add the e2e pipeline configuration "+SkipCIMarker)
 }
 
-// The pipeline wait's bounds: generous, because an ephemeral runner in a
-// container pulls its image on the first job, and tolerant of a run of API
-// errors, because a GitLab under load answers some polls with nothing.
-const (
-	pipelineWait                 = 15 * time.Minute
-	pipelineMaxConsecutiveErrors = 10
-)
+// pipelineMaxConsecutiveErrors is how many failed polls in a row the pipeline
+// wait sits through, because a GitLab under load answers some polls with
+// nothing.
+const pipelineMaxConsecutiveErrors = 10
 
-// pipelinePollInterval is how often the wait asks; a variable so the
-// package's own tests can ask faster than a real runner answers.
-var pipelinePollInterval = 5 * time.Second
+// The pipeline wait's default budget, generous because an ephemeral runner in
+// a container pulls its image on the first job, and how often the wait asks.
+// Variables so the package's own tests can ask faster than a real runner
+// answers and bound a wait that never ends, which no stub answer can do for
+// them.
+var (
+	pipelineWait         = 15 * time.Minute
+	pipelinePollInterval = 5 * time.Second
+)
 
 // NewPipeline creates a pipeline on ref and waits until it reaches a
 // terminal status, failing the test if it does not within the budget. The

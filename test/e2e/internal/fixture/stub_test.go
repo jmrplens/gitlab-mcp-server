@@ -28,6 +28,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -101,6 +102,11 @@ type stubGitLab struct {
 	pipelineStatuses []string
 	// pipelineFailures is how many pipeline reads answer 502 first.
 	pipelineFailures int
+	// pipelineGoneAfter, when positive, is how many pipeline reads are
+	// answered before every later one is answered 404, as a pipeline deleted
+	// between two reads of it would be; pipelineReads counts them.
+	pipelineGoneAfter int
+	pipelineReads     int
 	// enqueued is what the Sidekiq stats report, decremented per read.
 	enqueued int64
 	// sidekiqRefused makes the stats answer 403, as they do for a token
@@ -561,12 +567,16 @@ func (s *stubGitLab) sidekiq(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"jobs": map[string]any{"processed": 1, "failed": 0, "enqueued": enqueued}})
 }
 
-// listRunners answers the instance runner listing.
+// listRunners answers the instance runner listing, or the refusal a test
+// asked for on it.
 func (s *stubGitLab) listRunners(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if got := r.URL.Query().Get("type"); got != "instance_type" {
 		s.t.Errorf("runner listing asked for type %q, want instance_type", got)
+	}
+	if s.refuse(w, r) {
+		return
 	}
 	writeJSON(w, http.StatusOK, s.runners)
 }
@@ -620,6 +630,13 @@ func (s *stubGitLab) pipeline(w http.ResponseWriter, r *http.Request) {
 		s.pipelineFailures--
 		writeError(w, http.StatusBadGateway, "502 Bad Gateway")
 		return
+	}
+	if s.pipelineGoneAfter > 0 {
+		s.pipelineReads++
+		if s.pipelineReads > s.pipelineGoneAfter {
+			writeError(w, http.StatusNotFound, "404 Pipeline Not Found")
+			return
+		}
 	}
 	if answer, ok := s.state[r.URL.Path]; ok {
 		writeJSON(w, http.StatusOK, answer)
@@ -949,6 +966,73 @@ var builderFatalCases = map[string]func(t *testing.T){
 		stub.configure(func() { delete(stub.state, "/api/v4/projects/2/labels/5") })
 		buildWorld(e, &World{})
 	},
+	"pipeline wait": func(t *testing.T) {
+		t.Helper()
+		shortPipelinePolls(t)
+		stub, e := detachedStub(t)
+		stub.configure(func() { stub.pipelineStatuses = []string{"running"} })
+		WaitForPipeline(e, Project{ID: 2}, 77, 200*time.Millisecond)
+	},
+	"pipeline default wait": func(t *testing.T) {
+		t.Helper()
+		shortPipelineWait(t, 300*time.Millisecond)
+		stub, e := detachedStub(t)
+		stub.configure(func() { stub.pipelineStatuses = []string{"running"} })
+		WaitForPipeline(e, Project{ID: 2}, 77, 0)
+	},
+	"docker runner absent": func(t *testing.T) {
+		t.Helper()
+		stub, e := detachedStub(t)
+		stub.configure(func() { stub.runners = []*gl.Runner{{ID: 11, Description: "somebody-else"}} })
+		DockerRunnerID(e)
+	},
+	"docker runner listing": func(t *testing.T) {
+		t.Helper()
+		stub, e := detachedStub(t)
+		stub.configure(func() { stub.refusals = map[string]int{"/api/v4/runners/all": http.StatusForbidden} })
+		DockerRunnerID(e)
+	},
+	"failed job pipeline": func(t *testing.T) {
+		t.Helper()
+		shortFailedJobWait(t, 2*time.Second)
+		stub, e := detachedStub(t)
+		scriptFailedJob(stub)
+		stub.answers(http.MethodPost, "/api/v4/projects/1/pipeline", fatalRefusal())
+		NewFailedJob(e, failedJobProject)
+	},
+	"failed job wait": func(t *testing.T) {
+		t.Helper()
+		shortFailedJobWait(t, 100*time.Millisecond)
+		stub, e := detachedStub(t)
+		scriptFailedJob(stub)
+		stub.answers(http.MethodGet, jobsPath, stubOK([]any{map[string]any{"id": 71, "name": "failing-fixture", "status": "running"}}))
+		NewFailedJob(e, failedJobProject)
+	},
+	"vulnerable project pipeline": func(t *testing.T) {
+		t.Helper()
+		shortPipelineWait(t, 2*time.Second)
+		shortVulnerabilityReportWait(t, 2*time.Second)
+		stub, e := detachedStub(t)
+		scriptVulnerableProject(stub, "failed", vulnerableReport)
+		NewVulnerableProject(e)
+	},
+	"vulnerable project iid": func(t *testing.T) {
+		t.Helper()
+		shortPipelineWait(t, 2*time.Second)
+		shortVulnerabilityReportWait(t, 2*time.Second)
+		stub, e := detachedStub(t)
+		scriptVulnerableProject(stub, "success", vulnerableReport)
+		stub.configure(func() { stub.pipelineGoneAfter = 1 })
+		NewVulnerableProject(e)
+	},
+	"vulnerable project report": func(t *testing.T) {
+		t.Helper()
+		shortPipelineWait(t, 2*time.Second)
+		shortVulnerabilityReportWait(t, 2*time.Second)
+		stub, e := detachedStub(t)
+		scriptVulnerableProject(stub, "success", `{"errors":[{"message":"Field 'vulnerabilities' doesn't exist"}]}`)
+		NewVulnerableProject(e)
+	},
 }
 
 // TestBuilders_Refused_FailTheirTestNamingWhatTheyWereMaking checks the
@@ -975,6 +1059,18 @@ func TestBuilders_Refused_FailTheirTestNamingWhatTheyWereMaking(t *testing.T) {
 		{name: "world group", want: []string{"building the World: creating its group: ", "403"}},
 		{name: "world project", want: []string{"building the World: creating its project: ", "403"}},
 		{name: "world digest", want: []string{"building the World: reading it back for its digest: reading label 5 of project 2"}},
+		{name: "pipeline wait", want: []string{"pipeline 77 in project 2 did not reach a terminal status within 200ms (last status: running)"}},
+		{name: "pipeline default wait", want: []string{"pipeline 77 in project 2 did not reach a terminal status within 300ms (last status: running)"}},
+		{name: "docker runner absent", want: []string{`no instance runner is described "` + DockerRunnerDescription + `"; 1 runner(s) listed`}},
+		{name: "docker runner listing", want: []string{"listing the instance runners: ", "403"}},
+		{name: "failed job pipeline", want: []string{"creating a pipeline for the failing job in project 1: ", "403"}},
+		{name: "failed job wait", want: []string{"waiting for a failed job in pipeline 5 of project 1: "}},
+		{name: "vulnerable project pipeline", want: []string{"the SAST report pipeline 77 of " + vulnerableProjectPath + " ended failed, want success"}},
+		{name: "vulnerable project iid", want: []string{"reading pipeline 77 for its iid: ", "404"}},
+		{name: "vulnerable project report", want: []string{
+			"pipeline 77 published a SAST report and GitLab's own vulnerability report of " + vulnerableProjectPath + " holds nothing after ",
+			"GitLab refused the document: Field 'vulnerabilities' doesn't exist",
+		}},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {

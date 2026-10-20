@@ -70,9 +70,10 @@ type FailedJob struct {
 	ArtifactPath string
 }
 
-// failedJobWait is the wait's budget: as generous as the pipeline wait,
-// because the first job of a run pulls the runner's image.
-const failedJobWait = 10 * time.Minute
+// failedJobWait is the wait's budget, ten minutes, because the first job of a
+// run pulls the runner's image. A variable so the package's own tests can
+// watch a builder's wait run out, which no stub answer can make it do sooner.
+var failedJobWait = 10 * time.Minute
 
 // failedJobPollInterval is how often the wait asks; a variable so the
 // package's own tests can ask faster than a runner answers.

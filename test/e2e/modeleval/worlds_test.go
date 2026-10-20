@@ -19,17 +19,25 @@
 package modeleval
 
 import (
+	"encoding/json"
 	"errors"
 	"maps"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelcorpus"
+	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
+	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
 
 // TestWorlds_EveryRecipeTheCorpusNamesHasABuilder is the join in the direction
@@ -400,6 +408,99 @@ func statusError(code int, message string) error {
 	return &gl.ErrorResponse{
 		Response: &http.Response{StatusCode: code, Request: request},
 		Message:  message,
+	}
+}
+
+// sentCommit is the part of a commit request the configuration test reads.
+type sentCommit struct {
+	Branch        string `json:"branch"`
+	CommitMessage string `json:"commit_message"`
+	Actions       []struct {
+		Action   string `json:"action"`
+		FilePath string `json:"file_path"`
+		Content  string `json:"content"`
+	} `json:"actions"`
+}
+
+// commitRecorder is a GitLab that answers every commit to one project and
+// records what each carried. It answers anything else 404 and fails the test,
+// off the test goroutine, with Errorf.
+func commitRecorder(t *testing.T, projectID int64) (*gitlabclient.Client, func() []sentCommit) {
+	t.Helper()
+	var (
+		mu   sync.Mutex
+		sent []sentCommit
+	)
+	commitsPath := "/api/v4/projects/" + strconv.FormatInt(projectID, 10) + "/repository/commits"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != commitsPath {
+			t.Errorf("unexpected %s %s, want only commits to project %d", r.Method, r.URL.Path, projectID)
+			http.NotFound(w, r)
+			return
+		}
+		var commit sentCommit
+		if err := json.NewDecoder(r.Body).Decode(&commit); err != nil {
+			t.Errorf("decoding the commit request: %v", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		mu.Lock()
+		sent = append(sent, commit)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"0123456789abcdef","short_id":"01234567"}`))
+	}))
+	t.Cleanup(server.Close)
+	client, err := gitlabclient.NewClientWithTokenRetries(server.URL, "glpat-modeleval-stub", false, true)
+	if err != nil {
+		t.Fatalf("building a client for the stub: %v", err)
+	}
+	return client, func() []sentCommit {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(sent)
+	}
+}
+
+// TestCIConfiguration_EachWorldConfiguration_CommitsWithTheSkipMarker drives
+// the two configuration commits the worlds make against a stub GitLab and
+// holds each to one commit of its configuration on the default branch, under
+// a message carrying fixture.SkipCIMarker, so the push records a skipped
+// pipeline and the pipeline a world creates is the only one that runs a job.
+// The fixture package pins the marker to GitLab's own reading of it.
+func TestCIConfiguration_EachWorldConfiguration_CommitsWithTheSkipMarker(t *testing.T) {
+	cases := []struct {
+		name   string
+		commit func(*harness.Env, fixture.Project)
+		yaml   string
+	}{
+		{name: "the plain configuration", commit: ciConfiguration, yaml: fixture.CIYAML},
+		{name: "the manual job configuration", commit: manualJobConfiguration, yaml: fixture.ManualJobCIYAML},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			const projectID = 7
+			client, sent := commitRecorder(t, projectID)
+			tc.commit(harness.NewDetached(t, client), fixture.Project{ID: projectID, DefaultBranch: "main"})
+
+			commits := sent()
+			if len(commits) != 1 {
+				t.Fatalf("the world made %d commits, want the one of its configuration", len(commits))
+			}
+			commit := commits[0]
+			if commit.Branch != "main" {
+				t.Errorf("the configuration was committed to %q, want the default branch", commit.Branch)
+			}
+			if !strings.Contains(commit.CommitMessage, fixture.SkipCIMarker) {
+				t.Errorf("the configuration was committed with the message %q, want it to carry %s so the push runs no pipeline beside the world's",
+					commit.CommitMessage, fixture.SkipCIMarker)
+			}
+			if len(commit.Actions) != 1 || commit.Actions[0].Action != "create" ||
+				commit.Actions[0].FilePath != fixture.CIFilePath || commit.Actions[0].Content != tc.yaml {
+				t.Errorf("the commit carried %+v, want one create of %s with the world's configuration", commit.Actions, fixture.CIFilePath)
+			}
+		})
 	}
 }
 

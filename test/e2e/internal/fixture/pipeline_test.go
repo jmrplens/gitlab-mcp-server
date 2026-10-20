@@ -31,6 +31,19 @@ func shortPipelinePolls(t *testing.T) {
 	t.Cleanup(func() { pipelinePollInterval = saved })
 }
 
+// shortPipelineWait gives the pipeline wait's default budget the bound a test
+// needs, polling as fast as shortPipelinePolls does, and restores both
+// afterwards. A test that drives a builder through NewPipeline sets one, so a
+// defect that keeps the wait from ending fails the test at that bound rather
+// than holding it for the fifteen minutes a runner is given.
+func shortPipelineWait(t *testing.T, wait time.Duration) {
+	t.Helper()
+	shortPipelinePolls(t)
+	saved := pipelineWait
+	pipelineWait = wait
+	t.Cleanup(func() { pipelineWait = saved })
+}
+
 // TestWaitForPipelineStatus_Running_ReturnsTheTerminalStatus checks that the
 // wait polls through a running pipeline to its terminal status and tolerates
 // a burst of API errors on the way.
@@ -142,6 +155,23 @@ func TestFindRunner_Description_ReturnsTheDockerRunner(t *testing.T) {
 	}
 }
 
+// TestDockerRunnerID_Detached_FindsTheStacksRunner checks the lookup the
+// runner actions stand on whole: the runner register-runner.sh described is
+// handed back by its ID, whatever else the listing holds.
+func TestDockerRunnerID_Detached_FindsTheStacksRunner(t *testing.T) {
+	stub, e := detachedStub(t)
+	stub.configure(func() {
+		stub.runners = []*gl.Runner{
+			{ID: 11, Description: "somebody-else"},
+			{ID: 12, Description: DockerRunnerDescription},
+		}
+	})
+
+	if got := DockerRunnerID(e); got != 12 {
+		t.Errorf("DockerRunnerID() = %d, want the runner described %q, 12", got, DockerRunnerDescription)
+	}
+}
+
 // TestCIYAML_Shape_RunsOnAnyRunner pins the two properties the pipeline
 // fixture relies on: one stage with one job, and no runner tags, so it is
 // picked up by whatever runner the instance has.
@@ -212,6 +242,11 @@ func TestFindPipelineJob_Answers(t *testing.T) {
 		{
 			name:   "the first job",
 			answer: stubOK([]map[string]any{{"id": 10, "name": "fast-pass", "status": "running"}}),
+			accept: anyJob, want: 10,
+		},
+		{
+			name:   "past a null row",
+			answer: stubOK([]any{nil, map[string]any{"id": 10, "name": "fast-pass", "status": "running"}}),
 			accept: anyJob, want: 10,
 		},
 		{
@@ -440,7 +475,7 @@ func TestCIFile_Detached_CommitsWithoutAPushPipeline(t *testing.T) {
 // the ref it was given, and handed back once it reached a terminal status,
 // carrying that status rather than the one it was created in.
 func TestNewPipeline_Detached_CreatesOnTheRefAndWaitsForItToFinish(t *testing.T) {
-	shortPipelinePolls(t)
+	shortPipelineWait(t, 10*time.Second)
 	stub, e := detachedStub(t)
 	stub.answers(http.MethodGet, "/api/v4/runners", oneRunner)
 	stub.answers(http.MethodPost, "/api/v4/projects/2/pipeline", stubCreated(map[string]any{"id": 77, "ref": "trunk", "sha": "abc", "status": "created"}))
@@ -453,6 +488,22 @@ func TestNewPipeline_Detached_CreatesOnTheRefAndWaitsForItToFinish(t *testing.T)
 	}
 	if sent := requestTo(t, stub, http.MethodPost, "/api/v4/projects/2/pipeline").Body["ref"]; sent != "trunk" {
 		t.Errorf("NewPipeline() asked for a pipeline on %v, want trunk", sent)
+	}
+}
+
+// TestWaitForPipeline_ZeroTimeout_TakesTheDefaultBudget checks the wait a
+// scenario calls with no budget of its own, which is how the pipeline
+// creation scenario reads the pipeline the server created: it waits on the
+// default budget and hands back the terminal status. That the budget is the
+// default one shows where it runs out, in the fatal case "pipeline default
+// wait".
+func TestWaitForPipeline_ZeroTimeout_TakesTheDefaultBudget(t *testing.T) {
+	shortPipelineWait(t, 10*time.Second)
+	stub, e := detachedStub(t)
+	stub.configure(func() { stub.pipelineStatuses = []string{"running", "failed"} })
+
+	if got := WaitForPipeline(e, Project{ID: 2}, 77, 0); got != "failed" {
+		t.Errorf("WaitForPipeline() = %q, want the terminal status failed", got)
 	}
 }
 
