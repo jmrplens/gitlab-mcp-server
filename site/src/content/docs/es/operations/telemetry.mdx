@@ -14,7 +14,9 @@ faq:
 ---
 
 
-import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+import { Aside, Tabs, TabItem, Code } from "@astrojs/starlight/components";
+import collectorConfig from "../../../../../../examples/telemetry/otel-collector.yaml?raw";
+import composeFile from "../../../../../../examples/telemetry/compose.yaml?raw";
 
 Este servidor puede exportar trazas, métricas y logs por OTLP a un colector que
 tú ejecutas. Está **desactivado por defecto**.
@@ -193,6 +195,217 @@ perfectamente formada. Este servidor lee al arrancar las mismas variables que
 leen los exportadores y redacta esos valores, y sus formas decodificadas, de
 cada diagnóstico del SDK que emite. El nombre de la variable se deja tal cual,
 porque quien tiene una configuración mal formada necesita saber cuál corregir.
+
+## Un ejemplo completo
+
+Todo lo anterior termina en tu colector. El repositorio incluye el otro lado en
+[`examples/telemetry/`](https://github.com/jmrplens/gitlab-mcp-server/tree/main/examples/telemetry):
+una configuración de colector y un fichero de Docker Compose que ejecutan
+juntos este servidor, un OpenTelemetry Collector y un backend
+[`grafana/otel-lgtm`](https://github.com/grafana/docker-otel-lgtm), para que
+hagas una llamada y veas llegar sus trazas, métricas y logs a Grafana. Los dos
+ficheros de abajo son los del repositorio, no copias. La suite de extremo a
+extremo del colector ejecuta el binario real del servidor con la configuración
+y lee lo que esta reenvía, y somete el fichero de Compose al mismo pipeline, así
+que ninguno de los dos puede desviarse de un colector que siga aceptando lo que
+este servidor envía.
+
+### El colector
+
+<Code code={collectorConfig} lang="yaml" title="examples/telemetry/otel-collector.yaml" />
+
+El receptor escucha en `0.0.0.0` porque el servidor llega al colector desde
+otro contenedor, y eso nunca entra por el `localhost` que la imagen usa por
+defecto. El exportador `otlp_http/lgtm` reenvía las tres señales al backend por
+su nombre de servicio en Compose. El exportador `debug` escribe una línea por
+lote en el log del propio colector, `Traces`, `Metrics` o `Logs` con el número
+de spans, puntos de datos o registros que llevaba, así que ves moverse los datos
+antes de abrir un panel.
+
+### El fichero de Compose
+
+<Code code={composeFile} lang="yaml" title="examples/telemetry/compose.yaml" />
+
+El servidor corre en modo HTTP contra `GITLAB_URL`, `https://gitlab.com` si no
+configuras nada, y no recibe ningún token: en modo HTTP cada cliente envía el
+suyo con cada petición. `OTEL_EXPORTER_OTLP_ENDPOINT` nombra el servicio del
+colector, y `OTEL_METRIC_EXPORT_INTERVAL` vale diez segundos en lugar del minuto
+por defecto, escrito en milisegundos enteros como exige
+[la trampa de arriba](#cuatro-trampas-de-las-variables-estándar).
+`GITLAB_MCP_TELEMETRY_IDENTITY` es la elección que se describe
+[más abajo](#qué-registra-el-ejemplo-de-quien-llama). La comprobación de salud
+es el `--probe` de la propia imagen con los tiempos de la propia imagen,
+repetido para que el ejemplo lo muestre: lee el listener de la línea de órdenes
+del servidor en marcha y termina con 0 en cuanto `/health` responde 200. El
+colector publica además 4317 y 4318 en el host, para un servidor que ejecutes
+fuera de Compose.
+
+### Arrancarlo y hacer una llamada
+
+Desde la raíz del repositorio:
+
+```bash
+docker compose -f examples/telemetry/compose.yaml up -d
+docker compose -f examples/telemetry/compose.yaml ps
+```
+
+`ps` muestra el servidor `(health: starting)` y después `(healthy)` en menos de
+medio minuto. Haz una llamada con tu propio token, como hace cualquier cliente
+de un despliegue HTTP:
+
+```bash
+curl -s http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "PRIVATE-TOKEN: glpat-your-token" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+```
+
+Apunta un cliente MCP a `http://localhost:8080/mcp` con el mismo token y cada
+llamada que haga se registra igual. Cuando termines:
+
+```bash
+docker compose -f examples/telemetry/compose.yaml down
+```
+
+### Dónde mirar
+
+`docker compose -f examples/telemetry/compose.yaml logs collector` es lo
+primero que mirar: el exportador `debug` escribe ahí una línea por lote.
+Grafana está en `http://localhost:3000`, sin inicio de sesión, y su vista
+**Explore** tiene una fuente de datos por señal:
+
+- **Tempo** guarda las trazas. Busca por el nombre de servicio
+  `gitlab-mcp-server`: cada operación MCP es un span con el nombre de su método,
+  como `tools/list` o `tools/call gitlab_execute_action`, con un span hijo por
+  cada petición que hizo a GitLab. Las trazas `GET` que llegan cada treinta
+  segundos son la comprobación de salud preguntando por `/health`, y las
+  peticiones a GitLab como `GET /api/v4/user` fuera de toda operación MCP son
+  el servidor comprobando un token antes de atenderlo por primera vez.
+- **Prometheus** guarda las métricas, con los nombres que les da Prometheus:
+  `mcp_server_operation_duration_seconds_bucket` para
+  `mcp.server.operation.duration`, `http_client_request_duration_seconds_bucket`
+  para el tiempo que tarda GitLab, y la etiqueta de job `gitlab-mcp-server`.
+- **Loki** guarda los logs: `{service_name="gitlab-mcp-server"}`. Un registro
+  escrito mientras se atendía una llamada lleva el `trace_id` y el `span_id` de
+  esa llamada, así que lleva al span dentro del que ocurrió.
+
+### Autenticación en el lado del colector
+
+La [tabla de arriba](#autenticarse-ante-tu-colector) es la mitad de cada
+esquema que corresponde al servidor. La mitad del colector es una extensión de
+autenticación en su receptor: `bearertokenauth` para un token bearer,
+`basicauth` para la autenticación básica, y otra vez `bearertokenauth`, con un
+nombre de cabecera propio y sin esquema, para una clave de API. Cada bloque de
+abajo es una capa que se superpone. Guárdalo junto a la configuración, móntalo
+en el colector y arranca el colector con los dos ficheros, que fusiona en orden:
+
+```bash
+--config=/etc/otelcol-contrib/config.yaml --config=/etc/otelcol-contrib/auth.yaml
+```
+
+En el fichero de Compose eso es un `command:` con esos dos flags y una segunda
+línea bajo `volumes:` para el colector, la variable que lee la capa en su
+`environment:`, y `OTEL_EXPORTER_OTLP_HEADERS` en el del servidor, con la forma
+que da la primera línea de cada bloque. La suite del colector ejecuta así cada
+bloque de abajo, tanto por gRPC como por HTTP: el receptor rechaza una
+exportación sin credencial y deja pasar una enviada con la cabecera que da la
+tabla.
+
+```yaml title="auth-bearer.yaml"
+# Servidor: OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20<COLLECTOR_TOKEN>
+extensions:
+  bearertokenauth:
+    token: ${env:COLLECTOR_TOKEN}
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        auth:
+          authenticator: bearertokenauth
+      http:
+        auth:
+          authenticator: bearertokenauth
+service:
+  extensions: [bearertokenauth]
+```
+
+```yaml title="auth-basic.yaml"
+# Servidor: OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic%20<base64 de usuario:clave>
+extensions:
+  basicauth:
+    htpasswd:
+      inline: |
+        ${env:COLLECTOR_USER}:${env:COLLECTOR_PASSWORD}
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        auth:
+          authenticator: basicauth
+      http:
+        auth:
+          authenticator: basicauth
+service:
+  extensions: [basicauth]
+```
+
+```yaml title="auth-api-key.yaml"
+# Servidor: OTEL_EXPORTER_OTLP_HEADERS=api-key=<COLLECTOR_API_KEY>
+extensions:
+  bearertokenauth/apikey:
+    header: api-key
+    scheme: ""
+    token: ${env:COLLECTOR_API_KEY}
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        auth:
+          authenticator: bearertokenauth/apikey
+      http:
+        auth:
+          authenticator: bearertokenauth/apikey
+service:
+  extensions: [bearertokenauth/apikey]
+```
+
+El TLS mutuo no es una extensión: es el bloque `tls` del propio receptor, un
+`cert_file` y un `key_file` con los que sirve y un `client_ca_file` que nombra
+la CA de la que salen los certificados de cliente, emparejado con las dos
+variables de certificado de la tabla. Dentro de un mismo proyecto de Compose una
+credencial cruza en claro una red privada, y el servidor lo dice una vez al
+arrancar con el [aviso de texto plano](#autenticarse-ante-tu-colector); un
+colector en otra máquina necesita ese bloque `tls` sea cual sea el esquema.
+
+### Qué registra el ejemplo de quien llama
+
+El fichero de Compose deja `GITLAB_MCP_TELEMETRY_IDENTITY` en `none`, así que
+las trazas dicen qué se hizo y nada de quién lo hizo. Con el backend en tu
+propia máquina, `pseudonymous` permite a Tempo distinguir el tráfico de un
+llamante del de otro sin nombrar a nadie, y `full` pone `user.id` y `user.name`
+en cada span. Elige antes de arrancarlo:
+
+```bash
+GITLAB_MCP_TELEMETRY_IDENTITY=pseudonymous docker compose -f examples/telemetry/compose.yaml up -d
+```
+
+Qué exporta cada valor, y por qué `none` es el valor por defecto, está en
+[Registrar quién hizo la llamada](#registrar-quién-hizo-la-llamada). Un
+despliegue con más de una réplica que quiera un único seudónimo por llamante en
+todas ellas necesita además `GITLAB_MCP_TELEMETRY_IDENTITY_KEY`, descrita en
+[Registros](#registros).
+
+### Sin Compose para el servidor
+
+Para exportar desde un servidor que ya ejecutas, arranca solos el colector y el
+backend y apunta el servidor al puerto publicado del colector:
+
+```bash
+docker compose -f examples/telemetry/compose.yaml up -d collector lgtm
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
+  gitlab-mcp-server --http --gitlab-url=https://gitlab.com --telemetry
+```
 
 ## Qué se registra
 

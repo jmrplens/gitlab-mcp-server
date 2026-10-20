@@ -14,7 +14,9 @@ faq:
 ---
 
 
-import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+import { Aside, Tabs, TabItem, Code } from "@astrojs/starlight/components";
+import collectorConfig from "../../../../../examples/telemetry/otel-collector.yaml?raw";
+import composeFile from "../../../../../examples/telemetry/compose.yaml?raw";
 
 This server can export traces, metrics and logs over OTLP to a collector you
 run. It is **off by default**.
@@ -188,6 +190,215 @@ the same variables the exporters do at startup and redacts those values, and
 their percent-decoded spellings, out of every SDK diagnostic it emits. The
 variable name is left in place, because an operator whose configuration is
 malformed needs to know which one to fix.
+
+## A worked example
+
+Everything above stops at your collector. The repository ships the other side
+of it under
+[`examples/telemetry/`](https://github.com/jmrplens/gitlab-mcp-server/tree/main/examples/telemetry):
+one collector configuration and one Docker Compose file that run this server,
+an OpenTelemetry Collector and a
+[`grafana/otel-lgtm`](https://github.com/grafana/docker-otel-lgtm) backend
+together, so you can make a call and watch its traces, metrics and logs arrive
+in Grafana. The two files below are the committed ones, not copies. The
+collector end-to-end suite runs the real server binary through the
+configuration and reads back what it forwards, and holds the Compose file to
+the same pipeline, so neither can drift from a collector that still accepts
+what this server sends.
+
+### The collector
+
+<Code code={collectorConfig} lang="yaml" title="examples/telemetry/otel-collector.yaml" />
+
+The receiver binds `0.0.0.0` because the server reaches the collector from
+another container, which never arrives on the image's default of `localhost`.
+The `otlp_http/lgtm` exporter forwards all three signals to the backend by its
+Compose service name. The `debug` exporter writes one line per batch to the
+collector's own log, `Traces`, `Metrics` or `Logs` with the number of spans,
+data points or log records it carried, so you can see data moving before you
+open a dashboard.
+
+### The Compose file
+
+<Code code={composeFile} lang="yaml" title="examples/telemetry/compose.yaml" />
+
+The server runs in HTTP mode against `GITLAB_URL`, `https://gitlab.com` when you
+set nothing, and is given no token: in HTTP mode every client sends its own
+with each request. `OTEL_EXPORTER_OTLP_ENDPOINT` names the collector service,
+and `OTEL_METRIC_EXPORT_INTERVAL` is ten seconds rather than the default
+minute, written in integer milliseconds as
+[the trap above](#four-traps-in-the-standard-variables) requires.
+`GITLAB_MCP_TELEMETRY_IDENTITY` is the choice described
+[below](#what-the-example-records-about-callers). The health check is the
+image's own `--probe` with the image's own timing, restated so the example
+shows it: it reads the listener off the running server's command line and
+exits 0 once `/health` answers 200. The collector also publishes 4317 and 4318
+on the host, for a server you run outside Compose.
+
+### Start it and make a call
+
+From the repository root:
+
+```bash
+docker compose -f examples/telemetry/compose.yaml up -d
+docker compose -f examples/telemetry/compose.yaml ps
+```
+
+`ps` shows the server `(health: starting)` and then `(healthy)` within half a
+minute. Make a call with your own token, the way every client of an HTTP
+deployment does:
+
+```bash
+curl -s http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "PRIVATE-TOKEN: glpat-your-token" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+```
+
+Point an MCP client at `http://localhost:8080/mcp` with the same token and
+every call it makes is recorded the same way. When you are done:
+
+```bash
+docker compose -f examples/telemetry/compose.yaml down
+```
+
+### Where to look
+
+`docker compose -f examples/telemetry/compose.yaml logs collector` is the
+first place to look: the `debug` exporter writes one line there per batch.
+Grafana is at `http://localhost:3000`, with no login, and its **Explore** view
+has one data source per signal:
+
+- **Tempo** holds the traces. Search by the service name `gitlab-mcp-server`:
+  each MCP operation is a span named after its method, such as `tools/list` or
+  `tools/call gitlab_execute_action`, with a child span for every GitLab
+  request it made. The `GET` traces that arrive every thirty seconds are the
+  health check asking `/health`, and GitLab requests such as
+  `GET /api/v4/user` outside any MCP operation are the server checking a token
+  before it first serves it.
+- **Prometheus** holds the metrics, under the names Prometheus gives them:
+  `mcp_server_operation_duration_seconds_bucket` for
+  `mcp.server.operation.duration`, `http_client_request_duration_seconds_bucket`
+  for the time GitLab takes, and the job label `gitlab-mcp-server`.
+- **Loki** holds the logs: `{service_name="gitlab-mcp-server"}`. A record
+  written while serving a call carries that call's `trace_id` and `span_id`, so
+  it leads to the span it happened inside.
+
+### Authenticating the collector side
+
+The [table above](#authenticating-to-your-collector) is the server's half of
+each scheme. The collector's half is an authenticator extension on its
+receiver: `bearertokenauth` for a bearer token, `basicauth` for basic auth, and
+`bearertokenauth` again, with a header name of its own and no scheme, for an
+API key. Each block below is an overlay. Save it beside the configuration,
+mount it into the collector and start the collector with both files, which it
+merges in order:
+
+```bash
+--config=/etc/otelcol-contrib/config.yaml --config=/etc/otelcol-contrib/auth.yaml
+```
+
+In the Compose file that is a `command:` with those two flags and a second
+line under `volumes:` for the collector, the variable the overlay reads in its
+`environment:`, and `OTEL_EXPORTER_OTLP_HEADERS` in the server's, in the form
+the first line of each block gives. The collector suite runs every block below
+this way, over gRPC and over HTTP alike: the receiver refuses an export with no
+credential, and passes on one sent with the header the table gives.
+
+```yaml title="auth-bearer.yaml"
+# Server: OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20<COLLECTOR_TOKEN>
+extensions:
+  bearertokenauth:
+    token: ${env:COLLECTOR_TOKEN}
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        auth:
+          authenticator: bearertokenauth
+      http:
+        auth:
+          authenticator: bearertokenauth
+service:
+  extensions: [bearertokenauth]
+```
+
+```yaml title="auth-basic.yaml"
+# Server: OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic%20<base64 of user:password>
+extensions:
+  basicauth:
+    htpasswd:
+      inline: |
+        ${env:COLLECTOR_USER}:${env:COLLECTOR_PASSWORD}
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        auth:
+          authenticator: basicauth
+      http:
+        auth:
+          authenticator: basicauth
+service:
+  extensions: [basicauth]
+```
+
+```yaml title="auth-api-key.yaml"
+# Server: OTEL_EXPORTER_OTLP_HEADERS=api-key=<COLLECTOR_API_KEY>
+extensions:
+  bearertokenauth/apikey:
+    header: api-key
+    scheme: ""
+    token: ${env:COLLECTOR_API_KEY}
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        auth:
+          authenticator: bearertokenauth/apikey
+      http:
+        auth:
+          authenticator: bearertokenauth/apikey
+service:
+  extensions: [bearertokenauth/apikey]
+```
+
+Mutual TLS is not an extension: it is the receiver's own `tls` block, a
+`cert_file` and `key_file` it serves with and a `client_ca_file` naming the CA
+the client certificates come from, paired with the two certificate variables in
+the table. Inside one Compose project a credential crosses a private network in
+the clear, and the server says so once at startup with the
+[plaintext warning](#authenticating-to-your-collector); a collector on another
+machine wants that `tls` block whichever scheme you use.
+
+### What the example records about callers
+
+The Compose file leaves `GITLAB_MCP_TELEMETRY_IDENTITY` at `none`, so the
+traces say what was done and nothing about who did it. With the backend on
+your own machine, `pseudonymous` lets Tempo tell one caller's traffic from
+another's without naming anybody, and `full` puts `user.id` and `user.name` on
+every span. Choose before you start it:
+
+```bash
+GITLAB_MCP_TELEMETRY_IDENTITY=pseudonymous docker compose -f examples/telemetry/compose.yaml up -d
+```
+
+What each value exports, and why `none` is the default, is under
+[Recording who made a call](#recording-who-made-a-call). A deployment with more
+than one replica that wants one pseudonym per caller across all of them also
+needs `GITLAB_MCP_TELEMETRY_IDENTITY_KEY`, described under [Logs](#logs).
+
+### Without Compose for the server
+
+To export from a server you already run, start the collector and the backend
+alone and point the server at the collector's published port:
+
+```bash
+docker compose -f examples/telemetry/compose.yaml up -d collector lgtm
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
+  gitlab-mcp-server --http --gitlab-url=https://gitlab.com --telemetry
+```
 
 ## What is recorded
 

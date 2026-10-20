@@ -1,0 +1,61 @@
+# Worked OpenTelemetry example for gitlab-mcp-server: this server, an
+# OpenTelemetry Collector running otel-collector.yaml beside this file, and
+# grafana/otel-lgtm as the backend and UI. The server exports OTLP to the
+# collector, the collector forwards it to otel-lgtm, and Grafana shows the
+# traces, metrics and logs.
+#
+#   docker compose -f examples/telemetry/compose.yaml up -d     # start it
+#   open http://localhost:3000                                  # Grafana
+#   docker compose -f examples/telemetry/compose.yaml down      # stop it
+#
+# The walkthrough, with a first call and where to look, is the telemetry page:
+# https://docs.jmrp.io/gitlab-mcp-server/operations/telemetry/#a-worked-example
+
+services:
+  gitlab-mcp-server:
+    image: ghcr.io/jmrplens/gitlab-mcp-server:latest
+    command: ["--http", "--http-addr=0.0.0.0:8080", "--telemetry"]
+    environment:
+      # The instance this deployment serves. HTTP mode takes no GITLAB_TOKEN:
+      # every client sends its own token with each request.
+      GITLAB_URL: ${GITLAB_URL:-https://gitlab.com}
+      # Export to the collector service rather than to the exporters' own
+      # localhost default.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4318
+      OTEL_SERVICE_NAME: gitlab-mcp-server
+      # Integer milliseconds, as every OTEL_* duration is: metrics every ten
+      # seconds rather than the default sixty, so a first call shows up soon.
+      OTEL_METRIC_EXPORT_INTERVAL: "10000"
+      # What the export says about who made a call: none (the default),
+      # pseudonymous or full. The telemetry page explains the choice.
+      GITLAB_MCP_TELEMETRY_IDENTITY: ${GITLAB_MCP_TELEMETRY_IDENTITY:-none}
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      - collector
+    # The image's own HEALTHCHECK, restated with its values so the example
+    # shows it. --probe reads the listener off the running server's command
+    # line and exits 0 once /health answers 200.
+    healthcheck:
+      test: ["CMD", "gitlab-mcp-server", "--probe"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  collector:
+    image: otel/opentelemetry-collector-contrib:0.163.1
+    # Mounted where the image reads its configuration when it is given no
+    # --config flag.
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "127.0.0.1:4317:4317" # OTLP gRPC, for a server run outside Compose
+      - "127.0.0.1:4318:4318" # OTLP HTTP
+    depends_on:
+      - lgtm
+
+  lgtm:
+    image: grafana/otel-lgtm:0.37.0
+    ports:
+      - "127.0.0.1:3000:3000" # Grafana

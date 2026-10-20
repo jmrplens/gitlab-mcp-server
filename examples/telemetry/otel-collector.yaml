@@ -1,0 +1,52 @@
+# OpenTelemetry Collector configuration for the gitlab-mcp-server telemetry
+# example. The server exports OTLP to this collector (compose.yaml beside this
+# file starts all three); the collector batches what it receives and forwards
+# it to the grafana/otel-lgtm backend, where you read it in Grafana. The debug
+# exporter prints one summary line per batch to the collector's own log, so you
+# can see data moving without opening a UI.
+#
+# The walkthrough is the telemetry page of the documentation:
+# https://docs.jmrp.io/gitlab-mcp-server/operations/telemetry/#a-worked-example
+# The collector end-to-end module (test/e2e/collector) runs the real server
+# through this file and reads back what it forwards, so it cannot drift from a
+# collector that still accepts what the server emits.
+
+receivers:
+  otlp:
+    protocols:
+      # Bind 0.0.0.0 rather than the image default of localhost: the server
+      # reaches the collector from another container, which never arrives on
+      # the collector's own loopback.
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Group exports into batches before forwarding them.
+  batch: {}
+
+exporters:
+  # Forward everything to the all-in-one backend. "lgtm" is the backend's
+  # service name in compose.yaml; grafana/otel-lgtm accepts OTLP on 4317
+  # (gRPC) and 4318 (HTTP).
+  otlp_http/lgtm:
+    endpoint: http://lgtm:4318
+  # One summary line per batch in the collector's own log.
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http/lgtm, debug]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http/lgtm, debug]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http/lgtm, debug]
