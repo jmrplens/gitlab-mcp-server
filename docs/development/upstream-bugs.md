@@ -15217,7 +15217,8 @@ entry 73's adoption until that issue closed on 2026-10-07.
 - **Merged**: no. No Go release carries a fix: go1.27.2 and go1.26.9,
   released on 2026-10-08, change nothing in either `cycles.go` (from go1.27.1
   to go1.27.2, go/types and types2 differ only in `named_test.go`, one line
-  each), and `master` still reads the field the same way.
+  each), go1.27.3, released on 2026-10-19, changes nothing outside
+  `crypto/x509`, and `master` still reads the field the same way.
 - **Blocking**: no for the server, which type-checks nothing. It failed the
   race gate of a release rehearsal, in
   `TestAccess_OnlyTheSanctionedPackagesReadTheKey` of
@@ -15263,8 +15264,9 @@ entry 73's adoption until that issue closed on 2026-10-07.
   type, such as `type A[T any] B[T]`: a torn read of its instance
   dereferences a nil `*Named` and the command panics.
 
-**Where**: `go/types` in go1.27.1 and go1.27.2, the toolchain `go.mod` pins
-since 2026-10-09 (the file is the same in both), and its copy
+**Where**: `go/types` in go1.27.1, go1.27.2 and go1.27.3 (the file is the
+same in all three), the last the toolchain `go.mod` pins since 2026-10-20,
+and its copy
 `cmd/compile/internal/types2`. `(*Checker).isComplete` reads `t.fromRHS` of a
 `*Named` without unpacking it (`cycles.go:122`), while `(*Named).unpack`
 expands an instance by writing `n.fromRHS = n.expandRHS()` (`named.go:244`).
