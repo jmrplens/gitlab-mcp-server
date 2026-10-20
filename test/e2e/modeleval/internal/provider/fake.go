@@ -37,6 +37,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelcorpus"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelrecord"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 )
 
@@ -157,13 +158,19 @@ func answeredCalls(messages []Message) int {
 	return answered
 }
 
+// encodeCall encodes the arguments of a call. It is a variable so the one
+// failure no run can cause is reachable from a test: every value a payload
+// holds is a string, an integer, a boolean or a value decoded from JSON, and
+// each of those encodes.
+var encodeCall = json.Marshal
+
 // call renders one step as the surface spells it.
 func (a fakeAdapter) call(step modelcorpus.Step, index int, replay Replay) (modelrecord.Block, error) {
 	tool, payload, err := a.project(step, replay.Surface, a.arguments(step, replay))
 	if err != nil {
 		return modelrecord.Block{}, err
 	}
-	encoded, err := json.Marshal(payload)
+	encoded, err := encodeCall(payload)
 	if err != nil {
 		return modelrecord.Block{}, fmt.Errorf("fake: encode the call for step %d: %w", index+1, err)
 	}
@@ -251,10 +258,13 @@ func producedValue(ref modelcorpus.Ref, replay Replay) (value any, found bool) {
 	if ref.Step < 1 || ref.Step > len(replay.Produced) {
 		return nil, false
 	}
-	current := replay.Produced[ref.Step-1]
+	var current any
+	if err := json.Unmarshal(replay.Produced[ref.Step-1], &current); err != nil {
+		return nil, false
+	}
 	for segment := range strings.SplitSeq(ref.Field, ".") {
-		fields := map[string]json.RawMessage{}
-		if err := json.Unmarshal(current, &fields); err != nil {
+		fields, isObject := current.(map[string]any)
+		if !isObject {
 			return nil, false
 		}
 		next, present := fields[segment]
@@ -263,11 +273,7 @@ func producedValue(ref modelcorpus.Ref, replay Replay) (value any, found bool) {
 		}
 		current = next
 	}
-	var decoded any
-	if err := json.Unmarshal(current, &decoded); err != nil {
-		return nil, false
-	}
-	return decoded, true
+	return current, true
 }
 
 // project renders one step as the tool call the surface takes.
@@ -349,7 +355,7 @@ var (
 // own tier does not serve is refused by the server, which is the answer the
 // record should carry rather than one this fake invents.
 func lookupAction(id string) (fakeAction, bool, error) {
-	fakeCatalogOnce.Do(func() { fakeCatalog, errFakeCatalog = buildFakeCatalog() })
+	fakeCatalogOnce.Do(func() { fakeCatalog, errFakeCatalog = buildFakeCatalog(gitlabtools.SharedBaseCatalog) })
 	if errFakeCatalog != nil {
 		return fakeAction{}, false, errFakeCatalog
 	}
@@ -357,9 +363,13 @@ func lookupAction(id string) (fakeAction, bool, error) {
 	return action, known, nil
 }
 
-// buildFakeCatalog reads what every action is called on each surface.
-func buildFakeCatalog() (map[string]fakeAction, error) {
-	built, err := gitlabtools.SharedBaseCatalog(false, gitlabtools.ActionCatalogOptions{
+// buildFakeCatalog reads what every action is called on each surface, in the
+// catalog build makes. The builder is handed in, so a catalog that cannot be
+// built, which no input of a run can cause, is reachable from a test.
+func buildFakeCatalog(
+	build func(bool, gitlabtools.ActionCatalogOptions) (*actioncatalog.Catalog, error),
+) (map[string]fakeAction, error) {
+	built, err := build(false, gitlabtools.ActionCatalogOptions{
 		Tier:       edition.Ultimate,
 		IncludeMCP: true,
 	})

@@ -246,11 +246,14 @@ func TestAnthropic_ReportsAnAnswerThatIsNotJSON(t *testing.T) {
 func TestAnthropicMessages_RebuildsATurnWhenThereIsNoEchoToHandBack(t *testing.T) {
 	// The echo is what a live conversation carries. A conversation assembled
 	// from the record has blocks and no echo, and must still be sendable.
+	// The text block of the assistant turn is not sent a second time: the
+	// turn's Text carries it, and its blocks give only the calls.
 	built := anthropicMessages([]Message{
 		{Role: RoleUser, Text: "do it"},
-		{Role: RoleAssistant, Text: "calling", Blocks: []modelrecord.Block{{
-			Kind: modelrecord.BlockToolCall, Tool: "t", CallID: "c1", Arguments: json.RawMessage(`{"a":1}`),
-		}}},
+		{Role: RoleAssistant, Text: "calling", Blocks: []modelrecord.Block{
+			{Kind: modelrecord.BlockText, Text: "calling"},
+			{Kind: modelrecord.BlockToolCall, Tool: "t", CallID: "c1", Arguments: json.RawMessage(`{"a":1}`)},
+		}},
 		{Role: RoleTool, Results: []ToolResult{{CallID: "c1", Content: "done", IsError: true}}},
 		{Role: RoleAssistant, Echo: json.RawMessage(`not json`)},
 		{Role: RoleUser},
@@ -259,7 +262,7 @@ func TestAnthropicMessages_RebuildsATurnWhenThereIsNoEchoToHandBack(t *testing.T
 		t.Fatalf("built %d messages, want 3: an empty one is dropped rather than sent", len(built))
 	}
 	assistant := anthropicBuiltBlocks(t, built[1])
-	if assistant[0].Type != "text" || assistant[1].Type != "tool_use" {
+	if len(assistant) != 2 || assistant[0].Type != "text" || assistant[1].Type != "tool_use" {
 		t.Errorf("the rebuilt assistant turn is %+v", assistant)
 	}
 	if !anthropicBuiltBlocks(t, built[2])[0].IsError {

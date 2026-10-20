@@ -4,6 +4,7 @@ package provider
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelrecord"
@@ -216,6 +217,26 @@ func TestOpenAI_SendsAReasoningEffortWithoutATemperature(t *testing.T) {
 	}
 	if _, present := sent["temperature"]; present {
 		t.Error("the request carries a temperature, which this family refuses")
+	}
+}
+
+// TestOpenAI_ReportsAnAnswerThatIsNotJSON verifies a body that is not JSON
+// is the provider's failure, and is not kept in a field the record encodes as
+// JSON.
+func TestOpenAI_ReportsAnAnswerThatIsNotJSON(t *testing.T) {
+	backend := newRecorder(`<html>maintenance</html>`)
+	adapter := adapterFor(t, "openai:gpt-5.4-nano", backend.server(t))
+
+	answer, err := adapter.Call(t.Context(), Request{})
+	if err == nil {
+		t.Fatal("a body that is not JSON was read as an answer")
+	}
+	if answer.Status != modelrecord.TurnServerError || !strings.Contains(answer.Detail, "not JSON") {
+		t.Errorf("Status = %q, Detail = %q, want %q saying the answer is not JSON",
+			answer.Status, answer.Detail, modelrecord.TurnServerError)
+	}
+	if len(answer.ResponseBody) != 0 {
+		t.Error("a body that is not JSON was kept in a field the record encodes as JSON")
 	}
 }
 

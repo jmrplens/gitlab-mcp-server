@@ -21,6 +21,7 @@ func TestParseSpec_ReadsTheProviderTheModelAndTheOptions(t *testing.T) {
 			"claude-haiku-4-5-20251001", "0", defaultMaxTokens,
 		},
 		{"a temperature", "openai:gpt-5.4-nano;temperature=0.7", OpenAI, "gpt-5.4-nano", "0.7", defaultMaxTokens},
+		{"an empty option", "openai:gpt-5.4-nano;;temperature=0.7;", OpenAI, "gpt-5.4-nano", "0.7", defaultMaxTokens},
 		{
 			"the provider's own temperature", "qwen:qwen3.8-flash;temperature=default", Qwen,
 			"qwen3.8-flash", "provider default", defaultMaxTokens,

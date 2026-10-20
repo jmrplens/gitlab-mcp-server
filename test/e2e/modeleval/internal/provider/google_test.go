@@ -228,6 +228,26 @@ func TestGoogle_AnAnswerWithNoArgumentsIsAMalformedCall(t *testing.T) {
 	}
 }
 
+// TestGoogle_ReportsAnAnswerThatIsNotJSON verifies a body that is not JSON
+// is the provider's failure, and is not kept in a field the record encodes as
+// JSON.
+func TestGoogle_ReportsAnAnswerThatIsNotJSON(t *testing.T) {
+	backend := newRecorder(`<html>maintenance</html>`)
+	adapter := adapterFor(t, "google:gemini-flash-latest", backend.server(t))
+
+	answer, err := adapter.Call(t.Context(), Request{})
+	if err == nil {
+		t.Fatal("a body that is not JSON was read as an answer")
+	}
+	if answer.Status != modelrecord.TurnServerError || !strings.Contains(answer.Detail, "not JSON") {
+		t.Errorf("Status = %q, Detail = %q, want %q saying the answer is not JSON",
+			answer.Status, answer.Detail, modelrecord.TurnServerError)
+	}
+	if len(answer.ResponseBody) != 0 {
+		t.Error("a body that is not JSON was kept in a field the record encodes as JSON")
+	}
+}
+
 func TestGoogle_ReportsAnAnswerWithNoCandidateAndSaysWhy(t *testing.T) {
 	backend := newRecorder(`{"candidates":[],"promptFeedback":{"blockReason":"SAFETY"}}`)
 	adapter := adapterFor(t, "google:gemini-flash-latest", backend.server(t))
@@ -288,11 +308,14 @@ func TestGoogle_ReportsTheProvidersOwnErrorObject(t *testing.T) {
 }
 
 func TestGoogleContents_RebuildsATurnWhenThereIsNoEchoToHandBack(t *testing.T) {
+	// A text block of the assistant turn is not a call, and is not sent as
+	// one.
 	built := googleContents([]Message{
 		{Role: RoleUser, Text: "do it"},
-		{Role: RoleAssistant, Blocks: []modelrecord.Block{{
-			Kind: modelrecord.BlockToolCall, Tool: "t", CallID: "c1", Arguments: json.RawMessage(`{"a":1}`),
-		}}},
+		{Role: RoleAssistant, Blocks: []modelrecord.Block{
+			{Kind: modelrecord.BlockText, Text: "calling"},
+			{Kind: modelrecord.BlockToolCall, Tool: "t", CallID: "c1", Arguments: json.RawMessage(`{"a":1}`)},
+		}},
 		{Role: RoleTool, Results: []ToolResult{{CallID: "c1", Content: "done"}}},
 		{Role: RoleAssistant, Echo: json.RawMessage(`{"parts":[]}`)},
 		// An echo that is not a content, and one whose parts are not parts, are
@@ -305,8 +328,8 @@ func TestGoogleContents_RebuildsATurnWhenThereIsNoEchoToHandBack(t *testing.T) {
 	if len(built) != 3 {
 		t.Fatalf("built %d contents, want 3: an empty one is dropped rather than sent", len(built))
 	}
-	if call := googleBuiltParts(t, built[1])[0]; call.FunctionCall.Name != "t" {
-		t.Errorf("the rebuilt call is %+v", call)
+	if parts := googleBuiltParts(t, built[1]); len(parts) != 1 || parts[0].FunctionCall.Name != "t" {
+		t.Errorf("the rebuilt turn is %+v, want the one call", parts)
 	}
 	// The name is remembered from the call, which is the only place this API
 	// can learn what the result answers.

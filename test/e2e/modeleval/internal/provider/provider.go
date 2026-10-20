@@ -527,11 +527,7 @@ func normalizeSchema(schema json.RawMessage) (json.RawMessage, error) {
 	if err := json.Unmarshal(schema, &decoded); err != nil {
 		return nil, err
 	}
-	encoded, err := json.Marshal(normalizeValue(decoded))
-	if err != nil {
-		return nil, err
-	}
-	return encoded, nil
+	return json.Marshal(normalizeValue(decoded))
 }
 
 // droppedSchemaKeys are the keywords normalization removes wherever they

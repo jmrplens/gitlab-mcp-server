@@ -268,8 +268,12 @@ func TestNew_RefusesAProviderItDoesNotHaveAndOneWithNoCredential(t *testing.T) {
 		t.Errorf("the refusal does not name the setting to fill: %v", credentialErr)
 	}
 
-	if _, unknownErr := New(Config{Spec: Spec{Provider: "mistral", Model: "m"}}); unknownErr == nil {
+	// With a credential, so what refuses it is the provider rather than the
+	// missing key.
+	if _, unknownErr := New(Config{Spec: Spec{Provider: "mistral", Model: "m"}, APIKey: testKey}); unknownErr == nil {
 		t.Error("an unknown provider was built")
+	} else if !strings.Contains(unknownErr.Error(), `unsupported provider "mistral"`) {
+		t.Errorf("the refusal does not name the provider it does not have: %v", unknownErr)
 	}
 
 	// The fake needs no credential, which is what lets a pipe run start with
@@ -438,19 +442,78 @@ func TestCall_BoundsWhatItKeepsOfABadDay(t *testing.T) {
 	}
 }
 
+// TestCall_ReportsATransportFailureAsOne verifies every adapter reports a
+// request that got no answer as a transport failure, with no HTTP status.
 func TestCall_ReportsATransportFailureAsOne(t *testing.T) {
-	// A dead endpoint hangs up before any answer and keeps its port, so the
-	// call fails in transport and no other listener can answer it instead.
-	adapter := adapterFor(t, "anthropic:claude-haiku-4-5-20251001", netfixture.DeadEndpoint(t))
+	for _, spec := range []string{
+		"anthropic:claude-haiku-4-5-20251001", "openai:gpt-5.4-nano", "google:gemini-flash-latest",
+	} {
+		t.Run(spec, func(t *testing.T) {
+			// A dead endpoint hangs up before any answer and keeps its port,
+			// so the call fails in transport and no other listener can answer
+			// it instead.
+			adapter := adapterFor(t, spec, netfixture.DeadEndpoint(t))
+			answer, err := adapter.Call(t.Context(), Request{})
+			if err == nil {
+				t.Fatal("an unreachable provider was reported as a success")
+			}
+			if answer.Status != modelrecord.TurnTransportError {
+				t.Errorf("Status = %q, want %q", answer.Status, modelrecord.TurnTransportError)
+			}
+			if answer.HTTPStatus != 0 {
+				t.Errorf("HTTPStatus = %d, want 0 for a request that never got one", answer.HTTPStatus)
+			}
+		})
+	}
+}
+
+// TestCall_ReportsAnAnswerCutShortAsATransportFailure verifies an answer
+// whose body ends before the length it declared is a transport failure that
+// keeps the status it arrived with, rather than an answer read in part.
+func TestCall_ReportsAnAnswerCutShortAsATransportFailure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// The server closes a connection whose handler wrote less than the
+		// length it declared, so the client meets the end of the body early.
+		w.Header().Set("Content-Length", "100")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"content":`))
+	}))
+	t.Cleanup(server.Close)
+	adapter := adapterFor(t, "anthropic:claude-haiku-4-5-20251001", server.URL)
+
 	answer, err := adapter.Call(t.Context(), Request{})
-	if err == nil {
-		t.Fatal("an unreachable provider was reported as a success")
+	if err == nil || !strings.Contains(err.Error(), "read the anthropic answer") {
+		t.Fatalf("err = %v, want the read of the answer to fail", err)
 	}
-	if answer.Status != modelrecord.TurnTransportError {
-		t.Errorf("Status = %q, want %q", answer.Status, modelrecord.TurnTransportError)
+	if answer.Status != modelrecord.TurnTransportError || answer.HTTPStatus != http.StatusOK {
+		t.Errorf("Status = %q, HTTPStatus = %d, want %q with the 200 that arrived",
+			answer.Status, answer.HTTPStatus, modelrecord.TurnTransportError)
 	}
-	if answer.HTTPStatus != 0 {
-		t.Errorf("HTTPStatus = %d, want 0 for a request that never got one", answer.HTTPStatus)
+}
+
+// TestExchange_ARequestThatCannotBeBuilt_IsTheCallersFailure verifies the two
+// ways a request fails before it is sent, a payload that does not encode and
+// an endpoint that does not parse, are request errors that send nothing.
+func TestExchange_ARequestThatCannotBeBuilt_IsTheCallersFailure(t *testing.T) {
+	adapter := base{spec: Spec{Provider: Anthropic}, client: http.DefaultClient}
+	for _, one := range []struct {
+		name     string
+		endpoint string
+		payload  any
+		want     string
+	}{
+		{"a payload that does not encode", "http://never-dialed.invalid", map[string]any{"f": func() {}}, "marshal the anthropic request"},
+		{"an endpoint that does not parse", "://no-scheme", map[string]any{}, "build the anthropic request"},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			answer, raw, err := adapter.exchange(t.Context(), one.endpoint, nil, one.payload)
+			if err == nil || !strings.Contains(err.Error(), one.want) {
+				t.Fatalf("err = %v, want it to say %q", err, one.want)
+			}
+			if answer.Status != modelrecord.TurnRequestError || answer.Detail == "" || raw != nil {
+				t.Errorf("answer = %+v, raw = %q, want a request error that says why and carries no body", answer, raw)
+			}
+		})
 	}
 }
 
