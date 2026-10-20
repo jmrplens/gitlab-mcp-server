@@ -90,6 +90,8 @@ Coverage is what the server dispatched, in a test that passed, on a named runtim
 
 A scenario that cannot run is therefore a decision someone wrote down, not a silence. Two that used to skip on CE assert instead: `TestTierPin_DetectionAgreesWithTheRuntimeProbe` holds the server to Free on a Community Edition image, which can hold no license, and `TestWorkItems_Lifecycle_IssueTypeCreateListGetUpdateDelete` pins the refusal client-go's work item documents cause there (entry 45 of `docs/development/upstream-bugs.md`), so the day a client-go release with the fix is taken here, it fails and says to run the whole lifecycle on CE again.
 
+The decisions the list above describes each live in a script under `test/e2e/scripts/`, with a test of its own among the repository's scripts: `docker-images.sh` (`scripts/e2e_docker_images_test.py`), `skip-gate.sh` (`scripts/e2e_skip_gate_test.py`), `release-gate.sh` (`scripts/e2e_release_gate_test.py`) and `gitlab-exceptions.sh` (`scripts/e2e_gitlab_exceptions_test.py`).
+
 The CI job, `e2e-gitlab` in `e2e.yml`, is not a complete run and sets neither switch: it leaves the Bitbucket fixture out and holds none of the importers' credentials by design, and it keeps the `-check` floors. It pulls every image fresh, a hosted runner having none cached.
 
 ### Go statement coverage of the binary

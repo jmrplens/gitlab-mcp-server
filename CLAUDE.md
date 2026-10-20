@@ -24,7 +24,7 @@
 > main ran no CI and the v3.1.0 tag on it no release. `make check-pr-description`
 > refuses it.
 
-**This file is loaded into every session, so it holds the rules and an index, and the long-form references live in `docs/development/`**, read when a task needs them: [Repository Map](docs/development/repository-map.md) (what every command and package does), [Environment Variables and Flags](docs/development/configuration.md), [Test Infrastructure](docs/development/test-infrastructure.md), [Request Paths and Fine-Grained Grants](docs/development/request-paths.md) (R-PATH, R-PAGE and R-GRANT), [Adding or Changing a Limit](docs/development/adding-a-limit.md), [Release Process](docs/development/release-process.md), [Tier Gating](docs/development/tier-gating.md), [HTTP Mode Invariants](docs/development/http-invariants.md) and [Resource Subscriptions](docs/development/resource-subscriptions.md). Keep it that way: what a new section adds here is the rule and a link, and its explanation goes to the page that owns the topic. Claude Code warns at every start once this file passes 150,000 characters.
+**This file is loaded into every session, so it holds the rules and an index, and the long-form references live in `docs/development/`**, read when a task needs them: [Repository Map](docs/development/repository-map.md) (what every command and package does), [Environment Variables and Flags](docs/development/configuration.md), [Test Infrastructure](docs/development/test-infrastructure.md), [Request Paths and Fine-Grained Grants](docs/development/request-paths.md) (R-PATH, R-PAGE and R-GRANT), [Adding or Changing a Limit](docs/development/adding-a-limit.md), [Release Process](docs/development/release-process.md), [Tier Gating](docs/development/tier-gating.md), [HTTP Mode Invariants](docs/development/http-invariants.md) and [Resource Subscriptions](docs/development/resource-subscriptions.md). Keep it that way: what a new section adds here is the rule and a link, and its explanation goes to the page that owns the topic. Claude Code warns at every start once this file passes a size limit that scales with the model's context window (150,000 characters in a session with a one-million-token window).
 
 ## Project Overview
 
@@ -62,7 +62,7 @@ The six read-only `gitlab_orbit_*` tools (`status`, `schema`, `tools`, `dsl`, `q
 
 ## Project Structure
 
-One line per entry; [Repository Map](docs/development/repository-map.md) carries the full annotation of every command and package, and [Command-Line Utilities](docs/development/cmd-utilities.md) the flags and gates of each command.
+One line per entry; [Repository Map](docs/development/repository-map.md) carries the annotated version of this tree, and [Command-Line Utilities](docs/development/cmd-utilities.md) the flags and gates of each command.
 
 ```text
 gitlab-mcp-server/
@@ -85,6 +85,7 @@ gitlab-mcp-server/
 │   ├── godoc_tool/                   # Go doc auditor and fixer
 │   ├── audit_md_escaping/            # GitLab-authored values reaching Markdown unescaped (make check-md-escaping)
 │   ├── audit_metrics/                # Tool, resource and prompt metrics
+│   ├── audit_meta_descriptions/      # Meta-tool prose against the parameters its actions accept (make check-meta-descriptions)
 │   ├── audit_readonly_graphql/       # ReadOnly actions that can reach a GraphQL mutation (make check-readonly-graphql)
 │   ├── audit_sdk_context/            # client-go calls without the caller's context (make check-sdk-context)
 │   ├── audit_tenancy/                # Tenant policy register against the code that enforces it (make check-tenancy)
@@ -134,7 +135,7 @@ gitlab-mcp-server/
 │   ├── telemetry/                    # The one place that knows the OpenTelemetry SDK
 │   ├── toolutil/                     # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                     # Shared test helpers (NewTestClient, RespondJSON)
-│   ├── tools/                        # Tool orchestration layer + 180 sub-packages, one per domain
+│   ├── tools/                        # Tool orchestration layer + 180 sub-packages
 │   │   ├── action_catalog.go         # Builds the canonical action catalog from domain ActionSpecs
 │   │   ├── actiongrants/             # The generated fine-grained table (table_gen.go, never edited)
 │   │   ├── catalog_filter.go         # Read-only, token-scope and --exclude-tools filters
@@ -310,7 +311,7 @@ What each of these does, and why, is in [Test Infrastructure](docs/development/t
 
 ### Request paths (R-PATH) and fine-grained grants (R-GRANT)
 
-Two dimensions of the 1:1 audit read the requests a handler sends rather than the surface it publishes, which is why they caught nine registered tools that could not work while the other five were green. **R-PATH** (`go run ./cmd/audit_1to1/ -scope=paths`, `make audit-1to1-paths`) reads `docs/development/request-inventory.json` and asks whether each owning package was observed sending a request, whether each GraphQL document validates, whether each REST endpoint exists in GitLab's documentation (`make audit-1to1-paths-endpoints`), whether GitLab's live record sends the fields we publish and which fields it sends that we do not (each marked by whether client-go models it), whether every list says where it ends (R-PAGE), whether a param is sent that the caller never asked to send, and whether each path was ever built from more than one fixture value. **R-GRANT** derives from each action's handlers what it sends, joins it to what a booted GitLab declares a fine-grained token needs, and generates the table the server enforces (`internal/tools/actiongrants/table_gen.go`, never edited by hand) together with the classic scope each action needs (ADR-0026); `make check-action-grants-derivation`, `make check-action-grants` and `make audit-1to1-grants` are steps 26 to 28 of `make analyze`. Every declaration table either reads fails on an entry that answers nothing. Both, with each check, oracle, gate and declaration table, are in [Request Paths and Fine-Grained Grants](docs/development/request-paths.md).
+Two dimensions of the 1:1 audit read the requests a handler sends rather than the surface it publishes. **R-PATH** (`go run ./cmd/audit_1to1/ -scope=paths`, `make audit-1to1-paths`) is the one that reads the request a handler builds, added after nine registered tools shipped unable to work while the other five dimensions were green. It reads `docs/development/request-inventory.json` and asks whether each owning package was observed sending a request, whether each GraphQL document validates, whether each REST endpoint exists in GitLab's documentation (`make audit-1to1-paths-endpoints`), whether GitLab's live record sends the fields we publish and which fields it sends that we do not (each marked by whether client-go models it), whether every list says where it ends (R-PAGE), whether a param is sent that the caller never asked to send, and whether each path was ever built from more than one fixture value. **R-GRANT** derives from each action's handlers what it sends, joins it to what a booted GitLab declares a fine-grained token needs, and generates the table the server enforces (`internal/tools/actiongrants/table_gen.go`, never edited by hand) together with the classic scope each action needs (ADR-0026); `make check-action-grants-derivation`, `make check-action-grants` and `make audit-1to1-grants` are steps 26 to 28 of `make analyze`. Every declaration table either reads fails on an entry that answers nothing. Both, with each check, oracle, gate and declaration table, are in [Request Paths and Fine-Grained Grants](docs/development/request-paths.md).
 
 **None of that machinery may reach the server binary**: `internal/graphqlschema` and `internal/testutil` stay out of `cmd/server`'s import graph, held by `TestDependencies_TestSupport_NeverReachesTheServerBinary` in `cmd/server/main_test.go`.
 
@@ -366,7 +367,7 @@ make check-model-results                                        # the offline ga
 - **Rehearse before tagging.** `gh workflow run release.yml --ref <branch>` builds, smoke-tests and dry-runs every publisher from the dispatched tree, as the version its `VERSION` file carries, and publishes nothing; its publisher jobs run in the `release-rehearsal` environment, which no trusted publisher names.
 - **Only the newest stable release moves "latest"** (`scripts/release-order.sh`): a backport publishes under its own version on every channel and moves no pointer.
 - **Release link names are exact filenames**, never decorated: the Homebrew formula, winget, the installers and `scripts/fetch-release-assets.sh` look assets up by exact name.
-- **A generator reads nothing from the environment.** Anything it reads ships in the committed file, so an environment-sensitive input belongs in `cmd/internal/mcpsurface`, pinned there once for every generator, not read at the call site.
+- **What a generator reads from the environment ships in the committed file**, so a generator that describes the served surface pins its inputs in `cmd/internal/mcpsurface` (the default surface, an in-process stub client) rather than reading `GITLAB_MCP_TOOL_SURFACE`, `GITLAB_URL` or `GITLAB_TOKEN` at the call site. A generator whose job is to record a GitLab, such as `cmd/gen_graphql_schema` or `cmd/gen_orbit_record`, reads its credential on purpose.
 - **`server.json` is stamped by the release, not edited by hand**, for what the release decides (the mcpb entries, the image digest, the versions), and its traps pass `make check-server-json` while being wrong: a `remotes` URL must be unique across the whole MCP Registry as a literal string, the OCI entries carry no `packageArguments`, `version`, `registryBaseUrl` or `fileSha256`, and `registryType: "mcpb"` means the bundle. `make check-server-json-packages` downloads what it declares.
 - npm, PyPI and NuGet publish through OIDC trusted publishers with no stored token, each validated before an upload that cannot be replaced; LobeHub is the one manual step, `make publish-lobehub` after a release.
 
@@ -413,7 +414,7 @@ make analyze-report                        # generate LLM-consumable report
 
 ### Environment variables
 
-Settings this project defines are read as `GITLAB_MCP_<NAME>` and under no other spelling: a new one is added to `prefixedNames` in `internal/config/env_name.go` and read through `config.Getenv` or `config.TrimmedGetenv` there, never through `os.Getenv` (thirteen older variables are not on the list yet, which is issue 1171). Only `GITLAB_URL`, `GITLAB_TOKEN`, the `OTEL_*` variables and the `AUTOPILOT` alias stay bare. A retired spelling still set is found by `config.RetiredEnvUses`: `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE` and `EXCLUDE_TOOLS` refuse startup and every other one warns. In HTTP mode an explicitly passed flag wins over its variable, which wins over the default, and an invalid value fails startup. A flag only HTTP mode reads, given to a stdio run, is named at startup, and refused when ignoring it would serve what it withholds or send the token to an instance it never named.
+Settings this project defines are read as `GITLAB_MCP_<NAME>` and under no other spelling: a new one is added to `prefixedNames` in `internal/config/env_name.go` and read through `config.Getenv` or `config.TrimmedGetenv` there, never through `os.Getenv` (thirteen older variables are not on the list yet, which is issue 1171). Only `GITLAB_URL`, `GITLAB_TOKEN`, the `OTEL_*` variables and the `AUTOPILOT` alias stay bare; the model evaluation's `MODELEVAL_*` and the test transport's variables configure the harness rather than the server and are outside the rule. A retired spelling still set is found by `config.RetiredEnvUses`: `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE` and `EXCLUDE_TOOLS` refuse startup and every other one warns. In HTTP mode an explicitly passed flag wins over its variable, which wins over the default, and an invalid value fails startup. A flag only HTTP mode reads, given to a stdio run, is named at startup, and refused when ignoring it would serve what it withholds or send the token to an instance it never named.
 
 | Variable | What it sets |
 | --- | --- |
@@ -502,6 +503,8 @@ The 18 skills in `.github/skills/` are task templates any agent can invoke:
 | `create-mcp-evaluation`, `generate-release-notes`, `git-commit` | Evaluation Q&A pairs, categorized release notes between two refs, a conventional commit |
 | `go-safe-move-refactor`, `modularize-go-package` | Moving Go files between packages, and splitting a package into domain sub-packages, building at every step |
 | `create-mcp-tool`, `upstream-contribution` | A new MCP tool end to end, and a fix contributed to GitLab's own projects on gitlab.com |
+
+---
 
 ## Common Development Workflows
 
