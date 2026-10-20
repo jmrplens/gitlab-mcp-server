@@ -17,11 +17,13 @@ import (
 	"encoding/json"
 	"errors"
 	"io/fs"
+	"maps"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -33,7 +35,9 @@ import (
 // Never latest. A floating tag makes the suite's meaning change without a
 // commit, so a collector release that tightened validation would either fail a
 // run nobody had changed anything in, or, worse, relax one and let a defect
-// through unannounced. Bumping this is a deliberate act with a diff.
+// through unannounced. Bumping this is a deliberate act with a diff, and it
+// moves the collector in examples/telemetry/compose.yaml with it, which
+// TestExample_ComposeFile_RunsTheCommittedPipeline holds to this tag.
 const collectorImage = "otel/opentelemetry-collector-contrib:0.163.1"
 
 // The container-side paths. The receiver binds 0.0.0.0 rather than the image
@@ -105,6 +109,39 @@ service:
       exporters: [file/logs, debug]
 `
 
+// collectorConfigPath is where the image reads its configuration when it is
+// started with no --config flag. Every collector here is started that way, and
+// so is the one examples/telemetry/compose.yaml runs, which mounts the
+// committed configuration at the same path; TestExample_ComposeFile_RunsTheCommittedPipeline
+// holds the two to it. collectorConfigDir is the directory, where an overlay
+// is mounted beside it.
+const (
+	collectorConfigDir  = "/etc/otelcol-contrib"
+	collectorConfigPath = collectorConfigDir + "/config.yaml"
+)
+
+// collectorSpec is what a collector container is started with beyond what
+// every one here shares (the image, the published ports, the user, the output
+// directory).
+type collectorSpec struct {
+	// configs are host paths of configuration files, in the order the
+	// collector merges them. The first is mounted at collectorConfigPath; each
+	// further one is an overlay, mounted beside it and named with a --config
+	// flag of its own after the first, which is how a reader adds one of the
+	// authenticators the telemetry page documents to the committed example.
+	configs []string
+	// network is a Docker network the container joins, and alias the name the
+	// other containers on it reach it by. Both are empty for a collector the
+	// server reaches through its published port alone.
+	network string
+	alias   string
+	// env is set in the container, for a configuration that reads ${env:NAME}.
+	env map[string]string
+	// probeHeader is sent with the readiness probe, for a receiver that
+	// refuses an export without a credential.
+	probeHeader http.Header
+}
+
 // collector is a running OpenTelemetry Collector container.
 type collector struct {
 	// endpoint is what OTEL_EXPORTER_OTLP_ENDPOINT is set to.
@@ -115,6 +152,8 @@ type collector struct {
 	// outDir is the host side of the bind mount the file exporters write into.
 	outDir string
 	name   string
+	// probeHeader is what waitReceiving sends, from collectorSpec.
+	probeHeader http.Header
 }
 
 // startCollector runs the collector for the duration of the test.
@@ -126,13 +165,36 @@ type collector struct {
 // this module's own defect rather than the environment's.
 func startCollector(t *testing.T) *collector {
 	t.Helper()
+	return runCollector(t, collectorSpec{configs: []string{writeCollectorConfig(t)}})
+}
+
+// writeCollectorConfig writes collectorConfig to a file of the test's own and
+// returns its path, for a spec that runs this module's pipeline.
+func writeCollectorConfig(t *testing.T) string {
+	t.Helper()
+
+	confPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(confPath, []byte(collectorConfig), 0o644); err != nil { //#nosec G306 -- read by a throwaway container
+		t.Fatalf("writing the collector config: %v", err)
+	}
+	return confPath
+}
+
+// runCollector runs a collector described by spec for the duration of the
+// test, through the start, wait and cleanup path every collector here shares.
+// startCollector is the common case: this module's own pipeline, reached
+// through its published ports and nothing else.
+func runCollector(t *testing.T, spec collectorSpec) *collector {
+	t.Helper()
 
 	requireDocker(t)
+	if len(spec.configs) == 0 {
+		t.Fatal("a collector needs at least one configuration file")
+	}
 
 	hostPort := freePort(t)
 	grpcPort := freePort(t)
-	dir := t.TempDir()
-	outDir := filepath.Join(dir, "out")
+	outDir := filepath.Join(t.TempDir(), "out")
 	// World-writable, because a throwaway container writes here as its own
 	// user. MkdirAll applies the process umask, which on most machines clears
 	// the group and other write bits that user needs, so the mode is set
@@ -142,11 +204,6 @@ func startCollector(t *testing.T) *collector {
 	}
 	if err := os.Chmod(outDir, 0o777); err != nil { //#nosec G302 -- the same directory, with the bits the umask took back
 		t.Fatalf("opening the collector output directory to the container: %v", err)
-	}
-
-	confPath := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(confPath, []byte(collectorConfig), 0o644); err != nil { //#nosec G306 -- read by a throwaway container
-		t.Fatalf("writing the collector config: %v", err)
 	}
 
 	name := "gitlab-mcp-collectore2e-" + strconv.Itoa(hostPort)
@@ -162,11 +219,30 @@ func startCollector(t *testing.T) *collector {
 	if uid := os.Getuid(); uid >= 0 {
 		args = append(args, "--user", strconv.Itoa(uid)+":"+strconv.Itoa(os.Getgid()))
 	}
-	args = append(args,
-		"-v", confPath+":/etc/otelcol-contrib/config.yaml:ro",
-		"-v", outDir+":/out",
-		collectorImage,
-	)
+	if spec.network != "" {
+		args = append(args, "--network", spec.network, "--network-alias", spec.alias)
+	}
+	for _, key := range slices.Sorted(maps.Keys(spec.env)) {
+		args = append(args, "-e", key+"="+spec.env[key])
+	}
+	args = append(args, "-v", outDir+":/out")
+	containerConfigs := make([]string, len(spec.configs))
+	for i, hostPath := range spec.configs {
+		containerConfigs[i] = collectorConfigPath
+		if i > 0 {
+			containerConfigs[i] = collectorConfigDir + "/overlay-" + strconv.Itoa(i) + ".yaml"
+		}
+		args = append(args, "-v", hostPath+":"+containerConfigs[i]+":ro")
+	}
+	args = append(args, collectorImage)
+	// One file is started the way the image starts by default, which reads
+	// collectorConfigPath; an overlay needs every file named, since a --config
+	// flag replaces the default rather than adding to it.
+	if len(containerConfigs) > 1 {
+		for _, path := range containerConfigs {
+			args = append(args, "--config="+path)
+		}
+	}
 
 	// Generous, because this may include pulling the image on a cold machine.
 	runCtx, runCancel := context.WithTimeout(t.Context(), 5*time.Minute)
@@ -193,6 +269,7 @@ func startCollector(t *testing.T) *collector {
 		grpcEndpoint: "127.0.0.1:" + strconv.Itoa(grpcPort),
 		outDir:       outDir,
 		name:         name,
+		probeHeader:  spec.probeHeader,
 	}
 	t.Cleanup(func() {
 		// Not t.Context: cleanup runs after the test context is cancelled, and
@@ -241,6 +318,7 @@ func (c *collector) waitReceiving(t *testing.T) {
 		if err != nil {
 			t.Fatalf("building the collector readiness probe: %v", err)
 		}
+		maps.Copy(req.Header, c.probeHeader)
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := http.DefaultClient.Do(req)
 		if err == nil {
@@ -252,6 +330,32 @@ func (c *collector) waitReceiving(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 	}
 	t.Fatalf("the collector never accepted an export. Container output:\n%s", c.containerLogs(t))
+}
+
+// dockerNetwork creates a Docker network for the duration of the test and
+// returns its name, so containers started on it reach each other by alias.
+//
+// Created before the containers that join it, so its cleanup, registered
+// first, runs after theirs: Docker refuses to remove a network a container is
+// still attached to.
+func dockerNetwork(t *testing.T) string {
+	t.Helper()
+
+	requireDocker(t)
+	name := "gitlab-mcp-collectore2e-net-" + strconv.Itoa(os.Getpid()) + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	//#nosec G204 -- the network name is this file's own literal plus a pid and a clock reading
+	if out, err := exec.CommandContext(ctx, "docker", "network", "create", name).CombinedOutput(); err != nil {
+		t.Fatalf("could not create the network %s (%v):\n%s", name, err, out)
+	}
+	t.Cleanup(func() {
+		rmCtx, rmCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer rmCancel()
+		//#nosec G204 -- the same name
+		_ = exec.CommandContext(rmCtx, "docker", "network", "rm", name).Run()
+	})
+	return name
 }
 
 // containerLogs returns everything the collector has written to its own log.
