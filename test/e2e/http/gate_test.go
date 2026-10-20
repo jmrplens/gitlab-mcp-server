@@ -852,6 +852,123 @@ func TestGate_RotatingProxyHeader_IsBoundedByTheTransportSource(t *testing.T) {
 	})
 }
 
+// budgetDoor is one of the two doors an authentication budget sits behind, as
+// the binary is started for it: the legacy gate, which reads PRIVATE-TOKEN,
+// and the OAuth bearer guard in front of it, which reads a bearer token.
+type budgetDoor struct {
+	name  string
+	start func(t *testing.T, gitlabURL string, flags ...string) *server
+	// credential is the header a request presents token in.
+	credential func(token string) (string, string)
+}
+
+// budgetDoors are both doors, each started behind the trusted proxy the
+// loopback client is.
+func budgetDoors() []budgetDoor {
+	proxied := []string{"--trusted-proxy-header=X-Real-IP", "--trusted-proxies=127.0.0.1,::1"}
+	return []budgetDoor{
+		{
+			name: "legacy",
+			start: func(t *testing.T, gitlabURL string, flags ...string) *server {
+				t.Helper()
+				return startServer(t, nil, append(append([]string{"--gitlab-url=" + gitlabURL}, proxied...), flags...)...)
+			},
+			credential: func(token string) (string, string) { return "PRIVATE-TOKEN", token },
+		},
+		{
+			name: "oauth",
+			start: func(t *testing.T, gitlabURL string, flags ...string) *server {
+				t.Helper()
+				return oauthServer(t, gitlabURL, append(proxied, flags...)...)
+			},
+			credential: func(token string) (string, string) { return "Authorization", "Bearer " + token },
+		},
+	}
+}
+
+// TestGate_RotationInsideOneSlash64_IsBoundedAsOneAddress is the defect issue
+// 954 opened with, on the wire and at both doors. An IPv6 caller holds at
+// least a /64, and the budgets used to be keyed on the whole address, so a
+// trusted proxy forwarding addresses that rotate inside one /64 handed the
+// caller a fresh budget per request: the walk below was never cut off short of
+// the coarse transport budget. The /64 is the key now, so the walk is cut off
+// where a fixed address is, and a caller in the next /64 still has its own.
+func TestGate_RotationInsideOneSlash64_IsBoundedAsOneAddress(t *testing.T) {
+	for _, door := range budgetDoors() {
+		t.Run(door.name, func(t *testing.T) {
+			gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+			srv := door.start(t, gitlab.url)
+
+			attempts := gateAttemptsUntilBlocked(t, srv, 40, func(i int) string {
+				return "2001:db8:1:2::" + strconv.FormatInt(int64(i+1), 16)
+			})
+			if attempts == 0 {
+				t.Fatal("forty addresses rotating inside one /64 were never cut off: each was given a budget of its own")
+			}
+			// The per-address budget is ten a minute, as for a fixed address.
+			if attempts > 20 {
+				t.Errorf("rotating inside one /64 bought %d attempts, which is not one address's budget", attempts)
+			}
+			t.Logf("addresses rotating inside one /64 were cut off after %d requests", attempts)
+
+			next := srv.do(t, mcpPOST(map[string]string{"X-Real-IP": "2001:db8:1:3::1"}))
+			if next.status != http.StatusUnauthorized {
+				t.Errorf("a caller in the next /64 = %d, want %d: one /64 spent another's budget: %s",
+					next.status, http.StatusUnauthorized, truncate(next.body))
+			}
+		})
+	}
+}
+
+// TestGate_Slash64sRotatingInOneSlash48_TripTheNetworkAggregate pins the bound
+// one level up (AUB-006), at both doors. Keying on the /64 stops rotation
+// inside one, and a caller holding a /48 holds 65536 of them: ten /64s of one
+// /48 that each have a credential GitLab refused block the /48, so a /64 it
+// never used is refused 429 before its credential is sent to GitLab, while a
+// caller in another /48 is still judged. Each /64 here stays far inside its own
+// budgets, so nothing but the aggregate can refuse.
+func TestGate_Slash64sRotatingInOneSlash48_TripTheNetworkAggregate(t *testing.T) {
+	const prefixes = 10 // tenancy.AuthNetworkFailingPrefixes
+	for _, door := range budgetDoors() {
+		t.Run(door.name, func(t *testing.T) {
+			gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+			srv := door.start(t, gitlab.url)
+			post := func(client, token string) response {
+				name, value := door.credential(token)
+				return srv.do(t, mcpPOST(map[string]string{"X-Real-IP": client, name: value}))
+			}
+
+			for i := range prefixes {
+				client := "2001:db8:1:" + strconv.FormatInt(int64(i+1), 16) + "::1"
+				if got := post(client, "glpat-refused-"+strconv.Itoa(i)); got.status != http.StatusUnauthorized {
+					t.Fatalf("the refused credential from %s = %d, want %d: %s", client, got.status, http.StatusUnauthorized, truncate(got.body))
+				}
+			}
+
+			asked := gitlab.calls()
+			blocked := post("2001:db8:1:ff00::1", "glpat-from-an-unused-slash64")
+			if blocked.status != http.StatusTooManyRequests {
+				t.Fatalf("a /64 the /48 never used = %d once %d of its /64s had a credential refused, want %d: %s",
+					blocked.status, prefixes, http.StatusTooManyRequests, truncate(blocked.body))
+			}
+			if blocked.header.Get("Retry-After") == "" {
+				t.Error("a 429 must tell the caller when to come back")
+			}
+			if body := decodeJSONRPCError(t, blocked.body); body.Error.Code != -42900 {
+				t.Errorf("error code = %d, want -42900 (mirrors HTTP 429)", body.Error.Code)
+			}
+			if got := gitlab.calls() - asked; got != 0 {
+				t.Errorf("GitLab was asked %d times about the blocked /48's credential, want none", got)
+			}
+
+			elsewhere := post("2001:db8:2::1", "glpat-from-another-slash48")
+			if elsewhere.status != http.StatusUnauthorized {
+				t.Errorf("a caller in another /48 = %d, want %d: %s", elsewhere.status, http.StatusUnauthorized, truncate(elsewhere.body))
+			}
+		})
+	}
+}
+
 // TestGate_NonPostMethodsReachTheSDK verifies that GET and DELETE are answered
 // 405 on a stateless deployment, which is what protocol 2026-07-28 prescribes,
 // rather than being swallowed by anything mounted in front.
