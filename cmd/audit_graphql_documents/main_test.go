@@ -241,6 +241,72 @@ func TestMain_LiveFlag_HandsGITLABTOKENOnlyToTheInstanceGITLABURLNames(t *testin
 	}
 }
 
+// TestRunMain_ParsesTheCommandLine holds, in this process, what main hands the
+// run: a flag nobody defined is a usage error, a request for help is not a
+// failure, and -dir and -schema reach the run they describe. The processes
+// above hold the same command line end to end, where the coverage counters of
+// the child are not the test's.
+func TestRunMain_ParsesTheCommandLine(t *testing.T) {
+	narrow := filepath.Join(t.TempDir(), "narrow.graphql")
+	if err := os.WriteFile(narrow, []byte("type Query {\n  ok: Boolean\n}\n"), 0o600); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	dir := fixtureModule(t, map[string]string{"internal/ok": okFixture})
+	for _, testCase := range []struct {
+		name          string
+		args          []string
+		wantStatus    int
+		wantOut       string
+		wantErrPrefix string
+	}{
+		{
+			name: "an unknown flag", args: []string{"-nope"}, wantStatus: 2,
+			wantErrPrefix: "flag provided but not defined: -nope\nUsage of audit_graphql_documents:\n",
+		},
+		{name: "a request for help", args: []string{"-h"}, wantStatus: 0, wantErrPrefix: "Usage of audit_graphql_documents:\n"},
+		{name: "a schema file", args: []string{"-dir", dir, "-schema", narrow}, wantStatus: 0, wantOut: "1 document(s) accepted ("},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var out, errOut strings.Builder
+			status := runMain(testCase.args, func(string) string { return "" }, &out, &errOut)
+			if status != testCase.wantStatus {
+				t.Fatalf("exit status %d, want %d.\nstderr:\n%s", status, testCase.wantStatus, errOut.String())
+			}
+			if !strings.Contains(out.String(), testCase.wantOut) {
+				t.Errorf("stdout does not contain %q:\n%s", testCase.wantOut, out.String())
+			}
+			if !strings.HasPrefix(errOut.String(), testCase.wantErrPrefix) {
+				t.Errorf("stderr does not begin %q:\n%s", testCase.wantErrPrefix, errOut.String())
+			}
+		})
+	}
+}
+
+// TestMain_HandsRunMainsStatusToTheProcess verifies main in this process: it
+// ends the process with the status runMain decided for the command line the
+// process was given, here 2 for a flag nobody defined. It replaces the
+// process's arguments, its standard error and its exit, so it does not run in
+// parallel.
+func TestMain_HandsRunMainsStatusToTheProcess(t *testing.T) {
+	previousExit, previousArgs, previousStderr := exitProcess, os.Args, os.Stderr
+	t.Cleanup(func() { exitProcess, os.Args, os.Stderr = previousExit, previousArgs, previousStderr })
+	var statuses []int
+	exitProcess = func(status int) { statuses = append(statuses, status) }
+	os.Args = []string{"audit_graphql_documents", "-nope"}
+	stderr, err := os.Create(filepath.Join(t.TempDir(), "stderr"))
+	if err != nil {
+		t.Fatalf("prepare the stream: %v", err)
+	}
+	defer stderr.Close()
+	os.Stderr = stderr
+
+	main()
+
+	if !slices.Equal(statuses, []int{2}) {
+		t.Errorf("exit statuses %v, want the 2 runMain returns for an unknown flag", statuses)
+	}
+}
+
 // TestRun_AgainstASchemaTheCallerSupplies_JudgesByThatSchema verifies the entry
 // the live re-probe uses.
 //

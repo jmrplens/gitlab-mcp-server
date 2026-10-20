@@ -62,15 +62,33 @@ type auditRun struct {
 	now func() time.Time
 }
 
-func main() {
-	dir := flag.String("dir", ".", "repository root to audit")
-	verbose := flag.Bool("v", false, "list every document checked, not only the refused ones")
-	schemaPath := flag.String("schema", "", "SDL file to judge the documents against, instead of the pinned schema")
-	live := flag.String("live", "", "GraphQL endpoint to introspect now and judge the documents against, instead of the pinned schema")
-	flag.Parse()
+// exitProcess ends the process with the status main was handed. It is a
+// variable so a test can run main in its own process and read that status.
+var exitProcess = os.Exit
 
-	credential, withheld := graphqlintrospect.CredentialFor(*live, os.Getenv("GITLAB_URL"), os.Getenv("GITLAB_TOKEN"))
-	os.Exit(run(auditRun{
+func main() {
+	exitProcess(runMain(os.Args[1:], os.Getenv, os.Stdout, os.Stderr))
+}
+
+// runMain is main with its command line, its environment and its streams
+// handed to it, and its exit status returned: 2 for a command line that does
+// not parse, 0 for a request for help, and otherwise what [run] decides.
+func runMain(args []string, getenv func(string) string, out, errOut io.Writer) int {
+	flags := flag.NewFlagSet("audit_graphql_documents", flag.ContinueOnError)
+	flags.SetOutput(errOut)
+	dir := flags.String("dir", ".", "repository root to audit")
+	verbose := flags.Bool("v", false, "list every document checked, not only the refused ones")
+	schemaPath := flags.String("schema", "", "SDL file to judge the documents against, instead of the pinned schema")
+	live := flags.String("live", "", "GraphQL endpoint to introspect now and judge the documents against, instead of the pinned schema")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+
+	credential, withheld := graphqlintrospect.CredentialFor(*live, getenv("GITLAB_URL"), getenv("GITLAB_TOKEN"))
+	return run(auditRun{
 		dir:           *dir,
 		verbose:       *verbose,
 		patterns:      auditPatterns,
@@ -78,7 +96,7 @@ func main() {
 		schemaPath:    *schemaPath,
 		token:         credential,
 		tokenWithheld: withheld,
-	}, os.Stdout, os.Stderr))
+	}, out, errOut)
 }
 
 // run is main with its streams and its exit status handed to it, so the ways
