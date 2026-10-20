@@ -31,6 +31,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
 
@@ -4080,14 +4081,17 @@ func TestRevalidateAll_EvictsOnlyOnCredentialVerdict(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := httptest.NewServer(revalidationAnswer(tt.status, tt.body))
-			baseURL := srv.URL
+			var baseURL string
 			if tt.unreachable {
-				// Closing it first leaves a port nothing answers on, which is
-				// a dial error rather than any HTTP status.
-				srv.Close()
+				// A dead endpoint hangs up on every connection before any
+				// response and keeps its port, so what the probe meets is a
+				// transport error rather than any HTTP status, and no other
+				// listener can be given the address and answer instead.
+				baseURL = netfixture.DeadEndpoint(t)
 			} else {
+				srv := httptest.NewServer(revalidationAnswer(tt.status, tt.body))
 				t.Cleanup(srv.Close)
+				baseURL = srv.URL
 			}
 
 			pool := New(testConfig(stubGitLabBase), testFactory())
