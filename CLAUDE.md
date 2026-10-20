@@ -155,6 +155,7 @@ gitlab-mcp-server/
 │   └── elicitation/                  # MCP elicitation capability
 ├── docs/                             # Contributor documentation only (ADR-0025): a README and development/
 ├── site/                             # The documentation site, the only home of user documentation (English + es/ twin)
+├── examples/telemetry/               # The worked collector example the telemetry page imports; test/e2e/collector holds it to the server
 ├── test/e2e/                         # End-to-end tests: http/, stdio/, collector/, orbit/, internal/harness/, gitlab/{common,ce,ee}
 ├── plan/                             # Untracked working area; make check-plan-untracked fails on a force-added file
 ├── mcpb/                             # Claude Desktop extension manifest, icon, platform.jq and the Linux launcher
