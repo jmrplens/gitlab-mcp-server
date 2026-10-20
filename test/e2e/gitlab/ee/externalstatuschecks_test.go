@@ -8,11 +8,17 @@
 // The retry is the one step that refuses: a check can only be retried from
 // the failed state, and the fixture sets it to passed a moment before, so
 // the refusal is the assertion and names the listing to read the state from.
+//
+// A second scenario sends the create and the delete with a Developer's
+// credential, which GitLab refuses from 19.5 with a 403 the handlers hint
+// with the Maintainer role, and reads afterwards that nothing changed.
 
 package ee
 
 import (
 	"testing"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/externalstatuschecks"
@@ -122,6 +128,88 @@ func TestExternalStatusChecks_Lifecycle_CreatesSetsRetriesAndDeletes(t *testing.
 			if item.ID == created.ID {
 				e.T.Errorf("check %d is still listed after its delete", created.ID)
 			}
+		}
+	})
+}
+
+// developerStatusCheckFixture is a project in a group with one external
+// status check on it, and a group access token at the Developer role, which
+// reaches the project through the group and lacks the Maintainer role the
+// create and the delete need.
+type developerStatusCheckFixture struct {
+	project   fixture.Project
+	check     fixture.ExternalStatusCheck
+	developer fixture.GroupToken
+}
+
+// buildDeveloperStatusCheckFixture creates the group, the project in it, the
+// check with the run's own credential and the Developer token, and holds
+// until the token can read the project: until then GitLab answers the token
+// 404 for a project it cannot see, which is not the refusal under test.
+func buildDeveloperStatusCheckFixture(e *harness.Env) developerStatusCheckFixture {
+	group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("escdev"))
+	project := fixture.NewProject(e, fixture.InGroup(group), fixture.WithNamePrefix("escdev"))
+	check := fixture.NewExternalStatusCheck(e, project)
+	developer := fixture.NewGroupToken(e, group, gl.DeveloperPermissions)
+
+	client, err := e.ClientFor(developer.Value)
+	if err != nil {
+		e.T.Fatalf("building a client for the Developer group token: %v", err)
+	}
+	fixture.AwaitClientProjectAccess(e, client, project)
+	return developerStatusCheckFixture{project: project, check: check, developer: developer}
+}
+
+// assertNamesTheRoleNotTheLicense fails the test when a refusal of the role
+// does not name the Maintainer role and the read that verifies the project,
+// or blames the license the project's namespace has.
+func assertNamesTheRoleNotTheLicense(e *harness.Env, what, text string) {
+	e.T.Helper()
+	assertMentions(e, what, text, "needs the Maintainer role on the project", "Verify project_id with project.get")
+	if mentionsAny(text, "Ultimate license") {
+		e.T.Errorf("%s blames the license the namespace has: %s", what, firstLine(text))
+	}
+}
+
+// TestExternalStatusChecks_DeveloperToken_CreateAndDeleteRefusedWithTheRole
+// holds the create and the delete to what GitLab answers a caller without the
+// Maintainer role from 19.5: a 403 from the route's authorize! call, which the
+// handlers hint with the role rather than with the license the namespace has,
+// and nothing changed (entries 56 and 57 of docs/development/upstream-bugs.md).
+// Before 19.5 the create answered 500 and the delete 204 with nothing
+// deleted, so the scenario needs 19.5.
+//
+// The Developer is a group access token at that role, whose bot user GitLab
+// creates without an administrator's help, and its session pins the Ultimate
+// tier: the license endpoint answers administrators only, so a detected tier
+// would be Free and serve no status check action at all. The run's own
+// session then reads the project's checks, which are the fixture's one and
+// nothing else: the create made nothing and the delete removed nothing.
+func TestExternalStatusChecks_DeveloperToken_CreateAndDeleteRefusedWithTheRole(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.Tier(edition.Ultimate), harness.GitLabAtLeast(19, 5)))
+
+	harness.SurfacesWith(e, buildDeveloperStatusCheckFixture, func(e *harness.Env, surface harness.Surface, f developerStatusCheckFixture) {
+		developer := e.Session(harness.ServerConfig{Surface: surface, Token: f.developer.Value, Tier: harness.TierUltimate})
+		project := f.project.IDParam()
+
+		name := e.Name("devcheck")
+		created := harness.ExpectToolError(developer, actionStatusCheckCreateProject, map[string]any{
+			"project_id": project, "name": name, "external_url": "https://example.invalid/e2e/" + name,
+		}, "needs the Maintainer role on the project")
+		assertNamesTheRoleNotTheLicense(e, "the Developer's create", created)
+
+		deleted := harness.ExpectToolError(developer, actionStatusCheckDeleteProject, map[string]any{
+			"project_id": project, "check_id": f.check.ID,
+		}, "the check was left in place")
+		assertNamesTheRoleNotTheLicense(e, "the Developer's delete", deleted)
+
+		listed := harness.Do[externalstatuschecks.ListProjectStatusCheckOutput](e.On(surface), actionStatusCheckListProject, map[string]any{"project_id": project})
+		ids := make([]int64, 0, len(listed.Items))
+		for _, item := range listed.Items {
+			ids = append(ids, item.ID)
+		}
+		if len(ids) != 1 || ids[0] != f.check.ID {
+			e.T.Errorf("after the Developer's refused create and delete the project lists checks %v, want only the fixture's %d", ids, f.check.ID)
 		}
 	})
 }

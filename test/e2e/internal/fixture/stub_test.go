@@ -914,6 +914,7 @@ var builderFatalCases = map[string]func(t *testing.T){
 		stub.answers(http.MethodPost, "/api/v4/groups/1/milestones", fatalRefusal())
 		NewGroupMilestone(e, Group{ID: 1}, "milestone")
 	},
+	"client project access": runClientAccessEnded,
 	"pipeline": func(t *testing.T) {
 		t.Helper()
 		stub, e := detachedStub(t)
@@ -1051,6 +1052,7 @@ func TestBuilders_Refused_FailTheirTestNamingWhatTheyWereMaking(t *testing.T) {
 		{name: "deployment", want: []string{`creating a deployment of 01234567 into "env-run" in project 2: `, "403"}},
 		{name: "group label", want: []string{`creating group label "label-`, `in group 1: `, "403"}},
 		{name: "group milestone", want: []string{`creating group milestone "milestone-`, `in group 1: `, "403"}},
+		{name: "client project access", want: []string{"waiting for the client to read projects [7 8]: ", "context canceled"}},
 		{name: "pipeline", want: []string{`creating a pipeline on "main" in project 2: `, "403"}},
 		{name: "pipeline without waiting", want: []string{`creating a pipeline on "feature" in project 2: `, "403"}},
 		{name: "pipeline job", want: []string{"pipeline 77 in project 2 grew no job named " + ManualJobName + " within ", "403"}},
