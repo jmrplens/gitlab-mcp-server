@@ -15916,9 +15916,11 @@ func TestServerCardSubscriptions_PublishesTheEndingVocabulary(t *testing.T) {
 // evaluation run writes and cmd/gen_model_results reads,
 // internal/testutil/modelcorpus is the corpus that run is driven from,
 // internal/testutil/modelscore is the scorer that reads a record back against
-// that corpus, and internal/testutil/serialtypecheck is the blank import that
-// serializes go/packages under the race detector; each is named here in its
-// own right because this list matches exact import paths, so
+// that corpus, internal/testutil/serialtypecheck is the blank import that
+// serializes go/packages under the race detector, and
+// internal/testutil/netfixture is the dead address and the stoppable server
+// tests use where they used to close an httptest server; each is named here
+// in its own right because this list matches exact import paths, so
 // internal/testutil does not cover a subpackage of it.
 //
 // The scorer is the one of them that would cost nothing to link and still
@@ -15929,7 +15931,7 @@ func TestServerCardSubscriptions_PublishesTheEndingVocabulary(t *testing.T) {
 // instead: it sets GOMAXPROCS to one when a race build initializes it, so the
 // race-built server the transport modules drive would run on one processor.
 //
-// Today all ten stay out by accident, because nothing in the server's import
+// Today all eleven stay out by accident, because nothing in the server's import
 // graph happens to reach them. This makes it hold on purpose: the day somebody
 // imports test support from production code, this is the check that says so,
 // and it says so before the binary grows.
@@ -15944,6 +15946,7 @@ func TestDependencies_TestSupport_NeverReachesTheServerBinary(t *testing.T) {
 		"internal/testutil/modelcorpus",
 		"internal/testutil/modelscore",
 		"internal/testutil/serialtypecheck",
+		"internal/testutil/netfixture",
 		"internal/graphqlschema",
 		"internal/freshness",
 	}
