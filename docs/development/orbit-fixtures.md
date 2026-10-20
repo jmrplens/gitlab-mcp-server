@@ -9,16 +9,16 @@ the `plens1` group on gitlab.com. Those tests are gated behind the
 This document explains the data they expect and how to re-provision
 it.
 
-The suite holds 10 suites and 66 subtests, every query in GQL, the language GitLab.com reads every query in since 2026-10-15 (issue 1414). One subtest holds the query language GitLab.com describes to the GQL `orbit.query` teaches, and one what a query sent as a JSON object is answered. One holds the licensing tier the server detects for a token GitLab.com serves Orbit to at Premium or higher (issue 1224). One holds the release GitLab.com reports to the fine-grained action table's own release or the prerelease right after it (issue 1023), so GitLab.com moving past the table fails a run, and another holds that rule against a stand-in table with no network. One measures the query route against a token carrying `read_api` alone and runs only with `GITLAB_COM_READ_API_TOKEN`, and another holds that measurement's reading of GitLab's refusal against a stand-in, with no network.
+The file holds 10 tests and 66 subtests, and every query they send but one is written in GQL, the only query language GitLab.com has accepted since 2026-10-15 (issue 1414). One subtest checks that the query language GitLab.com describes is the GQL `orbit.query` teaches, and another sends the one exception, a query written as a JSON object, and checks what the caller is told when GitLab.com refuses it. One test holds the licensing tier the server detects for a token GitLab.com serves Orbit to at Premium or higher (issue 1224). One holds the release GitLab.com reports to the fine-grained action table's own release or the prerelease right after it (issue 1023), so GitLab.com moving past the table fails a run, and another holds that rule against a stand-in table with no network. One measures the query route against a token carrying `read_api` alone and runs only with `GITLAB_COM_READ_API_TOKEN`, and another holds that measurement's reading of GitLab's refusal against a stand-in, with no network.
 
 ## What the tests need
 
-Every query the tests send is written in GQL, the read-only language
-based on openCypher 9 that GitLab.com compiles every query in since
-2026-10-15, and each was answered `200` against this namespace on
-2026-10-17. A query written as a JSON object, the query DSL the suite
-used before, is refused by GitLab.com now, and one subtest holds what a
-caller is told about it.
+Every query the tests send but one is written in GQL, the read-only
+language based on openCypher 9 that GitLab.com compiles every query in
+since 2026-10-15, and each of those was answered `200` against this
+namespace on 2026-10-17. The one that is not is written as a JSON object,
+the query DSL the suite used before, which GitLab.com refuses now, and the
+subtest that sends it holds what a caller is told about it.
 
 `TestOrbitLiveGitLabCom` and `TestOrbitLiveGitLabCom_ShapeDiscovery`
 are self-contained: they bound their projects by path
@@ -71,7 +71,7 @@ is a no-op.
 | `<ns>/security-fixtures` | Intentionally vulnerable code (hard-coded AWS keys, SQL injection, weak MD5 hashing, `eval()`) + 4 GitLab-managed security scanning templates                                                       | Populates Vulnerability, Finding, SecurityScan, VulnerabilityIdentifier, VulnerabilityOccurrence, VulnerabilityScanner                                                                   |
 
 The script provisions everything from `test/fixtures/orbit/{kg,security}-fixtures/`
-in this repo. The fixture content is committed and reproducible —
+in this repo. The fixture content is committed and reproducible, so
 no external state is needed.
 
 ### Fixture reproduction flow
@@ -110,7 +110,7 @@ skips if already present.
 
 The Orbit indexer is eventually consistent. After a fresh push:
 
-1. The indexer picks up the new content within 1–5 minutes.
+1. The indexer picks up the new content within 1 to 5 minutes.
 2. `indexing.state` may transiently report `"error"` even while
    `last_completed_at` advances and row counts keep growing. This is
    a GitLab-side artifact, not a fixture issue.

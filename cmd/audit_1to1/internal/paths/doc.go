@@ -15,8 +15,8 @@
 // first honest answer to what this server sends GitLab, and it puts that
 // inventory through seven checks.
 //
-// Five of them read the inventory as a list of endpoints and parameter names,
-// which is what the recording keeps of a request. The last two read values,
+// Four read the inventory as endpoints and parameter names, what the recording
+// keeps of a request, and one reads the source. The last two read values,
 // because names alone leave two whole classes of defect invisible: a field this
 // server writes into every body whatever the caller asked for, and a path built
 // out of a constant every fixture happens to agree with.
