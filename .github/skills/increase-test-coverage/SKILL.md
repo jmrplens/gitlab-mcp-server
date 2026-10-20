@@ -330,7 +330,7 @@ After all phases complete:
 1. Run full test suite: `go test -race -coverprofile=coverage.out ./...`
 2. Generate final coverage report: `go tool cover -func=coverage.out`
 3. Verify every touched package is at 100%, or name each function below it with its reason
-4. Run quality checks: `make golangci-lint`, `make check-test-subtests`, `make check-test-goroutines`, `make check-test-file-names`
+4. Run quality checks: `make golangci-lint`, `make check-test-subtests`, `make check-test-goroutines`, `make check-test-file-names`, `make check-closed-servers` (an address nothing answers comes from `internal/testutil/netfixture`, never from a closed `httptest` server)
 5. Refresh `docs/development/testing/testing.md`: `go run ./cmd/gen_testing_docs/`
 6. Verify the generated testing reference: `go run ./cmd/gen_testing_docs/ --check`
 7. Lint the generated testing reference: `npx markdownlint-cli2 docs/development/testing/testing.md`
@@ -493,5 +493,9 @@ return, or record with atomics and assert on the test goroutine). Verify with
 - A `_test.go` file exists only under the name of a module it tests
   (`branches.go` has `branches_test.go`, `merge_requests.go` has
   `merge_requests_test.go`); `make check-test-file-names` gates it.
+- An address nothing answers comes from `internal/testutil/netfixture`
+  (`DeadEndpoint`, `NewStoppableServer`), never from a closed `httptest`
+  server, whose freed port another listener can be given;
+  `make check-closed-servers` gates it.
 - Refresh the generated testing reference when done: `go run ./cmd/gen_testing_docs/`,
   then `go run ./cmd/gen_testing_docs/ --check`.

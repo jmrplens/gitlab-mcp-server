@@ -367,6 +367,7 @@ Test rules that CI gates:
 - A case table (`for _, tt := range tests`) must run each case under `t.Run` (`make check-test-subtests`; `go run ./cmd/audit_test_subtests/ -fix` rewrites the unambiguous shapes)
 - Never `t.Fatal`/`t.Fatalf`/`t.FailNow` inside an `httptest` handler or any other goroutine: `t.Errorf` + a deterministic response + `return`, or record with atomics and assert afterwards (`.github/instructions/test-goroutines.instructions.md`; `make check-test-goroutines`). `testutil.AssertRequestPath` / `AssertRequestMethod` / `AssertQueryParam` and `testutil.ForbiddenHandler` already follow the contract
 - A `_test.go` file is named after the module it tests (`make check-test-file-names`)
+- An address nothing answers comes from `internal/testutil/netfixture` (`DeadEndpoint`, `NewStoppableServer`), never from a closed `httptest` server, whose freed port another listener can be given (`make check-closed-servers`)
 
 ## Step 7: Write the End-to-End Scenario
 
@@ -398,7 +399,7 @@ go test ./internal/tools/{domain}/ -count=1 -v
 go run ./cmd/gen_testing_docs/ --check
 npx markdownlint-cli2 docs/development/testing/testing.md
 golangci-lint run --build-tags e2e ./internal/tools/{domain}/
-make check-test-subtests check-test-goroutines check-test-file-names check-e2e-static
+make check-test-subtests check-test-goroutines check-test-file-names check-closed-servers check-e2e-static
 make check-tool-reference check-site-stats
 ```
 

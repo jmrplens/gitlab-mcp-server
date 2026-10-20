@@ -499,6 +499,7 @@ Before declaring any test work complete:
 - [ ] `make check-test-subtests` passes: every case loop runs its cases under `t.Run`
 - [ ] `make check-test-goroutines` passes: no `t.Fatal`/`FailNow` off the test goroutine
 - [ ] `make check-test-file-names` passes: every `_test.go` is named after the module it tests
+- [ ] `make check-closed-servers` passes: an address nothing answers comes from `internal/testutil/netfixture` (`DeadEndpoint`, `NewStoppableServer`), never from a closed `httptest` server
 - [ ] `docs/development/testing/testing.md` refreshed with `go run ./cmd/gen_testing_docs/` at the end of the test phase when tests or coverage changed
 - [ ] `go run ./cmd/gen_testing_docs/ --check` passes
 
@@ -523,3 +524,7 @@ return, or record with atomics and assert on the test goroutine). Verify with
   `merge_requests_test.go`); `export_test.go`, build-constrained qualifiers and
   external-package qualifiers are the codified exemptions.
   `make check-test-file-names` gates it.
+- An address nothing answers comes from `internal/testutil/netfixture`
+  (`DeadEndpoint`, `NewStoppableServer`), never from a closed `httptest`
+  server, whose freed port another listener can be given;
+  `make check-closed-servers` gates it.

@@ -44,6 +44,7 @@ gitlab-mcp-server/
 │   ├── audit_test_goroutines/   # testing.T aborts made off the test goroutine
 │   ├── audit_test_names/        # Test function naming compliance (+ -check-files for test-file names)
 │   ├── audit_test_subtests/     # Case loops that assert without a t.Run subtest (+ -fix)
+│   ├── audit_test_closed_servers/ # httptest servers closed while their address is still used
 │   ├── audit_tokens/            # Token overhead audit (+ --compare-schemas sizing spike, -footprint)
 │   ├── bench_resources/         # Measures what the server costs to run; draws the published charts
 │   ├── format_md_tables/        # Normalizes Markdown pipe tables
@@ -65,7 +66,7 @@ gitlab-mcp-server/
 │   ├── progress/                # Progress notification tracker
 │   ├── elicitation/             # Interactive user input client
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
-│   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
+│   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON); netfixture/ for an address nothing answers
 │   ├── tools/                   # Tool orchestration layer + 180 sub-packages (149 with action_specs.go)
 │   │   ├── register.go          # RegisterAll() — catalog-backed individual tool projection
 │   │   ├── register_meta.go     # RegisterMetaStandaloneTools() — the standalone surfaces; catalog groups come from RegisterMetaCatalog

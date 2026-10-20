@@ -41,6 +41,7 @@ gitlab-mcp-server/
 │   ├── audit_test_goroutines/ # Off-goroutine testing.T abort audit (--check gate)
 │   ├── audit_test_names/   # Test naming convention (+ -apply/-dry-run; -check-files gates test-file naming)
 │   ├── audit_test_subtests/ # Case loops that assert without a t.Run subtest (-fix rewrites the unambiguous ones)
+│   ├── audit_test_closed_servers/ # httptest servers closed while their address is still used later in the function (make check-closed-servers)
 │   ├── bench_resources/    # What the server costs to run, and the charts the docs publish
 │   ├── godoc_tool/         # Godoc auditor + fixer (audit/fix; was audit_godocs + add_docs)
 │   ├── format_md_tables/   # Markdown pipe-table normalizer
@@ -69,7 +70,7 @@ gitlab-mcp-server/
 │   ├── clientcompat/, gatewaycompat/, cachehints/, capguard/ # Per-client and gateway compatibility, cache hints, capability guard
 │   ├── toolutil/           # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── graphqlschema/      # Pinned GitLab GraphQL schema (SDL embedded as text + provenance) and Validate()
-│   ├── testutil/           # Shared test helpers (NewTestClient, RespondJSON); NewTestClient validates every GraphQL document against the pinned schema
+│   ├── testutil/           # Shared test helpers (NewTestClient, RespondJSON); NewTestClient validates every GraphQL document against the pinned schema; netfixture/ is the dead endpoint and the stoppable server a test uses instead of a closed httptest server
 │   ├── tools/              # Tool orchestration layer + 180 sub-packages
 │   │   ├── action_catalog.go # Canonical action catalog built from domain ActionSpecs
 │   │   ├── actiongrants/   # The generated fine-grained table (table_gen.go, never edited) the catalog reads each action's requirement from

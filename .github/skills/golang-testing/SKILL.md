@@ -833,6 +833,10 @@ return, or record with atomics and assert on the test goroutine). Verify with
 - Test functions are named `TestToolName_Scenario_ExpectedResult`, and a
   `_test.go` file exists only under the name of a module it tests
   (`branches.go` has `branches_test.go`); `make check-test-file-names` gates it.
+- An address nothing answers comes from `internal/testutil/netfixture`
+  (`DeadEndpoint`, `NewStoppableServer`), never from a closed `httptest`
+  server, whose freed port another listener can be given;
+  `make check-closed-servers` gates it.
 - The shared mocks live in `internal/testutil` (`NewTestClient`, `RespondJSON`,
   `RespondJSONWithPagination`, `AssertRequestPath`, `ForbiddenHandler`); the
   project uses the standard library only, no `testify`.

@@ -35,6 +35,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_test_names`             | Source quality audits         | Classifies `Test*` functions by naming pattern; emits rename hints; `-check-files` gates test-file naming                                                                                                                                                                                                                                                                                                                                                                                | `make audit-test-names`, `make check-test-file-names`                                                                                                                   |
 | `audit_test_goroutines`        | Source quality audits         | `testing.T` aborts made off the test goroutine                                                                                                                                                                                                                                                                                                                                                                                                                                           | `make check-test-goroutines`                                                                                                                                            |
 | `audit_test_subtests`          | Source quality audits         | Case loops that assert without a `t.Run` subtest; `-fix` rewrites the unambiguous ones                                                                                                                                                                                                                                                                                                                                                                                                   | `make check-test-subtests`                                                                                                                                              |
+| `audit_test_closed_servers`    | Source quality audits         | An `httptest` server closed while its address, or a value built from it, is still used later in the same function, whose freed port another listener could be given                                                                                                                                                                                                                                                                                                                      | `make check-closed-servers`                                                                                                                                             |
 | `audit_md_escaping`            | Source quality audits         | Values a Markdown formatter interpolates into a table cell, heading, list item or link without an escaping helper, or into a code fence it wrote by hand; staged, card rows written by hand and flags or timestamps printed without their helpers                                                                                                                                                                                                                                        | `make check-md-escaping`                                                                                                                                                |
 | `audit_sdk_context`            | Source quality audits         | Every call into client-go in `internal/` and `cmd/` hands the SDK the caller's context, which it takes only as the `gl.WithContext` request option and which neither `noctx` nor `contextcheck` can see                                                                                                                                                                                                                                                                                  | `make check-sdk-context`                                                                                                                                                |
 | `audit_tenancy`                | Source quality audits         | Holds the tenant policy register (`internal/tenancy`) to the code that enforces it: every row's sites, values, refusals, charges and reasons against the source, and anything shaped like a limit, in a shape its tripwire reads, to a row or a reasoned exemption; `-compare-binaries` proves a change moved no code                                                                                                                                                                    | `make check-tenancy`, `make audit-tenancy`, `make tenancy-code-identity`                                                                                                |
@@ -991,10 +992,10 @@ The report holds the findings deduplicated by package, schema type and field, wi
 
 #### Make targets
 
-- `make check-graphql-shapes`: the CI gate; also step [17/29] of `make analyze`.
+- `make check-graphql-shapes`: the CI gate; also step 17 of `make analyze`.
 - `make audit-graphql-shapes`: the same gate, listing everything it judged.
 - `make audit-graphql-sent`: the same run, writing `plan/graphql-sent.json`. The record is deliberately uncommitted and not freshness-gated: a schema re-pin would churn it every time.
-- `make check-graphql-sdk-shapes`: the client-go run (`-sdk`), a CI step of its own and part of step [17/29] of `make analyze`, so a client-go bump or a re-pin that moves what client-go selects fails until `sdk_declarations.go` or `sdk_declarations_sent.go` answers it, except where a type is declared whole rather than field by field.
+- `make check-graphql-sdk-shapes`: the client-go run (`-sdk`), a CI step of its own and part of step 17 of `make analyze`, so a client-go bump or a re-pin that moves what client-go selects fails until `sdk_declarations.go` or `sdk_declarations_sent.go` answers it, except where a type is declared whole rather than field by field.
 - `make audit-graphql-sdk-sent`: the client-go run listing every answer and writing `plan/graphql-sdk-sent.json`, uncommitted for the same reason.
 
 ## Surface quality audits
@@ -1296,7 +1297,7 @@ Human report to stdout (per-site `file:line [category] boundary`), summary line,
 #### Make targets
 
 - `make audit-test-goroutines` — writes `plan/test-goroutines-backlog.json`.
-- `make check-test-goroutines` — CI gate; also step [6/15] of `make analyze`.
+- `make check-test-goroutines`: CI gate; also step 7 of `make analyze`.
 
 ### audit_test_names
 
@@ -1364,7 +1365,49 @@ Per-file tallies (`sites`, `fixable`), a summary line, and optionally the JSON w
 #### Make targets
 
 - `make audit-test-subtests` — writes `plan/test-subtests-backlog.json`.
-- `make check-test-subtests` — CI gate; also step [7/15] of `make analyze`.
+- `make check-test-subtests`: CI gate; also step 8 of `make analyze`.
+
+### audit_test_closed_servers
+
+Reports every `httptest` server a function closes while its address is still used later in the same function. Closing a server gives its port back to the kernel at once, and whatever is given the port next can answer the request the test exists to see fail: a parallel test of the same package starting a server of its own, or a test binary of another package running beside it in the same coverage run. `cmd/bench_resources` failed that way in CI (issue 1131), and issue 1132 moved sixteen more sites in seven packages. A test that needs an address nothing answers takes one from `internal/testutil/netfixture` instead: `DeadEndpoint`, which holds a loopback port for the whole test and hangs up on every connection, or `NewStoppableServer`, which answers until the test calls `Stop` and then hangs up, keeping its port (see [Test Infrastructure](test-infrastructure.md)).
+
+The server is known by the `Close` method the type checker resolves, so one a helper returned (the issue named `stubVersionServer` in `internal/gitlab`), one held in a field and one embedded in a type of the test's own are followed like one started in place, and a variable given that `Close` as a method value (`stop := srv.Close`) closes the server where it is called or handed to a `Cleanup`, until an assignment gives it something else. So is every other name the server had before the close: a variable it was copied from (`other := srv` closed as `other.Close()`), and what a field it is closed through was given anywhere in the load, by an assignment or a composite literal, so `holder{server: srv}` closed as `h.server.Close()` is `srv`'s close, and a helper's `&fake{srv: s, url: s.URL}` makes the `url` field carry the address of the server closed as `f.srv.Close()`. Those names are found backwards from the one the server is closed through before anything is followed forwards, so two servers stored in one field are not taken for each other merely because both were stored there.
+
+Its address is followed through assignments to a fixed point: a URL saved before the close, a host and port trimmed from it, a client, a request or a function built on it, a struct holding it, whether built with it or given it through a field (`cfg.base = srv.URL` makes `cfg` carry it), and the variables of a range over it. Text, a string or a slice of bytes, is followed only as an address is built, through selectors, operators, conversions and the functions of `fmt`, `strings`, `net`, `net/url`, `path` and `path/filepath`; text any other call returned is read as what the call answered. An error, a boolean, a number and an answer are never followed, an answer being a response or a header of `net/http`, a stream of `io`, or a struct embedding one, as a client's own response type does. A name given a new value after the close stops being followed from the end of that assignment to the end of the block, or case of a `switch` or a `select`, the assignment is in, both as a use and as the source of a later value, since past that branch the old value may still be there: `if live { url = other.URL }` leaves the closed server's address in `url` for the case that does not take the branch. A new value built from the old one, as in `addr = strings.TrimPrefix(addr, "http://")`, is a use of it, `u := srv.URL` on the branch once `srv` holds a new server is not, an operator such as `+=` reads the value it changes and gives the name no new one, and a range statement's `=` gives its names new values once its expression is read and only until the loop ends, since a loop over nothing gives them none.
+
+A deferred close happens when the function that deferred it returns. In a function literal that is when the literal returns, so a use after the literal is reported. In the top-level function nothing written after the defer follows it, but two things still can: what the function returns after the defer, which its caller holds once the close has run, so a helper that defers the close of the server whose address it returns (`defer srv.Close(); return srv.URL`), or a client built on it, is reported at the defer; and a parallel subtest. A close handed to a test's `Cleanup`, as a literal or as the method value `t.Cleanup(srv.Close)`, happens when that test ends: a subtest's when its literal returns, so a use after the subtest is reported, and the top-level test's after everything the function runs, so it is not judged. A close a helper literal registers on the test its caller hands it, the `newServer(t)` shape, waits for whichever test that is, and is not taken to be in this function either. A subtest, a function literal handed to `Run`, that calls `Parallel` on its own test goes on from that call only once the body that started it has returned, the closes that body defers included, and before that test's `Cleanup` runs: what it reads from the call on is read after every close that body makes, in place, deferred, or in a subtest it runs and what that subtest defers or registers, and before a close registered on the `Cleanup` of that test or of an outer one, so `defer srv.Close()` followed by a parallel subtest that dials `srv.URL` is reported, and `t.Cleanup(srv.Close)` is not. What such a subtest defers or registers itself waits for the test that started it. A close on a branch, a block or a case of a `switch` or a `select`, that then returns, panics, or calls a test's `Fatal`, `FailNow` or `Skip` is followed only to the end of that branch, so the error path of a helper that closes the server it could not use and panics, the shape of the stub client `cmd/internal/mcpsurface` builds, is not followed into the success path below it, nor into a parallel subtest written after the branch.
+
+It loads `./...` with every package's tests through `cmd/internal/goprogram`, under `GO_ANALYSIS_TAGS`, so the files behind each end-to-end suite's tag are read; `TestAnalysisTags_AreTheMakefilesAnalysisTags` holds its list to the Makefile's. A file a build constraint still leaves out and that imports `net/http/httptest` is reported as unjudged and fails the gate. It covers `httptest` servers only, as decided on the issue, and reads positions rather than control flow beyond the branch rule: a close in one loop iteration and a use earlier in the body is not seen, a close in a function literal that is neither deferred nor registered counts where it is written, a copy of the server is the same server whenever it was made, a name given a new value on every branch of an `if` is still followed after it, a parallel subtest reads each name as it stands where the subtest is written, a subtest whose literal reaches `Run` through a variable is not known to be parallel, a close made inside a helper the server is handed to is judged in the helper, a server in a field is known by the field and a field is given the same values wherever in the load it was given them, a server closed through anything but a name or a field (an index, a dereferenced pointer, the result of a call), or through its `Close` held anywhere but a variable of the function, is not judged and its close is not counted, an address stored through an index, an explicit dereference or the result of a call is not followed, and a value other than text or an answer that a call over the address returned, such as a decoded object, is taken to keep the address, so reading one after the close is reported. The planted module under `testdata/planted` holds every shape it reports and every one it accepts, a finding behind each of the five tags, a hidden file, and a declared one.
+
+```bash
+go run ./cmd/audit_test_closed_servers/
+go run ./cmd/audit_test_closed_servers/ -check
+go run ./cmd/audit_test_closed_servers/ -v
+go run ./cmd/audit_test_closed_servers/ -check ./internal/oauth
+```
+
+#### Flags
+
+| Flag     | Type   | Default | Description                                                                     |
+| -------- | ------ | ------- | ------------------------------------------------------------------------------- |
+| `-dir`   | string | `.`     | Module root the patterns are resolved against                                   |
+| `-check` | bool   | `false` | Exit non-zero on a finding, a stale or unknown declaration, or an unjudged file |
+| `-v`     | bool   | `false` | Also list the closes a declaration excuses                                      |
+
+Package patterns after the flags narrow the run; the default is `./...`.
+
+#### Declarations
+
+A function allowed to close a server and go on using its address is declared in `cmd/audit_test_closed_servers/declarations.go`, keyed `package:Func` with a category and a reason. The one category is `only-as-text`: after the close the address is only read as text and nothing dials it. A declaration that excuses nothing in a package the run loaded is reported as stale, and one naming an undefined category as unknown; both fail the gate. The table is empty.
+
+#### Output
+
+One line per finding, naming the file and line of the close, the server as written, the name the address is used through after it and that line, and the function; then the stale and unknown declarations and the unjudged files; then a summary of the closes judged (every one but those that wait for the top-level test to end, which nothing in the function can follow), the packages read, the findings and the excused ones.
+
+#### Make targets
+
+- `make audit-closed-servers`: the report, with what a declaration excuses.
+- `make check-closed-servers`: CI gate, in the compile job; also step 30 of `make analyze`.
 
 ### audit_md_escaping
 
@@ -1420,7 +1463,7 @@ Findings grouped by package, each naming the file, line, formatter, construct, v
 #### Make targets
 
 - `make audit-md-escaping` — report plus `plan/md-escaping-backlog.json`, with the two staged rules judged beside the gating contexts.
-- `make check-md-escaping` — CI gate over the six gating contexts, holding `internal/toolutil` to no unresolved value; also step [9/15] of `make analyze`.
+- `make check-md-escaping`: CI gate over the six gating contexts, holding `internal/toolutil` to no unresolved value; also step 10 of `make analyze`.
 
 ### audit_sdk_context
 
@@ -1813,7 +1856,7 @@ Writes `gitlab-api-live.json` into `-dir` and reports two lines: the entity, fie
 #### Make targets
 
 - `make gen-api-live`
-- `make check-api-live`, the CI gate and step [16/29] of `make analyze`.
+- `make check-api-live`, the CI gate and step 16 of `make analyze`.
 
 ### gen_orbit_record
 
@@ -2620,6 +2663,7 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | `check-binary-vulns`                     | `audit_binary_vulns`                                             | No advisory the declaration table does not accept affects a module any release binary links, and every declaration still matches a finding                                                                       | Non-zero on an undeclared finding, a stale or malformed declaration, or a build or scan that could not be made                                                                    |
 | `check-test-goroutines`                  | `audit_test_goroutines`                                          | No `testing.T` abort is made off the test goroutine                                                                                                                                                              | Non-zero if any abort site exists                                                                                                                                                 |
 | `check-test-subtests`                    | `audit_test_subtests`                                            | No case loop asserts without a `t.Run` subtest                                                                                                                                                                   | Non-zero if any site remains                                                                                                                                                      |
+| `check-closed-servers`                   | `audit_test_closed_servers -check`                               | No `httptest` server is closed while its address is still used later in the function, and every entry of its declaration table excuses one                                                                       | Non-zero on a finding, a stale or unknown declaration, or a hidden file that imports `net/http/httptest`                                                                          |
 | `check-test-file-names`                  | `audit_test_names -check-files`                                  | Every `_test.go` is named after a module it tests                                                                                                                                                                | Non-zero on a violation                                                                                                                                                           |
 | `check-md-escaping`                      | `audit_md_escaping -check -fail-unresolved-in internal/toolutil` | No value reaches a Markdown table cell, heading, list item or link unescaped, none lands inside a hand-written code fence, and `internal/toolutil` holds no value the audit cannot follow                        | Non-zero on a finding, a directive that excuses nothing, or an unresolved value in toolutil                                                                                       |
 | `check-site-stats`                       | `audit_metrics -site-stats -check`                               | `site/src/data/stats.json` is current                                                                                                                                                                            | Non-zero if the file is stale                                                                                                                                                     |

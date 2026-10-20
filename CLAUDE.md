@@ -54,7 +54,7 @@
 | MCP Icons                 | 51 icons (50 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG. The brand mark is the generated "fan-out" (`cmd/gen_brand` → `brandmark_gen.go`), original artwork replacing the former tanuki |
 | Source files (tools)      | 785 non-test Go files under `internal/tools/`                                                                |
 | Test files (tools)        | 482 test files under `internal/tools/`                                                                       |
-| Go packages               | 300 in the module (`go list ./...`); 322 directories hold tracked `.go` files, the twenty-two more being what `go list` leaves out: twenty-one `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the stand-in module the SDK route reader's tests read and the platform module the condition measurement's discovery lists) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 181 under `internal/tools/...` (the root package plus 180 sub-packages) |
+| Go packages               | 302 in the module (`go list ./...`); 329 directories hold tracked `.go` files, the twenty-seven more being what `go list` leaves out: twenty-six `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the closed-server audit's planted module, the stand-in module the SDK route reader's tests read and the platform module the condition measurement's discovery lists) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 181 under `internal/tools/...` (the root package plus 180 sub-packages) |
 
 ### Orbit live tests
 
@@ -94,6 +94,7 @@ gitlab-mcp-server/
 │   ├── audit_test_goroutines/        # testing.T aborts off the test goroutine (make check-test-goroutines)
 │   ├── audit_test_names/             # Test function and file naming (make check-test-file-names)
 │   ├── audit_test_subtests/          # Case loops that assert without t.Run (make check-test-subtests)
+│   ├── audit_test_closed_servers/    # httptest servers closed while their address is still used (make check-closed-servers)
 │   ├── audit_tokens/                 # Token usage of the model-facing surfaces
 │   ├── bench_resources/              # CPU and memory measurements and the charts the docs publish (make bench-resources)
 │   ├── gen_model_corpus/             # Model evaluation corpus breadth ledger
@@ -134,7 +135,7 @@ gitlab-mcp-server/
 │   ├── tenancy/                      # The tenant policy register (ADR-0023): decides, never enforces
 │   ├── telemetry/                    # The one place that knows the OpenTelemetry SDK
 │   ├── toolutil/                     # Shared tool utilities (errors, pagination, markdown, logging)
-│   ├── testutil/                     # Shared test helpers (NewTestClient, RespondJSON)
+│   ├── testutil/                     # Shared test helpers (NewTestClient, RespondJSON); netfixture/ for an address nothing answers
 │   ├── tools/                        # Tool orchestration layer + 180 sub-packages
 │   │   ├── action_catalog.go         # Builds the canonical action catalog from domain ActionSpecs
 │   │   ├── actiongrants/             # The generated fine-grained table (table_gen.go, never edited)
@@ -305,6 +306,7 @@ All tests mock GitLab with `httptest` through `internal/testutil` (`NewTestClien
 
 - **Never `t.Fatal`/`FailNow` off the test goroutine** (httptest handlers, `go` statements, MCP handlers): `t.Errorf`, a deterministic response and `return`, or record with atomics and assert afterwards, per `.github/instructions/test-goroutines.instructions.md`; `make check-test-goroutines` gates it
 - **Every case table runs under `t.Run`**, one subtest per case; `// sequential: <reason>` on the line above a loop declares dependent steps rather than cases, and `make check-test-subtests` gates it
+- **An address nothing answers comes from `internal/testutil/netfixture`** (`DeadEndpoint`, or `NewStoppableServer` for an instance that answers and then goes away), never from a closed `httptest` server, whose freed port another listener can answer on; `make check-closed-servers` gates it
 - **A test that compares a committed generated artifact calls `freshness.SkipIfDeferred(t)` first**, guarding the comparison and nothing else
 - Test naming: `TestToolName_Scenario_ExpectedResult`; a `_test.go` exists only under the name of a module it tests, with the exemptions `make check-test-file-names` codifies
 
