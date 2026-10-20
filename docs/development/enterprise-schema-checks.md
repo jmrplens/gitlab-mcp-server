@@ -125,8 +125,8 @@ CE one.
 
 ### Where its result belongs
 
-The release rehearsal (`gh workflow run release.yml --ref <branch>`, described in the
-release process section of [CLAUDE.md](../../CLAUDE.md)) is the moment to run it, so a
+The release rehearsal (`gh workflow run release.yml --ref <branch>`, described in
+[Release Process](release-process.md)) is the moment to run it, so a
 tag cannot be cut without somebody having looked at the result.
 
 ## What every push checks without a license

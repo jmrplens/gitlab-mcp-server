@@ -12,8 +12,8 @@ page per channel, and the
 [Claude Desktop Extension](https://docs.jmrp.io/gitlab-mcp-server/claude-desktop/)
 page. This page is the other half: what produces those artifacts and what
 refuses a bad one. The release workflow's own sequence (draft, attest,
-publish, read back) is described in the Release process section of
-[CLAUDE.md](../../CLAUDE.md), and the settings it depends on that live on
+publish, read back) is described in
+[Release Process](release-process.md), and the settings it depends on that live on
 GitHub rather than in the tree are in
 [Repository Settings](repository-settings.md).
 

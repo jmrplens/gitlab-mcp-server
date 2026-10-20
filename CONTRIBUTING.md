@@ -262,7 +262,7 @@ Some documentation is written by a generator and never edited by hand. Change wh
 - Adding a new meta-tool action → update the action count table of the site page `tools/meta-tools`
 - Adding a new resource or prompt → update the site page `tools/resources-prompts`
 - Adding a new capability → update the site page `capabilities/overview` and the capability's own page under `capabilities/`, and [`docs/development/capabilities.md`](docs/development/capabilities.md) for the API a contributor calls
-- Changing configuration → update the site pages `configuration` and `reference/environment`, `reference/cli` for a flag, the variable and flag tables in `CLAUDE.md`, and the environment variable and flag tables in `.github/copilot-instructions.md`
+- Changing configuration → update the site pages `configuration` and `reference/environment`, `reference/cli` for a flag, the variable and flag lists in [`docs/development/configuration.md`](docs/development/configuration.md) and the summary table in `CLAUDE.md`, and the environment variable and flag tables in `.github/copilot-instructions.md`
 - Changing how the code is put together (a new package, the path a call takes) → update [`docs/development/architecture.md`](docs/development/architecture.md); a change to error classification or wrapping → [`docs/development/error-handling.md`](docs/development/error-handling.md); a change to how a bundle or channel is built or published → [`docs/development/distribution.md`](docs/development/distribution.md)
 - Changing how the repository works (a gate, a generator, a convention) → update `docs/development/` or `CLAUDE.md`, never the site
 - Adding or modifying tests → run `make gen-testing-docs` to refresh `docs/development/testing/testing.md`
@@ -285,7 +285,7 @@ The one exception is the Spanish half of the user documentation: the Spanish twi
 
 A release is cut by a tag. Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds every binary with GoReleaser, signs and attests what it publishes, creates the GitHub release and publishes the other channels (container images, npm, PyPI, NuGet, Homebrew, winget, the MCP Registry). `gh workflow run release.yml --ref <branch>` rehearses the whole run without publishing anything.
 
-`make release` builds the same binaries locally as a GoReleaser snapshot and flattens `dist/` to the release asset names, which is a way to inspect them, not to publish them. The Release process section of [CLAUDE.md](CLAUDE.md#release-process) carries the details.
+`make release` builds the same binaries locally as a GoReleaser snapshot and flattens `dist/` to the release asset names, which is a way to inspect them, not to publish them. [`docs/development/release-process.md`](docs/development/release-process.md) carries the details.
 
 ## Issue Reporting
 

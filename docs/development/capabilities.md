@@ -13,8 +13,7 @@ and, for the icons, which are presentation metadata rather than a capability,
 under [Icons](https://docs.jmrp.io/gitlab-mcp-server/reference/icons/) in the
 reference. This page is the Go side. Resource subscriptions have their
 decisions in [ADR-0015](adr/adr-0015-polled-resource-subscriptions.md) and
-their invariants in [CLAUDE.md](../../CLAUDE.md) under "Resource
-subscriptions".
+their invariants in [Resource Subscriptions](resource-subscriptions.md).
 
 ---
 

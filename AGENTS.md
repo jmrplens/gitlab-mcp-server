@@ -9,7 +9,7 @@
 
 | Where                                               | Why                                                                                 |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `CLAUDE.md`                                         | Full project context, env vars, ADR list, agents/skills catalog                     |
+| `CLAUDE.md`                                         | Project rules and context, ADR list, agents/skills catalog, docs/development index  |
 | `.github/copilot-instructions.md`                   | Auto-loaded by VS Code Copilot; has the language policy, env var table, E2E recipes |
 | `.github/instructions/*.md`                         | Auto-applied coding standards (go, MCP, OWASP, comments, code review)               |
 | `docs/development/tool-surfaces-and-action-core.md` | Surface ownership and catalog projection rules                                      |

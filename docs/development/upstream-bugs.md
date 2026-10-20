@@ -4916,7 +4916,7 @@ eight option types when read on 2026-10-07, two of them the share rows issue
 option types (33 always-sent fields GitLab requires beside them, and two the
 route does not declare): the nine of entries 52 and 54, which leave it with
 that bump, and the two of entry 121, which leave it with that entry's tag. The
-sentence of `CLAUDE.md`'s Request paths section that counts the 11 and the 33
+sentence of [Request Paths and Fine-Grained Grants](request-paths.md) that counts the 11 and the 33
 moves with it. The bump layer does, beside what entries 6 and 52 list:
 
 - `pipelineschedules.EditVariable` makes `value` optional in the handler, in

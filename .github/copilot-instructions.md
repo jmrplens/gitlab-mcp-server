@@ -248,7 +248,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 
 1. Build cross-platform binaries with `make release` (uses GoReleaser locally, flattens `dist/` to match GitHub Release asset names)
 2. **Release link names MUST be exact filenames** (e.g. `checksums.txt.sigstore.json`, `gitlab-mcp-server-linux-amd64`). Never add descriptive suffixes like `(GPG signature)` — the Homebrew formula, winget, the installers and `scripts/fetch-release-assets.sh` look assets up by exact name and will not find a decorated one
-3. The full chain (draft-then-publish, `.mcpb` bundle, npm, PyPI and NuGet trusted publishers, Homebrew tap, winget, `server.json` stamping, and how to rehearse it with `gh workflow run release.yml --ref <branch>`) is documented under "Release process" in `CLAUDE.md`
+3. The full chain (draft-then-publish, `.mcpb` bundle, npm, PyPI and NuGet trusted publishers, Homebrew tap, winget, `server.json` stamping, and how to rehearse it with `gh workflow run release.yml --ref <branch>`) is documented in `docs/development/release-process.md`
 
 ### Git Workflow
 
@@ -283,9 +283,9 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `GITLAB_MCP_AUTH_MODE`              | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) | `legacy` (default) |
 | `GITLAB_MCP_OAUTH_CACHE_TTL`        | OAuth token identity cache TTL (also `--oauth-cache-ttl` flag) | `15m` (default)  |
 
-This table is the subset an assistant meets most often. Every variable, its bounds and its flag are tabulated under "Environment variables" in `CLAUDE.md`; the [environment variable](https://docs.jmrp.io/gitlab-mcp-server/reference/environment/) and [CLI](https://docs.jmrp.io/gitlab-mcp-server/reference/cli/) pages are the user-facing references. In HTTP mode an explicitly passed flag wins over the environment variable, which wins over the default (`internal/config/http_overlay.go`).
+This table is the subset an assistant meets most often. Every variable, its bounds and its flag are listed in `docs/development/configuration.md`; the [environment variable](https://docs.jmrp.io/gitlab-mcp-server/reference/environment/) and [CLI](https://docs.jmrp.io/gitlab-mcp-server/reference/cli/) pages are the user-facing references. In HTTP mode an explicitly passed flag wins over the environment variable, which wins over the default (`internal/config/http_overlay.go`).
 
-**HTTP-only flags** (no environment variable equivalent; two of many, the rest are in `CLAUDE.md`):
+**HTTP-only flags** (no environment variable equivalent; two of many, the rest are in `docs/development/configuration.md`):
 
 | Flag                       | Description                                                    | Default            |
 | -------------------------- | -------------------------------------------------------------- | ------------------ |

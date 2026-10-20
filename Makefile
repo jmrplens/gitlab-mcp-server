@@ -1441,7 +1441,7 @@ publish-npm-dry:
 	scripts/publish-npm.sh "$(NPM_BINARIES)" "$$(tr -d '[:space:]' < VERSION)" --dry-run
 
 ## publish-npm: assemble and publish the npm distribution (platform packages, then launcher).
-## Auth via npm login or NPM_TOKEN. See the release process in CLAUDE.md.
+## Auth via npm login or NPM_TOKEN. See docs/development/release-process.md.
 publish-npm:
 	@test -n "$(NPM_BINARIES)" || { echo "ERROR: set NPM_BINARIES=<dir of release binaries>"; exit 1; }
 	scripts/publish-npm.sh "$(NPM_BINARIES)" "$$(tr -d '[:space:]' < VERSION)"
@@ -1554,7 +1554,7 @@ publish-nuget:
 ## requires the git URL; an already-published plugin is refused with "use lhm
 ## plugin update", which is what this target runs. Requires a one-time
 ## interactive `lhm login` + `lhm github connect` on the machine — LobeHub has
-## no CI path. See the release process in CLAUDE.md.
+## no CI path. See docs/development/release-process.md.
 # Pinned: the CLI has already changed its verb contract under this target
 # once (publish -> update, a new positional gitUrl); bump deliberately after
 # verifying `plugin update --dir` still holds.

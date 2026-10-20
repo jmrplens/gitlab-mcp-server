@@ -116,8 +116,8 @@ graph TD
 
 The invariants of this path (which middleware binds the credential, why the
 carrier wraps the SDK handler inside the gate, what the Host guard decides)
-are listed in [CLAUDE.md](../../CLAUDE.md) under "OAuth admission, per-action
-write gating, and HTTP routing", and the decisions behind them in
+are explained in [HTTP Mode Invariants](http-invariants.md), and the
+decisions behind them in
 [ADR-0018](adr/adr-0018-authorization-admits-per-action-gating.md) and
 [ADR-0020](adr/adr-0020-one-server-per-configuration-shape.md).
 
