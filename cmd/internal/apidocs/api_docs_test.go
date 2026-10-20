@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
 )
 
 // realSleepCtx keeps the production sleep so TestSleepCtx can exercise it
@@ -176,10 +178,9 @@ func TestFetch_RetriesOn429ThenSucceeds(t *testing.T) {
 
 func TestFetch_NetworkErrorFallsBackToStaleCache(t *testing.T) {
 	dir := t.TempDir()
-	// Closed server -> connection refused.
-	srv := httptest.NewServer(http.NotFoundHandler())
-	base := srv.URL + "/"
-	srv.Close()
+	// A dead endpoint hangs up before any answer, which is a network error
+	// rather than an HTTP status, and keeps its port for the whole test.
+	base := netfixture.DeadEndpoint(t) + "/"
 
 	cachePath := filepath.Join(dir, "branches.md")
 	if err := os.WriteFile(cachePath, []byte("stale-but-usable"), 0o600); err != nil {

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
 	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
@@ -528,15 +529,14 @@ func TestRun_ACredentialThisRunHolds_ReachesTheInstanceOrIsExplained(t *testing.
 // TestRun_AnInstanceThatCannotBeReached_FailsWithoutFallingBackToThePin
 // verifies that a re-probe whose instance never answered stops rather than
 // judging by the pin, which would report a pass for a question nobody asked.
+// The instance is a [netfixture.DeadEndpoint], which hangs up before any
+// answer and keeps its port, so no other listener can answer in its place.
 func TestRun_AnInstanceThatCannotBeReached_FailsWithoutFallingBackToThePin(t *testing.T) {
-	unreachable := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	unreachable.Close()
-
 	var out, errOut bytes.Buffer
 	status := run(auditRun{
 		dir:      fixtureModule(t, map[string]string{"ok": okFixture}),
 		patterns: []string{"./..."},
-		live:     unreachable.URL,
+		live:     netfixture.DeadEndpoint(t),
 	}, &out, &errOut)
 
 	if status != 1 {

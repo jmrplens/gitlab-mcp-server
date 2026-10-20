@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelrecord"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
 )
 
 // testKey is the credential every adapter test is built with. It is not a
@@ -438,13 +439,9 @@ func TestCall_BoundsWhatItKeepsOfABadDay(t *testing.T) {
 }
 
 func TestCall_ReportsATransportFailureAsOne(t *testing.T) {
-	// A server that is closed before the call is the cheapest unreachable
-	// endpoint there is.
-	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	endpoint := server.URL
-	server.Close()
-
-	adapter := adapterFor(t, "anthropic:claude-haiku-4-5-20251001", endpoint)
+	// A dead endpoint hangs up before any answer and keeps its port, so the
+	// call fails in transport and no other listener can answer it instead.
+	adapter := adapterFor(t, "anthropic:claude-haiku-4-5-20251001", netfixture.DeadEndpoint(t))
 	answer, err := adapter.Call(t.Context(), Request{})
 	if err == nil {
 		t.Fatal("an unreachable provider was reported as a success")
