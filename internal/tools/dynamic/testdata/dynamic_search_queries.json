@@ -325,6 +325,111 @@
         "notes": "Observed Enterprise Dynamic eval wording should prefer group protected branch protection over generic access token actions."
     },
     {
+        "category": "plural_issue_list",
+        "query": "list issues",
+        "want_top": "issue.list",
+        "notes": "A plural noun reaches the singular domain the catalog spells, ahead of actions that only mention issues in a parameter (issue 1121)."
+    },
+    {
+        "category": "plural_branch_list_noun_first",
+        "query": "branches list",
+        "want_top": "branch.list",
+        "notes": "An es plural reaches its singular in either word order; the value branches of an enum in pipeline.list no longer wins (issue 1121)."
+    },
+    {
+        "category": "plural_pipeline_read",
+        "query": "show pipelines",
+        "want_top": "pipeline.list",
+        "notes": "A read of a plural asks for many, so the list of the domain the plural names ranks over a get of one item (issue 1121)."
+    },
+    {
+        "category": "plural_tag_list",
+        "query": "list tags",
+        "want_top": "tag.list",
+        "notes": "A plural lifts the list action whose ID spells it, not a list action of another domain that carries the word among its tags (issue 1121)."
+    },
+    {
+        "category": "plural_commit_list",
+        "query": "list commits",
+        "want_top": "repository.commit_list",
+        "notes": "A plural of commit reaches repository.commit_list through the singular the catalog spells; with the ref tags of its optional ref, pipeline.list would have reached commit as strongly (issue 1121)."
+    },
+    {
+        "category": "singular_commit_list",
+        "query": "list commit",
+        "want_top": "repository.commit_list",
+        "notes": "An optional ref names no resource, so pipeline.list, whose ref only filters its pipelines, no longer ranks first for commits as the ref tags made it (issue 1121)."
+    },
+    {
+        "category": "plural_misspelled_branchs",
+        "query": "branchs list",
+        "want_top": "branch.list",
+        "notes": "A plural misspelled with a plain s still reaches the singular the catalog spells."
+    },
+    {
+        "category": "plural_in_a_sentence",
+        "query": "show pipeline and its jobs",
+        "want_top": "job.list",
+        "notes": "A plural inside a longer read reaches the list of the resource it names, ahead of a get of one job (issue 1121)."
+    },
+    {
+        "category": "plural_destructive_not_a_list",
+        "query": "delete merged branches",
+        "want_top": "branch.delete_merged",
+        "expect_destructive_top": true,
+        "notes": "A plural under a destructive verb gains no list preference, so the destructive action it names stays first."
+    },
+    {
+        "category": "plural_merge_requests_verbless",
+        "query": "merge requests",
+        "want_top": "merge_request.list",
+        "forbid_destructive_top": true,
+        "notes": "Merge is the first word of the domain merge request names, not a verb, so a verbless plural of it asks for the list and never for merge_request.merge (issue 1121)."
+    },
+    {
+        "category": "plural_merge_requests_scoped",
+        "query": "project merge requests",
+        "want_top": "merge_request.list",
+        "forbid_destructive_top": true,
+        "notes": "A scope word before the plural of a compound domain still asks for the list of that domain (issue 1121)."
+    },
+    {
+        "category": "plural_named_by_its_action",
+        "query": "list ssh keys",
+        "want_top": "user.ssh_keys",
+        "notes": "An action named by the plural itself ranks above lists that only hold its singular, and the singular forms no compound tag such as ssh key (issue 1121)."
+    },
+    {
+        "category": "plural_archive_not_one_artifact",
+        "query": "download job artifacts",
+        "want_top": "job.artifacts",
+        "notes": "A plural of artifact asks for the archive the plural names, not for the single artifact its singular reaches (issue 1121)."
+    },
+    {
+        "category": "plural_scope_free_service_accounts",
+        "query": "list service accounts",
+        "want_top": "user.list_service_accounts",
+        "notes": "The singular of a plural feeds no intent that reads the query's words, so a query naming no scope keeps the instance list of service accounts first (issue 1121)."
+    },
+    {
+        "category": "plural_under_an_unclassified_verb",
+        "query": "close issues",
+        "want_top": "issue.update",
+        "notes": "A verb the verb intent does not know keeps a plural from asking for a list, even where a synonym of it is a word of a list action's ID, so the action that closes an issue stays first (issue 1121)."
+    },
+    {
+        "category": "required_ref_names_where_to_start",
+        "query": "create branch from commit",
+        "want_top": "branch.create",
+        "notes": "A required ref names the point its action starts from, so the commit a branch is created from lifts branch.create, and repository.commit_create, which takes the branch to commit to, does not answer (issue 1121)."
+    },
+    {
+        "category": "plural_reaching_a_domain_of_another_sense",
+        "query": "list repositories",
+        "want_top": "project.list",
+        "notes": "The singular of repositories is the repository domain, whose actions read one repository's content, so its list of submodules must not take the list of projects' place (issue 1121)."
+    },
+    {
         "category": "no_match",
         "query": "zzzzzzzz",
         "expect_zero": true,

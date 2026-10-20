@@ -324,20 +324,68 @@ func TestSearch_ExactCanonicalIDBeatsBroadText(t *testing.T) {
 }
 
 // TestSearch_CurrentHighConfidenceQueriesRemainStable pins the top result of
-// twelve queries against the real catalog that a scoring change must not
-// move: the ones a model sends most, each with the action it has to reach.
+// the queries against the real catalog that a scoring change must not move:
+// the ones a model sends most, each with the action it has to reach.
+//
+// The list queries are pinned in the plural and in the singular, and in both
+// word orders, because a model writes them every way and the plural is the
+// one that used to break: "list issues" answered project.list and "list
+// branches" pipeline.list, since nothing matched a plural to the singular the
+// catalog spells (issue 1121). Those cases also require the top result to be
+// high confidence, a margin over the next result and not only first place,
+// so that a ranking decided by the tie-break fails here. "list branch" is the
+// one that was: branch.list and pipeline.list scored alike and the action ID
+// broke the tie. The release queries are pinned the same way because the
+// boost release.list used to have to itself was retired for the plural rule.
+//
+// More shapes are pinned because the first form of the plural rule broke
+// them: a read of the plural of merge request, whose first word is also a
+// verb ("show merge requests" answered merge_request.get), a plural that an
+// action's own name spells ("list ssh keys" answered the deploy key lists), a
+// plural of a word an intent reads ("list service accounts" tied the group
+// and project lists), a plural whose singular a compound tag of a write
+// spells ("protected branches" answered branch.protect), and a plural
+// downloaded, whose singular names the action for one artifact ("download job
+// artifacts" answered job.download_single_artifact). The last keeps its first
+// place without a confidence requirement: the download verb's own synonyms,
+// single and artifact, spell the compound tag single artifact that
+// job.download_single_artifact carries, the singular of artifacts reaches its
+// name as well, and job.download_artifacts downloads the same archive by ref,
+// so the three stay within a few points, as the first two did on the parent
+// by exactly the margin. "artifacts" alone is pinned with confidence, since a
+// plural with no verb must not lift job.delete_artifacts, which it names as
+// well.
 func TestSearch_CurrentHighConfidenceQueriesRemainStable(t *testing.T) {
 	registry := realCatalogRegistry(t)
 
-	tests := []struct {
-		name         string
-		query        string
-		limit        int
-		wantTop      string
-		wantContains string
-	}{
+	tests := []pinnedQuery{
 		{name: "merge request list", query: "merge request list open author project", wantTop: "merge_request.list"},
-		{name: "open issues", query: "list open issues", limit: 10},
+		{name: "open issues", query: "list open issues", limit: 10, wantTop: "issue.list", wantConfident: true},
+		{name: "plural issues", query: "list issues", wantTop: "issue.list", wantConfident: true},
+		{name: "plural issues noun first", query: "issues list", wantTop: "issue.list", wantConfident: true},
+		{name: "plural issues shown", query: "show issues", wantTop: "issue.list", wantConfident: true},
+		{name: "plural branches", query: "list branches", wantTop: "branch.list", wantConfident: true},
+		{name: "plural branches noun first", query: "branches list", wantTop: "branch.list", wantConfident: true},
+		{name: "plural pipelines", query: "list pipelines", wantTop: "pipeline.list", wantConfident: true},
+		{name: "plural pipelines noun first", query: "pipelines list", wantTop: "pipeline.list", wantConfident: true},
+		{name: "plural merge requests", query: "list merge requests", wantTop: "merge_request.list", wantConfident: true},
+		{name: "plural merge requests noun first", query: "merge requests list", wantTop: "merge_request.list", wantConfident: true},
+		{name: "plural merge requests shown", query: "show merge requests", wantTop: "merge_request.list", wantConfident: true},
+		{name: "plural merged merge requests shown", query: "show merged merge requests", wantTop: "merge_request.list", wantConfident: true},
+		{name: "plural mrs shown", query: "show mrs", wantTop: "merge_request.list", wantConfident: true},
+		{name: "plural named by an action", query: "list ssh keys", wantTop: "user.ssh_keys", wantConfident: true},
+		{name: "plural of a word an intent reads", query: "list service accounts", wantTop: "user.list_service_accounts", wantConfident: true},
+		{name: "plural a compound tag spells in the singular", query: "protected branches", wantTop: "branch.list_protected", wantConfident: true},
+		{name: "plural named by an action with no verb", query: "artifacts", wantTop: "job.artifacts", wantConfident: true},
+		{name: "plural archive downloaded", query: "download job artifacts", wantTop: "job.artifacts"},
+		{name: "singular issue", query: "list issue", wantTop: "issue.list", wantConfident: true},
+		{name: "singular issue noun first", query: "issue list", wantTop: "issue.list", wantConfident: true},
+		{name: "singular branch", query: "list branch", wantTop: "branch.list", wantConfident: true},
+		{name: "singular branch noun first", query: "branch list", wantTop: "branch.list", wantConfident: true},
+		{name: "singular pipeline", query: "list pipeline", wantTop: "pipeline.list", wantConfident: true},
+		{name: "singular pipeline noun first", query: "pipeline list", wantTop: "pipeline.list", wantConfident: true},
+		{name: "plural releases", query: "list releases", wantTop: "release.list", wantConfident: true},
+		{name: "singular release noun first", query: "release list", wantTop: "release.list", wantConfident: true},
 		{name: "pipeline trigger", query: "pipeline run trigger", wantContains: "pipeline.trigger_create"},
 		{name: "ci variable secret", query: "ci variable secret", wantTop: "ci_variable.create"},
 		{name: "project access token list", query: "project access tokens", wantTop: "access.token_project_list"},
@@ -363,16 +411,37 @@ func TestSearch_CurrentHighConfidenceQueriesRemainStable(t *testing.T) {
 			if result == nil || result.IsError {
 				t.Fatalf("Search() result = %+v, want non-error", result)
 			}
-			if output.Count == 0 {
-				t.Fatalf("Search(%q) returned no matches", tt.query)
-			}
-			if tt.wantTop != "" && output.Results[0].ID != tt.wantTop {
-				t.Fatalf("Search(%q) top result = %+v, want %s", tt.query, output.Results, tt.wantTop)
-			}
-			if tt.wantContains != "" && !slices.ContainsFunc(output.Results, func(result SearchResult) bool { return result.ID == tt.wantContains }) {
-				t.Fatalf("Search(%q) results = %+v, want %s", tt.query, output.Results, tt.wantContains)
-			}
+			assertPinnedQuery(t, tt, output)
 		})
+	}
+}
+
+// pinnedQuery is one query TestSearch_CurrentHighConfidenceQueriesRemainStable
+// pins: the action it has to reach first or among its results, and whether
+// that first result has to be high confidence.
+type pinnedQuery struct {
+	name          string
+	query         string
+	limit         int
+	wantTop       string
+	wantContains  string
+	wantConfident bool
+}
+
+// assertPinnedQuery holds one search's results to what tt pins.
+func assertPinnedQuery(t *testing.T, tt pinnedQuery, output SearchOutput) {
+	t.Helper()
+	if output.Count == 0 {
+		t.Fatalf("Search(%q) returned no matches", tt.query)
+	}
+	if tt.wantTop != "" && output.Results[0].ID != tt.wantTop {
+		t.Fatalf("Search(%q) top result = %+v, want %s", tt.query, output.Results, tt.wantTop)
+	}
+	if tt.wantContains != "" && !slices.ContainsFunc(output.Results, func(result SearchResult) bool { return result.ID == tt.wantContains }) {
+		t.Fatalf("Search(%q) results = %+v, want %s", tt.query, output.Results, tt.wantContains)
+	}
+	if tt.wantConfident && output.Results[0].LowConfidence {
+		t.Fatalf("Search(%q) top result %s is low confidence, want it ahead of the next by the high-confidence margin; results = %+v", tt.query, output.Results[0].ID, output.Results)
 	}
 }
 
