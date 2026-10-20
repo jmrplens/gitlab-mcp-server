@@ -14,9 +14,10 @@ import (
 // figure, so a callback that published the wrong one under a reason would show
 // as the wrong number rather than as a coincidence.
 var sampleAuthBlockCounts = AuthBlockCounts{
-	FailureLockout:  7,
-	TransportSource: 3,
-	DistinctTokens:  11,
+	FailureLockout:   7,
+	TransportSource:  3,
+	DistinctTokens:   11,
+	NetworkAggregate: 5,
 }
 
 // observingSampleAuthBlocks registers the callback against a real SDK reader
@@ -37,8 +38,8 @@ func observingSampleAuthBlocks(t *testing.T) *sdkmetric.ManualReader {
 
 // TestObserveAuthBlocks_PublishesOneSeriesPerBudget covers what the reason
 // dimension is for: an operator has to be able to tell which rule is doing the
-// refusing, since the three answer different questions and only one of them
-// escalates.
+// refusing, since the four answer different questions and only two of them
+// escalate.
 func TestObserveAuthBlocks_PublishesOneSeriesPerBudget(t *testing.T) {
 	reader := observingSampleAuthBlocks(t)
 	m := collectedMetric(t, reader, authBlocksInstrument)
@@ -57,6 +58,8 @@ func TestObserveAuthBlocks_PublishesOneSeriesPerBudget(t *testing.T) {
 		AuthBlockFailureLockout:  sampleAuthBlockCounts.FailureLockout,
 		AuthBlockTransportSource: sampleAuthBlockCounts.TransportSource,
 		AuthBlockDistinctTokens:  sampleAuthBlockCounts.DistinctTokens,
+		// The /48 aggregate of issue 954.
+		AuthBlockNetworkAggregate: sampleAuthBlockCounts.NetworkAggregate,
 	}
 	points := sumPoints(t, m)
 	if len(points) != len(want) {
@@ -150,7 +153,7 @@ func TestObserveAuthBlocks_ARefusedRegistration_IsReturnedNotSwallowed(t *testin
 // look exactly like a rule firing twice as often.
 func TestAuthBlockReasons_AreDistinct(t *testing.T) {
 	t.Parallel()
-	reasons := []string{AuthBlockFailureLockout, AuthBlockTransportSource, AuthBlockDistinctTokens}
+	reasons := []string{AuthBlockFailureLockout, AuthBlockTransportSource, AuthBlockDistinctTokens, AuthBlockNetworkAggregate}
 
 	distinct := map[string]bool{}
 	for _, r := range reasons {

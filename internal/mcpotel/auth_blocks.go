@@ -24,10 +24,12 @@ import (
 // question an operator asks is how much is being refused and by which rule.
 type AuthBlockCounts struct {
 	// One counter per budget, disjoint by construction because the guard
-	// consults them in order and answers with the first that refuses.
-	FailureLockout  int64
-	TransportSource int64
-	DistinctTokens  int64
+	// consults them all and counts a refusal under the one whose block lasts
+	// longest.
+	FailureLockout   int64
+	TransportSource  int64
+	DistinctTokens   int64
+	NetworkAggregate int64
 }
 
 // AttrAuthBlockReason says which budget refused the request.
@@ -53,6 +55,10 @@ const (
 	// for one address over a longer window, answered with a block that
 	// lengthens each time it is reached.
 	AuthBlockDistinctTokens = "distinct_tokens"
+	// AuthBlockNetworkAggregate is the budget above the address: distinct
+	// IPv6 /64s inside one /48 that had a credential refused, in the slow
+	// budget's window and on its ladder.
+	AuthBlockNetworkAggregate = "network_aggregate"
 )
 
 // authBlocksInstrument is the instrument name, written out once so the callback
@@ -71,7 +77,7 @@ var ErrNoAuthBlockReader = errors.New("mcpotel: ObserveAuthBlocks needs a functi
 // Asynchronous for the same reason [ObservePool] is: the guards already keep
 // these numbers, and the increments happen on the request path, where an
 // exporter's code does not belong. read is called on the SDK's collection
-// goroutine, so it must be cheap and must not block; three atomic loads are.
+// goroutine, so it must be cheap and must not block; four atomic loads are.
 //
 // Register it unconditionally. With telemetry off the global meter is a no-op
 // whose callback is never invoked, so this costs one registration at startup
@@ -107,6 +113,7 @@ func observeAuthBlocks(meter metric.Meter, read func() AuthBlockCounts) (metric.
 		{AuthBlockFailureLockout, func(c AuthBlockCounts) int64 { return c.FailureLockout }},
 		{AuthBlockTransportSource, func(c AuthBlockCounts) int64 { return c.TransportSource }},
 		{AuthBlockDistinctTokens, func(c AuthBlockCounts) int64 { return c.DistinctTokens }},
+		{AuthBlockNetworkAggregate, func(c AuthBlockCounts) int64 { return c.NetworkAggregate }},
 	}
 	sets := make([]metric.MeasurementOption, len(reasons))
 	for i, r := range reasons {
