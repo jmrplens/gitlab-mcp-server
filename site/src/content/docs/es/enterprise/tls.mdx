@@ -1,6 +1,6 @@
 ---
 title: TLS
-description: "Dónde terminar TLS, el certificado del propio listener, la rotación en caliente sin reinicio, los certificados de cliente y lo que un socket unix le cuesta al presupuesto de fallos de autenticación a escala."
+description: "Dónde terminar TLS, el certificado del propio listener, la rotación en caliente sin reinicio, los certificados de cliente y cómo un socket unix mantiene un presupuesto de fallos por cliente cuando unix es un proxy de confianza."
 datePublished: "2026-09-06"
 faq:
   - q: "¿Puedo rotar el certificado TLS sin reiniciar?"
@@ -8,7 +8,7 @@ faq:
   - q: "¿El listener hace mTLS?"
     a: "No. No pide certificado de cliente ni verifica ninguno; la autenticación en él es la credencial bearer, en cualquiera de los dos modos soportados. El TLS mutuo en el borde es una propiedad del proxy de delante, que es donde corresponde en un despliegue con muchos clientes, porque el proxy es quien tiene la CA de clientes y la lista de revocación."
   - q: "¿Es un socket unix la opción correcta para un proxy en la misma máquina?"
-    a: "Elimina el salto de red en lugar de cifrarlo, que suele ser lo que quieres. Tiene un coste a escala: un socket unix no tiene dirección de par, y el presupuesto de fallos de autenticación se indexa por la dirección de quien llama, así que todos los clientes detrás del proxy comparten un presupuesto. Diez autenticaciones fallidas por minuto desde cualquier punto lo agotan durante un minuto, y hasta que termina la ventana toda credencial que el servidor no tenga ya recibe `429`; los clientes a los que ya está sirviendo siguen atendidos. Enlaza TCP de loopback con `--trusted-proxy-header` y `--trusted-proxies` si la contabilidad de fallos por cliente te importa más que el salto."
+    a: "Elimina el salto de red en lugar de cifrarlo, que suele ser lo que quieres. Un socket unix no tiene dirección de par, así que pasa `--trusted-proxy-header` con `--trusted-proxies=unix`: el servidor cree entonces la dirección que el proxy reenvía desde el socket, y cada cliente conserva un presupuesto de fallos de autenticación propio. Sin ellos todos los clientes del socket comparten un presupuesto, y diez autenticaciones fallidas por minuto desde cualquier punto lo agotan para todo el mundo. Un listener de socket cuyo `--trusted-proxies` enumera direcciones pero no `unix` se niega a arrancar, porque ningún par de socket coincide con una dirección."
 ---
 
 import FAQ from "../../../../components/FAQ.astro";
@@ -22,8 +22,9 @@ import FAQ from "../../../../components/FAQ.astro";
 | Terminando para clientes | El certificado del propio proxy, más una de las dos filas anteriores para el salto de detrás    |
 
 El socket unix elimina el salto en lugar de cifrarlo, y bajo Docker ese salto no
-es "solo loopback": el camino pasa por docker-proxy y una red bridge. Tiene un
-coste a escala, descrito al final de esta página.
+es "solo loopback": el camino pasa por docker-proxy y una red bridge. Cómo
+distinguen a sus clientes los presupuestos de autenticación está al final de
+esta página.
 
 ## El TLS del propio listener
 
@@ -106,32 +107,48 @@ Para el salto entre el proxy y el servidor, `proxy_ssl_verify on` con
 `proxy_ssl_trusted_certificate` apuntando a tu CA privada es la pareja de
 `--tls-cert` en el listener.
 
-## El socket unix, y lo que cuesta a escala
+## El socket unix y los presupuestos de autenticación
 
-Un socket unix no tiene dirección de par. El presupuesto de fallos de
-autenticación se indexa por la dirección de quien llama, así que sobre un socket
-**todos los clientes comparten un presupuesto**: diez autenticaciones fallidas
-por minuto desde cualquier punto detrás del proxy lo agotan para todo el mundo
-durante un minuto. Un cliente cuya credencial este despliegue ya está sirviendo
-sigue atendido mientras está agotado, así que el daño se limita a las
-credenciales que el servidor no tiene en ese momento: todas ellas reciben `429`
-dentro de esa ventana, tanto quien se autentica por primera vez como quien ha
-visto al pool recuperar su entrada
-([por qué la exención es segura](/gitlab-mcp-server/es/operations/http-server/#códigos-de-estado-de-rechazo)).
-`--trusted-proxy-header` tampoco lo arregla, porque la cabecera solo se cree
-desde un par que se analiza como dirección, y ningún par de socket lo hace.
+Un socket unix no tiene dirección de par, así que los presupuestos de fallos de
+autenticación, que se indexan por la dirección de quien llama, no tienen con qué
+distinguir a sus clientes. Toda conexión al socket es la única clave `unix`.
 
-La alternativa es una línea: enlaza TCP de loopback y dile al servidor quién es
-el proxy.
+Declara el proxy del socket como proxy de confianza y le dirá al servidor quién
+es cada cliente, igual que hace un proxy en TCP de loopback:
 
 ```bash
-gitlab-mcp-server --http --http-addr=127.0.0.1:8080 \
+gitlab-mcp-server --http --http-addr=/run/gitlab-mcp/server.sock \
   --gitlab-url=https://gitlab.example.com \
-  --trusted-proxy-header=X-Real-IP --trusted-proxies=127.0.0.1,::1
+  --trusted-proxy-header=X-Real-IP --trusted-proxies=unix
 ```
 
-Quédate con el socket donde la población de clientes sea pequeña o de plena
-confianza, y donde eliminar el salto importe más que la contabilidad de fallos
-por cliente.
+`unix` confía en el par de una conexión al socket y en ninguna dirección. La
+cabecera se lee con la misma regla que desde un proxy TCP (el primer salto desde
+la derecha que no sea a su vez un proxy de la lista), así que una cadena de
+proxies enumera los exteriores por dirección junto a `unix`. Cada cliente tiene
+entonces presupuestos propios, un cliente IPv6 por el `/64` en el que está
+([Presupuestos de autenticación](/gitlab-mcp-server/es/operations/security/#presupuestos-de-autenticación)).
+
+Sin los dos flags **todos los clientes del socket comparten un presupuesto**:
+diez autenticaciones fallidas por minuto desde cualquier punto detrás del proxy
+lo agotan para todo el mundo durante un minuto. Un cliente cuya credencial este
+despliegue ya está sirviendo sigue atendido mientras está agotado, así que el
+daño se limita a las credenciales que el servidor no tiene en ese momento: todas
+ellas reciben `429` dentro de esa ventana, tanto quien se autentica por primera
+vez como quien ha visto al pool recuperar su entrada
+([por qué la exención es segura](/gitlab-mcp-server/es/operations/http-server/#códigos-de-estado-de-rechazo)).
+Eso basta donde la población de clientes es pequeña o de plena confianza.
+
+Dos combinaciones se rechazan al arrancar, porque cada una no confía en nadie
+mientras parece que confía en alguien:
+
+| Combinación                                                                         | Por qué se rechaza                                                                                                                                 |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Un `--http-addr` de socket cuyo `--trusted-proxies` enumera direcciones y no `unix` | Ningún par de socket coincide con una dirección, así que la cabecera nunca se creería y todos los clientes compartirían en silencio un presupuesto |
+| `unix` en `--trusted-proxies` con un `--http-addr` TCP                              | Ninguna conexión a un listener TCP viene de un par de socket, así que la entrada no confiaría en nadie                                             |
+
+Una versión anterior arrancaba con la primera combinación e ignoraba la
+cabecera. Si un despliegue que antes funcionaba ahora se niega a arrancar con
+`--trusted-proxies does not name unix`, añade `unix` a la lista.
 
 <FAQ />

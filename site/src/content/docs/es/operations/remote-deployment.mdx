@@ -35,13 +35,13 @@ cuanto una segunda persona necesita llegar hasta él la respuesta es HTTP.
 
 ## Elige primero la forma
 
-| Situación                        | Forma                                                                                                       |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Un host, proxy y servidor juntos | Socket unix: `--http-addr=/run/gitlab-mcp/server.sock`                                                      |
-| Proxy en otra máquina            | `--tls-cert` y `--tls-key` en el propio listener                                                            |
-| Sin ningún proxy                 | `--tls-cert` y `--tls-key` más `--auth-mode=oauth`; lee [Exposición directa](#exposición-directa-sin-proxy) |
-| Contenedores                     | La imagen publicada, sistema de ficheros raíz de solo lectura, digest fijado                                |
-| Más de una instancia             | Un balanceador con afinidad por token: [Varias instancias](#varias-instancias-tras-un-mismo-proxy)          |
+| Situación                        | Forma                                                                                                                |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Un host, proxy y servidor juntos | Socket unix: `--http-addr=/run/gitlab-mcp/server.sock` con `--trusted-proxy-header=X-Real-IP --trusted-proxies=unix` |
+| Proxy en otra máquina            | `--tls-cert` y `--tls-key` en el propio listener                                                                     |
+| Sin ningún proxy                 | `--tls-cert` y `--tls-key` más `--auth-mode=oauth`; lee [Exposición directa](#exposición-directa-sin-proxy)          |
+| Contenedores                     | La imagen publicada, sistema de ficheros raíz de solo lectura, digest fijado                                         |
+| Más de una instancia             | Un balanceador con afinidad por token: [Varias instancias](#varias-instancias-tras-un-mismo-proxy)                   |
 
 ## Ejecutarlo como servicio
 
@@ -121,7 +121,7 @@ sudo useradd --system --no-create-home --shell /usr/sbin/nologin gitlab-mcp
 sudo usermod -aG gitlab-mcp www-data   # o nginx, o caddy
 ```
 
-Después sustituye las líneas de identidad y de dirección:
+Después sustituye las líneas de identidad y de dirección, y con ellas la lista de proxies:
 
 ```ini
 User=gitlab-mcp
@@ -132,8 +132,17 @@ ExecStart=/usr/local/bin/gitlab-mcp-server \
     --http \
     --http-addr=/run/gitlab-mcp/server.sock \
     --http-socket-mode=0660 \
-    --gitlab-url=https://gitlab.example.com
+    --gitlab-url=https://gitlab.example.com \
+    --trusted-proxy-header=X-Real-IP \
+    --trusted-proxies=unix
 ```
+
+El par de un socket no tiene dirección, así que `unix` es la entrada que confía
+en el proxy que está en él, y cada cliente conserva entonces un presupuesto de
+autenticación propio. Conservar `--trusted-proxies=127.0.0.1` de la unidad TCP no
+sirve: un listener de socket cuya lista nombra direcciones y no `unix` se niega
+a arrancar
+([El socket unix y los presupuestos de autenticación](/gitlab-mcp-server/es/enterprise/tls/#el-socket-unix-y-los-presupuestos-de-autenticación)).
 
 `RuntimeDirectory=` hace que `/run/gitlab-mcp` exista, pertenezca al servicio y
 se elimine al parar. Además tiene que poder **escribirse**: el servidor no
@@ -467,7 +476,7 @@ despliegue local de un único usuario. La tabla completa está en
 | Reenviar `Authorization`            | El modo OAuth lee de ahí el token bearer; quitarla convierte cada petición en un `401`                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Reenviar `PRIVATE-TOKEN`            | La cabecera del modo legacy                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Reenviar `GITLAB-URL`               | Selecciona la instancia cuando se publican varias                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Dirección real del cliente          | `--trusted-proxy-header` nombra la cabecera que pone el proxy y `--trusted-proxies` las direcciones desde las que conecta, para que el limitador de fallos de autenticación cuente clientes y no al proxy                                                                                                                                                                                                                                                                                          |
+| Dirección real del cliente          | `--trusted-proxy-header` nombra la cabecera que pone el proxy y `--trusted-proxies` las direcciones desde las que conecta, o `unix` en un listener de socket, para que el limitador de fallos de autenticación cuente clientes y no al proxy                                                                                                                                                                                                                                                       |
 | Enrutar `/.well-known/` sin cambios | En modo OAuth los metadatos RFC 9728 viven en la **raíz del host**, no bajo el prefijo de ruta                                                                                                                                                                                                                                                                                                                                                                                                     |
 | No añadir cabeceras CORS            | El servidor responde el preflight por sí mismo. Dos cabeceras `Access-Control-Allow-Origin` son un fallo de CORS, no una fusión                                                                                                                                                                                                                                                                                                                                                                    |
 

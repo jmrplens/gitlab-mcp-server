@@ -35,13 +35,13 @@ the moment a second person needs to reach it the answer is HTTP.
 
 ## Pick a shape first
 
-| Situation                           | Shape                                                                                                    |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| One host, proxy and server together | Unix socket: `--http-addr=/run/gitlab-mcp/server.sock`                                                   |
-| Proxy on another host               | `--tls-cert` and `--tls-key` on the listener                                                             |
-| No proxy at all                     | `--tls-cert` and `--tls-key` plus `--auth-mode=oauth`; read [Direct exposure](#direct-exposure-no-proxy) |
-| Containers                          | The published image, read-only root filesystem, digest pin                                               |
-| More than one instance              | A balancer with token affinity: [Several instances](#several-instances-behind-one-proxy)                 |
+| Situation                           | Shape                                                                                                                 |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| One host, proxy and server together | Unix socket: `--http-addr=/run/gitlab-mcp/server.sock` with `--trusted-proxy-header=X-Real-IP --trusted-proxies=unix` |
+| Proxy on another host               | `--tls-cert` and `--tls-key` on the listener                                                                          |
+| No proxy at all                     | `--tls-cert` and `--tls-key` plus `--auth-mode=oauth`; read [Direct exposure](#direct-exposure-no-proxy)              |
+| Containers                          | The published image, read-only root filesystem, digest pin                                                            |
+| More than one instance              | A balancer with token affinity: [Several instances](#several-instances-behind-one-proxy)                              |
 
 ## Run it as a service
 
@@ -119,7 +119,7 @@ sudo useradd --system --no-create-home --shell /usr/sbin/nologin gitlab-mcp
 sudo usermod -aG gitlab-mcp www-data   # or nginx, or caddy
 ```
 
-Then replace the identity and address lines:
+Then replace the identity and address lines, and the proxy list with it:
 
 ```ini
 User=gitlab-mcp
@@ -130,8 +130,16 @@ ExecStart=/usr/local/bin/gitlab-mcp-server \
     --http \
     --http-addr=/run/gitlab-mcp/server.sock \
     --http-socket-mode=0660 \
-    --gitlab-url=https://gitlab.example.com
+    --gitlab-url=https://gitlab.example.com \
+    --trusted-proxy-header=X-Real-IP \
+    --trusted-proxies=unix
 ```
+
+A socket's peer has no address, so `unix` is the entry that trusts the proxy on
+it, and each caller then keeps an authentication budget of its own. Keeping
+`--trusted-proxies=127.0.0.1` from the TCP unit does not carry over: a socket
+listener whose list names addresses and no `unix` refuses to start
+([The unix socket and the authentication budgets](/gitlab-mcp-server/enterprise/tls/#the-unix-socket-and-the-authentication-budgets)).
 
 `RuntimeDirectory=` makes `/run/gitlab-mcp` exist, be owned by the service, and
 be removed on stop. It also has to be **writable**: the server does not bind the
@@ -453,7 +461,7 @@ single-user local deployment only. The full table is in
 | Forward `Authorization`              | OAuth mode reads the bearer token from it; stripping it turns every request into a `401`                                                                                                                                                                                                                                                                                                                                                           |
 | Forward `PRIVATE-TOKEN`              | Legacy mode's header                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Forward `GITLAB-URL`                 | Selects the instance when several are published                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Real client address                  | `--trusted-proxy-header` names the header the proxy sets and `--trusted-proxies` the addresses it connects from, so the authentication-failure limiter counts callers rather than the proxy                                                                                                                                                                                                                                                        |
+| Real client address                  | `--trusted-proxy-header` names the header the proxy sets and `--trusted-proxies` the addresses it connects from, or `unix` on a socket listener, so the authentication-failure limiter counts callers rather than the proxy                                                                                                                                                                                                                        |
 | Route `/.well-known/` unchanged      | In OAuth mode the RFC 9728 metadata lives at the **host root**, not under the path prefix                                                                                                                                                                                                                                                                                                                                                          |
 | Add no CORS headers                  | The server answers preflight itself. Two `Access-Control-Allow-Origin` headers is a CORS failure, not a merge                                                                                                                                                                                                                                                                                                                                      |
 

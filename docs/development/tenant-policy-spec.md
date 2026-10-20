@@ -94,22 +94,23 @@ key the vocabulary lacks adds it there, with its mint cost and the evidence for 
 is how the mintable-key question gets answered once. `Key.Evidence()` holds the sentence
 below with its sources, and a refusal of a share quotes it.
 
-| Key           | What it is                                            | Axis             | Mint cost to the caller                                                                                                                                                                                  |
-| ------------- | ----------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `request`     | One request, argument set or watched URI              | request          | Nothing                                                                                                                                                                                                  |
-| `credential`  | The raw token a request presents                      | requester        | Another credential of the same user: a personal access token through the UI, no administrator, no cap, no creation rate limit                                                                            |
-| `entry`       | One credential on one instance, the pool entry        | requester        | As a credential; several published instances do not multiply keys, but under `--allow-any-gitlab-url` (`DST-002`, loopback only) the caller names the instance and mints one entry per instance it names |
-| `owner`       | The random name of one entry build                    | requester        | As an entry                                                                                                                                                                                              |
-| `tenant`      | (canonical instance URL, GitLab user id)              | requester        | Another GitLab user: a project bot on self-managed, a paid namespace or a service account on GitLab.com                                                                                                  |
-| `verified`    | (instance, token) as the OAuth identity cache keys it | requester        | As a credential                                                                                                                                                                                          |
-| `application` | The OAuth application a token was issued to           | requester        | Nothing: dynamic registration needs no authentication                                                                                                                                                    |
-| `session`     | An SDK session id, recorded to an owner               | requester        | Nothing: any `initialize` opens one                                                                                                                                                                      |
-| `address`     | The charged client address                            | before admission | Address rotation; behind a trusted proxy that copies a caller's header, the header value; one for every caller on a unix socket                                                                          |
-| `source`      | The socket peer, every header ignored                 | before admission | Address rotation only                                                                                                                                                                                    |
-| `refused`     | A credential GitLab refused, held as a digest         | before admission | Nothing: an invented string                                                                                                                                                                              |
-| `unbound`     | Every request no credential was bound to              | process          | Not mintable                                                                                                                                                                                             |
-| `process`     | The running binary                                    | process          | Not mintable                                                                                                                                                                                             |
-| `deployment`  | The operator's configuration                          | process          | Not mintable by a caller                                                                                                                                                                                 |
+| Key           | What it is                                                                      | Axis             | Mint cost to the caller                                                                                                                                                                                  |
+| ------------- | ------------------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `request`     | One request, argument set or watched URI                                        | request          | Nothing                                                                                                                                                                                                  |
+| `credential`  | The raw token a request presents                                                | requester        | Another credential of the same user: a personal access token through the UI, no administrator, no cap, no creation rate limit                                                                            |
+| `entry`       | One credential on one instance, the pool entry                                  | requester        | As a credential; several published instances do not multiply keys, but under `--allow-any-gitlab-url` (`DST-002`, loopback only) the caller names the instance and mints one entry per instance it names |
+| `owner`       | The random name of one entry build                                              | requester        | As an entry                                                                                                                                                                                              |
+| `tenant`      | (canonical instance URL, GitLab user id)                                        | requester        | Another GitLab user: a project bot on self-managed, a paid namespace or a service account on GitLab.com                                                                                                  |
+| `verified`    | (instance, token) as the OAuth identity cache keys it                           | requester        | As a credential                                                                                                                                                                                          |
+| `application` | The OAuth application a token was issued to                                     | requester        | Nothing: dynamic registration needs no authentication                                                                                                                                                    |
+| `session`     | An SDK session id, recorded to an owner                                         | requester        | Nothing: any `initialize` opens one                                                                                                                                                                      |
+| `address`     | The charged client address: a whole IPv4 address, an IPv6 address's fixed `/64` | before admission | Address rotation, which inside one `/64` buys nothing; behind a trusted proxy that copies a caller's header, the header value; on a unix socket the one key `unix`, unless `unix` is a trusted proxy     |
+| `source`      | The socket peer, every header ignored, keyed as the address is                  | before admission | Address rotation only                                                                                                                                                                                    |
+| `network`     | The IPv6 `/48` a charged client address lies in                                 | before admission | Another `/48`, a new assignment; an IPv4 address and a unix-socket peer have none                                                                                                                        |
+| `refused`     | A credential GitLab refused, held as a digest                                   | before admission | Nothing: an invented string                                                                                                                                                                              |
+| `unbound`     | Every request no credential was bound to                                        | process          | Not mintable                                                                                                                                                                                             |
+| `process`     | The running binary                                                              | process          | Not mintable                                                                                                                                                                                             |
+| `deployment`  | The operator's configuration                                                    | process          | Not mintable by a caller                                                                                                                                                                                 |
 
 The per-request carrier and the configuration shape are deliberately not keys: nothing
 is counted against the first, and the second keys a catalog cache that `INV-010`
@@ -569,10 +570,47 @@ the OAuth verification sends it, once in the same way in October 2026, and GitLa
 reads both headers through one finder whose refusal of a token leaves the request
 unauthenticated. The distinct-credential budget's reason (`AUB-003`, stated at
 `DistinctTokenBudget`) now says what was observed rather than that GitLab rate-limits
-failed authentication per address. F-25 stays on `AUB-001` and `AUB-003`, which the rest of
-issue 954 changes.
+failed authentication per address.
 
-Twelve findings are answered, and stay in the list with their issues. F-03, the listing
+Issue 954 then changed the key, and answered F-14 and F-25 with it; the rows it moved
+(`IDN-004`, `IDN-005`, `AUB-001` to `AUB-003`) record the issue among their decisions and
+carry neither finding, and F-34 stays on `AUB-001` and `AUB-003` for issue 958. Every
+budget before admission reads its key off the address through `budgetKey`: a whole IPv4
+address, an IPv4-mapped one as the IPv4 address it names, and an IPv6 address by the
+fixed `/64` it lies in, since an IPv6 subnet is a `/64` (RFC 4291) and a caller on one
+rotated the bits below it into a fresh budget per request. The prefix is not
+configurable, which the issue decided, and the cost is the one an IPv4 NAT has always
+had, met more often: callers sharing a `/64` share its budgets (the hosts of one IPv6
+subnet, the customers a provider numbers from one shared `/64`, and every link-local
+caller, whose zone is dropped), while a credential already served is exempt from a block.
+A stateful NAT64 presents the translator's IPv4 address, keyed whole as before, but a
+stateless translator in front of an IPv6-only server (SIIT-DC, RFC 7755) writes each
+IPv4 client into its RFC 6052 prefix, so under `64:ff9b::/96`, or any prefix of `/64` or
+longer, they all share one `/64`, and under any prefix of `/48` or longer one `/48`,
+where on IPv4 each had a key of its own. The transport source (`AUB-002`) is keyed the
+same way. A caller holding a `/48` holds 65536 `/64`s, so `AUB-006` counts the `/64`s of
+one `/48` that had a credential refused, on a key of its own (`network`, through
+`networkKey`), with a register constant of ten no operator sets, in `AUB-003`'s window
+and up `AUB-003`'s ladder, the `/64`s held as digests in a table `AUB-004` caps; a
+request that carried no credential moves it no more than it moves `AUB-003`. A refused
+credential moves it whoever presents it, so an organization whose network is one `/48`
+reaches ten when callers on ten of its subnets present an expired or revoked token
+inside the window, and the `/48` is then refused for every credential not already
+served. Nor is a `/48` always one organization's: a provider that delegates each
+subscriber a `/56` or a `/60` puts 256 or 4096 of them in one, and a mobile network
+gives each device a `/64` of its own (RFC 6459), so ten unrelated subscribers presenting
+an expired token inside the window block the `/48` for every other one. Its windows fall
+back to their defaults when a zero switches off the budget that owns them, so it stays
+on wherever the gate runs (`INV-015`), and its refusal is every budget's `429`, counted
+in telemetry as `network_aggregate`. A unix socket's peer has no address, and RemoteAddr spells it `@`,
+an empty string or a path by platform, so `remoteHost` names every connection accepted on
+a socket listener `unix`: with nothing trusted every caller on the socket shares that key,
+and `unix` in `--trusted-proxies` trusts the socket's peer, so the proxy on it names each
+caller as a TCP proxy does, and the host guard reads the same set. The two pairings that
+trust nobody refuse startup: a socket listener whose list names addresses and no `unix`,
+which used to start with its header inert, and `unix` on a TCP listener.
+
+Fourteen findings are answered, and stay in the list with their issues. F-03, the listing
 bucket with no process partner, is answered by `RTC-007`, the first of issue 951's three
 changes: a `tools/list` bucket keyed on the process and counted in the tools a listing
 carries, which `RTC-003` names as its partner and which no row carries F-03 for any
@@ -864,7 +902,10 @@ learns which actions the tier removed from the catalog built without the tier fi
 (`tools.TierWithheld`), never naming one the operator excluded by name, so the
 `related_actions` links that the session dropped at Free (five in three packages) are
 published like the links a scope or operator filter withheld. `RTC-005`, `HLD-001` to
-`HLD-004`, `HLD-011` and `AUT-003` record the issue, and none carries F-07 or F-10. Four
+`HLD-004`, `HLD-011` and `AUT-003` record the issue, and none carries F-07 or F-10. F-14
+and F-25 are answered by issue 954, as its two paragraphs above say: the stated
+reason first, from what GitLab 19.5 answered, then the key, the `/48` aggregate
+(`AUB-006`) and the named unix-socket key. Four
 more
 have been carried by no row since the register landed, because each records something no
 row decides: F-18 a budget GitLab.com keeps that the process does not account for, F-24 a

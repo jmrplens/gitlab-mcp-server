@@ -290,7 +290,7 @@ This table is the subset an assistant meets most often. Every variable, its boun
 
 | Flag                       | Description                                                    | Default            |
 | -------------------------- | -------------------------------------------------------------- | ------------------ |
-| `--trusted-proxies`        | Addresses or CIDR ranges of the proxies whose `--trusted-proxy-header` is believed (e.g. `127.0.0.1,10.0.0.0/8`); required with it | _(empty)_          |
+| `--trusted-proxies`        | Addresses or CIDR ranges of the proxies whose `--trusted-proxy-header` is believed (e.g. `127.0.0.1,10.0.0.0/8`), and `unix` for the proxy on a socket `--http-addr`, where a list without it refuses startup; required with it | _(empty)_          |
 | `--trusted-proxy-header`   | HTTP header with real client IP for rate limiting behind proxies (e.g. `CF-Connecting-IP`, `X-Forwarded-For`); believed only from `--trusted-proxies` | _(empty)_          |
 
 **General flags** (both stdio and HTTP modes):

@@ -495,12 +495,13 @@ de `mcp.server.operation.duration` con un nombre que promete otra cosa.
 son el método, el esquema, el nombre del protocolo y el código de estado de ese
 span, sin el verbo original. `gitlab_mcp.auth.blocks` cuenta cada rechazo bajo
 el presupuesto que lo respondió, como `gitlab_mcp.auth.block.reason`:
-`failure_lockout` y `distinct_tokens` son los dos
-[presupuestos de autenticación](/gitlab-mcp-server/es/operations/security/#presupuestos-de-autenticación),
+`failure_lockout` y `distinct_tokens` son los
+[presupuestos de autenticación](/gitlab-mcp-server/es/operations/security/#presupuestos-de-autenticación)
+por dirección, `network_aggregate` es el que cuenta los `/64` de un `/48` IPv6,
 y `transport_source` es uno más grueso que se carga a la dirección de la que
 llegó la conexión y no a la que nombra una cabecera de proxy de confianza, y
-que solo existe cuando se confía en esa cabecera. Los tres se exportan desde el
-arranque, ceros incluidos. La dirección rechazada no es una dimensión, a
+que solo existe cuando se confía en esa cabecera. Los cuatro se exportan desde
+el arranque, ceros incluidos. La dirección rechazada no es una dimensión, a
 propósito: haría que la serie identificara a personas y crecería sin límite
 justo con el tráfico que mide.
 

@@ -485,11 +485,12 @@ something else.
 dimensions are that span's method, scheme, protocol name and status code, the
 original verb left out. `gitlab_mcp.auth.blocks` counts each refusal under the
 budget that answered it, as `gitlab_mcp.auth.block.reason`: `failure_lockout`
-and `distinct_tokens` are the two
+and `distinct_tokens` are the per-address
 [authentication budgets](/gitlab-mcp-server/operations/security/#authentication-budgets),
-and `transport_source` is a coarser one charged to the address the connection
+`network_aggregate` is the one over the `/64`s of an IPv6 `/48`, and
+`transport_source` is a coarser one charged to the address the connection
 came from rather than to the one a trusted proxy header names, which exists
-only when such a header is trusted. All three are exported from startup, zeros
+only when such a header is trusted. All four are exported from startup, zeros
 included. The address refused is deliberately not a dimension: it would make
 the series identify people, and grow without bound under exactly the traffic it
 measures.

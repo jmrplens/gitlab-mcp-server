@@ -1,6 +1,6 @@
 ---
 title: TLS
-description: "Where to terminate TLS, the listener's own certificate, rotation in place with no restart, client certificates, and what a unix socket costs the authentication failure budget at scale."
+description: "Where to terminate TLS, the listener's own certificate, rotation in place with no restart, client certificates, and how a unix socket keeps a failure budget per caller when unix is a trusted proxy."
 datePublished: "2026-09-06"
 faq:
   - q: "Can I rotate the TLS certificate without restarting?"
@@ -8,7 +8,7 @@ faq:
   - q: "Does the listener do mTLS?"
     a: "No. It requests no client certificate and verifies none; authentication on it is the bearer credential, in either supported mode. Mutual TLS at the edge is a property of the proxy in front, which is where it belongs for a deployment with many clients anyway, since the proxy is what holds the client CA and the revocation list."
   - q: "Is a unix socket the right choice for a same-machine proxy?"
-    a: "It removes the network hop rather than encrypting it, which is usually what you want. It has one cost at scale: a unix socket has no peer address, and the authentication failure budget is keyed on the caller's address, so every caller behind the proxy shares one budget. Ten failed authentications a minute from anywhere spend it for a minute, and until the window ends every credential the server does not already hold is answered `429`; callers it is already serving stay served. Bind loopback TCP with `--trusted-proxy-header` and `--trusted-proxies` if per-caller failure accounting matters more than the hop."
+    a: "It removes the network hop rather than encrypting it, which is usually what you want. A unix socket has no peer address, so pass `--trusted-proxy-header` with `--trusted-proxies=unix`: the server then believes the address the proxy forwards from the socket, and each caller keeps an authentication failure budget of its own. Without them every caller on the socket shares one budget, and ten failed authentications a minute from anywhere spend it for everybody. A socket listener whose `--trusted-proxies` lists addresses but not `unix` refuses to start, since no socket peer matches an address."
 ---
 
 import FAQ from "../../../components/FAQ.astro";
@@ -23,7 +23,8 @@ import FAQ from "../../../components/FAQ.astro";
 
 The unix socket removes the hop rather than encrypting it, and under Docker that
 hop is not "just loopback": the path runs through docker-proxy and a bridge
-network. It has one cost at scale, described at the end of this page.
+network. How the authentication budgets tell its callers apart is at the end of
+this page.
 
 ## The listener's own TLS
 
@@ -104,10 +105,29 @@ For the proxy-to-server hop, `proxy_ssl_verify on` with
 `proxy_ssl_trusted_certificate` pointed at your private CA is the pairing for
 `--tls-cert` on the listener.
 
-## The unix socket, and what it costs at scale
+## The unix socket and the authentication budgets
 
-A unix socket has no peer address. The authentication failure budget is keyed on
-the caller's address, so on a socket **every caller shares one budget**: ten
+A unix socket has no peer address, so the authentication failure budgets, which
+are keyed on the caller's address, have nothing to tell its callers apart by.
+Every connection to the socket is the one key `unix`.
+
+Name the proxy on the socket as a trusted proxy and it tells the server who each
+caller is, exactly as a proxy on loopback TCP does:
+
+```bash
+gitlab-mcp-server --http --http-addr=/run/gitlab-mcp/server.sock \
+  --gitlab-url=https://gitlab.example.com \
+  --trusted-proxy-header=X-Real-IP --trusted-proxies=unix
+```
+
+`unix` trusts the peer of a connection on the socket and no address. The header
+is read by the same rule as from a TCP proxy (the first hop from the right that
+is not itself a listed proxy), so a chain of proxies lists the outer ones by
+address beside `unix`. Each caller then has budgets of its own, an IPv6 caller by
+the `/64` it lies in
+([Authentication budgets](/gitlab-mcp-server/operations/security/#authentication-budgets)).
+
+Without the two flags **every caller on the socket shares one budget**: ten
 failed authentications a minute from anywhere behind the proxy spend it for
 everybody for a minute. A caller whose credential this deployment is already
 serving is still served while it is spent, so the damage is bounded to
@@ -115,19 +135,18 @@ credentials the server does not currently hold: every one of them is answered
 `429` inside that window, a caller authenticating for the first time and one
 whose entry the pool has reclaimed alike
 ([why the exemption is safe](/gitlab-mcp-server/operations/http-server/#rejection-status-codes)).
-`--trusted-proxy-header` cannot repair it either, since the header is believed
-only from a peer that parses as an address, and no socket peer does.
+That is fine where the caller population is small or entirely trusted.
 
-The alternative is one line: bind loopback TCP instead and tell the server who
-the proxy is.
+Two pairings are refused at startup, because each trusts nobody while reading
+as if it trusted someone:
 
-```bash
-gitlab-mcp-server --http --http-addr=127.0.0.1:8080 \
-  --gitlab-url=https://gitlab.example.com \
-  --trusted-proxy-header=X-Real-IP --trusted-proxies=127.0.0.1,::1
-```
+| Pairing                                                                        | Why it is refused                                                                                                           |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| A socket `--http-addr` whose `--trusted-proxies` lists addresses and no `unix` | No socket peer matches an address, so the header would never be believed and every caller would share one budget in silence |
+| `unix` in `--trusted-proxies` on a TCP `--http-addr`                           | No connection to a TCP listener comes from a socket peer, so the entry would trust nobody                                   |
 
-Keep the socket where the caller population is small or entirely trusted, and
-where removing the hop matters more than per-caller failure accounting.
+An earlier release started with the first pairing and ignored the header. If a
+deployment that worked before now refuses to start with
+`--trusted-proxies does not name unix`, add `unix` to the list.
 
 <FAQ />
