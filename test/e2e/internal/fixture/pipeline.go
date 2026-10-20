@@ -59,7 +59,9 @@ const CIFilePath = ".gitlab-ci.yml"
 //
 // A commit goes without it only where the marker would skip the pipeline a
 // scenario reads, or would create one where there is none, and it says why
-// beside the commit.
+// beside the commit, with a //gitlab:allow-push-pipeline line directly above
+// it: TestCICommits_EveryOne_SkipsThePushPipelineOrSaysWhy in sources_test.go
+// fails on a commit of the configuration that has neither.
 const SkipCIMarker = "[skip ci]"
 
 // ManualJobName is what ManualJobCIYAML calls the job a case plays.

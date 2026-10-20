@@ -202,6 +202,7 @@ func newHeadWithoutPipeline(e *harness.Env) headWithoutPipeline {
 	// earlier pipeline and become the newest on that branch, the race
 	// noPushPipelinesCIYAML records, and the feature branch's case would read
 	// it instead.
+	//gitlab:allow-push-pipeline the workflow rules already refuse a push pipeline
 	fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, noPushPipelinesCIYAML,
 		"ci: run merge request pipelines and no push pipelines")
 	earlier := fixture.NewPipelineNoWait(e, project, project.DefaultBranch)

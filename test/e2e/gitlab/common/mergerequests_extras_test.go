@@ -324,6 +324,7 @@ func newMergeRequestWithCI(e *harness.Env, project fixture.Project, prefix, ciYA
 	e.T.Helper()
 
 	branch := fixture.NewBranch(e, project, e.Name(prefix))
+	//gitlab:allow-push-pipeline a merge request pipeline honors the marker, and auto-merge arms against the push's pipeline
 	commit := fixture.CommitFile(e, project, branch.Name, fixture.CIFilePath, ciYAML, "ci: the "+prefix+" configuration")
 	mr := fixture.NewMergeRequest(e, project, branch.Name, project.DefaultBranch, e.Name(prefix))
 	return mergeRequestFixture{project: project, branch: branch, commit: commit, mr: mr}

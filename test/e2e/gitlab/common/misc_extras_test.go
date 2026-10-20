@@ -296,6 +296,7 @@ func publishCatalogVersion(e *harness.Env, project fixture.Project) {
 	// the tag pipeline waited for below runs on this very commit: GitLab reads
 	// the marker off the commit a tag pipeline runs on, and would skip the
 	// only pipeline the scenario has.
+	//gitlab:allow-push-pipeline the tag pipeline runs on this commit
 	fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, releaseJob, "Add release job")
 
 	// Tag pipelines are created asynchronously by Sidekiq, so the queue is

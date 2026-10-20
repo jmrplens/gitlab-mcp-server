@@ -317,6 +317,13 @@ func TestCreateWorldPipeline_Cancelled_BindsPipelineAndJob(t *testing.T) {
 	if commit.Body["branch"] != "main" {
 		t.Errorf("the configuration was committed to %v, want the default branch", commit.Body["branch"])
 	}
+	// The message is held here rather than by the source gate, which reads
+	// it where the commit is made and does not follow worldCIMessage to its
+	// declaration.
+	if message, _ := commit.Body["commit_message"].(string); message == "" || gitLabSkipCIPattern.MatchString(message) {
+		t.Errorf("the configuration was committed with the message %q, want one GitLab does not read as skipping the push's pipeline: "+
+			"the workflow rule already refuses that pipeline, and a marked push would record a skipped one beside the World's", message)
+	}
 	actions, _ := commit.Body["actions"].([]any)
 	if len(actions) != 1 {
 		t.Fatalf("the commit carried %d actions, want the one file", len(actions))
