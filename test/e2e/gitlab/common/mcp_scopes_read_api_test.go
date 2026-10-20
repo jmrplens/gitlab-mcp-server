@@ -82,6 +82,7 @@ func TestScope_ReadAPIToken_RunsWhatGitLabAcceptsFromIt(t *testing.T) {
 		if ran.ID == 0 || ran.Ref != f.project.DefaultBranch {
 			e.T.Errorf("trigger run on a read_api token answered %+v, want a pipeline on %s", ran, f.project.DefaultBranch)
 		}
+		assertTriggerIgnoredSkipMarker(e, ran)
 
 		runner := fixture.NewProjectRunner(e, f.project)
 		harness.DoVoid(s, actionRunnerVerify, map[string]any{"token": runner.Token})

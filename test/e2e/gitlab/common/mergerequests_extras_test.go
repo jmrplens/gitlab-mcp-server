@@ -304,6 +304,22 @@ func buildMRPipelineFixture(e *harness.Env) mrPipelineFixture {
 
 // newMergeRequestWithCI opens a request from a branch carrying the given CI
 // configuration.
+//
+// Its commit carries no skip marker, unlike the configurations the other
+// scenarios commit, and must not, for each of its three callers. It lands on
+// a feature branch rather than the default one, and the admitted
+// configuration's push starts nothing, since its one job runs only on merge
+// request events. The request's pipeline is created by
+// MergeRequests::CreatePipelineService, which does not pass ignore_skip_ci as
+// the pipelines API does, and GitLab judges the marker before the workflow
+// rules: a marked head would answer the admitted case with a skipped
+// pipeline, and the refused case with one too, instead of the workflow rules'
+// 400. The refused configuration's push does run its noop job, which nothing
+// reads or waits for. The auto-merge scenario waits for the push's own
+// pipeline, which its configuration keeps pending, to be the request's head
+// pipeline before it arms the merge, and a marked push would record that
+// pipeline skipped, a finished status, so the request would have no
+// unfinished pipeline to arm the merge against.
 func newMergeRequestWithCI(e *harness.Env, project fixture.Project, prefix, ciYAML string) mergeRequestFixture {
 	e.T.Helper()
 

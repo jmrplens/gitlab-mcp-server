@@ -55,7 +55,7 @@ func TestDependencies_ExportOfAPipeline_ReportsItsStatus(t *testing.T) {
 
 	harness.SurfacesWith(e, func(e *harness.Env) fixture.Pipeline {
 		project := fixture.NewProject(e, fixture.WithNamePrefix("depexport"))
-		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, sbomPipeline, "ci: publish an SBOM")
+		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, sbomPipeline, "ci: publish an SBOM "+fixture.SkipCIMarker)
 		pipeline := fixture.NewPipeline(e, project, project.DefaultBranch)
 		if pipeline.Status != "success" {
 			e.T.Fatalf("the SBOM pipeline %d of %s ended %s, want success", pipeline.ID, project.Path, pipeline.Status)

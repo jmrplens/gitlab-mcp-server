@@ -188,11 +188,13 @@ type vulnerabilityFixture struct {
 
 // buildVulnerabilityFixture commits the source and the pipeline, runs the
 // pipeline to success, and waits for GitLab's own report to hold the three
-// findings, failing with the pipeline's job diagnostics when it does not.
+// findings, failing with the pipeline's job diagnostics when it does not. The
+// pipeline's commit carries the skip marker, so the push does not run the
+// SAST job a second time beside the pipeline whose findings are read.
 func buildVulnerabilityFixture(e *harness.Env) vulnerabilityFixture {
 	project := fixture.NewProject(e, fixture.WithNamePrefix("vulnlife"))
 	fixture.CommitFile(e, project, project.DefaultBranch, "app.py", vulnerableSource, "add the intentionally vulnerable fixture source")
-	fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, sastReportPipeline, "add the SAST report publishing pipeline")
+	fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, sastReportPipeline, "add the SAST report publishing pipeline "+fixture.SkipCIMarker)
 
 	pipeline := fixture.NewPipeline(e, project, project.DefaultBranch)
 	if pipeline.Status != "success" {

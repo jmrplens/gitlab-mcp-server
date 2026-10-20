@@ -63,7 +63,7 @@ func TestPipeline_NeverRan_PublishesNoDuration(t *testing.T) {
 
 	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
 		project := fixture.NewProject(e, fixture.WithNamePrefix("pipenever"))
-		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, neverRunCIYAML, "ci: add a manual job nobody plays")
+		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, neverRunCIYAML, "ci: add a manual job nobody plays "+fixture.SkipCIMarker)
 		return project
 	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
 		s := e.On(surface)

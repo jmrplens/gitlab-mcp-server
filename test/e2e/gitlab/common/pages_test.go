@@ -196,7 +196,7 @@ func TestPages_Unpublish_RemovesTheDeployment(t *testing.T) {
 // the commit message says.
 func deployPages(e *harness.Env, project fixture.Project) {
 	e.T.Helper()
-	fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, pagesCIYAML, "ci: publish a pages site [skip ci]")
+	fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, pagesCIYAML, "ci: publish a pages site "+fixture.SkipCIMarker)
 	pipeline := fixture.NewPipeline(e, project, project.DefaultBranch)
 	if pipeline.Status != "success" {
 		e.T.Fatalf("the pages pipeline %d ended in %q, want success", pipeline.ID, pipeline.Status)

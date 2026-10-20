@@ -99,11 +99,12 @@ func inspectPipeline(e *harness.Env, s *harness.Session, project fixture.Project
 	if renamed.ID != created.ID || renamed.Name != name {
 		e.T.Errorf("pipeline update_metadata answered %+v, want pipeline %d named %q", renamed, created.ID, name)
 	}
-	// The commit that put the CI configuration on the branch starts a
-	// pipeline of its own, and GitLab creates that record in a background
-	// job, which can land after the pipeline this test asked for. The
-	// latest pipeline of the branch is therefore asserted to be that branch's
-	// and no older than the one just created, rather than to be it.
+	// The commit that put the CI configuration on the branch carries the
+	// skip marker, so its push runs no job, but it still records a pipeline,
+	// skipped, and GitLab creates that record in a background job, which can
+	// land after the pipeline this test asked for. The latest pipeline of the
+	// branch is therefore asserted to be that branch's and no older than the
+	// one just created, rather than to be it.
 	latest := harness.Do[pipelines.LatestOutput](s, actionPipelineLatest, params)
 	if latest.ID < created.ID || latest.Ref != project.DefaultBranch {
 		e.T.Errorf("the latest pipeline of %s is %d on %s, want one of that branch no older than the %d just created",

@@ -23,6 +23,20 @@ func triggerIDs(listed []pipelinetriggers.Output) []int64 {
 	return ids
 }
 
+// assertTriggerIgnoredSkipMarker fails the test when a trigger run answered a
+// skipped pipeline. The configuration's commit carries fixture.SkipCIMarker,
+// which GitLab ignores for a trigger run as it does for a pipeline created
+// through the API; a trigger that honored it would answer the run skipped,
+// and the scenarios that run a pipeline through a trigger would read one that
+// never had a job.
+func assertTriggerIgnoredSkipMarker(e *harness.Env, ran pipelinetriggers.RunOutput) {
+	e.T.Helper()
+	if ran.Status == "skipped" {
+		e.T.Errorf("trigger run answered pipeline %d skipped: the trigger honored the %s the configuration's commit carries, which it is relied on to ignore",
+			ran.ID, fixture.SkipCIMarker)
+	}
+}
+
 // TestPipelineTrigger_Lifecycle_CreateListGetUpdateRunDelete creates a
 // trigger token per surface on a shared project carrying the fixture's CI
 // configuration, finds it in the listing, reads it, renames it, runs a
@@ -30,7 +44,13 @@ func triggerIDs(listed []pipelinetriggers.Output) []int64 {
 // listing no longer holds it and the read is refused as not found.
 //
 // The triggered pipeline is left to the runner, or to stay pending without
-// one: what the run proves is the pipeline the answer names, not its end.
+// one: what the run proves is the pipeline the answer names, not its end. The
+// configuration's commit carries the skip marker, which a trigger run ignores
+// as a pipeline created through the API does, since
+// app/services/ci/pipeline_trigger_service.rb passes ignore_skip_ci. The run
+// is held to that: its answer carries the pipeline's status, and a trigger
+// that honored the marker would answer skipped, which a pipeline of CIYAML's
+// one job never is.
 //
 // Replaces: TestMeta_PipelineTriggers, TestIndividual_PipelineTriggerRun
 func TestPipelineTrigger_Lifecycle_CreateListGetUpdateRunDelete(t *testing.T) {
@@ -70,6 +90,7 @@ func TestPipelineTrigger_Lifecycle_CreateListGetUpdateRunDelete(t *testing.T) {
 		if ran.ID == 0 || ran.Ref != project.DefaultBranch || ran.SHA == "" {
 			e.T.Errorf("trigger run answered %+v, want a pipeline on %s with an ID and a commit", ran, project.DefaultBranch)
 		}
+		assertTriggerIgnoredSkipMarker(e, ran)
 
 		harness.DoVoid(s, actionPipelineTriggerDelete, byID)
 		remaining := harness.Do[pipelinetriggers.ListOutput](s, actionPipelineTriggerList, params)

@@ -65,7 +65,7 @@ func TestResourceGroup_Lifecycle_ListGetEditUpcomingJobs(t *testing.T) {
 
 	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
 		project := fixture.NewProject(e, fixture.WithNamePrefix("resgrp"))
-		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, resourceGroupCIYAML, "ci: bind a job to a resource group")
+		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, resourceGroupCIYAML, "ci: bind a job to a resource group "+fixture.SkipCIMarker)
 		return project
 	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
 		s := e.On(surface)
@@ -115,7 +115,7 @@ func TestResourceGroup_CurrentJob_IsTheBoundJobOrNone(t *testing.T) {
 
 	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
 		project := fixture.NewProject(e, fixture.WithNamePrefix("resgrpholder"))
-		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, resourceGroupCIYAML, "ci: bind a job to a resource group")
+		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, resourceGroupCIYAML, "ci: bind a job to a resource group "+fixture.SkipCIMarker)
 		return project
 	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
 		s := e.On(surface)

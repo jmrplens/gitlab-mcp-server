@@ -135,6 +135,13 @@ stages:
 `
 
 // worldCIMessage is the message of the commit that adds worldCIYAML.
+//
+// It carries no SkipCIMarker, unlike the other configurations committed to a
+// default branch, and must not. The workflow rule already keeps the push from
+// creating any pipeline, and GitLab judges the marker before the workflow
+// rules: a marked push would record a skipped pipeline beside the World's
+// own, in a background job that can land after it, and the World would have
+// two.
 const worldCIMessage = "ci: add the World's pipeline configuration"
 
 // worldExtra is one object the World makes beyond its core.

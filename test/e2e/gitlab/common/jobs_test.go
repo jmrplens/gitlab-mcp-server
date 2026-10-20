@@ -197,10 +197,17 @@ func TestJob_Lifecycle_ArtifactsManualPlayCancelRetryAndErase(t *testing.T) {
 
 	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
 		project := fixture.NewProject(e, fixture.WithNamePrefix("jobs"))
-		// The child configuration goes in first, so the pipeline the main
-		// configuration's commit triggers can already resolve the include.
+		// The child configuration goes in first and the main one last,
+		// because only the main configuration's commit carries the skip
+		// marker: the child's commit carries none, and pushed with the main
+		// configuration already on the branch it would run the whole
+		// pipeline, child included. In this order the child's push finds no
+		// main configuration to run and the main configuration's push is
+		// skipped, so each surface's pipeline below is the only one this
+		// configuration runs, and its bridge is the one that triggers a
+		// child.
 		fixture.CommitFile(e, project, project.DefaultBranch, jobLifecycleChildCIPath, jobLifecycleChildCIYAML, "ci: add the child pipeline configuration")
-		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, jobLifecycleCIYAML, "ci: add the job lifecycle configuration")
+		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, jobLifecycleCIYAML, "ci: add the job lifecycle configuration "+fixture.SkipCIMarker)
 		return project
 	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
 		s := e.On(surface)
@@ -322,7 +329,7 @@ func TestJob_Artifacts_LargeArchiveAndBinaryFile(t *testing.T) {
 
 	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
 		project := fixture.NewProject(e, fixture.WithNamePrefix("bigart"))
-		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, jobLargeArtifactsCIYAML, "ci: write a large archive and a binary file")
+		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, jobLargeArtifactsCIYAML, "ci: write a large archive and a binary file "+fixture.SkipCIMarker)
 		pipeline := fixture.NewPipeline(e, project, project.DefaultBranch)
 		if pipeline.Status != "success" {
 			e.T.Fatalf("pipeline %d ended as %q, want success", pipeline.ID, pipeline.Status)
@@ -384,7 +391,7 @@ func TestJob_Trace_LongLogKeepsItsFailure(t *testing.T) {
 	}
 	harness.SurfacesWith(e, func(e *harness.Env) run {
 		project := fixture.NewProject(e, fixture.WithNamePrefix("longlog"))
-		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, jobLongLogCIYAML, "ci: print a long log and fail")
+		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, jobLongLogCIYAML, "ci: print a long log and fail "+fixture.SkipCIMarker)
 		pipeline := fixture.NewPipeline(e, project, project.DefaultBranch)
 		if pipeline.Status != "failed" {
 			e.T.Fatalf("pipeline %d ended as %q, want failed", pipeline.ID, pipeline.Status)

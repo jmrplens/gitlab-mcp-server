@@ -290,6 +290,12 @@ func publishCatalogVersion(e *harness.Env, project fixture.Project) {
 		" --job-token \"$CI_JOB_TOKEN\" create --tag-name \"$CI_COMMIT_TAG\" --description \"Release $CI_COMMIT_TAG\"\n"
 	fixture.CommitFile(e, project, project.DefaultBranch, "README.md", "# e2e catalog component\n", "Add README")
 	fixture.CommitFile(e, project, project.DefaultBranch, "templates/hello.yml", catalogComponent, "Add component")
+	// The release job's commit carries no skip marker, unlike the other
+	// configurations a scenario commits to a default branch, and must not.
+	// Its one job runs only on a tag, so the branch push starts nothing, and
+	// the tag pipeline waited for below runs on this very commit: GitLab reads
+	// the marker off the commit a tag pipeline runs on, and would skip the
+	// only pipeline the scenario has.
 	fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, releaseJob, "Add release job")
 
 	// Tag pipelines are created asynchronously by Sidekiq, so the queue is

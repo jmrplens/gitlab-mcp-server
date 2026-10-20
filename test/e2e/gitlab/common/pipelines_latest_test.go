@@ -191,6 +191,17 @@ func newHeadWithoutPipeline(e *harness.Env) headWithoutPipeline {
 	e.T.Helper()
 
 	project := fixture.NewProject(e, fixture.WithNamePrefix("pipelatest"))
+	// The configuration's commit carries no skip marker, unlike the other
+	// configurations a scenario commits to a default branch, and must not.
+	// Its workflow rules already keep the push from creating any pipeline, so
+	// every branch pipeline is one this fixture creates, which is the premise
+	// above. GitLab judges the marker before the workflow rules, so a marked
+	// commit would make it record a skipped pipeline for every push it heads,
+	// the feature branch created from it below among them. GitLab records
+	// that one in a background job, so it can land after the branch's own
+	// earlier pipeline and become the newest on that branch, the race
+	// noPushPipelinesCIYAML records, and the feature branch's case would read
+	// it instead.
 	fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, noPushPipelinesCIYAML,
 		"ci: run merge request pipelines and no push pipelines")
 	earlier := fixture.NewPipelineNoWait(e, project, project.DefaultBranch)

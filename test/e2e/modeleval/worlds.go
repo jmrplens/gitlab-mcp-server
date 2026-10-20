@@ -1291,7 +1291,7 @@ func manualJobConfiguration(e *harness.Env, project fixture.Project) {
 func commitCIConfiguration(e *harness.Env, project fixture.Project, yaml string) {
 	e.T.Helper()
 	fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, yaml,
-		"ci: add the e2e pipeline configuration [skip ci]")
+		"ci: add the e2e pipeline configuration "+fixture.SkipCIMarker)
 }
 
 // newMergeRequestWorld raises the project, the branch ahead of its default
