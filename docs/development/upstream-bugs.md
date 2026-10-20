@@ -303,8 +303,8 @@ readable without opening the tracker:
 | 53 | gitlab-org/gitlab | [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator) | Yes, [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305) | Yes, [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936), open; the product decision the backend maintainer's review of 2026-10-06 asked for was given on the issue on 2026-10-09, needing no change, and they approved it on 2026-10-12, so every approval rule is met; two threads are open (the AppSec review's and the trial license question), its history line says 19.6 since 2026-10-12 while its milestone still says 19.5, and nobody has set it to merge; our reminder of 2026-10-17 has had no answer | No | No | Yes |
 | 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No; one latent, one narrows an action | Not needed for five; two handlers require the field, one of them until the tag changes |
 | 55 | gitlab-org/gitlab | [A permission refusal is answered 401 rather than 403](#a-permission-refusal-is-answered-401-rather-than-403) | In part, by another user, [gitlab-org/gitlab#383531](https://gitlab.com/gitlab-org/gitlab/-/issues/383531), for one of its sites | The documentation half, [gitlab-org/gitlab!260774](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260774), merged; the behaviour, no; the SAML group link routes' 401 for a missing group, [gitlab-org/gitlab!261348](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261348), open, closing that issue and keeping the permission 401, approved, with a pipeline failed on a runner warning it has no part in and no maintainer acting on it since 2026-10-13, nor on our reminder of 2026-10-17 | **The documentation half, 19.5.0**; the behaviour, no | No | Yes |
-| 56 | gitlab-org/gitlab | [Deleting an external status check without the role answers 204 and deletes nothing](#deleting-an-external-status-check-without-the-role-answers-204-and-deletes-nothing) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260486](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260486), merged, with row 57 | **Yes, 19.5.0**: merged on 2026-10-09 before the 19.5 cut, although its milestone says 19.6 | No | Partial, for releases before 19.5 |
-| 57 | gitlab-org/gitlab | [Creating an external status check without the role answers 500](#creating-an-external-status-check-without-the-role-answers-500) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260486](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260486), merged, with row 56 | **Yes, 19.5.0**: with row 56, merged before the 19.5 cut although its milestone says 19.6 | No | Yes, for releases before 19.5 |
+| 56 | gitlab-org/gitlab | [Deleting an external status check without the role answers 204 and deletes nothing](#deleting-an-external-status-check-without-the-role-answers-204-and-deletes-nothing) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260486](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260486), merged, with row 57 | **Yes, 19.5.0**: merged on 2026-10-09 before the 19.5 cut, although its milestone says 19.6 | No | Partial, for releases before 19.5, whose silent `204` the usage asks the caller to check; from 19.5 the `403` is hinted with the role |
+| 57 | gitlab-org/gitlab | [Creating an external status check without the role answers 500](#creating-an-external-status-check-without-the-role-answers-500) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260486](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260486), merged, with row 56 | **Yes, 19.5.0**: with row 56, merged before the 19.5 cut although its milestone says 19.6 | No | Yes, for releases before 19.5, whose `500` is read as the role refusal; from 19.5 the `403` is hinted with the role |
 | 58 | client-go | [Five response keys and three parameters GitLab 19.4 added](#five-response-keys-and-three-parameters-gitlab-194-added-that-v3140-does-not-model) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Partial |
 | 59 | client-go | [PlanLimit models eight of the twenty-nine limits GitLab sends and accepts](#planlimit-models-eight-of-the-twenty-nine-limits-gitlab-sends-and-accepts) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Partial |
 | 60 | client-go | [JobPipeline models five of the ten keys a job's pipeline carries](#jobpipeline-models-five-of-the-ten-keys-a-jobs-pipeline-carries) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes |
@@ -11887,10 +11887,12 @@ service's own errors.
   status as the cause: the three security settings routes read a 403 first as
   the license, an archive or an enforced setting, so a role refusal moved to
   403 would get the license hint; the three external status check merge
-  request routes read a 403 as the role, so the license refusal moved to 403
-  would get the role hint; the fork link would give a target namespace refusal
-  the Owner hint; and the merge train add would lose its hint. They are the
-  ones to revisit when this entry is retired.
+  request routes, and the create and the delete of a project's status check,
+  read a 403 as the role (the create and the delete since GitLab 19.5 answers
+  their role refusal with one, entries 56 and 57), so the license refusal
+  moved to 403 would get the role hint; the fork link would give a target
+  namespace refusal the Owner hint; and the merge train add would lose its
+  hint. They are the ones to revisit when this entry is retired.
 
 **Where**: `lib/api/merge_request_approvals.rb:105` and 148,
 `lib/api/merge_requests.rb:896` and 945, `lib/api/remote_mirrors.rb:12`,
@@ -12047,21 +12049,28 @@ merged without an answer to that offer.
   before 19.5.
 - **Blocking**: no, but the answer is false: a caller told the check was
   deleted goes on as if it were.
-- **Workaround**: partial. Nothing on the wire tells this refusal apart from
-  a real deletion, so the handler cannot report it. The action's served usage
-  says so instead, and asks the caller to confirm a deletion with
-  `external_status_check.list_project`; and
+- **Workaround**: partial, for the releases before 19.5. Nothing on the wire
+  tells their refusal apart from a real deletion, so the handler cannot
+  report it, and the action's served usage says instead that GitLab before
+  19.5 answers a caller without the role with success and deletes nothing,
+  and asks the caller to confirm a deletion with
+  `external_status_check.list_project` on those releases. From 19.5 the route
+  refuses the role with 403 before the service runs (below), and since
+  [issue 1402](https://github.com/jmrplens/gitlab-mcp-server/issues/1402)
   `DeleteProjectExternalStatusCheck` in
-  `internal/tools/externalstatuschecks/external_status_checks.go` hints only
-  the license on a refusal, never the role, since GitLab never refuses the
-  role there. What retires it is the route refusing the role before the
-  service runs, below; the handler then hints the Maintainer role on that 403
-  and keeps the license hint for the 401 the license check still answers, and
-  the usage stops asking the caller to confirm the deletion with
-  `external_status_check.list_project`. That route ships in 19.5.0, so the
-  handler and the usage can make that change for an instance on 19.5 or
-  later and keep today's answer for older ones, which is follow-up work in
-  this repository.
+  `internal/tools/externalstatuschecks/external_status_checks.go` hints the
+  Maintainer role on that 403 and says the check was left in place
+  (`refusedForRole`), and keeps the license hint for the 401 the license
+  check still answers (`refusedForLicense`), where it hinted the license on
+  every permission refusal. The hint needs no version check, because no
+  release before 19.5 answers this route 403 for the role.
+  `TestStatusChecks_CreateAndDeleteRefusedWith403_NameTheMaintainerRoleInOneSentence`
+  holds the hint, `TestActionSpecs_DeleteUsage_ScopesTheSilentSuccessToOlderReleases`
+  the usage, and the licensed scenario
+  `TestExternalStatusChecks_DeveloperToken_CreateAndDeleteRefusedWithTheRole`
+  (`test/e2e/gitlab/ee`) the refusal of a Developer's group access token on
+  19.5 with the check still listed afterwards. What is left is the usage's
+  advice for the older releases, which stays while this server serves them.
 
 **What**: `DELETE /projects/:id/external_status_checks/:check_id`
 (`ee/lib/api/status_checks.rb:122-132`) wraps
@@ -12118,19 +12127,25 @@ guide while these two answered wrongly outright.
 - **Blocking**: no. The check is correctly not created. What breaks is the
   answer: a refusal of the caller arrives as a fault of the instance, which a
   client retries or reports as an outage.
-- **Workaround**: yes. `CreateProjectExternalStatusCheck` in
+- **Workaround**: yes, for the releases before 19.5.
+  `CreateProjectExternalStatusCheck` in
   `internal/tools/externalstatuschecks/external_status_checks.go` reads a 500
   whose message carries the service's `Not allowed` as the role refusal it is
   (`createRefusedForRole`) and hints the Maintainer role, and
   `TestStatusChecks_CreateRefusedWith500NotAllowed_NamesTheMaintainerRole`
-  holds it, beside a 500 without that message, which names no role. What
-  retires it is the route refusing the role with 403 before the service runs,
-  as the merge request does, rather than the service giving its refusal a
-  status; the handler then hints the Maintainer role on that 403, where it
-  hints the license on every permission refusal today, and keeps
-  `createRefusedForRole` for the releases before it. Those releases are the
-  ones before 19.5, and hinting the role on the 403 from 19.5 is follow-up
-  work in this repository.
+  holds it, beside a 500 without that message, which names no role. From
+  19.5 the route refuses the role with 403 before the service runs, as the
+  merge request does, rather than the service giving its refusal a status,
+  and since [issue 1402](https://github.com/jmrplens/gitlab-mcp-server/issues/1402)
+  the handler hints the Maintainer role on that 403 (`refusedForRole`) and
+  the license on the 401 (`refusedForLicense`), where it hinted the license
+  on every permission refusal. The hint needs no version check, because no
+  release before 19.5 answers this route 403 for the role, and
+  `TestStatusChecks_CreateAndDeleteRefusedWith403_NameTheMaintainerRoleInOneSentence`
+  and the licensed scenario
+  `TestExternalStatusChecks_DeveloperToken_CreateAndDeleteRefusedWithTheRole`
+  hold it as entry 56 says. What is left is `createRefusedForRole`, kept for
+  the releases before 19.5 while this server serves them.
 
 **Where**: `ee/app/services/external_status_checks/create_service.rb:32-38`,
 rendered by `ee/lib/api/status_checks.rb:53`. Read at 19.4.0-pre
