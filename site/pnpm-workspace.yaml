@@ -2,11 +2,6 @@ packages:
   - .
 
 overrides:
-  # esbuild's development server reads arbitrary files on Windows on every
-  # release from 0.27.3 up to 0.28.0 (GHSA-g7r4-m6w7-qqqr), and astro asks for
-  # ^0.28.0, which admits 0.28.0. The pin is the last 0.28.x release, and it
-  # also holds vite, whose ^0.27.0 || ^0.28.0 would admit the rest of the range.
-  esbuild: 0.28.2
   # lodash-es is lodash's code under another name and carries lodash's two
   # advisories: code injection through _.template (GHSA-r5fr-rjxr-66jc, high)
   # and prototype pollution through _.unset (GHSA-f23m-r3pf-42rh), both
@@ -44,26 +39,26 @@ overrides:
   # 3.1.6 then became the vulnerable version itself: authority injection
   # through an unvalidated port in serialize (GHSA-qw65-cvwx-89v3, fixed in
   # 3.1.7) and host confusion through an unclosed bracket in the authority
-  # (GHSA-58mr-gqgx-xq4g, affecting 3.1.6 alone), so the pin moves to 3.1.8,
-  # the last 3.1.x release.
-  "fast-uri@<3.1.8": 3.1.8
-  # ip-address Address4 decodes leading-zero octets as decimal (GHSA-8gjw-6f7c-jmc4),
-  # and then two advisories on every release up to 10.5.0 (GHSA-2vr4-cq9g-pvrc,
-  # GHSA-rpw4-54j3-4h4q), both fixed in 10.5.1; dev/build deps only
-  # (pa11y-ci > puppeteer > socks-proxy-agent > socks). 10.5.1 then became
-  # vulnerable itself: isInSubnet comparing addresses of different families
-  # as one address space (GHSA-j6r3-76f7-8jcv) and an Address6 parse
-  # diagnostic with no length bound (GHSA-h3mg-xc3c-68pw), both on every
-  # release up to 10.7.0 and fixed in 10.7.1, so the pin moves to 10.7.2, the
-  # last 10.x release. socks asks for ^10.1.1, so this stays inside its range.
-  "ip-address@<10.7.2": 10.7.2
-  # undici GHSA-3wwx-pv8p-q78v, which reaches two majors here: 8.x through
-  # the build (astro > unifont) and 6.x through the dev tooling
-  # (pa11y-ci > cheerio), fixed in 8.10.2 and 6.28.1.
-  # Each line is pinned to its own patched release, since forcing one major
-  # onto the other's consumers is not what an advisory fix should do.
-  "undici@>=6.25.0 <6.28.1": 6.28.1
-  "undici@>=8.1.0 <8.10.2": 8.10.2
+  # (GHSA-58mr-gqgx-xq4g, affecting 3.1.6 alone), so the pin moved to 3.1.8.
+  # 3.1.8 then became vulnerable itself: scheme spoofing through a
+  # percent-encoded scheme (GHSA-w74x-v6f9-j3xg), host confusion during
+  # canonicalization (GHSA-wjr9-j795-jxcr), relative-reference normalization
+  # (GHSA-xhq7-xmqj-769h) and scheme injection in suffix references
+  # (GHSA-333x-w4r6-6crp), all fixed in 3.1.9, so the pin moves to 3.1.9, the
+  # last 3.1.x release.
+  "fast-uri@<3.1.9": 3.1.9
+  # undici reaches two majors here: 8.x through the build (astro > unifont)
+  # and 7.x through the dev tooling (pa11y-ci > cheerio, which moved from 6.x
+  # at cheerio 1.2.0). GHSA-3wwx-pv8p-q78v was fixed in 8.10.2, the version
+  # this line used to pin, and 8.10.2 then became vulnerable itself: eight
+  # advisories fixed in 8.12.2 and 7.30.1 on 2026-10-15, four of them high
+  # (GHSA-qrxm-fqhp-jwvm, GHSA-2m5v-pch6-74hx, GHSA-4w7w-5xrc-9h26,
+  # GHSA-xjj6-f33q-929c) and four moderate (GHSA-55wc-3pg8-jfw6,
+  # GHSA-f72v-6w45-q472, GHSA-4qv8-2p9j-2685, GHSA-9fm3-97px-rjf6). Each line
+  # is pinned to its newest release, 8.12.3 and 7.30.1, since forcing one
+  # major onto the other's consumers is not what an advisory fix should do.
+  "undici@>=7.0.0 <7.30.1": 7.30.1
+  "undici@>=8.0.0 <8.12.3": 8.12.3
   # js-yaml quadratic CPU consumption in !!omap resolution (GHSA-5p4m-2wfm-xmqj,
   # CVE-2026-59870), and then maxTotalMergeKeys not bounding CPU for empty
   # merge sources (GHSA-2883-xcg3-v3hh), which the 4.3.1 this line used to pin
@@ -72,53 +67,19 @@ overrides:
   # on, and pinning 5.x onto it is a major bump an advisory fix should not drag
   # in.
   "js-yaml@>=4.0.0 <4.3.2": 4.3.2
-  # devalue, which Astro uses for its content collections' data store, its
-  # sessions and its actions (astro > devalue): shared memory serialized by
-  # stringify and uneval (GHSA-j22f-vq7h-c4qm), quadratic expansion on
-  # repeated strings in uneval (GHSA-mcm9-63f2-9j32) and an unhandled
-  # rejection from stringifyAsync (GHSA-x5rw-q4pp-hg5g), and three lower
-  # advisories published with them (GHSA-hx4r-w6wj-j8fg, GHSA-4q55-j62x-fr9h,
-  # GHSA-wf3x-273g-mvxv), all fixed in 5.9.3. The pin is 5.9.4, the last 5.x
-  # release, which adds only tree-shaking annotations; Astro asks for ^5.8.1,
-  # so this stays inside its range.
-  "devalue@<5.9.4": 5.9.4
 
 auditConfig:
   ignoreGhsas:
-    # extract-zip symlink path traversal: the advisory lists >=2.0.2 as patched,
-    # but no release after 2.0.1 exists on npm, so there is nothing to pin to.
-    # Dev-only path (pa11y-ci > puppeteer > @puppeteer/browsers). Remove this
-    # exception once extract-zip publishes a fixed release.
-    - GHSA-jmr9-qjv8-65gv
-    # extract-zip arbitrary file writes through symlink archive entries: the
-    # same package, the same dev-only path, and the same absence of anywhere to
-    # go. This one records no patched version at all, and 2.0.1 is still the
-    # last release published. Both exceptions retire together, on the release
-    # that fixes either.
-    - GHSA-7pqw-9j4j-h8q3
-    # basic-ftp quadratic-time parsing of a hostile server's directory listing
-    # in Client.list() (GHSA-c475-qrg2-pj4r): fixed only in 6.2.1, and its one
-    # consumer, get-uri, declares basic-ftp 5 in every release up to the
-    # newest, 8.0.1, so a pin would force a major onto a consumer that
-    # declares the other. Dev-only path (pa11y-ci > puppeteer >
-    # @puppeteer/browsers > proxy-agent > pac-proxy-agent > get-uri), loaded
-    # only when a proxy variable names a pac+ URL, and reaching basic-ftp only
-    # for a pac+ftp:// one, which nothing here configures. A get-uri release
-    # that accepts basic-ftp 6 would not retire this, because the chain holds
-    # get-uri on 6.x (pac-proxy-agent 7 asks for ^6.0.1); puppeteer 25 does,
-    # since its @puppeteer/browsers 3 depends on neither proxy-agent nor
-    # extract-zip. Remove this exception, and the two above with it, once
-    # pa11y-ci and the pa11y it asks for are both on puppeteer 25.
-    - GHSA-c475-qrg2-pj4r
     # http-cache-semantics honours a client's max-stale on a shared-cache entry
     # that was zeroed for security, so one user can be served another's cached
     # response, Set-Cookie included (GHSA-ch52-4w7c-c8xp). The advisory lists
-    # every release up to 4.2.0, the version the lockfile resolves, and names
-    # no fixed one. 4.3.0 (2026-10-04), which astro 7.4.0 asks for, changes
-    # Vary matching and adds status() but leaves the max-stale handling as it
-    # was, so there is nothing to pin to. Build-time only: astro is its one
-    # consumer (7.3.8, the version taken, still asks for ^4.2.0) and imports
-    # it only in assets/build/remote.js, to
+    # every release up to 4.2.0 and names no fixed one. The lockfile resolves
+    # 4.3.0 (2026-10-04), which astro 7.4 asks for and the advisory does not
+    # list, but 4.3.0 changes Vary matching and adds status() and leaves the
+    # max-stale branch of evaluateRequest() as it was, so the exception stays
+    # for the day the advisory's range catches up with the code. Build-time
+    # only: astro is its one consumer and imports it only in
+    # assets/build/remote.js, to
     # decide how long a remote image fetched during a build stays fresh. It
     # calls only storable() and timeToLive() on a request it builds itself,
     # and max-stale is read only in evaluateRequest(), which astro never
@@ -142,7 +103,6 @@ peerDependencyRules:
 # that lands, and not before.
 
 allowBuilds:
-  esbuild: true
   puppeteer: true
   sharp: true
 

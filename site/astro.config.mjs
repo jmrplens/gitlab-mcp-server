@@ -3,6 +3,7 @@ import { rehypeWideTables } from "./src/lib/wide-tables.mjs";
 import { readRelease, remarkVersionToken } from "./src/lib/version-token.mjs";
 import { readFileSync } from "node:fs";
 import { defineConfig } from "astro/config";
+import { unified } from "@astrojs/markdown-remark";
 import starlight from "@astrojs/starlight";
 import starlightLinksValidator from "starlight-links-validator";
 import rehypeMermaid from "rehype-mermaid";
@@ -1003,63 +1004,68 @@ export default defineConfig({
 		}),
 	],
 	markdown: {
-		// The version token goes first, so every later plugin, and Expressive
-		// Code after them, sees the release rather than the token.
-		remarkPlugins: [[remarkVersionToken, { version }], remarkLocaleLinks],
-		rehypePlugins: [
-			rehypeTableAlign,
-			// Classifies wide record tables at build time and marks them to stack
-			// into label-above-value blocks on narrow viewports (tables.css) —
-			// per-cell data-label plus explicit ARIA roles, because display:block
-			// drops a table's implicit role. See src/lib/wide-tables.mjs.
-			rehypeWideTables,
-			[
-				// Renders every ```mermaid block to inline SVG at build time with a
-				// headless Chromium, replacing the previous client-side runtime.
-				// That runtime shipped 153 KB gzip (620 KB parsed, 21 chunks) to the
-				// 36 pages carrying a diagram — roughly 3.4x the weight of the rest
-				// of the page — and swapped a text <pre> for an SVG after hydration,
-				// which caused an unavoidable layout shift. Pre-rendering removes
-				// both, and the SVG is in the initial HTML so crawlers and
-				// no-JS readers get the diagram itself rather than its source.
-				rehypeMermaid,
-				{
-					strategy: "inline-svg",
-					mermaidConfig: {
-						// "base" plus explicit variables keeps the generated SVG
-						// neutral. Colours are re-applied from CSS custom properties
-						// at runtime (see src/styles/custom.css), so one SVG serves
-						// both themes and switching does not re-render anything.
-						theme: "base",
-						themeVariables: {
-							background: "transparent",
-							textColor: "#000000",
-							primaryColor: "#ffffff",
-							primaryTextColor: "#000000",
-							primaryBorderColor: "#d0d7de",
-							lineColor: "#000000",
-							secondaryColor: "#f6f8fa",
-							tertiaryColor: "#ffffff",
-							mainBkg: "#ffffff",
-							clusterBkg: "#f6f8fa",
-							clusterBorder: "#d0d7de",
-							edgeLabelBackground: "#ffffff",
-							actorBkg: "#ffffff",
-							actorBorder: "#d0d7de",
-							actorTextColor: "#000000",
-							signalColor: "#000000",
-							signalTextColor: "#000000",
-							labelBoxBkgColor: "#f6f8fa",
-							labelBoxBorderColor: "#d0d7de",
-							labelTextColor: "#000000",
-							loopTextColor: "#000000",
-							noteBkgColor: "#fff9c4",
-							noteBorderColor: "#d4a72c",
-							noteTextColor: "#000000",
+		// The plugins go to the unified processor itself. Astro 7.4 deprecates
+		// markdown.remarkPlugins and markdown.rehypePlugins, which it only folds
+		// into this same processor, so the pipeline is the one it built from them.
+		processor: unified({
+			// The version token goes first, so every later plugin, and Expressive
+			// Code after them, sees the release rather than the token.
+			remarkPlugins: [[remarkVersionToken, { version }], remarkLocaleLinks],
+			rehypePlugins: [
+				rehypeTableAlign,
+				// Classifies wide record tables at build time and marks them to stack
+				// into label-above-value blocks on narrow viewports (tables.css):
+				// per-cell data-label plus explicit ARIA roles, because display:block
+				// drops a table's implicit role. See src/lib/wide-tables.mjs.
+				rehypeWideTables,
+				[
+					// Renders every ```mermaid block to inline SVG at build time with a
+					// headless Chromium, replacing the previous client-side runtime.
+					// That runtime shipped 153 KB gzip (620 KB parsed, 21 chunks) to the
+					// 36 pages carrying a diagram (roughly 3.4x the weight of the rest
+					// of the page) and swapped a text <pre> for an SVG after hydration,
+					// which caused an unavoidable layout shift. Pre-rendering removes
+					// both, and the SVG is in the initial HTML so crawlers and
+					// no-JS readers get the diagram itself rather than its source.
+					rehypeMermaid,
+					{
+						strategy: "inline-svg",
+						mermaidConfig: {
+							// "base" plus explicit variables keeps the generated SVG
+							// neutral. Colours are re-applied from CSS custom properties
+							// at runtime (see src/styles/custom.css), so one SVG serves
+							// both themes and switching does not re-render anything.
+							theme: "base",
+							themeVariables: {
+								background: "transparent",
+								textColor: "#000000",
+								primaryColor: "#ffffff",
+								primaryTextColor: "#000000",
+								primaryBorderColor: "#d0d7de",
+								lineColor: "#000000",
+								secondaryColor: "#f6f8fa",
+								tertiaryColor: "#ffffff",
+								mainBkg: "#ffffff",
+								clusterBkg: "#f6f8fa",
+								clusterBorder: "#d0d7de",
+								edgeLabelBackground: "#ffffff",
+								actorBkg: "#ffffff",
+								actorBorder: "#d0d7de",
+								actorTextColor: "#000000",
+								signalColor: "#000000",
+								signalTextColor: "#000000",
+								labelBoxBkgColor: "#f6f8fa",
+								labelBoxBorderColor: "#d0d7de",
+								labelTextColor: "#000000",
+								loopTextColor: "#000000",
+								noteBkgColor: "#fff9c4",
+								noteBorderColor: "#d4a72c",
+								noteTextColor: "#000000",
+							},
 						},
 					},
-				},
+				],
 			],
-		],
+		}),
 	},
 });
