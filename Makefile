@@ -19,6 +19,7 @@
 	audit-action-ids check-action-ids \
 	audit-dead-consts check-dead-consts \
 	audit-sdk-context check-sdk-context \
+	audit-closed-servers check-closed-servers \
 	audit-tenancy check-tenancy tenancy-code-identity \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
@@ -54,7 +55,9 @@ GO_ANALYSIS_PKGS=./...
 # happened three times: `httpe2e` was missing until the HTTP suite broke CI,
 # `stdioe2e` until the stdio suite did, and `orbitlive` had never been listed
 # at all, so test/e2e/orbit had gone unlinted since it was written. The same
-# list lives in cmd/gen_testing_docs as e2eTags, for the same reason. Every
+# list lives in cmd/gen_testing_docs as e2eTags, for the same reason, and in
+# cmd/audit_test_closed_servers as analysisTags, which a test of that command
+# holds to this line. Every
 # file under test/e2e/gitlab and test/e2e/internal carries
 # `e2e` and nothing else, so this one list is the whole of what the analysis
 # has to know: no package under test/e2e selects between two file sets any
@@ -1046,35 +1049,36 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/29] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/29] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/29] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/29] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
-	run_check "[5/29] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/29] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
-	run_check "[7/29] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/29] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/29] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/29] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
-	run_check "[11/29] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
-	run_check "[12/29] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[13/29] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[14/29] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[15/29] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[16/29] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[17/29] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
-	run_check "[18/29] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
-	run_check "[19/29] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
-	run_check "[20/29] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
-	run_check "[21/29] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
-	run_check "[22/29] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
-	run_check "[23/29] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
-	run_check "[24/29] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
-	run_check "[25/29] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
-	run_check "[26/29] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
-	run_check "[27/29] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
-	run_check "[28/29] fine-grained grants (R-GRANT)" go run ./cmd/audit_1to1/ -scope=grants -gaps-only; \
-	run_check "[29/29] parameter requiredness (R-INPUT)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
+	run_check "[1/30] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/30] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/30] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/30] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
+	run_check "[5/30] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/30] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
+	run_check "[7/30] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/30] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/30] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/30] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
+	run_check "[11/30] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
+	run_check "[12/30] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[13/30] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[14/30] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[15/30] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[16/30] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[17/30] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
+	run_check "[18/30] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
+	run_check "[19/30] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[20/30] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[21/30] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
+	run_check "[22/30] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
+	run_check "[23/30] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
+	run_check "[24/30] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
+	run_check "[25/30] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
+	run_check "[26/30] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
+	run_check "[27/30] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
+	run_check "[28/30] fine-grained grants (R-GRANT)" go run ./cmd/audit_1to1/ -scope=grants -gaps-only; \
+	run_check "[29/30] parameter requiredness (R-INPUT)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
+	run_check "[30/30] httptest servers closed while their address is used" go run ./cmd/audit_test_closed_servers/ -check; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -2033,6 +2037,23 @@ audit-test-subtests:
 ## subtest. CI gate.
 check-test-subtests:
 	go run ./cmd/audit_test_subtests/ -check
+
+## audit-closed-servers: report every httptest server a function closes while
+## its address is still used later in it: the server itself, a URL saved
+## before the close, or a client built on one. Closing a server frees its port
+## at once, and a parallel test or another test binary given the port can
+## answer the request the test exists to see fail; a test that needs an
+## address nothing answers uses internal/testutil/netfixture. Every package of
+## the module is read with its tests, under GO_ANALYSIS_TAGS. -v also lists
+## what a declaration excuses.
+audit-closed-servers:
+	go run ./cmd/audit_test_closed_servers/ -v
+
+## check-closed-servers: the same rule as a gate, which also fails on a
+## declaration that excuses nothing and on a file a build constraint hid that
+## imports net/http/httptest. CI gate.
+check-closed-servers:
+	go run ./cmd/audit_test_closed_servers/ -check
 
 ## audit-md-escaping: report every value a Markdown formatter interpolates into
 ## a table cell, a heading, a list item, a link or a hand-written code fence

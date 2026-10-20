@@ -504,13 +504,15 @@ jobs:
           exit "$status"
 
   # The one thing every job below this one has in common: the server and the
-  # e2e suites compile. It is a minute, and it is the parent of the type-check
-  # matrix and the two transport modules so that the graph shows them as what
-  # they are, three questions asked of one binary. The children do not receive
-  # it as an artifact, since each transport harness builds ./cmd/server itself
-  # in its TestMain; waiting on this job costs them a minute and saves nothing
-  # when it passes, but it is a minute well below the pipeline's longest path,
-  # so the picture is free. The rebuilt suite's harness runs its own unit
+  # e2e suites compile. It is a few minutes, the closed-server gate at its end
+  # included, and it is the parent of the type-check matrix and the two
+  # transport modules so that the graph shows them as what they are, three
+  # questions asked of one binary. The children do not receive it as an
+  # artifact, since each transport harness builds ./cmd/server itself in its
+  # TestMain; waiting on this job delays their start by those minutes and
+  # saves nothing when it passes, but the cross-platform jobs run for over half
+  # an hour, so the delay stays well below the pipeline's longest path and the
+  # picture is free. The rebuilt suite's harness runs its own unit
   # tests here too, against a stub GitLab, and the push-time static gate over
   # the rebuilt suite's typed action ids runs beside them, since neither needs
   # an instance.
@@ -549,6 +551,18 @@ jobs:
       # go/packages and needs no GitLab.
       - name: Run the E2E static gate
         run: go run ./cmd/audit_e2e_coverage/ -static
+      # Closing an httptest server frees its port at once, and a parallel test
+      # or another test binary given that port can answer the request the test
+      # exists to see fail. Tests take a dead address from
+      # internal/testutil/netfixture instead, and this keeps a closed server's
+      # address from being used again. It type-checks every package with its
+      # tests under every e2e tag, about two minutes on five cores from an
+      # empty build cache and seconds from a warm one, which is why it sits in
+      # this job rather than beside the other test-convention gates in the
+      # generated one, whose runs already take eight to ten of its fifteen
+      # minutes.
+      - name: Check no test uses a closed httptest server's address
+        run: make check-closed-servers
 
   # Type-checks every build-constrained file including the tests, for each
   # platform this project ships, on a Linux runner. The cross-platform matrix
