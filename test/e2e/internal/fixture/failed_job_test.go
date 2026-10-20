@@ -1,8 +1,9 @@
 //go:build e2e
 
-// failed_job_test.go drives the failed job wait against the stub: a listing
-// that carries only running jobs at first, a listing endpoint that errors
-// while GitLab is still creating the pipeline, and a budget that runs out.
+// failed_job_test.go drives the failed job builder and its wait against the
+// stub: the builder whole, then a listing that carries only running jobs at
+// first, a listing endpoint that errors while GitLab is still creating the
+// pipeline, and a budget that runs out.
 //
 // It also pins the two facts about the CI configuration the file's comment
 // rests on, because both are invisible in a unit test against a stub: the
@@ -47,6 +48,34 @@ func TestFailingCIYAML_Shape_KeepsTheArtifactOfAJobThatFails(t *testing.T) {
 	}
 	if !strings.Contains(FailingCIYAML, FailedJobArtifactPath) {
 		t.Errorf("FailingCIYAML never names %s, which is the path an artifact case asks for", FailedJobArtifactPath)
+	}
+}
+
+// TestNewFailedJob_Detached_SkipsThePushPipelineAndWaitsForTheFailure drives
+// the builder whole: the failing configuration lands on the default branch
+// with a message that keeps the push from running it, the pipeline is asked
+// for on that branch, and the job that failed in it is handed back with the
+// artifact path. Without the marker the push ran the failing job a second
+// time, on the one runner a model evaluation run shares.
+func TestNewFailedJob_Detached_SkipsThePushPipelineAndWaitsForTheFailure(t *testing.T) {
+	fastFailedJobPolls(t)
+	stub, e := detachedStub(t)
+	stub.answers(http.MethodGet, "/api/v4/runners", oneRunner)
+	stub.answers(http.MethodPost, "/api/v4/projects/1/repository/commits", stubCreated(map[string]any{"id": "ci-sha", "short_id": "ci-sha"}))
+	stub.answers(http.MethodPost, "/api/v4/projects/1/pipeline", stubCreated(map[string]any{"id": 5, "ref": "trunk", "sha": "ci-sha", "status": "created"}))
+	stub.answers(http.MethodGet, jobsPath, stubOK([]any{
+		map[string]any{"id": 71, "name": "failing-fixture", "status": failedJobStatus},
+		map[string]any{"id": 72, "name": "manual-fixture", "status": "manual"},
+	}))
+
+	got := NewFailedJob(e, Project{ID: 1, DefaultBranch: "trunk"})
+
+	if want := (FailedJob{PipelineID: 5, JobID: 71, ArtifactPath: FailedJobArtifactPath}); got != want {
+		t.Errorf("NewFailedJob() = %+v, want %+v", got, want)
+	}
+	assertSkipsThePushPipeline(t, ciCommitTo(t, stub, 1), "trunk", FailingCIYAML)
+	if sent := requestTo(t, stub, http.MethodPost, "/api/v4/projects/1/pipeline").Body["ref"]; sent != "trunk" {
+		t.Errorf("NewFailedJob() asked for a pipeline on %v, want the default branch trunk", sent)
 	}
 }
 
