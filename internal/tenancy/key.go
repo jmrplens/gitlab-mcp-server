@@ -38,10 +38,16 @@ const (
 	KeyApplication
 	// KeySession is an SDK session id, recorded to an owner (IDN-010).
 	KeySession
-	// KeyAddress is the charged client address (IDN-004).
+	// KeyAddress is the charged client address (IDN-004): a whole IPv4
+	// address, an IPv6 address's /64, or the one name every unix-socket
+	// caller shares when nothing vouches for another.
 	KeyAddress
-	// KeySource is the socket peer, with every header ignored (IDN-005).
+	// KeySource is the socket peer, with every header ignored (IDN-005), keyed
+	// as the address is.
 	KeySource
+	// KeyNetwork is the IPv6 /48 a charged client address lies in, the key of
+	// the aggregate over its /64s (AUB-006).
+	KeyNetwork
 	// KeyRefused is a credential GitLab refused, held as a digest: what
 	// AUB-003 counts and what ADM-006 remembers.
 	KeyRefused
@@ -123,7 +129,7 @@ func Keys() []Key {
 	return []Key{
 		KeyNone, KeyRequest, KeyCredential, KeyEntry, KeyOwner, KeyTenant,
 		KeyVerified, KeyApplication, KeySession, KeyAddress, KeySource,
-		KeyRefused, KeyUnbound, KeyProcess, KeyDeployment,
+		KeyNetwork, KeyRefused, KeyUnbound, KeyProcess, KeyDeployment,
 	}
 }
 
@@ -237,19 +243,36 @@ func (k Key) info() keyInfo {
 	case KeyAddress:
 		return keyInfo{
 			name: "address", axis: AxisPreAdmission, mint: MintAddress, unit: UnitAddress,
-			evidence: "Address rotation: the key is the whole address, with no IPv6 prefix aggregation; " +
-				"behind a trusted proxy that copies a caller's header it is that header's value; on a unix " +
-				"socket every caller shares one.",
+			evidence: "Address rotation: the key is a whole IPv4 address, or the fixed /64 an IPv6 address " +
+				"lies in, since an IPv6 subnet is a /64 (RFC 4291) and a caller on one rotates the bits below it " +
+				"for nothing, which AUB-006 bounds one level up; behind a trusted proxy that copies a caller's " +
+				"header it is that header's value; every caller on a unix socket shares the one key unix, " +
+				"unless unix is a trusted proxy and the forwarded address is the key (issue 954).",
 			derivation: []Site{
 				derive(pkgServer, "clientIP"),
+				derive(pkgServer, "budgetKey"),
 			},
 		}
 	case KeySource:
 		return keyInfo{
 			name: "source", axis: AxisPreAdmission, mint: MintAddress, unit: UnitAddress,
-			evidence: "Address rotation only: the socket peer, with every header ignored.",
+			evidence: "Address rotation only: the socket peer, with every header ignored, keyed as the address " +
+				"is, an IPv6 peer by its /64 and a unix-socket peer as unix.",
 			derivation: []Site{
 				derive(pkgServer, "transportSource"),
+				derive(pkgServer, "budgetKey"),
+			},
+		}
+	case KeyNetwork:
+		return keyInfo{
+			name: "network", axis: AxisPreAdmission, mint: MintAddress, unit: UnitAddress,
+			evidence: "Network rotation: the /48 an IPv6 client address lies in, so another value is another " +
+				"assignment, while a provider that assigns one end site a /56 or a /48, which RFC 6177 leaves to " +
+				"its policy, gives it many /64s inside one /48, and one that delegates each subscriber a /56 or a " +
+				"/60, or each mobile device a /64 (RFC 6459), puts many unrelated callers inside one /48, who " +
+				"share its count; an IPv4 address and a unix-socket peer have none and are not counted.",
+			derivation: []Site{
+				derive(pkgServer, "networkKey"),
 			},
 		}
 	case KeyRefused:

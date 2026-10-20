@@ -17,9 +17,9 @@ type Failure struct {
 	Attributable bool
 	// Charged says it is charged to the authentication budgets. Which of them
 	// is its row's refusal's to say ([Refusal.Charged]): a missing credential
-	// spends AUB-001 and AUB-002 and not AUB-003, which counts nothing for an
-	// empty credential, and a rejected one spends all three. The gate holds the
-	// two statements to each other (G7).
+	// spends AUB-001 and AUB-002 and not AUB-003 or AUB-006, which count
+	// nothing for an empty credential, and a rejected one spends all four. The
+	// gate holds the two statements to each other (G7).
 	Charged bool
 	// Decision is the row whose refusal it is.
 	Decision string

@@ -49,7 +49,7 @@ func admitDecisions() []Decision {
 			Challenge: challenge, Prefix: prefix, Answer: WidenScope, At: at,
 		}
 	}
-	rejectedCharges := []string{"AUB-001", "AUB-002", "AUB-003"}
+	rejectedCharges := []string{"AUB-001", "AUB-002", "AUB-003", "AUB-006"}
 	blocked := func(at Site) Refusal {
 		return Refusal{
 			Methods: []string{MethodGate}, Channel: Gate, Code: CodeTooManyRequests, Status: 429,
@@ -461,6 +461,8 @@ func admitDecisions() []Decision {
 			},
 		},
 		{
+			// Keyed on IDN-004's address, an IPv6 one by its /64 (issue 954,
+			// which answered F-14 and F-25 here and on AUB-003).
 			ID: "AUB-001", Question: Admit, Kind: Budget, Class: ClassA, Disposition: Valued,
 			Resource: "failed authentications one address may produce in a window",
 			Key:      KeyAddress, StdioKey: KeyNone,
@@ -470,8 +472,8 @@ func admitDecisions() []Decision {
 			Source:    Configurable, Flags: []string{"--auth-failure-limit", "--auth-failure-window"},
 			Envs:   []string{"GITLAB_MCP_AUTH_FAILURE_LIMIT", "GITLAB_MCP_AUTH_FAILURE_WINDOW"},
 			Config: []string{"AuthFailureLimit", "AuthFailureWindow"}, Malformed: RefuseStartup, Zero: ZeroOff,
-			Decided:  []string{"issue 790"},
-			Findings: []string{"F-14", "F-25", "F-34"},
+			Decided:  []string{"issue 790", "issue 954"},
+			Findings: []string{"F-34"},
 			Refusals: blockedRefusals,
 			// The gate's own codes are declared here, with the budget row whose
 			// layer moves them: they mirror the statuses every gate refusal
@@ -491,9 +493,13 @@ func admitDecisions() []Decision {
 			},
 		},
 		{
+			// The source is keyed as the address is, an IPv6 peer by its /64
+			// and a unix-socket peer as unix (issue 954), so a proxy that
+			// rotates its own low bits is still one source.
 			ID: "AUB-002", Question: Admit, Kind: Budget, Class: ClassA, Disposition: Valued,
-			Resource: "distinct failing primary keys one transport source may produce in a window",
+			Resource: "distinct failing primary keys one transport source, an IPv6 one by its /64, may produce in a window",
 			Key:      KeySource, StdioKey: KeyNone,
+			Decided: []string{"issue 954"},
 			// The pairs already charged are remembered in a map keyed on the
 			// source and the primary key, both of which a caller mints. A
 			// source stops adding pairs once it is blocked, but a source that
@@ -537,8 +543,8 @@ func admitDecisions() []Decision {
 			Envs:   []string{"GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT", "GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW"},
 			Config: []string{"AuthDistinctTokenLimit", "AuthDistinctWindow"}, Malformed: RefuseStartup,
 			Zero: ZeroOff, OffWith: "AUB-001",
-			Decided:  []string{"issue 790"},
-			Findings: []string{"F-14", "F-25", "F-34"},
+			Decided:  []string{"issue 790", "issue 954"},
+			Findings: []string{"F-34"},
 			Refusals: blockedRefusals,
 			Sites: []Site{
 				alias(pkgConfig, "DefaultAuthDistinctTokenLimit", "AuthDistinctTokenLimit"),
@@ -555,14 +561,17 @@ func admitDecisions() []Decision {
 		},
 		{
 			ID: "AUB-004", Question: Admit, Kind: Ceiling, Class: ClassP, Disposition: Valued,
-			Resource: "addresses the authentication failure table and the distinct-credential address table each track",
+			Resource: "keys the authentication failure table, the distinct-credential address table and the /48 table each track",
 			Key:      KeyProcess, StdioKey: KeyNone,
 			ReasonUnit: KeyProcess, ProtectsProcess: true,
 			Values: []string{"AuthTrackedSources"}, Source: Constant, Zero: ZeroNotApplicable,
 			AtCapacity: StopCounting,
 			Findings:   []string{"F-11"},
-			// The one value caps both tables, and each stops counting a new
-			// address once it is full.
+			// The one value caps the three tables, and each stops counting a
+			// new key once it is full. The /48 table of AUB-006 is a
+			// DistinctTokenBudget of its own, so its refusal is the second
+			// below; keying the address on the /64 lowers the keys a caller
+			// can mint against all three.
 			Refusals: []Refusal{
 				{Methods: []string{MethodGate}, Channel: Silent, Answer: NoAnswer, At: refuse(pkgPool, "AuthRateLimiter.RecordFailure")},
 				{Methods: []string{MethodGate}, Channel: Silent, Answer: NoAnswer, At: refuse(pkgPool, "DistinctTokenBudget.roomForNewKeyLocked")},
@@ -582,6 +591,34 @@ func admitDecisions() []Decision {
 			// A var rather than a const, so a test can make the tick arrive;
 			// nothing at runtime writes it.
 			Sites: []Site{alias(pkgServer, "periodicCleanupInterval", "AuthSweepInterval")},
+		},
+		{
+			// The aggregate one level above the address (issue 954): an IPv6
+			// caller that rotates /64s inside its /48 gets a fresh AUB-001 and
+			// AUB-003 per /64, so the /64s of one /48 that had a credential
+			// refused are counted, in AUB-003's window and up the ladder
+			// AUB-003 climbs, and at the limit the /48 is refused before its
+			// credential is read. It counts what AUB-003 counts, a credential
+			// GitLab refused, and never a request that carried none, since a
+			// network of honest subnets produces that. The /64s are held as
+			// digests, in the table AUB-004 caps. Its value is the register's
+			// and no operator's (issue 954's decision), so it is on wherever
+			// the gate runs and its zero is not one anybody sets; the windows
+			// it reads fall back to their defaults when AUB-001 or AUB-003 is
+			// switched off by a zero, so turning those off does not turn this
+			// off (INV-015). An IPv4 address and a unix-socket peer have no
+			// /48 and are not counted.
+			ID: "AUB-006", Question: Admit, Kind: Budget, Class: ClassA, Disposition: Valued,
+			Resource: "distinct IPv6 /64s with a credential refused one /48 may produce in AUB-003's window",
+			Key:      KeyNetwork, StdioKey: KeyNone,
+			Values: []string{"AuthNetworkFailingPrefixes"}, Source: Constant, Zero: ZeroNotApplicable,
+			Decided:  []string{"issue 954"},
+			Refusals: blockedRefusals,
+			Sites: []Site{
+				alias(pkgServer, "networkFailingPrefixes", "AuthNetworkFailingPrefixes"),
+				enforce(pkgServer, "authNetworkBudget"),
+				resolve, check,
+			},
 		},
 		{
 			ID: "POL-006", Question: Admit, Kind: Ceiling, Class: ClassP, Disposition: Valued,

@@ -235,49 +235,106 @@ func TestListener_InvalidSocketMode_StopsStartup(t *testing.T) {
 	}
 }
 
-// TestListener_UnixSocket_SharesOneAuthenticationBudget pins the cost of the
-// socket, so a deployment serving many people can weigh it before choosing.
+// TestListener_UnixSocket_AuthenticationBudgetFollowsTheTrustedProxy pins what
+// a unix socket costs the authentication budgets, and the flag that removes
+// the cost (issue 954).
 //
-// The authentication failure budget is keyed on the caller's address, and a
-// unix socket has none: every connection reports the same peer, so the ten
-// failures a minute that block one address block every caller behind the
-// proxy at once. Nor can the proxy hand the real one over, because
-// --trusted-proxy-header is believed only from a peer that parses as an
-// address and is listed in --trusted-proxies, which no socket peer does.
-//
-// It is asserted rather than left implicit because the alternative is
-// concrete: a loopback TCP listener with --trusted-proxies=127.0.0.1 keys the
-// budget on the address the proxy forwards, which is what a shared deployment
-// wants. The socket stays the better answer where the callers are few or
-// trusted, and this is the number that decides which case a deployment is in.
-func TestListener_UnixSocket_SharesOneAuthenticationBudget(t *testing.T) {
+// A socket's peer has no address, so every caller on it is the one key unix.
+// With nothing trusted, one caller failing past the budget refuses another
+// presenting a valid credential this deployment has not admitted yet, which is
+// the cost the HTTP guide and the flag help state. With unix in
+// --trusted-proxies the proxy on the socket names each caller, as one on
+// loopback TCP does, so the same second caller is served while the first stays
+// refused. Before the issue the second case could not be written at all: a
+// header was believed only from a peer that parses as an address, which no
+// socket peer does, so a shared deployment had to give the socket up.
+func TestListener_UnixSocket_AuthenticationBudgetFollowsTheTrustedProxy(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the peer of an AF_UNIX connection is reported differently on Windows; the property under test is the POSIX one")
 	}
-	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
-	socketPath := filepath.Join(socketDir(t), "m.sock")
-	srv := startServerOnUnixSocket(t, socketPath,
-		"--gitlab-url="+gitlab.url,
-		"--trusted-proxy-header=X-Real-IP",
-		"--trusted-proxies=127.0.0.1,::1",
-	)
+	const valid = "glpat-second-caller"
+	for _, tc := range []struct {
+		name  string
+		flags []string
+		want  int
+	}{
+		{name: "nothing trusted, every caller is the key unix", want: http.StatusTooManyRequests},
+		{
+			name:  "unix trusted, each caller keeps its own budget",
+			flags: []string{"--trusted-proxy-header=X-Real-IP", "--trusted-proxies=unix"},
+			want:  http.StatusOK,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gitlab := startScopedFakeGitLab(t, map[string][]string{valid: {"api"}})
+			socketPath := filepath.Join(socketDir(t), "m.sock")
+			srv := startServerOnUnixSocket(t, socketPath, append([]string{"--gitlab-url=" + gitlab.url}, tc.flags...)...)
 
-	// Each request claims a different client address, which over TCP from a
-	// trusted proxy would give each its own budget.
-	blocked := 0
-	for i := range 15 {
-		got := srv.do(t, mcpPOST(map[string]string{"X-Real-IP": "203.0.113." + strconv.Itoa(i+1)}))
-		if got.status == http.StatusTooManyRequests {
-			blocked = i + 1
-			break
-		}
-		if got.status != http.StatusUnauthorized {
-			t.Fatalf("attempt %d: status = %d, want 401 or 429: %s", i+1, got.status, truncate(got.body))
-		}
+			blocked := 0
+			for i := range 15 {
+				got := srv.do(t, mcpPOST(map[string]string{
+					"X-Real-IP": "203.0.113.1", "PRIVATE-TOKEN": "glpat-invented-" + strconv.Itoa(i),
+				}))
+				if got.status == http.StatusTooManyRequests {
+					blocked = i + 1
+					break
+				}
+				if got.status != http.StatusUnauthorized {
+					t.Fatalf("attempt %d: status = %d, want 401 or 429: %s", i+1, got.status, truncate(got.body))
+				}
+			}
+			if blocked == 0 {
+				t.Fatal("fifteen invented tokens from one caller on the socket were never cut off")
+			}
+
+			second := srv.do(t, mcpPOST(map[string]string{"X-Real-IP": "203.0.113.2", "PRIVATE-TOKEN": valid}))
+			if second.status != tc.want {
+				t.Errorf("a second caller presenting a valid credential not yet admitted = %d, want %d: %s",
+					second.status, tc.want, truncate(second.body))
+			}
+		})
 	}
-	if blocked == 0 {
-		t.Fatal("fifteen failures from fifteen claimed addresses were never cut off over a unix socket; " +
-			"the budget is documented as shared there, and a deployment sizing against that would be sizing against nothing")
+}
+
+// TestListener_ProxyListThatTrustsNobody_StopsStartup pins the two pairings of
+// the proxy flags with the listener that issue 954 refuses at startup, since
+// each trusts nobody while reading as if it trusted someone. On a socket, a
+// list of addresses is never matched by the socket's peer: the header was
+// believed from nobody and every caller shared one budget, which used to start
+// in silence and is the change of behavior the release notes name. On TCP,
+// unix names a peer no connection to it can have. Neither leaves a listener
+// behind, and each refusal names both flags.
+func TestListener_ProxyListThatTrustsNobody_StopsStartup(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the unix-socket pairing is the POSIX listener's; the TCP one is driven by the unit tests on every platform")
+	}
+	socketPath := filepath.Join(socketDir(t), "never.sock")
+	for _, tc := range []struct {
+		name string
+		addr string
+		list string
+		want string
+	}{
+		{name: "addresses on a unix socket", addr: socketPath, list: "127.0.0.1,::1", want: "--trusted-proxies does not name unix and --http-addr"},
+		{name: "unix on a TCP listener", addr: "127.0.0.1:" + strconv.Itoa(freePort(t)), list: "unix", want: "--trusted-proxies names unix and --http-addr"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := runServerExpectingExit(t, serverBinary(t),
+				"--http", "--gitlab-url=https://gitlab.example.com",
+				"--http-addr="+tc.addr,
+				"--trusted-proxy-header=X-Real-IP",
+				"--trusted-proxies="+tc.list,
+			)
+			if err == nil {
+				t.Fatalf("the server started; output:\n%s", out)
+			}
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("the refusal must name both flags with %q; output:\n%s", tc.want, out)
+			}
+		})
+	}
+	if _, statErr := os.Lstat(socketPath); statErr == nil {
+		t.Error("a refused socket pairing left a socket behind")
 	}
 }
 

@@ -310,7 +310,7 @@ type Config struct {
 	ResourceTermsURI  string
 
 	TrustedProxyHeader string   // HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
-	TrustedProxies     []string // Addresses or CIDR ranges of the proxies TrustedProxyHeader is believed from; required with it
+	TrustedProxies     []string // Addresses, CIDR ranges and unix (the peer of a unix socket) TrustedProxyHeader is believed from; required with it
 	// TrustedOrigins are absolute origins (scheme://host[:port]) allowed to
 	// make cross-origin browser requests. Empty by default: the server
 	// refuses every cross-origin browser POST, and only a listed origin (or

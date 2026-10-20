@@ -41,7 +41,8 @@ type hostGuard struct {
 	// another name is nobody's health check. A wildcard bind or a unix socket
 	// names none, and only the rebinding rule below applies.
 	bound bool
-	// proxies are the addresses whose forwarded Host is believed, from
+	// proxies are the addresses whose forwarded Host is believed, and the
+	// unix entry that believes the peer of a unix-socket connection, from
 	// --trusted-proxies.
 	proxies trustedProxies
 }
@@ -88,8 +89,10 @@ func (g hostGuard) permits(r *http.Request) bool {
 	// A proxy the operator listed is a hop they vouched for, and forwarding
 	// the client's Host is what every proxy in the deployment guide is
 	// configured to do. A browser carrying out a rebinding attack is not that
-	// hop: it reaches the listener itself, from an address nobody listed.
-	if g.trustsPeer(r) {
+	// hop: it reaches the listener itself, from an address nobody listed. The
+	// question is the one the authentication budgets ask of the connection,
+	// answered by the same set, a unix entry included.
+	if g.proxies.trustsPeer(r) {
 		return true
 	}
 	if g.bound {
@@ -101,19 +104,6 @@ func (g hostGuard) permits(r *http.Request) bool {
 	// at. Reached on any other address it is not, and a wildcard bind then
 	// keeps answering whatever host a proxy in front of it forwards.
 	return !arrivedOnLoopback(r) || isLoopbackHost(normalizedHost(r.Host))
-}
-
-// trustsPeer reports whether the request arrived from an address in
-// --trusted-proxies.
-func (g hostGuard) trustsPeer(r *http.Request) bool {
-	if g.proxies.empty() {
-		return false
-	}
-	addr, err := netip.ParseAddr(remoteHost(r))
-	if err != nil {
-		return false
-	}
-	return g.proxies.contains(addr)
 }
 
 // hostOnly strips the port from a Host header value, leaving a bare host or

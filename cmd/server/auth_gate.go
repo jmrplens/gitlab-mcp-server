@@ -24,8 +24,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Authentication rate limiting for HTTP mode: a client IP is blocked after
-// authFailureLimit failed authentications inside authFailureWindow.
+// Authentication rate limiting for HTTP mode: a client address, an IPv6 one by
+// the /64 it lies in ([budgetKey]), is blocked after authFailureLimit failed
+// authentications inside authFailureWindow.
 //
 // What the block refuses is an authentication, not an address. A credential
 // this deployment is already serving is admitted from a blocked address too —
@@ -271,6 +272,12 @@ type mcpServerGate struct {
 	// earn a fresh allowance by moving between the two layers. Nil when the
 	// deployment turns it off, and every method tolerates that.
 	spray *serverpool.DistinctTokenBudget
+	// network is the aggregate one level above the address (AUB-006): the
+	// distinct /64s of one IPv6 /48 that had a credential refused, counted on
+	// the slow budget's machinery with the /64 in place of the credential.
+	// Shared with [bearerGuard] like spray. Nil only in tests that build a
+	// gate without it; a deployment always has one ([authNetworkBudget]).
+	network *serverpool.DistinctTokenBudget
 	// blocks counts the refusals each budget produced, for telemetry. Shared
 	// with [bearerGuard], since the two layers share the budgets themselves.
 	blocks             *authBlockCounters
@@ -795,24 +802,42 @@ func (g *mcpServerGate) credentialAlreadyAdmitted(r *http.Request) bool {
 }
 
 // blockedByBudget reports whether any budget is exhausted: the caller's key,
-// the transport source it arrived from, or the distinct credentials that key
-// has had refused. The duration is what Retry-After should say.
+// the transport source it arrived from, the distinct credentials that key has
+// had refused, or the /48 the caller's address lies in. The duration is what
+// Retry-After should say.
 //
-// It is a duration rather than a bare bool because the escalating budget's
-// block outlasts the window the other two are bounded by, and a 429 that
+// address is the client address [clientIP] returned, and the keys are read off
+// it here ([budgetKey], [networkKey]); source is already keyed.
+//
+// It is a duration rather than a bare bool because the escalating budgets'
+// blocks outlast the window the other two are bounded by, and a 429 that
 // announces the short one is telling the caller to come back while it is still
 // refused. A well-behaved client then knocks for the rest of the block.
 // The reason is what telemetry records the refusal under, and is the only
 // thing recorded about it: an address is who was refused, which a counter must
 // not carry.
-func (g *mcpServerGate) blockedByBudget(key, source string) (blocked bool, retryAfter time.Duration, reason string) {
-	lockedOut, lockoutFor := false, time.Duration(0)
+func (g *mcpServerGate) blockedByBudget(address, source string) (blocked bool, retryAfter time.Duration, reason string) {
+	key := budgetKey(address)
+	lockout := authBlock{reason: mcpotel.AuthBlockFailureLockout}
 	if g.limiter != nil {
-		lockedOut, lockoutFor = g.limiter.BlockedFor(key)
+		lockout.active, lockout.remaining = g.limiter.BlockedFor(key)
 	}
-	sourceBlocked, sourceFor := g.sourceBudget.blockedFor(source)
-	sprayed, sprayFor := g.spray.Blocked(key)
-	return longestAuthBlock(lockedOut, lockoutFor, sourceBlocked, sourceFor, sprayed, sprayFor)
+	sourceBlock := authBlock{reason: mcpotel.AuthBlockTransportSource}
+	sourceBlock.active, sourceBlock.remaining = g.sourceBudget.blockedFor(source)
+	spray := authBlock{reason: mcpotel.AuthBlockDistinctTokens}
+	spray.active, spray.remaining = g.spray.Blocked(key)
+	network := authBlock{reason: mcpotel.AuthBlockNetworkAggregate}
+	network.active, network.remaining = g.network.Blocked(networkKey(address))
+	return longestAuthBlock(lockout, sourceBlock, spray, network)
+}
+
+// authBlock is one budget's answer about a request: whether it holds the
+// request, for how much longer, and the reason telemetry records a refusal it
+// made under.
+type authBlock struct {
+	active    bool
+	remaining time.Duration
+	reason    string
 }
 
 // longestAuthBlock picks the block a refused request should be told about when
@@ -825,41 +850,40 @@ func (g *mcpServerGate) blockedByBudget(key, source string) (blocked bool, retry
 // fifty-nine being refused. Retry-After is a promise about when the next
 // attempt can succeed, so the longest active block is the only honest answer,
 // and its reason is the one worth recording.
-func longestAuthBlock(
-	lockedOut bool, lockoutFor time.Duration,
-	sourceBlocked bool, sourceFor time.Duration,
-	sprayed bool, sprayFor time.Duration,
-) (blocked bool, retryAfter time.Duration, reason string) {
-	consider := func(active bool, d time.Duration, r string) {
-		if !active || d < retryAfter {
-			return
+//
+// A later block only wins on a strict improvement, so the order the guards
+// pass them in breaks a tie: the lockout is the cheapest to explain, then the
+// transport source, the distinct-token block and the /48 aggregate, the most
+// specific last.
+func longestAuthBlock(blocks ...authBlock) (blocked bool, retryAfter time.Duration, reason string) {
+	for _, b := range blocks {
+		if !b.active || b.remaining < retryAfter || (blocked && b.remaining == retryAfter) {
+			continue
 		}
-		// A later budget only wins on a strict improvement, so the order below
-		// breaks a tie: the lockout is the cheapest to explain and the
-		// distinct-token block the most specific.
-		if blocked && d == retryAfter {
-			return
-		}
-		blocked, retryAfter, reason = true, d, r
+		blocked, retryAfter, reason = true, b.remaining, b.reason
 	}
-	consider(lockedOut, lockoutFor, mcpotel.AuthBlockFailureLockout)
-	consider(sourceBlocked, sourceFor, mcpotel.AuthBlockTransportSource)
-	consider(sprayed, sprayFor, mcpotel.AuthBlockDistinctTokens)
 	return blocked, retryAfter, reason
 }
 
 // chargeFailure charges one authentication failure to every budget.
 //
-// token is the credential that was refused, and is empty for a request that
-// carried none. The distinct-token budget ignores an empty one, so a client
-// that simply forgot its header never moves that ladder: only a credential
-// GitLab refused does, which is the thing a sprayer cannot avoid producing.
-func (g *mcpServerGate) chargeFailure(key, source, token string) {
+// address is the client address [clientIP] returned, and its keys are read off
+// it here, as [mcpServerGate.blockedByBudget] reads them; source is already
+// keyed. token is the credential that was refused, and is empty for a request
+// that carried none. The distinct-token budget ignores an empty one, and the
+// /48 aggregate is not charged for one, so a client that simply forgot its
+// header moves neither: only a credential GitLab refused does, which is the
+// thing a sprayer cannot avoid producing.
+func (g *mcpServerGate) chargeFailure(address, source, token string) {
+	key := budgetKey(address)
 	if g.limiter != nil {
 		g.limiter.RecordFailure(key)
 	}
 	g.sourceBudget.charge(source, key)
 	g.spray.Charge(key, token)
+	if token != "" {
+		g.network.Charge(networkKey(address), key)
+	}
 }
 
 // transportBudget is the secondary authentication budget of
@@ -984,13 +1008,17 @@ func (b *transportBudget) cleanup() {
 	b.limiter.Cleanup()
 }
 
-// transportSource is the address the connection actually came from.
+// transportSource is the key of the address the connection actually came
+// from.
 //
 // It is [clientIP] with every header ignored, and it is the whole point of the
 // secondary budget: RemoteAddr is set by the kernel from the accepted socket,
-// so nothing a caller sends can change it.
+// so nothing a caller sends can change it. It is keyed as every budget's
+// address is ([budgetKey]): a proxy reaching this server over IPv6 is its /64,
+// which rotating its own low bits does not change, and a connection on a unix
+// socket is [unixPeer] (issue 954).
 func transportSource(r *http.Request) string {
-	return remoteHost(r)
+	return budgetKey(remoteHost(r))
 }
 
 // errMissingGitLabURL is returned when a deployment publishes several

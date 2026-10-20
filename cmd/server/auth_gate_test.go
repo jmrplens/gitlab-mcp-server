@@ -1479,6 +1479,178 @@ func TestMCPServerGate_TrustedProxy_TheFleetBudgetCountsClientsNotFailures(t *te
 	}
 }
 
+// proxiedGatePost is a POST that reached the gate through the trusted proxy
+// 203.0.113.7, forwarding client and carrying token as PRIVATE-TOKEN when it
+// is not empty. It returns the status the gate answered.
+func proxiedGatePost(t *testing.T, handler http.Handler, client, token string) int {
+	t.Helper()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader("{}"))
+	req.RemoteAddr = "203.0.113.7:44444"
+	req.Header.Set("X-Forwarded-For", client)
+	if token != "" {
+		req.Header.Set("PRIVATE-TOKEN", token)
+	}
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	return rec.Code
+}
+
+// proxiedGate is a gate behind the trusted proxy 203.0.113.7, against a GitLab
+// that refuses every credential, with the fast budget and the transport source
+// budget at their defaults and the others left for the test to arm.
+func proxiedGate(t *testing.T) *mcpServerGate {
+	t.Helper()
+	gate := newGateAgainst(t, okFactory, gateStubGitLab(t, true))
+	gate.trustedProxyHeader = "X-Forwarded-For"
+	gate.trustedProxies = trustedProxiesOf([]string{"203.0.113.7"})
+	gate.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow), authFailureWindow)
+	return gate
+}
+
+// TestMCPServerGate_IPv6RotationInsideOneSlash64_SpendsOneBudget is the defect
+// issue 954 opened with: an IPv6 caller holds at least a /64 and rotating its
+// low bits used to mint a fresh budget per request, so neither the fast budget
+// nor the distinct-credential one bounded it. Every address of one /64 is now
+// one key, so the rotation is cut off where a fixed address would be, and a
+// caller in the next /64 keeps a budget of its own.
+func TestMCPServerGate_IPv6RotationInsideOneSlash64_SpendsOneBudget(t *testing.T) {
+	inSlash64 := func(i int) string { return "2001:db8:1:2::" + strconv.FormatInt(int64(i+1), 16) }
+
+	t.Run("the fast budget", func(t *testing.T) {
+		handler := proxiedGate(t).middleware(http.NotFoundHandler())
+		for i := range authFailureLimit {
+			if got := proxiedGatePost(t, handler, inSlash64(i), ""); got != http.StatusUnauthorized {
+				t.Fatalf("failure %d from %s got %d, want %d", i+1, inSlash64(i), got, http.StatusUnauthorized)
+			}
+		}
+		if got := proxiedGatePost(t, handler, inSlash64(authFailureLimit), ""); got != http.StatusTooManyRequests {
+			t.Errorf("a never-seen address of the same /64 got %d, want %d: rotating the low bits minted a fresh budget",
+				got, http.StatusTooManyRequests)
+		}
+		if got := proxiedGatePost(t, handler, "2001:db8:1:3::1", ""); got != http.StatusUnauthorized {
+			t.Errorf("a caller in the next /64 got %d, want %d: one /64 spent another's budget", got, http.StatusUnauthorized)
+		}
+	})
+
+	t.Run("the distinct-credential budget", func(t *testing.T) {
+		gate := proxiedGate(t)
+		gate.limiter = nil
+		gate.spray = serverpool.NewDistinctTokenBudget(3, time.Minute, time.Minute)
+		handler := gate.middleware(http.NotFoundHandler())
+		for i := range 3 {
+			if got := proxiedGatePost(t, handler, inSlash64(i), "glpat-refused-"+strconv.Itoa(i)); got != http.StatusUnauthorized {
+				t.Fatalf("refused credential %d got %d, want %d", i+1, got, http.StatusUnauthorized)
+			}
+		}
+		if got := proxiedGatePost(t, handler, inSlash64(3), "glpat-refused-3"); got != http.StatusTooManyRequests {
+			t.Errorf("a fourth credential from a never-seen address of the same /64 got %d, want %d: "+
+				"the distinct credentials were counted per address", got, http.StatusTooManyRequests)
+		}
+	})
+}
+
+// TestMCPServerGate_Slash64sRotatingInOneSlash48_TripTheNetworkAggregate pins
+// the bound on the next rotation up (AUB-006): a caller holding a /48 owns
+// 65536 /64s, each with budgets of its own, so the /64s inside one /48 that
+// have a credential refused are counted, and at the register's limit the /48
+// is refused before its credential is read, a /64 it never used included. A
+// /48 that stops short of the limit is not refused, and another /48 is not
+// touched.
+func TestMCPServerGate_Slash64sRotatingInOneSlash48_TripTheNetworkAggregate(t *testing.T) {
+	gate := proxiedGate(t)
+	gate.limiter = nil
+	gate.network = authNetworkBudget(&config.Config{})
+	handler := gate.middleware(http.NotFoundHandler())
+	slash64 := func(i int) string { return "2001:db8:1:" + strconv.FormatInt(int64(i+1), 16) + "::1" }
+
+	for i := range networkFailingPrefixes {
+		if i == networkFailingPrefixes-1 {
+			if got := proxiedGatePost(t, handler, "2001:db8:1:ff00::1", ""); got != http.StatusUnauthorized {
+				t.Fatalf("one /64 short of the limit, a fresh /64 of the /48 got %d, want %d", got, http.StatusUnauthorized)
+			}
+		}
+		if got := proxiedGatePost(t, handler, slash64(i), "glpat-refused-"+strconv.Itoa(i)); got != http.StatusUnauthorized {
+			t.Fatalf("the refused credential from /64 %d got %d, want %d", i+1, got, http.StatusUnauthorized)
+		}
+	}
+	if got := proxiedGatePost(t, handler, "2001:db8:1:ff00::1", ""); got != http.StatusTooManyRequests {
+		t.Errorf("a /64 the /48 never used got %d once %d of its /64s had a credential refused, want %d",
+			got, networkFailingPrefixes, http.StatusTooManyRequests)
+	}
+	if got := proxiedGatePost(t, handler, "2001:db8:2::1", "glpat-refused-elsewhere"); got != http.StatusUnauthorized {
+		t.Errorf("a caller in another /48 got %d, want %d", got, http.StatusUnauthorized)
+	}
+}
+
+// TestMCPServerGate_NetworkAggregate_CountsOnlyRefusedCredentials holds the
+// aggregate to what the distinct-credential budget counts: a credential GitLab
+// refused. A /64 that sent none is a client that forgot its header, which a
+// network of honest subnets produces, so twice the limit of them leave the /48
+// unrefused. An IPv4 caller has no /48, so a spray spread over an IPv4 /24
+// never reaches it either.
+func TestMCPServerGate_NetworkAggregate_CountsOnlyRefusedCredentials(t *testing.T) {
+	gate := proxiedGate(t)
+	gate.limiter = nil
+	gate.network = authNetworkBudget(&config.Config{})
+	handler := gate.middleware(http.NotFoundHandler())
+
+	for i := range 2 * networkFailingPrefixes {
+		client := "2001:db8:1:" + strconv.FormatInt(int64(i+1), 16) + "::1"
+		if got := proxiedGatePost(t, handler, client, ""); got != http.StatusUnauthorized {
+			t.Fatalf("credential-less request %d from %s got %d, want %d", i+1, client, got, http.StatusUnauthorized)
+		}
+	}
+	for i := range 2 * networkFailingPrefixes {
+		client := "198.51.100." + strconv.Itoa(i+1)
+		if got := proxiedGatePost(t, handler, client, "glpat-refused-"+strconv.Itoa(i)); got != http.StatusUnauthorized {
+			t.Fatalf("refused credential %d from %s got %d, want %d", i+1, client, got, http.StatusUnauthorized)
+		}
+	}
+}
+
+// TestMCPServerGate_UnixSocketCallers_ShareOneKeyUnlessUnixIsTrusted drives the
+// unix-socket half of issue 954 through the gate. Without a proxy vouching for
+// anybody, every caller on the socket is the one key unix: one caller failing
+// past the budget refuses another presenting a valid credential the pool has
+// not admitted, which is the cost the flag help and the HTTP guide state. With
+// unix in --trusted-proxies the proxy on the socket names each caller, and the
+// second caller is served.
+func TestMCPServerGate_UnixSocketCallers_ShareOneKeyUnlessUnixIsTrusted(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		proxies []string
+		want    int
+	}{
+		{"nothing trusted", nil, http.StatusTooManyRequests},
+		{"unix trusted", []string{"unix"}, http.StatusNotFound},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gate := newGate(t, okFactory)
+			if tc.proxies != nil {
+				gate.trustedProxyHeader = "X-Forwarded-For"
+				gate.trustedProxies = trustedProxiesOf(tc.proxies)
+			}
+			handler := gate.middleware(http.NotFoundHandler())
+			post := func(client, token string) int {
+				r := unixSocketRequest(t, http.Header{"X-Forwarded-For": {client}})
+				r.Body = io.NopCloser(strings.NewReader("{}"))
+				if token != "" {
+					r.Header.Set("PRIVATE-TOKEN", token)
+				}
+				rec := httptest.NewRecorder()
+				handler.ServeHTTP(rec, r)
+				return rec.Code
+			}
+			for range authFailureLimit {
+				post("198.51.100.1", "")
+			}
+			if got := post("198.51.100.2", gateTestToken); got != tc.want {
+				t.Errorf("a second caller on the socket presenting a valid credential got %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestTransportBudget_ChargesOncePerKeyPerWindow pins the accounting the gates
 // share, without a request in sight.
 //
@@ -1524,7 +1696,10 @@ func TestTransportBudget_NilBudgetIsInert(t *testing.T) {
 
 // TestTransportSource verifies that the connection's own address is read from
 // RemoteAddr and never from a header, since that is the whole point of the
-// secondary budget.
+// secondary budget, and that it is keyed as every budget's address is: an IPv6
+// peer by its /64 (AUB-002, issue 954). A connection accepted on a unix socket
+// is [unixPeer], which TestRemoteHost_AUnixSocketConnection_IsTheSharedKeyUnix
+// pins.
 func TestTransportSource(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -1533,11 +1708,13 @@ func TestTransportSource(t *testing.T) {
 		want   string
 	}{
 		{"host_and_port", "203.0.113.7:44444", "203.0.113.7"},
-		{"ipv6", "[2001:db8::1]:443", "2001:db8::1"},
-		// A peer without a port is what a unix socket listener reports; it
+		{"ipv6", "[2001:db8::1]:443", "2001:db8::/64"},
+		{"ipv6_elsewhere_in_the_same_slash64", "[2001:db8::ffff:1]:443", "2001:db8::/64"},
+		{"ipv4_mapped", "[::ffff:203.0.113.7]:443", "203.0.113.7"},
+		// A peer without a port on a connection that names no unix listener
 		// is charged as reported rather than to an empty key.
 		{"no_port", "203.0.113.7", "203.0.113.7"},
-		{"unix_socket", "@", "@"},
+		{"no_address", "@", "@"},
 		{"empty", "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1708,20 +1885,22 @@ func TestLongestAuthBlock_AnswersWithTheLongestActiveBlock(t *testing.T) {
 	const (
 		lockout = time.Minute
 		source  = 5 * time.Minute
+		network = 10 * time.Minute
 		spray   = time.Hour
 	)
 
 	cases := []struct {
-		name                              string
-		lockedOut, sourceBlocked, sprayed bool
-		wantBlocked                       bool
-		wantAfter                         time.Duration
-		wantReason                        string
+		name                                          string
+		lockedOut, sourceBlocked, sprayed, networkRef bool
+		wantBlocked                                   bool
+		wantAfter                                     time.Duration
+		wantReason                                    string
 	}{
 		{name: "nothing active", wantBlocked: false},
 		{name: "lockout alone", lockedOut: true, wantBlocked: true, wantAfter: lockout, wantReason: mcpotel.AuthBlockFailureLockout},
 		{name: "source alone", sourceBlocked: true, wantBlocked: true, wantAfter: source, wantReason: mcpotel.AuthBlockTransportSource},
 		{name: "spray alone", sprayed: true, wantBlocked: true, wantAfter: spray, wantReason: mcpotel.AuthBlockDistinctTokens},
+		{name: "network alone", networkRef: true, wantBlocked: true, wantAfter: network, wantReason: mcpotel.AuthBlockNetworkAggregate},
 		{
 			name:      "lockout and spray together answer with the spray",
 			lockedOut: true, sprayed: true,
@@ -1733,8 +1912,13 @@ func TestLongestAuthBlock_AnswersWithTheLongestActiveBlock(t *testing.T) {
 			wantBlocked: true, wantAfter: source, wantReason: mcpotel.AuthBlockTransportSource,
 		},
 		{
-			name:      "all three answer with the longest",
-			lockedOut: true, sourceBlocked: true, sprayed: true,
+			name:          "source and network together answer with the network",
+			sourceBlocked: true, networkRef: true,
+			wantBlocked: true, wantAfter: network, wantReason: mcpotel.AuthBlockNetworkAggregate,
+		},
+		{
+			name:      "all four answer with the longest",
+			lockedOut: true, sourceBlocked: true, sprayed: true, networkRef: true,
 			wantBlocked: true, wantAfter: spray, wantReason: mcpotel.AuthBlockDistinctTokens,
 		},
 	}
@@ -1743,9 +1927,10 @@ func TestLongestAuthBlock_AnswersWithTheLongestActiveBlock(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			blocked, after, reason := longestAuthBlock(
-				tc.lockedOut, lockout,
-				tc.sourceBlocked, source,
-				tc.sprayed, spray,
+				authBlock{tc.lockedOut, lockout, mcpotel.AuthBlockFailureLockout},
+				authBlock{tc.sourceBlocked, source, mcpotel.AuthBlockTransportSource},
+				authBlock{tc.sprayed, spray, mcpotel.AuthBlockDistinctTokens},
+				authBlock{tc.networkRef, network, mcpotel.AuthBlockNetworkAggregate},
 			)
 			if blocked != tc.wantBlocked || after != tc.wantAfter || reason != tc.wantReason {
 				t.Errorf("longestAuthBlock() = (%v, %v, %q), want (%v, %v, %q)",
@@ -1763,7 +1948,12 @@ func TestLongestAuthBlock_EqualDurations_KeepTheEarlierReason(t *testing.T) {
 	t.Parallel()
 
 	const equal = 30 * time.Second
-	_, after, reason := longestAuthBlock(true, equal, true, equal, true, equal)
+	_, after, reason := longestAuthBlock(
+		authBlock{true, equal, mcpotel.AuthBlockFailureLockout},
+		authBlock{true, equal, mcpotel.AuthBlockTransportSource},
+		authBlock{true, equal, mcpotel.AuthBlockDistinctTokens},
+		authBlock{true, equal, mcpotel.AuthBlockNetworkAggregate},
+	)
 	if after != equal {
 		t.Errorf("retryAfter = %v, want %v", after, equal)
 	}
@@ -1786,8 +1976,14 @@ func TestLongestAuthBlock_AShorterLaterBlock_KeepsTheLongerEarlierOne(t *testing
 		lockout = 50 * time.Minute
 		source  = 5 * time.Minute
 		spray   = time.Minute
+		network = 2 * time.Minute
 	)
-	blocked, after, reason := longestAuthBlock(true, lockout, true, source, true, spray)
+	blocked, after, reason := longestAuthBlock(
+		authBlock{true, lockout, mcpotel.AuthBlockFailureLockout},
+		authBlock{true, source, mcpotel.AuthBlockTransportSource},
+		authBlock{true, spray, mcpotel.AuthBlockDistinctTokens},
+		authBlock{true, network, mcpotel.AuthBlockNetworkAggregate},
+	)
 	if !blocked || after != lockout || reason != mcpotel.AuthBlockFailureLockout {
 		t.Errorf("longestAuthBlock() = (%v, %v, %q), want (true, %v, %q)",
 			blocked, after, reason, lockout, mcpotel.AuthBlockFailureLockout)
@@ -2000,7 +2196,12 @@ func TestNewHeader_IgnoresAnOddTrailingName(t *testing.T) {
 func TestLongestAuthBlock_AnActiveBlockWithNoTimeLeftStillRefuses(t *testing.T) {
 	t.Parallel()
 
-	blocked, after, reason := longestAuthBlock(true, 0, false, 0, false, 0)
+	blocked, after, reason := longestAuthBlock(
+		authBlock{true, 0, mcpotel.AuthBlockFailureLockout},
+		authBlock{false, 0, mcpotel.AuthBlockTransportSource},
+		authBlock{false, 0, mcpotel.AuthBlockDistinctTokens},
+		authBlock{false, 0, mcpotel.AuthBlockNetworkAggregate},
+	)
 	if !blocked || after != 0 || reason != mcpotel.AuthBlockFailureLockout {
 		t.Errorf("longestAuthBlock(active, 0) = (%v, %v, %q), want (true, 0, %q)",
 			blocked, after, reason, mcpotel.AuthBlockFailureLockout)
@@ -2454,6 +2655,16 @@ func TestMCPServerGate_ABlockedRequest_IsCountedUnderTheBudgetThatRefusedIt(t *t
 			spend:   []gateSpend{{"198.51.100.1", "glpat-refused-a"}, {"198.51.100.1", "glpat-refused-b"}},
 			refused: "198.51.100.1",
 			want:    mcpotel.AuthBlockCounts{DistinctTokens: 1},
+		},
+		{
+			name: "the network aggregate",
+			arm: func(g *mcpServerGate) {
+				g.limiter = nil
+				g.network = serverpool.NewDistinctTokenBudget(2, time.Minute, time.Minute)
+			},
+			spend:   []gateSpend{{"2001:db8:1:1::1", "glpat-refused-a"}, {"2001:db8:1:2::1", "glpat-refused-b"}},
+			refused: "2001:db8:1:3::1",
+			want:    mcpotel.AuthBlockCounts{NetworkAggregate: 1},
 		},
 	}
 

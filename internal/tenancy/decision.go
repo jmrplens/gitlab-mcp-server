@@ -321,7 +321,7 @@ const (
 	// constant (ADM-002).
 	RetryAfterUpstreamOrFixed
 	// RetryAfterLongestBlock is the longest block holding the request, at
-	// least one second (AUB-001 to AUB-003).
+	// least one second (AUB-001 to AUB-003, AUB-006).
 	RetryAfterLongestBlock
 )
 

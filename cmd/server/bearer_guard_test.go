@@ -21,6 +21,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
@@ -1519,6 +1520,169 @@ func TestBearerGuard_SpoofedProxyHeaderRotation_StaysBounded(t *testing.T) {
 	}
 }
 
+// TestBearerGuard_IPv6RotationInsideOneSlash64_SpendsOneBudget is the oauth
+// half of the gate's test of the same name (issue 954): the guard keys the
+// fast budget and the distinct-credential budget on the /64, so rotating the
+// low bits of one buys no fresh allowance, and the next /64 keeps its own.
+func TestBearerGuard_IPv6RotationInsideOneSlash64_SpendsOneBudget(t *testing.T) {
+	t.Parallel()
+	inSlash64 := func(i int) string { return "2001:db8:1:2::" + strconv.FormatInt(int64(i+1), 16) }
+	refusing := func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		return nil, auth.ErrInvalidToken
+	}
+
+	t.Run("the fast budget", func(t *testing.T) {
+		t.Parallel()
+		g := newProxiedGuard(okVerifier(oauth.ScopeAPI))
+		for i := range authFailureLimit {
+			if failure := g.check(proxiedRequest(t, inSlash64(i), "")); failure == nil || failure.status != http.StatusUnauthorized {
+				t.Fatalf("failure %d from %s = %+v, want 401", i+1, inSlash64(i), failure)
+			}
+		}
+		if failure := g.check(proxiedRequest(t, inSlash64(authFailureLimit), "")); failure == nil || failure.status != http.StatusTooManyRequests {
+			t.Errorf("a never-seen address of the same /64 = %+v, want 429: rotating the low bits minted a fresh budget", failure)
+		}
+		if failure := g.check(proxiedRequest(t, "2001:db8:1:3::1", "")); failure == nil || failure.status != http.StatusUnauthorized {
+			t.Errorf("a caller in the next /64 = %+v, want 401", failure)
+		}
+	})
+
+	t.Run("the distinct-credential budget", func(t *testing.T) {
+		t.Parallel()
+		g := newProxiedGuard(refusing)
+		g.limiter = nil
+		g.spray = serverpool.NewDistinctTokenBudget(3, time.Minute, time.Minute)
+		for i := range 3 {
+			if failure := g.check(proxiedRequest(t, inSlash64(i), "gloas-refused-"+strconv.Itoa(i))); failure == nil || failure.status != http.StatusUnauthorized {
+				t.Fatalf("refused credential %d = %+v, want 401", i+1, failure)
+			}
+		}
+		if failure := g.check(proxiedRequest(t, inSlash64(3), "gloas-refused-3")); failure == nil || failure.status != http.StatusTooManyRequests {
+			t.Errorf("a fourth credential from a never-seen address of the same /64 = %+v, want 429", failure)
+		}
+	})
+}
+
+// TestBearerGuard_Slash64sRotatingInOneSlash48_TripTheNetworkAggregate is the
+// oauth half of the gate's test of the same name (AUB-006): the /64s of one /48
+// that had a credential refused are counted, a /48 one short of the limit is
+// still served, at the limit a /64 it never used is refused before its token is
+// verified, and another /48 is untouched. A credential-less request moves
+// nothing, since only a refused credential does.
+func TestBearerGuard_Slash64sRotatingInOneSlash48_TripTheNetworkAggregate(t *testing.T) {
+	t.Parallel()
+	var verified atomic.Int64
+	g := newProxiedGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		verified.Add(1)
+		return nil, auth.ErrInvalidToken
+	})
+	g.limiter = nil
+	g.network = authNetworkBudget(&config.Config{})
+	slash64 := func(i int) string { return "2001:db8:1:" + strconv.FormatInt(int64(i+1), 16) + "::1" }
+
+	for i := range 2 * networkFailingPrefixes {
+		if failure := g.check(proxiedRequest(t, "2001:db8:1:"+strconv.FormatInt(int64(0x8000+i), 16)+"::1", "")); failure == nil ||
+			failure.status != http.StatusUnauthorized {
+			t.Fatalf("credential-less request %d = %+v, want 401", i+1, failure)
+		}
+	}
+	for i := range networkFailingPrefixes {
+		if i == networkFailingPrefixes-1 {
+			if failure := g.check(proxiedRequest(t, "2001:db8:1:ff00::1", "")); failure == nil || failure.status != http.StatusUnauthorized {
+				t.Fatalf("one /64 short of the limit, a fresh /64 of the /48 = %+v, want 401", failure)
+			}
+		}
+		if failure := g.check(proxiedRequest(t, slash64(i), "gloas-refused-"+strconv.Itoa(i))); failure == nil ||
+			failure.status != http.StatusUnauthorized {
+			t.Fatalf("the refused credential from /64 %d = %+v, want 401", i+1, failure)
+		}
+	}
+	before := verified.Load()
+	if failure := g.check(proxiedRequest(t, "2001:db8:1:ff00::1", "gloas-unseen")); failure == nil || failure.status != http.StatusTooManyRequests {
+		t.Errorf("a /64 the /48 never used = %+v, want 429 once %d of its /64s had a credential refused", failure, networkFailingPrefixes)
+	}
+	if got := verified.Load() - before; got != 0 {
+		t.Errorf("the refused /48's token was verified %d times, want none: a block costs nothing upstream", got)
+	}
+	if failure := g.check(proxiedRequest(t, "2001:db8:2::1", "gloas-refused-elsewhere")); failure == nil || failure.status != http.StatusUnauthorized {
+		t.Errorf("a caller in another /48 = %+v, want 401", failure)
+	}
+}
+
+// TestBearerGuard_UnixSocketCallers_ShareOneKeyUnlessUnixIsTrusted is the
+// oauth half of the gate's test of the same name (issue 954). Without a proxy
+// vouching for anybody, every caller on the socket is the one key unix: one
+// caller whose invented tokens spent the fast budget has another caller's
+// valid token, which the guard has not verified yet, refused before it is
+// verified. With unix in --trusted-proxies the proxy on the socket names each
+// caller, and the same token is verified and served.
+func TestBearerGuard_UnixSocketCallers_ShareOneKeyUnlessUnixIsTrusted(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		proxies []string
+		// wantStatus is the second caller's refusal, 0 when it is served.
+		wantStatus   int
+		wantVerified int64
+	}{
+		{name: "nothing trusted", wantStatus: http.StatusTooManyRequests, wantVerified: 0},
+		{name: "unix trusted", proxies: []string{"unix"}, wantStatus: 0, wantVerified: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			status, verified := secondCallerOnASpentSocket(t, tc.proxies)
+			if status != tc.wantStatus {
+				t.Errorf("a second caller on the socket presenting a valid token = %d, want %d (0 is served): "+
+					"without unix trusted every caller on it is the key unix", status, tc.wantStatus)
+			}
+			if verified != tc.wantVerified {
+				t.Errorf("the second caller's token was verified %d times, want %d: a refused request costs nothing upstream",
+					verified, tc.wantVerified)
+			}
+		})
+	}
+}
+
+// secondCallerOnASpentSocket spends the fast budget from one caller on a unix
+// socket with invented tokens, then presents a valid token the guard has not
+// verified yet from another caller on the same socket. It returns the status
+// that second request was refused with, 0 when it was served, and how many
+// times its token was verified. proxies is the deployment's --trusted-proxies,
+// with the forwarded-address header set whenever it names any.
+func secondCallerOnASpentSocket(t *testing.T, proxies []string) (status int, verified int64) {
+	t.Helper()
+	const valid = "gloas-second-caller"
+	var calls atomic.Int64
+	g := newTestGuard(func(_ context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
+		calls.Add(1)
+		if token != valid {
+			return nil, auth.ErrInvalidToken
+		}
+		return &auth.TokenInfo{UserID: "7", Scopes: []string{oauth.ScopeAPI}, Expiration: time.Now().Add(time.Hour)}, nil
+	})
+	g.limiter = serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow)
+	if proxies != nil {
+		g.trustedProxyHeader = "X-Forwarded-For"
+		g.trustedProxies = trustedProxiesOf(proxies)
+	}
+	onSocket := func(client, token string) *http.Request {
+		r := unixSocketRequest(t, http.Header{"X-Forwarded-For": {client}})
+		r.Header.Set("Authorization", "Bearer "+token)
+		return r
+	}
+	for i := range authFailureLimit {
+		if failure := g.check(onSocket("198.51.100.1", "gloas-invented-"+strconv.Itoa(i))); failure == nil ||
+			failure.status != http.StatusUnauthorized {
+			t.Fatalf("invented token %d = %+v, want 401", i+1, failure)
+		}
+	}
+	before := calls.Load()
+	if failure := g.check(onSocket("198.51.100.2", valid)); failure != nil {
+		status = failure.status
+	}
+	return status, calls.Load() - before
+}
+
 // TestBearerGuard_BlockedByTheFleetBudget_NamesTheTransportSource verifies the
 // 429 log line identifies whoever exhausted the budget.
 //
@@ -1704,6 +1868,13 @@ func TestBearerGuard_ABlockedRequest_IsCountedUnderTheBudgetThatRefusedIt(t *tes
 			spend:   []gateSpend{{"198.51.100.1", "gloas-refused-a"}, {"198.51.100.1", "gloas-refused-b"}},
 			refused: "198.51.100.1",
 			want:    mcpotel.AuthBlockCounts{DistinctTokens: 1},
+		},
+		{
+			name:    "the network aggregate",
+			arm:     func(g *bearerGuard) { g.network = serverpool.NewDistinctTokenBudget(2, time.Minute, time.Minute) },
+			spend:   []gateSpend{{"2001:db8:1:1::1", "gloas-refused-a"}, {"2001:db8:1:2::1", "gloas-refused-b"}},
+			refused: "2001:db8:1:3::1",
+			want:    mcpotel.AuthBlockCounts{NetworkAggregate: 1},
 		},
 	}
 

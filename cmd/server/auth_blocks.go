@@ -29,9 +29,10 @@ import (
 // A nil *authBlockCounters counts nothing and is usable, which is what a guard
 // built without telemetry wiring gets.
 type authBlockCounters struct {
-	failureLockout  atomic.Int64
-	transportSource atomic.Int64
-	distinctTokens  atomic.Int64
+	failureLockout   atomic.Int64
+	transportSource  atomic.Int64
+	distinctTokens   atomic.Int64
+	networkAggregate atomic.Int64
 }
 
 // record counts one refusal under the given reason, which is one of the
@@ -49,6 +50,8 @@ func (c *authBlockCounters) record(reason string) {
 		c.transportSource.Add(1)
 	case mcpotel.AuthBlockDistinctTokens:
 		c.distinctTokens.Add(1)
+	case mcpotel.AuthBlockNetworkAggregate:
+		c.networkAggregate.Add(1)
 	}
 }
 
@@ -121,6 +124,50 @@ func authSprayBudget(cfg *config.Config) *serverpool.DistinctTokenBudget {
 	return serverpool.NewDistinctTokenBudget(cfg.AuthDistinctTokenLimit, cfg.AuthDistinctWindow, cfg.AuthFailureWindow)
 }
 
+// networkFailingPrefixes is how many distinct IPv6 /64s of one /48 may have a
+// credential refused inside the distinct-credential window before the /48 is
+// blocked.
+//
+// The aggregate exists because the address budgets are keyed on the /64
+// ([budgetKey]), and a caller holding a /48 holds 65536 of them, each with a
+// fast budget and a distinct-credential budget of its own: keying on the /64
+// stops rotation inside a /64 and buys nothing against rotation across them.
+// Ten is issue 954's figure, and it is reached by more than a spray. A
+// rotating spray reaches it on its tenth /64; so does an organization whose
+// network is one /48 when callers on ten of its subnets have a credential
+// refused inside the window, an expired or revoked token as much as an
+// invented one, and the /48 is then refused for every credential the
+// deployment does not already hold. Nor is a /48 always one organization's:
+// a provider that delegates each subscriber a /56 or a /60 puts 256 or 4096
+// of them in one, and a mobile network gives each device a /64 of its own
+// (RFC 6459), so ten unrelated subscribers presenting an expired token inside
+// the window block the /48 for every other one whose credential is not
+// already held. A /64 whose clients only forgot their header never counts.
+// The figure is the register's and no operator's, which the issue decided.
+const networkFailingPrefixes = tenancy.AuthNetworkFailingPrefixes // register row AUB-006
+
+// authNetworkBudget builds the /48 aggregate (AUB-006).
+//
+// It is the distinct-token budget's machinery counting /64s instead of
+// credentials: the /48 is the key, the /64 is the distinct value, held as a
+// digest like a refused credential is, and the block climbs the same ladder
+// in the same window. The figure is a register constant, so it is built for
+// every deployment; the windows it reads are the operator's, and a window of
+// zero, which switches the budget that owns it off, gives this one the default
+// rather than switching it off too (INV-015), as [transportFailureBudget]
+// reads the fast window.
+func authNetworkBudget(cfg *config.Config) *serverpool.DistinctTokenBudget {
+	window := cfg.AuthDistinctWindow
+	if window <= 0 {
+		window = config.DefaultAuthDistinctWindow
+	}
+	step := cfg.AuthFailureWindow
+	if step <= 0 {
+		step = config.DefaultAuthFailureWindow
+	}
+	return serverpool.NewDistinctTokenBudget(networkFailingPrefixes, window, step)
+}
+
 // observeAuthBlocks registers the refusal counters with OpenTelemetry.
 //
 // A failure is logged and not returned: telemetry that cannot be registered is
@@ -150,14 +197,15 @@ func retryAfterSeconds(d time.Duration) int {
 	return int((d + time.Second - 1) / time.Second)
 }
 
-// counts reads the three counters, in the shape mcpotel publishes them.
+// counts reads the four counters, in the shape mcpotel publishes them.
 func (c *authBlockCounters) counts() mcpotel.AuthBlockCounts {
 	if c == nil {
 		return mcpotel.AuthBlockCounts{}
 	}
 	return mcpotel.AuthBlockCounts{
-		FailureLockout:  c.failureLockout.Load(),
-		TransportSource: c.transportSource.Load(),
-		DistinctTokens:  c.distinctTokens.Load(),
+		FailureLockout:   c.failureLockout.Load(),
+		TransportSource:  c.transportSource.Load(),
+		DistinctTokens:   c.distinctTokens.Load(),
+		NetworkAggregate: c.networkAggregate.Load(),
 	}
 }

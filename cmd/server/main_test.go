@@ -4420,7 +4420,9 @@ func TestStartPeriodicCleanup_RunsOnEveryTickUntilTheContextEnds(t *testing.T) {
 // applications. The legacy mode sweeps its own rejected-token structure
 // whatever the budgets are too: it remembers the credentials GitLab accepted
 // and refused the permission to read their own user, which no budget charges
-// and so no budget's table ever sees.
+// and so no budget's table ever sees. Both modes sweep the /48 aggregate's
+// table whatever the operator's budgets are, since its limit is the
+// register's and turning another budget off does not turn it off (AUB-006).
 func TestRegisterMCPHandlers_SweepEachExpiringTableTheyBuild(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
@@ -4429,10 +4431,10 @@ func TestRegisterMCPHandlers_SweepEachExpiringTableTheyBuild(t *testing.T) {
 		pinned    bool
 		wantLoops int
 	}{
-		{name: "legacy with every budget off", wantLoops: 1},
-		{name: "legacy with every budget on", budgets: true, wantLoops: 4},
-		{name: "oauth with every budget off", oauth: true, wantLoops: 2},
-		{name: "oauth with every budget on and applications pinned", oauth: true, budgets: true, pinned: true, wantLoops: 5},
+		{name: "legacy with every budget off", wantLoops: 2},
+		{name: "legacy with every budget on", budgets: true, wantLoops: 5},
+		{name: "oauth with every budget off", oauth: true, wantLoops: 3},
+		{name: "oauth with every budget on and applications pinned", oauth: true, budgets: true, pinned: true, wantLoops: 6},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := sweepTestConfig(tc.oauth, tc.budgets, tc.pinned)
@@ -12866,9 +12868,13 @@ func TestValidateHTTPRuntimeConfig_RefusesEachUnusableSetting(t *testing.T) {
 			},
 		},
 		{
+			// The remedy names unix as well as addresses: on a unix-socket
+			// listener a list of addresses alone is the pairing the next
+			// startup refuses, so advice that stopped at addresses sent the
+			// operator from one refusal into another.
 			name:    "a proxy header nobody is trusted to set",
 			mutate:  func(c *config.Config) { c.TrustedProxyHeader = "X-Real-IP" },
-			wantErr: "trusted-proxies",
+			wantErr: "--trusted-proxies with the addresses or CIDR ranges of the proxies that reach this listener (unix for the proxy on a unix-socket --http-addr)",
 		},
 		{
 			name:    "trusted proxies whose header is never read",
@@ -13613,6 +13619,14 @@ func TestMain_HTTPFlags_EachRefusalNamesTheFlagThatCarriedTheValue(t *testing.T)
 		{args: []string{"-tls-key", "/nonexistent/key.pem"}, want: "--tls-key requires --tls-cert"},
 		{args: []string{"-trusted-proxy-header", "X-Real-IP"}, want: "--trusted-proxy-header names a header nobody is trusted to set"},
 		{args: []string{"-trusted-proxies", "10.0.0.0/8"}, want: "--trusted-proxies names proxies whose header is never read"},
+		{args: []string{"-trusted-proxies", "unix,10.0.0.0/8", "-trusted-proxy-header", "X-Real-IP"}, want: "--trusted-proxies names unix and --http-addr"},
+		// The socket pairing is refused before the socket is opened, so the
+		// path need not exist; a server that tried to bind it would fail
+		// there instead, in words that name neither flag.
+		{
+			args: []string{"-http-addr", "/nonexistent/gitlab-mcp/m.sock", "-trusted-proxies", "127.0.0.1", "-trusted-proxy-header", "X-Real-IP"},
+			want: "--trusted-proxies does not name unix and --http-addr",
+		},
 		{args: []string{"-trusted-origins", "not an origin"}, want: `--trusted-origins entry "not an origin"`},
 		{args: []string{"-meta-param-schema", "sprawling"}, want: "--meta-param-schema must be one of"},
 		{args: []string{"-capability-surface", "sprawling"}, want: "--capability-surface must be"},

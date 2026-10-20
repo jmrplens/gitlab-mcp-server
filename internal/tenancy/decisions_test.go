@@ -19,7 +19,7 @@ var specRequirementIDs = []string{
 	"IDN-008", "IDN-009", "IDN-010", "IDN-011", "IDN-012", "IDN-013",
 	"ADM-001", "ADM-002", "ADM-003", "ADM-004", "ADM-005", "ADM-006", "ADM-007",
 	"ADM-008", "ADM-009", "ADM-010", "ADM-011", "ADM-012", "ADM-013", "ADM-014",
-	"AUB-001", "AUB-002", "AUB-003", "AUB-004", "AUB-005",
+	"AUB-001", "AUB-002", "AUB-003", "AUB-004", "AUB-005", "AUB-006",
 	"RTC-001", "RTC-002", "RTC-003", "RTC-004", "RTC-005", "RTC-006", "RTC-007",
 	"HLD-001", "HLD-002", "HLD-003", "HLD-004", "HLD-005", "HLD-006", "HLD-007",
 	"HLD-008", "HLD-009", "HLD-010", "HLD-011",
@@ -96,7 +96,8 @@ func TestDecisions_AreGroupedByQuestion(t *testing.T) {
 // RQB-011, the bounds on reading that grant, is the eleventh request bound,
 // and RQB-012, the pages the latest-pipeline fallback reads, which the
 // latest_pipeline resource runs on every poll of a watch (issue 1242), the
-// twelfth.
+// twelfth. AUB-006, the /48 aggregate issue 954 added, is the thirty-second
+// valued row.
 func TestDecisions_DispositionCounts(t *testing.T) {
 	counts := map[Disposition]int{}
 	for _, d := range Decisions() {
@@ -107,7 +108,7 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		disposition Disposition
 		want        int
 	}{
-		{"valued", Valued, 31},
+		{"valued", Valued, 32},
 		{"ruled", Ruled, 36},
 		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
@@ -327,6 +328,101 @@ func heldIsDecidedByIssue951(held Decision) bool {
 		len(held.Findings) == 0 && slices.Equal(held.Functions, []string{"MeterFor"})
 }
 
+// TestDecisions_AuthenticationKeys_AreDecidedByIssue954 pins what issue 954
+// decided for the keys before admission. The address (IDN-004) and the
+// transport source (IDN-005) are derived at budgetKey, the whole IPv4 address
+// or the IPv6 /64, and the budgets keyed on them (AUB-001 to AUB-003) record
+// the decision and carry F-14 and F-25 no longer, F-34 staying on the two that
+// carry it for issue 958. AUB-006 is the /48 aggregate the decision added: a
+// constant on a key of its own, charged with the refused credentials the
+// distinct-credential budget is charged with, refused in the words every
+// budget refuses with, its zero not an operator's to set, and its table capped
+// with the others by AUB-004. Both findings stay in the register's list, filed
+// as issue 954's.
+func TestDecisions_AuthenticationKeys_AreDecidedByIssue954(t *testing.T) {
+	for _, id := range []string{"IDN-004", "IDN-005", "AUB-001", "AUB-002", "AUB-003", "AUB-006"} {
+		t.Run(id, func(t *testing.T) {
+			d, _ := Lookup(id)
+			if !slices.Contains(d.Decided, "issue 954") || d.Carries("F-14") || d.Carries("F-25") {
+				t.Errorf("%s: decided %v, findings %v; want issue 954 recorded and neither F-14 nor F-25 carried", id, d.Decided, d.Findings)
+			}
+		})
+	}
+	for _, id := range []string{"IDN-004", "IDN-005"} {
+		t.Run(id+" derives at budgetKey", func(t *testing.T) {
+			d, _ := Lookup(id)
+			if !slices.Contains(d.Sites, derive(pkgServer, "budgetKey")) {
+				t.Errorf("%s declares %v, want budgetKey among its derivations", id, d.Sites)
+			}
+		})
+	}
+	for _, id := range []string{"AUB-001", "AUB-003"} {
+		t.Run(id+" keeps F-34", func(t *testing.T) {
+			if d, _ := Lookup(id); !slices.Equal(d.Findings, []string{"F-34"}) {
+				t.Errorf("%s carries %v, want F-34 alone, which issue 958 answers", id, d.Findings)
+			}
+		})
+	}
+	for _, finding := range []string{"F-14", "F-25"} {
+		t.Run(finding, func(t *testing.T) {
+			if FindingIssue(finding) != 954 {
+				t.Errorf("%s is filed as issue %d, want it kept as issue 954's", finding, FindingIssue(finding))
+			}
+		})
+	}
+}
+
+// TestDecisions_NetworkAggregate_IsTheConstantIssue954Added pins AUB-006, the
+// /48 aggregate the decision added: a constant on a key of its own, which no
+// operator sets or switches off, minted as an address is, charged with the
+// refused credentials the distinct-credential budget is charged with and with
+// nothing else (each charged failure's refusal names it exactly when the
+// failure is a refused credential), and its table capped with the others by
+// AUB-004.
+func TestDecisions_NetworkAggregate_IsTheConstantIssue954Added(t *testing.T) {
+	aggregate, _ := Lookup("AUB-006")
+	if !slices.Equal(aggregate.Values, []string{"AuthNetworkFailingPrefixes"}) || aggregate.Source != Constant ||
+		aggregate.Zero != ZeroNotApplicable || aggregate.OffWith != "" || len(aggregate.Functions) != 0 {
+		t.Errorf("AUB-006: values %v, source %d, zero %d, off with %q, functions %v; "+
+			"want the register constant alone, which no operator sets or switches off",
+			aggregate.Values, aggregate.Source, aggregate.Zero, aggregate.OffWith, aggregate.Functions)
+	}
+	if aggregate.Key != KeyNetwork || aggregate.Key.MintCost() != MintAddress || aggregate.Key.Axis() != AxisPreAdmission {
+		t.Errorf("AUB-006 is keyed on %s, minted at %d on axis %d; want the network before admission, minted as an address",
+			aggregate.Key, aggregate.Key.MintCost(), aggregate.Key.Axis())
+	}
+	for _, f := range Failures() {
+		t.Run(f.At.Name+":"+f.Kind, func(t *testing.T) {
+			want := f.Charged && f.Kind != "missing-credential"
+			if got := chargesTheAggregate(f); got != want {
+				t.Errorf("charged to AUB-006: %v, want %v: the aggregate counts a refused credential and nothing else", got, want)
+			}
+		})
+	}
+	capped, _ := Lookup("AUB-004")
+	if !strings.Contains(capped.Resource, "/48") {
+		t.Errorf("AUB-004 caps %q, want the /48 table named among the tables its one value caps", capped.Resource)
+	}
+}
+
+// chargesTheAggregate reports whether a charged failure's refusal, the one of
+// the same function, status, prefix and challenge, names AUB-006 among the
+// budgets it is charged to. An uncharged failure charges nothing.
+func chargesTheAggregate(f Failure) bool {
+	if !f.Charged {
+		return false
+	}
+	for _, d := range Decisions() {
+		for _, r := range d.Refusals {
+			same := r.At.Name == f.At.Name && r.Status == f.Status && r.Prefix == f.Prefix && r.Challenge == f.Challenge
+			if same && slices.Contains(r.Charged, "AUB-006") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // TestDecisions_TwoMCPClauses_AreDecidedByIssue959 pins what issue 959
 // decided about the two clauses of MCP the server meets in part: the tool-call
 // bucket stays off by default on stdio, and the response profile chosen from
@@ -537,7 +633,10 @@ var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
 // the tier's Free fallback as INV-008's exception, F-08 did when issue 952
 // set the read_api minimum at the legacy door as well as the OAuth one, and
 // F-07 and F-10 did when issue 956 gave each refusal the code the standard
-// assigns to what it says and answered a tier-removed action with its cause.
+// assigns to what it says and answered a tier-removed action with its cause,
+// and F-14 and F-25 did when issue 954 keyed the authentication budgets on the
+// /64 with a /48 aggregate and a named unix-socket key, and stated the
+// distinct-credential budget's reason as GitLab 19.5 answered it.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	carried := map[string]bool{}
 	decided := map[string]bool{}
@@ -565,7 +664,7 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-03,F-07,F-08,F-09,F-10,F-17,F-19,F-20,F-29,F-30,F-31,F-33"; got != want {
+	if got, want := strings.Join(answered, ","), "F-03,F-07,F-08,F-09,F-10,F-14,F-17,F-19,F-20,F-25,F-29,F-30,F-31,F-33"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }
@@ -630,7 +729,7 @@ const (
 	pinRate         = "rate limit exceeded for "
 	pinSeveral      = "This deployment serves several GitLab instances"
 	pinSubMeths     = "resources/subscribe,subscriptions/listen"
-	pinCharged      = "AUB-001,AUB-002,AUB-003"
+	pinCharged      = "AUB-001,AUB-002,AUB-003,AUB-006"
 	pinRetry503     = "GitLab could not verify this token right now"
 	pinBusy         = "This server is busy."
 	pinGrant        = "GitLab accepted this token and refused it the permission to read its own user."
@@ -830,6 +929,7 @@ func rowPins() map[string]rowPin {
 			{methods: "http", channel: Silent, answer: NoAnswer},
 		}},
 		"AUB-005": {Admit, Lifetime, ClassP, Valued, KeyProcess, KeyNone, KeyNone, KeyNone, nil},
+		"AUB-006": {Admit, Budget, ClassA, Valued, KeyNetwork, KeyNone, KeyNone, KeyNone, pinBlockedAt()},
 		"POL-006": {Admit, Ceiling, ClassP, Valued, KeyProcess, KeyNone, KeyNone, KeyProcess, []refusalPin{
 			{
 				methods: "http", channel: Gate, code: -50300, status: 503,

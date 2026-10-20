@@ -40,6 +40,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
@@ -93,6 +94,9 @@ type bearerGuard struct {
 	// with [mcpServerGate], like limiter and sourceBudget, since this guard is
 	// the layer that sees a refused credential first.
 	spray *serverpool.DistinctTokenBudget
+	// network is the /48 aggregate (AUB-006), shared with [mcpServerGate]
+	// like spray. Nil only in tests that build a guard without it.
+	network *serverpool.DistinctTokenBudget
 	// blocks counts the refusals each budget produced, for telemetry. Shared
 	// with [mcpServerGate].
 	blocks *authBlockCounters
@@ -560,9 +564,12 @@ func (g *bearerGuard) invalidTokenFailure(message string) *gateFailure {
 	}
 }
 
-// recordFailure charges an authentication failure to both budgets: the
-// caller's key, and — behind a trusted proxy header, where that key is
-// caller-controlled — the transport source it arrived from.
+// recordFailure charges an authentication failure to every budget: the
+// caller's key, the transport source it arrived from behind a trusted proxy
+// header, where that key is caller-controlled, and for a refused credential
+// the distinct-token budget and the /48 aggregate. It is
+// [mcpServerGate.chargeFailure] at this layer, reading the keys off address
+// the same way.
 //
 // The source is charged through [transportBudget] rather than against its
 // limiter directly, and that is the whole of the accounting: once per distinct
@@ -570,15 +577,19 @@ func (g *bearerGuard) invalidTokenFailure(message string) *gateFailure {
 // the correction the gate had already made, because this guard runs in front
 // of the gate and so spends the shared budget first. See
 // [transportFailureLimit].
-func (g *bearerGuard) recordFailure(key, source, token string) {
+func (g *bearerGuard) recordFailure(address, source, token string) {
+	key := budgetKey(address)
 	if g.limiter != nil {
 		g.limiter.RecordFailure(key)
 	}
 	g.sourceBudget.charge(source, key)
 	// Empty for a request that carried no Bearer token at all, which the
-	// distinct-token budget ignores: only a credential that was refused moves
-	// that ladder.
+	// distinct-token budget ignores and the aggregate is not charged for:
+	// only a credential that was refused moves either.
 	g.spray.Charge(key, token)
+	if token != "" {
+		g.network.Charge(networkKey(address), key)
+	}
 }
 
 // credentialAlreadyVerified reports whether this request carries a token this
@@ -628,16 +639,22 @@ func (g *bearerGuard) credentialAlreadyVerified(r *http.Request) bool {
 
 // blockedByBudget reports whether any budget is exhausted, for how much longer,
 // and which one refused. It is [mcpServerGate.blockedByBudget] at this layer,
-// consulting the same three budgets in the same order, and the two must agree:
-// a caller refused here and one refused there was refused by the same rule.
-func (g *bearerGuard) blockedByBudget(key, source string) (blocked bool, retryAfter time.Duration, reason string) {
-	lockedOut, lockoutFor := false, time.Duration(0)
+// consulting the same four budgets in the same order with the keys read off
+// address the same way, and the two must agree: a caller refused here and one
+// refused there was refused by the same rule.
+func (g *bearerGuard) blockedByBudget(address, source string) (blocked bool, retryAfter time.Duration, reason string) {
+	key := budgetKey(address)
+	lockout := authBlock{reason: mcpotel.AuthBlockFailureLockout}
 	if g.limiter != nil {
-		lockedOut, lockoutFor = g.limiter.BlockedFor(key)
+		lockout.active, lockout.remaining = g.limiter.BlockedFor(key)
 	}
-	sourceBlocked, sourceFor := g.sourceBudget.blockedFor(source)
-	sprayed, sprayFor := g.spray.Blocked(key)
-	return longestAuthBlock(lockedOut, lockoutFor, sourceBlocked, sourceFor, sprayed, sprayFor)
+	sourceBlock := authBlock{reason: mcpotel.AuthBlockTransportSource}
+	sourceBlock.active, sourceBlock.remaining = g.sourceBudget.blockedFor(source)
+	spray := authBlock{reason: mcpotel.AuthBlockDistinctTokens}
+	spray.active, spray.remaining = g.spray.Blocked(key)
+	network := authBlock{reason: mcpotel.AuthBlockNetworkAggregate}
+	network.active, network.remaining = g.network.Blocked(networkKey(address))
+	return longestAuthBlock(lockout, sourceBlock, spray, network)
 }
 
 // challenge builds the WWW-Authenticate value, appending the given key/value

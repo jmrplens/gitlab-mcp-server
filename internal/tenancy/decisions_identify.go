@@ -61,17 +61,28 @@ func identifyDecisions() []Decision {
 			},
 		},
 		{
+			// The address is read as before, the peer or the first untrusted
+			// forwarded hop, and keyed by budgetKey: a whole IPv4 address, an
+			// IPv6 address's fixed /64, and on a unix socket the one name unix
+			// unless unix is a trusted proxy (issue 954, which answered F-14).
 			ID: "IDN-004", Question: Identify, Kind: Rule, Class: ClassA, Disposition: Ruled,
-			Resource: "the client address authentication budgets are charged to",
+			Resource: "the client address authentication budgets are charged to, an IPv6 one by its /64",
 			Key:      KeyAddress, StdioKey: KeyNone,
-			Findings: []string{"F-14"},
-			Sites:    []Site{derive(pkgServer, "clientIP")},
+			Decided: []string{"issue 954"},
+			Sites: []Site{
+				derive(pkgServer, "clientIP"),
+				derive(pkgServer, "budgetKey"),
+			},
 		},
 		{
 			ID: "IDN-005", Question: Identify, Kind: Rule, Class: ClassA, Disposition: Ruled,
-			Resource: "the socket peer, every header ignored",
+			Resource: "the socket peer, every header ignored, keyed as the address is",
 			Key:      KeySource, StdioKey: KeyNone,
-			Sites: []Site{derive(pkgServer, "transportSource")},
+			Decided: []string{"issue 954"},
+			Sites: []Site{
+				derive(pkgServer, "transportSource"),
+				derive(pkgServer, "budgetKey"),
+			},
 		},
 		{
 			ID: "IDN-006", Question: Identify, Kind: Rule, Class: ClassR, Disposition: Mechanism,

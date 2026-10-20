@@ -97,6 +97,8 @@ func frozenValues() []frozenValue {
 		{"AuthEscalationThird", AuthEscalationThird, 60},
 		{"AuthTrackedSources", AuthTrackedSources, 4096},
 		{"AuthSweepInterval", AuthSweepInterval, 5 * time.Minute},
+		// The /48 aggregate issue 954 added, at the figure its decision named.
+		{"AuthNetworkFailingPrefixes", AuthNetworkFailingPrefixes, 10},
 		{"TierNamespacePageSize", TierNamespacePageSize, 100},
 		{"TierNamespaceMaxPages", TierNamespaceMaxPages, 10},
 		{"TierMembershipPageSize", TierMembershipPageSize, 100},

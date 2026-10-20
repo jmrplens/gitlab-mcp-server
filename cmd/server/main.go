@@ -290,16 +290,16 @@ func main() {
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
 	flag.StringVar(&hcfg.oauthClientUID, "oauth-client-uid", "", "Comma-separated GitLab OAuth application uids whose tokens this deployment admits. Empty (default) admits any credential the instance accepts; setting it also refuses personal access tokens, which belong to no application")
 	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP); believed only from the peers named in --trusted-proxies, which it requires")
-	flag.StringVar(&hcfg.trustedProxies, "trusted-proxies", "", "Comma-separated addresses or CIDR ranges of the reverse proxies whose --trusted-proxy-header is believed (e.g. 127.0.0.1,10.0.0.0/8); required with --trusted-proxy-header")
+	flag.StringVar(&hcfg.trustedProxies, "trusted-proxies", "", "Comma-separated addresses or CIDR ranges of the reverse proxies whose --trusted-proxy-header is believed (e.g. 127.0.0.1,10.0.0.0/8), and unix for the proxy on a unix-socket --http-addr, where a list without it refuses startup; required with --trusted-proxy-header. Without the two flags every caller on a socket shares one authentication budget. The budgets key an IPv6 caller on its /64")
 	flag.StringVar(&hcfg.trustedOrigins, "trusted-origins", "", "Comma-separated absolute origins (scheme://host[:port], e.g. an IP for local deploys) allowed to make cross-origin browser requests; '*' accepts any origin (disables the protection); empty rejects all. The --public-url origin is trusted automatically")
 	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", config.DefaultHTTPRateLimitRPS, "Per-credential rate limit, in requests/second, on every call that reaches GitLab, plus tools/list on a bucket of its own refilled a tenth as fast; each pooled token and URL pair draws on its own buckets, and a listing is also charged, in tools, to one bucket the whole process shares (0 disables all of them)")
 	flag.IntVar(&hcfg.rateLimitBurst, "rate-limit-burst", config.DefaultRateLimitBurst, "Token-bucket burst size when --rate-limit-rps > 0")
 	flag.IntVar(&hcfg.authFailureLimit, "auth-failure-limit", config.DefaultAuthFailureLimit,
-		"Failed authentications one address may produce inside --auth-failure-window before it is blocked for the rest of it (0 disables this budget)")
+		"Failed authentications one address, an IPv6 one by its /64, may produce inside --auth-failure-window before it is blocked for the rest of it (0 disables this budget)")
 	flag.DurationVar(&hcfg.authFailureWindow, "auth-failure-window", config.DefaultAuthFailureWindow,
 		"Window the failure budget counts in, and the step the distinct-token escalation is built from: one window, then ten, then sixty")
 	flag.IntVar(&hcfg.authDistinctLimit, "auth-distinct-token-limit", config.DefaultAuthDistinctTokenLimit,
-		"Distinct credentials one address may have refused inside --auth-distinct-token-window before it is blocked, for longer each time (0 disables this budget)")
+		"Distinct credentials one address, an IPv6 one by its /64, may have refused inside --auth-distinct-token-window before it is blocked, for longer each time (0 disables this budget)")
 	flag.DurationVar(&hcfg.authDistinctWindow, "auth-distinct-token-window", config.DefaultAuthDistinctWindow,
 		"Window the distinct-credential budget counts in")
 	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
@@ -585,20 +585,25 @@ FLAGS
                             tools it carries, to one bucket the whole process shares: %d tools a second
                             with %d in hand, not configurable (default 10; 0 disables all of them)
   -rate-limit-burst int     Token-bucket burst size when -rate-limit-rps > 0 (default %d)
-  -auth-failure-limit int   Failed authentications one address may produce inside -auth-failure-window
-                            before it is blocked for the rest of it (default %d; 0 disables this budget)
+  -auth-failure-limit int   Failed authentications one address, an IPv6 one by its /64, may produce inside
+                            -auth-failure-window before it is blocked for the rest of it (default %d; 0
+                            disables this budget). Separately, %d /64s of one IPv6 /48 with a credential
+                            refused inside -auth-distinct-token-window block the /48, not configurable
   -auth-failure-window dur  Window the failure budget counts in, and the step the distinct-credential
                             escalation below is built from: one window, then ten, then sixty (default %s)
   -auth-distinct-token-limit int
-                            Distinct credentials one address may have refused inside
-                            -auth-distinct-token-window before it is blocked, for longer each time
-                            (default %d; 0 disables this budget). A person has one token and a fleet
-                            behind a NAT has one each, so only a spray produces this count
+                            Distinct credentials one address, an IPv6 one by its /64, may have refused
+                            inside -auth-distinct-token-window before it is blocked, for longer each
+                            time (default %d; 0 disables this budget). A person has one token and a
+                            fleet behind a NAT has one each, so only a spray produces this count
   -auth-distinct-token-window dur
                             Window the distinct-credential budget counts in (default %s)
   -trusted-origins string   Origins allowed to make cross-origin browser requests ('*' accepts any; empty rejects all)
   -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP); requires -trusted-proxies
-  -trusted-proxies str      Addresses or CIDR ranges of the proxies that header is believed from (e.g. 127.0.0.1,10.0.0.0/8)
+  -trusted-proxies str      Addresses or CIDR ranges of the proxies that header is believed from (e.g. 127.0.0.1,10.0.0.0/8),
+                            and unix for the proxy on a unix-socket -http-addr, where a list without it
+                            refuses startup; without the two flags every caller on a socket shares one
+                            authentication budget
 
  Telemetry
   -telemetry                Export OpenTelemetry traces, metrics and logs over OTLP (default false)
@@ -699,14 +704,15 @@ ENVIRONMENT VARIABLES (HTTP mode)
   GITLAB_MCP_SESSION_REVALIDATE_INTERVAL
                                     Token re-validation interval (default 15m; 0 stops the periodic
                                     check, an entry older than 1h is still rebuilt)
-  GITLAB_MCP_AUTH_FAILURE_LIMIT     Failed authentications one address may produce inside the failure
-                                    window before it is blocked (default %d; 0 disables this budget)
+  GITLAB_MCP_AUTH_FAILURE_LIMIT     Failed authentications one address, an IPv6 one by its /64, may
+                                    produce inside the failure window before it is blocked (default
+                                    %d; 0 disables this budget)
   GITLAB_MCP_AUTH_FAILURE_WINDOW    Window the failure budget counts in, and the step the
                                     distinct-credential escalation is built from (default %s)
   GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT
-                                    Distinct credentials one address may have refused inside the
-                                    distinct-credential window before it is blocked, for longer each
-                                    time (default %d; 0 disables this budget)
+                                    Distinct credentials one address, an IPv6 one by its /64, may have
+                                    refused inside the distinct-credential window before it is
+                                    blocked, for longer each time (default %d; 0 disables this budget)
   GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW
                                     Window the distinct-credential budget counts in (default %s)
 
@@ -763,7 +769,7 @@ JSON CONFIGURATION EXAMPLES
 		config.DefaultPoolIdleTimeout,
 		tenancy.CatalogProcessRate, tenancy.CatalogProcessBurst,
 		config.DefaultRateLimitBurst,
-		config.DefaultAuthFailureLimit, config.DefaultAuthFailureWindow,
+		config.DefaultAuthFailureLimit, networkFailingPrefixes, config.DefaultAuthFailureWindow,
 		config.DefaultAuthDistinctTokenLimit, config.DefaultAuthDistinctWindow,
 		config.DefaultGitLabURL,
 		// The ENVIRONMENT block names the same four budgets again, because a
@@ -953,6 +959,9 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	cfg := configFromHTTPFlags(hcfg, toolSurface, tier, tierExplicit)
 	if validationErr := validateHTTPRuntimeConfig(cfg); validationErr != nil {
 		return validationErr
+	}
+	if listenerErr := validateTrustedProxyListener(hcfg.addr, cfg); listenerErr != nil {
+		return listenerErr
 	}
 	// The description-substitution knob is parsed here so a typo in it fails
 	// startup with a clear message; createServer parses it again per pool
@@ -1263,11 +1272,14 @@ func validateHTTPPoolAndRateBounds(cfg *config.Config) error {
 // key of the per-address budget, handed to the caller. A list without a header
 // names proxies whose word is never asked for. Both are refused at startup
 // rather than left to mean something the operator did not write, and a list
-// entry that is not an address or a range is refused for the same reason.
+// entry that is not an address, a range or unix is refused for the same
+// reason. The first refusal's remedy names unix beside addresses, because on
+// a unix-socket listener a list of addresses alone is the pairing
+// [validateTrustedProxyListener] refuses next.
 func validateTrustedProxyConfig(cfg *config.Config) error {
 	header := strings.TrimSpace(cfg.TrustedProxyHeader)
 	if header != "" && len(cfg.TrustedProxies) == 0 {
-		return errors.New("--trusted-proxy-header names a header nobody is trusted to set: pass --trusted-proxies with the addresses or CIDR ranges of the proxies that reach this listener, or drop the header")
+		return errors.New("--trusted-proxy-header names a header nobody is trusted to set: pass --trusted-proxies with the addresses or CIDR ranges of the proxies that reach this listener (unix for the proxy on a unix-socket --http-addr), or drop the header")
 	}
 	if header == "" && len(cfg.TrustedProxies) > 0 {
 		return errors.New("--trusted-proxies names proxies whose header is never read: pass --trusted-proxy-header with the header they set, or drop the list")
@@ -3731,6 +3743,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	authLimiter := authFailureLimiter(cfg)
 	sourceBudget := transportFailureBudget(cfg)
 	sprayBudget := authSprayBudget(cfg)
+	networkBudget := authNetworkBudget(cfg)
 	blockCounts := &authBlockCounters{}
 	observeAuthBlocks(blockCounts)
 	// One structure for the rejections of both layers: the guard records what
@@ -3748,6 +3761,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		limiter:            authLimiter,
 		sourceBudget:       sourceBudget,
 		spray:              sprayBudget,
+		network:            networkBudget,
 		blocks:             blockCounts,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),
@@ -3820,6 +3834,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		limiter:            authLimiter,
 		sourceBudget:       sourceBudget,
 		spray:              sprayBudget,
+		network:            networkBudget,
 		blocks:             blockCounts,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),
@@ -3875,6 +3890,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	if sprayBudget != nil {
 		startPeriodicCleanup(ctx, sprayBudget.Cleanup)
 	}
+	startPeriodicCleanup(ctx, networkBudget.Cleanup)
 	slog.InfoContext(ctx, "oauth mode enabled", "cache_ttl", cacheTTL, "resource", resourceID, "metadata_url", resourceMetadataURL)
 }
 
@@ -3912,6 +3928,8 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 	if sprayBudget != nil {
 		startPeriodicCleanup(ctx, sprayBudget.Cleanup)
 	}
+	networkBudget := authNetworkBudget(cfg)
+	startPeriodicCleanup(ctx, networkBudget.Cleanup)
 	blockCounts := &authBlockCounters{}
 	observeAuthBlocks(blockCounts)
 	// Legacy mode keeps no negative cache of invalid tokens (the failure
@@ -3930,6 +3948,7 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 		limiter:            authLimiter,
 		sourceBudget:       sourceBudget,
 		spray:              sprayBudget,
+		network:            networkBudget,
 		blocks:             blockCounts,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),

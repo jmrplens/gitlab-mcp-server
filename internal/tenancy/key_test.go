@@ -26,6 +26,7 @@ func TestKey_EveryKeyIsDescribed(t *testing.T) {
 		{KeySession, "session", AxisRequester, MintFree, UnitSession},
 		{KeyAddress, "address", AxisPreAdmission, MintAddress, UnitAddress},
 		{KeySource, "source", AxisPreAdmission, MintAddress, UnitAddress},
+		{KeyNetwork, "network", AxisPreAdmission, MintAddress, UnitAddress},
 		{KeyRefused, "refused", AxisPreAdmission, MintFree, UnitCredential},
 		{KeyUnbound, "unbound", AxisProcess, NotMintable, UnitProcess},
 		{KeyProcess, "process", AxisProcess, NotMintable, UnitProcess},
@@ -58,8 +59,8 @@ func TestKey_EveryKeyIsDescribed(t *testing.T) {
 func TestKey_MintableIsFalseExactlyForTheKeysNoCallerControls(t *testing.T) {
 	notMintable := map[Key]bool{KeyNone: true, KeyUnbound: true, KeyProcess: true, KeyDeployment: true}
 	keys := Keys()
-	if len(keys) != 15 {
-		t.Fatalf("Keys() returned %d keys, want fifteen: KeyNone and the fourteen of the spec's key table", len(keys))
+	if len(keys) != 16 {
+		t.Fatalf("Keys() returned %d keys, want sixteen: KeyNone and the fifteen of the spec's key table", len(keys))
 	}
 	for _, k := range keys {
 		t.Run(k.String(), func(t *testing.T) {
@@ -100,8 +101,9 @@ func TestKey_DerivationsAreDeclaredBySymbol(t *testing.T) {
 		{KeyVerified, "internal/oauth.tokenKey"},
 		{KeyApplication, "internal/oauth.acceptedRecipient"},
 		{KeySession, "cmd/server.sessionOwners.record"},
-		{KeyAddress, "cmd/server.clientIP"},
-		{KeySource, "cmd/server.transportSource"},
+		{KeyAddress, "cmd/server.clientIP,cmd/server.budgetKey"},
+		{KeySource, "cmd/server.transportSource,cmd/server.budgetKey"},
+		{KeyNetwork, "cmd/server.networkKey"},
 		{KeyRefused, "internal/oauth.rejectedKey,internal/serverpool.DistinctTokenBudget.Charge"},
 		{KeyUnbound, ""},
 		{KeyProcess, ""},

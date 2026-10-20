@@ -2,8 +2,10 @@ package main
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -15,7 +17,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
-// TestAuthBlockCounters_Record_CountsEachReasonApart checks that the three
+// TestAuthBlockCounters_Record_CountsEachReasonApart checks that the four
 // budgets are counted separately, which is the whole point of the reason
 // dimension: an operator reading one series must be able to tell which rule is
 // doing the refusing.
@@ -29,9 +31,12 @@ func TestAuthBlockCounters_Record_CountsEachReasonApart(t *testing.T) {
 	c.record(mcpotel.AuthBlockDistinctTokens)
 	c.record(mcpotel.AuthBlockDistinctTokens)
 	c.record(mcpotel.AuthBlockDistinctTokens)
+	for range 4 {
+		c.record(mcpotel.AuthBlockNetworkAggregate)
+	}
 
 	got := c.counts()
-	want := mcpotel.AuthBlockCounts{FailureLockout: 2, TransportSource: 1, DistinctTokens: 3}
+	want := mcpotel.AuthBlockCounts{FailureLockout: 2, TransportSource: 1, DistinctTokens: 3, NetworkAggregate: 4}
 	if got != want {
 		t.Errorf("counts() = %+v, want %+v", got, want)
 	}
@@ -196,6 +201,102 @@ func TestAuthSprayBudget_LadderIsBuiltFromTheFailureWindow(t *testing.T) {
 	if remaining > 2*time.Second || remaining <= 0 {
 		t.Errorf("first block = %v, want at most the 2s failure window", remaining)
 	}
+}
+
+// networkSlash64 is the i-th /64 of 2001:db8:1::/48, spelled as [budgetKey]
+// spells one.
+func networkSlash64(i int) string {
+	return "2001:db8:1:" + strconv.FormatInt(int64(i+1), 16) + "::/64"
+}
+
+// TestAuthNetworkBudget_StaysOnWhateverTheOtherBudgetsSay pins the /48
+// aggregate's zero meaning (AUB-006): its limit is a register constant no
+// operator sets, and turning another budget off does not turn it off
+// (INV-015), so it is built from every configuration, the empty one included,
+// and blocks a /48 at its limit of distinct /64s and not one before.
+func TestAuthNetworkBudget_StaysOnWhateverTheOtherBudgetsSay(t *testing.T) {
+	t.Parallel()
+	const network = "2001:db8:1::/48"
+	for _, tc := range []struct {
+		name string
+		cfg  config.Config
+	}{
+		{name: "the defaults", cfg: config.Config{
+			AuthFailureLimit: config.DefaultAuthFailureLimit, AuthFailureWindow: config.DefaultAuthFailureWindow,
+			AuthDistinctTokenLimit: config.DefaultAuthDistinctTokenLimit, AuthDistinctWindow: config.DefaultAuthDistinctWindow,
+		}},
+		{name: "the fast budget off", cfg: config.Config{
+			AuthDistinctTokenLimit: config.DefaultAuthDistinctTokenLimit, AuthDistinctWindow: config.DefaultAuthDistinctWindow,
+		}},
+		{name: "the distinct-credential budget off", cfg: config.Config{
+			AuthFailureLimit: config.DefaultAuthFailureLimit, AuthFailureWindow: config.DefaultAuthFailureWindow,
+		}},
+		{name: "nothing set", cfg: config.Config{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			budget := authNetworkBudget(&tc.cfg)
+			for i := range networkFailingPrefixes - 1 {
+				budget.Charge(network, networkSlash64(i))
+			}
+			if blocked, _ := budget.Blocked(network); blocked {
+				t.Fatalf("the /48 was blocked at %d distinct /64s, one short of the limit", networkFailingPrefixes-1)
+			}
+			budget.Charge(network, networkSlash64(networkFailingPrefixes-1))
+			if blocked, _ := budget.Blocked(network); !blocked {
+				t.Errorf("the /48 was not blocked at %d distinct /64s", networkFailingPrefixes)
+			}
+		})
+	}
+}
+
+// TestAuthNetworkBudget_CountsInTheDistinctWindowAndStepsByTheFailureWindow
+// pins what the aggregate reads of the configuration (issue 954): it counts in
+// the distinct-credential budget's window and climbs the ladder that budget
+// climbs, one failure window first, and a window of zero, which switches those
+// budgets off, gives it the default rather than a window that lapses at once.
+func TestAuthNetworkBudget_CountsInTheDistinctWindowAndStepsByTheFailureWindow(t *testing.T) {
+	t.Parallel()
+	const network = "2001:db8:1::/48"
+
+	t.Run("the configured windows", func(t *testing.T) {
+		t.Parallel()
+		synctest.Test(t, func(t *testing.T) {
+			budget := authNetworkBudget(&config.Config{AuthDistinctWindow: time.Minute, AuthFailureWindow: 7 * time.Second})
+			for i := range networkFailingPrefixes - 1 {
+				budget.Charge(network, networkSlash64(i))
+			}
+			time.Sleep(time.Minute + time.Second)
+			budget.Charge(network, networkSlash64(100))
+			if blocked, _ := budget.Blocked(network); blocked {
+				t.Fatal("the /48 was blocked by /64s counted in a window that had lapsed")
+			}
+			for i := range networkFailingPrefixes - 1 {
+				budget.Charge(network, networkSlash64(200+i))
+			}
+			blocked, remaining := budget.Blocked(network)
+			if !blocked || remaining != 7*time.Second {
+				t.Errorf("Blocked() = (%v, %v), want (true, 7s): the first block is one failure window", blocked, remaining)
+			}
+		})
+	})
+
+	t.Run("windows of zero take the defaults", func(t *testing.T) {
+		t.Parallel()
+		synctest.Test(t, func(t *testing.T) {
+			budget := authNetworkBudget(&config.Config{})
+			for i := range networkFailingPrefixes - 1 {
+				budget.Charge(network, networkSlash64(i))
+			}
+			time.Sleep(config.DefaultAuthDistinctWindow / 2)
+			budget.Charge(network, networkSlash64(networkFailingPrefixes))
+			blocked, remaining := budget.Blocked(network)
+			if !blocked || remaining != config.DefaultAuthFailureWindow {
+				t.Errorf("Blocked() = (%v, %v), want (true, %v): the count runs in the default distinct window "+
+					"and the first block is the default failure window", blocked, remaining, config.DefaultAuthFailureWindow)
+			}
+		})
+	})
 }
 
 // TestValidateAuthBudgetBounds_RefusesWhatIsOutOfRange covers both directions

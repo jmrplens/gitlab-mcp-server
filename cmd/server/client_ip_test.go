@@ -1,15 +1,192 @@
 // client_ip_test.go covers which address a request is charged to: the peer
 // unless a trusted proxy vouched for another, and then the first hop from the
-// right that is not itself a trusted proxy.
+// right that is not itself a trusted proxy; and the keys the authentication
+// budgets read off that address (issue 954).
 package main
 
 import (
+	"context"
+	"maps"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/netip"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
+
+// unixSocketRequest builds a request accepted on a unix socket listener, as
+// net/http hands one to a handler: the listener's address on the context and
+// the peer Linux reports for an unnamed client socket, with header set.
+func unixSocketRequest(t *testing.T, header http.Header) *http.Request {
+	t.Helper()
+	ctx := context.WithValue(t.Context(), http.LocalAddrContextKey, &net.UnixAddr{Name: "/run/gitlab-mcp/m.sock", Net: "unix"})
+	r := httptest.NewRequestWithContext(ctx, http.MethodPost, "/mcp", http.NoBody)
+	r.RemoteAddr = "@"
+	maps.Copy(r.Header, header)
+	return r
+}
+
+// TestBudgetKey_KeysAnIPv4AddressWholeAndAnIPv6AddressByItsSlash64 pins the
+// key every authentication budget is charged to (issue 954). An IPv6 caller
+// holds at least a /64 and rotates the low bits for nothing, so keying on the
+// whole address gave it a fresh budget per request; an IPv4 address is still
+// the unit one caller holds. A mapped address is keyed as the IPv4 address it
+// names, a zone says nothing about who is calling, and a value that is not an
+// address, the shared unix key among them, is its own key.
+func TestBudgetKey_KeysAnIPv4AddressWholeAndAnIPv6AddressByItsSlash64(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		address string
+		want    string
+	}{
+		{"an IPv4 address is its own key", "203.0.113.7", "203.0.113.7"},
+		{"an IPv6 address is keyed by its /64", "2001:db8:1:2:a:b:c:d", "2001:db8:1:2::/64"},
+		{"another address of the same /64 shares that key", "2001:db8:1:2:ffff:ffff:ffff:ffff", "2001:db8:1:2::/64"},
+		{"the next /64 is another key", "2001:db8:1:3::1", "2001:db8:1:3::/64"},
+		{"an IPv4-mapped address is keyed as the IPv4 address it names", "::ffff:198.51.100.7", "198.51.100.7"},
+		{"a zone is dropped with the low bits", "fe80::1%eth0", "fe80::/64"},
+		{"the loopback is keyed by its /64 like any IPv6 address", "::1", "::/64"},
+		{"the unix-socket peer keeps its one shared key", unixPeer, unixPeer},
+		{"an empty address stays empty", "", ""},
+		{"anything else is charged as reported", "@", "@"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := budgetKey(tc.address); got != tc.want {
+				t.Errorf("budgetKey(%q) = %q, want %q", tc.address, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestNetworkKey_IsTheSlash48OfAnIPv6AddressAndNothingElse pins the key of the
+// aggregate that bounds rotation across /64s (AUB-006): the /48 an IPv6
+// address lies in. An IPv4 address, a mapped one included, and a peer with no
+// address have none, and the empty key is what the aggregate counts nothing
+// for.
+func TestNetworkKey_IsTheSlash48OfAnIPv6AddressAndNothingElse(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		address string
+		want    string
+	}{
+		{"an IPv6 address is keyed by its /48", "2001:db8:1:2::1", "2001:db8:1::/48"},
+		{"another /64 of the same /48 shares that key", "2001:db8:1:ffff:1:2:3:4", "2001:db8:1::/48"},
+		{"the next /48 is another key", "2001:db8:2::1", "2001:db8:2::/48"},
+		{"an IPv4 address has none", "203.0.113.7", ""},
+		{"an IPv4-mapped address has none either", "::ffff:198.51.100.7", ""},
+		{"the unix-socket peer has none", unixPeer, ""},
+		{"an empty address has none", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := networkKey(tc.address); got != tc.want {
+				t.Errorf("networkKey(%q) = %q, want %q", tc.address, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRemoteHost_AUnixSocketConnection_IsTheSharedKeyUnix pins the one key
+// every caller on a unix socket shares when nothing vouches for another: the
+// peer of such a connection has no address, whatever RemoteAddr spells, so it
+// is named once rather than charged as "@" on Linux and as an empty string or
+// a drive letter elsewhere. The transport source is that key too, and a header
+// from it is ignored unless unix is a trusted proxy.
+func TestRemoteHost_AUnixSocketConnection_IsTheSharedKeyUnix(t *testing.T) {
+	t.Parallel()
+	for _, remote := range []string{"@", "", `C:\run\m.sock`} {
+		t.Run(strconv.Quote(remote), func(t *testing.T) {
+			t.Parallel()
+			r := unixSocketRequest(t, http.Header{"X-Real-Ip": {"203.0.113.42"}})
+			r.RemoteAddr = remote
+			if got := remoteHost(r); got != unixPeer {
+				t.Errorf("remoteHost() = %q, want %q", got, unixPeer)
+			}
+			if got := transportSource(r); got != unixPeer {
+				t.Errorf("transportSource() = %q, want %q", got, unixPeer)
+			}
+			if got := clientIP(r, "X-Real-IP", loopbackProxies(t)); got != unixPeer {
+				t.Errorf("clientIP() = %q, want %q: unix is not among the trusted proxies, so the header is the caller's own text", got, unixPeer)
+			}
+		})
+	}
+}
+
+// TestClientIP_TrustedUnixSocket_BelievesTheHeader covers the proxy on the
+// same host that reaches this server over its socket (issue 954): with unix in
+// --trusted-proxies the header is believed from the socket's peer and read by
+// the rule a TCP proxy's is, so each caller behind the proxy keeps a budget of
+// its own. The entry trusts the socket and no address, so a TCP peer is still
+// charged as itself.
+func TestClientIP_TrustedUnixSocket_BelievesTheHeader(t *testing.T) {
+	t.Parallel()
+	proxies, err := parseTrustedProxies([]string{"unix", "10.0.0.0/8"})
+	if err != nil {
+		t.Fatalf("parseTrustedProxies: %v", err)
+	}
+	for _, tc := range []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{"a single forwarded address", "2001:db8:5::9", "2001:db8:5::9"},
+		{"the first untrusted hop from the right", "198.51.100.1, 203.0.113.9, 10.0.0.7", "203.0.113.9"},
+		{"a hop that is not an address charges the socket", "client.example.com", unixPeer},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			r := unixSocketRequest(t, http.Header{"X-Forwarded-For": {tc.value}})
+			if got := clientIP(r, "X-Forwarded-For", proxies); got != tc.want {
+				t.Errorf("clientIP(%q) = %q, want %q", tc.value, got, tc.want)
+			}
+		})
+	}
+
+	tcp := &http.Request{RemoteAddr: "127.0.0.1:12345", Header: http.Header{"X-Forwarded-For": {"203.0.113.9"}}}
+	if got := clientIP(tcp, "X-Forwarded-For", trustedProxiesOf([]string{"unix"})); got != "127.0.0.1" {
+		t.Errorf("clientIP() over TCP with only unix trusted = %q, want the peer 127.0.0.1", got)
+	}
+}
+
+// TestTrustedProxies_TrustsPeer_ReadsTheConnection is the one question both the
+// address a request is charged to and the Host it may forward ask of the
+// connection: did it come from a proxy the operator listed? A TCP peer is
+// looked up among the addresses and ranges, a unix-socket connection is
+// trusted exactly when unix is listed, and a peer that is neither is trusted
+// by nothing.
+func TestTrustedProxies_TrustsPeer_ReadsTheConnection(t *testing.T) {
+	t.Parallel()
+	tcp := func(remote string) *http.Request { return &http.Request{RemoteAddr: remote, Header: http.Header{}} }
+	for _, tc := range []struct {
+		name    string
+		proxies []string
+		request *http.Request
+		want    bool
+	}{
+		{"a listed TCP peer", []string{"127.0.0.1"}, tcp("127.0.0.1:1"), true},
+		{"a TCP peer inside a listed range", []string{"10.0.0.0/8"}, tcp("10.9.9.9:1"), true},
+		{"a TCP peer nobody listed", []string{"10.0.0.0/8"}, tcp("192.0.2.1:1"), false},
+		{"a peer that is not an address", []string{"127.0.0.1"}, tcp("@"), false},
+		{"a TCP peer when only unix is listed", []string{"unix"}, tcp("127.0.0.1:1"), false},
+		{"a unix-socket connection when unix is listed", []string{"unix"}, unixSocketRequest(t, nil), true},
+		{"a unix-socket connection when only addresses are listed", []string{"127.0.0.1", "::1"}, unixSocketRequest(t, nil), false},
+		{"nobody listed", nil, unixSocketRequest(t, nil), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := trustedProxiesOf(tc.proxies).trustsPeer(tc.request); got != tc.want {
+				t.Errorf("trustsPeer() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
 
 // mustAddr parses a literal the test wrote.
 func mustAddr(t *testing.T, s string) netip.Addr {
@@ -230,9 +407,10 @@ func TestClientIP_MappedPeer_IsRecognised(t *testing.T) {
 	}
 }
 
-// TestClientIP_UnixSocketPeer_HasNoAddress verifies a peer without a port,
-// which a unix socket listener reports, is charged as it is rather than
-// crashing the split.
+// TestClientIP_UnixSocketPeer_HasNoAddress verifies a peer without a port, on a
+// connection that did not say it arrived on a unix socket listener (a handler
+// driven directly rather than through net/http), is charged as it is rather
+// than crashing the split.
 func TestClientIP_UnixSocketPeer_HasNoAddress(t *testing.T) {
 	t.Parallel()
 	r := &http.Request{RemoteAddr: "@", Header: http.Header{}}
@@ -243,22 +421,28 @@ func TestClientIP_UnixSocketPeer_HasNoAddress(t *testing.T) {
 
 // TestParseTrustedProxies_ReadsAddressesAndRanges covers the accepted spellings
 // and the refused ones: whitespace and empty entries are ignored, a plain
-// address is the range holding only it, and anything else fails naming the
-// entry, so a typo refuses startup rather than trusting nobody in silence.
+// address is the range holding only it, unix names the peer of a unix-socket
+// connection and no address, and anything else fails naming the entry, so a
+// typo refuses startup rather than trusting nobody in silence.
 func TestParseTrustedProxies_ReadsAddressesAndRanges(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name    string
-		entries []string
-		wantErr string
-		wantIn  []string
-		wantOut []string
+		name     string
+		entries  []string
+		wantErr  string
+		wantIn   []string
+		wantOut  []string
+		wantUnix bool
 	}{
 		{name: "addresses and ranges", entries: []string{" 127.0.0.1 ", "10.0.0.0/8", "", "fd00::/8"}, wantIn: []string{"127.0.0.1", "10.1.2.3", "fd00::1"}, wantOut: []string{"127.0.0.2", "192.0.2.1", "2001:db8::1"}},
 		{name: "a range not on its boundary still covers the block", entries: []string{"192.0.2.77/24"}, wantIn: []string{"192.0.2.1"}, wantOut: []string{"192.0.3.1"}},
 		{name: "a plain address trusts that address alone, on either family", entries: []string{"192.0.2.10", "2001:db8::10"}, wantIn: []string{"192.0.2.10", "2001:db8::10"}, wantOut: []string{"192.0.2.11", "2001:db8::11"}},
 		{name: "an IPv4-mapped address is trusted as the IPv4 peer it names", entries: []string{"::ffff:192.0.2.20"}, wantIn: []string{"192.0.2.20", "::ffff:192.0.2.20"}, wantOut: []string{"192.0.2.21"}},
 		{name: "nothing", entries: nil, wantOut: []string{"127.0.0.1"}},
+		{name: "unix trusts the socket's peer and no address", entries: []string{" unix "}, wantOut: []string{"127.0.0.1", "::1"}, wantUnix: true},
+		{name: "unix beside a range", entries: []string{"unix", "10.0.0.0/8"}, wantIn: []string{"10.1.2.3"}, wantOut: []string{"127.0.0.1"}, wantUnix: true},
+		{name: "a socket path is not the unix entry", entries: []string{"/run/gitlab-mcp/m.sock"}, wantErr: "/run/gitlab-mcp/m.sock"},
+		{name: "unix is spelled in lower case", entries: []string{"UNIX"}, wantErr: "UNIX"},
 		{name: "a hostname", entries: []string{"proxy.example.com"}, wantErr: "proxy.example.com"},
 		{name: "a malformed range", entries: []string{"10.0.0.0/33"}, wantErr: "10.0.0.0/33"},
 	}
@@ -276,6 +460,9 @@ func TestParseTrustedProxies_ReadsAddressesAndRanges(t *testing.T) {
 				t.Fatalf("parseTrustedProxies(%v) error = %v", tc.entries, err)
 			}
 			assertTrustedSet(t, proxies, tc.wantIn, tc.wantOut)
+			if proxies.unix != tc.wantUnix {
+				t.Errorf("unix = %v, want %v", proxies.unix, tc.wantUnix)
+			}
 		})
 	}
 }
@@ -296,6 +483,52 @@ func assertTrustedSet(t *testing.T, proxies trustedProxies, wantIn, wantOut []st
 	}
 }
 
+// TestValidateTrustedProxyListener_RefusesThePairingsThatTrustNobody pins the
+// two pairings of the proxy flags with --http-addr that issue 954 refuses at
+// startup, since each trusts nobody while reading as if it trusted someone: a
+// unix entry on a TCP listener, whose connections never come from a socket
+// peer, and a socket listener whose list names no unix, whose peer no address
+// or range matches, so its header is never believed and every caller shares
+// one budget. Every other pairing starts. That each refusal stops main is
+// TestMain_HTTPFlags_EachRefusalNamesTheFlagThatCarriedTheValue's.
+func TestValidateTrustedProxyListener_RefusesThePairingsThatTrustNobody(t *testing.T) {
+	t.Parallel()
+	const socket = "/run/gitlab-mcp/m.sock"
+	for _, tc := range []struct {
+		name    string
+		addr    string
+		proxies []string
+		want    string
+	}{
+		{name: "unix on a TCP listener", addr: ":8080", proxies: []string{"unix"}, want: `--trusted-proxies names unix and --http-addr ":8080" is not a unix socket`},
+		{name: "unix beside a range on a TCP listener", addr: "127.0.0.1:8080", proxies: []string{"10.0.0.0/8", "unix"}, want: "--trusted-proxies names unix"},
+		{name: "addresses on a socket listener", addr: socket, proxies: []string{"127.0.0.1", "::1"}, want: `--trusted-proxies does not name unix and --http-addr "` + socket + `" is a unix socket`},
+		{name: "addresses on a TCP listener", addr: ":8080", proxies: []string{"127.0.0.1", "10.0.0.0/8"}},
+		{name: "unix on a socket listener", addr: socket, proxies: []string{"unix"}},
+		{name: "unix beside a range on a socket listener", addr: socket, proxies: []string{"unix", "10.0.0.0/8"}},
+		{name: "no proxy on a socket listener", addr: socket},
+		{name: "no proxy on a TCP listener", addr: ":8080"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := &config.Config{TrustedProxies: tc.proxies}
+			if len(tc.proxies) > 0 {
+				cfg.TrustedProxyHeader = "X-Forwarded-For"
+			}
+			err := validateTrustedProxyListener(tc.addr, cfg)
+			if tc.want == "" {
+				if err != nil {
+					t.Errorf("validateTrustedProxyListener(%q, %v) = %v, want it to start", tc.addr, tc.proxies, err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("validateTrustedProxyListener(%q, %v) = %v, want it to carry %q", tc.addr, tc.proxies, err, tc.want)
+			}
+		})
+	}
+}
+
 // TestCommaSeparated_TrimsAndDropsEmptyEntries covers the flag's list syntax.
 func TestCommaSeparated_TrimsAndDropsEmptyEntries(t *testing.T) {
 	t.Parallel()
@@ -313,11 +546,11 @@ func TestCommaSeparated_TrimsAndDropsEmptyEntries(t *testing.T) {
 // it did, the safe answer is a set that believes no header.
 func TestTrustedProxiesOf_UnparseableList_TrustsNobody(t *testing.T) {
 	t.Parallel()
-	if !trustedProxiesOf([]string{"not an address"}).empty() {
-		t.Error("an unparseable list produced a non-empty trusted set")
+	if got := trustedProxiesOf([]string{"unix", "not an address"}); got.unix || len(got.prefixes) != 0 {
+		t.Errorf("an unparseable list produced the trusted set %+v, want one that trusts nobody", got)
 	}
-	if trustedProxiesOf([]string{"127.0.0.1"}).empty() {
-		t.Error("a valid list produced an empty trusted set")
+	if got := trustedProxiesOf([]string{"127.0.0.1"}); len(got.prefixes) != 1 {
+		t.Errorf("a valid list produced the trusted set %+v, want the one address", got)
 	}
 }
 

@@ -280,6 +280,9 @@ func TestHostValidationMiddleware_TrustedProxyForwardsItsHost(t *testing.T) {
 		{name: "from an address nobody listed", proxies: []string{"10.0.0.0/8"}, peer: "192.0.2.9:9000", want: http.StatusForbidden},
 		{name: "with no proxy listed at all", proxies: nil, peer: "127.0.0.1:9000", want: http.StatusForbidden},
 		{name: "from a peer that is not an address", proxies: []string{"127.0.0.1"}, peer: "not-an-address", want: http.StatusForbidden},
+		// The guard reads the set the budgets read (issue 954): unix trusts
+		// the peer of a unix-socket connection, and no address.
+		{name: "from a TCP peer when only unix is listed", proxies: []string{"unix"}, peer: "127.0.0.1:9000", want: http.StatusForbidden},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -490,16 +493,24 @@ func TestNewHostGuard_DeclaresTheLoopbackNamesAndTheAdvertisedHost(t *testing.T)
 	}
 }
 
-// TestHostGuard_TrustsPeer_ReadsTheConnectionsAddress covers the trusted-proxy
-// exception at the level the middleware cannot reach: which peer addresses are
-// believed, independent of what any of them forwards.
-func TestHostGuard_TrustsPeer_ReadsTheConnectionsAddress(t *testing.T) {
+// TestHostGuard_TrustsThePeersTheBudgetsTrust covers the trusted-proxy
+// exception through permits itself, on a guard bound to a host of its own and
+// declaring none it is asked for, the one shape where a Host nobody declared
+// is refused unless the peer is trusted: an unbound guard admits every socket
+// connection anyway, since no name resolves to a socket, so a bound one is
+// where the list is seen. Which peers may forward that Host is the question
+// the address a request is charged to asks, answered by the same set
+// ([trustedProxies.trustsPeer]): a unix entry trusts the socket's peer here
+// too and no TCP peer, and a peer with no address is trusted by nothing.
+func TestHostGuard_TrustsThePeersTheBudgetsTrust(t *testing.T) {
 	t.Parallel()
 
+	socket := &net.UnixAddr{Name: "/run/gitlab-mcp/m.sock", Net: "unix"}
 	tests := []struct {
 		name    string
 		proxies []string
 		peer    string
+		local   net.Addr
 		want    bool
 	}{
 		{name: "the listed address", proxies: []string{"127.0.0.1"}, peer: "127.0.0.1:1", want: true},
@@ -508,14 +519,17 @@ func TestHostGuard_TrustsPeer_ReadsTheConnectionsAddress(t *testing.T) {
 		{name: "an address outside every listed range", proxies: []string{"10.0.0.0/8"}, peer: "192.0.2.1:1", want: false},
 		{name: "an empty list believes nobody", proxies: nil, peer: "127.0.0.1:1", want: false},
 		{name: "a peer with no address at all", proxies: []string{"127.0.0.1"}, peer: "", want: false},
+		{name: "a TCP peer when only unix is listed", proxies: []string{"unix"}, peer: "127.0.0.1:1", want: false},
+		{name: "a unix-socket connection when unix is listed", proxies: []string{"unix"}, peer: "@", local: socket, want: true},
+		{name: "a unix-socket connection when only addresses are listed", proxies: []string{"127.0.0.1"}, peer: "@", local: socket, want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			guard := hostGuard{declared: map[string]bool{}, proxies: trustedProxiesOf(tt.proxies)}
-			req := requestFrom(t, "mcp.example.com", tt.peer, nil)
-			if got := guard.trustsPeer(req); got != tt.want {
-				t.Errorf("trustsPeer(%q) = %v, want %v", tt.peer, got, tt.want)
+			guard := hostGuard{declared: map[string]bool{}, bound: true, proxies: trustedProxiesOf(tt.proxies)}
+			req := requestFrom(t, "undeclared.example.com", tt.peer, tt.local)
+			if got := guard.permits(req); got != tt.want {
+				t.Errorf("permits(Host %q from %q) = %v, want %v", req.Host, tt.peer, got, tt.want)
 			}
 		})
 	}

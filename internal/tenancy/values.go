@@ -194,7 +194,7 @@ const (
 	SessionIdleTimeoutMax = 24 * time.Hour
 )
 
-// Authentication failure budgets (AUB-001 to AUB-005).
+// Authentication failure budgets (AUB-001 to AUB-006).
 const (
 	// AuthFailureLimit is how many failed authentications one address may
 	// produce inside the window before it is blocked (AUB-001).
@@ -229,12 +229,17 @@ const (
 	// AuthEscalationThird is the third and every later block's length in
 	// steps (AUB-003).
 	AuthEscalationThird = 60
-	// AuthTrackedSources is how many addresses the failure table tracks
+	// AuthTrackedSources is how many keys each authentication table tracks:
+	// the failure table, the distinct-credential table and the /48 table
 	// (AUB-004).
 	AuthTrackedSources = 4096
 	// AuthSweepInterval is how often the authentication tables are swept
 	// (AUB-005).
 	AuthSweepInterval = 5 * time.Minute
+	// AuthNetworkFailingPrefixes is how many distinct IPv6 /64s inside one
+	// /48 may have a credential refused inside AUB-003's window before the
+	// /48 is blocked (AUB-006).
+	AuthNetworkFailingPrefixes = 10
 )
 
 // The tier (AUT-003).
