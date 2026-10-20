@@ -51,7 +51,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	otelloggl "go.opentelemetry.io/otel/log/global"
 	nooplog "go.opentelemetry.io/otel/log/noop"
 	noopmetric "go.opentelemetry.io/otel/metric/noop"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -108,7 +107,7 @@ var testHTTPClient = &http.Client{Timeout: testCatalogBuildTimeout}
 func TestMain(m *testing.M) {
 	otel.SetTracerProvider(nooptrace.NewTracerProvider())
 	otel.SetMeterProvider(noopmetric.NewMeterProvider())
-	otelloggl.SetLoggerProvider(nooplog.NewLoggerProvider())
+	otel.SetLoggerProvider(nooplog.NewLoggerProvider())
 	os.Exit(m.Run())
 }
 
@@ -13778,12 +13777,12 @@ func TestRunStdio_HandsTheToolLayerItsSettings(t *testing.T) {
 func TestRunWithContext_ReportsTheBuildAsTheTelemetryServiceVersion(t *testing.T) {
 	withBuildIdentity(t, "9.8.7-telemetry", "c0mm1t-telemetry")
 	restoreFlag := telemetryFlag
-	previousTracer, previousMeter, previousLogger := otel.GetTracerProvider(), otel.GetMeterProvider(), otelloggl.GetLoggerProvider()
+	previousTracer, previousMeter, previousLogger := otel.GetTracerProvider(), otel.GetMeterProvider(), otel.GetLoggerProvider()
 	t.Cleanup(func() {
 		telemetryFlag = restoreFlag
 		otel.SetTracerProvider(previousTracer)
 		otel.SetMeterProvider(previousMeter)
-		otelloggl.SetLoggerProvider(previousLogger)
+		otel.SetLoggerProvider(previousLogger)
 	})
 	telemetryFlag = nil
 	// A provider no earlier test can have left behind, so the wait below ends

@@ -13,7 +13,6 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/log/global"
 	nooplog "go.opentelemetry.io/otel/log/noop"
 	noopmetric "go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/propagation"
@@ -315,7 +314,7 @@ func (p *Provider) abandon(ctx context.Context, cause error) error {
 	// has anyway.
 	otel.SetTracerProvider(nooptrace.NewTracerProvider())
 	otel.SetMeterProvider(noopmetric.NewMeterProvider())
-	global.SetLoggerProvider(nooplog.NewLoggerProvider())
+	otel.SetLoggerProvider(nooplog.NewLoggerProvider())
 
 	if err := p.Shutdown(ctx); err != nil {
 		return errors.Join(cause, err)
@@ -754,7 +753,7 @@ func (p *Provider) startLogs(ctx context.Context, res *resource.Resource, protoc
 		sdklog.WithProcessor(sdklog.NewBatchProcessor(exporter)),
 		sdklog.WithResource(res),
 	)
-	global.SetLoggerProvider(provider)
+	otel.SetLoggerProvider(provider)
 	p.shutdowns = append(p.shutdowns, provider.Shutdown)
 	return nil
 }

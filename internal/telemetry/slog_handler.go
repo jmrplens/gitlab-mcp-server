@@ -9,7 +9,7 @@ import (
 	"unicode/utf8"
 
 	"go.opentelemetry.io/contrib/bridges/otelslog"
-	"go.opentelemetry.io/otel/log/global"
+	"go.opentelemetry.io/otel"
 )
 
 // scopeName names this bridge as the instrumentation scope on every exported
@@ -61,7 +61,7 @@ func NewSlogHandler(base slog.Handler, floor slog.Level, identity *Redactor) slo
 	}
 	return &fanOutHandler{
 		stderr:   base,
-		otlp:     otelslog.NewHandler(scopeName, otelslog.WithLoggerProvider(global.GetLoggerProvider())),
+		otlp:     otelslog.NewHandler(scopeName, otelslog.WithLoggerProvider(otel.GetLoggerProvider())),
 		otlpMin:  floor,
 		exported: true,
 		identity: identity,

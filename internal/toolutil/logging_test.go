@@ -26,7 +26,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
-	"go.opentelemetry.io/otel/log/global"
+	"go.opentelemetry.io/otel"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
@@ -470,9 +470,9 @@ func TestLogToolCallAll_InsideASpan_ExportsACorrelatedRecord(t *testing.T) {
 	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exp)))
 	t.Cleanup(func() { _ = lp.Shutdown(context.Background()) })
 
-	previous := global.GetLoggerProvider()
-	global.SetLoggerProvider(lp)
-	t.Cleanup(func() { global.SetLoggerProvider(previous) })
+	previous := otel.GetLoggerProvider()
+	otel.SetLoggerProvider(lp)
+	t.Cleanup(func() { otel.SetLoggerProvider(previous) })
 
 	handler := telemetry.NewSlogHandler(slog.NewJSONHandler(io.Discard, nil), slog.LevelInfo, nil)
 	previousDefault := slog.Default()

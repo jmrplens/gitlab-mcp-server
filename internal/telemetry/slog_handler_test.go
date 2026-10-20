@@ -13,8 +13,8 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/log/global"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
@@ -59,9 +59,9 @@ func newRecordingLogger(t *testing.T) (*slog.Logger, *recordingExporter) {
 	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exp)))
 	t.Cleanup(func() { _ = lp.Shutdown(context.Background()) })
 
-	previous := global.GetLoggerProvider()
-	global.SetLoggerProvider(lp)
-	t.Cleanup(func() { global.SetLoggerProvider(previous) })
+	previous := otel.GetLoggerProvider()
+	otel.SetLoggerProvider(lp)
+	t.Cleanup(func() { otel.SetLoggerProvider(previous) })
 
 	handler := NewSlogHandler(slog.NewJSONHandler(io.Discard, nil), slog.LevelInfo, nil)
 	return slog.New(handler), exp
@@ -140,9 +140,9 @@ func TestSlogHandler_BelowTheFloor_IsNotExported(t *testing.T) {
 	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exp)))
 	t.Cleanup(func() { _ = lp.Shutdown(context.Background()) })
 
-	previous := global.GetLoggerProvider()
-	global.SetLoggerProvider(lp)
-	t.Cleanup(func() { global.SetLoggerProvider(previous) })
+	previous := otel.GetLoggerProvider()
+	otel.SetLoggerProvider(lp)
+	t.Cleanup(func() { otel.SetLoggerProvider(previous) })
 
 	// The stderr leg is set to debug so it accepts the record: the point is that
 	// the OTLP leg declines it on its own floor, not that nobody logged it.
@@ -250,9 +250,9 @@ func TestSlogHandler_ADerivedLoggerKeepsTheExportFloor(t *testing.T) {
 	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exp)))
 	t.Cleanup(func() { _ = lp.Shutdown(context.Background()) })
 
-	previous := global.GetLoggerProvider()
-	global.SetLoggerProvider(lp)
-	t.Cleanup(func() { global.SetLoggerProvider(previous) })
+	previous := otel.GetLoggerProvider()
+	otel.SetLoggerProvider(lp)
+	t.Cleanup(func() { otel.SetLoggerProvider(previous) })
 
 	base := slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(NewSlogHandler(base, slog.LevelInfo, nil)).With("component", "telemetry")
@@ -361,9 +361,9 @@ func TestSlogHandler_StderrKeepsTheResourceURI(t *testing.T) {
 	exp := &recordingExporter{}
 	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exp)))
 	t.Cleanup(func() { _ = lp.Shutdown(context.Background()) })
-	previous := global.GetLoggerProvider()
-	global.SetLoggerProvider(lp)
-	t.Cleanup(func() { global.SetLoggerProvider(previous) })
+	previous := otel.GetLoggerProvider()
+	otel.SetLoggerProvider(lp)
+	t.Cleanup(func() { otel.SetLoggerProvider(previous) })
 
 	slog.New(NewSlogHandler(base, slog.LevelInfo, nil)).
 		Info("resource subscribed", "uri", "gitlab://project/82077663")
@@ -516,9 +516,9 @@ func exportedRecord(t *testing.T, identity *Redactor, write func(*slog.Logger)) 
 	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exp)))
 	t.Cleanup(func() { _ = lp.Shutdown(context.Background()) })
 
-	previous := global.GetLoggerProvider()
-	global.SetLoggerProvider(lp)
-	t.Cleanup(func() { global.SetLoggerProvider(previous) })
+	previous := otel.GetLoggerProvider()
+	otel.SetLoggerProvider(lp)
+	t.Cleanup(func() { otel.SetLoggerProvider(previous) })
 
 	handler := NewSlogHandler(slog.NewJSONHandler(io.Discard, nil), slog.LevelInfo, identity)
 	write(slog.New(handler))
@@ -600,9 +600,9 @@ func TestSlogHandler_TheExportFloorSurvivesAQuietTerminal(t *testing.T) {
 	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exp)))
 	t.Cleanup(func() { _ = lp.Shutdown(context.Background()) })
 
-	previous := global.GetLoggerProvider()
-	global.SetLoggerProvider(lp)
-	t.Cleanup(func() { global.SetLoggerProvider(previous) })
+	previous := otel.GetLoggerProvider()
+	otel.SetLoggerProvider(lp)
+	t.Cleanup(func() { otel.SetLoggerProvider(previous) })
 
 	var terminal bytes.Buffer
 	stderr := slog.NewJSONHandler(&terminal, &slog.HandlerOptions{Level: slog.LevelWarn})
@@ -680,9 +680,9 @@ func bothLegs(t *testing.T, identity *Redactor, write func(*slog.Logger)) (expor
 	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exp)))
 	t.Cleanup(func() { _ = lp.Shutdown(context.Background()) })
 
-	previous := global.GetLoggerProvider()
-	global.SetLoggerProvider(lp)
-	t.Cleanup(func() { global.SetLoggerProvider(previous) })
+	previous := otel.GetLoggerProvider()
+	otel.SetLoggerProvider(lp)
+	t.Cleanup(func() { otel.SetLoggerProvider(previous) })
 
 	var out bytes.Buffer
 	write(slog.New(NewSlogHandler(slog.NewJSONHandler(&out, nil), slog.LevelInfo, identity)))
