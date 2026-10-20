@@ -10,12 +10,17 @@
 # hours), and security updates ignore cooldown entirely, so this delays
 # convenience, not fixes.
 #
+# The root docker-compose.yml names this project's own image by a variable
+# tag, which Dependabot cannot resolve and so never proposes; it states the
+# window anyway, because examples/telemetry/compose.yaml pins third-party
+# images that do move, and one rule for the ecosystem is what
+# cmd/audit_supply_chain holds both entries to.
+#
 # Two deliberate omissions:
-#   * docker-compose carries no cooldown — its images are :latest test fixtures
-#     that generate no pull request. SemVer sub-keys are also left off the
-#     docker entries: Dependabot scopes them to SemVer-aware managers and
-#     rejects the whole configuration otherwise, which would stop that
-#     ecosystem's updates completely.
+#   * SemVer sub-keys are left off every docker and docker-compose entry:
+#     Dependabot scopes them to SemVer-aware managers and rejects the whole
+#     configuration otherwise, which would stop that ecosystem's updates
+#     completely.
 #   * npm/gitlab-mcp-server, the published launcher, has no entry on purpose.
 #     Its only dependencies are the per-platform packages, pinned to the exact
 #     release version by scripts/update-server-json-sha.sh; a Dependabot bump
@@ -115,13 +120,40 @@ updates:
       - "dependencies"
       - "docker"
 
-  # Docker Compose
+  # Docker Compose (root docker-compose.yml)
   - package-ecosystem: "docker-compose"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
       timezone: "Europe/Madrid"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "docker"
+
+  # Docker Compose for the worked telemetry example (examples/telemetry/compose.yaml),
+  # which pins the collector and the otel-lgtm backend a reader runs. This entry
+  # moves otel-lgtm. The collector is ignored: its tag has to equal
+  # collectorImage in test/e2e/collector/collector_test.go, a Go constant
+  # Dependabot never edits, and the collector module that holds the two equal
+  # runs weekly and at release, never on a pull request, so a bump of the
+  # compose file alone would merge green and stop the next release. The
+  # collector moves by hand, in the same diff as collectorImage.
+  - package-ecosystem: "docker-compose"
+    directory: "/examples/telemetry"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      timezone: "Europe/Madrid"
+    cooldown:
+      default-days: 7
+    ignore:
+      - dependency-name: "otel/opentelemetry-collector-contrib"
     commit-message:
       prefix: "chore"
       include: "scope"

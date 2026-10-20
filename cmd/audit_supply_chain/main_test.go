@@ -2339,9 +2339,28 @@ func TestCheckDependabot_CooldownEcosystem_MustStateItsWindow(t *testing.T) {
 			wantProblem: false,
 		},
 		{
-			name:        "docker-compose exempt",
-			entry:       map[string]any{"package-ecosystem": "docker-compose", "directory": "/"},
+			// examples/telemetry/compose.yaml pins the third-party images a
+			// reader runs, so a docker-compose entry is a stream of pull
+			// requests like any other and states its window like any other.
+			name:        "docker-compose without cooldown",
+			entry:       map[string]any{"package-ecosystem": "docker-compose", "directory": "/examples/telemetry"},
+			wantProblem: true,
+		},
+		{
+			name: "docker-compose plain",
+			entry: map[string]any{
+				"package-ecosystem": "docker-compose", "directory": "/examples/telemetry",
+				"cooldown": map[string]any{"default-days": 7},
+			},
 			wantProblem: false,
+		},
+		{
+			name: "docker-compose with semver keys",
+			entry: map[string]any{
+				"package-ecosystem": "docker-compose", "directory": "/",
+				"cooldown": map[string]any{"default-days": 7, "semver-patch-days": 3},
+			},
+			wantProblem: true,
 		},
 		{
 			name: "cooldown is not a mapping",
@@ -2447,11 +2466,10 @@ func TestCheckDependabot_Findings_ReadLikePython(t *testing.T) {
 // TestSemVerCooldownKeys_Ecosystem_DecidesTheRule verifies that the SemVer rule
 // belongs to the two docker ecosystems and to no other.
 //
-// Only `docker` reaches it through the audit today, because docker-compose is
-// deliberately left out of the cooldown list entirely. The rule still names
-// both, since Dependabot rejects those keys for each of them, and the day a
-// docker-compose entry states a cooldown the rule has to be right already
-// rather than be discovered wrong by a stopped update stream.
+// Both reach it through the audit: docker-compose joined the cooldown list
+// when examples/telemetry/compose.yaml began pinning images Dependabot moves,
+// and Dependabot rejects those keys for each of the two, so a docker-compose
+// entry carrying one would stop that update stream as surely as a docker one.
 func TestSemVerCooldownKeys_Ecosystem_DecidesTheRule(t *testing.T) {
 	t.Parallel()
 

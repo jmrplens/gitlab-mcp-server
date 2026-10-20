@@ -57,9 +57,10 @@ var pipInstall = regexp.MustCompile(`\bpip\s+install\b`)
 var credentialedPermissions = []string{"contents", "id-token", "packages"}
 
 // cooldownEcosystems are the ecosystems where an explicit cooldown is
-// meaningful. docker-compose is exempt: its images are :latest test fixtures
-// that open no pull request.
-var cooldownEcosystems = []string{"gomod", "npm", "github-actions", "docker"}
+// meaningful. docker-compose is among them since examples/telemetry/compose.yaml
+// pins the backend image a reader runs, which Dependabot moves with a pull
+// request like any other dependency.
+var cooldownEcosystems = []string{"gomod", "npm", "github-actions", "docker", "docker-compose"}
 
 // minCooldownDays is the shortest release window this repository accepts before
 // Dependabot may propose a dependency.
