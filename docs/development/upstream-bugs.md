@@ -8453,8 +8453,8 @@ the server's output.
   that carries
   [modelcontextprotocol/go-sdk#1226](https://github.com/modelcontextprotocol/go-sdk/pull/1226)
   without this pull request would therefore break the guided flows for a
-  client that asks for 2026-07-28 in `initialize`; the pin catches it, but
-  its message names only the case where this pull request landed. I put
+  client that asks for 2026-07-28 in `initialize`; the pin catches it, and
+  since issue 1403 its message says which of the two it met (below). I put
   the finding on the pull request at 16:16 UTC on 2026-10-16
   ([comment 6219740922](https://github.com/modelcontextprotocol/go-sdk/pull/1266#issuecomment-6219740922)):
   the result `main` sends, the two places in the dispatcher it comes from,
@@ -8486,12 +8486,20 @@ the server's output.
   naming this row, the comment in `internal/elicitation/flow.go` and the
   elicitation page as what that bump updates (issue 1319). It fails against
   go-sdk's `main` too, for the reason above and not because this pull
-  request landed, and its message does not yet tell the two apart: a result
-  carrying `inputRequests` and no `resultType` means the release carries
-  [modelcontextprotocol/go-sdk#1226](https://github.com/modelcontextprotocol/go-sdk/pull/1226)
-  without the fix, and is a reason to hold the bump or answer it in
-  `internal/elicitation`, not to turn the test into the legacy flow's
-  assertion.
+  request landed, and since issue 1403 it tells the two failures apart:
+  only the `elicitation/create` this pull request produces fails with what
+  that bump updates, a result carrying `inputRequests` and no `resultType`
+  fails naming this row and
+  [row 66](#a-tool-prompt-or-resource-result-a-middleware-makes-carries-no-resulttype)
+  and saying the bump is to be held or the case answered in
+  `internal/elicitation`, not the test turned into the legacy flow's
+  assertion, and any other result fails printed in full, with no
+  instruction to rewrite the test.
+  `TestDeclaredVersionVerdict_EachResultShape_NamesWhatProducedIt`, beside
+  it, holds each result shape to its message. Run on 2026-10-20 against
+  `main` at `3ebc6d1`, the pin fails with the message naming rows 11 and 66,
+  and against `main` with this pull request's head `bb0e7c5a` merged on top,
+  at the `elicitation/create` with the message naming what the bump updates.
 
 **What**: `initialize` is deprecated in 2026-07-28, so `negotiatedVersion`
 (`mcp/shared.go`) caps that handshake at `2025-11-25`, while
