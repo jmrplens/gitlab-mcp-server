@@ -24,6 +24,10 @@
 // connection has to say what it actually checks instead: that no answer
 // came.
 //
+// cmd/audit_test_closed_servers keeps the old pattern from coming back: it
+// reports an httptest server closed while its address, or a value built from
+// it, is still used later in the same function.
+//
 // The package sits beside [github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil]
 // rather than inside it because internal/gitlab's own tests use it, and
 // testutil imports internal/gitlab: importing testutil from those tests is an
