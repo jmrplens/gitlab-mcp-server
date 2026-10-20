@@ -547,6 +547,31 @@ departure from `INV-010`. The map was first recorded under F-29, whose issue (95
 about OAuth verification while the map is kept in both authentication modes, and it was
 given a finding of its own once it was filed.
 
+The question F-25 left open, whether a REST request carrying an invalid token counts
+against GitLab's per-IP limit on unauthenticated requests (OQ-11, as issue 954 names it), is
+answered by a probe against GitLab 19.5.0 CE,
+`TestAuthThrottle_InvalidTokens_SpendTheAddressUnauthenticatedAllowance` in
+`test/e2e/gitlab/ce`, which turns the unauthenticated API throttle on (four requests in
+two minutes) and runs only when `E2E_AUTH_THROTTLE_PROBE=true`, since it changes an
+instance-wide setting, which issue 954 decided no complete run may do; a complete run
+refuses to start with the switch set and otherwise skips the probe, declared under
+`opt-in-probe`. With the throttle off, as a self-managed instance ships, nothing counted an
+invalid token. With it on, every `GET /api/v4/user` carrying one in `PRIVATE-TOKEN` was
+counted once against the address, the server's own legacy verification of an invented
+token included, by the `throttle_unauthenticated_api` GitLab names in its `RateLimit-Name`
+header, which GitLab 19.5 counts with Labkit in a window that opens with the first request
+counted; the fifth request of the window was answered 429, and so was an anonymous request
+from the same address; the run's own token was answered 200 and counted by no
+unauthenticated limit, and three servers started at the throttled address verified it and
+served `user.current`; in the next window an invalid token was answered 401 and counted
+afresh, so no ban followed. GitLab.com counted an invalid token sent as a Bearer token, as
+the OAuth verification sends it, once in the same way in October 2026, and GitLab 19.5
+reads both headers through one finder whose refusal of a token leaves the request
+unauthenticated. The distinct-credential budget's reason (`AUB-003`, stated at
+`DistinctTokenBudget`) now says what was observed rather than that GitLab rate-limits
+failed authentication per address. F-25 stays on `AUB-001` and `AUB-003`, which the rest of
+issue 954 changes.
+
 Twelve findings are answered, and stay in the list with their issues. F-03, the listing
 bucket with no process partner, is answered by `RTC-007`, the first of issue 951's three
 changes: a `tools/list` bucket keyed on the process and counted in the tools a listing

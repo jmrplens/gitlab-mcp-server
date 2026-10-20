@@ -96,9 +96,12 @@ const (
 // over a longer one. Fifty in ten minutes is only an attack: a person has one
 // token and a fleet behind a NAT has one each, so the distinct count is what a
 // legitimate neighbor never produces and a sprayer cannot avoid producing. It
-// is also the earliest signal that the deployment's own standing with GitLab is
-// being spent, since every distinct credential that reaches verification is a
-// request GitLab charges to this server's address.
+// also bounds what the fast one cannot: a sprayer kept under ten failures a
+// minute is never blocked by the fast budget, yet every distinct refused
+// credential of its that reaches verification is an unauthenticated request
+// GitLab counts against this server's address once its unauthenticated API
+// throttle is on; the budget's own type in internal/serverpool records what
+// GitLab 19.5 and GitLab.com were observed to count, and what that costs.
 //
 // The escalation the slow budget imposes is derived from the fast window
 // rather than configured on its own: one window, then ten, then sixty, reset

@@ -44,13 +44,43 @@ var escalationLadder = [...]int{tenancy.AuthEscalationFirst, tenancy.AuthEscalat
 // count is the one thing a legitimate neighbor never produces and a sprayer
 // cannot avoid producing.
 //
-// What it protects is not really this server, which refuses those requests
-// cheaply either way. Every distinct token that reaches verification is a
-// request to GitLab from the deployment's own address, and GitLab rate-limits
-// failed authentication per source address; a sprayer is therefore spending
-// the deployment's standing with GitLab, and the throttle GitLab eventually
-// applies lands on the server for everyone using it. The distinct count is the
-// earliest signal of that, earlier than the failure count.
+// What it protects is not the refusal, which this server makes cheaply either
+// way. Every distinct token GitLab refuses that reaches verification is a GET
+// /api/v4/user from the deployment's own address, the token in PRIVATE-TOKEN
+// in legacy mode and as a Bearer token in oauth mode, and GitLab counts it as
+// unauthenticated traffic of that address. Against GitLab 19.5 with its
+// unauthenticated API throttle on, the probe in
+// test/e2e/gitlab/ce/auth_throttle_probe_test.go saw each invalid token sent
+// in PRIVATE-TOKEN counted once against the per-IP limit, the server's own
+// legacy verification of one included. GitLab.com counted an invalid token
+// sent as a Bearer token once in the same way in October 2026, and GitLab
+// 19.5 reads both headers through one finder whose refusal of a token leaves
+// the request unauthenticated (Gitlab::Auth::RequestAuthenticator). Past the
+// limit GitLab answered every unauthenticated request from the address 429,
+// an anonymous one too, while a token GitLab accepts was still verified and
+// served from it, counted by no unauthenticated limit (GitLab's authenticated
+// API limit, which counts per user, was off on that instance, as it is by
+// default); no ban followed, and the next window counted an invalid token
+// afresh. GitLab's failed-authentication ban covers Git and the container
+// registry and not the API, and the unauthenticated API throttle is off by
+// default on a self-managed instance. In October 2026 GitLab.com answered with
+// a limit of 500 unauthenticated requests a minute per address; GitLab
+// announced 60 an hour for unauthenticated traffic from 19 October 2026,
+// which its rate limits page still listed as proposed.
+//
+// A sprayer therefore spends the deployment's unauthenticated allowance with
+// GitLab, not the standing of the callers it serves. What lands on the server
+// once the allowance is spent is that its verification of every token GitLab
+// does not accept, every invented one among them, is answered 429, which is no
+// verdict on the token: in legacy mode the pool admits a credential its probe
+// got no verdict for, so an invented token is then given an entry
+// ([verifyCredential]), and in oauth mode the gate answers it 503 and charges
+// nothing. A token GitLab accepts is still verified and served. The distinct
+// count bounds that spending where the failure count does not: a sprayer kept
+// under [AuthRateLimiter]'s limit is never blocked by it, and one that is not
+// kept under it is blocked by it a window at a time, while this budget blocks
+// it for longer each time it is reached (at the defaults a minute, then ten,
+// then an hour).
 //
 // Both tables are bounded, and both ceilings are reached by the same reasoning
 // as [AuthRateLimiter]'s: the keys come from whoever is calling. The address
