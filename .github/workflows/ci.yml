@@ -128,7 +128,7 @@ jobs:
         run: go run ./cmd/gen_request_inventory/ -check
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: coverage
           path: coverage.out
@@ -397,7 +397,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: coverage
       - name: SonarCloud Scan
@@ -460,7 +460,7 @@ jobs:
       - name: Put the cached pnpm on PATH
         if: steps.pnpm-cache.outputs.cache-hit == 'true'
         run: echo "$HOME/setup-pnpm/node_modules/.bin" >> "$GITHUB_PATH"
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version-file: site/.node-version
           cache: pnpm
@@ -730,7 +730,7 @@ jobs:
             **/*.{md,mdx}
             #plan
             #node_modules
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version-file: site/.node-version
       - name: Read the pinned mcpb CLI version
@@ -779,7 +779,7 @@ jobs:
       - name: Put the cached pnpm on PATH
         if: steps.pnpm-cache.outputs.cache-hit == 'true'
         run: echo "$HOME/setup-pnpm/node_modules/.bin" >> "$GITHUB_PATH"
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version-file: site/.node-version
           cache: pnpm
@@ -856,7 +856,7 @@ jobs:
       - name: Put the cached pnpm on PATH
         if: steps.pnpm-cache.outputs.cache-hit == 'true'
         run: echo "$HOME/setup-pnpm/node_modules/.bin" >> "$GITHUB_PATH"
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version-file: site/.node-version
           cache: pnpm
@@ -1341,7 +1341,7 @@ jobs:
       # reader needs to tell a runner crash from a regression.
       - name: Upload the unit-suite streams
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: unit-suite-stream-${{ matrix.os }}
           path: test-results/unit-suite
