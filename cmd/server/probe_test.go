@@ -28,6 +28,8 @@ import (
 	"time"
 
 	"github.com/shirou/gopsutil/v4/process"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
 )
 
 // TestParseListenerFlags_ReadsEverySpelling covers the flag spellings the flag
@@ -263,9 +265,15 @@ func serveOnUnixSocket(t *testing.T, handler http.Handler) string {
 
 // TestRunProbe_ExplicitTarget covers a target given on the command line
 // against each kind of listener, plus the answers a probe must not take for
-// healthy and the exit code a malformed target earns. A target nothing listens
-// on is TestRunProbe_ATargetNothingListensOn_IsReportedRefused, which cannot
-// run in parallel as these do.
+// healthy and the exit code a malformed target earns.
+//
+// The target that never answers is a [netfixture.DeadEndpoint], which accepts
+// the connection and hangs up before any response, so what the probe says
+// there is an EOF or a reset rather than "connection refused". The case holds
+// what the probe is for: it is unhealthy, and it names the target it could
+// not get an answer from. It used to close an httptest server and assert
+// "refused", which the freed port did not guarantee, since the next listener
+// given it could answer.
 func TestRunProbe_ExplicitTarget(t *testing.T) {
 	t.Parallel()
 
@@ -275,6 +283,7 @@ func TestRunProbe_ExplicitTarget(t *testing.T) {
 	t.Cleanup(unhealthy.Close)
 	tlsServer := httptest.NewTLSServer(healthMux(http.StatusOK))
 	t.Cleanup(tlsServer.Close)
+	dead := netfixture.DeadEndpoint(t)
 
 	cases := []struct {
 		name     string
@@ -286,6 +295,7 @@ func TestRunProbe_ExplicitTarget(t *testing.T) {
 		{name: "host:port", target: strings.TrimPrefix(healthy.URL, "http://"), wantCode: probeHealthy, wantSaid: "answered"},
 		{name: "TLS without a pin gets the standard verification, which a self-signed listener fails", target: tlsServer.URL, wantCode: probeUnhealthy, wantSaid: "x509"},
 		{name: "a 503 is not healthy", target: unhealthy.URL, wantCode: probeUnhealthy, wantSaid: "503"},
+		{name: "a target that hangs up without answering is not healthy and is named", target: dead, wantCode: probeUnhealthy, wantSaid: "probe: " + dead + "/health: "},
 		{name: "a target that does not parse", target: "not a target", wantCode: probeUsage, wantSaid: "not a URL"},
 	}
 	for _, tc := range cases {
@@ -300,31 +310,6 @@ func TestRunProbe_ExplicitTarget(t *testing.T) {
 				t.Errorf("runProbe(%q) said %q, want it to mention %q", tc.target, said.String(), tc.wantSaid)
 			}
 		})
-	}
-}
-
-// TestRunProbe_ATargetNothingListensOn_IsReportedRefused covers an explicit
-// target with no listener behind it: the probe is unhealthy and says the
-// connection was refused, which tells an operator that nothing is there rather
-// than that something there misbehaved.
-//
-// It does not run in parallel, for the reason deadUnixSocket gives: a sibling
-// starting a process keeps the closed listener open in its child until the
-// child's exec, and a connect that lands there is reset instead of refused.
-// That reset was measured here, once in 3000 runs beside the package's tests
-// that start processes.
-func TestRunProbe_ATargetNothingListensOn_IsReportedRefused(t *testing.T) {
-	closed := httptest.NewServer(healthMux(http.StatusOK))
-	target := closed.URL
-	closed.Close()
-
-	var said bytes.Buffer
-	code := runProbe(t.Context(), []string{target}, "", probeDeps{}, &said)
-	if code != probeUnhealthy {
-		t.Errorf("runProbe(%q) = %d, want %d: %s", target, code, probeUnhealthy, said.String())
-	}
-	if !strings.Contains(said.String(), "refused") {
-		t.Errorf("runProbe(%q) said %q, want it to mention %q", target, said.String(), "refused")
 	}
 }
 
@@ -457,9 +442,7 @@ func TestRunProbe_Discovery(t *testing.T) {
 	healthy := httptest.NewServer(healthMux(http.StatusOK))
 	t.Cleanup(healthy.Close)
 	healthyAddr := strings.TrimPrefix(healthy.URL, "http://")
-	closed := httptest.NewServer(healthMux(http.StatusOK))
-	closedAddr := strings.TrimPrefix(closed.URL, "http://")
-	closed.Close()
+	closedAddr := strings.TrimPrefix(netfixture.DeadEndpoint(t), "http://")
 
 	server := func(pid int32, args ...string) probePeer {
 		return probePeer{pid: pid, args: append([]string{"gitlab-mcp-server"}, args...)}
