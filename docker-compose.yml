@@ -1,6 +1,7 @@
 services:
   gitlab-mcp-server:
-    # Pin VERSION to a specific release (e.g., 1.7.7) in production; avoid :latest
+    # Pin VERSION to a specific release in production; avoid :latest. The
+    # health check below needs 3.0.0 or later, the first image with --probe.
     image: ${DOCKER_REGISTRY:-ghcr.io/jmrplens/gitlab-mcp-server}:${VERSION:-latest}
     pull_policy: always
     ports:
@@ -43,8 +44,11 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    # The image's own check: --probe reads the listener off the running
+    # server's command line, so it follows a moved --http-addr where a fixed
+    # URL would report a serving container unhealthy.
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      test: ["CMD", "gitlab-mcp-server", "--probe"]
       interval: 30s
       timeout: 5s
       retries: 3
