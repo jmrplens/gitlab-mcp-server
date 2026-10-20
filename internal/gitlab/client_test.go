@@ -26,6 +26,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
 )
 
 // Test constants used across client tests.
@@ -728,14 +729,12 @@ func TestInitialize_Success(t *testing.T) {
 }
 
 // TestInitialize_ServerDown verifies that [Client.Initialize] returns an error
-// and leaves the client as not initialized when GitLab is unreachable.
+// and leaves the client as not initialized when GitLab never answers. The
+// instance is a [netfixture.DeadEndpoint], which hangs up on every
+// connection while keeping its port, so no other listener can be given the
+// address and answer the version request.
 func TestInitialize_ServerDown(t *testing.T) {
-	// Create a server and immediately close it so the URL is unreachable.
-	srv := stubVersionServer(t, http.StatusOK)
-	url := srv.URL
-	srv.Close()
-
-	client, err := NewClient(newTestConfig(url, testValidToken))
+	client, err := NewClient(newTestConfig(netfixture.DeadEndpoint(t), testValidToken))
 	if err != nil {
 		t.Fatalf(fmtNewClientErr, err)
 	}
@@ -1572,6 +1571,22 @@ func TestPingDirect_NilContext(t *testing.T) {
 	}
 }
 
+// credentialEndpoint is the instance a credential probe case asks: a server
+// answering through handler, closed when the test ends, or, for the case of
+// an instance that never answers, a [netfixture.DeadEndpoint]. Building a
+// client makes no request, so the unanswered case can build its client on the
+// dead address from the start rather than on a live server it closes before
+// the probe, whose freed port another listener could be given and answer on.
+func credentialEndpoint(t *testing.T, neverAnswers bool, handler http.Handler) string {
+	t.Helper()
+	if neverAnswers {
+		return netfixture.DeadEndpoint(t)
+	}
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
 // TestCheckCredential_FiveAnswers_KeepsEachApart verifies that the credential
 // probe tells its five answers apart rather than folding one into another.
 //
@@ -1611,17 +1626,13 @@ func TestCheckCredential_FiveAnswers_KeepsEachApart(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			endpoint := credentialEndpoint(t, tt.unreliable, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.status)
 				_, _ = w.Write([]byte(tt.body))
 			}))
-			defer srv.Close()
-			client, err := NewClientWithTokenRetries(srv.URL, testValidToken, false, true)
+			client, err := NewClientWithTokenRetries(endpoint, testValidToken, false, true)
 			if err != nil {
 				t.Fatalf(fmtNewClientErr, err)
-			}
-			if tt.unreliable {
-				srv.Close()
 			}
 			if got := client.CheckCredential(t.Context()); got != tt.want {
 				t.Errorf("CheckCredential() = %v, want %v", got, tt.want)
@@ -1665,16 +1676,12 @@ func TestCheckCredentialDetail_EachAnswer_KeepsItsCause(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			endpoint := credentialEndpoint(t, tt.unreachable, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.status)
 			}))
-			defer srv.Close()
-			client, err := NewClientWithTokenRetries(srv.URL, testValidToken, false, true)
+			client, err := NewClientWithTokenRetries(endpoint, testValidToken, false, true)
 			if err != nil {
 				t.Fatalf(fmtNewClientErr, err)
-			}
-			if tt.unreachable {
-				srv.Close()
 			}
 			check := client.CheckCredentialDetail(t.Context())
 			assertCredentialCheck(t, check, tt.wantVerdict, tt.wantStatus, tt.wantCause)

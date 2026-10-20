@@ -15,6 +15,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
 )
 
 // TestDetectToken_SelfAnswers_ReadsTheTokensKindAndID verifies what the self
@@ -87,18 +88,15 @@ func sameFacts(got, want TokenFacts) bool {
 }
 
 // TestDetectToken_NoAnswer_IsNothingKnown verifies an instance that does not
-// answer the self request at all, a connection refused rather than any status,
-// is read as nothing known, the token's kind included: a failure that carries
-// no response is not GitLab's refusal of a fine-grained token, and reading it
-// as one would withhold actions from a classic token whose instance was
-// briefly away, while reading it as a classic token for good would serve a
-// fine-grained one every action for as long as nothing asked again.
+// answer the self request at all, a connection hung up on before any status
+// (a [netfixture.DeadEndpoint]), is read as nothing known, the token's kind
+// included: a failure that carries no response is not GitLab's refusal of a
+// fine-grained token, and reading it as one would withhold actions from a
+// classic token whose instance was briefly away, while reading it as a
+// classic token for good would serve a fine-grained one every action for as
+// long as nothing asked again.
 func TestDetectToken_NoAnswer_IsNothingKnown(t *testing.T) {
-	srv := httptest.NewServer(http.NotFoundHandler())
-	url := srv.URL
-	srv.Close()
-
-	client, err := NewClientWithTokenRetries(url, testValidToken, false, true)
+	client, err := NewClientWithTokenRetries(netfixture.DeadEndpoint(t), testValidToken, false, true)
 	if err != nil {
 		t.Fatalf("NewClient() error: %v", err)
 	}
