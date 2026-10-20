@@ -100,10 +100,13 @@ type ListProjectStatusChecksInput struct {
 // project whose namespace lacks the Ultimate feature with 401 from one
 // before-block (ee/lib/api/status_checks.rb:16), and the project list and the
 // update answer a missing role with 401 too (:67, and
-// ee/app/services/external_status_checks/update_service.rb:40), so these are
-// keyed on toolutil.IsPermissionRefusal rather than on a status. The create
-// and the delete lose the role refusal on the way out, answering it with 500
-// and with 204 (entries 57 and 56 of docs/development/upstream-bugs.md).
+// ee/app/services/external_status_checks/update_service.rb:40), so theirs are
+// keyed on toolutil.IsPermissionRefusal rather than on a status. From 19.5
+// the create and the delete authorize the ability their service checks
+// before the service runs, and answer a missing role with 403. Before 19.5
+// they lost the role refusal on the way out, answering it with 500 and with
+// 204 (entries 57 and 56 of docs/development/upstream-bugs.md). Theirs are
+// therefore keyed on the status, like the merge request routes'.
 const (
 	// hintStatusCheckLicense is the license every route checks first.
 	hintStatusCheckLicense = "external status checks need an Ultimate license on the project's namespace (on GitLab.com, the plan of its top-level group), and GitLab answers a project without it with 401 on every status check route"
@@ -112,33 +115,53 @@ const (
 	hintStatusCheckMaintainer = "reading or changing a project's external status checks needs the Maintainer role, and an Ultimate license on the project's namespace; GitLab answers the lack of either with 401. Verify project_id with project.get"
 )
 
-// refusedForLicense reports whether err is the 401 a merge request's status
-// check route answers when the project's namespace lacks Ultimate. On those
-// routes a missing role is a 403 of its own (the route's authorize! call), so
+// refusedForLicense reports whether err is the 401 a status check route
+// answers when the project's namespace lacks Ultimate, on a route that
+// refuses a missing role with a 403 of its own: the merge request routes, and
+// from 19.5 the create and the delete (the route's authorize! call). There
 // the two are told apart by status, not read as one refusal.
 func refusedForLicense(err error) bool {
 	return toolutil.IsHTTPStatus(err, http.StatusUnauthorized) && toolutil.IsPermissionRefusal(err)
 }
 
-// hintStatusCheckCreateRole is what a create refused for the role needs. The
-// role is not refused with 401 there, nor with 403: the create service builds
-// its refusal without a status, so GitLab answers it with 500 and the body
-// {"message":["Not allowed"]} (entry 57 of docs/development/upstream-bugs.md),
-// which reads as a fault of the instance unless the hint says otherwise.
+// The hints the create and the delete give the 403 GitLab answers from 19.5
+// a caller without the Maintainer role on the project (entries 57 and 56 of
+// docs/development/upstream-bugs.md). The delete's says the check is still
+// there, since a release before 19.5 answered the same caller as though it
+// had been deleted.
+const (
+	hintStatusCheckCreateForbidden = "creating an external status check needs the Maintainer role on the project. Verify project_id with project.get"
+	hintStatusCheckDeleteForbidden = "deleting an external status check needs the Maintainer role on the project, and the check was left in place. Verify project_id with project.get"
+)
+
+// hintStatusCheckCreateRole is what a create refused for the role on a
+// release before 19.5 needs. The role is not refused with 401 there, nor with
+// 403: the create service builds its refusal without a status, so GitLab
+// answers it with 500 and the body {"message":["Not allowed"]} (entry 57 of
+// docs/development/upstream-bugs.md), which reads as a fault of the instance
+// unless the hint says otherwise. From 19.5 the route answers 403 instead,
+// which hintStatusCheckCreateForbidden is for.
 const hintStatusCheckCreateRole = "creating an external status check needs the Maintainer role on the project, and GitLab answers a caller without it with a server error saying \"Not allowed\" rather than a refusal. Verify project_id with project.get"
 
-// createRefusedForRole reports whether err is the answer a create gets from
-// GitLab for a caller without the Maintainer role: a 500 carrying the create
-// service's "Not allowed" (ee/app/services/external_status_checks/create_service.rb:32-38,
+// createRefusedForRole reports whether err is the answer a create gets from a
+// release before 19.5 for a caller without the Maintainer role: a 500
+// carrying the create service's "Not allowed" (ee/app/services/external_status_checks/create_service.rb:32-38,
 // rendered by ee/lib/api/status_checks.rb:53 with no status). The message
 // is what tells it apart from a 500 the instance answers for any other fault.
+// From 19.5 the route authorizes the ability before the service runs and
+// answers that caller 403 ([refusedForRole]), so only an older release still
+// sends this answer, and it is kept for those.
 func createRefusedForRole(err error) bool {
 	return toolutil.IsHTTPStatus(err, http.StatusInternalServerError) &&
 		strings.Contains(toolutil.ExtractGitLabMessage(err), "Not allowed")
 }
 
-// refusedForRole reports whether err is the 403 a merge request's status
-// check route answers a caller whose role on the merge request falls short.
+// refusedForRole reports whether err is the 403 a status check route answers
+// a caller whose role falls short: on a merge request route the role on the
+// merge request, and on the create and the delete, from 19.5, the Maintainer
+// role on the project. No release before 19.5 answered the create or the
+// delete 403 for the role, so the hint keyed on it needs no version check:
+// it is only ever given where it is true.
 func refusedForRole(err error) bool {
 	return toolutil.IsHTTPStatus(err, http.StatusForbidden) && toolutil.IsPermissionRefusal(err)
 }
@@ -277,8 +300,11 @@ func CreateProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 	}
 	check, _, err := client.GL().ExternalStatusChecks.CreateProjectExternalStatusCheck(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsPermissionRefusal(err) {
+		if refusedForLicense(err) {
 			return ProjectStatusCheckOutput{}, toolutil.WrapErrWithHint("createProjectExternalStatusCheck", err, hintStatusCheckLicense)
+		}
+		if refusedForRole(err) {
+			return ProjectStatusCheckOutput{}, toolutil.WrapErrWithHint("createProjectExternalStatusCheck", err, hintStatusCheckCreateForbidden)
 		}
 		if createRefusedForRole(err) {
 			return ProjectStatusCheckOutput{}, toolutil.WrapErrWithHint("createProjectExternalStatusCheck", err, hintStatusCheckCreateRole)
@@ -308,12 +334,18 @@ func DeleteProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 	}
 	_, err := client.GL().ExternalStatusChecks.DeleteProjectExternalStatusCheck(string(input.ProjectID), input.CheckID, &gl.DeleteProjectExternalStatusCheckOptions{}, gl.WithContext(ctx))
 	if err != nil {
-		// The license is the one refusal this route answers. A caller without
-		// the Maintainer role is answered 204 and nothing is deleted, because
-		// the route discards the refusal its service returns
-		// (docs/development/upstream-bugs.md), so no hint here names the role.
-		if toolutil.IsPermissionRefusal(err) {
+		// The license check answers 401, and from 19.5 a caller without the
+		// Maintainer role is answered 403 before the service runs. Before
+		// 19.5 the route discarded the refusal its service returned and
+		// answered that caller 204 with nothing deleted (entry 56 of
+		// docs/development/upstream-bugs.md), which nothing on the wire
+		// tells apart from a deletion, so the action's usage asks the caller
+		// to confirm one on those releases.
+		if refusedForLicense(err) {
 			return toolutil.WrapErrWithHint("deleteProjectExternalStatusCheck", err, hintStatusCheckLicense)
+		}
+		if refusedForRole(err) {
+			return toolutil.WrapErrWithHint("deleteProjectExternalStatusCheck", err, hintStatusCheckDeleteForbidden)
 		}
 		return toolutil.WrapErrWithStatusHint("deleteProjectExternalStatusCheck", err, http.StatusNotFound,
 			"verify check_id with external_status_check.list_project")

@@ -127,7 +127,7 @@ var externalStatusCheckActionMeta = map[string]externalStatusCheckActionMetaEntr
 		description: "Update a project external status check service. Returns: the updated check with id, name, external_url, hmac, and protected branches. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_delete_project_external_status_check.",
 	},
 	"gitlab_delete_project_external_status_check": {
-		usage:       "Permanently delete a project external status check service. Destructive and irreversible. Confirm project_id and check_id before calling. Requires the Maintainer role and an Ultimate license. GitLab answers a caller without the role with success and deletes nothing, so confirm the deletion with external_status_check.list_project.",
+		usage:       "Permanently delete a project external status check service. Destructive and irreversible. Confirm project_id and check_id before calling. Requires the Maintainer role and an Ultimate license. GitLab before 19.5 answers a caller without the role with success and deletes nothing, so on those releases confirm the deletion with external_status_check.list_project.",
 		aliases:     []string{"delete external status check", "remove project status check", "remove external status check service"},
 		related:     []string{actionListProject, actionCreateProject, actionUpdateProject},
 		description: "Delete a project external status check service permanently. Returns: a success confirmation. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_update_project_external_status_check.",

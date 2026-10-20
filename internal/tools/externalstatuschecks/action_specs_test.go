@@ -223,6 +223,25 @@ func TestDecorateExternalStatusCheckMeta_EntryNamesNothing_KeepsWhatTheCallerHad
 	}
 }
 
+// TestActionSpecs_DeleteUsage_ScopesTheSilentSuccessToOlderReleases
+// verifies that the delete's served usage says which releases answer a
+// caller without the Maintainer role with success and delete nothing, and
+// keeps the advice to confirm the deletion for those releases only. From 19.5
+// GitLab refuses that caller with 403, which the handler hints, so a usage
+// telling every caller to confirm every deletion describes an answer GitLab
+// no longer sends (entry 56 of docs/development/upstream-bugs.md). The usage
+// is served prose, so it carries no semicolon either.
+func TestActionSpecs_DeleteUsage_ScopesTheSilentSuccessToOlderReleases(t *testing.T) {
+	usage := externalStatusCheckSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))["gitlab_delete_project_external_status_check"].Usage
+	const silentSuccess = "GitLab before 19.5 answers a caller without the role with success and deletes nothing, so on those releases confirm the deletion with " + actionListProject + "."
+	if !strings.HasSuffix(usage, silentSuccess) {
+		t.Errorf("delete usage = %q, want it to end with %q", usage, silentSuccess)
+	}
+	if strings.Contains(usage, ";") {
+		t.Errorf("delete usage = %q, must carry no semicolon", usage)
+	}
+}
+
 func externalStatusCheckSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

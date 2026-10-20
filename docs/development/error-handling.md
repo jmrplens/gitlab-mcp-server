@@ -387,8 +387,9 @@ gate unless the wrapper takes it under a parameter named for a hint.
 
 A route whose 403 means something other than the permission its 401 refuses
 pairs the predicate with `IsHTTPStatus`. The external status check routes of
-a merge request answer the license with 401 and the caller's role with 403;
-the fork link answers the target namespace with 401 and the caller's
+a merge request, and from GitLab 19.5 the create and the delete of a
+project's status check, answer the license with 401 and the caller's role
+with 403; the fork link answers the target namespace with 401 and the caller's
 abilities with 403; the security settings answer the role with 401 and the
 license, an archived project or an instance-enforced setting with 403, so
 that handler reads the 403 first. Two kinds of action are not keyed on the

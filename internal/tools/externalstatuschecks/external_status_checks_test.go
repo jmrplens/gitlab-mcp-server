@@ -1127,9 +1127,9 @@ func assertFieldsAbsent(t *testing.T, body map[string]json.RawMessage, fields ..
 // statusCheckCalls drives each of the eight status check entry points once,
 // named by what each one's refusals are about: the project routes, which
 // refuse the license with 401 and, for the lists and the update, the role too
-// (the create answers the role with 500 and the delete with 204), and the
-// merge request routes, which refuse the license with 401 and the role with
-// 403.
+// (the create and the delete answer the role with 403 from 19.5, and before
+// it with 500 and with 204), and the merge request routes, which refuse the
+// license with 401 and the role with 403.
 func statusCheckCalls() map[string]func(*gitlabclient.Client) error {
 	ctx := context.Background()
 	return map[string]func(*gitlabclient.Client) error{
@@ -1167,13 +1167,17 @@ func statusCheckCalls() map[string]func(*gitlabclient.Client) error {
 	}
 }
 
-// refusedBy answers every request with status and Grape's plain refusal body,
-// the one ee/lib/api/status_checks.rb:16 renders for a project whose
-// namespace lacks the Ultimate feature.
+// refusedBy answers every request with status and the body GitLab's error
+// helpers render for it, whose one message is the status code and its text
+// (lib/api/helpers.rb). A 401 is unauthorized!'s, which
+// ee/lib/api/status_checks.rb:16 answers a project whose namespace lacks the
+// Ultimate feature, a 403 is the forbidden! authorize! answers a caller
+// without the role, on a merge request route and from 19.5 on the create
+// (:44) and the delete (:132), and a 404 is not_found!'s.
 func refusedBy(t *testing.T, status int) *gitlabclient.Client {
 	t.Helper()
 	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, status, `{"message":"`+http.StatusText(status)+`"}`)
+		testutil.RespondJSON(w, status, fmt.Sprintf(`{"message":"%d %s"}`, status, http.StatusText(status)))
 	}))
 }
 
@@ -1188,9 +1192,9 @@ func refusedBy(t *testing.T, status int) *gitlabclient.Client {
 //
 // The project list and the update also refuse a missing Maintainer role with
 // 401 (status_checks.rb:67, update_service.rb:40), so theirs names the role
-// too. The delete's does not: that route answers a missing role with 204 and
-// deletes nothing, so a hint naming the role would describe a refusal GitLab
-// never sends.
+// too. The create's and the delete's do not: those routes answer a missing
+// role with 403 from 19.5, and before it with 500 and with 204, so on their
+// 401 a hint naming the role would describe a refusal GitLab never sends.
 func TestStatusChecks_PermissionRefusedWith401_NameTheUltimateLicense(t *testing.T) {
 	namesTheRole := map[string]bool{"list (deprecated)": true, "list": true, "update": true}
 	for name, call := range statusCheckCalls() {
@@ -1213,12 +1217,15 @@ func TestStatusChecks_PermissionRefusedWith401_NameTheUltimateLicense(t *testing
 }
 
 // TestStatusChecks_CreateRefusedWith500NotAllowed_NamesTheMaintainerRole
-// verifies the create names the role on the answer GitLab gives a caller
-// without it, which is neither 401 nor 403: the create service builds its
-// refusal with no status, so Grape answers it 500 with the service's "Not
-// allowed" (create_service.rb:32-38, status_checks.rb:53). Without the hint a
-// model reads a fault of the instance and retries. A 500 without that message
-// is the instance's own and names no role.
+// verifies the create names the role on the answer a release before 19.5
+// gives a caller without it, which is neither 401 nor 403: the create service
+// builds its refusal with no status, so Grape answers it 500 with the
+// service's "Not allowed" (create_service.rb:32-38, status_checks.rb:53).
+// Without the hint a model reads a fault of the instance and retries. A 500
+// without that message is the instance's own and names no role. From 19.5
+// the route answers 403 instead, which
+// TestStatusChecks_CreateAndDeleteRefusedWith403_NameTheMaintainerRoleInOneSentence
+// holds.
 func TestStatusChecks_CreateRefusedWith500NotAllowed_NamesTheMaintainerRole(t *testing.T) {
 	create := statusCheckCalls()["create"]
 	cases := []struct {
@@ -1245,14 +1252,19 @@ func TestStatusChecks_CreateRefusedWith500NotAllowed_NamesTheMaintainerRole(t *t
 	}
 }
 
-// TestStatusChecks_MergeRequestRoutesRefusedWith403_NameTheRoleNotTheLicense
-// verifies the merge request routes keep their 403 apart from their 401.
-// Those routes answer a caller whose role on the merge request falls short
-// with 403 from authorize! (status_checks.rb:172, 204 and 235), which is not
-// the license, so the license hint must not follow it; the project routes
+// TestStatusChecks_RoleRefusedWith403_NameTheRoleNotTheLicense verifies the
+// routes that refuse a missing role with 403 keep it apart from their 401.
+// The merge request routes answer a caller whose role on the merge request
+// falls short with 403 from authorize! (status_checks.rb:172, 204 and 235),
+// and from 19.5 the create and the delete answer a caller without the
+// Maintainer role on the project with 403 from authorize! too (entries 56 and
+// 57 of docs/development/upstream-bugs.md). None of those is the license, so
+// the license hint must not follow it. The two project lists and the update
 // answer no 403 of their own, so a plain one there is read like their 401.
-func TestStatusChecks_MergeRequestRoutesRefusedWith403_NameTheRoleNotTheLicense(t *testing.T) {
+func TestStatusChecks_RoleRefusedWith403_NameTheRoleNotTheLicense(t *testing.T) {
 	roles := map[string]string{
+		"create":                    "Maintainer role on the project",
+		"delete":                    "Maintainer role on the project",
 		"list merge request checks": "Reporter role",
 		"retry":                     "Developer role",
 		"set status":                "permission to approve the merge request",
@@ -1263,8 +1275,8 @@ func TestStatusChecks_MergeRequestRoutesRefusedWith403_NameTheRoleNotTheLicense(
 			if err == nil {
 				t.Fatalf("%s error = nil, want the 403", name)
 			}
-			role, mergeRequestRoute := roles[name]
-			if !mergeRequestRoute {
+			role, refusesTheRoleWith403 := roles[name]
+			if !refusesTheRoleWith403 {
 				if !strings.Contains(err.Error(), "Ultimate license") {
 					t.Errorf("%s error = %q, want a plain 403 read like the 401", name, err)
 				}
@@ -1280,26 +1292,93 @@ func TestStatusChecks_MergeRequestRoutesRefusedWith403_NameTheRoleNotTheLicense(
 	}
 }
 
-// TestStatusChecks_CredentialRefused_CarryNoPermissionHint verifies that a
-// 401 GitLab said was about the token itself, and the API guard's 403 about a
-// token scope, get neither the license nor a role hint on any entry point.
-func TestStatusChecks_CredentialRefused_CarryNoPermissionHint(t *testing.T) {
-	bodies := map[int]string{
-		http.StatusUnauthorized: `{"error":"invalid_token","error_description":"Token is expired. You can either do re-authorization or token refresh."}`,
-		http.StatusForbidden:    `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"api"}`,
+// TestStatusChecks_CreateAndDeleteRefusedWith403_NameTheMaintainerRoleInOneSentence
+// verifies the hint the create and the delete give the 403 GitLab answers a
+// caller without the Maintainer role from 19.5, where both routes authorize
+// the ability their service checks before the service runs (entries 56 and
+// 57 of docs/development/upstream-bugs.md). Both handlers hinted the license
+// on it, which sent a Developer to check a license the namespace already had.
+//
+// The hint names the role on the project and sends the caller to project.get
+// to check which project it named. The delete's also says the check was left
+// in place, since before 19.5 the same refusal was answered as a deletion.
+// The create's leaves out the server error a release before 19.5 answers
+// instead, which is not what this caller was told. Neither carries a
+// semicolon, as decided in issue 1402: each names the role in one sentence.
+func TestStatusChecks_CreateAndDeleteRefusedWith403_NameTheMaintainerRoleInOneSentence(t *testing.T) {
+	cases := []struct {
+		name     string
+		mentions string
+		omits    []string
+	}{
+		{name: "create", mentions: "creating an external status check needs the Maintainer role on the project", omits: []string{"server error", "Not allowed"}},
+		{name: "delete", mentions: "deleting an external status check needs the Maintainer role on the project, and the check was left in place"},
 	}
-	for status, body := range bodies {
+	calls := statusCheckCalls()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := calls[tc.name](refusedBy(t, http.StatusForbidden))
+			if err == nil {
+				t.Fatalf("%s error = nil, want the 403", tc.name)
+			}
+			hint := suggestionOf(err)
+			if !strings.HasPrefix(hint, tc.mentions) {
+				t.Errorf("%s hint = %q, want it to open with %q", tc.name, hint, tc.mentions)
+			}
+			if !strings.HasSuffix(hint, ". Verify project_id with project.get") {
+				t.Errorf("%s hint = %q, want it to end by sending the caller to project.get", tc.name, hint)
+			}
+			for _, unwanted := range append([]string{"license", ";"}, tc.omits...) {
+				if strings.Contains(hint, unwanted) {
+					t.Errorf("%s hint = %q, must not carry %q", tc.name, hint, unwanted)
+				}
+			}
+		})
+	}
+}
+
+// suggestionOf returns the hint a wrapped error carries: the text after
+// "Suggestion: " up to the ": " that joins it to GitLab's error, or "" when
+// the error carries none. The hints of this package carry no colon, so the
+// first one after the label ends the hint.
+func suggestionOf(err error) string {
+	_, after, found := strings.Cut(err.Error(), "Suggestion: ")
+	if !found {
+		return ""
+	}
+	hint, _, _ := strings.Cut(after, ": ")
+	return hint
+}
+
+// TestStatusChecks_CredentialOrAccountRefused_CarryNoPermissionHint verifies
+// that a 401 GitLab said was about the token itself, the API guard's 403
+// about a token scope, and its plain 403 about a blocked account get neither
+// the license nor a role hint on any entry point. The last two matter most
+// to the create and the delete, whose role hint is keyed on a 403: pairing
+// the status with toolutil.IsPermissionRefusal is what keeps a credential or
+// an account GitLab refused from being told to ask for a role.
+func TestStatusChecks_CredentialOrAccountRefused_CarryNoPermissionHint(t *testing.T) {
+	refusals := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"expired token", http.StatusUnauthorized, `{"error":"invalid_token","error_description":"Token is expired. You can either do re-authorization or token refresh."}`},
+		{"insufficient scope", http.StatusForbidden, `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"api"}`},
+		{"blocked account", http.StatusForbidden, `{"message":"403 Forbidden - Your account has been blocked."}`},
+	}
+	for _, refusal := range refusals {
 		for name, call := range statusCheckCalls() {
-			t.Run(fmt.Sprintf("%s %d", name, status), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s %s", name, refusal.name), func(t *testing.T) {
 				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					testutil.RespondJSON(w, status, body)
+					testutil.RespondJSON(w, refusal.status, refusal.body)
 				}))
 				err := call(client)
 				if err == nil {
-					t.Fatalf("%s error = nil, want the %d", name, status)
+					t.Fatalf("%s error = nil, want the %d", name, refusal.status)
 				}
 				if strings.Contains(err.Error(), "Suggestion") {
-					t.Errorf("%s error = %q, must carry no hint after a refusal of the credential", name, err)
+					t.Errorf("%s error = %q, must carry no hint after a refusal of the credential or the account", name, err)
 				}
 			})
 		}
@@ -1307,8 +1386,11 @@ func TestStatusChecks_CredentialRefused_CarryNoPermissionHint(t *testing.T) {
 }
 
 // TestDeleteProjectExternalStatusCheck_NotFound_NamesTheCheckList verifies
-// the 404 hint the delete took over from its old 403 hint, which named a
-// role this route never refuses.
+// the 404 hint the delete took over from its old 403 hint, which named the
+// role at a time no release of GitLab refused it there. From 19.5 the 403 is
+// the role's, and
+// TestStatusChecks_CreateAndDeleteRefusedWith403_NameTheMaintainerRoleInOneSentence
+// holds its hint.
 func TestDeleteProjectExternalStatusCheck_NotFound_NamesTheCheckList(t *testing.T) {
 	err := DeleteProjectExternalStatusCheck(context.Background(), refusedBy(t, http.StatusNotFound), DeleteProjectInput{ProjectID: "1", CheckID: 42})
 	if err == nil {
