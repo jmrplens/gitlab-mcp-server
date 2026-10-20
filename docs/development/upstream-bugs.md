@@ -1448,8 +1448,9 @@ is recorded anywhere this entry could cite.
   opened on 2026-09-27, the joint merge request
   [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
   describes.
-- **In review**: yes, open. The commit, `9accb089` (`418162ec` until the
-  merge request was rebased onto v3.17.0 at 16:56 UTC on 2026-10-09), gives
+- **In review**: yes, open. The commit (`418162ec` until the merge request
+  was rebased onto v3.17.0 at 16:56 UTC on 2026-10-09, `9accb089` after that
+  rebase, `aca7a71b` since its rebase of 2026-10-19) gives
   the eight optional fields (`key`, `feature_group`, `user`, `group`,
   `namespace`, `project`, `repository` and `force`) `omitempty` on both halves
   of the tag and pins that a field the caller set is still sent; `Value` keeps
@@ -1458,9 +1459,9 @@ is recorded anywhere this entry could cite.
   activity since 2026-09-30; the triage bot labelled it `idle` at 00:20 UTC on
   2026-10-08. Read at 12:23 UTC on 2026-10-10 the commit is still the 32nd of
   35, as `9accb089`, and the merge request has no approval. Read on
-  2026-10-19 it is the 32nd of 41, as `5837b155` since the merge request's
-  rebase and force push of 2026-10-17, and the merge request still has no
-  approval.
+  2026-10-19 it is the 32nd of 41, as `5837b155` after the merge request's
+  rebase and force push of 2026-10-17 and `aca7a71b` since its rebase of
+  2026-10-19, and the merge request still has no approval.
 - **Merged**: no. The struct is unchanged at v3.15.0 and at v3.16.0, tagged
   on 2026-10-07 (`feature_flags.go:115-125`), and read on 2026-10-19 at
   v3.29.0, the version `go.mod` pins, it is unchanged on the same lines.
@@ -1723,9 +1724,10 @@ endpoint is a new method with its own result type, and would let a tool answer
   so, and `DeploymentStatusValue` `skipped` beside `blocked`. The cancellation
   role gets `CIRestrictPipelineCancellationRoleValue` with its three values,
   declared at first as an alias of `AccessControlValue` so no caller broke.
-  After the review read the old typing as a bug, commit 35 (`62977aec` since
-  the rebase of 2026-10-17, `cc6c70bf` after that of 2026-10-09, `a9dbd2b5`
-  before it, added 2026-09-29) makes it
+  After the review read the old typing as a bug, commit 35 (`0e532ff7` since
+  the rebase of 2026-10-19, `62977aec` after the rebase and force push of
+  2026-10-17, `cc6c70bf` after the rebase of 2026-10-09, `a9dbd2b5` before
+  it, added 2026-09-29) makes it
   a type of its own, which stops compiling code that holds
   the role in an `AccessControlValue`; GitLab's Terraform provider is such code
   (see the review of the joint merge request below).
@@ -2236,12 +2238,13 @@ can reuse whichever basic-user struct the wrapper settles on.
   2026-10-15), so commit 24 still leaves `granular_scopes` off
   `ImpersonationToken`, which is right until then and wrong after. 19.5.0,
   tagged on 2026-10-15, carries it, and at 13:44 UTC on 2026-10-17 commit 41
-  of the same merge request (`3dedb27b`) gave `ImpersonationToken` the
+  of the same merge request (`3dedb27b` when pushed, `b0eacf91` since its
+  rebase of 2026-10-19) gave `ImpersonationToken` the
   `GranularScopes` field, with an integration test that reads a fine-grained
   impersonation token back through the impersonation routes from 19.5, and
   corrected commit 24's fixture of a granular token to `"scopes":
-  ["granular"]`, as GitLab sends it. Commit 24 is `651d9999` since the merge
-  request's rebase of 2026-10-17.
+  ["granular"]`, as GitLab sends it. Commit 24 is `9b64fdec` since the merge
+  request's rebase of 2026-10-19, and was `651d9999` after that of 2026-10-17.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. The fields are read from the captured response beside
@@ -4591,15 +4594,16 @@ option, and 4.0 makes it the default.
   opened on 2026-09-27, the joint merge request
   [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
   describes.
-- **In review**: yes, open. The commit, `74aabe53` (`707ff4be` until the
-  merge request was rebased onto v3.17.0 on 2026-10-09), gives both fields
+- **In review**: yes, open. The commit (`707ff4be` until the merge request
+  was rebased onto v3.17.0 on 2026-10-09, `74aabe53` after that rebase,
+  `1eaa7470` since its rebase of 2026-10-19) gives both fields
   `omitempty` on both halves of the tag and pins a body carrying the one field
   the caller set; `CreatePackageProtectionRulesOptions` keeps its tags, since
   GitLab requires both there. Read on 2026-10-07 it was the 33rd of the merge
   request's 35 commits, and read on 2026-10-10 it still is, with the merge
-  request open. Read on 2026-10-19 it is the 33rd of 41, as `a7b57ca1` since
-  the merge request's rebase and force push of 2026-10-17, and the merge
-  request is open.
+  request open. Read on 2026-10-19 it is the 33rd of 41, as `a7b57ca1` after
+  the merge request's rebase and force push of 2026-10-17 and `1eaa7470`
+  since its rebase of 2026-10-19, and the merge request is open.
 - **Merged**: no.
 - **Blocking**: partly. An update that names the pattern and the type works;
   an update that leaves out either of them is refused by GitLab (measured for
@@ -5644,8 +5648,9 @@ the group milestone tests.
   one more commit. Read on 2026-10-07, no client-go merge request or issue
   proposed it, and neither that merge request's branch nor any other branch
   of the community fork added the fields; the joint merge request changes
-  only the tag of `LabelID` (commit 34, `64d142c8` since its rebase of
-  2026-10-09 and `26736d2b` before it,
+  only the tag of `LabelID` (commit 34, `bee02517` since its rebase of
+  2026-10-19, `694fc8e8` after its rebase and force push of 2026-10-17,
+  `64d142c8` after its rebase of 2026-10-09 and `26736d2b` before it,
   [entry 54](#seven-more-option-structs-send-an-optional-param-on-every-call)).
 - **In review**: yes, in the same merge request, open (row 34's section says
   where it stands). Commit 8 is unchanged; commit 9 (`ff2f0836`), pushed at
@@ -6285,7 +6290,8 @@ without its object from one it refused, for each of the 20 writes of row 88.
 
 - **Reported**: yes, as commit 36 of
   [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
-  (`39a394ce`), pushed on 2026-10-12.
+  (`39a394ce` when pushed, `669b1b18` since the merge request's rebase of
+  2026-10-19), pushed on 2026-10-12.
 - **In review**: yes, in that merge request, open.
 - **Merged**: no. v3.17.0 and the merge request's branch before the push
   (`cc6c70bf`) send the same two documents as v3.15.0.
@@ -6367,7 +6373,8 @@ connection; three more fields on two documents if they are decided.
 
 - **Reported**: yes, as commit 37 of
   [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
-  (`182c1a25`), pushed on 2026-10-12.
+  (`182c1a25` when pushed, `e48aef96` since the merge request's rebase of
+  2026-10-19), pushed on 2026-10-12.
 - **In review**: yes, in that merge request, open.
 - **Merged**: no. v3.17.0 and the merge request's branch before the push
   (`cc6c70bf`) send the same document as v3.15.0.
@@ -6417,8 +6424,9 @@ default document if they are decided.
 
 - **Reported**: yes, as commit 38 of
   [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
-  (`cb2727af` when pushed, `120d7f56` since the merge request's rebase of
-  2026-10-17), pushed on 2026-10-12, on top of its commit 8, which built the
+  (`cb2727af` when pushed, `120d7f56` after the merge request's rebase and
+  force push of 2026-10-17, `c0a4c05a` since its rebase of 2026-10-19),
+  pushed on 2026-10-12, on top of its commit 8, which built the
   get, create and update documents from the `ReturnedFields` registry.
 - **In review**: yes, in that merge request, open. The rebase of 2026-10-17
   put it on v3.25.0, where another contributor's merge had given the
@@ -7098,8 +7106,9 @@ or three parallel methods.
 
 - **Reported**: yes, as commit 39 of
   [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
-  (`be72781d` when pushed at 07:21 UTC, `8daec46a` since the merge request's
-  force push of 13:44 UTC that day), pushed on 2026-10-17.
+  (`be72781d` when pushed at 07:21 UTC, `8daec46a` after the merge request's
+  force push of 13:44 UTC that day, `dcec96a5` since its rebase of
+  2026-10-19), pushed on 2026-10-17.
 - **In review**: yes, in that merge request, open.
 - **Merged**: no. v3.25.0, the head of main on 2026-10-15, carries the same
   struct.
@@ -11895,14 +11904,16 @@ had shown one of them going nowhere.
   the joint merge request
   [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
   describes, rather than as a merge request of its own. Commit 40
-  (`6e8e9856`) gives `CreatePersonalAccessTokenOptions`,
+  (`6e8e9856` when pushed, `a8677749` since the rebase of 2026-10-19)
+  gives `CreatePersonalAccessTokenOptions`,
   `CreatePersonalAccessTokenForCurrentUserOptions` and
   `CreateImpersonationTokenOptions` a `GranularScopes` field, one
   `PersonalAccessTokenGranularScopeOptions` per scope, left out when unset
   because each route counts a key sent as `null`, with a new
   `GranularScopeAccessValue` for a scope's access, and gives the
   impersonation options the `Description` its route already took; commit 41
-  (`3dedb27b`) decodes the `granular_scopes` the create routes answer with,
+  (`3dedb27b` when pushed, `b0eacf91` since the rebase of 2026-10-19)
+  decodes the `granular_scopes` the create routes answer with,
   `ImpersonationToken` included
   ([row 32](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still)).
   They add four integration tests, each creating a fine-grained token through
@@ -12075,8 +12086,8 @@ Nobody had answered on 2026-09-30, nor on 2026-10-05.
 [Row 32](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still)
 is the response side and is not repeated here: commit 24 of
 [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
-(`651d9999` since its rebase of 2026-10-17, `2a9f3736` after that of
-2026-10-09, `fff671b1` before it) gives
+(`9b64fdec` since its rebase of 2026-10-19, `651d9999` after that of
+2026-10-17, `2a9f3736` after that of 2026-10-09, `fff671b1` before it) gives
 `PersonalAccessToken` the fields `Granular`,
 `GranularScopes` and `LastUsedIPs`, with a new type,
 `PersonalAccessTokenGranularScope`, for one scope a token holds. This entry is
