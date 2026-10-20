@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 21,871 |
-| Unit test functions                                   | 20,302 |
+| Total test functions                                  | 21,882 |
+| Unit test functions                                   | 20,313 |
 | E2E test functions                                    |  1,569 |
 | cmd test functions                                    |  4,821 |
 | Test files (internal/)                                |    719 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,379 | 61.2% |
+| `TestFunc_Scenario` (2-part)           | 13,384 | 61.2% |
 | `TestFunc` (no underscore)             |    912 |  4.2% |
-| `TestFunc_Scenario_Expected` (3+ part) |  7,580 | 34.7% |
+| `TestFunc_Scenario_Expected` (3+ part) |  7,586 | 34.7% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          4,027 |        237 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            414 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (180) |         11,040 |        466 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (180) |         11,051 |        466 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,569 |        420 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          4,821 |        336 | server entry point and developer command utilities                                              |
-| **Total**               |     **21,871** |  **1,475** |                                                                                                 |
+| **Total**               |     **21,882** |  **1,475** |                                                                                                 |
 
 ### Core Packages
 
@@ -99,8 +99,8 @@
 | ----------------- | ----: | -------: | ----: |
 | projects          |   498 |   100.0% |    57 |
 | mergerequests     |   343 |   100.0% |    30 |
+| dynamic           |   321 |   100.0% |     2 |
 | groups            |   317 |   100.0% |    37 |
-| dynamic           |   310 |   100.0% |     2 |
 | issues            |   296 |   100.0% |    21 |
 | users             |   272 |   100.0% |    38 |
 | jobs              |   178 |   100.0% |    17 |
@@ -172,7 +172,7 @@
 | deploytokens            |         71 |          2 |   100.0% |         9 |
 | dockerfiletemplates     |         25 |          3 |   100.0% |         2 |
 | dorametrics             |         17 |          2 |   100.0% |         2 |
-| dynamic                 |        310 |          9 |   100.0% |         2 |
+| dynamic                 |        321 |          9 |   100.0% |         2 |
 | dynamiccatalog          |         13 |          1 |   100.0% |         0 |
 | elicitationtools        |         73 |          2 |   100.0% |         4 |
 | enterpriseusers         |         41 |          3 |   100.0% |         4 |
@@ -310,7 +310,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        136 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,040** |    **466** |          | **1,195** |
+| **Total**               | **11,051** |    **466** |          | **1,195** |
 
 </details>
 
