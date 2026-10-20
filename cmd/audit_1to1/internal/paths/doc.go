@@ -31,11 +31,11 @@
 // of them.
 //
 // That grain is the check's limit and it is worth saying plainly, because the
-// number it prints reads stronger than it is: 990 of 1082 actions observed
-// means 990 actions whose owning package issued some request, not 990 actions
-// whose own request anybody has seen. Summary.Grain says so beside the number,
-// since the number is what gets quoted. As a regression guard it is real and
-// as per-action assurance it is nothing.
+// number it prints reads stronger than it is: an action counted as observed is
+// one whose owning package issued some request, not one whose own request
+// anybody has seen, however high the count. Summary.Grain says so beside the
+// number, since the number is what gets quoted. As a regression guard it is
+// real and as per-action assurance it is nothing.
 //
 // The layer that closes that gap is a live instance, and it is here now as a
 // report beside the gate. An end-to-end run has the one thing the unit

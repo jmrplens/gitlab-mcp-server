@@ -154,9 +154,13 @@ The first answers `custom_branch_policies: true`, `protected_branches: false`
 and `can_admins_bypass: false`; the second lists exactly one policy,
 `{"name": "v*", "type": "tag"}`; the third answers `0`.
 
-**Current state.** Not yet applied. On 2026-10-12 `release` had no deployment
-policy (`deployment_branch_policy: null`) and administrator bypass on, and
-`release-rehearsal` did not exist.
+**Current state.** Applied. `release-rehearsal` exists since 2026-10-17, with
+no secret and no protection rule. `release` was restricted on 2026-10-20, once
+the workflow that sends rehearsals elsewhere was on `main`; until then it had no
+deployment policy and administrator bypass on. Read that day after the change,
+the three checks above answer as they should: `custom_branch_policies: true`,
+`protected_branches: false`, `can_admins_bypass: false`, the one policy
+`{"name": "v*", "type": "tag"}`, and `0` secrets on `release-rehearsal`.
 
 **Caveat.** The policy binds the environment and nothing outside it. A
 repository secret, as opposed to an environment secret, reaches any workflow
@@ -215,8 +219,10 @@ The second command, given the id of `Create release tags`, answers
 `include: ["refs/tags/v*"]`, `rules: ["creation"]` and one bypass actor,
 `{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}`.
 
-**Current state.** Not yet applied. On 2026-10-12 the only tag ruleset was
-`Protect tags`, with the rules `deletion`, `update` and `non_fast_forward`.
+**Current state.** Applied on 2026-10-20 as ruleset `25490294`, beside
+`Protect tags`. Read that day, the second command answers
+`include: ["refs/tags/v*"]`, `rules: ["creation"]` and the one bypass actor
+above.
 
 **What tells you it drifted.** Nothing automatic; the commands above.
 
