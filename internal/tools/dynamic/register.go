@@ -1430,6 +1430,10 @@ func appendSchemaEnumValue(values []string, value any) []string {
 type searchTerm struct {
 	Raw          string
 	Alternatives []string
+	// RefResource reports that Raw is a branch, a tag or a commit in a query
+	// that says what to do, which names the point an action whose ref is
+	// required starts from ([markRefResources], [refResourceMatch]).
+	RefResource bool
 }
 
 func normalizeSearchTerms(query string) []searchTerm {
@@ -2145,14 +2149,60 @@ func addSchemaPropertyTags(add tagCollector, schema map[string]any) {
 		switch name {
 		case "state_event":
 			add("close", "reopen", "state")
-		case "ref":
-			add("branch", "tag", "commit")
 		case "file_path":
 			add("repository file", "path")
 		case "url":
 			add("url")
 		}
 	}
+}
+
+// markRefResources marks the terms of a query that name the point an action
+// whose ref is required starts from: a branch, a tag or a commit
+// ([refResourceMatch]).
+//
+// It marks them only when the query says what to do. A query with no verb
+// names what it is about, and a branch there is that resource rather than a
+// place to start from: "pipeline for branch" asks for the pipeline of a
+// branch, and pipeline.create, whose ref is required, is not its answer.
+func markRefResources(terms []searchTerm) {
+	if queryVerbIntent(terms) == "" {
+		return
+	}
+	for position := range terms {
+		terms[position].RefResource = isRefResource(terms[position].Raw)
+	}
+}
+
+// isRefResource reports whether word is one of the three things a ref
+// parameter names.
+func isRefResource(word string) bool {
+	return word == "branch" || word == "tag" || word == "commit"
+}
+
+// refResourceMatch scores a term that names a branch, tag or commit
+// ([searchTerm.RefResource]) against an action whose ref is required, and
+// returns 0 for every other action.
+//
+// A required ref is the point the action works from: the commit a branch or a
+// tag is created from, the branch a pipeline runs on, the ref a file is read
+// at. So "create branch from commit" names branch.create twice, as the
+// resource it creates and as the point it creates it from, and
+// repository.commit_create, which takes the branch to commit to, does not
+// answer it. The word scores as a word of a domain, a step below the action's
+// own domain, so the resource the query acts on ranks first: "create tag from
+// commit" is tag.create before branch.create.
+//
+// An optional ref names nothing. It filters what its action lists or reads:
+// pipeline.list takes one to filter its pipelines, and when every ref tagged
+// its action with branch, tag and commit at the weight of a tag, above an
+// action's own domain, "list branch" tied it with branch.list and "list
+// commit" put it ahead of repository.commit_list (issue 1121).
+func refResourceMatch(document searchDocument, term searchTerm) int {
+	if term.RefResource && slices.Contains(document.RequiredParams, "ref") {
+		return scoreRefResource
+	}
+	return 0
 }
 
 // searchMatches scores the catalog against one query.
@@ -2165,6 +2215,7 @@ func addSchemaPropertyTags(add tagCollector, schema map[string]any) {
 func (r *Registry) searchMatches(ctx context.Context, query string, limit int, explain bool) ([]scoredActionEntry, error) {
 	limit = normalizedLimit(limit)
 	terms := normalizeSearchTerms(query)
+	markRefResources(terms)
 	searchScorer := scoreEntryWithoutExplanation
 	fuzzyScorer := fuzzyScoreEntryWithoutExplanation
 	if explain {
@@ -3072,6 +3123,7 @@ func (r *Registry) suggestActionIDs(query string, limit int) []string {
 	if len(terms) == 0 {
 		return nil
 	}
+	markRefResources(terms)
 	nounVerb, isNounVerb := nounVerbActionName(query)
 	type scoredEntry struct {
 		id    string
@@ -3081,7 +3133,7 @@ func (r *Registry) suggestActionIDs(query string, limit int) []string {
 	for _, entry := range r.entries {
 		score := 0
 		for _, term := range terms {
-			best := 0
+			best := refResourceMatch(documentForEntry(entry), term)
 			for _, alternative := range term.Alternatives {
 				best = max(best, scoreSearchAlternative(entry, term.Raw, alternative))
 			}
@@ -3282,7 +3334,7 @@ func scoreEntry(entry actionEntry, terms []searchTerm) int {
 	totalScore := 0
 	matchedCount := 0
 	for _, term := range terms {
-		best := 0
+		best := refResourceMatch(documentForEntry(entry), term)
 		for _, alternative := range term.Alternatives {
 			best = max(best, scoreSearchAlternative(entry, term.Raw, alternative))
 		}
@@ -3339,6 +3391,10 @@ func scoreEntryWithExplanation(entry actionEntry, terms []searchTerm) (int, Scor
 				best = candidateScore
 				bestReason = reason
 			}
+		}
+		if ref := refResourceMatch(documentForEntry(entry), term); ref > best {
+			best = ref
+			bestReason = MatchReason{Field: searchFieldRefResource, QueryTerm: term.Raw, MatchedValue: "ref", Score: ref}
 		}
 		if best > 0 {
 			matchedCount++

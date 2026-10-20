@@ -14,6 +14,7 @@ const (
 	searchFieldAction         = "action"
 	searchFieldRequiredParam  = "required_param"
 	searchFieldOptionalParam  = "optional_param"
+	searchFieldRefResource    = "ref_resource"
 	searchFieldSchemaProperty = "schema_property"
 	searchFieldSchemaEnum     = "schema_enum"
 	searchFieldSchemaDesc     = "schema_description"
@@ -56,6 +57,12 @@ const (
 	scoreFieldContains        = 25
 	scoreSynonymContains      = 18
 	scoreUnmatchedActionWord  = -60
+	// scoreRefResource is what a branch, tag or commit named by a query that
+	// says what to do scores on an action whose ref is required
+	// ([refResourceMatch]): a word of a domain, one step below the action's
+	// own domain, so that the resource the query acts on ranks above the one
+	// it starts from.
+	scoreRefResource = scoreDomainActionWord
 )
 
 const (

@@ -6390,10 +6390,31 @@ func TestRegistry_ActionTagHints(t *testing.T) {
 			"url":         map[string]any{},
 		}}
 		got := actionTags("repository.file_create", "repository", "file_create", schema)
-		for _, want := range []string{"repository file", "branch", "url", "close"} {
+		for _, want := range []string{"repository file", "path", "url", "close"} {
 			t.Run(want, func(t *testing.T) {
 				if !stringInSlice(got, want) {
 					t.Fatalf("actionTags() = %v, want %q", got, want)
+				}
+			})
+		}
+	})
+
+	// A ref parameter used to tag its action with branch, tag and commit, at
+	// the weight of a tag, which is above the weight of the action's own
+	// domain. Every action taking a ref then claimed those three resources as
+	// strongly as their own domains did: "list branch" tied branch.list with
+	// pipeline.list, "list tags" put pipeline.list first and "list commit"
+	// ranked it over repository.commit_list (issue 1121). A ref tags
+	// nothing now: a required one names the point its action starts from
+	// through refResourceMatch, a step below the action's own domain, and an
+	// optional one names nothing at all.
+	t.Run("a ref parameter names no resource", func(t *testing.T) {
+		schema := map[string]any{"properties": map[string]any{"ref": map[string]any{}}}
+		got := actionTags("pipeline.list", "pipeline", "list", schema)
+		for _, resource := range []string{"branch", "tag", "commit"} {
+			t.Run(resource, func(t *testing.T) {
+				if stringInSlice(got, resource) {
+					t.Errorf("actionTags(pipeline.list with ref) = %v, want no %q", got, resource)
 				}
 			})
 		}
@@ -6407,6 +6428,116 @@ func TestRegistry_ActionTagHints(t *testing.T) {
 		memberRole := actionTags("member_role.create", "member_role", "create", nil)
 		if !stringInSlice(memberRole, "member role") {
 			t.Fatalf("actionTags(member role) = %v, want member role", memberRole)
+		}
+	})
+}
+
+// TestMarkRefResources_MarksABranchTagOrCommitOfAQueryThatSaysWhatToDo
+// verifies which terms name the point an action with a required ref starts
+// from: a branch, a tag or a commit, in a query with a verb of any intent, and
+// nothing in a query with no verb, which names what it is about rather than
+// where to start. A ref itself and a sha are no resource of the three.
+func TestMarkRefResources_MarksABranchTagOrCommitOfAQueryThatSaysWhatToDo(t *testing.T) {
+	cases := []struct {
+		name  string
+		query string
+		want  []bool
+	}{
+		{name: "a write naming a branch and a commit", query: "create branch from commit", want: []bool{false, true, true}},
+		{name: "a read naming a tag", query: "show file at tag", want: []bool{false, false, true}},
+		{name: "a workflow verb naming a branch", query: "run pipeline on branch", want: []bool{false, false, true}},
+		{name: "a destructive verb naming a branch", query: "delete branch", want: []bool{false, true}},
+		{name: "no verb", query: "pipeline for branch", want: []bool{false, false}},
+		{name: "a ref and a sha", query: "get file at ref sha", want: []bool{false, false, false, false}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			terms := normalizeSearchTerms(tc.query)
+			markRefResources(terms)
+			got := make([]bool, 0, len(terms))
+			for _, term := range terms {
+				got = append(got, term.RefResource)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("markRefResources(%q) marked %v, want %v", tc.query, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRefResourceMatch_ScoresAWordOfADomainOnARequiredRefOnly verifies what a
+// marked term scores against an action: a word of a domain where the action
+// requires a ref, and nothing where the ref is optional, where the action has
+// none, or where the term names no ref resource.
+func TestRefResourceMatch_ScoresAWordOfADomainOnARequiredRefOnly(t *testing.T) {
+	required := searchDocument{RequiredParams: []string{"branch", "ref"}}
+	optional := searchDocument{RequiredParams: []string{"project_id"}, OptionalParams: []string{"ref"}}
+	marked := searchTerm{Raw: "commit", Alternatives: []string{"commit"}, RefResource: true}
+	unmarked := searchTerm{Raw: "commit", Alternatives: []string{"commit"}}
+
+	cases := []struct {
+		name     string
+		document searchDocument
+		term     searchTerm
+		want     int
+	}{
+		{name: "a required ref", document: required, term: marked, want: scoreRefResource},
+		{name: "an optional ref", document: optional, term: marked},
+		{name: "no ref", document: searchDocument{}, term: marked},
+		{name: "a term naming no ref resource", document: required, term: unmarked},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := refResourceMatch(tc.document, tc.term); got != tc.want {
+				t.Errorf("refResourceMatch() = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestSearch_RequiredRef_NamesThePointItsActionStartsFrom pins, against the
+// real catalog, what a required ref claims now that no ref tags its action.
+//
+// "create branch from commit" names branch.create twice, as what it creates
+// and as the point it creates it from, and has to answer it with high
+// confidence. With no claim at all repository.commit_create, which takes the
+// branch to commit to, answered it with confidence instead; with the ref tags
+// pipeline.create and tag.create came within ten points, because a tag
+// scored a commit as high as their own domains. "create tag from commit" is
+// the same shape for tag.create, which release.create tied on the parent. A
+// query with no verb names what it is about, so "pipeline for branch" must not
+// make the action that creates a pipeline its answer.
+func TestSearch_RequiredRef_NamesThePointItsActionStartsFrom(t *testing.T) {
+	registry := realCatalogRegistry(t)
+	search := func(t *testing.T, query string) SearchOutput {
+		t.Helper()
+		_, output, err := registry.Search(t.Context(), nil, SearchInput{Query: query, Limit: 5})
+		if err != nil {
+			t.Fatalf("Search(%q) error = %v", query, err)
+		}
+		if output.Count == 0 {
+			t.Fatalf("Search(%q) returned no matches", query)
+		}
+		return output
+	}
+
+	for _, tc := range []struct{ query, wantTop string }{
+		{query: "create branch from commit", wantTop: "branch.create"},
+		{query: "create a branch from a commit", wantTop: "branch.create"},
+		{query: "new branch from commit", wantTop: "branch.create"},
+		{query: "create tag from commit", wantTop: "tag.create"},
+	} {
+		t.Run(tc.query, func(t *testing.T) {
+			output := search(t, tc.query)
+			if top := output.Results[0]; top.ID != tc.wantTop || top.LowConfidence {
+				t.Errorf("Search(%q) top = %s (low confidence %v), want %s with high confidence; results = %+v", tc.query, top.ID, top.LowConfidence, tc.wantTop, output.Results)
+			}
+		})
+	}
+	t.Run("a query with no verb", func(t *testing.T) {
+		output := search(t, "pipeline for branch")
+		if top := output.Results[0]; top.ID == "pipeline.create" {
+			t.Errorf("Search(%q) top = pipeline.create, want no action that creates a pipeline first; results = %+v", "pipeline for branch", output.Results)
 		}
 	})
 }
