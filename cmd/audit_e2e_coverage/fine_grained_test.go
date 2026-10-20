@@ -113,6 +113,46 @@ func TestClassify_FineGrainedCells_CountHowEachCallEnded(t *testing.T) {
 	}
 }
 
+// TestFineGrainedFold_Report_EitherHalfIsAMeasurement holds report() to
+// saying nothing only about a run that had neither a fine-grained session nor
+// a fine-grained call: sessions that called nothing still say what they were
+// listed, and calls whose session line is missing still say how each ended,
+// so either half alone is reported.
+func TestFineGrainedFold_Report_EitherHalfIsAMeasurement(t *testing.T) {
+	session := fixtureSession(individualDefault, true)
+	session.Credential = e2ecalls.CredentialFineGrained
+	call := fixtureCall(callSpec{test: "TestFineGrained_Reads", action: "issue.list", dispatched: "issue.list", shape: individualDefault})
+	call.Credential = e2ecalls.CredentialFineGrained
+
+	t.Run("neither", func(t *testing.T) {
+		if rep := newFineGrainedFold().report(); rep != nil {
+			t.Errorf("report() = %+v for a run with no fine-grained line, want nil", rep)
+		}
+	})
+	t.Run("sessions that called nothing", func(t *testing.T) {
+		fold := newFineGrainedFold()
+		fold.foldSession(session)
+		rep := fold.report()
+		if rep == nil {
+			t.Fatal("report() = nil for a run whose fine-grained session called nothing, want its session counted")
+		}
+		if rep.Sessions != 1 || len(rep.Shapes) != 1 || len(rep.Cells) != 0 {
+			t.Errorf("report() = %+v, want one session, its shape and no cell", rep)
+		}
+	})
+	t.Run("calls whose session line is missing", func(t *testing.T) {
+		fold := newFineGrainedFold()
+		fold.foldCall(call)
+		rep := fold.report()
+		if rep == nil {
+			t.Fatal("report() = nil for a run with a fine-grained call and no session line, want the call counted")
+		}
+		if rep.Sessions != 0 || rep.Calls != 1 || len(rep.Cells) != 1 {
+			t.Errorf("report() = %+v, want no session, one call and its cell", rep)
+		}
+	})
+}
+
 // TestIsFineGrained_OnlyTheFineGrainedKind verifies a line with no kind, the
 // shape of every line written before the harness recorded one, is classic.
 func TestIsFineGrained_OnlyTheFineGrainedKind(t *testing.T) {
