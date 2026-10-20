@@ -1360,7 +1360,7 @@ MCPB_CLI_VERSION := 2.1.2
 ## tree would land in go.sum for every job that runs `go mod download`. Keep it
 ## equal to what developers run locally, so `make golangci-lint` means the same
 ## on both sides of a push.
-GOLANGCI_LINT_VERSION := v2.14.0
+GOLANGCI_LINT_VERSION := v2.15.0
 
 ## check-mcpb: validate the Claude Desktop extension manifests: mcpb/manifest.json,
 ## which the universal bundle packs, and the darwin, win32 and linux manifests
@@ -1558,7 +1558,7 @@ publish-nuget:
 # Pinned: the CLI has already changed its verb contract under this target
 # once (publish -> update, a new positional gitUrl); bump deliberately after
 # verifying `plugin update --dir` still holds.
-LOBEHUB_MARKET_CLI_VERSION := 0.0.41
+LOBEHUB_MARKET_CLI_VERSION := 0.0.42
 
 publish-lobehub: check-lhm-manifest
 	@command -v node >/dev/null || { echo "ERROR: Node.js >= 22 is required"; exit 1; }

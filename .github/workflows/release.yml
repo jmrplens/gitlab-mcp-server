@@ -118,7 +118,7 @@ env:
   # these binaries at run time into a job that holds the signing identity, so
   # SHA-pinning the action alone leaves the code that actually runs unpinned.
   GORELEASER_VERSION: "v2.18.3"
-  SYFT_VERSION: "v1.54.0"
+  SYFT_VERSION: "v1.55.0"
 
 jobs:
   # The one check that has to run before anything else spends a runner. The
@@ -524,7 +524,7 @@ jobs:
       # after the image was already pushed.
       - name: Install syft
         env:
-          SYFT_SHA256: "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860"
+          SYFT_SHA256: "bb65249542db5fedeeb4d3f9b018b75e7264dbfbbb10486f044581a92f90490d"
         run: |
           set -euo pipefail
           TARBALL="syft_${SYFT_VERSION#v}_linux_amd64.tar.gz"
@@ -926,8 +926,8 @@ jobs:
       # before a tag does.
       - name: Install oras
         env:
-          ORAS_VERSION: "1.3.4"
-          ORAS_SHA256: "f27adb935022d94df8dc77719c322dda592c78a0d57a6f7dcdd8d900b248c454"
+          ORAS_VERSION: "1.3.5"
+          ORAS_SHA256: "f48a73ea6d026a862c3919fc773da9a8c86fc259c2c737d5baed3b8b9614ad22"
         run: |
           set -euo pipefail
           TARBALL="oras_${ORAS_VERSION}_linux_amd64.tar.gz"
@@ -1101,7 +1101,7 @@ jobs:
       # its certificate arrive together as one sigstore bundle.
       - name: Install syft
         env:
-          SYFT_SHA256: "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860"
+          SYFT_SHA256: "bb65249542db5fedeeb4d3f9b018b75e7264dbfbbb10486f044581a92f90490d"
         run: |
           set -euo pipefail
           TARBALL="syft_${SYFT_VERSION#v}_linux_amd64.tar.gz"
@@ -1315,7 +1315,7 @@ jobs:
           NPM_DIST_TAG: ${{ needs.preflight.outputs.npm_dist_tag }}
         run: |
           set -euo pipefail
-          npm install -g npm@11.21.0
+          npm install -g npm@12.2.1
           if [ "$REHEARSAL" = "true" ]; then
             # npm publish --dry-run packs every tarball and validates it
             # against the registry without uploading, so the rehearsal runs
@@ -1957,17 +1957,18 @@ jobs:
       # vedantmgoyal9/winget-releaser, which was pinned to a commit while that
       # commit installed cargo-binstall from its main branch and then whatever
       # komac release was newest, with no version and no digest, in the job
-      # holding WINGET_TOKEN (issue 1232). It is fetched here instead, at the
-      # version 3.1.0's submission ran (2.16.0), and held to the SHA-256 of
+      # holding WINGET_TOKEN (issue 1232). It is fetched here instead, at a
+      # pinned version (first 2.16.0, the one 3.1.0's submission ran, and
+      # 2.17.1 since 2026-10-20), and held to the SHA-256 of
       # each Windows build, read from the release and checked against its
       # SHA256SUMS when recorded. komac publishes no signature and no build
       # provenance (its release workflow signs nothing and the attestation API
       # holds none for these digests), so the recorded digest is the whole of
       # the check. Dependabot cannot see these lines: a bump is a hand edit of
       # all three.
-      KOMAC_VERSION: "2.16.0"
-      KOMAC_SHA256_X64: "bdc45baf028f750da7519cc8a5f2eab5dfef46dfe88650eeb0d0a9bf51446e4f"
-      KOMAC_SHA256_ARM64: "fce7e4debdc3b21c09d6205375c5944c02cc1bd0aa3839d5c758ff50d2ddd4b0"
+      KOMAC_VERSION: "2.17.1"
+      KOMAC_SHA256_X64: "a97c002c5ffa15f232af117efac6774e755d27acc47eba00f1661033267d7438"
+      KOMAC_SHA256_ARM64: "be644ceab89470229d4e21525ccd2adf43de3f5a2f363d1ff848f38f05e1c7b9"
     # Every write authenticates with WINGET_TOKEN. The job's own token reads
     # only public data: the release this run names, and in a rehearsal what
     # komac reads of winget-pkgs and of this repository to build the
@@ -2080,7 +2081,7 @@ jobs:
         run: |
           & $env:KOMAC cleanup --only-merged
 
-      # The rehearsal's half: the same command with --dry-run. komac 2.16.0
+      # The rehearsal's half: the same command with --dry-run. komac 2.17.1
       # still reads everything a submission reads, winget-pkgs' versions and
       # the pull requests already open for this one, the previous version's
       # manifests, the release the installers belong to and the installers
