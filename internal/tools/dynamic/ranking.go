@@ -56,7 +56,12 @@ const (
 	scoreSchemaDescMatch      = 12
 	scoreFieldContains        = 25
 	scoreSynonymContains      = 18
-	scoreUnmatchedActionWord  = -60
+	// scoreUnmatchedActionWordPenalty is taken off for each word of the
+	// action name the query does not spell. It is written as the size of the
+	// penalty and negated where it applies, as scoreVerbIntentPenalty is, so
+	// that the sign is an operator in a statement the tests cover rather than
+	// in a constant the mutation gate cannot see.
+	scoreUnmatchedActionWordPenalty = 60
 	// scoreSingularExact and scoreSingularWord are what the singular of a
 	// plural scores against the action ID ([singularMatch]): one step below
 	// the singular's own match, an exact domain or action as a word of one
@@ -79,7 +84,10 @@ const (
 	minimumHighConfidenceScore  = 80
 	minimumHighConfidenceMargin = 15
 	scoreVerbIntentBoost        = 16
-	scoreVerbIntentPenalty      = -24
+	// scoreVerbIntentPenalty is taken off an action that answers the query's
+	// verb with the opposite one, written as its size and negated where it
+	// applies.
+	scoreVerbIntentPenalty      = 24
 	scoreRequiredParamBoost     = 10
 	scoreCompoundTagBoost       = 50
 	scoreCompareRefsIntentBoost = 90

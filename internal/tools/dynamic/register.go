@@ -37,9 +37,14 @@ var searchStopWordsMap = map[string]struct{}{
 // drops a request header its preflight did not authorize, and the server then
 // rejects the call for that header's absence, so the two must be derived from
 // one another rather than maintained in parallel. Declared on its own so it
-// carries its own documentation; the suffix it is built from lives in the
-// block below.
-const ExecuteActionHeaderName = "Mcp-Param-" + executeActionHeaderSuffix
+// carries its own documentation; the suffix it is the prefixed form of lives
+// in the block below.
+//
+// It is written out rather than concatenated from that suffix because the
+// mutation gate cannot see an operator in a constant, and
+// TestExecuteActionSchema_XMCPHeader_AnnotatesActionParam holds the two to
+// "Mcp-Param-" plus the suffix, so neither can drift from the other.
+const ExecuteActionHeaderName = "Mcp-Param-Action"
 
 const (
 	aliasProtectedEnvironment  = "protected environment"
@@ -3544,9 +3549,9 @@ func scoreVerbIntentFor(entry actionEntry, intent verbIntent, terms []searchTerm
 	case verbIntentRead:
 		switch {
 		case entry.Destructive:
-			adjustment = scoreVerbIntentPenalty
+			adjustment = -scoreVerbIntentPenalty
 		case isWriteAction(document.Action):
-			adjustment = scoreVerbIntentPenalty / 2
+			adjustment = -scoreVerbIntentPenalty / 2
 		case isReadAction(document.Action):
 			adjustment = scoreVerbIntentBoost
 		}
@@ -3584,7 +3589,7 @@ func scoreDestructiveVerbAdjustment(entry actionEntry, terms []searchTerm, docum
 		return 0
 	}
 	if !queryHasResourceSignal(terms, document) {
-		return scoreVerbIntentPenalty
+		return -scoreVerbIntentPenalty
 	}
 	if document.Action == "delete" || document.Action == "remove" || document.Action == "revoke" {
 		return scoreVerbIntentBoost * 3
@@ -4136,7 +4141,7 @@ func scoreActionSpecificity(entry actionEntry, terms []searchTerm) (int, MatchRe
 	if unmatched == 0 {
 		return 0, MatchReason{}
 	}
-	adjustment := unmatched * scoreUnmatchedActionWord
+	adjustment := -unmatched * scoreUnmatchedActionWordPenalty
 	return adjustment, MatchReason{Field: searchFieldSpecificity, QueryTerm: "action_words", MatchedValue: document.Action, Score: adjustment}
 }
 
@@ -4157,7 +4162,7 @@ func scoreActionSpecificityValue(entry actionEntry, terms []searchTerm) int {
 	// guard here would be a branch no input could distinguish. The sibling
 	// scoreActionSpecificity keeps its guard because there it decides whether a
 	// MatchReason is emitted at all, which is observable.
-	return unmatched * scoreUnmatchedActionWord
+	return -unmatched * scoreUnmatchedActionWordPenalty
 }
 
 func searchTermsContainWord(terms []searchTerm, word string) bool {

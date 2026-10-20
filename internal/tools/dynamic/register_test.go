@@ -8404,8 +8404,8 @@ func TestScoreVerbIntentFor_AdjustsByWhatTheQueryAskedAndWhatTheActionDoes(t *te
 	}{
 		{name: "a query with no verb at all", entry: scoringEntry("project.get", "project", "get")},
 		{name: "a read intent on a read action", entry: scoringEntry("project.get", "project", "get"), intent: verbIntentRead, want: scoreVerbIntentBoost},
-		{name: "a read intent on a writing action", entry: scoringEntry("project.create", "project", "create"), intent: verbIntentRead, want: scoreVerbIntentPenalty / 2},
-		{name: "a read intent on a destructive action", entry: destructive, intent: verbIntentRead, want: scoreVerbIntentPenalty},
+		{name: "a read intent on a writing action", entry: scoringEntry("project.create", "project", "create"), intent: verbIntentRead, want: -scoreVerbIntentPenalty / 2},
+		{name: "a read intent on a destructive action", entry: destructive, intent: verbIntentRead, want: -scoreVerbIntentPenalty},
 		{name: "a write intent on a writing action", entry: scoringEntry("project.create", "project", "create"), intent: verbIntentWrite, want: scoreVerbIntentBoost},
 		{name: "a write intent on a read action", entry: scoringEntry("project.get", "project", "get"), intent: verbIntentWrite},
 		{name: "a workflow intent on a workflow action", entry: scoringEntry("pipeline.retry", "pipeline", "retry"), intent: verbIntentWorkflow, want: scoreVerbIntentBoost},
@@ -8460,7 +8460,7 @@ func TestScoreDestructiveVerbAdjustment_SeparatesTheNamedVerbsFromTheRest(t *tes
 		{name: "an action that destroys nothing", entry: scoringEntry("project.get", "project", "get"), terms: searchTermsFromWords("delete", "project")},
 		{name: "a destructive name the catalog did not mark", entry: scoringEntry("project.delete", "project", "delete"), terms: searchTermsFromWords("delete", "project"), want: scoreVerbIntentBoost * 3},
 		{name: "a marked action under a name that says nothing", entry: markedButNotNamed, terms: searchTermsFromWords("purge", "project"), want: scoreVerbIntentBoost},
-		{name: "a query naming no resource at all", entry: scoringEntry("project.delete", "project", "delete"), terms: searchTermsFromWords("zzzzzzzz"), want: scoreVerbIntentPenalty},
+		{name: "a query naming no resource at all", entry: scoringEntry("project.delete", "project", "delete"), terms: searchTermsFromWords("zzzzzzzz"), want: -scoreVerbIntentPenalty},
 		{name: "remove", entry: scoringEntry("runner.remove", "runner", "remove"), terms: searchTermsFromWords("remove", "runner"), want: scoreVerbIntentBoost * 3},
 		{name: "revoke", entry: scoringEntry("token.revoke", "token", "revoke"), terms: searchTermsFromWords("revoke", "token"), want: scoreVerbIntentBoost * 3},
 		{name: "destroy, which is destructive but is not one of the three", entry: scoringEntry("widget.destroy", "widget", "destroy"), terms: searchTermsFromWords("destroy", "widget"), want: scoreVerbIntentBoost},
@@ -11658,7 +11658,7 @@ func TestScoreActionSpecificity_PenalizesOnlyUnmatchedMultiWordActions(t *testin
 
 	t.Run("two of three action words unmatched", func(t *testing.T) {
 		terms := searchTermsFromWords("list")
-		want := 2 * scoreUnmatchedActionWord
+		want := -2 * scoreUnmatchedActionWordPenalty
 		if got := scoreActionSpecificityValue(multiWord, terms); got != want {
 			t.Fatalf("scoreActionSpecificityValue() = %d, want %d", got, want)
 		}
@@ -11673,8 +11673,8 @@ func TestScoreActionSpecificity_PenalizesOnlyUnmatchedMultiWordActions(t *testin
 
 	t.Run("one of three action words unmatched", func(t *testing.T) {
 		terms := searchTermsFromWords("service", "account")
-		if got := scoreActionSpecificityValue(multiWord, terms); got != scoreUnmatchedActionWord {
-			t.Fatalf("scoreActionSpecificityValue() = %d, want %d", got, scoreUnmatchedActionWord)
+		if got := scoreActionSpecificityValue(multiWord, terms); got != -scoreUnmatchedActionWordPenalty {
+			t.Fatalf("scoreActionSpecificityValue() = %d, want %d", got, -scoreUnmatchedActionWordPenalty)
 		}
 	})
 
@@ -11725,7 +11725,7 @@ func TestScoreActionSpecificity_ReadsTheSingularAndTheListAPluralAsksFor(t *test
 		entry actionEntry
 		want  int
 	}{
-		{name: "a plural spells the word of its singular", entry: writer, want: scoreUnmatchedActionWord},
+		{name: "a plural spells the word of its singular", entry: writer, want: -scoreUnmatchedActionWordPenalty},
 		{name: "a plural that asks for the list spells list", entry: reader, want: 0},
 	}
 	for _, tc := range cases {
