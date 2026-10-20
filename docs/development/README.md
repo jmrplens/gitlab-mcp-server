@@ -20,7 +20,7 @@ testing reference live in subfolders here.
 | Document                                                                  | Purpose                                                                                 |
 | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | [Development Guide](development.md)                                       | Setup, building, testing, and adding new tools                                          |
-| [Repository Map](repository-map.md)                                       | Every directory of the repository, and what each command and package does               |
+| [Repository Map](repository-map.md)                                       | The main directories, every command and shared package, and what each does              |
 | [Environment Variables and Flags](configuration.md)                       | Every setting, the code that reads it, its bounds and the register row behind it        |
 | [Internal Architecture](architecture.md)                                  | The packages, what each owns, the path a call takes, and the handler patterns           |
 | [HTTP Mode Invariants](http-invariants.md)                                | Admission, per-action write gating, routing, and how a call is bound to its credential  |

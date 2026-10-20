@@ -4,7 +4,7 @@
 
 > **Diátaxis type**: Reference · **Audience**: 🛠️ Contributors & maintainers
 
-This is where a new command, package or top-level directory is described. The domain packages under `internal/tools/` are listed by example rather than one by one, since each is named after the catalog group it serves. `CLAUDE.md` keeps a one-line version of the same tree for the assistants that load it at the start of every session, and [Command-Line Utilities](cmd-utilities.md) documents each command under `cmd/` in depth: its flags, what it writes and what each gate refuses.
+This is where a new command, package or top-level directory is described. The domain packages under `internal/tools/` are listed by example rather than one by one. `CLAUDE.md` keeps a one-line version of the same tree for the assistants that load it at the start of every session, and [Command-Line Utilities](cmd-utilities.md) documents each command under `cmd/` in depth: its flags, what it writes and what each gate refuses.
 
 ---
 
@@ -83,7 +83,7 @@ gitlab-mcp-server/
 │   │   ├── action_catalog.go    # Builds the canonical action catalog from domain ActionSpecs (pruneSchemaFieldsByTier)
 │   │   ├── actiongrants/        # The generated fine-grained table (`table_gen.go`, written by `cmd/gen_action_grants`, never edited) and its two readers, `Table()` and `Requirement(id)`; the catalog sets each action's `FineGrained` from it by canonical ID, and a test holds that the table compiles to data with no init work
 │   │   ├── catalog_filter.go    # FilterActionCatalog: read-only, token-scope and --exclude-tools filters, with what each removed
-│   │   ├── scope_filter.go      # MetaToolScopes and FilterScopeFilteredCatalog: the PAT scopes a catalog group needs, applied to the catalog before registration so one map reaches all three surfaces (see PAT scope filtering below)
+│   │   ├── scope_filter.go      # MetaToolScopes and FilterScopeFilteredCatalog: the PAT scopes a catalog group needs, applied to the catalog before registration so one map reaches all three surfaces (see http-invariants.md)
 │   │   ├── register.go          # RegisterAll(): projects individual tools from the canonical action catalog
 │   │   ├── register_meta.go     # RegisterMetaStandaloneTools: registers the standalone utility tools the catalog does not hold (`gitlab_discover_project` and the `gitlab_interactive_*` guided flows, from `StandaloneSurfaceToolSpecs`) beside the meta groups and beside the individual tools; the meta groups themselves are registered by `RegisterMetaCatalog` in `meta_catalog.go`
 │   │   ├── dynamic/             # Low-token dynamic find/execute surface over catalog routes
