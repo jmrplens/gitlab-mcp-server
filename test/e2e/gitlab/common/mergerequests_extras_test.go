@@ -5,7 +5,8 @@
 // the caller, the issues its description closes, and the pipeline it runs
 // or that its configuration refuses. Everything here is shared across the
 // surfaces, because none of it consumes the request: a pinned commit is
-// unpinned again, a to-do is marked done, a pipeline may be created twice.
+// unpinned again, a to-do is resolved before the next surface raises its
+// own, a pipeline may be created twice.
 
 package common
 
@@ -25,18 +26,22 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
 
-// The related issues wait: the closing reference in a description is read
-// by a background job, and the budget is the one the old suite gave it.
+// The related issues wait. GitLab derives the related issues from the
+// request's title, description, notes and commits when the list is read, so
+// the first poll answers; the poll stays as a guard, with the budget the old
+// suite gave it.
 const (
 	relatedIssuesInterval = 2 * time.Second
 	relatedIssuesWait     = 120 * time.Second
 )
 
-// The wait for a created to-do to be listed. It is short because the to-do
-// exists by the time create_todo answers and only its listing lags.
+// The wait for GitLab to resolve a surface's to-do after the description
+// edit. The resolution is a Sidekiq job, so the budget is one a loaded
+// instance meets, and the interval is short because the job usually runs
+// within a second of the edit.
 const (
-	todoListedInterval = 500 * time.Millisecond
-	todoListedWait     = 30 * time.Second
+	todoResolvedInterval = 500 * time.Millisecond
+	todoResolvedWait     = 90 * time.Second
 )
 
 // mrPipelineCIYAML runs one job for merge request pipelines only, so that
@@ -140,10 +145,19 @@ func assertCommitWithLinkKeys(e *harness.Env, pinned mrcontextcommits.CreateOutp
 // without consuming it: the unrelated commit is pinned as context, found in
 // the listing with its author's account and its rendered title, which the
 // pin's own answer does not carry, and unpinned; a to-do is raised for the
-// caller, a second one is refused as already pending and the first is
-// marked done through client-go so the next surface starts without one; and
-// the closing reference is written into the description, after which the
-// issue it names is waited for among the related issues.
+// caller and a second one is refused as already pending; and the description
+// is rewritten to a closing reference, after which the issue it names is
+// waited for among the related issues and the to-do for GitLab to resolve
+// it.
+//
+// The last wait is what keeps the surfaces apart. Editing the description
+// makes GitLab mark the caller's pending to-dos on the request done, in a
+// Sidekiq job that resolves whatever is pending when it runs rather than
+// what was pending when it was queued. Run late, one surface's job can take
+// the to-do the next surface has just raised, which is then never listed, or
+// let a second create_todo through where its refusal is expected. Each
+// surface therefore writes a description of its own, so that each edit
+// queues the job, and waits for that job before the next surface starts.
 //
 // Replaces: TestIndividual_MRExtras
 func TestMergeRequestExtras_ContextCommitsTodoAndRelatedIssues(t *testing.T) {
@@ -173,13 +187,18 @@ func TestMergeRequestExtras_ContextCommitsTodoAndRelatedIssues(t *testing.T) {
 		if todo.ID == 0 || todo.State != "pending" {
 			e.T.Fatalf("create_todo answered %+v, want a pending to-do with an ID", todo)
 		}
-		defer markTodoDone(e, todo.ID)
-		awaitTodoListed(e, todo.ID)
+		// The to-do is settled on every way out of the surface, the
+		// passing one included: after the description edit settleTodo waits
+		// for GitLab to resolve it, and before the edit it marks it done.
+		edited := false
+		defer func() { settleTodo(e, f.mr.project.ID, todo.ID, edited) }()
+		assertTodoPending(e, f.mr.project.ID, todo.ID)
 		refusal := harness.ExpectToolError(s, actionMergeRequestCreateTodo, params, "already exists")
 		assertMentions(e, "the refusal of a second to-do", refusal, "user.todo_list")
 
-		description := fmt.Sprintf("Closes #%d", f.issue.IID)
+		description := fmt.Sprintf("Closes #%d (edited on the %s surface)", f.issue.IID, surface)
 		updated := harness.Do[mergerequests.Output](s, actionMergeRequestUpdate, withParams(params, map[string]any{"description": description}))
+		edited = true
 		if updated.IID != f.mr.mr.IID || updated.Description != description {
 			e.T.Fatalf("merge_request update answered %+v, want request !%d describing %q", updated, f.mr.mr.IID, description)
 		}
@@ -219,38 +238,93 @@ func TestMergeRequestContextCommits_List_PagesOneCommitAtATime(t *testing.T) {
 	})
 }
 
-// awaitTodoListed waits for a to-do to appear among the caller's pending
-// ones, which is the state that makes GitLab refuse a second to-do for the
-// same merge request.
+// projectTodos lists the caller's to-dos of one project in one state through
+// client-go rather than the server, because only what the server dispatched
+// is credited as coverage and a precondition read is not a scenario. The
+// project narrows the list to the to-dos this scenario raised, so a page of
+// other ones cannot hide the one looked for.
+func projectTodos(e *harness.Env, projectID int64, state string) ([]*gl.Todo, error) {
+	todos, _, err := e.Client().GL().Todos.ListTodos(&gl.ListTodosOptions{
+		ProjectID: new(projectID),
+		State:     new(state),
+	}, gl.WithContext(e.Ctx))
+	return todos, err
+}
+
+// holdsTodo reports whether a to-do listing holds the one with the given ID.
+func holdsTodo(todos []*gl.Todo, todoID int64) bool {
+	return slices.ContainsFunc(todos, func(todo *gl.Todo) bool { return todo.ID == todoID })
+}
+
+// assertTodoPending reads the caller's pending to-dos of the project once and
+// stops the surface unless the one create_todo answered is among them, which
+// is the state that makes GitLab refuse a second to-do for the same request.
 //
-// The refusal is what the assertion after it is about, and it is not
-// immediate: GitLab answers create_todo before the to-do is listed, so under
-// load the second call can be served while the first is still invisible, and
-// what comes back is a created to-do rather than "already exists". That is
-// how this test failed on a loaded CI runner while passing on a developer
-// machine. The wait goes through client-go rather than the server, because
-// only what the server dispatched is credited as coverage and a wait is not
-// a scenario.
-func awaitTodoListed(e *harness.Env, todoID int64) {
+// One read is enough and a wait would only put the failure off: GitLab
+// writes the to-do in the request create_todo is answered by and lists it
+// from the same table, so a to-do missing here has already been resolved,
+// and a resolved to-do does not become pending again. What resolves it is a
+// job GitLab runs in the background for the caller on the request: the one a
+// description edit queues, which the scenario waits out on every surface, or
+// the refresh that a push to the source branch runs. The message names them,
+// so that a failure points at a job rather than at a slow list, and the
+// refusal assertion after it is not left to fail on a created to-do.
+func assertTodoPending(e *harness.Env, projectID, todoID int64) {
 	e.T.Helper()
-	err := harness.Poll(e.Ctx, todoListedInterval, todoListedWait, func() (bool, string, error) {
-		todos, _, listErr := e.Client().GL().Todos.ListTodos(&gl.ListTodosOptions{}, gl.WithContext(e.Ctx))
-		if listErr != nil {
-			return harness.WaitThrough("listing to-dos", listErr)
-		}
-		if slices.ContainsFunc(todos, func(todo *gl.Todo) bool { return todo.ID == todoID }) {
-			return true, "", nil
-		}
-		return false, fmt.Sprintf("to-do %d is not listed among the %d pending ones yet", todoID, len(todos)), nil
-	})
+	pending, err := projectTodos(e, projectID, todoStatePending)
 	if err != nil {
-		e.T.Fatalf("waiting for to-do %d to be listed: %v", todoID, err)
+		e.T.Fatalf("listing the pending to-dos of project %d: %v", projectID, err)
+	}
+	if !holdsTodo(pending, todoID) {
+		e.T.Fatalf("to-do %d is not among the %d pending to-do(s) of project %d although create_todo answered it pending: "+
+			"a background job resolved it, which GitLab runs for the caller on a request after a description edit or a push to its source branch",
+			todoID, len(pending), projectID)
 	}
 }
 
+// settleTodo leaves nothing of a surface's to-do for the next surface to
+// meet, on every way out of the surface, which is why the scenario defers it.
+// Once GitLab has answered the description edit, the job the edit queued may
+// still be waiting to run, and marking the to-do done would not stop that job
+// from resolving the to-do the next surface raises, so after the edit
+// settleTodo waits for the job to resolve this one. Before the edit, or when
+// the job has not run within the wait, it marks the to-do done, because a
+// to-do left pending would make the next surface's create answer the refusal
+// where it expects the to-do; a wait that runs out is reported with Errorf,
+// since a Fatalf would stop the deferred call before the mark.
+func settleTodo(e *harness.Env, projectID, todoID int64, edited bool) {
+	e.T.Helper()
+	if edited {
+		err := awaitTodoResolved(e, projectID, todoID)
+		if err == nil {
+			return
+		}
+		e.T.Errorf("waiting for GitLab to resolve to-do %d after the description edit: %v", todoID, err)
+	}
+	markTodoDone(e, todoID)
+}
+
+// awaitTodoResolved waits until GitLab has marked a surface's to-do done,
+// which it does in a Sidekiq job for the caller's pending to-dos on a request
+// whose description the caller edited. Seeing the surface's own to-do done is
+// the one observation that the job has run, so once this returns nil the job
+// can no longer resolve the to-do the next surface raises on the same
+// request.
+func awaitTodoResolved(e *harness.Env, projectID, todoID int64) error {
+	return harness.Poll(e.Ctx, todoResolvedInterval, todoResolvedWait, func() (bool, string, error) {
+		done, listErr := projectTodos(e, projectID, todoStateDone)
+		if listErr != nil {
+			return harness.WaitThrough("listing the done to-dos", listErr)
+		}
+		if holdsTodo(done, todoID) {
+			return true, "", nil
+		}
+		return false, fmt.Sprintf("to-do %d is not among the %d done to-do(s) of project %d yet", todoID, len(done), projectID), nil
+	})
+}
+
 // markTodoDone marks a to-do done through client-go, failing the test when
-// GitLab refuses: a to-do left pending would make the next surface's create
-// answer the refusal where it expects the to-do.
+// GitLab refuses.
 func markTodoDone(e *harness.Env, todoID int64) {
 	e.T.Helper()
 	if _, err := e.Client().GL().Todos.MarkTodoAsDone(todoID, gl.WithContext(e.Ctx)); err != nil {
