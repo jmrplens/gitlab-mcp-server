@@ -38,7 +38,11 @@ other retired name is a warning. The condition is what ignoring one would cost,
 not where it came from: the refusal reads the name and never its value, and a
 bare `EXCLUDE_TOOLS` refuses even though another tool in the same shell could
 own it, since the server cannot tell whose it is and guessing that it is
-somebody else's is the guess that serves what was removed.
+somebody else's is the guess that serves what was removed. Only the 28
+settings 3.0.0 read had an old spelling, and `config.hadOldSpelling` is that
+closed list: a setting added since, from the four authentication budgets of
+3.1.0 on, carries the prefix from its first day, needs no entry there, and
+its bare suffix is never reported.
 Only three groups stay bare, because prefixing them
 would be wrong rather than churn: `GITLAB_URL` and `GITLAB_TOKEN` (GitLab's own
 convention, and what a user already has in the environment, so they are never

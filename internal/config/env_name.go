@@ -29,7 +29,8 @@ const EnvPrefix = "GITLAB_MCP_"
 //
 // What is left of the old spellings is [RetiredEnvUses], which finds them in
 // the environment so that a deployment still setting one is told rather than
-// quietly reconfigured.
+// quietly reconfigured. Only the settings 3.0.0 read had one
+// ([hadOldSpelling]); a setting added since carries the prefix from the start.
 //
 // Every variable this server defines is on this list; the rule has no
 // exception for a name that already began with GITLAB_. Two names stay bare
@@ -51,6 +52,49 @@ var prefixedNames = []string{
 	"CLIENT_COMPAT",
 	"DISCOVERY_RATE_LIMIT_BURST",
 	"DISCOVERY_RATE_LIMIT_RPS",
+	"DRAIN_DELAY",
+	"EMBEDDED_RESOURCES",
+	"EXCLUDE_TOOLS",
+	"IGNORE_SCOPES",
+	"LOG_LEVEL",
+	"MAX_HTTP_CLIENTS",
+	"META_PARAM_SCHEMA",
+	"OAUTH_CACHE_TTL",
+	"OAUTH_CLIENT_UID",
+	"POOL_IDLE_TIMEOUT",
+	"PPROF_ADDR",
+	"PUBLIC_URL",
+	"RATE_LIMIT_BURST",
+	"RATE_LIMIT_RPS",
+	"READ_ONLY",
+	"SAFE_MODE",
+	"SESSION_REVALIDATE_INTERVAL",
+	"SESSION_TIMEOUT",
+	"SKIP_TLS_VERIFY",
+	"TIER",
+	"TOOL_SURFACE",
+	"TRUSTED_ORIGINS",
+	"UPLOAD_MAX_FILE_SIZE",
+	"YOLO_MODE",
+}
+
+// hadOldSpelling are the settings that answered to another name as well until
+// 3.1.0 removed it: the ones 3.0.0 read, and the only ones [RetiredEnvUses]
+// looks for.
+//
+// The list is closed, and spelled out rather than derived from
+// [prefixedNames] for that reason. A setting added since was read under its
+// prefixed name from its first day, so its bare suffix is somebody else's
+// variable if it is anybody's, and reporting it as "no longer read (removed in
+// 3.1.0)" would tell an operator that a name another tool owns was once this
+// server's, and send them renaming it. The four authentication budgets are the
+// first such settings: they arrived in 3.1.0 after its removal of the old
+// spellings had landed. A setting added after them needs nothing here.
+var hadOldSpelling = []string{
+	"ACTION_TIMEOUT",
+	"AUTH_MODE",
+	"CAPABILITY_SURFACE",
+	"CLIENT_COMPAT",
 	"DRAIN_DELAY",
 	"EMBEDDED_RESOURCES",
 	"EXCLUDE_TOOLS",
@@ -136,7 +180,7 @@ var protectionNames = map[string]struct{}{
 // report only what had been read, because reading was still happening. Nothing
 // reads these now, so the only moment they can be noticed is this one.
 func RetiredEnvUses() (refuse, warn []string) {
-	for _, name := range prefixedNames {
+	for _, name := range hadOldSpelling {
 		retired := RetiredEnvName(name)
 		if _, set := os.LookupEnv(retired); !set {
 			continue

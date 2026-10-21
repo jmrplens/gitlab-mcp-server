@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -198,6 +199,24 @@ func TestRetiredEnvUses_SplitsByWhatIgnoringOneWouldCost(t *testing.T) {
 			env:        map[string]string{EnvPrefix + "READ_ONLY": "true"},
 			wantRefuse: 0,
 		},
+		{
+			// The authentication budgets became settings in 3.1.0, after the
+			// release's own removal of the old spellings had landed, so they
+			// were read under the prefixed name from their first day.
+			name: "the authentication budgets were born with the prefix and have no old spelling",
+			env: map[string]string{
+				"AUTH_FAILURE_LIMIT": "5", "AUTH_FAILURE_WINDOW": "1m",
+				"AUTH_DISTINCT_TOKEN_LIMIT": "5", "AUTH_DISTINCT_TOKEN_WINDOW": "1m",
+			},
+			wantWarn: 0,
+		},
+		{
+			// And so were the discovery documents' two, in 3.4.0: a setting
+			// added later needs nothing for its bare suffix to go unreported.
+			name:     "a setting added after the removal has no old spelling",
+			env:      map[string]string{"DISCOVERY_RATE_LIMIT_RPS": "5", "DISCOVERY_RATE_LIMIT_BURST": "50"},
+			wantWarn: 0,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, name := range PrefixedEnvNames() {
@@ -220,6 +239,27 @@ func TestRetiredEnvUses_SplitsByWhatIgnoringOneWouldCost(t *testing.T) {
 				if !strings.Contains(reported, want) {
 					t.Errorf("the report %q does not mention %q", reported, want)
 				}
+			}
+		})
+	}
+}
+
+// TestHadOldSpelling_HoldsTheSettings300ReadAndNoOthers pins the settings an
+// old spelling is looked for under to the twenty-eight 3.0.0 read, every one
+// of them still a setting this server defines. The list is closed: no setting
+// added since ever answered to another name, so a twenty-ninth entry would
+// report a name nobody's deployment was ever configured with, and a setting
+// dropped from the server would leave an entry telling an operator to rename
+// a variable into one nothing reads.
+func TestHadOldSpelling_HoldsTheSettings300ReadAndNoOthers(t *testing.T) {
+	if len(hadOldSpelling) != 28 {
+		t.Errorf("hadOldSpelling holds %d settings, want the 28 that 3.0.0 read", len(hadOldSpelling))
+	}
+	names := PrefixedEnvNames()
+	for _, name := range hadOldSpelling {
+		t.Run(name, func(t *testing.T) {
+			if !slices.Contains(names, name) {
+				t.Errorf("%s has an old spelling looked for, but it is not a setting this server defines", name)
 			}
 		})
 	}
