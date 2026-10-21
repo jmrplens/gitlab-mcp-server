@@ -2,6 +2,7 @@ package goprogram
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -125,6 +126,25 @@ func LoadWith(dir string, patterns []string, opts Options) ([]*packages.Package,
 		}
 	}
 	return loaded, nil
+}
+
+// LoadRooted is [LoadWith] for a gate that names what it finds below the root
+// it loads: it returns that root made absolute beside the packages.
+//
+// The root is made absolute before anything is loaded, so a run whose working
+// directory is gone stops on that error instead of naming files against
+// wherever the process happens to be. The error is the one [filepath.Abs]
+// gave, unwrapped, since it already says what could not be resolved.
+func LoadRooted(dir string, patterns []string, opts Options) (string, []*packages.Package, error) {
+	root, err := filepath.Abs(dir)
+	if err != nil {
+		return "", nil, err
+	}
+	loaded, err := LoadWith(dir, patterns, opts)
+	if err != nil {
+		return "", nil, err
+	}
+	return root, loaded, nil
 }
 
 // packageLoadError turns a package's load errors into one reportable error.

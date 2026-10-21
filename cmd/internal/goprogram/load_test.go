@@ -275,6 +275,64 @@ func declaresConstant(loaded []*packages.Package, name string) bool {
 	return false
 }
 
+// TestLoadRooted_ARelativeDir_ReturnsTheRootItResolvesTo verifies a load made
+// from a relative directory hands back the absolute root a gate names files
+// against, beside the packages LoadWith would have returned.
+func TestLoadRooted_ARelativeDir_ReturnsTheRootItResolvesTo(t *testing.T) {
+	repo := repoRoot(t)
+	t.Chdir(repo)
+	root, loaded, err := LoadRooted(".", []string{selfPattern}, Options{})
+	if err != nil {
+		t.Fatalf("LoadRooted() error = %v, want nil", err)
+	}
+	if root != repo {
+		t.Errorf("root = %q, want the absolute %q", root, repo)
+	}
+	if !loadedFile(loaded, "load.go") {
+		t.Error("LoadRooted() loaded no package holding load.go")
+	}
+}
+
+// TestLoadRooted_ALoadThatFails_ReturnsNoRoot verifies a refusal of the load
+// is the error the caller gets, with neither a root nor packages beside it.
+func TestLoadRooted_ALoadThatFails_ReturnsNoRoot(t *testing.T) {
+	root, loaded, err := LoadRooted(repoRoot(t), []string{"./docs/..."}, Options{})
+	if err == nil || !strings.Contains(err.Error(), "no packages matched") {
+		t.Fatalf("LoadRooted() error = %v, want the empty-match refusal", err)
+	}
+	if root != "" || loaded != nil {
+		t.Errorf("LoadRooted() = %q, %d package(s) with an error, want neither", root, len(loaded))
+	}
+}
+
+// TestLoadRooted_RootThatCannotBeResolved_FailsRatherThanLoading verifies a
+// run whose working directory is gone stops on that error instead of naming
+// files against wherever the process happens to be. Only Linux can be made to
+// fail that way, so the other platforms skip.
+func TestLoadRooted_RootThatCannotBeResolved_FailsRatherThanLoading(t *testing.T) {
+	gone := filepath.Join(t.TempDir(), "gone")
+	if err := os.Mkdir(gone, 0o750); err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	t.Chdir(gone)
+	if err := os.Remove(gone); err != nil {
+		t.Skipf("this platform will not remove the working directory, so filepath.Abs cannot be made to fail here: %v", err)
+	}
+	if _, err := os.Getwd(); err == nil {
+		t.Skip("this platform's getcwd still answers after the working directory is removed, so filepath.Abs cannot fail here")
+	}
+	root, loaded, err := LoadRooted(".", []string{"./..."}, Options{})
+	if err == nil {
+		t.Fatalf("LoadRooted() error = nil, want the unresolved root; root = %q, %d package(s)", root, len(loaded))
+	}
+	if strings.Contains(err.Error(), "load packages") {
+		t.Errorf("LoadRooted() error = %q, want the root's own error rather than a load that was attempted", err)
+	}
+	if root != "" || loaded != nil {
+		t.Errorf("LoadRooted() = %q, %d package(s) with an error, want neither", root, len(loaded))
+	}
+}
+
 // TestPackageLoadError_CleanPackage_ReturnsNil verifies the happy path of the
 // per-package check, which is what lets a clean package through untouched.
 func TestPackageLoadError_CleanPackage_ReturnsNil(t *testing.T) {
