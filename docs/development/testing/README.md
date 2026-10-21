@@ -600,8 +600,10 @@ property the constant has to hold rather than repeating its value.
 
 `cmd/internal/apidocs` is the same lesson at one tenth the size, and worth
 naming because its ten not-covered mutants looked like nine artifacts and one
-more. Six sit in a `switch { case … }` classifying an HTTP status, and all six
-die when applied by hand. Four sit in the fetch-tuning constant block, three of
+more. Six sat in a `switch { case … }` classifying an HTTP status, and all six
+died when applied by hand; that classification is a chain of ifs now, in the
+retry loop and `retriedStatus`, and gremlins measures and kills each of them
+itself. Four sit in the fetch-tuning constant block, three of
 which die too. The tenth is `baseSpacing = 500 * time.Millisecond` mutated to
 `500 / time.Millisecond`, which is zero, compiles, and survived: the only test
 that read it expected `baseSpacing`, so the pause keeping a 250-page sweep under

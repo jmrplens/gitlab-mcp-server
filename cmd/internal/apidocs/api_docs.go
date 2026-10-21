@@ -229,20 +229,23 @@ func (f *Fetcher) download(ctx context.Context, area string) ([]byte, error) {
 func (f *Fetcher) request(ctx context.Context, label, url string) ([]byte, error) {
 	progressf("apidocs: fetching %s", label)
 	var lastErr error
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
+	// The loop is left through the break after the last attempt, never by
+	// its own condition, which an attempt counted past maxAttempts would be.
+	for attempt := 1; ; attempt++ {
 		body, status, retryAfter, err := fetchOnce(ctx, f.client, url)
-		switch {
-		case err != nil:
-			lastErr = err
-		case status == http.StatusTooManyRequests || status >= http.StatusInternalServerError:
+		lastErr = err
+		if err == nil {
+			if status == http.StatusOK {
+				// Gentle spacing so a full sweep does not trip the rate
+				// limiter. A cancel here is harmless: the body is already
+				// in hand.
+				_ = sleepCtx(ctx, f.spacing)
+				return body, nil
+			}
 			lastErr = fmt.Errorf("HTTP %d for %s", status, url)
-		case status != http.StatusOK:
-			return nil, fmt.Errorf("HTTP %d for %s", status, url)
-		default:
-			// Gentle spacing so a full sweep does not trip the rate limiter.
-			// A cancel here is harmless — the body is already in hand.
-			_ = sleepCtx(ctx, f.spacing)
-			return body, nil
+			if !retriedStatus(status) {
+				return nil, lastErr
+			}
 		}
 		if attempt == maxAttempts {
 			break
@@ -254,6 +257,20 @@ func (f *Fetcher) request(ctx context.Context, label, url string) ([]byte, error
 		}
 	}
 	return nil, fmt.Errorf("apidocs: giving up on %s after %d attempts: %w", label, maxAttempts, lastErr)
+}
+
+// retriedStatus reports whether a status is worth asking again for: a rate
+// limit, or a server error, either of which the next attempt may not meet.
+// Any other status but 200 is GitLab's answer and is returned at once.
+//
+// It is a chain of ifs rather than a switch with no tag because gremlins
+// cannot see into the expressions of a case, so a switch here left the
+// classification unmeasured.
+func retriedStatus(status int) bool {
+	if status == http.StatusTooManyRequests {
+		return true
+	}
+	return status >= http.StatusInternalServerError
 }
 
 // backoffDelay computes the wait before the next attempt. A server Retry-After
