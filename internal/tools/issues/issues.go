@@ -51,7 +51,9 @@ type CreateInput struct {
 	DiscussionToResolve                string `json:"discussion_to_resolve,omitempty" jsonschema:"Discussion ID to mark as resolved by this issue"`
 }
 
-// Output represents a GitLab issue.
+// BasicOutput is an issue as API::Entities::IssueBasic renders it, which is
+// what a search hit and a merge request's closing and related issues carry.
+// [Output] embeds it and adds what only the issues API's own routes send.
 type BasicOutput struct {
 	toolutil.HintableOutput
 	ID int64 `json:"id"`
@@ -268,9 +270,10 @@ type ListGroupOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// ToOutput converts a GitLab API [gl.Issue] to the MCP tool output
-// format, extracting author, milestone, assignees, and formatting timestamps
-// as RFC 3339 strings. Nil labels are normalized to an empty slice.
+// ToBasicOutput converts a GitLab API [gl.Issue] to [BasicOutput], pairing
+// what the SDK decoded with the extra fields read off the captured response.
+// It extracts author, milestone and assignees, formats timestamps as RFC 3339
+// strings, and normalizes nil labels and assignees to empty slices.
 func ToBasicOutput(issue *gl.Issue, extra toolutil.IssueBasicExtra) BasicOutput {
 	out := BasicOutput{
 		ID:          issue.ID,

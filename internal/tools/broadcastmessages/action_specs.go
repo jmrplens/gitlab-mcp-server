@@ -7,6 +7,7 @@
 // aggregated them, so they reached no surface: the served metadata had drifted
 // from this copy word for word, and a maintainer correcting the text here
 // changed nothing a model reads.
+
 package broadcastmessages
 
 import (

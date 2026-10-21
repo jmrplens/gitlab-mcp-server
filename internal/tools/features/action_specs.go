@@ -6,6 +6,7 @@
 //
 // This package used to declare a full set of specs of its own that nothing
 // ever aggregated, so they reached no surface and no validation.
+
 package features
 
 import (

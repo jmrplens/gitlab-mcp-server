@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 )
 
+// GeneratedFileMode and generatedDirMode are the modes a generator creates a
+// missing artifact and its missing parent directory with.
 const (
 	// GeneratedFileMode is the mode a generated artifact is created with. The
 	// copies this replaced disagreed, 0o644 in one and 0o600 in seven, and
