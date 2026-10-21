@@ -535,8 +535,6 @@ func (g *mcpServerGate) withIdentity(ctx context.Context, r *http.Request) conte
 	})
 }
 
-// resolve returns the pool server for the request, or the failure that stopped
-// it. Exactly one of the two return values is non-nil.
 // mcpSessionIDHeader is the streamable HTTP session header. The SDK keeps its
 // own copy unexported, so the name is restated here rather than reached for.
 const mcpSessionIDHeader = "Mcp-Session-Id"
@@ -602,6 +600,8 @@ func sessionOwnershipFailure() *gateFailure {
 	}
 }
 
+// resolve returns the pool server for the request, or the failure that stopped
+// it. Exactly one of the two return values is non-nil.
 func (g *mcpServerGate) resolve(r *http.Request) (*serverpool.Entry, *gateFailure) {
 	ip := clientIP(r, g.trustedProxyHeader, g.trustedProxies)
 	source := transportSource(r)
