@@ -232,17 +232,23 @@ func pinnedTokens(text string, values []string, ids *actionids.IDs) []bool {
 	renamed.WriteString(text[written:])
 	read := renamed.String()
 
+	// Every position is asked whether an occurrence starts there, rather than
+	// each occurrence being looked for after the last one. The search form
+	// carries its own progress, an index the next search starts from, and an
+	// index read wrong never moves it: mutation testing turned both its test
+	// for the end and its step into loops that never ended, which a test can
+	// only meet as a timeout. A range over the positions ends whatever its body
+	// does, and finds every occurrence the search found, overlapping ones
+	// included.
 	var inside []bool
 	for _, value := range values {
 		if !strings.Contains(value, " ") {
 			continue
 		}
-		for from := 0; ; {
-			at := strings.Index(read[from:], value)
-			if at < 0 {
-				break
+		for start := range len(read) {
+			if !strings.HasPrefix(read[start:], value) {
+				continue
 			}
-			start := from + at
 			if inside == nil {
 				inside = make([]bool, len(tokens))
 			}
@@ -251,7 +257,6 @@ func pinnedTokens(text string, values []string, ids *actionids.IDs) []bool {
 					inside[index] = true
 				}
 			}
-			from = start + 1
 		}
 	}
 	return inside

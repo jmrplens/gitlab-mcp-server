@@ -297,8 +297,10 @@ func TestPinnedTokens_TheHintMustReadAsASentence(t *testing.T) {
 
 // TestPinnedTokens_SaysWhichNamesLieInsideAHint holds the positions the
 // pinning rule answers with, at both edges of a hint, for a hint the literal
-// holds twice, and for a name the catalog does not publish, which the
-// literal is read with unrenamed as the hint is.
+// holds twice, for two occurrences of a hint that overlap, where the name they
+// share and the name only the second holds are both inside one, and for a
+// name the catalog does not publish, which the literal is read with
+// unrenamed as the hint is.
 func TestPinnedTokens_SaysWhichNamesLieInsideAHint(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -317,6 +319,12 @@ func TestPinnedTokens_SaysWhichNamesLieInsideAHint(t *testing.T) {
 			text:   "gitlab_fetch_demo reads one; gitlab_fetch_demo reads one",
 			values: []string{"demo.get reads one"},
 			want:   []bool{true, true},
+		},
+		{
+			name:   "two occurrences of a hint that overlap",
+			text:   "gitlab_fetch_demo then gitlab_fetch_demo then gitlab_fetch_demo",
+			values: []string{"demo.get then demo.get"},
+			want:   []bool{true, true, true},
 		},
 		{
 			name:   "a name the catalog does not publish",
