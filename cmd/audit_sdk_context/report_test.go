@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcegate"
 )
 
 // sampleFinding is one finding to render, with every field distinct so a
@@ -38,7 +40,7 @@ func TestReport_Write_RendersEverySection(t *testing.T) {
 		Unjudged: []string{"internal/tools/x/hidden.go"},
 	}
 	var out strings.Builder
-	report.write(&out, true)
+	report.Write(&out, true)
 	want := "internal/tools/x/a.go:12: client.GL().Version.GetVersion " + reasonMissing + " (in Get)\n" +
 		"internal/tools/x/b.go:30: client.GL().Version.GetVersion " + reasonMissing + " (in Keep), excused by its declaration\n" +
 		"internal/tools/x/c.go:8: client.GL().Version.GetVersion " + reasonMissing + " (in Hold), excused by its declaration\n" +
@@ -50,7 +52,7 @@ func TestReport_Write_RendersEverySection(t *testing.T) {
 		"(3 clean by forwarding to their own caller, 5 by rebinding after they were built); " +
 		"1 without the caller's context, 2 excused by a declaration\n"
 	if out.String() != want {
-		t.Fatalf("write =\n%s\nwant\n%s", out.String(), want)
+		t.Fatalf("Write =\n%s\nwant\n%s", out.String(), want)
 	}
 }
 
@@ -63,36 +65,12 @@ func TestReport_Write_QuietRunHidesTheExcused(t *testing.T) {
 		Excused: []Finding{sampleFinding("internal/tools/x/b.go", 30, "Keep")},
 	}
 	var out strings.Builder
-	report.write(&out, false)
+	report.Write(&out, false)
 	want := "audit_sdk_context: 6 calls building or sending a request in 4 packages " +
 		"(0 clean by forwarding to their own caller, 0 by rebinding after they were built); " +
 		"0 without the caller's context, 1 excused by a declaration\n"
 	if out.String() != want {
-		t.Fatalf("write = %q, want the summary line alone, %q", out.String(), want)
-	}
-}
-
-// TestReport_Ok_FailsOnEachKindOfFinding: every section but the excused calls
-// fails the gate on its own.
-func TestReport_Ok_FailsOnEachKindOfFinding(t *testing.T) {
-	tests := []struct {
-		name   string
-		report Report
-		want   bool
-	}{
-		{"nothing", Report{}, true},
-		{"only excused", Report{Excused: []Finding{{}}}, true},
-		{"a finding", Report{Findings: []Finding{{}}}, false},
-		{"a stale declaration", Report{Stale: []string{"k"}}, false},
-		{"an unknown category", Report{Unknown: []string{"k"}}, false},
-		{"an unjudged file", Report{Unjudged: []string{"f"}}, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.report.ok(); got != tt.want {
-				t.Fatalf("ok() = %v, want %v", got, tt.want)
-			}
-		})
+		t.Fatalf("Write = %q, want the summary line alone, %q", out.String(), want)
 	}
 }
 
@@ -117,14 +95,14 @@ func TestBuildReport_HoldsTheScanAgainstTheTable(t *testing.T) {
 		sampleFinding("internal/tools/x/c.go", 1, "Keep"),
 	}
 	found.unjudged = []string{"z.go", "a.go", "m.go", "b.go", "y.go"}
-	report := buildReport(found, map[string]declaration{
-		"internal/tools/x:Keep":   {category: categoryOutlivesTheCall, reason: "r"},
-		"internal/tools/x:Gone":   {category: categoryOutlivesTheCall, reason: "r"},
-		"internal/tools/y:Absent": {category: categoryOutlivesTheCall, reason: "r"},
-		"internal/tools/x:Later":  {category: "made-up", reason: "r"},
-		"internal/tools/q:A":      {category: "invented", reason: "r"},
-		"internal/tools/q:B":      {category: "", reason: "r"},
-		"internal/tools/q:C":      {category: "also-invented", reason: "r"},
+	report := buildReport(found, map[string]sourcegate.Declaration{
+		"internal/tools/x:Keep":   {Category: categoryOutlivesTheCall, Reason: "r"},
+		"internal/tools/x:Gone":   {Category: categoryOutlivesTheCall, Reason: "r"},
+		"internal/tools/y:Absent": {Category: categoryOutlivesTheCall, Reason: "r"},
+		"internal/tools/x:Later":  {Category: "made-up", Reason: "r"},
+		"internal/tools/q:A":      {Category: "invented", Reason: "r"},
+		"internal/tools/q:B":      {Category: "", Reason: "r"},
+		"internal/tools/q:C":      {Category: "also-invented", Reason: "r"},
 	})
 	var order []string
 	for _, finding := range report.Findings {
@@ -164,9 +142,9 @@ func Detached(c *gl.Client) {
 func Bound(ctx context.Context, c *gl.Client) {
 	_, _, _ = c.Version.GetVersion(gl.WithContext(ctx))
 }
-`}, map[string]declaration{
-		fixtureDir + ":Detached": {category: categoryOutlivesTheCall, reason: "the fixture's request outlives its call"},
-		fixtureDir + ":Bound":    {category: categoryOutlivesTheCall, reason: "passes the context, so this excuses nothing"},
+`}, map[string]sourcegate.Declaration{
+		fixtureDir + ":Detached": {Category: categoryOutlivesTheCall, Reason: "the fixture's request outlives its call"},
+		fixtureDir + ":Bound":    {Category: categoryOutlivesTheCall, Reason: "passes the context, so this excuses nothing"},
 	})
 	if len(report.Findings) != 0 || len(report.Excused) != 1 || report.Excused[0].Func != "Detached" {
 		t.Fatalf("findings = %+v, excused = %+v, want the one call excused", report.Findings, report.Excused)

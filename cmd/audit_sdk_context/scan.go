@@ -2,15 +2,14 @@ package main
 
 import (
 	"go/ast"
-	"go/parser"
-	"go/token"
 	"go/types"
-	"path/filepath"
+	"slices"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcegate"
 )
 
 // clientGoPath is the import path of the SDK whose request options this gate
@@ -129,7 +128,7 @@ func newScanner(root string, overlay map[string][]byte) *scanner {
 // observe judges every call in every package of one load.
 func (s *scanner) observe(loaded []*packages.Package) {
 	for _, pkg := range loaded {
-		name := trimModulePath(pkg.PkgPath)
+		name := goprogram.TrimModulePath(pkg.PkgPath)
 		s.packages[name] = struct{}{}
 		s.noteUnjudged(pkg)
 		facts := collectFacts(pkg)
@@ -139,39 +138,26 @@ func (s *scanner) observe(loaded []*packages.Package) {
 	}
 }
 
-// noteUnjudged records the files this load left out that import client-go.
+// noteUnjudged records the files this load left out that import client-go, or
+// that cannot be read: whether a hidden file could hold a call this gate would
+// judge is all the question needs, and [goprogram.FilesImporting] answers it
+// from the imports alone.
 //
-// Only the imports are read, which is all the question needs: whether a
-// hidden file could hold a call this gate would judge. A file that cannot be
-// read is recorded too, since nothing can be said about what it calls. A test
-// file is passed over whatever its constraints say, because the gate reads no
-// test file under any constraint: naming one here would report the stated
-// blind spot as though a build tag had caused it.
+// A test file is passed over before anything reads it, whatever its
+// constraints say, because the gate reads no test file under any constraint:
+// naming one here would report the stated blind spot as though a build tag had
+// caused it.
 func (s *scanner) noteUnjudged(pkg *packages.Package) {
-	for _, path := range pkg.IgnoredFiles {
-		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-			continue
-		}
-		var src any
-		if content, overlaid := s.overlay[path]; overlaid {
-			src = content
-		}
-		file, err := parser.ParseFile(token.NewFileSet(), path, src, parser.ImportsOnly)
-		if err == nil && !importsClientGo(file) {
-			continue
-		}
-		s.unjudged = append(s.unjudged, relativePath(path, s.root))
+	hidden := slices.DeleteFunc(goprogram.IgnoredGoFiles(pkg), isTestFile)
+	for _, path := range goprogram.FilesImporting(hidden, clientGoPath, s.overlay) {
+		s.unjudged = append(s.unjudged, goprogram.RelativePath(path, s.root))
 	}
 }
 
-// importsClientGo reports whether a file imports the SDK, under any name.
-func importsClientGo(file *ast.File) bool {
-	for _, spec := range file.Imports {
-		if strings.Trim(spec.Path.Value, "\"`") == clientGoPath {
-			return true
-		}
-	}
-	return false
+// isTestFile reports whether a file is a test file by its name, which is how
+// the go tool decides it.
+func isTestFile(path string) bool {
+	return strings.HasSuffix(path, "_test.go")
 }
 
 // observeFile judges every call in one file, each against the declaration it
@@ -180,7 +166,7 @@ func (s *scanner) observeFile(pkg *packages.Package, pkgName string, facts *fact
 	for _, decl := range file.Decls {
 		switch d := decl.(type) {
 		case *ast.FuncDecl:
-			s.observeNode(pkg, pkgName, facts, d, funcDeclName(d))
+			s.observeNode(pkg, pkgName, facts, d, sourcegate.FuncDeclName(d))
 		case *ast.GenDecl:
 			for _, spec := range d.Specs {
 				if value, isValue := spec.(*ast.ValueSpec); isValue {
@@ -206,7 +192,7 @@ func (s *scanner) observeNode(pkg *packages.Package, pkgName string, facts *fact
 		at := pkg.Fset.Position(call.Pos())
 		s.findings = append(s.findings, Finding{
 			Package: pkgName,
-			File:    relativePath(at.Filename, s.root),
+			File:    goprogram.RelativePath(at.Filename, s.root),
 			Line:    at.Line,
 			Func:    enclosing,
 			Callee:  types.ExprString(call.Fun),
@@ -403,7 +389,7 @@ func collectFacts(pkg *packages.Package) *facts {
 			case *ast.AssignStmt:
 				f.noteAssignment(info, n.Lhs, n.Rhs)
 			case *ast.ValueSpec:
-				f.noteAssignment(info, identsAsExprs(n.Names), n.Values)
+				f.noteAssignment(info, sourcegate.IdentsAsExprs(n.Names), n.Values)
 			case *ast.CallExpr:
 				f.noteReboundArguments(info, n)
 			}
@@ -654,53 +640,4 @@ func objectOf(info *types.Info, expr ast.Expr) types.Object {
 		return obj
 	}
 	return info.Uses[ident]
-}
-
-// identsAsExprs widens a name list so a declaration and an assignment are
-// read by one function.
-func identsAsExprs(names []*ast.Ident) []ast.Expr {
-	exprs := make([]ast.Expr, len(names))
-	for i, name := range names {
-		exprs[i] = name
-	}
-	return exprs
-}
-
-// funcDeclName spells a function the way its file does: the bare name, or
-// `Type.Method` with the receiver's type stripped of its pointer and of its
-// type parameters. A receiver that is not a type name once those are gone
-// does not type-check, and is spelled by the method's name alone rather than
-// guessed at.
-func funcDeclName(fn *ast.FuncDecl) string {
-	if fn.Recv == nil {
-		return fn.Name.Name
-	}
-	receiver := ast.Unparen(fn.Recv.List[0].Type)
-	if star, isPointer := receiver.(*ast.StarExpr); isPointer {
-		receiver = ast.Unparen(star.X)
-	}
-	switch generic := receiver.(type) {
-	case *ast.IndexExpr:
-		receiver = generic.X
-	case *ast.IndexListExpr:
-		receiver = generic.X
-	}
-	if ident, isIdent := receiver.(*ast.Ident); isIdent {
-		return ident.Name + "." + fn.Name.Name
-	}
-	return fn.Name.Name
-}
-
-// trimModulePath names a package the way the repository does.
-func trimModulePath(pkgPath string) string {
-	return strings.TrimPrefix(strings.TrimPrefix(pkgPath, goprogram.ModulePath), "/")
-}
-
-// relativePath renders a file below the repository root, so a finding reads
-// the same wherever the audit was run from.
-func relativePath(path, root string) string {
-	if rel, err := filepath.Rel(root, path); err == nil && !strings.HasPrefix(rel, "..") {
-		return filepath.ToSlash(rel)
-	}
-	return filepath.ToSlash(path)
 }

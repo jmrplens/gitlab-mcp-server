@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"golang.org/x/tools/go/packages"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcegate"
 )
 
 // fixtureDir is the directory the in-memory fixture package pretends to live
@@ -71,7 +73,7 @@ func fixtureOverlay(root string, files map[string]string) map[string][]byte {
 
 // auditFixture runs the whole audit over the named fixture files, held to the
 // given declarations, and returns the report.
-func auditFixture(t *testing.T, files map[string]string, declared map[string]declaration) Report {
+func auditFixture(t *testing.T, files map[string]string, declared map[string]sourcegate.Declaration) Report {
 	t.Helper()
 	root := repoRoot(t)
 	report, err := audit(auditConfig{
@@ -730,19 +732,6 @@ var fetch, other = func(c *gl.Client) { _, _, _ = c.Version.GetVersion() }, 1
 	}
 }
 
-// TestFuncDeclName_AReceiverThatIsNoTypeName_KeepsTheMethodName: a receiver
-// written as a qualified name does not type-check, so no load hands one over,
-// and the name is the method's own rather than a guess at the type.
-func TestFuncDeclName_AReceiverThatIsNoTypeName_KeepsTheMethodName(t *testing.T) {
-	fn := &ast.FuncDecl{
-		Name: ast.NewIdent("Method"),
-		Recv: &ast.FieldList{List: []*ast.Field{{Type: &ast.SelectorExpr{X: ast.NewIdent("pkg"), Sel: ast.NewIdent("T")}}}},
-	}
-	if got := funcDeclName(fn); got != "Method" {
-		t.Fatalf("funcDeclName = %q, want Method", got)
-	}
-}
-
 // TestScan_BuildConstrainedFiles holds the one blind spot a load has that the
 // gate can see from outside: a file its build constraints left out. One that
 // imports client-go is reported as unjudged, since every call in it went
@@ -781,8 +770,8 @@ var _ = context.Background
 	if !slices.Equal(report.Unjudged, want) {
 		t.Fatalf("unjudged = %v, want %v", report.Unjudged, want)
 	}
-	if report.ok() {
-		t.Fatal("ok() = true, want an unjudged file to fail the gate")
+	if report.OK() {
+		t.Fatal("OK() = true, want an unjudged file to fail the gate")
 	}
 }
 
@@ -800,49 +789,6 @@ func TestNoteUnjudged_AFileThatCannotBeRead_IsUnjudged(t *testing.T) {
 	}})
 	if want := []string{"gone.go"}; !slices.Equal(found.unjudged, want) {
 		t.Fatalf("unjudged = %v, want %v", found.unjudged, want)
-	}
-}
-
-// TestImportsClientGo_ReadsThePathNotTheName: the import is recognized by its
-// path under any name, a raw string included, and a path that only begins
-// like it is another package.
-func TestImportsClientGo_ReadsThePathNotTheName(t *testing.T) {
-	tests := []struct {
-		name string
-		path string
-		want bool
-	}{
-		{"quoted", `"gitlab.com/gitlab-org/api/client-go/v3"`, true},
-		{"raw", "`gitlab.com/gitlab-org/api/client-go/v3`", true},
-		{"a subpackage", `"gitlab.com/gitlab-org/api/client-go/v3/testing"`, false},
-		{"something else", `"context"`, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			file := &ast.File{Imports: []*ast.ImportSpec{{Path: &ast.BasicLit{Kind: token.STRING, Value: tt.path}}}}
-			if got := importsClientGo(file); got != tt.want {
-				t.Fatalf("importsClientGo(%s) = %v, want %v", tt.path, got, tt.want)
-			}
-		})
-	}
-}
-
-// TestRelativePath_OutsideTheRoot_KeepsTheAbsolutePath: a file the root does
-// not contain is named in full rather than climbed to.
-func TestRelativePath_OutsideTheRoot_KeepsTheAbsolutePath(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "repo")
-	outside := filepath.Join(filepath.Dir(root), "elsewhere", "file.go")
-	if got := relativePath(outside, root); got != filepath.ToSlash(outside) {
-		t.Fatalf("relativePath = %q, want the absolute path %q", got, filepath.ToSlash(outside))
-	}
-	inside := filepath.Join(root, "internal", "x.go")
-	if got := relativePath(inside, root); got != "internal/x.go" {
-		t.Fatalf("relativePath = %q, want internal/x.go", got)
-	}
-	// A path that cannot be made relative to the root at all, because one of
-	// the two is relative and the other is not, is kept as it was given.
-	if got := relativePath(filepath.Join("already", "relative.go"), root); got != "already/relative.go" {
-		t.Fatalf("relativePath = %q, want already/relative.go", got)
 	}
 }
 

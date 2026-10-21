@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcegate"
 	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
@@ -305,10 +306,10 @@ func writeTree(t *testing.T, files map[string]string) string {
 // TestMain_ExitsWithTheCodeRunMainDecided: main hands runMain's code to the
 // process and does nothing else.
 func TestMain_ExitsWithTheCodeRunMainDecided(t *testing.T) {
-	previous := exitProcess
-	t.Cleanup(func() { exitProcess = previous })
+	previous := sourcegate.Exit
+	t.Cleanup(func() { sourcegate.Exit = previous })
 	var codes []int
-	exitProcess = func(code int) { codes = append(codes, code) }
+	sourcegate.Exit = func(code int) { codes = append(codes, code) }
 	previousArgs := os.Args
 	t.Cleanup(func() { os.Args = previousArgs })
 	os.Args = []string{toolName, "-nope"}
@@ -328,13 +329,13 @@ func TestMain_ExitsWithTheCodeRunMainDecided(t *testing.T) {
 // replacing them here is what main sees.
 func TestMain_WritesTheReportToStdoutAndTheComplaintToStderr(t *testing.T) {
 	root := repoRoot(t)
-	previousExit, previousArgs := exitProcess, os.Args
+	previousExit, previousArgs := sourcegate.Exit, os.Args
 	previousStdout, previousStderr := os.Stdout, os.Stderr
 	t.Cleanup(func() {
-		exitProcess, os.Args = previousExit, previousArgs
+		sourcegate.Exit, os.Args = previousExit, previousArgs
 		os.Stdout, os.Stderr = previousStdout, previousStderr
 	})
-	exitProcess = func(int) {}
+	sourcegate.Exit = func(int) {}
 	tests := []struct {
 		name       string
 		args       []string
