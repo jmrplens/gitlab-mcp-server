@@ -242,6 +242,7 @@ func TestElicitedValue_AnswersEachKindOfProperty(t *testing.T) {
 			property: map[string]any{"enum": []any{"first", "second"}}, want: "first",
 		},
 		{name: "choice with no options", key: "selection", want: "default"},
+		{name: "choice from an empty list", key: "selection", property: map[string]any{"enum": []any{}}, want: "default"},
 		{name: "name", key: "name", want: "unique-name"},
 		{name: "title", key: "title", want: "unique-name"},
 		{name: "description", key: "description", want: "Created by the model evaluation's scripted elicitation responder"},

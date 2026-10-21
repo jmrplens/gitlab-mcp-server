@@ -199,7 +199,7 @@ func groupFacts(group fixture.Group) map[string][]string {
 // last write wins and the run-time comparison in BuildWorld is what catches a
 // key that should not be there at all.
 func with(base, extra map[string][]string) map[string][]string {
-	merged := make(map[string][]string, len(base)+len(extra))
+	merged := make(map[string][]string)
 	maps.Copy(merged, base)
 	maps.Copy(merged, extra)
 	return merged
