@@ -9395,7 +9395,7 @@ bump that brings that release in.
   JSON-RPC body naming the call, which would move a v1.8.0 client from the
   first outcome below to the second: the connection fails with
   `ErrSessionMissing`, the error go-sdk documents as needing a reconnect,
-  instead of staying on a dead session under a message about the wrong cause.
+  instead of staying on a dead session with a refusal as the only sign of it.
   Row ADM-007 of the tenant policy register rules that out by declaring the
   refusal's code and text, and it would not start a new session either, since
   v1.8.0 never does. 404 itself is the answer the 2025-11-25 transport
@@ -9414,12 +9414,15 @@ can read:
 - **A call** carries an id, so the body is a JSON-RPC error response naming it.
   `checkResponse` (`mcp/streamable.go`) decodes a non-2xx body before it looks
   at the status, and returns that error wrapped as a rejection that keeps the
-  connection. The application is shown the gate's own words, "This session does
-  not belong to the presented credential. Start a new session by sending
-  initialize without a session ID.", which it is told about its own expired
-  session too, since the gate has one message for every session it will not
-  serve. The client keeps the dead session ID and sends every later call on it,
-  to be refused the same way.
+  connection. The application is shown the gate's own words, "This session is
+  not open for the presented credential. Start a new session by sending
+  initialize without a session ID.", the gate's one message for every session
+  it will not serve, worded since issue 1102 to be as true of the client's own
+  expired session as of another credential's (it used to say the session did
+  not belong to the presented credential, which told a client whose own
+  session had ended that it had presented somebody else's). The client keeps
+  the dead session ID and sends every later call on it, to be refused the same
+  way.
 - **The standalone GET stream**, which a default client keeps open, and **a
   notification** carry no id, and neither does the gate's body then
   (`requestIDFromBody` in `cmd/server/jsonrpc_id.go` reads an id only from a
@@ -9438,12 +9441,14 @@ can read:
   closed, exported that error rather than acting on it, so starting over is the
   application's.
 
-Only the second path tells the application its session is gone. On the first
-it sees a refusal that names the wrong cause on a connection that looks alive,
-and a client that disabled the standalone stream, or makes a call in the second
-or two before its stream reconnects, or holds a live session under another
-credential, is on the first. The tenant policy specification records it as
-F-22, on row ADM-007.
+Only the second path tells the application its session is gone in the way
+go-sdk documents. On the first it sees a refusal that says the session is not
+open, on a connection that looks alive and with an error that does not wrap
+`ErrSessionMissing`, which is what an application tests for to know it must
+reconnect. A client that disabled the standalone stream, or makes a call in
+the second or two before its stream reconnects, or holds a live session under
+another credential, is on the first. The tenant policy specification records
+it as F-22, on row ADM-007.
 
 **Measured on 2026-09-27** with the tests below, against this server's binary
 started with `--stateless=false`, a go-sdk client at 2025-11-25, and for the
