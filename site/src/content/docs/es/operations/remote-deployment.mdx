@@ -476,7 +476,7 @@ despliegue local de un único usuario. La tabla completa está en
 | Reenviar `Authorization`            | El modo OAuth lee de ahí el token bearer; quitarla convierte cada petición en un `401`                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Reenviar `PRIVATE-TOKEN`            | La cabecera del modo legacy                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Reenviar `GITLAB-URL`               | Selecciona la instancia cuando se publican varias                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Dirección real del cliente          | `--trusted-proxy-header` nombra la cabecera que pone el proxy y `--trusted-proxies` las direcciones desde las que conecta, o `unix` en un listener de socket, para que el limitador de fallos de autenticación cuente clientes y no al proxy                                                                                                                                                                                                                                                       |
+| Dirección real del cliente          | `--trusted-proxy-header` nombra la cabecera que pone el proxy y `--trusted-proxies` las direcciones desde las que conecta, o `unix` en un listener de socket, para que el limitador de fallos de autenticación y el cubo de los documentos de descubrimiento cuenten clientes y no al proxy                                                                                                                                                                                                        |
 | Enrutar `/.well-known/` sin cambios | En modo OAuth los metadatos RFC 9728 viven en la **raíz del host**, no bajo el prefijo de ruta                                                                                                                                                                                                                                                                                                                                                                                                     |
 | No añadir cabeceras CORS            | El servidor responde el preflight por sí mismo. Dos cabeceras `Access-Control-Allow-Origin` son un fallo de CORS, no una fusión                                                                                                                                                                                                                                                                                                                                                                    |
 
@@ -492,6 +492,19 @@ lleva ningún `Host`, que es lo que envía la comprobación de salud de un
 balanceador, se sirve. La regla completa, la alternativa del proxy de confianza
 y lo que hace un listener comodín están en
 [Tras un proxy inverso](/gitlab-mcp-server/es/operations/http-server/#tras-un-proxy-inverso).
+
+**Nombra la dirección real del cliente, o los documentos de descubrimiento
+comparten un único cubo.** Las dos fichas del servidor y los metadatos RFC 9728
+se sirven sin credencial, y el binario los limita por sí mismo: un cubo por
+dirección de cliente para los tres, 20 peticiones por segundo con 200 de
+reserva, que rechaza con `429` lo que lo supera. Tras un proxy al que el
+servidor no tiene orden de creer, todos los clientes llegan desde la dirección
+del proxy, así que todo el despliegue comparte ese único cubo. Fija
+`--trusted-proxy-header` y `--trusted-proxies` para que cada cliente se cuente
+por separado o, cuando el proxy o una CDN ya limitan estas rutas, desactiva el
+cubo del servidor con `--discovery-rate-limit-rps=0`. Las cifras y lo que cuenta
+el cubo están en
+[Limitación de tasa de los documentos de descubrimiento](/gitlab-mcp-server/es/operations/http-server/#limitación-de-tasa-de-los-documentos-de-descubrimiento).
 
 :::caution[La ruta de metadatos está en la raíz del host]
 
@@ -834,10 +847,12 @@ unix. Un despliegue sin proxy debería aun así ser deliberado en cinco cosas:
   reiniciar; consulta
   [TLS entre el proxy y el servidor](#tls-entre-el-proxy-y-el-servidor).
 - **Limitación de tasa.** `--rate-limit-rps` vale 10 por defecto en modo HTTP con
-  una ráfaga de 40, contada por token del pool y no por dirección, y un
-  presupuesto aparte por dirección cubre los fallos de autenticación, que es el
-  que responde `429` con `Retry-After`. Un `tools/call` limitado no es un `429`:
-  es un resultado MCP normal que lleva un error, así que no aparecerá en la
+  una ráfaga de 40, contada por token del pool y no por dirección. Dos cosas se
+  cuentan por dirección y responden `429` con `Retry-After`: el presupuesto de
+  fallos de autenticación y el cubo de los documentos que se sirven sin
+  credencial, las dos fichas del servidor y los metadatos RFC 9728, 20 peticiones
+  por segundo con 200 de reserva. Un `tools/call` limitado no es un `429`: es un
+  resultado MCP normal que lleva un error, así que no aparecerá en la
   monitorización a nivel HTTP.
 - **Límites.** `--max-http-clients` acota las entradas del pool, no las sesiones
   ni las peticiones que retienen; el proceso acota las llamadas retenidas a la vez

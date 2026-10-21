@@ -196,7 +196,9 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   it, and that partner is not configurable, because an operator who can raise the shared
   number can undo the bound (`HLD-001` with `HLD-002`, `HLD-003` with `HLD-004`, `RTC-003`
   with `RTC-007`). The pool size (`POL-001`) is not such a partner: it bounds memory the
-  operator provisions.
+  operator provisions. A key before admission is held to this as one after it is, since
+  an address is as mintable as a credential: `RTC-008`, the discovery documents' bucket on
+  the address, stands alone by issue 1053's decision, which F-36 records.
 - **INV-005 Across keys, refuse; never take.** A holding that belongs to one key is not
   evicted to admit another key. Two things are taken across keys, each by a recorded
   decision, never growing past its bound and never refusing the newcomer: the pool
@@ -519,21 +521,22 @@ disagree with each other, their stated reason or the protocol, is a finding carr
 the rows it concerns (`Decision.Findings`, and `tenancy.FindingIssue` for its issue). None
 is fixed by the register. They are filed, grouped where one change would answer several:
 
-| Issue                                                           | Subject                                                                                                                          |
-| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| [950](https://github.com/jmrplens/gitlab-mcp-server/issues/950) | OAuth verification is unbounded: the identity cache has no size limit and the verifier's round trips have no concurrency ceiling |
-| [951](https://github.com/jmrplens/gitlab-mcp-server/issues/951) | The process has no ceiling of its own on held requests, stateful sessions or catalog listings                                    |
-| [952](https://github.com/jmrplens/gitlab-mcp-server/issues/952) | Admission and authority read scopes in more than one way                                                                         |
-| [953](https://github.com/jmrplens/gitlab-mcp-server/issues/953) | Attribution: an OAuth tool call loses its instance, request state binds no principal, and unattributed requests share one budget |
-| [954](https://github.com/jmrplens/gitlab-mcp-server/issues/954) | The authentication budgets key on a whole address, and their stated reason is not what GitLab documents                          |
-| [955](https://github.com/jmrplens/gitlab-mcp-server/issues/955) | GitLab's per-user and per-IP budgets are spent through allowances keyed per credential, or not accounted at all                  |
-| [956](https://github.com/jmrplens/gitlab-mcp-server/issues/956) | One refusal class, one code: retry-later is answered in several shapes, and a tier-removed action reads as a typo                |
-| [957](https://github.com/jmrplens/gitlab-mcp-server/issues/957) | Settings read outside the configuration rule, disagreeing on malformed values                                                    |
-| [958](https://github.com/jmrplens/gitlab-mcp-server/issues/958) | Limits disagree on what zero means, keep their defaults in two places, and state no rule for what happens at capacity            |
-| [959](https://github.com/jmrplens/gitlab-mcp-server/issues/959) | Where the server stands on rate limiting tool invocations, and on behavior chosen from `clientInfo`                              |
-| [960](https://github.com/jmrplens/gitlab-mcp-server/issues/960) | Stale statements about the tenant policy in comments, ADRs, the development guide and the site                                   |
-| [961](https://github.com/jmrplens/gitlab-mcp-server/issues/961) | The refusal and ending behaviors of go-sdk that decide what a refused caller sees                                                |
-| [982](https://github.com/jmrplens/gitlab-mcp-server/issues/982) | The transport-source budget remembers every (source, key) pair it charges, and only its sweep bounds that record                 |
+| Issue                                                             | Subject                                                                                                                          |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| [950](https://github.com/jmrplens/gitlab-mcp-server/issues/950)   | OAuth verification is unbounded: the identity cache has no size limit and the verifier's round trips have no concurrency ceiling |
+| [951](https://github.com/jmrplens/gitlab-mcp-server/issues/951)   | The process has no ceiling of its own on held requests, stateful sessions or catalog listings                                    |
+| [952](https://github.com/jmrplens/gitlab-mcp-server/issues/952)   | Admission and authority read scopes in more than one way                                                                         |
+| [953](https://github.com/jmrplens/gitlab-mcp-server/issues/953)   | Attribution: an OAuth tool call loses its instance, request state binds no principal, and unattributed requests share one budget |
+| [954](https://github.com/jmrplens/gitlab-mcp-server/issues/954)   | The authentication budgets key on a whole address, and their stated reason is not what GitLab documents                          |
+| [955](https://github.com/jmrplens/gitlab-mcp-server/issues/955)   | GitLab's per-user and per-IP budgets are spent through allowances keyed per credential, or not accounted at all                  |
+| [956](https://github.com/jmrplens/gitlab-mcp-server/issues/956)   | One refusal class, one code: retry-later is answered in several shapes, and a tier-removed action reads as a typo                |
+| [957](https://github.com/jmrplens/gitlab-mcp-server/issues/957)   | Settings read outside the configuration rule, disagreeing on malformed values                                                    |
+| [958](https://github.com/jmrplens/gitlab-mcp-server/issues/958)   | Limits disagree on what zero means, keep their defaults in two places, and state no rule for what happens at capacity            |
+| [959](https://github.com/jmrplens/gitlab-mcp-server/issues/959)   | Where the server stands on rate limiting tool invocations, and on behavior chosen from `clientInfo`                              |
+| [960](https://github.com/jmrplens/gitlab-mcp-server/issues/960)   | Stale statements about the tenant policy in comments, ADRs, the development guide and the site                                   |
+| [961](https://github.com/jmrplens/gitlab-mcp-server/issues/961)   | The refusal and ending behaviors of go-sdk that decide what a refused caller sees                                                |
+| [982](https://github.com/jmrplens/gitlab-mcp-server/issues/982)   | The transport-source budget remembers every (source, key) pair it charges, and only its sweep bounds that record                 |
+| [1053](https://github.com/jmrplens/gitlab-mcp-server/issues/1053) | The discovery documents' bucket is kept per address with no process partner beside it, by decision                               |
 
 One finding grew after it was filed, and one was added, when the register was read
 against the code as a whole. F-34 ([issue 958](https://github.com/jmrplens/gitlab-mcp-server/issues/958))
@@ -570,6 +573,46 @@ are at most three times what the table holds, whatever the window. What
 the issue leaves alone is the saturation itself, a source arriving once the limiter's
 table is full being blocked by neither table, which is the `/48` aggregate's (`AUB-006`)
 and issue 958's capacity rules'.
+
+F-36 ([issue 1053](https://github.com/jmrplens/gitlab-mcp-server/issues/1053)) is the one
+finding a decision recorded rather than a reading of the code found. The three documents
+the server publishes without a credential, the SEP-2127 card at every path it is mounted
+at, the legacy enumerating card and in oauth mode the RFC 9728 metadata, draw on one token
+bucket per client address (`RTC-008`), keyed as the authentication budgets key an address,
+20 requests a second with 200 in hand by default, `0` for either setting switching it off,
+refused with the gate's `429`, `-42900` and a fixed `Retry-After` of one second, and
+charged to no budget. Every request to those paths draws on it, a revalidation answered
+`304` and a CORS preflight included; `/health` and the MCP endpoint do not. No bucket
+keyed on the process stands beside it, which departs from `INV-004`: a bucket the whole
+process shared would let a flood from many addresses deny discovery to every caller, a
+hosted client's egress address first, so the issue decided against one and the finding
+records that it did, which is why `Validate` holds a key before admission to `INV-004` as
+it holds a requester's. Its table holds `DiscoveryTrackedAddresses` addresses, and a new
+one past that takes the place of the one used least recently, which is how `EvictOldest`
+reads for a bucket, since a bucket has no expiry; what that forgets is a record against its
+own address rather than a holding taken from it (`INV-005`). No rule at the bound limits a
+caller holding more addresses than the table, which any IPv6 `/48` does, without denying
+discovery to somebody. Under eviction it cycles them and finds each forgotten when it
+returns; against a table that stopped counting, it would fill the table and then ask from
+one more address uncounted until the sweep; and refusing newcomers would deny every new
+address while the flood lasts, the outcome the missing partner avoids. That gap is part of what the finding
+accepts. What eviction changes is the cost: an address that keeps asking stays counted, so
+a flood has to keep cycling through more addresses than the table holds, drawing about one
+burst from each before it is forgotten, where a table that stopped counting would let a few
+thousand single requests from distinct `/64`s leave every newcomer uncounted until its
+sweep. The measurement it answers VAL-012 with, `make bench-fairness BOUND=discovery` and
+`BenchmarkDiscoveryDocuments` in `cmd/server`, is in the pull request that added it: a
+discovery request cost the process about 0.1 ms of processor whatever the document, a
+refusal about a sixth less (about 92 microseconds against 110), and the legacy card is
+141 KB on the dynamic surface; on a host of 16 logical CPUs, in a container held to five,
+sixteen addresses flooding at 100 requests a second each kept 0.22 to 0.30 cores busy in
+either arm, each refused four requests in five with the bucket in force, and two at 2,000
+a second each 0.42 to 0.47 without the bucket and 0.37 with it, the legacy card's egress
+falling from 141 MB/s to about 1.6 MB/s, while a hosted client's egress address shared by
+eight users fetching the metadata and the card was refused nothing in any arm. Discovery
+requests at those rates do not contend for the machine, so the comparison of the quiet
+tenant's latency was the saturation gate's `indistinguishable`: what the bucket bounds is
+each address's draw.
 
 The question F-25 left open, whether a REST request carrying an invalid token counts
 against GitLab's per-IP limit on unauthenticated requests (OQ-11, as issue 954 names it), is

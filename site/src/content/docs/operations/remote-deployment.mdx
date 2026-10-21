@@ -461,7 +461,7 @@ single-user local deployment only. The full table is in
 | Forward `Authorization`              | OAuth mode reads the bearer token from it; stripping it turns every request into a `401`                                                                                                                                                                                                                                                                                                                                                           |
 | Forward `PRIVATE-TOKEN`              | Legacy mode's header                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Forward `GITLAB-URL`                 | Selects the instance when several are published                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Real client address                  | `--trusted-proxy-header` names the header the proxy sets and `--trusted-proxies` the addresses it connects from, or `unix` on a socket listener, so the authentication-failure limiter counts callers rather than the proxy                                                                                                                                                                                                                        |
+| Real client address                  | `--trusted-proxy-header` names the header the proxy sets and `--trusted-proxies` the addresses it connects from, or `unix` on a socket listener, so the authentication-failure limiter and the discovery documents' bucket count callers rather than the proxy                                                                                                                                                                                     |
 | Route `/.well-known/` unchanged      | In OAuth mode the RFC 9728 metadata lives at the **host root**, not under the path prefix                                                                                                                                                                                                                                                                                                                                                          |
 | Add no CORS headers                  | The server answers preflight itself. Two `Access-Control-Allow-Origin` headers is a CORS failure, not a merge                                                                                                                                                                                                                                                                                                                                      |
 
@@ -475,6 +475,18 @@ refused with `403`, on `/health` as well as on `/mcp`. A request that carries no
 `Host` at all, which is what a balancer health check sends, is served. The full
 rule, the trusted-proxy alternative and what a wildcard listener does are in
 [Behind a reverse proxy](/gitlab-mcp-server/operations/http-server/#behind-a-reverse-proxy).
+
+**Name the real client address, or the discovery documents share one bucket.**
+The two server cards and the RFC 9728 metadata are served without a credential,
+and the binary limits them itself: one bucket per client address for the three,
+20 requests a second with 200 in hand, refused `429` past it. Behind a proxy that
+the server is not told to believe, every caller arrives from the proxy's
+address, so the whole deployment shares that one bucket. Set
+`--trusted-proxy-header` and `--trusted-proxies` so each caller is counted on its
+own, or, when the proxy or a CDN already limits these paths, turn the server's
+bucket off with `--discovery-rate-limit-rps=0`. The figures and what the bucket
+counts are in
+[Rate limiting the discovery documents](/gitlab-mcp-server/operations/http-server/#rate-limiting-the-discovery-documents).
 
 :::caution[The metadata path is at the host root]
 
@@ -805,10 +817,12 @@ a proxy should still be deliberate about five things:
   change, so a renewal is a file write rather than a restart; see
   [TLS between the proxy and the server](#tls-between-the-proxy-and-the-server).
 - **Rate limiting.** `--rate-limit-rps` defaults to 10 in HTTP mode with a burst
-  of 40, counted per pooled token rather than per address, and a separate
-  per-address budget covers authentication failures, which is the one that
-  answers `429` with `Retry-After`. A throttled `tools/call` is not a `429`: it
-  is a normal MCP result carrying an error, so it will not show up in HTTP-level
+  of 40, counted per pooled token rather than per address. Two things are
+  counted per address and answer `429` with `Retry-After`: the budget on
+  authentication failures, and the bucket on the documents served without a
+  credential, the two server cards and the RFC 9728 metadata, 20 requests a
+  second with 200 in hand. A throttled `tools/call` is not a `429`: it is a
+  normal MCP result carrying an error, so it will not show up in HTTP-level
   monitoring.
 - **Bounds.** `--max-http-clients` caps pooled entries, not sessions or the
   requests they hold; the process bounds the calls held at once across every

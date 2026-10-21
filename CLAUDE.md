@@ -449,6 +449,7 @@ Settings this project defines are read as `GITLAB_MCP_<NAME>` and under no other
 | `GITLAB_MCP_RATE_LIMIT_RPS`, `GITLAB_MCP_RATE_LIMIT_BURST` | Per-credential rate limit (off by default on stdio, 10 req/s in HTTP mode) and burst (40) |
 | `GITLAB_MCP_AUTH_FAILURE_LIMIT`, `GITLAB_MCP_AUTH_FAILURE_WINDOW` | Failed authentications per address (an IPv6 one by its `/64`) before a block (10 per `1m`) |
 | `GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT`, `GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW` | Distinct refused credentials per address (an IPv6 one by its `/64`) before an escalating block (50 per `10m`) |
+| `GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS`, `GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST` | HTTP: one bucket per address for the two server cards and the RFC 9728 metadata (20 req/s, burst 200; `0` turns it off) |
 | `GITLAB_MCP_CLIENT_COMPAT` | Per-client response compatibility (`auto`) |
 | `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` | Rewrite listed text for strict gateway validators |
 | `GITLAB_MCP_TELEMETRY`, `GITLAB_MCP_TELEMETRY_*` | OTLP export (off), identity policy, its key and rotation, tool-name metric dimensions |
