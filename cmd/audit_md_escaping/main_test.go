@@ -204,6 +204,31 @@ func TestRun_CommandLine_ParsesItsFlags(t *testing.T) {
 	}
 }
 
+// TestRun_NoPackagesNamed_AuditsTheDefaultSweep checks the other half of the
+// positional arguments: a command line that names no package audits the sweep
+// the command carries, exactly as a command line naming that sweep does, rather
+// than an empty list of patterns.
+//
+// The sweep is narrowed to one package for the test, since the real one is the
+// whole tree.
+func TestRun_NoPackagesNamed_AuditsTheDefaultSweep(t *testing.T) {
+	original := auditPatterns
+	t.Cleanup(func() { auditPatterns = original })
+	auditPatterns = []string{"./internal/toolutil"}
+	root := repoRoot(t)
+	var named, namedErr, defaulted, defaultedErr strings.Builder
+
+	namedCode := run([]string{"-dir", root, "-contexts", "heading", "./internal/toolutil"}, &named, &namedErr)
+	defaultCode := run([]string{"-dir", root, "-contexts", "heading"}, &defaulted, &defaultedErr)
+
+	if namedCode != 0 || defaultCode != 0 {
+		t.Fatalf("exit codes = %d naming the sweep and %d leaving it out, want 0 for both\n%s%s", namedCode, defaultCode, namedErr.String(), defaultedErr.String())
+	}
+	if defaulted.String() != named.String() {
+		t.Errorf("a run naming no package reported\n%s\nwant what naming the sweep reports\n%s", defaulted.String(), named.String())
+	}
+}
+
 // TestGate_Report_DecidesWhatFails checks the verdict itself, since what the
 // gate counts as a failure is the whole of its behavior in CI.
 func TestGate_Report_DecidesWhatFails(t *testing.T) {
@@ -220,9 +245,18 @@ func TestGate_Report_DecidesWhatFails(t *testing.T) {
 		failUnresolvedIn []string
 		want             int
 		says             string
+		// exactly, when set, is the whole of what the gate prints, which is
+		// how a case holds that a clause is absent as well as present.
+		exactly string
 	}{
-		{name: "nothing at all", summary: Summary{Contexts: "table-cell"}, want: 0, says: "check: PASS"},
-		{name: "an unescaped value", summary: Summary{Findings: 1}, want: 1, says: "check: FAIL"},
+		{
+			name: "nothing at all", summary: Summary{Contexts: "table-cell"}, want: 0, says: "check: PASS",
+			exactly: "check: PASS. Every value reaching table-cell is escaped or declared safe (0 excused by directive, 0 unresolved)\n",
+		},
+		{
+			name: "an unescaped value", summary: Summary{Findings: 1}, want: 1, says: "check: FAIL",
+			exactly: "check: FAIL. 1 value(s) reach a Markdown construct unescaped, 0 directive(s) excuse nothing, 0 unresolved\n",
+		},
 		{name: "a directive that excuses nothing", summary: Summary{Stale: 1}, want: 1, says: "check: FAIL"},
 		{name: "an unresolved value is not a failure", summary: Summary{Unresolved: 3, Contexts: "table-cell"}, want: 0, says: "3 unresolved"},
 		{name: "unless the operator asks", summary: Summary{Unresolved: 3}, failUnresolved: true, want: 1, says: "check: FAIL"},
@@ -252,6 +286,9 @@ func TestGate_Report_DecidesWhatFails(t *testing.T) {
 			}
 			if !strings.Contains(out.String(), tc.says) {
 				t.Errorf("gate said %q, want it to say %q", out.String(), tc.says)
+			}
+			if tc.exactly != "" && out.String() != tc.exactly {
+				t.Errorf("gate said %q, want exactly %q", out.String(), tc.exactly)
 			}
 		})
 	}

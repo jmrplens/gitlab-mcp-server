@@ -228,6 +228,46 @@ func TestAudit_Fixture_SummarisesWhatItSaw(t *testing.T) {
 	}
 }
 
+// TestAudit_Fixture_SummaryAccountsForEveryHole holds the counts to what they
+// count rather than only to being there: every sink collected is counted once,
+// every judged hole lands in exactly one bucket, and each breakdown adds up to
+// the findings it breaks down.
+//
+// The run judges the gating contexts alone, so each judged hole was asked the
+// escaping question and nothing else, and its answer is a safe value, a
+// finding, an unresolved value or an excused one.
+func TestAudit_Fixture_SummaryAccountsForEveryHole(t *testing.T) {
+	prog := loadFixture(t, caseFixture)
+	report := auditFixture(t)
+	summary := report.Summary
+
+	if want := len(collectSinks(prog)); summary.Sinks != want {
+		t.Errorf("summary counts %d sink(s), want the %d the sweep collected", summary.Sinks, want)
+	}
+	if got := summary.Safe + summary.Findings + summary.Unresolved + summary.Excused; got != summary.Holes {
+		t.Errorf("%d safe + %d findings + %d unresolved + %d excused = %d, want the %d hole(s) judged",
+			summary.Safe, summary.Findings, summary.Unresolved, summary.Excused, got, summary.Holes)
+	}
+	if got := total(summary.ByContext); got != summary.Findings {
+		t.Errorf("the context breakdown %v adds up to %d, want the %d findings", summary.ByContext, got, summary.Findings)
+	}
+	if got := total(summary.ByPackage); got != summary.Findings {
+		t.Errorf("the package breakdown %v adds up to %d, want the %d findings", summary.ByPackage, got, summary.Findings)
+	}
+	if len(summary.ByPackage) != summary.Packages {
+		t.Errorf("the package breakdown names %d package(s), want the %d counted", len(summary.ByPackage), summary.Packages)
+	}
+}
+
+// total adds up a breakdown.
+func total(counts map[string]int) int {
+	sum := 0
+	for _, count := range counts {
+		sum += count
+	}
+	return sum
+}
+
 // TestAudit_Fixture_NarrowedToOneContext_JudgesOnlyThat checks that staging the
 // sweep by context leaves the other contexts unjudged rather than passed.
 func TestAudit_Fixture_NarrowedToOneContext_JudgesOnlyThat(t *testing.T) {

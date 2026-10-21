@@ -221,7 +221,8 @@ func FormatClosedBefore(item Item) string {
 `
 
 // mdfenceWritersSource holds the destinations a write can name besides a local
-// builder: a dereferenced pointer, which is followed, and the two that are not.
+// builder: a dereferenced pointer, which is followed, and the two that are not;
+// and the two print calls told apart by whether they end the line they write.
 const mdfenceWritersSource = `package mdfence
 
 import (
@@ -268,6 +269,27 @@ func FormatSprint(item Item) string {
 func FormatPrintProse(item Item) string {
 	var b strings.Builder
 	fmt.Fprint(&b, item.Title)
+	return b.String()
+}
+
+// FormatAfterPrintln ends a line with Fprintln, so the backticks written next
+// are at the start of a line and open a block.
+func FormatAfterPrintln(item Item) string {
+	var b strings.Builder
+	fmt.Fprintln(&b, "Output:")
+	b.WriteString("` + "```" + `\n")
+	b.WriteString(item.Content)
+	b.WriteString("\n` + "```" + `\n")
+	return b.String()
+}
+
+// FormatAfterPrint writes a label with Fprint, which ends no line, so the
+// backticks written next sit after it on the same line and open nothing.
+func FormatAfterPrint(item Item) string {
+	var b strings.Builder
+	fmt.Fprint(&b, "Output: ")
+	b.WriteString("` + "```" + `\n")
+	b.WriteString(item.Content)
 	return b.String()
 }
 `
@@ -335,6 +357,7 @@ var wantFenceFindings = []string{
 	"mdfence fence item.Content",  // written through a dereferenced pointer
 	"mdfence fence item.Content",  // a template of its own, to a writer no variable names
 	"mdfence fence item.Content",  // inside the arm of a select that opened the fence
+	"mdfence fence item.Content",  // inside a block opened on the line after an Fprintln
 	"mdfence fence item.Language", // the info string of the opening fence
 	"mdfence fence item.Title",    // written in a loop inside the block
 }
@@ -368,6 +391,40 @@ func TestAudit_FenceFixture_ReportsEveryValueInsideAHandWrittenFence(t *testing.
 	}
 	for _, line := range extra {
 		t.Errorf("unexpected finding: %s", line)
+	}
+}
+
+// TestAudit_FenceFixture_ReadsWhereAPrintCallLeavesTheLine checks, formatter
+// by formatter, what the two print calls with no template leave behind: a value
+// Fprint writes inside a block, a line Fprintln ends so the next write opens a
+// block, and a line Fprint leaves open so backticks after it open none.
+//
+// It counts by formatter because the fixture-wide want list names a value and
+// not where it was written: a value lost in one formatter and gained in another
+// would leave that list exactly as it was.
+func TestAudit_FenceFixture_ReadsWhereAPrintCallLeavesTheLine(t *testing.T) {
+	report := auditFenceFixture(t)
+	byFunc := map[string]int{}
+	for _, finding := range report.Findings {
+		byFunc[finding.Func]++
+	}
+
+	cases := []struct {
+		name string
+		fn   string
+		want int
+	}{
+		{name: "a value Fprint writes inside a block", fn: "FormatPrintBlock", want: 1},
+		{name: "a block opened on the line after Fprintln", fn: "FormatAfterPrintln", want: 1},
+		{name: "backticks after Fprint on the same line", fn: "FormatAfterPrint", want: 0},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := byFunc[tc.fn]; got != tc.want {
+				t.Errorf("%s reported %d finding(s), want %d", tc.fn, got, tc.want)
+			}
+		})
 	}
 }
 

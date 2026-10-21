@@ -147,6 +147,18 @@ func TestSinkOf_MoreVerbsThanOperands_SplitsOnlyTheOnesPassed(t *testing.T) {
 	}
 }
 
+// TestSinkOf_TemplateWithNothingToJudge_IsNotASink checks that a formatting
+// call is a sink only when something in it is judged.
+//
+// A template whose every verb renders a number carries no hole the audit
+// collects and no card row, so as a sink it would hold nothing, and the count
+// of sinks a report prints would include a call with nothing in it to judge.
+func TestSinkOf_TemplateWithNothingToJudge_IsNotASink(t *testing.T) {
+	if sinks := edgeSinks(t)["CountOnly"]; len(sinks) != 0 {
+		t.Errorf("a template with no textual verb was collected as %d sink(s)", len(sinks))
+	}
+}
+
 // TestSinkOf_CellBuilderWithNoCells_IsNotASink checks the guard on a row
 // builder called with nothing to put in the row.
 //
