@@ -90,9 +90,10 @@ var prices = []priceEntry{
 			RetrievedOn:             "2026-09-16",
 		},
 		Source: "https://ai.google.dev/gemini-api/docs/pricing",
-		Note: "the alias resolved to gemini-3.8-flash on the retrieval date, and the page states " +
-			"these prices through 2026-12-31 and double from 2027-01-01, so a run in 2027 is " +
-			"reading a stale table even inside the window",
+		// One literal, because a package-level initializer carries no
+		// statement counter and the mutation tool reports every operator in
+		// one as untested.
+		Note: "the alias resolved to gemini-3.8-flash on the retrieval date, and the page states these prices through 2026-12-31 and double from 2027-01-01, so a run in 2027 is reading a stale table even inside the window",
 	},
 	{
 		Provider: OpenAI,
@@ -161,15 +162,19 @@ func (e priceEntry) problems(now time.Time) []string {
 			e.Provider, e.Model))
 	}
 
+	// The date is judged by a chain of ifs rather than a switch with no tag,
+	// whose case expressions the mutation tool cannot see into.
 	retrieved, err := time.Parse(time.DateOnly, e.Price.RetrievedOn)
-	switch age := now.Sub(retrieved); {
-	case err != nil:
-		problems = append(problems, fmt.Sprintf("%s:%s says it was read on %q, which is not a date: "+
+	if err != nil {
+		return append(problems, fmt.Sprintf("%s:%s says it was read on %q, which is not a date: "+
 			"nothing can then say how old the figure is", e.Provider, e.Model, e.Price.RetrievedOn))
-	case age < 0:
-		problems = append(problems, fmt.Sprintf("%s:%s says it was read on %s, which has not happened yet",
+	}
+	age := now.Sub(retrieved)
+	if age < 0 {
+		return append(problems, fmt.Sprintf("%s:%s says it was read on %s, which has not happened yet",
 			e.Provider, e.Model, e.Price.RetrievedOn))
-	case age > maxPriceAge:
+	}
+	if age > maxPriceAge {
 		problems = append(problems, fmt.Sprintf("%s:%s was read on %s, %d days ago, and the window is %d: "+
 			"a provider changes a price by publishing a page, so a budget computed from this one is a "+
 			"guess", e.Provider, e.Model, e.Price.RetrievedOn, int(age.Hours()/24),

@@ -263,10 +263,50 @@ func TestAnthropicMessages_RebuildsATurnWhenThereIsNoEchoToHandBack(t *testing.T
 	}
 	assistant := anthropicBuiltBlocks(t, built[1])
 	if len(assistant) != 2 || assistant[0].Type != "text" || assistant[1].Type != "tool_use" {
-		t.Errorf("the rebuilt assistant turn is %+v", assistant)
+		t.Fatalf("the rebuilt assistant turn is %+v", assistant)
+	}
+	// The call goes back as the call the model made, not as a block of the
+	// turn that was something else.
+	if call := assistant[1]; call.ID != "c1" || call.Name != "t" || string(call.Input) != `{"a":1}` {
+		t.Errorf("the rebuilt call is %+v, want the call c1 to t with its arguments", call)
 	}
 	if !anthropicBuiltBlocks(t, built[2])[0].IsError {
 		t.Error("a failed tool result was fed back as a successful one")
+	}
+}
+
+// TestAnthropicEchoed_HandsBackOnlyAnAssistantsListOfBlocks holds the check an
+// echo passes before its bytes go back unread: it is an assistant turn's, and
+// it is a list of blocks with at least one in it.
+func TestAnthropicEchoed_HandsBackOnlyAnAssistantsListOfBlocks(t *testing.T) {
+	blocks := json.RawMessage(`[{"type":"text","text":"hello"}]`)
+	for _, one := range []struct {
+		name    string
+		message Message
+		want    bool
+	}{
+		{"an assistant's blocks", Message{Role: RoleAssistant, Echo: blocks}, true},
+		{"a user's blocks", Message{Role: RoleUser, Echo: blocks}, false},
+		{"an assistant with no echo", Message{Role: RoleAssistant}, false},
+		{"an empty list", Message{Role: RoleAssistant, Echo: json.RawMessage(`[]`)}, false},
+		{"not a list", Message{Role: RoleAssistant, Echo: json.RawMessage(`{"type":"text"}`)}, false},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			echoed, ok := anthropicEchoed(one.message)
+			if ok != one.want || (ok && string(echoed) != string(one.message.Echo)) {
+				t.Errorf("anthropicEchoed = %s, %v, want the echo handed back: %v", echoed, ok, one.want)
+			}
+		})
+	}
+}
+
+// TestAnthropicBlocks_PassesOverABlockItDoesNotRecord verifies a block of a
+// type the record has no kind for, such as a redacted thinking block, is left
+// out rather than recorded as something it is not.
+func TestAnthropicBlocks_PassesOverABlockItDoesNotRecord(t *testing.T) {
+	blocks := anthropicBlocks([]anthropicBlock{{Type: "redacted_thinking"}, {Type: "text", Text: "kept"}})
+	if len(blocks) != 1 || blocks[0].Kind != modelrecord.BlockText || blocks[0].Text != "kept" {
+		t.Errorf("blocks = %+v, want the text block alone", blocks)
 	}
 }
 

@@ -44,9 +44,12 @@ func TestPrices_ReportsEveryWayADateStopsAnswering(t *testing.T) {
 		now  time.Time
 		says string
 	}{
+		{"read this very instant", read, ""},
 		{"just read", read.Add(time.Hour), ""},
 		{"inside the window", read.Add(maxPriceAge - time.Hour), ""},
-		{"past the window", read.Add(maxPriceAge + 48*time.Hour), "and the window is"},
+		{"at the window's edge", read.Add(maxPriceAge), ""},
+		// The figures are days, the age's and the window's.
+		{"past the window", read.Add(maxPriceAge + 48*time.Hour), "182 days ago, and the window is 180:"},
 		{"before it was read", read.Add(-48 * time.Hour), "has not happened yet"},
 	} {
 		t.Run(one.name, func(t *testing.T) {
@@ -84,6 +87,22 @@ func TestPrices_RefusesAnEntryNothingCanJudge(t *testing.T) {
 			priceEntry{
 				Provider: "p", Model: "m", Source: "s",
 				Price: modelrecord.Price{RetrievedOn: today()},
+			},
+			"prices input or output at zero",
+		},
+		{
+			"free input alone",
+			priceEntry{
+				Provider: "p", Model: "m", Source: "s",
+				Price: modelrecord.Price{OutputPerMillionUSD: 2, RetrievedOn: today()},
+			},
+			"prices input or output at zero",
+		},
+		{
+			"free output alone",
+			priceEntry{
+				Provider: "p", Model: "m", Source: "s",
+				Price: modelrecord.Price{InputPerMillionUSD: 1, RetrievedOn: today()},
 			},
 			"prices input or output at zero",
 		},

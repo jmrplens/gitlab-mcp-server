@@ -21,6 +21,9 @@ func TestParseSpec_ReadsTheProviderTheModelAndTheOptions(t *testing.T) {
 			"claude-haiku-4-5-20251001", "0", defaultMaxTokens,
 		},
 		{"a temperature", "openai:gpt-5.4-nano;temperature=0.7", OpenAI, "gpt-5.4-nano", "0.7", defaultMaxTokens},
+		// Written with every digit it was given, not rounded to one.
+		{"a finer temperature", "openai:gpt-5.4-nano;temperature=0.25", OpenAI, "gpt-5.4-nano", "0.25", defaultMaxTokens},
+		{"the highest temperature", "anthropic:m;temperature=2", Anthropic, "m", "2", defaultMaxTokens},
 		{"an empty option", "openai:gpt-5.4-nano;;temperature=0.7;", OpenAI, "gpt-5.4-nano", "0.7", defaultMaxTokens},
 		{
 			"the provider's own temperature", "qwen:qwen3.8-flash;temperature=default", Qwen,
@@ -120,6 +123,7 @@ func TestParseSpec_RefusesWhatItCannotSend(t *testing.T) {
 		{"an option another provider takes", "anthropic:m;reasoning_effort=low", "does not take option"},
 		{"a temperature that is not a number", "anthropic:m;temperature=warm", "neither"},
 		{"a temperature out of range", "anthropic:m;temperature=9", "neither"},
+		{"a temperature below zero", "anthropic:m;temperature=-0.5", "neither"},
 		{"a ceiling that is not a count", "anthropic:m;max_tokens=lots", "positive number of tokens"},
 		{"a ceiling of zero", "anthropic:m;max_tokens=0", "positive number of tokens"},
 		{"an empty reasoning effort", "openai:m;reasoning_effort=", "omit the option"},

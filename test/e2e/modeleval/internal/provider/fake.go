@@ -206,23 +206,27 @@ func (a fakeAdapter) arguments(step modelcorpus.Step, replay Replay) map[string]
 }
 
 // resolveTruth reads one argument's right value.
+//
+// It is a chain of ifs rather than a switch with no tag, whose case
+// expressions the mutation tool cannot see into.
 func resolveTruth(truth modelcorpus.Truth, replay Replay) (value any, found bool) {
-	switch {
-	case truth.Authored:
+	if truth.Authored {
 		return authoredValue, true
-	case truth.Literal != "":
+	}
+	if truth.Literal != "" {
 		return truth.Literal, true
-	case truth.Fact != "":
+	}
+	if truth.Fact != "" {
 		fact, known := replay.Facts[truth.Fact]
 		if !known {
 			return nil, false
 		}
 		return typedFact(fact), true
-	case !truth.Produced.IsZero():
-		return producedValue(truth.Produced, replay)
-	default:
-		return nil, false
 	}
+	if !truth.Produced.IsZero() {
+		return producedValue(truth.Produced, replay)
+	}
+	return nil, false
 }
 
 // typedFact gives a fact the JSON type a model would have written for it.

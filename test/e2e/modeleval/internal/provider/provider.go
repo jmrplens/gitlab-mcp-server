@@ -449,17 +449,21 @@ func (b base) exchange(
 
 // failureStatus classifies an HTTP status the way the record's turn statuses
 // do, and reports whether it is a failure at all.
+//
+// It is a chain of ifs rather than a switch with no tag because the mutation
+// tool cannot see into the expressions of such a switch's cases, and would
+// report each of them as untested whatever the tests held.
 func failureStatus(code int) (string, bool) {
-	switch {
-	case code == http.StatusTooManyRequests:
+	if code == http.StatusTooManyRequests {
 		return modelrecord.TurnRateLimited, true
-	case code >= http.StatusInternalServerError:
-		return modelrecord.TurnServerError, true
-	case code < http.StatusOK || code >= http.StatusMultipleChoices:
-		return modelrecord.TurnRequestError, true
-	default:
-		return modelrecord.TurnOK, false
 	}
+	if code >= http.StatusInternalServerError {
+		return modelrecord.TurnServerError, true
+	}
+	if code < http.StatusOK || code >= http.StatusMultipleChoices {
+		return modelrecord.TurnRequestError, true
+	}
+	return modelrecord.TurnOK, false
 }
 
 // maxDetailBytes bounds what a failure message keeps of a provider's answer.

@@ -8,9 +8,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelrecord"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
@@ -514,6 +516,109 @@ func TestExchange_ARequestThatCannotBeBuilt_IsTheCallersFailure(t *testing.T) {
 				t.Errorf("answer = %+v, raw = %q, want a request error that says why and carries no body", answer, raw)
 			}
 		})
+	}
+}
+
+// TestFailureStatus_ClassifiesEachSideOfEveryBoundary holds the status a
+// turn records for each HTTP status on either side of the bounds the
+// classification draws.
+func TestFailureStatus_ClassifiesEachSideOfEveryBoundary(t *testing.T) {
+	for _, one := range []struct {
+		code   int
+		status string
+		failed bool
+	}{
+		{http.StatusTooManyRequests, modelrecord.TurnRateLimited, true},
+		{http.StatusInternalServerError, modelrecord.TurnServerError, true},
+		{http.StatusInternalServerError - 1, modelrecord.TurnRequestError, true},
+		{http.StatusMultipleChoices, modelrecord.TurnRequestError, true},
+		{http.StatusMultipleChoices - 1, modelrecord.TurnOK, false},
+		{http.StatusOK, modelrecord.TurnOK, false},
+		{http.StatusOK - 1, modelrecord.TurnRequestError, true},
+	} {
+		t.Run(strconv.Itoa(one.code), func(t *testing.T) {
+			status, failed := failureStatus(one.code)
+			if status != one.status || failed != one.failed {
+				t.Errorf("failureStatus(%d) = %q, %v, want %q, %v", one.code, status, failed, one.status, one.failed)
+			}
+		})
+	}
+}
+
+// TestRedact_KeepsADetailOfTheBoundsLengthWholeAndCutsALongerOne verifies
+// where a detail is cut, and that an adapter with no credential, the fake's
+// case, has nothing to take out of it.
+func TestRedact_KeepsADetailOfTheBoundsLengthWholeAndCutsALongerOne(t *testing.T) {
+	exact := strings.Repeat("a", maxDetailBytes)
+	if got := (base{}).redact("  " + exact + "  "); got != exact {
+		t.Errorf("a detail of %d bytes was changed to %d bytes", maxDetailBytes, len(got))
+	}
+	longer := exact + "b"
+	if got := (base{}).redact(longer); got != exact+"...(truncated)" {
+		t.Errorf("a detail of %d bytes was kept as %q", len(longer), got[len(got)-20:])
+	}
+}
+
+// TestNew_SendsThroughTheClientItIsGivenOrOneWithATimeout verifies the client
+// a caller configures is the one the adapter sends with, and that with none
+// the adapter's own has the ten-minute timeout that keeps a provider that
+// never answers from holding a run open.
+func TestNew_SendsThroughTheClientItIsGivenOrOneWithATimeout(t *testing.T) {
+	spec, err := ParseSpec("anthropic:claude-haiku-4-5-20251001")
+	if err != nil {
+		t.Fatalf("ParseSpec: %v", err)
+	}
+	given := &http.Client{Timeout: time.Second}
+	for _, one := range []struct {
+		name    string
+		client  *http.Client
+		timeout time.Duration
+	}{
+		{"a given client", given, time.Second},
+		{"no client", nil, 10 * time.Minute},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			built, newErr := New(Config{Spec: spec, APIKey: testKey, HTTPClient: one.client})
+			if newErr != nil {
+				t.Fatalf("New: %v", newErr)
+			}
+			adapter, isAnthropic := built.(anthropicAdapter)
+			if !isAnthropic {
+				t.Fatalf("New built %T, want the Anthropic adapter", built)
+			}
+			if one.client != nil && adapter.client != one.client {
+				t.Error("the adapter sends through a client of its own instead of the given one")
+			}
+			if adapter.client.Timeout != one.timeout {
+				t.Errorf("the client times out after %s, want %s", adapter.client.Timeout, one.timeout)
+			}
+		})
+	}
+}
+
+// TestCall_MeasuresTheLatencyInMilliseconds verifies the latency a turn
+// records is the exchange's in milliseconds: never more than the wall time
+// the whole call took, measured around it.
+func TestCall_MeasuresTheLatencyInMilliseconds(t *testing.T) {
+	backend := newRecorder(`{"content":[],"usage":{}}`)
+	adapter := adapterFor(t, "anthropic:claude-haiku-4-5-20251001", backend.server(t))
+
+	started := time.Now()
+	answer, err := adapter.Call(t.Context(), Request{})
+	wall := float64(time.Since(started).Microseconds()) / 1000
+	if err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	if answer.LatencyMS < 0 || answer.LatencyMS > wall {
+		t.Errorf("LatencyMS = %v, want a figure between 0 and the %v ms the call took", answer.LatencyMS, wall)
+	}
+}
+
+// TestNormalizeType_PicksTheNamedMemberOfAUnion verifies a union is collapsed
+// to the type its first named member gives, past a member that is not a name.
+func TestNormalizeType_PicksTheNamedMemberOfAUnion(t *testing.T) {
+	if got := normalizeType([]any{float64(1), "null", "integer"}); got != "integer" {
+		t.Errorf("normalizeType = %#v, want integer", got)
 	}
 }
 

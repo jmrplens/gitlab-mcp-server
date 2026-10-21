@@ -364,10 +364,12 @@ func googleEchoed(message Message) (json.RawMessage, []googlePart, bool) {
 	if message.Role != RoleAssistant || len(message.Echo) == 0 {
 		return nil, nil, false
 	}
+	// A content with no parts field leaves Parts empty, which the decoding
+	// below refuses, so that case needs no check of its own here.
 	var echoed struct {
 		Parts json.RawMessage `json:"parts"`
 	}
-	if err := json.Unmarshal(message.Echo, &echoed); err != nil || len(echoed.Parts) == 0 {
+	if err := json.Unmarshal(message.Echo, &echoed); err != nil {
 		return nil, nil, false
 	}
 	var parts []googlePart
@@ -393,23 +395,29 @@ func rememberGoogleNames(names map[string]string, parts []googlePart) {
 // absent identifier is filled from the call's position. Every provider's tool
 // result is addressed by an identifier here, and a conversation whose two calls
 // share the empty one would answer both with the first result.
+//
+// A call with no args at all is malformed rather than a call with none:
+// json.Valid refuses empty input, so the absent field is kept as the empty
+// text the model sent. A part that is neither a call nor text, such as an
+// empty one, records nothing.
 func googleBlocks(content googleContent) []modelrecord.Block {
 	var blocks []modelrecord.Block
 	for index, part := range content.Parts {
-		switch {
-		case part.FunctionCall != nil:
+		if part.FunctionCall != nil {
 			call := modelrecord.Block{
 				Kind:   modelrecord.BlockToolCall,
 				Tool:   part.FunctionCall.Name,
 				CallID: googleCallID(part.FunctionCall.ID, index),
 			}
-			if json.Valid(part.FunctionCall.Args) && len(part.FunctionCall.Args) > 0 {
+			if json.Valid(part.FunctionCall.Args) {
 				call.Arguments = part.FunctionCall.Args
 			} else {
 				call.Raw = string(part.FunctionCall.Args)
 			}
 			blocks = append(blocks, call)
-		case part.Text != "":
+			continue
+		}
+		if part.Text != "" {
 			blocks = append(blocks, modelrecord.Block{Kind: modelrecord.BlockText, Text: part.Text})
 		}
 	}

@@ -208,8 +208,78 @@ func TestGoogle_NamesEveryCallEvenWhenTheProviderDoesNot(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("the turn returned %d calls, want 2", len(calls))
 	}
-	if calls[0].CallID == calls[1].CallID {
-		t.Errorf("both calls are named %q", calls[0].CallID)
+	// Each is named for its position, counted from one as a reader counts.
+	if calls[0].CallID != "google-call-1" || calls[1].CallID != "google-call-2" {
+		t.Errorf("the calls are named %q and %q, want google-call-1 and google-call-2",
+			calls[0].CallID, calls[1].CallID)
+	}
+}
+
+// TestGoogleBlocks_RecordsNothingForAPartThatIsNeitherACallNorText verifies an
+// empty part, which a thought summary the request did not ask for arrives as,
+// adds no block, while the text beside it is kept.
+func TestGoogleBlocks_RecordsNothingForAPartThatIsNeitherACallNorText(t *testing.T) {
+	blocks := googleBlocks(googleContent{Parts: []googlePart{{}, {Text: "kept"}}})
+	if len(blocks) != 1 || blocks[0].Kind != modelrecord.BlockText || blocks[0].Text != "kept" {
+		t.Errorf("blocks = %+v, want the text block alone", blocks)
+	}
+}
+
+// TestGoogleEmptyDetail_SaysTheBlockReasonOnlyWhenThereIsOne holds the
+// detail of an answer with no candidate to what the answer said instead.
+func TestGoogleEmptyDetail_SaysTheBlockReasonOnlyWhenThereIsOne(t *testing.T) {
+	const bare = "the answer carried no candidates"
+	blocked := googleResponse{}
+	blocked.PromptFeedback = &struct {
+		BlockReason string `json:"blockReason,omitempty"`
+	}{BlockReason: "SAFETY"}
+	silent := googleResponse{}
+	silent.PromptFeedback = &struct {
+		BlockReason string `json:"blockReason,omitempty"`
+	}{}
+	for _, one := range []struct {
+		name     string
+		response googleResponse
+		want     string
+	}{
+		{"no feedback at all", googleResponse{}, bare},
+		{"feedback naming no reason", silent, bare},
+		{"a block reason", blocked, bare + "; blockReason=SAFETY"},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			if got := googleEmptyDetail(one.response); got != one.want {
+				t.Errorf("googleEmptyDetail = %q, want %q", got, one.want)
+			}
+		})
+	}
+}
+
+// TestGoogleEchoed_HandsBackOnlyAnAssistantsParts holds the check an echo
+// passes before its bytes go back unread: it is an assistant turn's, and it
+// is a content whose parts decode, with at least one.
+func TestGoogleEchoed_HandsBackOnlyAnAssistantsParts(t *testing.T) {
+	content := json.RawMessage(`{"role":"model","parts":[{"text":"hello"}]}`)
+	for _, one := range []struct {
+		name    string
+		message Message
+		want    bool
+	}{
+		{"an assistant's parts", Message{Role: RoleAssistant, Echo: content}, true},
+		{"a user's parts", Message{Role: RoleUser, Echo: content}, false},
+		{"an assistant with no echo", Message{Role: RoleAssistant}, false},
+		{"a content with no parts field", Message{Role: RoleAssistant, Echo: json.RawMessage(`{"role":"model"}`)}, false},
+		{"no parts in the list", Message{Role: RoleAssistant, Echo: json.RawMessage(`{"parts":[]}`)}, false},
+		{"not a content", Message{Role: RoleAssistant, Echo: json.RawMessage(`["hello"]`)}, false},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			raw, parts, ok := googleEchoed(one.message)
+			if ok != one.want {
+				t.Fatalf("googleEchoed handed back %v, want %v", ok, one.want)
+			}
+			if ok && (string(raw) != `[{"text":"hello"}]` || len(parts) != 1 || parts[0].Text != "hello") {
+				t.Errorf("googleEchoed = %s, %+v, want the parts as sent and as decoded", raw, parts)
+			}
+		})
 	}
 }
 
