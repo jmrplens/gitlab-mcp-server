@@ -1137,6 +1137,96 @@ func TestGate_SessionIsBoundToTheCredentialThatMintedIt(t *testing.T) {
 	}
 }
 
+// TestGate_SessionRefusal_IsOneAnswerOnTheWireAndTwoLinesInTheLog pins, at
+// the binary, what issue 1102 decided for the gate's refusal of a session ID:
+// a session another credential opened and an ID the process does not hold are
+// answered with the same bytes, a 404 carrying -32600 and words true of both,
+// and only the log tells them apart, a WARN line for the first and an INFO
+// line for the second.
+//
+// The words used to name the first case alone, which told a client whose own
+// session had ended that it had presented somebody else's; and an answer that
+// named the first case only where it applied would tell a caller that another
+// credential holds the ID, which the tenant policy's INV-019 forbids. The ID
+// no session was ever opened under stands for every ended session: an idle
+// timeout, an eviction and a restart all leave the process holding no record
+// of the ID, which is the one thing the check reads. It is presented with the
+// owner's own credential, as a client whose session ended presents it.
+func TestGate_SessionRefusal_IsOneAnswerOnTheWireAndTwoLinesInTheLog(t *testing.T) {
+	gitlab := startTokenAwareGitLab(t)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--stateless=false")
+
+	// The same revision, and for the same reason, as
+	// TestGate_SessionIsBoundToTheCredentialThatMintedIt.
+	const statefulVersion = "2025-06-18"
+	const initialize = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"` + statefulVersion + `","capabilities":{},"clientInfo":{"name":"probe","version":"0"}}}`
+	const statefulBody = `{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`
+	// Restated rather than imported, because this module drives the binary
+	// from outside: the refusal sessionOwnershipFailure writes, and the two
+	// lines checkSessionOwnership logs, in cmd/server/auth_gate.go.
+	const (
+		refusal     = "This session is not open for the presented credential. Start a new session by sending initialize without a session ID."
+		foreignLine = "request rejected: session ID does not belong to the presented credential"
+		unheldLine  = "request rejected: session ID names no session open in this process"
+	)
+
+	opened := srv.do(t, request{
+		method: http.MethodPost, path: "/mcp", body: initialize,
+		headers: map[string]string{"PRIVATE-TOKEN": "glpat-owner", "MCP-Protocol-Version": statefulVersion},
+	})
+	sessionID := opened.header.Get("Mcp-Session-Id")
+	if sessionID == "" {
+		t.Fatalf("no session ID minted in stateful mode; status=%d body=%s", opened.status, opened.body)
+	}
+
+	presenting := func(token, session string) response {
+		return srv.do(t, request{
+			method: http.MethodPost, path: "/mcp", body: statefulBody,
+			headers: map[string]string{"PRIVATE-TOKEN": token, "Mcp-Session-Id": session, "MCP-Protocol-Version": statefulVersion},
+		})
+	}
+	answers := []struct {
+		name string
+		got  response
+	}{
+		{name: "another credential's session", got: presenting("glpat-intruder", sessionID)},
+		{name: "an id this process does not hold", got: presenting("glpat-owner", "never-opened-by-this-process")},
+	}
+	for _, answer := range answers {
+		t.Run(answer.name, func(t *testing.T) {
+			if answer.got.status != http.StatusNotFound {
+				t.Fatalf("status = %d, want 404, the terminated-session signal: %s", answer.got.status, truncate(answer.got.body))
+			}
+			decoded := decodeJSONRPCError(t, answer.got.body)
+			if decoded.Error.Code != -32600 || decoded.Error.Message != refusal {
+				t.Errorf("refusal = %d %q, want -32600 %q", decoded.Error.Code, decoded.Error.Message, refusal)
+			}
+		})
+	}
+	if answers[0].got.body != answers[1].got.body {
+		t.Errorf("the two refusals differ on the wire, which tells a caller whether another credential holds the ID:\n%s\n%s",
+			answers[0].got.body, answers[1].got.body)
+	}
+
+	lines := []struct {
+		name, msg, level string
+	}{
+		{name: "another credential's session is a warning", msg: foreignLine, level: `"level":"WARN"`},
+		{name: "an id this process does not hold is information", msg: unheldLine, level: `"level":"INFO"`},
+	}
+	for _, line := range lines {
+		t.Run(line.name, func(t *testing.T) {
+			logged := awaitLogLine(t, srv, line.msg)
+			if logged == "" {
+				t.Fatalf("the server never logged %q:\n%s", line.msg, srv.logs())
+			}
+			if !strings.Contains(logged, line.level) {
+				t.Errorf("the line is not at %s: %s", line.level, logged)
+			}
+		})
+	}
+}
+
 // TestProtocolVersion_UnsupportedGetsTheSpecifiedError pins the answer to a
 // version this server does not implement.
 //
