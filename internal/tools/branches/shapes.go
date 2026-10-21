@@ -170,8 +170,11 @@ func commitToOutput(c *gl.Commit) *CommitOutput {
 
 // BranchAccessDescriptionOutput mirrors gl.BranchAccessDescription, an entry in
 // a protected branch's push/merge/unprotect access-level arrays. GitLab sends
-// member_role_id on an entry that grants a custom role, which needs an
-// Ultimate license (ee/lib/ee/api/entities/protected_ref_access.rb).
+// member_role_id and member_role_name on an entry that grants a custom role,
+// which needs an Ultimate license (ee/lib/ee/api/entities/protected_ref_access.rb).
+// client-go does not model the name, so it is read off the captured response
+// (toolutil.ProtectedRefAccessExtra); the gap is recorded in
+// docs/development/upstream-bugs.md.
 type BranchAccessDescriptionOutput struct {
 	ID                     int64  `json:"id"`
 	AccessLevel            int    `json:"access_level"`
@@ -180,16 +183,19 @@ type BranchAccessDescriptionOutput struct {
 	UserID                 int64  `json:"user_id,omitempty"`
 	GroupID                int64  `json:"group_id,omitempty"`
 	MemberRoleID           int64  `json:"member_role_id,omitempty" tier:"ultimate"`
+	MemberRoleName         string `json:"member_role_name,omitempty" tier:"ultimate"`
 }
 
 // branchAccessDescriptionsToOutput maps a slice of gl.BranchAccessDescription to
-// the output shape, returning nil for an empty or all-nil slice.
-func branchAccessDescriptionsToOutput(in []*gl.BranchAccessDescription) []BranchAccessDescriptionOutput {
+// the output shape, with the custom role name of each entry taken from the
+// captured extra at the same index, returning nil for an empty or all-nil
+// slice.
+func branchAccessDescriptionsToOutput(in []*gl.BranchAccessDescription, extras []toolutil.ProtectedRefAccessExtra) []BranchAccessDescriptionOutput {
 	if len(in) == 0 {
 		return nil
 	}
 	out := make([]BranchAccessDescriptionOutput, 0, len(in))
-	for _, d := range in {
+	for i, d := range in {
 		if d == nil {
 			continue
 		}
@@ -201,6 +207,7 @@ func branchAccessDescriptionsToOutput(in []*gl.BranchAccessDescription) []Branch
 			UserID:                 d.UserID,
 			GroupID:                d.GroupID,
 			MemberRoleID:           d.MemberRoleID,
+			MemberRoleName:         toolutil.MemberRoleNameAt(extras, i),
 		})
 	}
 	if len(out) == 0 {

@@ -2387,7 +2387,7 @@ Also needs at least one of: `user_id`; `username`.
 
 ### `group.protected_branch_get`
 
-> Get a single group-level protected branch by name or wildcard. Returns: the protected branch with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id) and force-push and code-owner-approval flags. See also: [`group.protected_branch_list`](#groupprotected_branch_list), [`group.protected_branch_update`](#groupprotected_branch_update), [`group.protected_branch_unprotect`](#groupprotected_branch_unprotect).
+> Get a single group-level protected branch by name or wildcard. Returns: the protected branch with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id, member_role_name) and force-push and code-owner-approval flags. See also: [`group.protected_branch_list`](#groupprotected_branch_list), [`group.protected_branch_update`](#groupprotected_branch_update), [`group.protected_branch_unprotect`](#groupprotected_branch_unprotect).
 
 - **Meta-tool**: `gitlab_group`, action `protected_branch_get`
 - **Individual tool**: `gitlab_group_protected_branch_get`
@@ -2403,7 +2403,7 @@ Also needs at least one of: `user_id`; `username`.
 
 ### `group.protected_branch_list`
 
-> List group-level protected branches with search and offset or keyset pagination. Returns: protected branches with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id), force-push and code-owner-approval flags, plus pagination metadata. See also: [`group.protected_branch_get`](#groupprotected_branch_get), [`group.protected_branch_protect`](#groupprotected_branch_protect), [`group.get`](#groupget).
+> List group-level protected branches with search and offset or keyset pagination. Returns: protected branches with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id, member_role_name), force-push and code-owner-approval flags, plus pagination metadata. See also: [`group.protected_branch_get`](#groupprotected_branch_get), [`group.protected_branch_protect`](#groupprotected_branch_protect), [`group.get`](#groupget).
 
 - **Meta-tool**: `gitlab_group`, action `protected_branch_list`
 - **Individual tool**: `gitlab_group_protected_branch_list`

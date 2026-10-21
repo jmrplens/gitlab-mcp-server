@@ -27,12 +27,12 @@ const (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		groupProtectedBranchReadSpec("protected_branch_list", toolutil.RouteAction(client, List), "gitlab_group_protected_branch_list",
-			"List group-level protected branches with search and offset or keyset pagination. Returns: protected branches with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id), force-push and code-owner-approval flags, plus pagination metadata. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_protect, gitlab_group_get.",
+			"List group-level protected branches with search and offset or keyset pagination. Returns: protected branches with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id, member_role_name), force-push and code-owner-approval flags, plus pagination metadata. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_protect, gitlab_group_get.",
 			"List the protected-branch rules defined on a group so subgroup projects inherit them. Use params.group_id. Supports search plus offset or keyset pagination. Prefer this over inspecting a single rule when enumerating or auditing a group's inherited branch protections.",
 			[]string{"list group protected branches", "show group branch protection rules", "audit inherited branch protections"},
 			[]string{actionGet, actionProtect, actionGroupGet}),
 		groupProtectedBranchReadSpec("protected_branch_get", toolutil.RouteAction(client, Get), "gitlab_group_protected_branch_get",
-			"Get a single group-level protected branch by name or wildcard. Returns: the protected branch with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id) and force-push and code-owner-approval flags. See also: gitlab_group_protected_branch_list, gitlab_group_protected_branch_update, gitlab_group_protected_branch_unprotect.",
+			"Get a single group-level protected branch by name or wildcard. Returns: the protected branch with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id, member_role_name) and force-push and code-owner-approval flags. See also: gitlab_group_protected_branch_list, gitlab_group_protected_branch_update, gitlab_group_protected_branch_unprotect.",
 			"Fetch one group-level protected-branch rule by exact name or wildcard via params.group_id plus params.branch. Use after a list call or when the rule name is already known. Prefer this over list when inspecting a single inherited rule's access levels.",
 			[]string{"get group protected branch", "show group branch protection details", "inspect inherited branch rule"},
 			[]string{actionList, actionUpdate, actionUnprotect}),

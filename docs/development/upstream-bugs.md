@@ -100,6 +100,7 @@ for the fork, branch, fix, test and MR workflow.
   - [UpdateSettingsOptions models twenty-six settings the update route does not take](#updatesettingsoptions-models-twenty-six-settings-the-update-route-does-not-take)
   - [ListTopicsOptions and CreateTopicOptions model no organization_id](#listtopicsoptions-and-createtopicoptions-model-no-organization_id)
   - [ListPipelineTriggerJobsOptions models no include_retried, which the trigger job routes read and do not declare](#listpipelinetriggerjobsoptions-models-no-include_retried-which-the-trigger-job-routes-read-and-do-not-declare)
+  - [BranchAccessDescription and GroupBranchAccessDescription model no member_role_name](#branchaccessdescription-and-groupbranchaccessdescription-model-no-member_role_name)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -384,6 +385,7 @@ readable without opening the tracker:
 | 135 | client-go | [`UpdateSettingsOptions` models twenty-six settings the update route does not take](#updatesettingsoptions-models-twenty-six-settings-the-update-route-does-not-take) | No | No | No | No | Yes, `admin.settings_update` refuses them by name before anything is sent, as it refuses a key client-go does not model |
 | 136 | client-go | [`ListTopicsOptions` and `CreateTopicOptions` model no `organization_id`](#listtopicsoptions-and-createtopicoptions-model-no-organization_id) | No | No | No | No | None; `admin.topic_list` and `admin.topic_create` act on the organization GitLab resolves for the request |
 | 137 | client-go and gitlab-org/gitlab | [`ListPipelineTriggerJobsOptions` models no `include_retried`, which the trigger job routes read and do not declare](#listpipelinetriggerjobsoptions-models-no-include_retried-which-the-trigger-job-routes-read-and-do-not-declare) | No | No | No | No | Yes, `job.list_bridges` adds `include_retried` to the `trigger_jobs` query through a request option, only when the caller asked |
+| 138 | client-go | [`BranchAccessDescription` and `GroupBranchAccessDescription` model no `member_role_name`](#branchaccessdescription-and-groupbranchaccessdescription-model-no-member_role_name) | No, not yet; it goes out as a small merge request at the pace of the ones that replace row 34's joint one | No, not yet | No | No | Yes, every project and group protected branch read and write reads it off the captured response |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -1398,11 +1400,10 @@ a row gives them (rows 6, 44, 52, 54, 95, 96, 98, 101, 116, 122, 128, 133,
 135, 136 and 137), so those rows now name v3.30.0 and say what they said, and
 no capture or other workaround of this file retires with the pin.
 `member_role_id` was not a recorded gap: GitLab documents it from 19.2, and
-this server publishes and takes it from v3.30.0. `member_role_name`, which
-GitLab sends beside it on an Ultimate instance
-(`ee/lib/ee/api/entities/protected_ref_access.rb`), is not modeled by
-client-go and not published here; whether it becomes a row of its own is
-open.
+this server publishes and takes it from v3.30.0. Row 138 is new:
+`member_role_name`, which GitLab sends beside it on an Ultimate instance and
+client-go does not model, read off the captured response from the same
+change.
 
 ## GitLab client (`gitlab.com/gitlab-org/api/client-go`)
 
@@ -7778,6 +7779,67 @@ with `url` and `json` tags and `omitempty` on
 GitLab, `optional :include_retried, type: Boolean, default: false` on both
 routes, as the pipeline jobs route declares it, which also makes `false`
 mean false, and the parameter in the page's table.
+
+### BranchAccessDescription and GroupBranchAccessDescription model no member_role_name
+
+- **Reported**: no, not yet. It goes out as a small merge request of its
+  own, at the pace of the small merge requests that replace the joint one
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: no, not yet.
+- **Merged**: no. v3.30.0, the version `go.mod` pins, added `member_role_id`
+  to both structs and to the two permission option structs through another
+  contributor's
+  [gitlab-org/api/client-go!3149](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3149),
+  and not the name GitLab sends beside it.
+- **Blocking**: no.
+- **Workaround**: yes. Every handler that answers with a protected branch
+  rule reads `member_role_name` off the captured response beside the SDK's
+  decode
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)),
+  one `toolutil.ProtectedRefAccessExtra` per access level in GitLab's order:
+  `Protect` (its 409 path included), `ProtectedGet`, `ProtectedList` and
+  `ProtectedUpdate` in `internal/tools/branches`, behind `branch.protect`,
+  `branch.get_protected`, `branch.list_protected` and
+  `branch.update_protected`, through `toolutil.CapturedProtectedBranch` and
+  `CapturedProtectedBranches`; and `List`, `Get`, `Protect` and `Update` in
+  `internal/tools/groupprotectedbranches`, behind
+  `group.protected_branch_list`, `group.protected_branch_get`,
+  `group.protected_branch_protect` and `group.protected_branch_update`,
+  through `toolutil.CapturedGroupProtectedBranch` and
+  `CapturedGroupProtectedBranches`. A name that does not decode as a string
+  fails the call rather than reaching the caller as an empty one
+  (`TestProtectedBranches_UnreadableCapturedMemberRoleName` and
+  `TestGroupProtectedBranches_UnreadableCapturedMemberRoleName`). The branch
+  protection audit prompt reads the SDK's struct alone and names a custom
+  role by its id. The capture retires when both structs carry the field.
+
+**Where**: `protected_branches.go`, `BranchAccessDescription`, and
+`group_protected_branches.go`, `GroupBranchAccessDescription`, which decode
+each entry of a protected branch's `push_access_levels`,
+`merge_access_levels` and `unprotect_access_levels` on every project and
+group protected branch route that answers with a rule.
+
+**What**: `ee/lib/ee/api/entities/protected_ref_access.rb` exposes
+`member_role_id` and `member_role_name` together, under one condition: the
+access level can carry a member role and custom roles are licensed for its
+namespace, which is Ultimate. `member_role_name` is the name of the custom
+role the level grants, read through the level's `member_role`, and null on a
+level that grants none. `Entities::ProtectedBranch` and `Entities::GroupProtectedBranch`
+both present their three arrays through that entity, and the 19.5.0 live
+record (`docs/development/gitlab-api-live.json`) holds both keys on
+`API::Entities::ProtectedRefAccess` under that condition. client-go v3.30.0
+decodes the id and drops the name, so a caller of the SDK learns which
+custom role a rule grants only by its number.
+
+**How we found it**: moving the pin to v3.30.0, which added `member_role_id`
+to both structs. The entity in the live record exposes the name beside it,
+and R-PATH's sent report had not named it, since it judges a type against
+the entity its routes annotate and not the entity a nested array renders
+with.
+
+**Effort**: small: a `MemberRoleName string` with its `json` tag on both
+structs, and a test that each decodes it.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

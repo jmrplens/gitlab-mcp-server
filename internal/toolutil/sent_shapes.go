@@ -257,10 +257,43 @@ func CapturedPipelineTriggers(capture *gitlabclient.ResponseCapture, decoded int
 	return capturedList[PipelineTriggerExtra](capture, decoded, "pipeline triggers")
 }
 
-// ProtectedBranchExtra is whether a protected branch rule was inherited from
-// the group rather than declared on the project, exposed under no condition.
+// ProtectedRefAccessExtra is what lib/api/entities/protected_ref_access.rb and
+// its EE prepend send on one access level of a protected branch that
+// client-go's BranchAccessDescription and GroupBranchAccessDescription do not
+// carry: the name of the custom member role the level grants. GitLab exposes
+// it beside member_role_id only where custom roles are licensed, which is
+// Ultimate, and as null on a level that grants no custom role.
+type ProtectedRefAccessExtra struct {
+	MemberRoleName string `json:"member_role_name"`
+}
+
+// ProtectedRefAccessExtras holds one ProtectedRefAccessExtra per entry of each
+// of a protected branch's three access level arrays, in GitLab's order, which
+// is the order the SDK decodes them in.
+type ProtectedRefAccessExtras struct {
+	PushAccessLevels      []ProtectedRefAccessExtra `json:"push_access_levels"`
+	MergeAccessLevels     []ProtectedRefAccessExtra `json:"merge_access_levels"`
+	UnprotectAccessLevels []ProtectedRefAccessExtra `json:"unprotect_access_levels"`
+}
+
+// MemberRoleNameAt returns the custom role name the access level at index i
+// of extras carries, and "" for an index the capture holds no entry for. The
+// capture holds the bytes the SDK decoded, so its arrays are as long as the
+// SDK's; the bound keeps a converter from indexing past one regardless.
+func MemberRoleNameAt(extras []ProtectedRefAccessExtra, i int) string {
+	if i < 0 || i >= len(extras) {
+		return ""
+	}
+	return extras[i].MemberRoleName
+}
+
+// ProtectedBranchExtra is what Entities::ProtectedBranch sends that client-go's
+// ProtectedBranch does not carry: whether the rule was inherited from the
+// group rather than declared on the project, exposed under no condition, and
+// the custom role names of its access levels.
 type ProtectedBranchExtra struct {
 	Inherited bool `json:"inherited"`
+	ProtectedRefAccessExtras
 }
 
 // CapturedProtectedBranch reads it off the captured answer to a request for
@@ -273,6 +306,25 @@ func CapturedProtectedBranch(capture *gitlabclient.ResponseCapture) (ProtectedBr
 // branch in order, the count held to what the SDK decoded.
 func CapturedProtectedBranches(capture *gitlabclient.ResponseCapture, decoded int) ([]ProtectedBranchExtra, error) {
 	return capturedList[ProtectedBranchExtra](capture, decoded, "protected branches")
+}
+
+// GroupProtectedBranchExtra is what Entities::GroupProtectedBranch sends that
+// client-go's GroupProtectedBranch does not carry: the custom role names of
+// its access levels. The group entity has no inherited key.
+type GroupProtectedBranchExtra struct {
+	ProtectedRefAccessExtras
+}
+
+// CapturedGroupProtectedBranch reads it off the captured answer to a request
+// for one group protected branch.
+func CapturedGroupProtectedBranch(capture *gitlabclient.ResponseCapture) (GroupProtectedBranchExtra, error) {
+	return capturedOne[GroupProtectedBranchExtra](capture)
+}
+
+// CapturedGroupProtectedBranches reads the same off a list answer, one extra
+// per branch in order, the count held to what the SDK decoded.
+func CapturedGroupProtectedBranches(capture *gitlabclient.ResponseCapture, decoded int) ([]GroupProtectedBranchExtra, error) {
+	return capturedList[GroupProtectedBranchExtra](capture, decoded, "group protected branches")
 }
 
 // MergeRequestDiffExtra is the patch id of a merge request version, which

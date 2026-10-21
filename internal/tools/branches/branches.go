@@ -115,14 +115,15 @@ type ProtectedListOutput struct {
 
 // ProtectedToOutput converts a GitLab API [gl.ProtectedBranch] to the
 // MCP tool output format, surfacing the full push/merge/unprotect access-level
-// arrays, and takes what the capture read beside the decode.
+// arrays, and takes what the capture read beside the decode: whether the rule
+// is inherited and the custom role name of each access level.
 func ProtectedToOutput(b *gl.ProtectedBranch, extra toolutil.ProtectedBranchExtra) ProtectedOutput {
 	return ProtectedOutput{
 		ID:                        b.ID,
 		Name:                      b.Name,
-		PushAccessLevels:          branchAccessDescriptionsToOutput(b.PushAccessLevels),
-		MergeAccessLevels:         branchAccessDescriptionsToOutput(b.MergeAccessLevels),
-		UnprotectAccessLevels:     branchAccessDescriptionsToOutput(b.UnprotectAccessLevels),
+		PushAccessLevels:          branchAccessDescriptionsToOutput(b.PushAccessLevels, extra.PushAccessLevels),
+		MergeAccessLevels:         branchAccessDescriptionsToOutput(b.MergeAccessLevels, extra.MergeAccessLevels),
+		UnprotectAccessLevels:     branchAccessDescriptionsToOutput(b.UnprotectAccessLevels, extra.UnprotectAccessLevels),
 		AllowForcePush:            b.AllowForcePush,
 		CodeOwnerApprovalRequired: b.CodeOwnerApprovalRequired,
 		Inherited:                 extra.Inherited,

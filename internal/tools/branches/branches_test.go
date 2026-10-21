@@ -1318,12 +1318,14 @@ func TestFormatProtectedMarkdown(t *testing.T) {
 
 // TestFormatProtectedMarkdown_GranularLevels pins an entry that names one
 // user, group, custom member role or deploy key rather than a role: the
-// principal is named beside the role the level stands for.
+// principal is named beside the role the level stands for. A custom role is
+// named by GitLab's name for it when the answer carried one, escaped where the
+// card writes it, and by its id alone otherwise.
 func TestFormatProtectedMarkdown_GranularLevels(t *testing.T) {
 	got := FormatProtectedMarkdown(ProtectedOutput{
 		ID:                        7,
 		Name:                      "release/*",
-		PushAccessLevels:          []BranchAccessDescriptionOutput{{AccessLevel: 40, UserID: 3}},
+		PushAccessLevels:          []BranchAccessDescriptionOutput{{AccessLevel: 40, UserID: 3}, {AccessLevel: 40, MemberRoleID: 14, MemberRoleName: "Lead | Dev"}},
 		MergeAccessLevels:         []BranchAccessDescriptionOutput{{AccessLevel: 30, GroupID: 9}, {AccessLevel: 30, MemberRoleID: 12}},
 		UnprotectAccessLevels:     []BranchAccessDescriptionOutput{{AccessLevel: 60, DeployKeyID: 4}},
 		AllowForcePush:            true,
@@ -1333,7 +1335,7 @@ func TestFormatProtectedMarkdown_GranularLevels(t *testing.T) {
 
 	want := "## Protected Branch: release/*\n\n" +
 		"- **ID**: 7\n" +
-		"- **Push Access Levels**: Maintainer (User #3)\n" +
+		"- **Push Access Levels**: Maintainer (User #3), Maintainer (Custom Role Lead &#124; Dev #14)\n" +
 		"- **Merge Access Levels**: Developer (Group #9), Developer (Custom Role #12)\n" +
 		"- **Unprotect Access Levels**: Admin (Deploy Key #4)\n" +
 		"- **Allow Force Push**: ✅\n" +
@@ -2240,10 +2242,10 @@ func TestShapeConverters_NilAndEmpty(t *testing.T) {
 	if commitToOutput(nil) != nil {
 		t.Error("commitToOutput(nil) should be nil")
 	}
-	if branchAccessDescriptionsToOutput(nil) != nil {
+	if branchAccessDescriptionsToOutput(nil, nil) != nil {
 		t.Error("branchAccessDescriptionsToOutput(nil) should be nil")
 	}
-	if got := branchAccessDescriptionsToOutput([]*gl.BranchAccessDescription{nil}); got != nil {
+	if got := branchAccessDescriptionsToOutput([]*gl.BranchAccessDescription{nil}, nil); got != nil {
 		t.Errorf("all-nil slice should map to nil, got %+v", got)
 	}
 	if branchPermissionOptions(nil) != nil {
@@ -2388,6 +2390,98 @@ func TestProtectedBranches_UnreadableCapturedInherited(t *testing.T) {
 		{Name: "protected_update", Call: func() error {
 			client := poisoned(`{"id":1,"name":"main","inherited":"yes"}`)
 			_, err := ProtectedUpdate(context.Background(), client, ProtectedUpdateInput{ProjectID: "42", BranchName: "main", Name: "main-2"})
+			return err
+		}},
+	})
+}
+
+// TestProtectedGet_MemberRoleName_ReadFromTheCapture pins the custom role name
+// client-go does not model, which the handler reads off the captured answer:
+// published on the access level that carries it, and left empty where GitLab
+// sent no name, by leaving the key out (an instance without custom roles
+// licensed) or as null (a level that grants no custom role).
+func TestProtectedGet_MemberRoleName_ReadFromTheCapture(t *testing.T) {
+	tests := []struct {
+		name  string
+		level string
+		want  string
+	}{
+		{name: "carries it", level: `{"id":13,"access_level":30,"member_role_id":8,"member_role_name":"Lead Developer"}`, want: "Lead Developer"},
+		{name: "leaves the key out", level: `{"id":13,"access_level":30}`, want: ""},
+		{name: "sends null", level: `{"id":13,"access_level":30,"member_role_id":null,"member_role_name":null}`, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"main","merge_access_levels":[`+tt.level+`]}`)
+			}))
+			out, err := ProtectedGet(context.Background(), client, ProtectedGetInput{ProjectID: "42", BranchName: "main"})
+			if err != nil {
+				t.Fatalf("ProtectedGet() error = %v", err)
+			}
+			if len(out.MergeAccessLevels) != 1 || out.MergeAccessLevels[0].MemberRoleName != tt.want {
+				t.Errorf("MergeAccessLevels = %+v, want one level named %q", out.MergeAccessLevels, tt.want)
+			}
+		})
+	}
+}
+
+// TestProtectedList_MemberRoleName_FollowsItsOwnLevel holds each captured name
+// to the access level it was sent on, across branches and arrays: a converter
+// that took the name of the wrong index, or of the wrong branch, would move a
+// custom role onto a rule that does not grant it.
+func TestProtectedList_MemberRoleName_FollowsItsOwnLevel(t *testing.T) {
+	const body = `[` +
+		`{"id":1,"name":"main","push_access_levels":[{"id":11,"access_level":40},{"id":12,"access_level":30,"member_role_id":8,"member_role_name":"Release role"}]},` +
+		`{"id":2,"name":"stable","unprotect_access_levels":[{"id":21,"access_level":40,"member_role_id":9,"member_role_name":"Auditor"}]}` +
+		`]`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	out, err := ProtectedList(context.Background(), client, ProtectedListInput{ProjectID: "42"})
+	if err != nil {
+		t.Fatalf("ProtectedList() error = %v", err)
+	}
+	if len(out.Branches) != 2 {
+		t.Fatalf("Branches = %+v, want 2", out.Branches)
+	}
+	push := out.Branches[0].PushAccessLevels
+	if len(push) != 2 || push[0].MemberRoleName != "" || push[1].MemberRoleName != "Release role" || push[1].MemberRoleID != 8 {
+		t.Errorf("main push levels = %+v, want the name on the second level only", push)
+	}
+	unprotect := out.Branches[1].UnprotectAccessLevels
+	if len(unprotect) != 1 || unprotect[0].MemberRoleName != "Auditor" || unprotect[0].MemberRoleID != 9 {
+		t.Errorf("stable unprotect levels = %+v, want the Auditor role", unprotect)
+	}
+}
+
+// TestProtectedBranches_UnreadableCapturedMemberRoleName verifies that every
+// protected-branch handler returns an error rather than a level without its
+// name when GitLab sends member_role_name as something that is not a string.
+// client-go does not model the key, so the captured read is the only thing
+// that can notice.
+func TestProtectedBranches_UnreadableCapturedMemberRoleName(t *testing.T) {
+	const branch = `{"id":1,"name":"main","merge_access_levels":[{"id":11,"access_level":30,"member_role_id":8,"member_role_name":7}]}`
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "protect", Call: func() error {
+			_, err := Protect(context.Background(), poisoned(branch), ProtectInput{ProjectID: "42", BranchName: "main"})
+			return err
+		}},
+		{Name: "protected_list", Call: func() error {
+			_, err := ProtectedList(context.Background(), poisoned(`[`+branch+`]`), ProtectedListInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "protected_get", Call: func() error {
+			_, err := ProtectedGet(context.Background(), poisoned(branch), ProtectedGetInput{ProjectID: "42", BranchName: "main"})
+			return err
+		}},
+		{Name: "protected_update", Call: func() error {
+			_, err := ProtectedUpdate(context.Background(), poisoned(branch), ProtectedUpdateInput{ProjectID: "42", BranchName: "main", Name: "main-2"})
 			return err
 		}},
 	})

@@ -262,8 +262,21 @@ func tailReaderCases() []capturedReaderCase {
 		{
 			name: "protected branch",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedProtectedBranch(c) },
-			body: `{"id":1,"inherited":true}`,
-			want: func(v any) bool { e, _ := v.(ProtectedBranchExtra); return e.Inherited },
+			body: `{"id":1,"inherited":true,"merge_access_levels":[{"id":2},{"id":3,"member_role_id":8,"member_role_name":"Lead"}]}`,
+			want: func(v any) bool {
+				e, _ := v.(ProtectedBranchExtra)
+				return e.Inherited && len(e.MergeAccessLevels) == 2 && e.MergeAccessLevels[1].MemberRoleName == "Lead"
+			},
+		},
+		{
+			name: "group protected branch",
+			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedGroupProtectedBranch(c) },
+			body: `{"id":1,"push_access_levels":[{"id":2,"member_role_id":8,"member_role_name":"Lead"}],"unprotect_access_levels":[{"id":3,"member_role_name":"Auditor"}]}`,
+			want: func(v any) bool {
+				e, _ := v.(GroupProtectedBranchExtra)
+				return len(e.PushAccessLevels) == 1 && e.PushAccessLevels[0].MemberRoleName == "Lead" &&
+					len(e.UnprotectAccessLevels) == 1 && e.UnprotectAccessLevels[0].MemberRoleName == "Auditor"
+			},
 		},
 		{
 			name: "merge request version",
@@ -609,6 +622,10 @@ func TestCapturedTailListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 		}},
 		{"protected branches", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
 			x, e := CapturedProtectedBranches(c, n)
+			return len(x), e
+		}},
+		{"group protected branches", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
+			x, e := CapturedGroupProtectedBranches(c, n)
 			return len(x), e
 		}},
 		{"merge request versions", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
@@ -1130,6 +1147,29 @@ func TestCapturedSplitListReaders_ReadAndHoldTheCount(t *testing.T) {
 			}
 			if _, err := testCase.read(untouched, 0); !errors.Is(err, gitlabclient.ErrNoResponseCaptured) {
 				t.Errorf("read on a capture nothing ran under = %v, want ErrNoResponseCaptured", err)
+			}
+		})
+	}
+}
+
+// TestMemberRoleNameAt_InAndOutOfRange_ReturnsTheNameOrNothing pins the bound
+// the access level converters lean on: an index the capture holds answers its
+// name, and one before or past the array answers "" rather than panicking.
+func TestMemberRoleNameAt_InAndOutOfRange_ReturnsTheNameOrNothing(t *testing.T) {
+	extras := []ProtectedRefAccessExtra{{}, {MemberRoleName: "Lead"}}
+	for _, testCase := range []struct {
+		name  string
+		index int
+		want  string
+	}{
+		{"a level with no name", 0, ""},
+		{"a level with a name", 1, "Lead"},
+		{"past the array", 2, ""},
+		{"before the array", -1, ""},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := MemberRoleNameAt(extras, testCase.index); got != testCase.want {
+				t.Errorf("MemberRoleNameAt(%d) = %q, want %q", testCase.index, got, testCase.want)
 			}
 		})
 	}

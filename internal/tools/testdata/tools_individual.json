@@ -9990,6 +9990,9 @@
               "member_role_id": {
                 "type": "integer"
               },
+              "member_role_name": {
+                "type": "string"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -10040,6 +10043,9 @@
               "member_role_id": {
                 "type": "integer"
               },
+              "member_role_name": {
+                "type": "string"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -10077,6 +10083,9 @@
               },
               "member_role_id": {
                 "type": "integer"
+              },
+              "member_role_name": {
+                "type": "string"
               },
               "user_id": {
                 "type": "integer"
@@ -69053,7 +69062,7 @@
   },
   {
     "name": "gitlab_group_protected_branch_get",
-    "description": "Get a single group-level protected branch by name or wildcard. Returns: the protected branch with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id) and force-push and code-owner-approval flags. See also: gitlab_group_protected_branch_list, gitlab_group_protected_branch_update, gitlab_group_protected_branch_unprotect.",
+    "description": "Get a single group-level protected branch by name or wildcard. Returns: the protected branch with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id, member_role_name) and force-push and code-owner-approval flags. See also: gitlab_group_protected_branch_list, gitlab_group_protected_branch_update, gitlab_group_protected_branch_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -69109,6 +69118,9 @@
               "member_role_id": {
                 "type": "integer"
               },
+              "member_role_name": {
+                "type": "string"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -69159,6 +69171,9 @@
               "member_role_id": {
                 "type": "integer"
               },
+              "member_role_name": {
+                "type": "string"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -69197,6 +69212,9 @@
               "member_role_id": {
                 "type": "integer"
               },
+              "member_role_name": {
+                "type": "string"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -69234,7 +69252,7 @@
   },
   {
     "name": "gitlab_group_protected_branch_list",
-    "description": "List group-level protected branches with search and offset or keyset pagination. Returns: protected branches with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id), force-push and code-owner-approval flags, plus pagination metadata. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_protect, gitlab_group_get.",
+    "description": "List group-level protected branches with search and offset or keyset pagination. Returns: protected branches with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id, member_role_name), force-push and code-owner-approval flags, plus pagination metadata. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_protect, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -69324,6 +69342,9 @@
                     "member_role_id": {
                       "type": "integer"
                     },
+                    "member_role_name": {
+                      "type": "string"
+                    },
                     "user_id": {
                       "type": "integer"
                     }
@@ -69374,6 +69395,9 @@
                     "member_role_id": {
                       "type": "integer"
                     },
+                    "member_role_name": {
+                      "type": "string"
+                    },
                     "user_id": {
                       "type": "integer"
                     }
@@ -69411,6 +69435,9 @@
                     },
                     "member_role_id": {
                       "type": "integer"
+                    },
+                    "member_role_name": {
+                      "type": "string"
                     },
                     "user_id": {
                       "type": "integer"
@@ -69786,6 +69813,9 @@
               "member_role_id": {
                 "type": "integer"
               },
+              "member_role_name": {
+                "type": "string"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -69836,6 +69866,9 @@
               "member_role_id": {
                 "type": "integer"
               },
+              "member_role_name": {
+                "type": "string"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -69873,6 +69906,9 @@
               },
               "member_role_id": {
                 "type": "integer"
+              },
+              "member_role_name": {
+                "type": "string"
               },
               "user_id": {
                 "type": "integer"
@@ -70232,6 +70268,9 @@
               "member_role_id": {
                 "type": "integer"
               },
+              "member_role_name": {
+                "type": "string"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -70282,6 +70321,9 @@
               "member_role_id": {
                 "type": "integer"
               },
+              "member_role_name": {
+                "type": "string"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -70319,6 +70361,9 @@
               },
               "member_role_id": {
                 "type": "integer"
+              },
+              "member_role_name": {
+                "type": "string"
               },
               "user_id": {
                 "type": "integer"
@@ -206302,6 +206347,9 @@
               "member_role_id": {
                 "type": "integer"
               },
+              "member_role_name": {
+                "type": "string"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -206352,6 +206400,9 @@
               "member_role_id": {
                 "type": "integer"
               },
+              "member_role_name": {
+                "type": "string"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -206389,6 +206440,9 @@
               },
               "member_role_id": {
                 "type": "integer"
+              },
+              "member_role_name": {
+                "type": "string"
               },
               "user_id": {
                 "type": "integer"
@@ -206688,6 +206742,9 @@
               "member_role_id": {
                 "type": "integer"
               },
+              "member_role_name": {
+                "type": "string"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -206738,6 +206795,9 @@
               "member_role_id": {
                 "type": "integer"
               },
+              "member_role_name": {
+                "type": "string"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -206775,6 +206835,9 @@
               },
               "member_role_id": {
                 "type": "integer"
+              },
+              "member_role_name": {
+                "type": "string"
               },
               "user_id": {
                 "type": "integer"
@@ -206904,6 +206967,9 @@
                     "member_role_id": {
                       "type": "integer"
                     },
+                    "member_role_name": {
+                      "type": "string"
+                    },
                     "user_id": {
                       "type": "integer"
                     }
@@ -206954,6 +207020,9 @@
                     "member_role_id": {
                       "type": "integer"
                     },
+                    "member_role_name": {
+                      "type": "string"
+                    },
                     "user_id": {
                       "type": "integer"
                     }
@@ -206991,6 +207060,9 @@
                     },
                     "member_role_id": {
                       "type": "integer"
+                    },
+                    "member_role_name": {
+                      "type": "string"
                     },
                     "user_id": {
                       "type": "integer"

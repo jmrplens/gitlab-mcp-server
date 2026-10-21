@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 21,843 |
-| Unit test functions                                   | 20,288 |
+| Total test functions                                  | 21,850 |
+| Unit test functions                                   | 20,295 |
 | E2E test functions                                    |  1,555 |
 | cmd test functions                                    |  4,821 |
 | Test files (internal/)                                |    719 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,376 | 61.2% |
+| `TestFunc_Scenario` (2-part)           | 13,378 | 61.2% |
 | `TestFunc` (no underscore)             |    912 |  4.2% |
-| `TestFunc_Scenario_Expected` (3+ part) |  7,555 | 34.6% |
+| `TestFunc_Scenario_Expected` (3+ part) |  7,560 | 34.6% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,021 |        237 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          4,022 |        237 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            414 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (180) |         11,032 |        466 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (180) |         11,038 |        466 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,555 |        418 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          4,821 |        336 | server entry point and developer command utilities                                              |
-| **Total**               |     **21,843** |  **1,473** |                                                                                                 |
+| **Total**               |     **21,850** |  **1,473** |                                                                                                 |
 
 ### Core Packages
 
@@ -90,8 +90,8 @@
 | testutil/modelscore      |        96 |   100.0% | Package modelscore turns one attempt's record into the verdict a published row is made of.                                                                                                                                                                                                                                          |
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil                 |     1,298 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **4,021** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil                 |     1,299 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**             | **4,022** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -113,8 +113,8 @@
 | resourceevents    |   131 |   100.0% |    17 |
 | awardemoji        |   130 |   100.0% |    24 |
 | containerregistry |   123 |   100.0% |    16 |
+| branches          |   115 |   100.0% |    10 |
 | snippets          |   114 |   100.0% |    15 |
-| branches          |   112 |   100.0% |    10 |
 | groupmilestones   |   110 |   100.0% |     8 |
 | accesstokens      |   108 |   100.0% |    18 |
 | mrapprovals       |   108 |   100.0% |     7 |
@@ -147,7 +147,7 @@
 | awardemoji              |        130 |          3 |   100.0% |        24 |
 | badges                  |         64 |          3 |   100.0% |        12 |
 | boards                  |         85 |          2 |   100.0% |        10 |
-| branches                |        112 |          1 |   100.0% |        10 |
+| branches                |        115 |          1 |   100.0% |        10 |
 | branchrules             |         35 |          1 |   100.0% |         1 |
 | broadcastmessages       |         38 |          1 |   100.0% |         5 |
 | bulkimports             |         27 |          1 |   100.0% |         7 |
@@ -203,7 +203,7 @@
 | groupmarkdownuploads    |         35 |          4 |   100.0% |         3 |
 | groupmembers            |        107 |          5 |   100.0% |        10 |
 | groupmilestones         |        110 |          3 |   100.0% |         8 |
-| groupprotectedbranches  |         21 |          2 |   100.0% |         5 |
+| groupprotectedbranches  |         24 |          2 |   100.0% |         5 |
 | groupprotectedenvs      |         30 |          3 |   100.0% |         5 |
 | grouprelationsexport    |         30 |          3 |   100.0% |         2 |
 | groupreleases           |         24 |          3 |   100.0% |         1 |
@@ -310,7 +310,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        136 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,032** |    **466** |          | **1,195** |
+| **Total**               | **11,038** |    **466** |          | **1,195** |
 
 </details>
 

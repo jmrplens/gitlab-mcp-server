@@ -618,15 +618,16 @@ func TestUpdate_Rename_SendsNameOnlyWhenTheCallerGaveOne(t *testing.T) {
 // custom member role, as ee/lib/ee/api/entities/protected_ref_access.rb
 // renders it on an Ultimate instance.
 const customRoleBranchJSON = `{"id":4,"name":"release/*","push_access_levels":[],` +
-	`"merge_access_levels":[{"id":41,"access_level":30,"access_level_description":"Release role","member_role_id":42}],` +
+	`"merge_access_levels":[{"id":41,"access_level":30,"access_level_description":"Release role","member_role_id":42,"member_role_name":"Release role"}],` +
 	`"unprotect_access_levels":[],"allow_force_push":false,"code_owner_approval_required":false}`
 
 // TestCustomRolePermission_ProtectAndUpdate_SendAndPublishMemberRoleID pins
 // member_role_id on both sides of the two writes: a custom role the caller
 // names in allowed_to_merge reaches GitLab on that entry's own key and on no
-// other, and the rule GitLab answers with publishes it on the access level.
-// The role's id is the only id in the request, so a handler that wrote it to
-// the user, group or deploy key key, or dropped it, fails here.
+// other, and the rule GitLab answers with publishes it on the access level,
+// with the role's name read off the captured answer. The role's id is the only
+// id in the request, so a handler that wrote it to the user, group or deploy
+// key key, or dropped it, fails here.
 func TestCustomRolePermission_ProtectAndUpdate_SendAndPublishMemberRoleID(t *testing.T) {
 	allowed := []BranchPermissionInput{{MemberRoleID: new(int64(42))}}
 	tests := []struct {
@@ -657,8 +658,9 @@ func TestCustomRolePermission_ProtectAndUpdate_SendAndPublishMemberRoleID(t *tes
 		t.Run(tt.name, func(t *testing.T) {
 			entries, out := captureAllowedToMerge(t, tt.method, tt.path, tt.call)
 			assertCustomRoleEntry(t, entries)
-			if len(out.MergeAccessLevels) != 1 || out.MergeAccessLevels[0].MemberRoleID != 42 {
-				t.Errorf("MergeAccessLevels = %+v, want one entry with member_role_id 42", out.MergeAccessLevels)
+			if len(out.MergeAccessLevels) != 1 || out.MergeAccessLevels[0].MemberRoleID != 42 ||
+				out.MergeAccessLevels[0].MemberRoleName != "Release role" {
+				t.Errorf("MergeAccessLevels = %+v, want one entry with member_role_id 42 named Release role", out.MergeAccessLevels)
 			}
 		})
 	}
@@ -709,6 +711,97 @@ func assertCustomRoleEntry(t *testing.T, entries []map[string]any) {
 			t.Errorf("allowed_to_merge[0].%s = %#v, want the key left out", key, got)
 		}
 	}
+}
+
+// TestGet_MemberRoleName_ReadFromTheCapture pins the custom role name
+// client-go does not model, which Get reads off the captured answer: published
+// on the access level that carries it, and left empty where GitLab sent no
+// name, by leaving the key out (an instance without custom roles licensed) or
+// as null (a level that grants no custom role).
+func TestGet_MemberRoleName_ReadFromTheCapture(t *testing.T) {
+	tests := []struct {
+		name  string
+		level string
+		want  string
+	}{
+		{name: "carries it", level: `{"id":11,"access_level":30,"member_role_id":42,"member_role_name":"Lead Developer"}`, want: "Lead Developer"},
+		{name: "leaves the key out", level: `{"id":11,"access_level":30}`, want: ""},
+		{name: "sends null", level: `{"id":11,"access_level":30,"member_role_id":null,"member_role_name":null}`, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"main","unprotect_access_levels":[`+tt.level+`]}`)
+			}))
+			out, err := Get(context.Background(), client, GetInput{GroupID: "mygroup", Branch: "main"})
+			if err != nil {
+				t.Fatalf("Get() error = %v", err)
+			}
+			if len(out.UnprotectAccessLevels) != 1 || out.UnprotectAccessLevels[0].MemberRoleName != tt.want {
+				t.Errorf("UnprotectAccessLevels = %+v, want one level named %q", out.UnprotectAccessLevels, tt.want)
+			}
+		})
+	}
+}
+
+// TestList_MemberRoleName_FollowsItsOwnLevel holds each captured name to the
+// access level it was sent on, across branches and arrays, so a converter that
+// read the wrong index or the wrong branch's extra fails here.
+func TestList_MemberRoleName_FollowsItsOwnLevel(t *testing.T) {
+	const body = `[` +
+		`{"id":1,"name":"main","push_access_levels":[{"id":11,"access_level":40},{"id":12,"access_level":30,"member_role_id":8,"member_role_name":"Release role"}]},` +
+		`{"id":2,"name":"stable","merge_access_levels":[{"id":21,"access_level":40,"member_role_id":9,"member_role_name":"Auditor"}]}` +
+		`]`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	out, err := List(context.Background(), client, ListInput{GroupID: "mygroup"})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(out.Branches) != 2 {
+		t.Fatalf("Branches = %+v, want 2", out.Branches)
+	}
+	push := out.Branches[0].PushAccessLevels
+	if len(push) != 2 || push[0].MemberRoleName != "" || push[1].MemberRoleName != "Release role" || push[1].MemberRoleID != 8 {
+		t.Errorf("main push levels = %+v, want the name on the second level only", push)
+	}
+	merge := out.Branches[1].MergeAccessLevels
+	if len(merge) != 1 || merge[0].MemberRoleName != "Auditor" || merge[0].MemberRoleID != 9 {
+		t.Errorf("stable merge levels = %+v, want the Auditor role", merge)
+	}
+}
+
+// TestGroupProtectedBranches_UnreadableCapturedMemberRoleName verifies that
+// every handler answering with a rule returns an error rather than a level
+// without its name when GitLab sends member_role_name as something that is
+// not a string. client-go does not model the key, so the captured read is the
+// only thing that can notice.
+func TestGroupProtectedBranches_UnreadableCapturedMemberRoleName(t *testing.T) {
+	const branch = `{"id":1,"name":"main","push_access_levels":[{"id":11,"access_level":30,"member_role_id":8,"member_role_name":7}]}`
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			_, err := List(context.Background(), poisoned(`[`+branch+`]`), ListInput{GroupID: "mygroup"})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			_, err := Get(context.Background(), poisoned(branch), GetInput{GroupID: "mygroup", Branch: "main"})
+			return err
+		}},
+		{Name: "protect", Call: func() error {
+			_, err := Protect(context.Background(), poisoned(branch), ProtectInput{GroupID: "mygroup", Name: "main"})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			_, err := Update(context.Background(), poisoned(branch), UpdateInput{GroupID: "mygroup", Branch: "main"})
+			return err
+		}},
+	})
 }
 
 // TestUnprotect validates the Unprotect handler for removing group-level
@@ -922,7 +1015,8 @@ func TestFormatOutputMarkdown_WithAccessLevels(t *testing.T) {
 // TestFormatOutputMarkdown_GranularRules pins what the grantee column was added
 // for: a rule naming a user, a group, a custom member role or a deploy key says
 // so, and its Level reads "-" rather than the role number GitLab echoes beside
-// it, which is not what the rule grants.
+// it, which is not what the rule grants. A custom role carries GitLab's name
+// for it, escaped for the cell, when the answer held one.
 func TestFormatOutputMarkdown_GranularRules(t *testing.T) {
 	got := FormatOutputMarkdown(Output{
 		ID:   7,
@@ -932,6 +1026,7 @@ func TestFormatOutputMarkdown_GranularRules(t *testing.T) {
 			{ID: 21, AccessLevel: 40, AccessLevelDescription: "Release managers", GroupID: 55},
 			{ID: 22, AccessLevel: 40, AccessLevelDescription: "deploy-bot", DeployKeyID: 9},
 			{ID: 24, AccessLevel: 30, AccessLevelDescription: "Release role", MemberRoleID: 42},
+			{ID: 25, AccessLevel: 30, AccessLevelDescription: "Lead developers", MemberRoleID: 43, MemberRoleName: "Lead | Dev"},
 			{ID: 23, AccessLevel: 0, AccessLevelDescription: "No one"},
 		},
 		AllowForcePush: true,
@@ -947,6 +1042,7 @@ func TestFormatOutputMarkdown_GranularRules(t *testing.T) {
 		"| 21 | - | group #55 | Release managers |\n" +
 		"| 22 | - | deploy key #9 | deploy-bot |\n" +
 		"| 24 | - | custom role #42 | Release role |\n" +
+		"| 25 | - | custom role Lead &#124; Dev #43 | Lead developers |\n" +
 		"| 23 | No access |  | No one |\n" +
 		cardHints
 

@@ -72,6 +72,8 @@ func granteeCell(l AccessLevelOutput) string {
 		return fmt.Sprintf("user #%d", l.UserID)
 	case l.GroupID != 0:
 		return fmt.Sprintf("group #%d", l.GroupID)
+	case l.MemberRoleID != 0 && l.MemberRoleName != "":
+		return fmt.Sprintf("custom role %s #%d", toolutil.EscapeMdTableCell(l.MemberRoleName), l.MemberRoleID)
 	case l.MemberRoleID != 0:
 		return fmt.Sprintf("custom role #%d", l.MemberRoleID)
 	case l.DeployKeyID != 0:

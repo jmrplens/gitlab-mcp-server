@@ -106,7 +106,9 @@ func accessLevelsSummary(levels []BranchAccessDescriptionOutput) string {
 
 // accessLevelLabel names one access-level entry: the role the level stands
 // for, and the principal the entry names when it grants one user, group,
-// custom member role or deploy key rather than a role.
+// custom member role or deploy key rather than a role. A custom role is named
+// by GitLab's name for it when the answer carried one. The label is escaped
+// where it is written: the card's field and the listing's cell both escape it.
 func accessLevelLabel(l BranchAccessDescriptionOutput) string {
 	label := toolutil.AccessLevelDescription(gl.AccessLevelValue(l.AccessLevel))
 	switch {
@@ -114,6 +116,8 @@ func accessLevelLabel(l BranchAccessDescriptionOutput) string {
 		return fmt.Sprintf("%s (User #%d)", label, l.UserID)
 	case l.GroupID != 0:
 		return fmt.Sprintf("%s (Group #%d)", label, l.GroupID)
+	case l.MemberRoleID != 0 && l.MemberRoleName != "":
+		return fmt.Sprintf("%s (Custom Role %s #%d)", label, l.MemberRoleName, l.MemberRoleID)
 	case l.MemberRoleID != 0:
 		return fmt.Sprintf("%s (Custom Role #%d)", label, l.MemberRoleID)
 	case l.DeployKeyID != 0:
