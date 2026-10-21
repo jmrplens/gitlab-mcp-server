@@ -71,6 +71,30 @@ func TestHTTPOnlyFlags_OnStdio_AreNamedAndIgnored(t *testing.T) {
 	}
 }
 
+// TestHTTPOnlyFlags_OnStdio_TheDiscoveryBucketIsNamedAndIgnored covers the two
+// flags issue 1053 added. A stdio server publishes no discovery document, so
+// it has nothing for them to bound and no variable to name instead: they are
+// named at WARN as settings stdio does not have, and the server serves on.
+func TestHTTPOnlyFlags_OnStdio_TheDiscoveryBucketIsNamedAndIgnored(t *testing.T) {
+	s := startSessionWithArgs(t, baseEnv(startFakeGitLab(t).URL),
+		"--discovery-rate-limit-rps=5", "--discovery-rate-limit-burst=3")
+
+	if got := s.call(t, currentUserCall(1)); !served(got) {
+		t.Fatalf("the tool call was not served: %v", got)
+	}
+	warned := awaitLogRecord(t, s, stdioIgnoredFlagsLine, 10*time.Second)
+	if level, _ := warned["level"].(string); level != "WARN" {
+		t.Errorf("the line naming the ignored flags is at %s, want WARN", level)
+	}
+	want := []any{
+		"--discovery-rate-limit-burst (stdio has no such setting)",
+		"--discovery-rate-limit-rps (stdio has no such setting)",
+	}
+	if got, _ := warned["flags"].([]any); !reflect.DeepEqual(got, want) {
+		t.Errorf("flags named = %v, want %v", got, want)
+	}
+}
+
 // TestHTTPOnlyFlags_UnderTransportAuto_ListenerFlagsAreNamedAtInfo starts the
 // binary with the container image's own command, --transport auto --http-addr
 // 0.0.0.0:8080, over the pipe every MCP client connects, which is what
