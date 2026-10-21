@@ -541,12 +541,35 @@ also records the idle session timeout's variable, which refuses a zero its flag 
 (`END-005`), and the tool-call bucket's burst, whose zero beside a positive rate refuses
 startup rather than meaning off (`RTC-001`); both are departures from `INV-015` of the
 kind the issue is about. F-35
-([issue 982](https://github.com/jmrplens/gitlab-mcp-server/issues/982)) records the
-transport-source budget's map of charged (source, key) pairs, which only the sweep bounds,
+([issue 982](https://github.com/jmrplens/gitlab-mcp-server/issues/982)) recorded the
+transport-source budget's map of charged (source, key) pairs, which only the sweep bounded,
 since a source the full failure table never tracks is never blocked (`AUB-002`), a
 departure from `INV-010`. The map was first recorded under F-29, whose issue (950) is
 about OAuth verification while the map is kept in both authentication modes, and it was
-given a finding of its own once it was filed.
+given a finding of its own once it was filed. Issue 982 answered it with two bounds, and
+`AUB-002` records the issue and says what it does at capacity rather than carrying the
+finding. A source holds at most `AUB-002`'s value in pairs, since a source charged that
+many distinct keys is blocked and remembering more teaches nothing, and at that bound a
+fresh key reclaims the source's own oldest pair and is charged as before: stopping
+instead would let a source just released from its block fail with fresh keys uncharged
+until its old pairs lapse, and reclaiming only the source's own pair takes nothing across
+sources (`INV-005`). And a pair is kept only for a failure the transport limiter recorded,
+so the map holds nothing the limiter did not charge: a pair kept for an unrecorded failure
+used to stand in for a charge that never happened, so the same key failing again once the
+limiter had room went uncounted (`INV-007` holds either way, since the caller causes each
+failure). That alone does not bound the sources, because the limiter's full table lets a
+lapsed record go at most an eighth of a window after it lapses and takes a new source in
+its place, while the sweep (`AUB-005`) forgets a pair only every five minutes: a new
+table's worth of sources stayed for every window between two sweeps, and more the shorter
+`AUB-001`'s window. Once the budget indexes as many sources as `AUB-004` lets that limiter
+track, a new source first makes it forget every source none of whose pairs is live, at
+most once every eighth of a window, as the limiter sweeps its own table. Past that many,
+the sources it holds were all charged within one window and an eighth, while the limiter
+held a record of each, and a record stays in that table for a window at least, so they
+are at most three times what the table holds, whatever the window. What
+the issue leaves alone is the saturation itself, a source arriving once the limiter's
+table is full being blocked by neither table, which is the `/48` aggregate's (`AUB-006`)
+and issue 958's capacity rules'.
 
 The question F-25 left open, whether a REST request carrying an invalid token counts
 against GitLab's per-IP limit on unauthenticated requests (OQ-11, as issue 954 names it), is
@@ -610,7 +633,7 @@ caller as a TCP proxy does, and the host guard reads the same set. The two pairi
 trust nobody refuse startup: a socket listener whose list names addresses and no `unix`,
 which used to start with its header inert, and `unix` on a TCP listener.
 
-Fourteen findings are answered, and stay in the list with their issues. F-03, the listing
+Fifteen findings are answered, and stay in the list with their issues. F-03, the listing
 bucket with no process partner, is answered by `RTC-007`, the first of issue 951's three
 changes: a `tools/list` bucket keyed on the process and counted in the tools a listing
 carries, which `RTC-003` names as its partner and which no row carries F-03 for any
@@ -905,7 +928,10 @@ published like the links a scope or operator filter withheld. `RTC-005`, `HLD-00
 `HLD-004`, `HLD-011` and `AUT-003` record the issue, and none carries F-07 or F-10. F-14
 and F-25 are answered by issue 954, as its two paragraphs above say: the stated
 reason first, from what GitLab 19.5 answered, then the key, the `/48` aggregate
-(`AUB-006`) and the named unix-socket key. Four
+(`AUB-006`) and the named unix-socket key. F-35 is answered by issue 982, as the
+paragraph that records it says: the transport-source budget's pairs are bounded per
+source, and across sources to three times what its limiter's table holds, and `AUB-002`
+records the issue and carries the finding no longer. Four
 more
 have been carried by no row since the register landed, because each records something no
 row decides: F-18 a budget GitLab.com keeps that the process does not account for, F-24 a
