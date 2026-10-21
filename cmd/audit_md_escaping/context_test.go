@@ -28,6 +28,9 @@ func TestContextAt_Templates_ClassifiesTheConstructTheHoleSitsIn(t *testing.T) {
 		{name: "star list item", template: "* %s", want: ctxListItem},
 		{name: "ordered list item", template: "1. %s", want: ctxListItem},
 		{name: "parenthesised ordered item", template: "12) %s", want: ctxListItem},
+		// The two ends of the digit range, each a marker of its own.
+		{name: "an ordered item numbered zero", template: "0. %s", want: ctxListItem},
+		{name: "an ordered item numbered nine", template: "9) %s", want: ctxListItem},
 		{name: "a number alone is not a list", template: "12%s", want: ctxProse},
 		{name: "a number and a dot at the end is not a list", template: "12.%s", want: ctxProse},
 		{name: "a number followed by a letter is not a list", template: "12x %s", want: ctxProse},

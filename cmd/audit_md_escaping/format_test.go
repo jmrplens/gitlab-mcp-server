@@ -19,6 +19,14 @@ func TestParseVerbs_Templates_PairsEachVerbWithItsArgument(t *testing.T) {
 		{name: "two verbs", template: "| %s | %d |", want: []string{"s@0", "d@1"}},
 		{name: "a literal percent consumes nothing", template: "100%% of %s", want: []string{"s@0"}},
 		{name: "flags and width", template: "|%-10.3s|", want: []string{"s@0"}},
+		// The first flag character and the last digit are each the end of
+		// the range a byte is tested against.
+		{name: "a plus flag", template: "%+v", want: []string{"v@0"}},
+		{name: "a width of nine", template: "%9s", want: []string{"s@0"}},
+		{name: "an index of nine", template: "%[9]s", want: []string{"s@8"}},
+		{name: "an index ending in zero", template: "%[10]s", want: []string{"s@9"}},
+		{name: "a two-digit index", template: "%[12]s", want: []string{"s@11"}},
+		{name: "an empty index", template: "%[]s", want: []string{"[@0"}},
 		{name: "a star width takes an argument", template: "%*s", want: []string{"*@0", "s@1"}},
 		{name: "a star precision takes one too", template: "%.*f", want: []string{"*@0", "f@1"}},
 		{name: "explicit indices", template: "[%[1]s](%[1]s)", want: []string{"s@0", "s@0"}},
