@@ -1,14 +1,12 @@
 package main
 
 import (
-	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcegate"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
@@ -83,64 +81,44 @@ func productionConfig(dir string) auditConfig {
 	}
 }
 
-// exitProcess is [os.Exit] behind a seam, so the code [runMain] decided is a
-// value a test can read rather than the end of the test binary.
-var exitProcess = os.Exit
-
 func main() {
-	exitProcess(runMain(os.Args[1:], os.Stdout, os.Stderr))
+	sourcegate.Main(runMain)
 }
 
 // runMain parses the command line and runs what it describes, returning the
-// process exit code: 2 for arguments it cannot parse.
+// process exit code: 0 for a request for help, 2 for arguments it cannot
+// parse or patterns it is given, and otherwise what [run] or [runCompare]
+// decides.
 func runMain(args []string, stdout, stderr io.Writer) int {
-	flags := flag.NewFlagSet(toolName, flag.ContinueOnError)
-	flags.SetOutput(stderr)
-	dir := flags.String("dir", ".", "repository root the packages are loaded from")
-	check := flags.Bool("check", false, "exit non-zero when the register and the code disagree")
-	verbose := flags.Bool("v", false, "also list what the exemption table answered")
-	compare := flags.Bool("compare-binaries", false,
+	cmd := sourcegate.NewCommand(toolName, sourcegate.Usage{
+		Dir:     "repository root the packages are loaded from",
+		Check:   "exit non-zero when the register and the code disagree",
+		Verbose: "also list what the exemption table answered",
+	}, stderr)
+	compare := cmd.Flags.Bool("compare-binaries", false,
 		"compare two ELF binaries given as arguments: every allocated section but .gopclntab must be byte-identical")
-	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return 0
-		}
-		return 2
+	if code, goOn := cmd.Parse(args); !goOn {
+		return code
 	}
 	if *compare {
-		return runCompare(flags.Args(), stdout, stderr)
+		return runCompare(cmd.Flags.Args(), stdout, stderr)
 	}
-	if flags.NArg() > 0 {
-		fmt.Fprintf(stderr, "%s: unexpected arguments %q: the gate always loads the server and internal/\n", toolName, flags.Args())
+	if cmd.Flags.NArg() > 0 {
+		fmt.Fprintf(stderr, "%s: unexpected arguments %q: the gate always loads the server and internal/\n", toolName, cmd.Flags.Args())
 		return 2
 	}
-	return run(productionConfig(*dir), *check, *verbose, stdout, stderr)
+	return run(productionConfig(cmd.Dir), cmd.Check, cmd.Verbose, stdout, stderr)
 }
 
-// run audits, reports, and returns the process exit code.
-//
-// Exit 1 covers two different things on purpose, told apart by which stream
-// spoke: a run that could not be made at all says so on stderr, and a run that
-// found something says it on stdout and only fails under -check. A report is
-// worth having without a gate.
+// run audits, reports, and returns the process exit code [sourcegate.Finish]
+// decides: a run that could not be made fails on stderr, and one that found
+// something says so on stdout and fails only under -check.
 func run(cfg auditConfig, check, verbose bool, stdout, stderr io.Writer) int {
 	report, err := audit(cfg)
-	if err != nil {
-		fmt.Fprintf(stderr, "%s: %v\n", toolName, err)
-		return 1
-	}
-	report.write(stdout, verbose)
-	if check && !report.ok() {
-		return 1
-	}
-	return 0
+	return sourcegate.Finish(toolName, report, err, check, verbose, stdout, stderr)
 }
 
 // audit loads the program and holds the register to it.
-//
-// The root is made absolute before anything is loaded, so a run whose working
-// directory is gone stops on that error instead of naming files against
-// wherever the process happens to be.
 func audit(cfg auditConfig) (Report, error) {
 	p, err := loadProgram(cfg)
 	if err != nil {
@@ -166,14 +144,11 @@ const (
 	judgedGOARCH = "amd64"
 )
 
-// loadProgram loads and indexes the packages a run reads.
+// loadProgram loads and indexes the packages a run reads, naming files below
+// the root the load resolved.
 func loadProgram(cfg auditConfig) (*program, error) {
-	root, err := filepath.Abs(cfg.dir)
-	if err != nil {
-		return nil, err
-	}
 	env := append(os.Environ(), "GOOS="+judgedGOOS, "GOARCH="+judgedGOARCH)
-	loaded, err := goprogram.LoadWith(cfg.dir, cfg.patterns, goprogram.Options{Overlay: cfg.overlay, Env: env})
+	root, loaded, err := goprogram.LoadRooted(cfg.dir, cfg.patterns, goprogram.Options{Overlay: cfg.overlay, Env: env})
 	if err != nil {
 		return nil, err
 	}

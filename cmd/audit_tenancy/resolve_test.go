@@ -128,32 +128,6 @@ func TestNewProgram_LeavesOutWhatTheRulesMustNotRead(t *testing.T) {
 	}
 }
 
-// TestReceiverName_ReadsEveryReceiverShape: the base type name under a
-// pointer, type parameters and parentheses, and nothing for a shape no
-// receiver can have.
-func TestReceiverName_ReadsEveryReceiverShape(t *testing.T) {
-	gate := ast.NewIdent("Gate")
-	tests := []struct {
-		name string
-		expr ast.Expr
-		want string
-	}{
-		{"plain", gate, "Gate"},
-		{"pointer", &ast.StarExpr{X: gate}, "Gate"},
-		{"one type parameter", &ast.IndexExpr{X: gate}, "Gate"},
-		{"two type parameters", &ast.IndexListExpr{X: gate}, "Gate"},
-		{"parenthesized", &ast.ParenExpr{X: &ast.StarExpr{X: gate}}, "Gate"},
-		{"not a receiver", &ast.ArrayType{Elt: gate}, ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := receiverName(tt.expr); got != tt.want {
-				t.Fatalf("receiverName = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
 // TestObjectName_NamesAFunctionAndAMethod: a method is named by its
 // receiver's type, whichever receiver kind, and a method whose receiver is no
 // named type (an interface literal's) by its own name alone.

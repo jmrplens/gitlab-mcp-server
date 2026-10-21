@@ -42,9 +42,9 @@ func TestReport_Write_PrintsWhatAReaderNeeds(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var out strings.Builder
-			tt.report.write(&out, tt.verbose)
+			tt.report.Write(&out, tt.verbose)
 			if out.String() != tt.want {
-				t.Fatalf("write = %q, want %q", out.String(), tt.want)
+				t.Fatalf("Write = %q, want %q", out.String(), tt.want)
 			}
 		})
 	}

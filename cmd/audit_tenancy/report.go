@@ -79,14 +79,14 @@ type Report struct {
 	Excused []Excuse `json:"excused,omitempty"`
 }
 
-// ok reports whether the run found nothing to answer for.
-func (r Report) ok() bool {
+// OK reports whether the run found nothing to answer for.
+func (r Report) OK() bool {
 	return len(r.Findings) == 0
 }
 
-// write renders the report: every finding on its own line, what the
+// Write renders the report: every finding on its own line, what the
 // exemption table answered when verbose, and one summary line.
-func (r Report) write(out io.Writer, verbose bool) {
+func (r Report) Write(out io.Writer, verbose bool) {
 	for _, finding := range r.Findings {
 		fmt.Fprintln(out, finding.String())
 	}

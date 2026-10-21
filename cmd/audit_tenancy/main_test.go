@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcegate"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
@@ -330,10 +331,10 @@ func TestRunMain_TheTree_PassesTheGate(t *testing.T) {
 // TestMain_ExitsWithTheCodeRunMainDecided: main hands runMain's code to the
 // process and does nothing else.
 func TestMain_ExitsWithTheCodeRunMainDecided(t *testing.T) {
-	previous := exitProcess
-	t.Cleanup(func() { exitProcess = previous })
+	previous := sourcegate.Exit
+	t.Cleanup(func() { sourcegate.Exit = previous })
 	var codes []int
-	exitProcess = func(code int) { codes = append(codes, code) }
+	sourcegate.Exit = func(code int) { codes = append(codes, code) }
 	previousArgs := os.Args
 	t.Cleanup(func() { os.Args = previousArgs })
 	os.Args = []string{toolName, "-nope"}

@@ -12,6 +12,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcegate"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
@@ -50,7 +51,7 @@ type declaration struct {
 func newProgram(root string, loaded []*packages.Package, leave []string) *program {
 	p := &program{root: root, byDir: map[string]*packages.Package{}, decls: map[string]*declaration{}}
 	for _, pkg := range loaded {
-		dir := moduleDir(pkg.PkgPath)
+		dir := goprogram.TrimModulePath(pkg.PkgPath)
 		if leftOut(dir, leave) {
 			continue
 		}
@@ -80,12 +81,6 @@ func leftOut(dir string, leave []string) bool {
 	return false
 }
 
-// moduleDir is an import path relative to this module, the way the register
-// names a package.
-func moduleDir(path string) string {
-	return strings.TrimPrefix(path, goprogram.ModulePath+"/")
-}
-
 // index records every package-level declaration of pkg under its key.
 func (p *program) index(pkg *packages.Package, dir string) {
 	for _, file := range pkg.Syntax {
@@ -94,7 +89,7 @@ func (p *program) index(pkg *packages.Package, dir string) {
 			// the parser makes a bad one only of source that does not parse,
 			// which the loader has already refused.
 			if fn, isFunc := decl.(*ast.FuncDecl); isFunc {
-				p.add(&declaration{pkg: pkg, key: siteKey(dir, funcName(fn)), obj: pkg.TypesInfo.Defs[fn.Name], fn: fn})
+				p.add(&declaration{pkg: pkg, key: siteKey(dir, sourcegate.FuncDeclName(fn)), obj: pkg.TypesInfo.Defs[fn.Name], fn: fn})
 				continue
 			}
 			gen, _ := decl.(*ast.GenDecl)
@@ -138,33 +133,6 @@ func keyOf(s tenancy.Site) string {
 	return siteKey(s.Pkg, s.Name)
 }
 
-// funcName is how a function is named in a site: "Func", or "Type.Method"
-// with the receiver's base type, its pointer and type parameters stripped.
-func funcName(fn *ast.FuncDecl) string {
-	if fn.Recv == nil {
-		return fn.Name.Name
-	}
-	return receiverName(fn.Recv.List[0].Type) + "." + fn.Name.Name
-}
-
-// receiverName is the base type name of a receiver expression.
-func receiverName(expr ast.Expr) string {
-	switch e := expr.(type) {
-	case *ast.StarExpr:
-		return receiverName(e.X)
-	case *ast.IndexExpr:
-		return receiverName(e.X)
-	case *ast.IndexListExpr:
-		return receiverName(e.X)
-	case *ast.ParenExpr:
-		return receiverName(e.X)
-	case *ast.Ident:
-		return e.Name
-	default:
-		return ""
-	}
-}
-
 // objectName is how a site names a function object, "Func" or "Type.Method".
 func objectName(fn *types.Func) string {
 	recvVar := fn.Signature().Recv()
@@ -193,7 +161,7 @@ func objectKey(obj types.Object) string {
 	} else if obj.Parent() != obj.Pkg().Scope() {
 		return ""
 	}
-	return siteKey(moduleDir(obj.Pkg().Path()), name)
+	return siteKey(goprogram.TrimModulePath(obj.Pkg().Path()), name)
 }
 
 // lookup returns the declaration a site names, or why it names none.
@@ -366,7 +334,7 @@ func sortedKeys[V any](m map[string]V) []string {
 // several names from one call is the first name's.
 func (p *program) forEachTopLevel(visit func(key string, info *types.Info, node ast.Node)) {
 	for _, pkg := range p.packages {
-		dir := moduleDir(pkg.PkgPath)
+		dir := goprogram.TrimModulePath(pkg.PkgPath)
 		for _, file := range pkg.Syntax {
 			for _, decl := range file.Decls {
 				visitDecl(dir, pkg.TypesInfo, decl, visit)
@@ -378,7 +346,7 @@ func (p *program) forEachTopLevel(visit func(key string, info *types.Info, node 
 // visitDecl hands visit the code of one top-level declaration.
 func visitDecl(dir string, info *types.Info, decl ast.Decl, visit func(key string, info *types.Info, node ast.Node)) {
 	if fn, isFunc := decl.(*ast.FuncDecl); isFunc {
-		visit(siteKey(dir, funcName(fn)), info, fn)
+		visit(siteKey(dir, sourcegate.FuncDeclName(fn)), info, fn)
 		return
 	}
 	gen, _ := decl.(*ast.GenDecl)
