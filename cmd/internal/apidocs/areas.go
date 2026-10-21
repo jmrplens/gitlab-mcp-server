@@ -15,6 +15,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
 
+// DefaultAreasURL and the constants beside it say where the list of the areas
+// GitLab documents is read from, and how that listing is paged and named.
 const (
 	// DefaultAreasURL lists the files under doc/api in the canonical GitLab
 	// repository, which is the only complete answer to "what does GitLab
