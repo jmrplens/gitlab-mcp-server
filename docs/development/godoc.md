@@ -38,7 +38,11 @@ By default, it checks:
 - Package comments on non-test Go files
 - Exported functions and methods
 - Exported types
-- Exported constants and variables
+- Exported constants and variables: a declaration of one exported name needs a comment that opens with it, on the
+  group or, in a group that has none, on the spec declaring the name; a declaration of several needs a comment on the
+  group, whatever its form, or a doc comment on each exported name that opens with it (`const_group_missing` and
+  `var_group_missing` for a name with none, the form finding for one that does not open with its name). A trailing
+  line comment never counts
 
 With `--include-tests`, it also checks:
 
@@ -71,6 +75,21 @@ type Config struct {
     // ...
 }
 ```
+
+A const or var group that declares several exported names takes one comment for the set, which need not open with
+any one of them, unless every exported name in it has a doc comment of its own that opens with it:
+
+```go
+// The states a sample workflow can be in.
+const (
+    StateOpen   = "open"
+    StateClosed = "closed"
+)
+```
+
+A group that declares one exported name and has no group comment is judged by the doc comment on that name's spec,
+which must open with the name, as revive's `exported` rule judges it. A trailing line comment is never read as
+documentation, on one name or on several.
 
 Test function comments should also start with the function name when the test needs to appear clearly in Godoc or
 the audit report:

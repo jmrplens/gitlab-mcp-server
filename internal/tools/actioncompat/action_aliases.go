@@ -6,6 +6,9 @@ import (
 	"sync"
 )
 
+// The values an alias's Source carries: compatibility for a historical alias of
+// an action or of one of its parameters, standalone for an action alias that
+// names a standalone route such as discover_project.resolve.
 const (
 	SourceCompatibility = "compatibility"
 	SourceStandalone    = "standalone"

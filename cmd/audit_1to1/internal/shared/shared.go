@@ -24,6 +24,8 @@ type loadResult struct {
 	err  error
 }
 
+// What the 1:1 analyzers share: the import-path fragments that identify
+// client-go and the tool packages, and the schema version of their reports.
 const (
 	ClientGoPkgPath = "gitlab.com/gitlab-org/api/client-go"
 	ToolsPkgInfix   = "/internal/tools/"

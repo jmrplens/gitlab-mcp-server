@@ -889,7 +889,8 @@ func TestCheckTestFunctionDoc_FormAndOutputRules(t *testing.T) {
 
 // TestCheckValueDoc_GroupedNamesAndUnexportedValues verifies that a grouped
 // declaration carrying several exported names is exempt from the
-// starts-with-the-name rule and that an unexported value is not audited.
+// starts-with-the-name rule, so its group comment may describe the set, and
+// that an unexported value is not audited.
 func TestCheckValueDoc_GroupedNamesAndUnexportedValues(t *testing.T) {
 	t.Parallel()
 
@@ -897,6 +898,7 @@ func TestCheckValueDoc_GroupedNamesAndUnexportedValues(t *testing.T) {
 		"doc.go": "// Package sample provides a fixture.\npackage sample\n",
 		"sample.go": `package sample
 
+// Letters the sample uses.
 const (
 	Alpha = "a"
 	Beta  = "b"
@@ -912,6 +914,191 @@ var unexported = "x"
 	}
 	if len(findings) != 0 {
 		t.Fatalf("auditPackage() = %#v, want no findings", findings)
+	}
+}
+
+// TestAuditPackage_ReportsAnUndocumentedGroupOfExportedValues verifies the
+// rule for a const or var declaration that declares more than one exported
+// name. It passes with a comment on the group, which describes the set and is
+// held to no one name's form, or with a comment of its own on every exported
+// name, each of which must open with its name or is reported under the form
+// category with that name alone; otherwise it is reported once, under a
+// category of its own, naming every exported name the declaration holds and
+// listing those that have no comment. Before the rule such a group passed
+// with no comment at all, because the starts-with-the-name check cannot apply
+// to several names and was the only check made. A spec that declares an exported and an unexported name
+// shows that only exported names are listed; a const and a var group of a
+// documented type show the type-associated values are judged the same way,
+// each under its own kind; and a trailing line comment on every name shows
+// such a comment does not stand in for a doc comment. The categories are
+// written out rather than named by their constants because they are the
+// report's vocabulary, which a reader of the JSON keys on.
+func TestAuditPackage_ReportsAnUndocumentedGroupOfExportedValues(t *testing.T) {
+	t.Parallel()
+
+	const listed = "group has no group comment, and these exported names have none of their own: "
+	cases := []struct {
+		name   string
+		source string
+		want   []finding
+	}{
+		{
+			name:   "const group with no comment anywhere",
+			source: "const (\n\tAlpha = \"a\"\n\tBeta  = \"b\"\n)",
+			want:   []finding{symbolFinding("const_group_missing", "Alpha,Beta", "const "+listed+"Alpha, Beta")},
+		},
+		{
+			name:   "var group with no comment anywhere",
+			source: "var (\n\tAlpha = \"a\"\n\tBeta  = \"b\"\n)",
+			want:   []finding{symbolFinding("var_group_missing", "Alpha,Beta", "var "+listed+"Alpha, Beta")},
+		},
+		{
+			name:   "one spec declaring two exported names",
+			source: "var Alpha, Beta = 1, 2",
+			want:   []finding{symbolFinding("var_group_missing", "Alpha,Beta", "var "+listed+"Alpha, Beta")},
+		},
+		{
+			name:   "only the names without a comment are listed",
+			source: "const (\n\t// Alpha is documented.\n\tAlpha = \"a\"\n\tBeta  = \"b\"\n\tGamma = \"c\"\n)",
+			want:   []finding{symbolFinding("const_group_missing", "Alpha,Beta,Gamma", "const "+listed+"Beta, Gamma")},
+		},
+		{
+			name:   "an unexported name beside exported ones is not listed",
+			source: "const (\n\tAlpha, beta = 1, 2\n\tGamma       = 3\n)",
+			want:   []finding{symbolFinding("const_group_missing", "Alpha,Gamma", "const "+listed+"Alpha, Gamma")},
+		},
+		{
+			name:   "a group of a documented type is judged the same way",
+			source: "// Mode is documented.\ntype Mode int\n\nconst (\n\tModeA Mode = 1\n\tModeB Mode = 2\n)",
+			want:   []finding{symbolFinding("const_group_missing", "ModeA,ModeB", "const "+listed+"ModeA, ModeB")},
+		},
+		{
+			name:   "a var group of a documented type is judged as a var group",
+			source: "// Mode is documented.\ntype Mode int\n\nvar (\n\tModeA Mode = 1\n\tModeB Mode = 2\n)",
+			want:   []finding{symbolFinding("var_group_missing", "ModeA,ModeB", "var "+listed+"ModeA, ModeB")},
+		},
+		{
+			name:   "a comment on the group covers every name whatever its form",
+			source: "// Letters the sample uses.\nconst (\n\tAlpha = \"a\"\n\tBeta  = \"b\"\n)",
+		},
+		{
+			name:   "a comment on every exported name covers the group",
+			source: "var (\n\t// Alpha is the first letter.\n\tAlpha = \"a\"\n\t// Beta is the second letter.\n\tBeta  = \"b\"\n\tgamma = \"c\"\n)",
+		},
+		{
+			name:   "a comment on each name is held to that name's form",
+			source: "const (\n\t// Alpha is the first letter.\n\tAlpha = \"a\"\n\t// The second letter.\n\tBeta  = \"b\"\n)",
+			want:   []finding{symbolFinding(categoryConstForm, "Beta", `const comment must start with "Beta"; got "The second letter."`)},
+		},
+		{
+			name:   "a trailing line comment on each name does not cover the group",
+			source: "const (\n\tAlpha = \"a\" // the first letter\n\tBeta  = \"b\" // the second letter\n)",
+			want:   []finding{symbolFinding("const_group_missing", "Alpha,Beta", "const "+listed+"Alpha, Beta")},
+		},
+		{
+			name:   "one exported name in a group stays under the single-name rule",
+			source: "const (\n\tAlpha = \"a\"\n\tbeta  = \"b\"\n)",
+			want:   []finding{symbolFinding(categoryConstMissing, "Alpha", "missing const documentation")},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			pkg := writePackageFixture(t, "sample", map[string]string{
+				"doc.go":    "// Package sample provides a fixture.\npackage sample\n",
+				"sample.go": "package sample\n\n" + tc.source + "\n",
+			})
+			findings, err := auditPackage(pkg, false)
+			if err != nil {
+				t.Fatalf("auditPackage() error = %v", err)
+			}
+			if len(findings) == 0 {
+				findings = nil
+			}
+			if !reflect.DeepEqual(findings, tc.want) {
+				t.Fatalf("auditPackage() findings =\n%+v\nwant\n%+v", findings, tc.want)
+			}
+		})
+	}
+}
+
+// TestAuditPackage_OneExportedNameInAGroup_ReadsItsSpecComment verifies that a
+// parenthesized group declaring one exported name, with no comment on the
+// group, is judged by the doc comment of the spec that declares the name, as
+// revive's exported rule judges it: go/doc hands the audit only the group's
+// own comment, which used to report the name as undocumented however it was
+// commented. A spec comment opening with the name passes, one that does not is
+// held to the form, and neither no comment nor a trailing line comment counts.
+func TestAuditPackage_OneExportedNameInAGroup_ReadsItsSpecComment(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		source string
+		want   []finding
+	}{
+		{
+			name:   "a spec comment opening with the name passes",
+			source: "const (\n\t// Alpha is the first letter.\n\tAlpha = \"a\"\n\tbeta  = \"b\"\n)",
+		},
+		{
+			name:   "a spec comment not opening with the name is held to the form",
+			source: "const (\n\t// The first letter.\n\tAlpha = \"a\"\n\tbeta  = \"b\"\n)",
+			want:   []finding{symbolFinding(categoryConstForm, "Alpha", `const comment must start with one exported name in the group; got "The first letter."`)},
+		},
+		{
+			name:   "no comment is still missing",
+			source: "const (\n\tAlpha = \"a\"\n\tbeta  = \"b\"\n)",
+			want:   []finding{symbolFinding(categoryConstMissing, "Alpha", "missing const documentation")},
+		},
+		{
+			name:   "a trailing line comment is still missing",
+			source: "const (\n\tAlpha = \"a\" // Alpha is the first letter.\n\tbeta  = \"b\"\n)",
+			want:   []finding{symbolFinding(categoryConstMissing, "Alpha", "missing const documentation")},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			pkg := writePackageFixture(t, "sample", map[string]string{
+				"doc.go":    "// Package sample provides a fixture.\npackage sample\n",
+				"sample.go": "package sample\n\n" + tc.source + "\n",
+			})
+			findings, err := auditPackage(pkg, false)
+			if err != nil {
+				t.Fatalf("auditPackage() error = %v", err)
+			}
+			if len(findings) == 0 {
+				findings = nil
+			}
+			if !reflect.DeepEqual(findings, tc.want) {
+				t.Fatalf("auditPackage() findings =\n%+v\nwant\n%+v", findings, tc.want)
+			}
+		})
+	}
+}
+
+// TestSpecDocs_MapsEachNameToItsSpecComment verifies the helper on a
+// declaration built by hand, which is the only way to hand it a spec that
+// declares no value: go/doc passes it value declarations alone, so through
+// auditPackage the type spec below could never arrive. Each name of a value
+// spec maps to that spec's comment, trimmed, or to "" when it has none, both
+// names of a spec declaring two included, and the type spec adds nothing.
+func TestSpecDocs_MapsEachNameToItsSpecComment(t *testing.T) {
+	t.Parallel()
+
+	decl := &ast.GenDecl{Tok: token.CONST, Specs: []ast.Spec{
+		&ast.TypeSpec{Name: ast.NewIdent("Widget")},
+		&ast.ValueSpec{
+			Doc:   &ast.CommentGroup{List: []*ast.Comment{{Text: "// Alpha is documented."}}},
+			Names: []*ast.Ident{ast.NewIdent("Alpha")},
+		},
+		&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent("Beta"), ast.NewIdent("gamma")}},
+	}}
+
+	want := map[string]string{"Alpha": "Alpha is documented.", "Beta": "", "gamma": ""}
+	if got := specDocs(decl); !reflect.DeepEqual(got, want) {
+		t.Fatalf("specDocs() = %q, want %q", got, want)
 	}
 }
 
@@ -1344,6 +1531,7 @@ func TestCheckValueDoc_UnexportedAndSingleValidDoc(t *testing.T) {
 	t.Parallel()
 
 	pkg := golist.PackageInfo{ImportPath: "example.com/x", Name: "x"}
+	rule := valueRule{missing: categoryConstMissing, form: categoryConstForm, kind: "const", group: categoryConstGroupMissing}
 	testCases := []struct {
 		name  string
 		names []string
@@ -1357,7 +1545,7 @@ func TestCheckValueDoc_UnexportedAndSingleValidDoc(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			var findings []finding
-			checkValueDoc(pkg, categoryConstMissing, categoryConstForm, "const", tc.names, tc.doc, &findings)
+			checkValueDoc(pkg, rule, &doc.Value{Names: tc.names, Doc: tc.doc, Decl: &ast.GenDecl{Tok: token.CONST}}, &findings)
 			if len(findings) != 0 {
 				t.Fatalf("checkValueDoc() findings = %+v, want none", findings)
 			}

@@ -35,8 +35,10 @@ const (
 	categoryTypeForm           = "type_form"
 	categoryConstMissing       = "const_missing"
 	categoryConstForm          = "const_form"
+	categoryConstGroupMissing  = "const_group_missing"
 	categoryVarMissing         = "var_missing"
 	categoryVarForm            = "var_form"
+	categoryVarGroupMissing    = "var_group_missing"
 	categoryTestMissing        = "test_missing"
 	categoryTestForm           = "test_form"
 	categoryBenchmarkMissing   = "benchmark_missing"
@@ -338,6 +340,8 @@ func checkExportedDocs(pkg golist.PackageInfo, parsed parsedPackage, findings *[
 	funcRule := symbolRule{missing: categoryFuncMissing, form: categoryFuncForm, kind: "func"}
 	typeRule := symbolRule{missing: categoryTypeMissing, form: categoryTypeForm, kind: "type"}
 	methodRule := symbolRule{missing: categoryMethodMissing, form: categoryMethodForm, kind: "method"}
+	constRule := valueRule{missing: categoryConstMissing, form: categoryConstForm, kind: "const", group: categoryConstGroupMissing}
+	varRule := valueRule{missing: categoryVarMissing, form: categoryVarForm, kind: "var", group: categoryVarGroupMissing}
 	for _, fn := range docPackage.Funcs {
 		checkNamedDoc(pkg, funcRule, fn.Name, fn.Name, fn.Doc, findings)
 	}
@@ -352,17 +356,17 @@ func checkExportedDocs(pkg golist.PackageInfo, parsed parsedPackage, findings *[
 			checkNamedDoc(pkg, methodRule, typ.Name+"."+method.Name, method.Name, method.Doc, findings)
 		}
 		for _, value := range typ.Consts {
-			checkValueDoc(pkg, categoryConstMissing, categoryConstForm, "const", value.Names, value.Doc, findings)
+			checkValueDoc(pkg, constRule, value, findings)
 		}
 		for _, value := range typ.Vars {
-			checkValueDoc(pkg, categoryVarMissing, categoryVarForm, "var", value.Names, value.Doc, findings)
+			checkValueDoc(pkg, varRule, value, findings)
 		}
 	}
 	for _, value := range docPackage.Consts {
-		checkValueDoc(pkg, categoryConstMissing, categoryConstForm, "const", value.Names, value.Doc, findings)
+		checkValueDoc(pkg, constRule, value, findings)
 	}
 	for _, value := range docPackage.Vars {
-		checkValueDoc(pkg, categoryVarMissing, categoryVarForm, "var", value.Names, value.Doc, findings)
+		checkValueDoc(pkg, varRule, value, findings)
 	}
 	return nil
 }
@@ -387,18 +391,58 @@ func checkNamedDoc(pkg golist.PackageInfo, rule symbolRule, label, name, docText
 	}
 }
 
-func checkValueDoc(pkg golist.PackageInfo, missingCategory, formCategory, kind string, names []string, docText string, findings *[]finding) {
-	exportedNames := exportedNames(names)
+// valueRule is how one kind of const or var declaration is reported: the
+// categories and word of [symbolRule], and the category of a declaration of
+// several exported names that leaves some of them with no comment at all.
+type valueRule struct {
+	symbolRule
+	group string
+}
+
+// checkValueDoc reports a missing or malformed comment on one const or var
+// declaration, which go/doc hands over whole: a parenthesized group, or a
+// single spec that may declare several names.
+//
+// Where a declaration's comment is looked for follows revive's exported rule,
+// which counts a trailing line comment no more than this audit does, with one
+// difference: revive never judges the form of a parenthesized group's own
+// comment, while a group of one exported name is held to it here, since go doc
+// shows that comment as the name's documentation.
+//
+// A declaration of one exported name needs a comment opening with that name:
+// the group's own, or, in a group that has none, the doc comment of the spec
+// declaring the name, which go/doc does not hand over and which used to leave
+// such a name reported as undocumented however it was commented. A declaration
+// of several needs a comment on the group, which describes the set and so is
+// not judged by its form, or else a doc comment of its own on every exported
+// name that opens with that name.
+func checkValueDoc(pkg golist.PackageInfo, rule valueRule, value *doc.Value, findings *[]finding) {
+	exportedNames := exportedNames(value.Names)
 	if len(exportedNames) == 0 {
 		return
 	}
-	docText = strings.TrimSpace(docText)
+	docText := strings.TrimSpace(value.Doc)
 	nameList := strings.Join(exportedNames, ",")
+	specDoc := specDocs(value.Decl)
 	if len(exportedNames) > 1 {
+		if docText != "" {
+			return
+		}
+		if undocumented := withoutDoc(exportedNames, specDoc); len(undocumented) > 0 {
+			*findings = append(*findings, newFinding(rule.group, pkg, "", nameList, fmt.Sprintf("%s group has no group comment, and these exported names have none of their own: %s", rule.kind, strings.Join(undocumented, ", "))))
+		}
+		for _, name := range exportedNames {
+			if text := specDoc[name]; text != "" && !strings.HasPrefix(text, name) {
+				*findings = append(*findings, newFinding(rule.form, pkg, "", name, fmt.Sprintf("%s comment must start with %q; got %q", rule.kind, name, firstLine(text))))
+			}
+		}
 		return
 	}
 	if docText == "" {
-		*findings = append(*findings, newFinding(missingCategory, pkg, "", nameList, fmt.Sprintf("missing %s documentation", kind)))
+		docText = specDoc[exportedNames[0]]
+	}
+	if docText == "" {
+		*findings = append(*findings, newFinding(rule.missing, pkg, "", nameList, fmt.Sprintf("missing %s documentation", rule.kind)))
 		return
 	}
 	for _, name := range exportedNames {
@@ -406,7 +450,39 @@ func checkValueDoc(pkg golist.PackageInfo, missingCategory, formCategory, kind s
 			return
 		}
 	}
-	*findings = append(*findings, newFinding(formCategory, pkg, "", nameList, fmt.Sprintf("%s comment must start with one exported name in the group; got %q", kind, firstLine(docText))))
+	*findings = append(*findings, newFinding(rule.form, pkg, "", nameList, fmt.Sprintf("%s comment must start with one exported name in the group; got %q", rule.kind, firstLine(docText))))
+}
+
+// specDocs maps every name a const or var declaration declares to the doc
+// comment of the spec declaring it, "" for none. A trailing line comment is not
+// one: go doc prints it inside the declaration's code, not as documentation. A
+// spec that declares no value names nothing, although go/doc only ever hands
+// over value specs here.
+func specDocs(decl *ast.GenDecl) map[string]string {
+	docs := map[string]string{}
+	for _, spec := range decl.Specs {
+		valueSpec, ok := spec.(*ast.ValueSpec)
+		if !ok {
+			continue
+		}
+		text := strings.TrimSpace(valueSpec.Doc.Text())
+		for _, name := range valueSpec.Names {
+			docs[name.Name] = text
+		}
+	}
+	return docs
+}
+
+// withoutDoc returns the names, in their order, for which docs holds no
+// comment.
+func withoutDoc(names []string, docs map[string]string) []string {
+	var out []string
+	for _, name := range names {
+		if docs[name] == "" {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 func exportedNames(names []string) []string {

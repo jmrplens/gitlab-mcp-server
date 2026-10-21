@@ -9,6 +9,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
 
+// The fixed parts of the committed request inventory: where it lives, the note
+// it opens with, and the two kinds a row can be.
 const (
 	// Path is where the committed artifact lives, relative to the repository
 	// root.

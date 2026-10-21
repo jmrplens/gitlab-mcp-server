@@ -96,6 +96,8 @@ type IndividualToolAnnotationOverrides struct {
 	OpenWorld   *bool
 }
 
+// The values an ActionSpec's ContentKind, NotFoundPolicy, EmbeddedResourcePolicy
+// and RichResultPolicy accept, one block per field; validation refuses any other.
 const (
 	ActionSpecContentList      = "list"
 	ActionSpecContentDetail    = "detail"
