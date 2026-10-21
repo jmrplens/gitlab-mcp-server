@@ -4,9 +4,11 @@ import (
 	"cmp"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
-	"sort"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcegate"
 )
 
 // Summary is what a run looked at, so a clean report says what it was clean
@@ -16,70 +18,35 @@ type Summary struct {
 	// Closes are the closes of an httptest server judged: every one but those
 	// that wait for the top-level function's test to end, which nothing in
 	// the function can follow.
-	Closes   int `json:"closes"`
-	Findings int `json:"findings"`
-	Excused  int `json:"excused"`
-	Stale    int `json:"stale_declarations"`
-	Unknown  int `json:"unknown_categories"`
-	Unjudged int `json:"unjudged_files"`
+	Closes int `json:"closes"`
+	sourcegate.Counts
 }
 
-// Report is the whole answer.
+// Report is the whole answer: what the run looked at, and the verdict the
+// declaration table and the load give. Its unjudged files are the ones the
+// load left out that import net/http/httptest, whose servers this run could
+// not see.
 type Report struct {
-	Summary  Summary   `json:"summary"`
-	Findings []Finding `json:"findings"`
-	// Excused are the findings a declaration answers, kept so a verbose run
-	// can show what the table is standing in front of.
-	Excused []Finding `json:"excused,omitempty"`
-	// Stale are the declarations that excused nothing this run.
-	Stale []string `json:"stale_declarations,omitempty"`
-	// Unknown are the declarations naming a category nobody defined.
-	Unknown []string `json:"unknown_categories,omitempty"`
-	// Unjudged are the files the load left out that import
-	// net/http/httptest, whose servers this run could not see.
-	Unjudged []string `json:"unjudged_files,omitempty"`
+	Summary Summary `json:"summary"`
+	sourcegate.Verdict[Finding]
 }
 
-// buildReport holds what the scan found against the declaration table.
-func buildReport(found *scanner, declared map[string]declaration) Report {
-	report := Report{Summary: Summary{Packages: len(found.packages), Closes: len(found.closes)}}
-	findings := make([]Finding, 0, len(found.findings))
-	for _, finding := range found.findings {
-		findings = append(findings, finding)
-	}
+// buildReport holds what the scan found, in the report's order, against the
+// declaration table.
+func buildReport(found *scanner, declared map[string]sourcegate.Declaration) Report {
+	findings := slices.Collect(maps.Values(found.findings))
 	sortFindings(findings)
-	excused := map[string]struct{}{}
-	for _, finding := range findings {
-		key := declarationKey(finding)
-		if _, allowed := declared[key]; allowed {
-			excused[key] = struct{}{}
-			report.Excused = append(report.Excused, finding)
-			continue
-		}
-		report.Findings = append(report.Findings, finding)
+	table := sourcegate.Table{Declared: declared, Categories: categories}
+	verdict := sourcegate.Judge(findings, declarationKey, table, found.packages, slices.Collect(maps.Keys(found.unjudged)))
+	return Report{
+		Summary: Summary{Packages: len(found.packages), Closes: len(found.closes), Counts: verdict.Counts()},
+		Verdict: verdict,
 	}
-	report.Stale = staleDeclarations(declared, excused, found.packages)
-	report.Unknown = unknownCategories(declared)
-	for file := range found.unjudged {
-		report.Unjudged = append(report.Unjudged, file)
-	}
-	sort.Strings(report.Unjudged)
-	report.Summary.Findings = len(report.Findings)
-	report.Summary.Excused = len(report.Excused)
-	report.Summary.Stale = len(report.Stale)
-	report.Summary.Unknown = len(report.Unknown)
-	report.Summary.Unjudged = len(report.Unjudged)
-	return report
 }
 
-// ok reports whether the run found nothing to answer for.
-func (r Report) ok() bool {
-	return len(r.Findings) == 0 && len(r.Stale) == 0 && len(r.Unknown) == 0 && len(r.Unjudged) == 0
-}
-
-// write renders the report: each finding on its own line, then the
+// Write renders the report: each finding on its own line, then the
 // declarations and files that need a reader, then one summary line.
-func (r Report) write(out io.Writer, verbose bool) {
+func (r Report) Write(out io.Writer, verbose bool) {
 	for _, finding := range r.Findings {
 		fmt.Fprintf(out, "%s\n", describe(finding))
 	}
@@ -97,7 +64,7 @@ func (r Report) write(out io.Writer, verbose bool) {
 	for _, file := range r.Unjudged {
 		fmt.Fprintf(out, "%s: left out of this load by its build constraints and imports net/http/httptest, so no server in it was judged\n", file)
 	}
-	if verbose || !r.ok() {
+	if verbose || !r.OK() {
 		fmt.Fprintln(out)
 	}
 	fmt.Fprintf(out, "%s: %d closes of an httptest server judged in %d packages; "+

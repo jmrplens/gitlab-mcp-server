@@ -42,32 +42,9 @@ func TestReport_Write_RendersEverySection(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var out strings.Builder
-			report.write(&out, tt.verbose)
+			report.Write(&out, tt.verbose)
 			if out.String() != tt.want {
-				t.Errorf("write =\n%s\nwant\n%s", out.String(), tt.want)
-			}
-		})
-	}
-}
-
-// TestReport_Ok_FailsOnEachKindOfProblem verifies every section but the
-// excused one fails the gate on its own, and an empty report passes it.
-func TestReport_Ok_FailsOnEachKindOfProblem(t *testing.T) {
-	for _, tt := range []struct {
-		name   string
-		report Report
-		want   bool
-	}{
-		{name: "nothing", want: true},
-		{name: "only excused", report: Report{Excused: []Finding{finding("a_test.go", 1, "srv")}}, want: true},
-		{name: "a finding", report: Report{Findings: []Finding{finding("a_test.go", 1, "srv")}}},
-		{name: "a stale declaration", report: Report{Stale: []string{"p:F"}}},
-		{name: "an unknown category", report: Report{Unknown: []string{"p:F"}}},
-		{name: "an unjudged file", report: Report{Unjudged: []string{"a_test.go"}}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.report.ok(); got != tt.want {
-				t.Errorf("ok() = %v, want %v", got, tt.want)
+				t.Errorf("Write =\n%s\nwant\n%s", out.String(), tt.want)
 			}
 		})
 	}

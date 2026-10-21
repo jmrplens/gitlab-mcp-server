@@ -1,18 +1,21 @@
 package main
 
 import (
-	"errors"
-	"flag"
-	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcegate"
 )
 
 // toolName is how the report names itself.
 const toolName = "audit_test_closed_servers"
+
+// usage is the help text of the gate's flags.
+var usage = sourcegate.Usage{
+	Dir:     "module root the patterns are resolved against",
+	Check:   "exit non-zero when an httptest server is closed while its address is still used",
+	Verbose: "also list the closes a declaration excuses",
+}
 
 // defaultPatterns is the whole module: a closed server is a hazard in any
 // test, the end-to-end packages included, and the loader is asked for every
@@ -37,74 +40,39 @@ type auditConfig struct {
 	overlay map[string][]byte
 	// declared is the declaration table, which a test replaces so an excused
 	// site and a stale entry can be exercised without editing the real one.
-	declared map[string]declaration
+	declared map[string]sourcegate.Declaration
 }
 
-// exitProcess is [os.Exit] behind a seam, so the code [runMain] decided is a
-// value a test can read rather than the end of the test binary.
-var exitProcess = os.Exit
-
 func main() {
-	exitProcess(runMain(os.Args[1:], os.Stdout, os.Stderr))
+	sourcegate.Main(runMain)
 }
 
 // runMain parses the command line and runs the audit it describes, returning
-// the process exit code: 2 for arguments it cannot parse, and otherwise what
-// [run] decides.
+// the process exit code: 0 for a request for help, 2 for arguments it cannot
+// parse, and otherwise what [run] decides.
 func runMain(args []string, stdout, stderr io.Writer) int {
-	flags := flag.NewFlagSet(toolName, flag.ContinueOnError)
-	flags.SetOutput(stderr)
-	dir := flags.String("dir", ".", "module root the patterns are resolved against")
-	check := flags.Bool("check", false, "exit non-zero when an httptest server is closed while its address is still used")
-	verbose := flags.Bool("v", false, "also list the closes a declaration excuses")
-	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return 0
-		}
-		return 2
-	}
-	patterns := flags.Args()
-	if len(patterns) == 0 {
-		patterns = defaultPatterns
-	}
-	return run(auditConfig{
-		dir:      *dir,
-		patterns: patterns,
-		tags:     analysisTags,
-		declared: usedAfterTheCloseOnPurpose,
-	}, *check, *verbose, stdout, stderr)
+	return sourcegate.Run(toolName, usage, args, stderr, func(cmd *sourcegate.Command) int {
+		return run(auditConfig{
+			dir:      cmd.Dir,
+			patterns: cmd.Patterns(defaultPatterns),
+			tags:     analysisTags,
+			declared: usedAfterTheCloseOnPurpose,
+		}, cmd.Check, cmd.Verbose, stdout, stderr)
+	})
 }
 
-// run scans, reports, and returns the process exit code.
-//
-// Exit 1 covers two different things on purpose, told apart by which stream
-// spoke: a run that could not be made at all says so on stderr, and a run that
-// found something says it on stdout and only fails under -check.
+// run scans, reports, and returns the process exit code [sourcegate.Finish]
+// decides: a run that could not be made fails on stderr, and one that found
+// something says so on stdout and fails only under -check.
 func run(cfg auditConfig, check, verbose bool, stdout, stderr io.Writer) int {
 	report, err := audit(cfg)
-	if err != nil {
-		fmt.Fprintf(stderr, "%s: %v\n", toolName, err)
-		return 1
-	}
-	report.write(stdout, verbose)
-	if check && !report.ok() {
-		return 1
-	}
-	return 0
+	return sourcegate.Finish(toolName, report, err, check, verbose, stdout, stderr)
 }
 
 // audit loads the tree with its tests under the configured tags and judges
-// every function in it.
-//
-// The root is made absolute before anything is loaded, so a run whose working
-// directory is gone stops on that error instead of naming files against
-// wherever the process happens to be.
+// every function in it, naming files below the root the load resolved.
 func audit(cfg auditConfig) (Report, error) {
-	root, err := filepath.Abs(cfg.dir)
-	if err != nil {
-		return Report{}, err
-	}
-	loaded, err := goprogram.LoadWith(cfg.dir, cfg.patterns, goprogram.Options{
+	root, loaded, err := goprogram.LoadRooted(cfg.dir, cfg.patterns, goprogram.Options{
 		Tests:     true,
 		BuildTags: cfg.tags,
 		Overlay:   cfg.overlay,

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcegate"
 	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
@@ -35,7 +36,7 @@ func plantedDir(t *testing.T) string {
 // every analysis tag, with no declarations.
 func plantedConfig(t *testing.T, patterns ...string) auditConfig {
 	t.Helper()
-	return auditConfig{dir: plantedDir(t), patterns: patterns, tags: analysisTags, declared: map[string]declaration{}}
+	return auditConfig{dir: plantedDir(t), patterns: patterns, tags: analysisTags, declared: map[string]sourcegate.Declaration{}}
 }
 
 // runPlanted runs the command over the fixture module and returns the exit
@@ -233,10 +234,10 @@ func writeTree(t *testing.T, files map[string]string) string {
 // TestMain_ExitsWithTheCodeRunMainDecided: main hands runMain's code to the
 // process and does nothing else.
 func TestMain_ExitsWithTheCodeRunMainDecided(t *testing.T) {
-	previous := exitProcess
-	t.Cleanup(func() { exitProcess = previous })
+	previous := sourcegate.Exit
+	t.Cleanup(func() { sourcegate.Exit = previous })
 	var codes []int
-	exitProcess = func(code int) { codes = append(codes, code) }
+	sourcegate.Exit = func(code int) { codes = append(codes, code) }
 	previousArgs := os.Args
 	t.Cleanup(func() { os.Args = previousArgs })
 	os.Args = []string{toolName, "-nope"}
@@ -257,13 +258,13 @@ func TestMain_ExitsWithTheCodeRunMainDecided(t *testing.T) {
 // not lost, only moved.
 func TestMain_WritesTheReportToStdoutAndTheComplaintToStderr(t *testing.T) {
 	dir := plantedDir(t)
-	previousExit, previousArgs := exitProcess, os.Args
+	previousExit, previousArgs := sourcegate.Exit, os.Args
 	previousStdout, previousStderr := os.Stdout, os.Stderr
 	t.Cleanup(func() {
-		exitProcess, os.Args = previousExit, previousArgs
+		sourcegate.Exit, os.Args = previousExit, previousArgs
 		os.Stdout, os.Stderr = previousStdout, previousStderr
 	})
-	exitProcess = func(int) {}
+	sourcegate.Exit = func(int) {}
 	tests := []struct {
 		name       string
 		args       []string

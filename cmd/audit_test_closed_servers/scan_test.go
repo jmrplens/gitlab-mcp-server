@@ -2,19 +2,18 @@ package main
 
 import (
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"path/filepath"
 	"slices"
 	"testing"
 
 	"golang.org/x/tools/go/packages"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcegate"
 )
 
 // auditPlanted audits the named packages of the fixture module under the
 // given tags, held to the given declarations, and returns the report.
-func auditPlanted(t *testing.T, tags []string, declared map[string]declaration, patterns ...string) Report {
+func auditPlanted(t *testing.T, tags []string, declared map[string]sourcegate.Declaration, patterns ...string) Report {
 	t.Helper()
 	report, err := audit(auditConfig{dir: plantedDir(t), patterns: patterns, tags: tags, declared: declared})
 	if err != nil {
@@ -108,7 +107,7 @@ var plantedFindings = []string{
 // its fixture says, nothing under clean is, the file a constraint hides is
 // named as unjudged, and the figures say what the run was over.
 func TestAudit_PlantedModule_ReportsEveryPlantedShapeAndNothingElse(t *testing.T) {
-	report := auditPlanted(t, analysisTags, map[string]declaration{}, "./...")
+	report := auditPlanted(t, analysisTags, map[string]sourcegate.Declaration{}, "./...")
 	if got := spell(report.Findings); !slices.Equal(got, plantedFindings) {
 		t.Errorf("findings =\n%q\nwant\n%q", got, plantedFindings)
 	}
@@ -130,14 +129,14 @@ func TestAudit_PlantedModule_ReportsEveryPlantedShapeAndNothingElse(t *testing.T
 // nothing.
 func TestAudit_EachTag_RevealsItsOwnFile(t *testing.T) {
 	t.Run("no tag", func(t *testing.T) {
-		report := auditPlanted(t, nil, map[string]declaration{}, "./tagged/...")
+		report := auditPlanted(t, nil, map[string]sourcegate.Declaration{}, "./tagged/...")
 		if len(report.Findings) != 0 || report.Summary.Closes != 0 {
 			t.Errorf("an untagged load found %v in %d closes, want nothing", spell(report.Findings), report.Summary.Closes)
 		}
 	})
 	for _, tag := range analysisTags {
 		t.Run(tag, func(t *testing.T) {
-			report := auditPlanted(t, []string{tag}, map[string]declaration{}, "./tagged/...")
+			report := auditPlanted(t, []string{tag}, map[string]sourcegate.Declaration{}, "./tagged/...")
 			want := fmt.Sprintf("tagged/%s_test.go:15 TestPlanted_BehindThe_%s_Tag_Reported srv url:16", tag, tag)
 			if got := spell(report.Findings); !slices.Equal(got, []string{want}) {
 				t.Errorf("findings = %q, want only %q", got, want)
@@ -152,11 +151,11 @@ func TestAudit_EachTag_RevealsItsOwnFile(t *testing.T) {
 // one for a package the run did not load is out of view, and a category
 // nobody defined is reported whatever it excuses.
 func TestAudit_Declarations_ExcuseStaleAndUnknownAreEachReported(t *testing.T) {
-	declared := map[string]declaration{
-		"example.com/planted/declared:TestPlanted_ExcusedByADeclaration_Excused": {category: categoryOnlyAsText, reason: "compared as text"},
-		"example.com/planted/declared:TestPlanted_Gone":                          {category: categoryOnlyAsText, reason: "no longer there"},
-		"example.com/planted/elsewhere:TestPlanted_OutOfView":                    {category: categoryOnlyAsText, reason: "not loaded"},
-		"example.com/planted/declared:TestPlanted_Invented":                      {category: "invented", reason: "nobody defined it"},
+	declared := map[string]sourcegate.Declaration{
+		"example.com/planted/declared:TestPlanted_ExcusedByADeclaration_Excused": {Category: categoryOnlyAsText, Reason: "compared as text"},
+		"example.com/planted/declared:TestPlanted_Gone":                          {Category: categoryOnlyAsText, Reason: "no longer there"},
+		"example.com/planted/elsewhere:TestPlanted_OutOfView":                    {Category: categoryOnlyAsText, Reason: "not loaded"},
+		"example.com/planted/declared:TestPlanted_Invented":                      {Category: "invented", Reason: "nobody defined it"},
 	}
 	report := auditPlanted(t, analysisTags, declared, "./declared/...")
 	if len(report.Findings) != 0 {
@@ -171,7 +170,7 @@ func TestAudit_Declarations_ExcuseStaleAndUnknownAreEachReported(t *testing.T) {
 	if want := []string{"example.com/planted/declared:TestPlanted_Invented"}; !slices.Equal(report.Unknown, want) {
 		t.Errorf("unknown = %v, want %v", report.Unknown, want)
 	}
-	if report.ok() {
+	if report.OK() {
 		t.Error("a report with stale and unknown declarations is ok, want it to fail the gate")
 	}
 }
@@ -200,82 +199,5 @@ func TestNoteUnjudged_ReadsTheImportsOfTheGoFilesLeftOut(t *testing.T) {
 	slices.Sort(got)
 	if want := []string{"aliased_test.go", "broken_test.go"}; !slices.Equal(got, want) {
 		t.Errorf("unjudged = %v, want %v", got, want)
-	}
-}
-
-// TestIsTestMain_BelievesTheSuffixOnlyBesideAVariant verifies the synthesized
-// test executable is told apart from a package whose directory is named like
-// one.
-func TestIsTestMain_BelievesTheSuffixOnlyBesideAVariant(t *testing.T) {
-	underTest := packagesUnderTest([]*packages.Package{
-		{PkgPath: "example.com/p [example.com/p.test]", ForTest: "example.com/p"},
-		{PkgPath: "example.com/p"},
-	})
-	for _, tt := range []struct {
-		name string
-		pkg  *packages.Package
-		want bool
-	}{
-		{name: "the executable built for a package with tests", pkg: &packages.Package{Name: "main", PkgPath: "example.com/p.test"}, want: true},
-		{name: "a main package in a directory named like one", pkg: &packages.Package{Name: "main", PkgPath: "example.com/q.test"}},
-		{name: "a library in a directory named like one", pkg: &packages.Package{Name: "p", PkgPath: "example.com/p.test"}},
-		{name: "a main package", pkg: &packages.Package{Name: "main", PkgPath: "example.com/cmd"}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := isTestMain(tt.pkg, underTest); got != tt.want {
-				t.Errorf("isTestMain(%s) = %v, want %v", tt.pkg.PkgPath, got, tt.want)
-			}
-		})
-	}
-}
-
-// TestNaming_SpellsPackagesAndFilesAsTheRepositoryDoes covers the names a
-// finding carries: a variant's decoration taken off, the module path trimmed,
-// and a file below the root made relative, one outside it or one that cannot
-// be made relative left whole.
-func TestNaming_SpellsPackagesAndFilesAsTheRepositoryDoes(t *testing.T) {
-	for _, tt := range []struct{ name, got, want string }{
-		{"a test variant", variantName("example.com/p [example.com/p.test]"), "example.com/p"},
-		{"a plain package", variantName("example.com/p"), "example.com/p"},
-		{"a package of this module", trimModulePath("github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"), "internal/oauth"},
-		{"a package of another module", trimModulePath("example.com/p"), "example.com/p"},
-		{"a file below the root", relativePath(filepath.Join("/repo", "a", "b.go"), "/repo"), "a/b.go"},
-		{"a file outside the root", relativePath(filepath.Join("/elsewhere", "b.go"), "/repo"), "/elsewhere/b.go"},
-		{"a relative file against an absolute root", relativePath(filepath.Join("a", "b.go"), "/repo"), "a/b.go"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.got != tt.want {
-				t.Errorf("got %q, want %q", tt.got, tt.want)
-			}
-		})
-	}
-}
-
-// TestFuncDeclName_SpellsTheReceiverAsTheFileDoes covers every receiver form
-// a declaration key has to name: none, a value, a pointer, a parenthesized
-// one, a generic type with one parameter and with two, and a receiver that is
-// not a type name, which keeps the method's name alone.
-func TestFuncDeclName_SpellsTheReceiverAsTheFileDoes(t *testing.T) {
-	const source = `package p
-
-func Plain() {}
-func (T) Value() {}
-func (t *T) Pointer() {}
-func ((T)) Parenthesized() {}
-func (g G[A]) OneParameter() {}
-func (g *G[A, B]) TwoParameters() {}
-func (x pkg.T) Qualified() {}
-`
-	file, err := parser.ParseFile(token.NewFileSet(), "p.go", source, 0)
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	var got []string
-	for _, decl := range file.Decls {
-		got = append(got, funcDeclName(decl.(*ast.FuncDecl)))
-	}
-	want := []string{"Plain", "T.Value", "T.Pointer", "T.Parenthesized", "G.OneParameter", "G.TwoParameters", "Qualified"}
-	if !slices.Equal(got, want) {
-		t.Errorf("names = %v, want %v", got, want)
 	}
 }

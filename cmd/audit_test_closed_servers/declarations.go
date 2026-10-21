@@ -1,9 +1,6 @@
 package main
 
-import (
-	"sort"
-	"strings"
-)
+import "github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcegate"
 
 // categoryOnlyAsText is the one reason a function may close a server and go
 // on reading its address: afterwards the address is only text, compared or
@@ -17,16 +14,10 @@ var categories = map[string]string{
 	categoryOnlyAsText: "after the close the address is only read as text and nothing dials it, so no listener given the port can answer in its place",
 }
 
-// declaration is one excused function: why it reads a closed server's address,
-// in a category and in words.
-type declaration struct {
-	category string
-	reason   string
-}
-
 // usedAfterTheCloseOnPurpose are the functions this repository lets close an
 // httptest server and go on using its address, each with the reason that is
-// right.
+// right: why the function reads a closed server's address, in a category and
+// in words.
 //
 // The table is meant to stay empty. A server closed in the middle of a test
 // gives its port back at once, and a test that needs an address nothing
@@ -41,44 +32,9 @@ type declaration struct {
 // also how a finding names where it sits. An entry that excuses nothing is
 // reported, on the terms every declaration table here is held to: a
 // declaration that has stopped describing the tree is itself a finding.
-var usedAfterTheCloseOnPurpose = map[string]declaration{}
+var usedAfterTheCloseOnPurpose = map[string]sourcegate.Declaration{}
 
 // declarationKey is how a finding is named in the declaration table.
 func declarationKey(finding Finding) string {
 	return finding.Package + ":" + finding.Func
-}
-
-// unknownCategories names the declarations whose category is not one of
-// [categories], in a stable order.
-func unknownCategories(declared map[string]declaration) []string {
-	var unknown []string
-	for key, entry := range declared {
-		if _, known := categories[entry.category]; !known {
-			unknown = append(unknown, key)
-		}
-	}
-	sort.Strings(unknown)
-	return unknown
-}
-
-// staleDeclarations names the entries that excused nothing this run, out of
-// the ones this run was in a position to judge.
-//
-// An entry naming a package the run never loaded is passed over rather than
-// reported: a run narrowed to one package would otherwise condemn every
-// declaration outside it, which would teach a reader to ignore the line.
-func staleDeclarations(declared map[string]declaration, excused, scanned map[string]struct{}) []string {
-	var stale []string
-	for key := range declared {
-		if _, used := excused[key]; used {
-			continue
-		}
-		pkg, _, _ := strings.Cut(key, ":")
-		if _, looked := scanned[pkg]; !looked {
-			continue
-		}
-		stale = append(stale, key)
-	}
-	sort.Strings(stale)
-	return stale
 }

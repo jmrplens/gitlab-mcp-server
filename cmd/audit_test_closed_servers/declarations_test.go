@@ -1,8 +1,9 @@
 package main
 
 import (
-	"slices"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcegate"
 )
 
 // TestUsedAfterTheCloseOnPurpose_IsEmptyAndItsCategoriesAreDescribed states
@@ -17,38 +18,9 @@ func TestUsedAfterTheCloseOnPurpose_IsEmptyAndItsCategoriesAreDescribed(t *testi
 			t.Errorf("category %q has no description", name)
 		}
 	}
-	if got := unknownCategories(usedAfterTheCloseOnPurpose); len(got) != 0 {
+	table := sourcegate.Table{Declared: usedAfterTheCloseOnPurpose, Categories: categories}
+	if got := table.UnknownCategories(); len(got) != 0 {
 		t.Errorf("unknown categories in the table = %v", got)
-	}
-}
-
-// TestStaleDeclarations_AreScopedToThePackagesLoaded verifies an entry that
-// excused something is not stale, one in a loaded package that excused
-// nothing is, and one in a package the run never loaded is passed over.
-func TestStaleDeclarations_AreScopedToThePackagesLoaded(t *testing.T) {
-	declared := map[string]declaration{
-		"p:TestUsed":      {category: categoryOnlyAsText},
-		"p:TestGone":      {category: categoryOnlyAsText},
-		"p:TestAlsoGone":  {category: categoryOnlyAsText},
-		"q:TestElsewhere": {category: categoryOnlyAsText},
-	}
-	excused := map[string]struct{}{"p:TestUsed": {}}
-	scanned := map[string]struct{}{"p": {}}
-	if got, want := staleDeclarations(declared, excused, scanned), []string{"p:TestAlsoGone", "p:TestGone"}; !slices.Equal(got, want) {
-		t.Errorf("stale = %v, want %v", got, want)
-	}
-}
-
-// TestUnknownCategories_NamesEachUndefinedOneInOrder verifies a category
-// nobody defined is reported, sorted, and a defined one is not.
-func TestUnknownCategories_NamesEachUndefinedOneInOrder(t *testing.T) {
-	declared := map[string]declaration{
-		"p:B":       {category: "made-up"},
-		"p:A":       {category: "also-made-up"},
-		"p:Defined": {category: categoryOnlyAsText},
-	}
-	if got, want := unknownCategories(declared), []string{"p:A", "p:B"}; !slices.Equal(got, want) {
-		t.Errorf("unknown = %v, want %v", got, want)
 	}
 }
 

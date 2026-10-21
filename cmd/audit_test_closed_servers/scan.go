@@ -3,16 +3,14 @@ package main
 import (
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"go/types"
-	"path/filepath"
 	"slices"
-	"strings"
 
 	"golang.org/x/tools/go/packages"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcegate"
 )
 
 // httptestPath is the package whose server this gate follows. The Close it
@@ -99,10 +97,10 @@ func newScanner(root string, overlay map[string][]byte) *scanner {
 // synthesizes for a package is passed over: its one generated file is
 // nobody's source.
 func (s *scanner) observe(loaded []*packages.Package) {
-	underTest := packagesUnderTest(loaded)
+	underTest := goprogram.PackagesUnderTest(loaded)
 	var judged []*packages.Package
 	for _, pkg := range loaded {
-		if isTestMain(pkg, underTest) {
+		if goprogram.IsTestMain(pkg, underTest) {
 			continue
 		}
 		judged = append(judged, pkg)
@@ -111,7 +109,7 @@ func (s *scanner) observe(loaded []*packages.Package) {
 		}
 	}
 	for _, pkg := range judged {
-		name := trimModulePath(variantName(pkg.PkgPath))
+		name := goprogram.TrimModulePath(goprogram.VariantName(pkg.PkgPath))
 		s.packages[name] = struct{}{}
 		s.noteUnjudged(pkg)
 		for _, file := range pkg.Syntax {
@@ -121,37 +119,13 @@ func (s *scanner) observe(loaded []*packages.Package) {
 }
 
 // noteUnjudged records the files this load left out that import
-// net/http/httptest.
-//
-// Only the imports are read, which is all the question needs: whether a
-// hidden file could hold a server this gate would follow. A file that cannot
-// be read is recorded too, since nothing can be said about what it holds.
+// net/http/httptest, or that cannot be read: whether a hidden file could hold
+// a server this gate would follow is all the question needs, and
+// [goprogram.FilesImporting] answers it from the imports alone.
 func (s *scanner) noteUnjudged(pkg *packages.Package) {
-	for _, path := range pkg.IgnoredFiles {
-		if !strings.HasSuffix(path, ".go") {
-			continue
-		}
-		var src any
-		if content, overlaid := s.overlay[path]; overlaid {
-			src = content
-		}
-		file, err := parser.ParseFile(token.NewFileSet(), path, src, parser.ImportsOnly)
-		if err == nil && !importsHTTPTest(file) {
-			continue
-		}
-		s.unjudged[relativePath(path, s.root)] = struct{}{}
+	for _, path := range goprogram.FilesImporting(goprogram.IgnoredGoFiles(pkg), httptestPath, s.overlay) {
+		s.unjudged[goprogram.RelativePath(path, s.root)] = struct{}{}
 	}
-}
-
-// importsHTTPTest reports whether a file imports net/http/httptest, under any
-// name.
-func importsHTTPTest(file *ast.File) bool {
-	for _, spec := range file.Imports {
-		if strings.Trim(spec.Path.Value, "\"`") == httptestPath {
-			return true
-		}
-	}
-	return false
 }
 
 // observeFile judges every top-level function of one file, and every function
@@ -161,7 +135,7 @@ func importsHTTPTest(file *ast.File) bool {
 func (s *scanner) observeFile(pkg *packages.Package, pkgName string, file *ast.File) {
 	for _, decl := range file.Decls {
 		if fn, isFunc := decl.(*ast.FuncDecl); isFunc {
-			s.observeFunc(pkg, pkgName, fn, funcDeclName(fn))
+			s.observeFunc(pkg, pkgName, fn, sourcegate.FuncDeclName(fn))
 			continue
 		}
 		ast.Inspect(decl, func(n ast.Node) bool {
@@ -188,7 +162,7 @@ func (s *scanner) observeFunc(pkg *packages.Package, pkgName string, node ast.No
 		}
 		s.findings[key] = Finding{
 			Package: pkgName,
-			File:    relativePath(at.Filename, s.root),
+			File:    goprogram.RelativePath(at.Filename, s.root),
 			Line:    at.Line,
 			Func:    enclosing,
 			Server:  types.ExprString(site.server),
@@ -379,7 +353,7 @@ func (w *walk) enter(n ast.Node) {
 			w.unbinding[branch] = append(w.unbinding[branch], rebound...)
 		}
 	case *ast.ValueSpec:
-		fn.noteAssignments(identsAsExprs(n.Names), n.Values)
+		fn.noteAssignments(sourcegate.IdentsAsExprs(n.Names), n.Values)
 	case *ast.RangeStmt:
 		rebound := fn.noteAssignments([]ast.Expr{n.Key, n.Value}, []ast.Expr{n.X})
 		w.rebinding[n.X] = rebound
@@ -891,85 +865,4 @@ func nameOf(expr ast.Expr) *ast.Ident {
 		return e.Sel
 	}
 	return nil
-}
-
-// identsAsExprs widens a name list so a declaration and an assignment are
-// read by one function.
-func identsAsExprs(names []*ast.Ident) []ast.Expr {
-	exprs := make([]ast.Expr, len(names))
-	for i, name := range names {
-		exprs[i] = name
-	}
-	return exprs
-}
-
-// funcDeclName spells a function the way its file does: the bare name, or
-// `Type.Method` with the receiver's type stripped of its pointer and of its
-// type parameters.
-func funcDeclName(fn *ast.FuncDecl) string {
-	if fn.Recv == nil {
-		return fn.Name.Name
-	}
-	receiver := ast.Unparen(fn.Recv.List[0].Type)
-	if star, isPointer := receiver.(*ast.StarExpr); isPointer {
-		receiver = ast.Unparen(star.X)
-	}
-	switch generic := receiver.(type) {
-	case *ast.IndexExpr:
-		receiver = generic.X
-	case *ast.IndexListExpr:
-		receiver = generic.X
-	}
-	if ident, isIdent := receiver.(*ast.Ident); isIdent {
-		return ident.Name + "." + fn.Name.Name
-	}
-	return fn.Name.Name
-}
-
-// packagesUnderTest collects, from one load, the import paths the loader says
-// a test executable was built for. `go list` reports a test variant as
-// "p [q.test]" and fills [packages.Package.ForTest] with q for it; the
-// executable itself arrives as plain "q.test" with ForTest empty.
-func packagesUnderTest(loaded []*packages.Package) map[string]struct{} {
-	underTest := map[string]struct{}{}
-	for _, pkg := range loaded {
-		if pkg.ForTest != "" {
-			underTest[pkg.ForTest] = struct{}{}
-		}
-	}
-	return underTest
-}
-
-// isTestMain reports whether a loaded package is the test executable the go
-// tool synthesizes, "q.test". The path is only believed when the loader also
-// produced a test variant of q, since a directory may really be named
-// "foo.test".
-func isTestMain(pkg *packages.Package, underTest map[string]struct{}) bool {
-	if pkg.Name != "main" || !strings.HasSuffix(pkg.PkgPath, ".test") {
-		return false
-	}
-	_, built := underTest[strings.TrimSuffix(pkg.PkgPath, ".test")]
-	return built
-}
-
-// variantName is a package's import path with the test-variant decoration the
-// loader adds taken off, so "p" and "p [p.test]" are one package. The external
-// test package keeps its "_test" name, since it is a different package.
-func variantName(pkgPath string) string {
-	plain, _, _ := strings.Cut(pkgPath, " [")
-	return plain
-}
-
-// trimModulePath names a package the way the repository does.
-func trimModulePath(pkgPath string) string {
-	return strings.TrimPrefix(strings.TrimPrefix(pkgPath, goprogram.ModulePath), "/")
-}
-
-// relativePath renders a file below the repository root, so a finding reads
-// the same wherever the audit was run from.
-func relativePath(path, root string) string {
-	if rel, err := filepath.Rel(root, path); err == nil && !strings.HasPrefix(rel, "..") {
-		return filepath.ToSlash(rel)
-	}
-	return filepath.ToSlash(path)
 }
