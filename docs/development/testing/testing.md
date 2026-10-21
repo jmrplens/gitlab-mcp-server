@@ -31,7 +31,7 @@
 | Core packages tested                                  |     34 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 100.0% |
 | Overall coverage (`go test ./internal/...`)           | 100.0% |
-| Average package coverage                              |  99.9% |
+| Average package coverage                              | 100.0% |
 
 ### Naming Convention Stats
 
@@ -332,10 +332,10 @@
 | cmd/audit_1to1/internal/sdk               |   100.0% |
 | cmd/audit_1to1/internal/shared            |   100.0% |
 | cmd/audit_1to1/internal/structs           |   100.0% |
-| cmd/audit_action_ids                      |    99.4% |
+| cmd/audit_action_ids                      |   100.0% |
 | cmd/audit_binary_vulns                    |   100.0% |
 | cmd/audit_catalog_first                   |   100.0% |
-| cmd/audit_dead_consts                     |    97.3% |
+| cmd/audit_dead_consts                     |   100.0% |
 | cmd/audit_discovery_completeness          |   100.0% |
 | cmd/audit_doc_tool_names                  |   100.0% |
 | cmd/audit_dynamic_aliases                 |   100.0% |
@@ -395,7 +395,7 @@
 | cmd/internal/provenance                   |   100.0% |
 | cmd/internal/requestinventory             |   100.0% |
 | cmd/internal/sdkroutes                    |   100.0% |
-| cmd/internal/sourcegate                   |      n/a |
+| cmd/internal/sourcegate                   |   100.0% |
 | cmd/internal/testsource                   |   100.0% |
 | cmd/measure_conditions                    |   100.0% |
 | cmd/server                                |   100.0% |
