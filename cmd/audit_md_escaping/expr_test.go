@@ -5,6 +5,7 @@ import (
 	"go/constant"
 	"go/token"
 	"go/types"
+	"slices"
 	"strings"
 	"testing"
 
@@ -33,11 +34,15 @@ func holeByExpression(t *testing.T, prog *program, pkgName, expression string) (
 // walk: a call whose arguments do not line up with the signature it calls, a
 // parameter nobody named, a variable nothing initializes, a template
 // declaring more verbs than the call passes, and the two cell-builder calls
-// that carry no card row.
+// that carry no card row; and, in depth.go, what the tests of the walk's own
+// bookkeeping read.
 //
 // It is a fixture set of its own rather than a package added to caseFixture so
 // that the want lists the other tests pin do not move when an edge is added.
-var edgeFixture = map[string]string{"mdedge/mdedge.go": mdedgeSource}
+var edgeFixture = map[string]string{
+	"mdedge/mdedge.go": mdedgeSource,
+	"mdedge/depth.go":  mdedgeDepthSource,
+}
 
 // mdedgeSource holds one of each edge shape, written the way a formatter that
 // hit it would write it.
@@ -101,6 +106,110 @@ func Cells() string {
 // FromBlank reads a field of the variable nothing initializes.
 func FromBlank() string {
 	return fmt.Sprintf("| %s |\n", blank.Title)
+}
+`
+
+// mdedgeDepthSource holds what the tests of the walk's own bookkeeping read:
+// two raw values of different provenance in every shape that takes the worse
+// of several, a sum whose halves each take one more step, a template with no
+// textual verb, the locals the walk back to a literal steps through, a field
+// of options a caller built into a local, a helper called twice with values of
+// different verdicts, and a helper whose body settles its verdict, called
+// twice by one formatter.
+//
+// Every raw value here is one of two kinds, and the reason tells them apart: a
+// field of the parameter of FormatDeep, which nothing calls, and a field of
+// blank, which nothing initializes.
+const mdedgeDepthSource = `package mdedge
+
+import (
+	"fmt"
+	"strings"
+)
+
+// Deep is the shape a GitLab response fills, with a field of each type a step
+// of the walk reads through.
+type Deep struct {
+	Title  string
+	Author *string
+	Labels []string
+}
+
+// Options is a struct a caller builds into a local before passing it on.
+type Options struct {
+	Title string
+}
+
+// FormatDeep writes the values whose reason depends on which of two raw
+// values the walk met first, and two sums whose halves are a constant and a
+// dereference.
+func FormatDeep(item Deep) string {
+	var b strings.Builder
+	chosen := item.Title
+	if len(item.Labels) > 0 {
+		chosen = blank.Title
+	}
+	fmt.Fprintf(&b, "| %v |\n", append(item.Labels, blank.Title))
+	fmt.Fprintf(&b, "| %s |\n", item.Title+blank.Title)
+	fmt.Fprintf(&b, "| %v |\n", []string{item.Title, blank.Title})
+	fmt.Fprintf(&b, "| %s |\n", chosen)
+	fmt.Fprintf(&b, "| %s |\n", *item.Author+"x")
+	fmt.Fprintf(&b, "| %s |\n", "x"+*item.Author)
+	b.WriteString(cell(item.Title))
+	b.WriteString(cell(blank.Title))
+	b.WriteString(titleOf(Deep{Title: "fixed"}))
+	b.WriteString(titleOf(item))
+	return b.String()
+}
+
+// cell writes one cell, for two callers that pass raw values of the two kinds.
+func cell(value string) string {
+	return fmt.Sprintf("| %s |\n", value)
+}
+
+// titleOf reads a field of the value its caller passed, which is answered by
+// that caller's argument and so holds for one call site only.
+func titleOf(d Deep) string {
+	return d.Title
+}
+
+// CountOnly writes a template whose one verb renders a number.
+func CountOnly(item Deep) string {
+	return fmt.Sprintf("| %d |\n", len(item.Labels))
+}
+
+// Chain reads a field through a copy of a local, through the address of that
+// copy and through a pointer to the local.
+func Chain() string {
+	lit := Deep{Title: "fixed"}
+	alias := lit
+	ptr := &lit
+	return fmt.Sprintf("| %s | %s | %s |\n", alias.Title, (&alias).Title, (*ptr).Title)
+}
+
+// titled reads a field of the options its one caller built into a local.
+func titled(opts Options) string {
+	return fmt.Sprintf("| %s |\n", opts.Title)
+}
+
+// Titled is that caller.
+func Titled() string {
+	opts := Options{Title: "fixed"}
+	return titled(opts)
+}
+
+// rawTitle returns a field of blank, a verdict its body settles without any
+// caller's argument.
+func rawTitle() string {
+	return blank.Title
+}
+
+// TitleTwice writes that helper's value in two rows.
+func TitleTwice() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "| %s |\n", rawTitle())
+	fmt.Fprintf(&b, "| %s |\n", rawTitle())
+	return b.String()
 }
 `
 
@@ -627,16 +736,30 @@ func TestConstantText_Values_ReadsOnlyAString(t *testing.T) {
 
 // TestClassifyPassThrough_ShortCall_IsUnresolved checks the guard on a
 // transform called with fewer arguments than the audit expects, which is a
-// shape it must not read as safe.
+// shape it must not read as safe: an argument named past the end of the list,
+// and the one named just at it, which is the first position the call does
+// not have.
 func TestClassifyPassThrough_ShortCall_IsUnresolved(t *testing.T) {
 	prog := loadFixture(t, caseFixture)
 	c := newClassifier(prog)
 	pkg, expr := holeByExpression(t, prog, "mdcase", "item.State")
+	call := &ast.CallExpr{Fun: ast.NewIdent("f"), Args: []ast.Expr{expr}}
 
-	got, why := c.classifyPassThrough(pkg, &ast.CallExpr{Fun: ast.NewIdent("f"), Args: []ast.Expr{expr}}, []int{0, 2}, nil, 0)
+	cases := []struct {
+		name    string
+		carried []int
+	}{
+		{name: "an argument past the end", carried: []int{0, 2}},
+		{name: "an argument at the end", carried: []int{0, 1}},
+	}
 
-	if got != unresolved || !strings.Contains(why, "shape the audit does not follow") {
-		t.Errorf("classifyPassThrough = %v (%s), want unresolved", got, why)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, why := c.classifyPassThrough(pkg, call, tc.carried, nil, 0)
+			if got != unresolved || !strings.Contains(why, "shape the audit does not follow") {
+				t.Errorf("classifyPassThrough = %v (%s), want unresolved", got, why)
+			}
+		})
 	}
 }
 
@@ -686,6 +809,24 @@ func TestTextual_Types_TellsTextFromEverythingElse(t *testing.T) {
 	for range 10 {
 		deep = types.NewSlice(deep)
 	}
+	// Every step of the walk counts against the bound, whatever kind of type
+	// it steps through, so each kind is nested past it on its own: a step that
+	// did not count would reach the string at the bottom.
+	nested := func(levels int, wrap func(types.Type) types.Type) types.Type {
+		typ := types.Type(str)
+		for range levels {
+			typ = wrap(typ)
+		}
+		return typ
+	}
+	field := func(inner types.Type) types.Type {
+		return types.NewStruct([]*types.Var{types.NewField(token.NoPos, nil, "Inner", inner, false)}, nil)
+	}
+	// A named type steps to its underlying one, which is never named itself,
+	// so each level here is a named slice and counts two steps.
+	namedSlice := func(inner types.Type) types.Type {
+		return types.NewNamed(types.NewTypeName(token.NoPos, nil, "Level", nil), types.NewSlice(inner), nil)
+	}
 
 	cases := []struct {
 		name string
@@ -703,6 +844,13 @@ func TestTextual_Types_TellsTextFromEverythingElse(t *testing.T) {
 		{name: "a map whose values are strings", typ: types.NewMap(num, str), want: true},
 		{name: "a map of numbers", typ: types.NewMap(num, num), want: false},
 		{name: "a nesting deeper than the walk follows", typ: deep, want: false},
+		{name: "a nesting as deep as the walk follows", typ: nested(8, func(inner types.Type) types.Type { return types.NewSlice(inner) }), want: true},
+		{name: "pointers nested past the bound", typ: nested(10, func(inner types.Type) types.Type { return types.NewPointer(inner) }), want: false},
+		{name: "arrays nested past the bound", typ: nested(10, func(inner types.Type) types.Type { return types.NewArray(inner, 1) }), want: false},
+		{name: "map keys nested past the bound", typ: nested(10, func(inner types.Type) types.Type { return types.NewMap(inner, num) }), want: false},
+		{name: "map values nested past the bound", typ: nested(10, func(inner types.Type) types.Type { return types.NewMap(num, inner) }), want: false},
+		{name: "struct fields nested past the bound", typ: nested(10, field), want: false},
+		{name: "named types nested past the bound", typ: nested(5, namedSlice), want: false},
 		{name: "a struct holding a string", typ: textStruct, want: true},
 		{name: "a struct holding only numbers", typ: numStruct, want: false},
 		{name: "an interface, whose contents are not knowable", typ: types.NewInterfaceType(nil, nil), want: true},
@@ -880,5 +1028,237 @@ func TestPackageLevel_Variables_TellsAGlobalFromAField(t *testing.T) {
 	inner.Insert(local)
 	if packageLevel(local) {
 		t.Error("a variable declared inside a function was read as a package-level variable")
+	}
+}
+
+// deeperReason is what the walk answers once a chain passes the bound.
+const deeperReason = "deeper than the audit follows"
+
+// TestClassifyExpr_EveryStep_CountsAgainstTheBound holds each step the walk
+// takes to the bound it carries against a chain that does not end.
+//
+// The bound is reached only by such a chain, so a step that failed to count
+// would change no answer the fixtures give at the depth they start from.
+// Each case therefore starts where the step it names is the one that crosses
+// the bound: the value it leads to is past it and answered as such, where a
+// step that did not count would have reached the value and judged it. A step
+// that takes two levels, or a value whose halves each take one, starts a
+// level earlier, and the last two cases are the two sides of the bound
+// itself.
+func TestClassifyExpr_EveryStep_CountsAgainstTheBound(t *testing.T) {
+	cases := []struct {
+		name       string
+		fixture    map[string]string
+		pkg        string
+		expression string
+		depth      int
+		want       verdict
+		reason     string
+	}{
+		{name: "a dereference", fixture: caseFixture, pkg: "mdcase", expression: "*item.Author", depth: maxDepth, want: unresolved, reason: deeperReason},
+		{name: "a type assertion", fixture: caseFixture, pkg: "mdcase", expression: "item.Extra.(string)", depth: maxDepth, want: unresolved, reason: deeperReason},
+		{name: "an element", fixture: caseFixture, pkg: "mdcase", expression: "item.Labels[0]", depth: maxDepth, want: unresolved, reason: deeperReason},
+		{name: "a slice of a value", fixture: caseFixture, pkg: "mdcase", expression: "item.Title[:8]", depth: maxDepth, want: unresolved, reason: deeperReason},
+		{name: "a conversion", fixture: caseFixture, pkg: "mdsafe", expression: "string(rune(item.Count))", depth: maxDepth, want: unresolved, reason: deeperReason},
+		{name: "an append", fixture: edgeFixture, pkg: "mdedge", expression: "append(item.Labels, blank.Title)", depth: maxDepth, want: unresolved, reason: deeperReason},
+		{name: "a strings transform", fixture: caseFixture, pkg: "mdcase", expression: `strings.Join([]string{…}, ", ")`, depth: maxDepth, want: unresolved, reason: deeperReason},
+		{
+			name: "a nested Sprintf", fixture: caseFixture, pkg: "mdsafe",
+			expression: `fmt.Sprintf("%s (%s)", toolutil.EscapeMdTableCell(item.Title), "server text")`, depth: maxDepth, want: unresolved, reason: deeperReason,
+		},
+		{name: "a parameter bound to an argument", fixture: caseFixture, pkg: "mdcase", expression: "repeat(item.Title, depth)", depth: maxDepth - 1, want: unresolved, reason: deeperReason},
+		{name: "a local and its assignments", fixture: caseFixture, pkg: "mdcase", expression: "name", depth: maxDepth, want: unresolved, reason: deeperReason},
+		{name: "a parameter and its callers", fixture: caseFixture, pkg: "mdcase", expression: "title", depth: maxDepth, want: unresolved, reason: deeperReason},
+		{name: "the left half of a sum", fixture: edgeFixture, pkg: "mdedge", expression: `*item.Author + "x"`, depth: maxDepth - 1, want: unresolved, reason: deeperReason},
+		{name: "the right half of a sum", fixture: edgeFixture, pkg: "mdedge", expression: `"x" + *item.Author`, depth: maxDepth - 1, want: unresolved, reason: deeperReason},
+		{name: "a literal", fixture: caseFixture, pkg: "mdcase", expression: "[]string{…}", depth: maxDepth, want: unresolved, reason: deeperReason},
+		{name: "another package's variable", fixture: caseFixture, pkg: "mdcase", expression: "mdsafe.DefaultLabel", depth: maxDepth - 1, want: unresolved, reason: deeperReason},
+		{name: "a field of a literal a caller built", fixture: caseFixture, pkg: "mdsafe", expression: "opts.Title", depth: maxDepth - 1, want: unresolved, reason: deeperReason},
+		{
+			// Past the bound the walk back to the caller's literal stops at
+			// the local holding it, which is a value it cannot see built, so
+			// the field is answered as one a GitLab response filled.
+			name: "a field of a local a caller built", fixture: edgeFixture, pkg: "mdedge",
+			expression: "opts.Title", depth: maxDepth, want: unescaped, reason: "a caller of titled filled from a GitLab response",
+		},
+		{name: "a value at the bound itself", fixture: caseFixture, pkg: "mdcase", expression: "item.State", depth: maxDepth, want: unescaped, reason: "handed to FormatOutputMarkdown"},
+		{name: "a value past the bound", fixture: caseFixture, pkg: "mdcase", expression: "item.State", depth: maxDepth + 1, want: unresolved, reason: deeperReason},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			prog := loadFixture(t, tc.fixture)
+			// A classifier of its own, so a verdict one case remembered for a
+			// helper cannot answer for another case's walk.
+			c := newClassifier(prog)
+			pkg, expr := holeByExpression(t, prog, tc.pkg, tc.expression)
+
+			got, why := c.classifyExpr(pkg, expr, nil, tc.depth)
+
+			if got != tc.want {
+				t.Errorf("classifyExpr(%s) at depth %d = %v (%s), want %v", tc.expression, tc.depth, got, why, tc.want)
+			}
+			if !strings.Contains(why, tc.reason) {
+				t.Errorf("reason for %s at depth %d is %q, want one saying %q", tc.expression, tc.depth, why, tc.reason)
+			}
+		})
+	}
+}
+
+// TestClassifyExpr_TwoRawValues_NamesTheFirstOneMet checks which reason a
+// value built from two raw values reports, in every shape that takes the worse
+// of several.
+//
+// The two are equally bad, so the verdict cannot tell which was kept, and the
+// reason is what a reader acts on: it has to name the first one met, which is
+// the one written first, rather than whichever came last.
+func TestClassifyExpr_TwoRawValues_NamesTheFirstOneMet(t *testing.T) {
+	prog := loadFixture(t, edgeFixture)
+	first := "a field of the value handed to FormatDeep"
+
+	cases := []struct {
+		name       string
+		expression string
+	}{
+		{name: "an append", expression: "append(item.Labels, blank.Title)"},
+		{name: "a sum", expression: "item.Title + blank.Title"},
+		{name: "a literal", expression: "[]string{…}"},
+		{name: "a local assigned twice", expression: "chosen"},
+		{name: "a parameter two callers pass", expression: "value"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newClassifier(prog)
+			pkg, expr := holeByExpression(t, prog, "mdedge", tc.expression)
+
+			got, why := c.classifyExpr(pkg, expr, nil, 0)
+
+			if got != unescaped {
+				t.Errorf("classifyExpr(%s) = %v (%s), want unescaped", tc.expression, got, why)
+			}
+			if !strings.Contains(why, first) {
+				t.Errorf("reason for %s is %q, want the first raw value's, saying %q", tc.expression, why, first)
+			}
+		})
+	}
+}
+
+// TestClassifyReturns_VerdictTheBodySettled_IsRemembered checks the memo from
+// the side that keeps it, through the reasons the report prints: a helper
+// whose returns consult no caller's argument is answered by its body at its
+// first call, and the finding at its second call carries the remembered
+// answer.
+func TestClassifyReturns_VerdictTheBodySettled_IsRemembered(t *testing.T) {
+	prog := loadFixture(t, edgeFixture)
+	sel, err := parseContexts("table-cell")
+	if err != nil {
+		t.Fatalf("parseContexts: %v", err)
+	}
+	report := audit(prog, sel, repoRoot(t))
+
+	var reasons []string
+	for _, finding := range report.Findings {
+		if finding.Func == "TitleTwice" {
+			reasons = append(reasons, finding.Reason)
+		}
+	}
+
+	want := []string{"a field of a value filled from a GitLab response", "what rawTitle returns"}
+	if !slices.Equal(reasons, want) {
+		t.Errorf("the findings of TitleTwice give the reasons %q, want %q", reasons, want)
+	}
+}
+
+// TestClassifyReturns_VerdictThroughACallersArgument_IsNotRemembered checks
+// the memo from the side that declines it: a helper whose answer came from
+// what one caller passed holds for that call site only, so a second caller
+// passing a raw value is answered by its own argument rather than by the
+// first caller's.
+//
+// The argument is reached both ways the walk consults a binding: as the value
+// a helper interpolates, and as the struct a helper reads a field of.
+func TestClassifyReturns_VerdictThroughACallersArgument_IsNotRemembered(t *testing.T) {
+	cases := []struct {
+		name    string
+		fixture map[string]string
+		pkg     string
+		helper  string
+	}{
+		{name: "a value the helper interpolates", fixture: caseFixture, pkg: "mdcase", helper: "FormatRow"},
+		{name: "a field of a value the helper reads", fixture: edgeFixture, pkg: "mdedge", helper: "titleOf"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			prog := loadFixture(t, tc.fixture)
+			c := newClassifier(prog)
+			pkg := fixturePackage(t, prog, tc.pkg)
+			calls := callsNamed(pkg, tc.helper)
+			if len(calls) != 2 {
+				t.Fatalf("the fixture calls %s %d time(s), want an escaped call and then a raw one", tc.helper, len(calls))
+			}
+
+			if got, why := c.classifyExpr(pkg, calls[0], nil, 0); got != safe {
+				t.Fatalf("the call passing a safe value = %v (%s), want safe", got, why)
+			}
+			if got, why := c.classifyExpr(pkg, calls[1], nil, 0); got != unescaped {
+				t.Errorf("the call passing a raw value = %v (%s), want unescaped from its own argument", got, why)
+			}
+		})
+	}
+}
+
+// TestResolveBase_EveryStep_CountsAgainstTheBound holds each step of the walk
+// back to a literal to the bound, as the test above does for the classifier:
+// each case starts where the step it names crosses the bound, so the walk
+// stops at the value the step leads to rather than going on to the literal
+// behind it.
+func TestResolveBase_EveryStep_CountsAgainstTheBound(t *testing.T) {
+	prog := loadFixture(t, edgeFixture)
+	c := newClassifier(prog)
+	// The base of each field read in Chain is the value the walk starts from.
+	base := func(t *testing.T, expression string) (*packages.Package, ast.Expr) {
+		t.Helper()
+		pkg, expr := holeByExpression(t, prog, "mdedge", expression)
+		sel, ok := expr.(*ast.SelectorExpr)
+		if !ok {
+			t.Fatalf("%s is a %T, want a field read", expression, expr)
+		}
+		return pkg, sel.X
+	}
+	pkg, alias := base(t, "alias.Title")
+	aliasVar, ok := pkg.TypesInfo.Uses[alias.(*ast.Ident)].(*types.Var)
+	if !ok || len(c.assigns[aliasVar]) != 1 {
+		t.Fatal("the fixture's copy of the local is not recorded with its one assignment")
+	}
+	// The local the copy was made from, as the assignment wrote it.
+	original := c.assigns[aliasVar][0]
+	bindsAlias := &env{binds: map[*types.Var]bound{aliasVar: {expr: original, pkg: pkg}}}
+
+	cases := []struct {
+		name  string
+		field string
+		env   *env
+		depth int
+		want  string
+	}{
+		{name: "a copy of a local, at the bound", field: "alias.Title", depth: maxDepth, want: "lit"},
+		{name: "a copy of a local, past the bound", field: "alias.Title", depth: maxDepth + 1, want: "alias"},
+		{name: "the address of a copy", field: "(&alias).Title", depth: maxDepth, want: "alias"},
+		{name: "a dereferenced pointer", field: "(*ptr).Title", depth: maxDepth, want: "ptr"},
+		{name: "a bound parameter", field: "alias.Title", env: bindsAlias, depth: maxDepth, want: "lit"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			in, start := base(t, tc.field)
+
+			got := c.resolveBase(in, start, tc.env, tc.depth)
+
+			if rendered := types.ExprString(got.expr); rendered != tc.want {
+				t.Errorf("resolveBase(%s) at depth %d stopped at %s, want %s", types.ExprString(start), tc.depth, rendered, tc.want)
+			}
+		})
 	}
 }
