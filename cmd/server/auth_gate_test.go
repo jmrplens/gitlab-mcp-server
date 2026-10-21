@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -25,6 +26,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -2164,6 +2166,455 @@ func TestTransportBudget_Charge_KeepsTheSourceAndKeyApart(t *testing.T) {
 				t.Errorf("source %s was not charged for its one client", source)
 			}
 		})
+	}
+}
+
+// pairsOf counts the (source, key) pairs the budget remembers for one source.
+func pairsOf(budget *transportBudget, source string) int {
+	budget.mu.Lock()
+	defer budget.mu.Unlock()
+	n := 0
+	for pair := range budget.charged {
+		if strings.HasPrefix(pair, source+"\x00") {
+			n++
+		}
+	}
+	return n
+}
+
+// remembers reports whether the budget holds the pair of source and key.
+func remembers(budget *transportBudget, source, key string) bool {
+	budget.mu.Lock()
+	defer budget.mu.Unlock()
+	_, held := budget.charged[source+"\x00"+key]
+	return held
+}
+
+// fillerSource is the i'th of the distinct transport sources a test fills the
+// limiter's table with.
+func fillerSource(i int) string {
+	return "10.1." + strconv.Itoa(i/256) + "." + strconv.Itoa(i%256)
+}
+
+// TestTransportBudget_Charge_KeepsNoPairForASourceTheFullLimiterDidNotRecord
+// is issue 982's measurement with the limiter's table full.
+//
+// Once as many sources as the table tracks have failed inside one window, the
+// limiter records no new one, so a source arriving then is never blocked by
+// this budget. The pairs the budget kept for it were the only thing left
+// growing: one for every key that source failed with, removed only by the
+// sweep. A pair is now kept only for a failure the limiter recorded, so the
+// source keeps none however many keys it fails with, and the map stays at the
+// one pair each filling source was charged.
+func TestTransportBudget_Charge_KeepsNoPairForASourceTheFullLimiterDidNotRecord(t *testing.T) {
+	t.Parallel()
+
+	budget := newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow), authFailureWindow)
+	for i := range tenancy.AuthTrackedSources {
+		budget.charge(fillerSource(i), "198.51.100.1")
+	}
+
+	const source = "203.0.113.7"
+	const keys = 100000
+	for i := range keys {
+		budget.charge(source, "key-"+strconv.Itoa(i))
+	}
+
+	if got := pairsOf(budget, source); got != 0 {
+		t.Errorf("a source the full limiter never recorded holds %d pairs after failing with %d keys, want none: the record grows with the keys a caller mints", got, keys)
+	}
+	budget.mu.Lock()
+	total := len(budget.charged)
+	budget.mu.Unlock()
+	if total != tenancy.AuthTrackedSources {
+		t.Errorf("the budget holds %d pairs, want the %d the filling sources were charged", total, tenancy.AuthTrackedSources)
+	}
+	if blocked, _ := budget.blockedFor(source); blocked {
+		t.Error("a source whose failures the limiter never recorded was blocked")
+	}
+}
+
+// TestTransportBudget_Charge_BlocksAtTheLimitAndKeepsNoMoreThanItsPairs is the
+// same measurement with room in the table: the source is blocked at the limit,
+// as before, and the pairs it holds stay at the limit's worth whatever it is
+// charged after that, a charge the gates can still make for a request that
+// passed their check before the block. At the bound a fresh key takes the
+// place of the source's own oldest pair (issue 982), so another source's pair
+// is never what makes room (INV-005).
+func TestTransportBudget_Charge_BlocksAtTheLimitAndKeepsNoMoreThanItsPairs(t *testing.T) {
+	t.Parallel()
+
+	budget := newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow), authFailureWindow)
+	const source, other, otherKey = "203.0.113.7", "203.0.113.8", "198.51.100.9"
+	budget.charge(other, otherKey)
+
+	for i := range transportFailureLimit {
+		budget.charge(source, "key-"+strconv.Itoa(i))
+	}
+	if blocked, _ := budget.blockedFor(source); !blocked {
+		t.Fatalf("a source charged %d distinct keys was not blocked", transportFailureLimit)
+	}
+
+	for i := range transportFailureLimit {
+		budget.charge(source, "past-the-block-"+strconv.Itoa(i))
+	}
+	if got := pairsOf(budget, source); got != transportFailureLimit {
+		t.Errorf("the source holds %d pairs, want the %d its limit is worth", got, transportFailureLimit)
+	}
+	if !remembers(budget, other, otherKey) {
+		t.Error("another source's pair was taken to make room for this one's")
+	}
+}
+
+// TestTransportBudget_Charge_AfterTheBlockLifts_StillChargesAFreshKey covers
+// the bound's other half (issue 982, decided 2026-10-17): a source whose block
+// has lifted can still hold its limit's worth of pairs from the window that
+// blocked it, and a fresh key then takes the place of the source's own oldest
+// pair and is charged as any other. Stopping at the bound instead would let the
+// source fail with fresh keys uncharged until its old pairs lapse. Only a fake
+// clock can put the block's end between the two pairs' windows.
+func TestTransportBudget_Charge_AfterTheBlockLifts_StillChargesAFreshKey(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		budget := newTransportBudget(serverpool.NewAuthRateLimiter(2, authFailureWindow), authFailureWindow)
+		const source, other, otherKey = "203.0.113.7", "203.0.113.8", "198.51.100.9"
+		// The oldest pair of all is another source's, so a bound that made
+		// room across sources would take it first.
+		budget.charge(other, otherKey)
+		budget.charge(source, "198.51.100.1")
+		time.Sleep(authFailureWindow / 2)
+		budget.charge(source, "198.51.100.2")
+		if blocked, _ := budget.blockedFor(source); !blocked {
+			t.Fatal("two distinct keys did not block a source whose limit is two")
+		}
+
+		time.Sleep(authFailureWindow/2 + time.Second)
+		if blocked, _ := budget.blockedFor(source); blocked {
+			t.Fatal("the block did not lift a window after the first failure")
+		}
+
+		budget.charge(source, "198.51.100.3")
+		if got := pairsOf(budget, source); got != 2 {
+			t.Errorf("the source holds %d pairs after a fresh key at its bound, want its limit of 2", got)
+		}
+		if remembers(budget, source, "198.51.100.1") || !remembers(budget, source, "198.51.100.2") {
+			t.Error("the fresh key did not take the place of the source's oldest pair")
+		}
+
+		budget.charge(source, "198.51.100.4")
+		if blocked, _ := budget.blockedFor(source); !blocked {
+			t.Error("fresh keys after the block lifted were not charged: the source fails uncharged at its bound")
+		}
+		if got := pairsOf(budget, source); got != 2 {
+			t.Errorf("the source holds %d pairs, want its limit of 2", got)
+		}
+		if !remembers(budget, other, otherKey) {
+			t.Error("another source's pair was taken to make room for this one's")
+		}
+	})
+}
+
+// TestTransportBudget_Charge_ALapsedPairReopensInPlace pins that a key whose
+// pair lapsed is re-opened where it stands: it is already one of the source's
+// pairs, so failing again takes no room and reclaims nothing, and the source
+// still holds its other pair. A fresh key after it is the one that has to make
+// room, and takes the oldest.
+func TestTransportBudget_Charge_ALapsedPairReopensInPlace(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		budget := newTransportBudget(serverpool.NewAuthRateLimiter(2, authFailureWindow), authFailureWindow)
+		const source = "203.0.113.7"
+		budget.charge(source, "198.51.100.1")
+		time.Sleep(authFailureWindow / 4)
+		budget.charge(source, "198.51.100.2")
+
+		time.Sleep(authFailureWindow + authFailureWindow/2)
+		budget.charge(source, "198.51.100.2")
+		if got := pairsOf(budget, source); got != 2 {
+			t.Errorf("re-opening a lapsed pair left the source %d pairs, want both kept: re-opening one is not growth", got)
+		}
+
+		budget.charge(source, "198.51.100.3")
+		if got := pairsOf(budget, source); got != 2 {
+			t.Errorf("the source holds %d pairs after a fresh key at its bound, want its limit of 2", got)
+		}
+		if remembers(budget, source, "198.51.100.1") {
+			t.Error("the fresh key did not take the place of the source's oldest pair")
+		}
+	})
+}
+
+// TestTransportBudget_Charge_ChargesAFailureOnceTheFullLimiterHasRoom covers
+// what a pair kept for an unrecorded failure used to cost. With the limiter's
+// table full a source's failure is not counted, which is the cap's own choice,
+// and the source is not blocked by it (INV-007). The pair kept beside it then
+// stood in for a charge that never happened: once the table had room, the same
+// key failing again inside the pair's window was not charged at all. Kept only
+// for a recorded failure, it is charged once the limiter can record it.
+func TestTransportBudget_Charge_ChargesAFailureOnceTheFullLimiterHasRoom(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		budget := newTransportBudget(serverpool.NewAuthRateLimiter(1, authFailureWindow), authFailureWindow)
+		for i := range tenancy.AuthTrackedSources {
+			budget.charge(fillerSource(i), "198.51.100.1")
+		}
+
+		time.Sleep(authFailureWindow / 2)
+		const source, key = "203.0.113.7", "198.51.100.7"
+		budget.charge(source, key)
+		if blocked, _ := budget.blockedFor(source); blocked {
+			t.Fatal("a failure the full limiter did not record blocked the source")
+		}
+		if got := pairsOf(budget, source); got != 0 {
+			t.Errorf("the source holds %d pairs for a failure the limiter did not record, want none", got)
+		}
+
+		// The filling sources' windows pass, and the limiter has room again.
+		time.Sleep(authFailureWindow/2 + time.Second)
+		budget.charge(source, key)
+		if blocked, _ := budget.blockedFor(source); !blocked {
+			t.Error("the key's next failure was not charged once the limiter had room: the pair kept for an unrecorded failure stood in for a charge")
+		}
+	})
+}
+
+// TestTransportBudget_Cleanup_KeepsTheRoomOfAPairItKeeps covers the sweep's
+// side of the bound: a pair it keeps still counts against its source's room, so
+// the fresh keys after it make room as any others do, and a source whose every
+// pair lapsed leaves nothing behind.
+func TestTransportBudget_Cleanup_KeepsTheRoomOfAPairItKeeps(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		budget := newTransportBudget(serverpool.NewAuthRateLimiter(2, authFailureWindow), authFailureWindow)
+		const source, other = "203.0.113.7", "203.0.113.8"
+		budget.charge(other, "198.51.100.9")
+		budget.charge(source, "198.51.100.1")
+		time.Sleep(authFailureWindow / 2)
+		budget.charge(source, "198.51.100.2")
+
+		time.Sleep(authFailureWindow/2 + time.Second)
+		budget.cleanup()
+		if got := pairsOf(budget, source); got != 1 {
+			t.Fatalf("cleanup left the source %d pairs, want the one still inside its window", got)
+		}
+		if got := pairsOf(budget, other); got != 0 {
+			t.Errorf("cleanup left %d pairs of a source whose every pair lapsed, want none", got)
+		}
+
+		budget.charge(source, "198.51.100.3")
+		budget.charge(source, "198.51.100.4")
+		if got := pairsOf(budget, source); got != 2 {
+			t.Errorf("the source holds %d pairs, want its limit of 2: the sweep lost count of the pair it kept", got)
+		}
+	})
+}
+
+// TestTransportBudget_Cleanup_ForgetsASourceWithNoPairLeft holds the index of
+// pairs by source to the pairs themselves: a source whose every pair lapsed is
+// dropped from it by the sweep, so the index is bounded as the pairs are
+// rather than by every source that ever failed.
+func TestTransportBudget_Cleanup_ForgetsASourceWithNoPairLeft(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		budget := newTransportBudget(serverpool.NewAuthRateLimiter(2, authFailureWindow), authFailureWindow)
+		budget.charge("203.0.113.7", "198.51.100.1")
+		budget.charge("203.0.113.8", "198.51.100.1")
+
+		time.Sleep(authFailureWindow + time.Second)
+		budget.cleanup()
+
+		budget.mu.Lock()
+		sources, pairs := len(budget.bySource), len(budget.charged)
+		budget.mu.Unlock()
+		if sources != 0 || pairs != 0 {
+			t.Errorf("after every pair lapsed the budget indexes %d sources and holds %d pairs, want neither", sources, pairs)
+		}
+	})
+}
+
+// sourcesHeld counts the distinct transport sources the budget holds a pair
+// of, and the pairs, read off the flat map alone.
+func sourcesHeld(budget *transportBudget) (sources, pairs int) {
+	budget.mu.Lock()
+	defer budget.mu.Unlock()
+	seen := map[string]struct{}{}
+	for pair := range budget.charged {
+		source, _, _ := strings.Cut(pair, "\x00")
+		seen[source] = struct{}{}
+	}
+	return len(seen), len(budget.charged)
+}
+
+// TestTransportBudget_Charge_TurningTheLimiterOverDoesNotStackSources is the
+// cross-source half of issue 982's bound under the rotation that broke it. The
+// limiter's full table forgets a lapsed record on its own, at most an eighth of
+// a window after it lapses, so it takes a whole new table of sources every
+// window, while the budget forgot a pair only at its sweep, every five minutes
+// (AUB-005): each generation of sources between two sweeps stacked on the
+// last, and four of them held four tables' worth of pairs. Once the budget
+// indexes as many sources as the limiter's table can hold, a new source first
+// makes it forget every source none of whose pairs is live, so a generation
+// whose pairs have all lapsed leaves nothing behind for the next.
+func TestTransportBudget_Charge_TurningTheLimiterOverDoesNotStackSources(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		const limit = 2
+		budget := newTransportBudget(serverpool.NewAuthRateLimiter(limit, authFailureWindow), authFailureWindow)
+		for generation := range 4 {
+			for i := range tenancy.AuthTrackedSources {
+				source := "g" + strconv.Itoa(generation) + "-" + fillerSource(i)
+				for k := range limit {
+					budget.charge(source, "key-"+strconv.Itoa(k))
+				}
+			}
+			sources, pairs := sourcesHeld(budget)
+			if sources != tenancy.AuthTrackedSources || pairs != limit*tenancy.AuthTrackedSources {
+				t.Fatalf("after generation %d the budget holds %d pairs of %d sources, want the %d pairs of the %d sources this generation charged",
+					generation, pairs, sources, limit*tenancy.AuthTrackedSources, tenancy.AuthTrackedSources)
+			}
+			time.Sleep(authFailureWindow + time.Second)
+		}
+	})
+}
+
+// TestTransportBudget_Charge_HoldsAtMostThreeTablesOfSources is the bound the
+// cross-source half rests on, under the rotation that comes nearest it. A pair
+// outlives its source's record in the limiter when the source is charged late
+// in that record's window, so the limiter can take a new table of sources
+// while the last one's pairs are still live, and the budget keeps those. What
+// it never keeps, once its index is full, is a source with no live pair, and
+// every source it holds was charged while the limiter held a record of it, so
+// it holds no more sources than the limiter's table held over a window and an
+// eighth: three tables' worth at most, whatever the window. Each generation
+// here leaves two, and before the bound every generation stayed until the
+// sweep.
+func TestTransportBudget_Charge_HoldsAtMostThreeTablesOfSources(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		budget := newTransportBudget(serverpool.NewAuthRateLimiter(2, authFailureWindow), authFailureWindow)
+		const most = 3 * tenancy.AuthTrackedSources
+		for generation := range 6 {
+			sources := make([]string, tenancy.AuthTrackedSources)
+			for i := range sources {
+				sources[i] = "g" + strconv.Itoa(generation) + "-" + fillerSource(i)
+				budget.charge(sources[i], "first")
+			}
+			// The second key is charged into each record a second before
+			// it lapses, so its pair outlives the record by a window less
+			// that second.
+			time.Sleep(authFailureWindow - time.Second)
+			for _, source := range sources {
+				budget.charge(source, "last")
+			}
+			if held, _ := sourcesHeld(budget); held > most {
+				t.Fatalf("after generation %d the budget holds pairs of %d sources, want at most the %d of three limiter tables", generation, held, most)
+			}
+			time.Sleep(2 * time.Second)
+		}
+	})
+}
+
+// TestTransportBudget_Charge_ForgetsLapsedSourcesAnEighthOfAWindowApart pins
+// when the budget forgets a source with no live pair outside its sweep: when a
+// new source arrives while it indexes as many sources as the limiter's table
+// can hold, and at most once every eighth of a window, as the limiter sweeps
+// its own full table, so a flood of new sources cannot make each of them pay
+// for a pass over the index. A source last charged exactly a window ago is
+// still live, and is kept.
+func TestTransportBudget_Charge_ForgetsLapsedSourcesAnEighthOfAWindowApart(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		budget := newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow), authFailureWindow)
+		const lapsing, lapsingToo, edge = "203.0.113.1", "203.0.113.2", "203.0.113.3"
+		const first, second, third = "203.0.113.11", "203.0.113.12", "203.0.113.13"
+		eighth := authFailureWindow / 8
+		start := time.Now()
+		firstSweep := authFailureWindow + time.Second
+		secondSweep := firstSweep + eighth
+		at := func(offset time.Duration) { time.Sleep(time.Until(start.Add(offset))) }
+
+		// The index fills to the limiter's ceiling: a generation that has
+		// lapsed by the first sweep, two sources that outlive it and lapse
+		// before the second, and one exactly a window old at the second.
+		for i := range tenancy.AuthTrackedSources - 3 {
+			budget.charge(fillerSource(i), "key")
+		}
+		at(2 * time.Second)
+		budget.charge(lapsing, "key")
+		budget.charge(lapsingToo, "key")
+		at(secondSweep - authFailureWindow)
+		budget.charge(edge, "key")
+
+		at(firstSweep)
+		budget.charge(first, "key")
+		if held, _ := sourcesHeld(budget); held != 4 || remembers(budget, fillerSource(0), "key") {
+			t.Fatalf("a new source at the ceiling left pairs of %d sources, want the 3 still live and itself: the lapsed generation was not forgotten", held)
+		}
+		for i := range tenancy.AuthTrackedSources - 4 {
+			budget.charge("b-"+fillerSource(i), "key")
+		}
+
+		// An eighth of a window less a nanosecond after the first sweep, a
+		// new source does not sweep again, though two sources have lapsed.
+		at(secondSweep - time.Nanosecond)
+		budget.blockedFor(lapsing) // the limiter forgets its lapsed record, which makes room for one more
+		budget.charge(second, "key")
+		if !remembers(budget, lapsing, "key") {
+			t.Fatal("a new source swept the index again before an eighth of a window had passed")
+		}
+
+		at(secondSweep)
+		budget.charge(third, "key")
+		if remembers(budget, lapsing, "key") || remembers(budget, lapsingToo, "key") {
+			t.Error("a new source an eighth of a window after the last sweep did not forget the sources with no live pair")
+		}
+		if !remembers(budget, edge, "key") {
+			t.Error("a source last charged exactly a window ago was forgotten while its pair was live")
+		}
+		if held, _ := sourcesHeld(budget); held != tenancy.AuthTrackedSources {
+			t.Errorf("the budget holds pairs of %d sources, want the %d still live", held, tenancy.AuthTrackedSources)
+		}
+	})
+}
+
+// TestTransportBudget_Charge_ChargesAConcurrentFreshPairOnce pins what asking
+// the limiter under the budget's own lock buys (issue 982): failures of one
+// fresh pair that arrive together are one key failing, and are charged once.
+// Were the limiter asked after the lock is released, every failure that read
+// the pair as fresh before the first one kept it would be charged, and a
+// source whose limit is two would be blocked by a single key.
+func TestTransportBudget_Charge_ChargesAConcurrentFreshPairOnce(t *testing.T) {
+	t.Parallel()
+
+	budget := newTransportBudget(serverpool.NewAuthRateLimiter(2, authFailureWindow), authFailureWindow)
+	const rounds, callers = 200, 32
+	blocked := 0
+	for round := range rounds {
+		source := fillerSource(round)
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		for range callers {
+			wg.Go(func() {
+				<-start
+				budget.charge(source, "198.51.100.1")
+			})
+		}
+		close(start)
+		wg.Wait()
+		if isBlocked, _ := budget.blockedFor(source); isBlocked {
+			blocked++
+		}
+	}
+	if blocked != 0 {
+		t.Errorf("%d of %d sources were blocked by %d concurrent failures of one key, want none: a fresh pair was charged more than once", blocked, rounds, callers)
 	}
 }
 

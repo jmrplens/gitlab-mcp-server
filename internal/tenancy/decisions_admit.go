@@ -499,19 +499,35 @@ func admitDecisions() []Decision {
 			ID: "AUB-002", Question: Admit, Kind: Budget, Class: ClassA, Disposition: Valued,
 			Resource: "distinct failing primary keys one transport source, an IPv6 one by its /64, may produce in a window",
 			Key:      KeySource, StdioKey: KeyNone,
-			Decided: []string{"issue 954"},
+			Decided: []string{"issue 954", "issue 982"},
 			// The pairs already charged are remembered in a map keyed on the
-			// source and the primary key, both of which a caller mints. A
-			// source stops adding pairs once it is blocked, but a source that
-			// arrives after the limiter's table is full is never blocked, so
-			// nothing but the sweep bounds the map, which F-35 records
-			// (issue 982). It is kept in both authentication modes, so it is
-			// not F-29's, whose issue is about OAuth verification.
+			// source and the primary key, both of which a caller mints, in
+			// both authentication modes, and issue 982 bounded it twice. A
+			// source holds at most the value's worth of pairs, and at that
+			// bound a fresh key reclaims the source's own oldest pair and is
+			// charged, so nothing is taken across sources (INV-005) and a
+			// source released from its block is still charged for the keys
+			// it fails with. And a pair is kept only for a failure the
+			// limiter recorded, and once the budget indexes as many sources
+			// as AUB-004 lets that limiter track, a new source first makes it
+			// forget every source with no live pair, at most once an eighth
+			// of a window as the limiter sweeps its own table. Past that
+			// many, the sources it holds were all charged within one window
+			// and an eighth, each while the limiter held a record of it, so
+			// they are at most three times what that table holds, whatever
+			// AUB-001's window;
+			// the sweep (AUB-005) alone let one table's worth stay for every
+			// window between two sweeps. A source that arrives once that
+			// table is full is given no place, and is not blocked by this
+			// budget either: that saturation is left to the /48 aggregate
+			// (AUB-006) and issue 958. The map used to be bounded by its
+			// sweep alone, which F-35 recorded.
 			Table:  true,
 			Values: []string{"TransportSourceDistinctKeys"}, Source: Constant, Zero: ZeroNotApplicable,
+			AtCapacity: ReclaimOwnThenRefuse,
 			// Whether the budget exists is TransportSourceBudgetOn's answer.
 			Functions: []string{"TransportSourceBudgetOn"},
-			Findings:  []string{"F-16", "F-35"},
+			Findings:  []string{"F-16"},
 			Refusals:  blockedRefusals,
 			// The window falls back to the default when AUB-001's is zero, in
 			// two places kept in step by hand (issue 958): the function that
@@ -525,6 +541,9 @@ func admitDecisions() []Decision {
 				enforce(pkgServer, "newTransportBudget"),
 				enforce(pkgServer, "transportBudget.window"),
 				enforce(pkgServer, "transportBudget.charge"),
+				enforce(pkgServer, "transportBudget.keepLocked"),
+				enforce(pkgServer, "transportBudget.forgetLapsedSourcesLocked"),
+				enforce(pkgServer, "transportBudget.reclaimOldestLocked"),
 				resolve, check,
 			},
 		},
@@ -571,13 +590,18 @@ func admitDecisions() []Decision {
 			// new key once it is full. The /48 table of AUB-006 is a
 			// DistinctTokenBudget of its own, so its refusal is the second
 			// below; keying the address on the /64 lowers the keys a caller
-			// can mint against all three.
+			// can mint against all three. The transport-source budget reads
+			// it as well (issue 982): once its index of charged sources holds
+			// that many, a new source first makes it forget every source with
+			// no live pair, which is what bounds AUB-002's pairs across
+			// sources.
 			Refusals: []Refusal{
 				{Methods: []string{MethodGate}, Channel: Silent, Answer: NoAnswer, At: refuse(pkgPool, "AuthRateLimiter.RecordFailure")},
 				{Methods: []string{MethodGate}, Channel: Silent, Answer: NoAnswer, At: refuse(pkgPool, "DistinctTokenBudget.roomForNewKeyLocked")},
 			},
 			Sites: []Site{
 				alias(pkgPool, "maxTrackedAuthSources", "AuthTrackedSources"),
+				alias(pkgServer, "transportTrackedSources", "AuthTrackedSources"),
 				enforce(pkgPool, "DistinctTokenBudget.roomForNewKeyLocked"),
 				refuse(pkgPool, "AuthRateLimiter.RecordFailure"),
 				refuse(pkgPool, "DistinctTokenBudget.roomForNewKeyLocked"),

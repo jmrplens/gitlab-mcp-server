@@ -18,10 +18,16 @@ import (
 // in a window, so this admits several such sources at once and still costs a
 // few hundred kilobytes at the ceiling.
 //
-// The same ceiling caps that budget's own table of sources. What it does not
-// do is block a source that arrives once that table is full, since it is never
-// recorded; that saturation is left to the /48 aggregate and to the capacity
-// rules (issues 954 and 958).
+// The same ceiling caps that budget's own table of sources, and through it the
+// pairs the budget keeps beside it (register row AUB-002, issue 982): a source
+// holds at most its limit's worth, a pair is kept only for a failure that
+// table recorded, and once the budget indexes as many sources as the table can
+// hold, a new one makes it forget the sources with no live pair. A record stays
+// in the table for a window at least, so the budget then holds at most three
+// times the sources the table can, rather than a pair for every key a caller
+// fails with. What the ceiling does not do is block a source that arrives once
+// that table is full, since it is never recorded; that saturation is left to
+// the /48 aggregate and to the capacity rules (issues 954 and 958).
 const maxTrackedAuthSources = tenancy.AuthTrackedSources // register row AUB-004
 
 // AuthRateLimiter tracks authentication failures per client IP and blocks
@@ -75,6 +81,8 @@ func NewAuthRateLimiter(maxFails int, window time.Duration) *AuthRateLimiter {
 // failure the cap leaves uncounted. A caller that keeps a record of its own
 // about the key should keep it only when this reports true, so that what it
 // keeps is bounded by this table rather than by the keys a caller fails with.
+// The transport-source budget keeps its pairs that way (register row AUB-002,
+// issue 982).
 func (l *AuthRateLimiter) RecordFailure(ip string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -94,7 +102,9 @@ func (l *AuthRateLimiter) RecordFailure(ip string) bool {
 }
 
 // Limit is the count of failures inside a window that blocks a key, as the
-// limiter was built with it.
+// limiter was built with it. The transport-source budget bounds the pairs it
+// keeps for one source at it, since a source charged that many distinct keys
+// is blocked, and remembering more of its keys teaches nothing.
 func (l *AuthRateLimiter) Limit() int {
 	return l.maxFails
 }

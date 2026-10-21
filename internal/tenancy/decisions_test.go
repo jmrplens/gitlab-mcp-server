@@ -372,6 +372,45 @@ func TestDecisions_AuthenticationKeys_AreDecidedByIssue954(t *testing.T) {
 	}
 }
 
+// TestDecisions_TransportSourcePairs_AreBoundedByIssue982 pins what issue 982
+// decided for the record AUB-002 keeps of the (source, key) pairs it charged, a
+// table keyed on two values a caller mints. It says what it does at its bound
+// rather than carrying F-35: a source at its limit's worth of pairs reclaims its
+// own oldest for a fresh key, and a source the limiter did not record is given
+// no place, and the sites that keep and reclaim a pair and forget the sources
+// with none live are declared, with the alias of AUB-004's value the last of
+// them reads. F-16, issue 958's, is carried as before, and F-35 stays in the
+// register's list, filed as issue 982's.
+func TestDecisions_TransportSourcePairs_AreBoundedByIssue982(t *testing.T) {
+	d, _ := Lookup("AUB-002")
+	if !d.Table || d.AtCapacity != ReclaimOwnThenRefuse || !slices.Contains(d.Decided, "issue 982") {
+		t.Errorf("AUB-002: table %v, at capacity %d, decided %v; want a table that reclaims its own key's holding, by issue 982",
+			d.Table, d.AtCapacity, d.Decided)
+	}
+	if !slices.Equal(d.Findings, []string{"F-16"}) {
+		t.Errorf("AUB-002 carries %v, want F-16 alone: F-35 is answered", d.Findings)
+	}
+	for _, name := range []string{
+		"transportBudget.charge", "transportBudget.keepLocked",
+		"transportBudget.forgetLapsedSourcesLocked", "transportBudget.reclaimOldestLocked",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if !slices.Contains(d.Sites, enforce(pkgServer, name)) {
+				t.Errorf("AUB-002 declares %v, want %s among its enforcing sites", d.Sites, name)
+			}
+		})
+	}
+	// The sources the budget indexes before it forgets those with no live
+	// pair are the ceiling of its limiter's table, read where AUB-004 says.
+	capped, _ := Lookup("AUB-004")
+	if !slices.Contains(capped.Sites, alias(pkgServer, "transportTrackedSources", "AuthTrackedSources")) {
+		t.Errorf("AUB-004 declares %v, want the transport-source budget's alias of its value among them", capped.Sites)
+	}
+	if FindingIssue("F-35") != 982 {
+		t.Errorf("F-35 is filed as issue %d, want it kept as issue 982's", FindingIssue("F-35"))
+	}
+}
+
 // TestDecisions_NetworkAggregate_IsTheConstantIssue954Added pins AUB-006, the
 // /48 aggregate the decision added: a constant on a key of its own, which no
 // operator sets or switches off, minted as an address is, charged with the
@@ -636,7 +675,9 @@ var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
 // assigns to what it says and answered a tier-removed action with its cause,
 // and F-14 and F-25 did when issue 954 keyed the authentication budgets on the
 // /64 with a /48 aggregate and a named unix-socket key, and stated the
-// distinct-credential budget's reason as GitLab 19.5 answered it.
+// distinct-credential budget's reason as GitLab 19.5 answered it, and F-35 did
+// when issue 982 bounded the transport-source budget's record of charged pairs
+// per source and to the sources its limiter recorded.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	carried := map[string]bool{}
 	decided := map[string]bool{}
@@ -664,7 +705,7 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-03,F-07,F-08,F-09,F-10,F-14,F-17,F-19,F-20,F-25,F-29,F-30,F-31,F-33"; got != want {
+	if got, want := strings.Join(answered, ","), "F-03,F-07,F-08,F-09,F-10,F-14,F-17,F-19,F-20,F-25,F-29,F-30,F-31,F-33,F-35"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }

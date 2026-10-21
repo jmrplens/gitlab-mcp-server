@@ -72,9 +72,19 @@ const (
 	//
 	// Five hundred distinct failing client identities inside a minute from
 	// one transport source is the rotation, or an incident either way. It
-	// also bounds the primary limiter's map: a blocked source is refused
-	// before a failure is recorded, so it stops minting keys.
+	// also bounds the primary limiter's map for a source this budget's own
+	// limiter tracks: a blocked source is refused before a failure is
+	// recorded, so it stops minting keys. And it bounds the pairs the budget
+	// keeps for one source, at its value (issue 982): a source that has been
+	// charged that many distinct keys is blocked, and remembering more of
+	// them teaches nothing.
 	transportFailureLimit = tenancy.TransportSourceDistinctKeys // register row AUB-002
+	// transportTrackedSources is how many sources the transport-source
+	// budget indexes before a new one makes it forget every source none of
+	// whose pairs is live (issue 982). It is the ceiling of the limiter's own
+	// table, since every source the budget holds a pair of was recorded
+	// there when it was charged.
+	transportTrackedSources = tenancy.AuthTrackedSources // register row AUB-004
 )
 
 // JSON-RPC error codes emitted by the request gate.
@@ -900,6 +910,24 @@ func (g *mcpServerGate) chargeFailure(address, source, token string) {
 // refused whatever it carried, including a valid token, and including the
 // clients that had never failed at all.
 //
+// What it remembers to charge that way is bounded, because both halves of a
+// pair are the caller's to choose: the source by reaching the listener from an
+// IPv6 range, each /64 of which is a source of its own, and the key by the
+// header a trusted proxy forwards. A source holds at most its limit's worth of
+// pairs (register row AUB-002, issue 982). A pair is kept only for a failure
+// the limiter recorded, and once the budget indexes as many sources as the
+// limiter's table can hold (AUB-004), a new source first makes it forget every
+// source none of whose pairs is live, at most once every eighth of a window.
+// Past that many, the sources it holds were therefore all charged within one
+// span of a window and an eighth, each while the limiter held a record of it,
+// and a record stays in that table for a window at least, so they are at most
+// three times what the table can hold, whatever the window. The sweep alone
+// used to bound the pairs: a blocked source adds none, but a source arriving
+// once the limiter's table is full is never recorded and so never blocked, and
+// the budget kept a pair for every key it failed with. A source the limiter
+// recorded and then let go kept its pairs until the sweep too, while the table
+// took a new source in its place every window.
+//
 // The zero value is not usable; a nil *transportBudget is, and is what a
 // deployment without --trusted-proxy-header gets. Every method tolerates it.
 type transportBudget struct {
@@ -912,14 +940,36 @@ type transportBudget struct {
 	// deduplicating for less recharges one pair inside a single window and
 	// blocks a proxy's legitimate clients early.
 	effectiveWindow time.Duration
+	// pairsPerSource is how many pairs one source may hold, the limiter's own
+	// limit: a source charged that many distinct keys is blocked, so a pair
+	// past them is one nothing would learn from.
+	pairsPerSource int
 
 	mu sync.Mutex
 	// charged records when a (source, key) pair last opened a window, so a
 	// key already counted against a source is not counted again until its
-	// window lapses. A blocked source adds no pairs, but a source the full
-	// limiter table never tracks is never blocked, so only the sweep bounds
-	// the map (register row AUB-002, F-35, issue 982).
+	// window lapses. It is keyed on the source and the key joined by a NUL,
+	// so that two pairs whose halves concatenate alike stay apart.
 	charged map[string]time.Time
+	// bySource holds, for each source with a pair in charged, the pairs it
+	// holds there and when it was last charged. That is what bounds a
+	// source's share of the map, finds its oldest pair when it is full, and
+	// finds the sources with no live pair without reading their pairs. A
+	// source leaves it once its last pair has.
+	bySource map[string]*sourcePairs
+	// lastForgetAt is when the sources with no live pair were last forgotten
+	// on the way to indexing a new one, which happens at most once every
+	// eighth of a window ([transportBudget.forgetLapsedSourcesLocked]).
+	lastForgetAt time.Time
+}
+
+// sourcePairs is one source's share of the transport-source budget's record.
+type sourcePairs struct {
+	// pairs are the source's entries in the budget's charged map.
+	pairs map[string]struct{}
+	// lastAt is when the source was last charged. None of its pairs was
+	// charged later, so once lastAt has lapsed none of them is live.
+	lastAt time.Time
 }
 
 // newTransportBudget wraps a limiter in the per-key accounting above.
@@ -937,7 +987,9 @@ func newTransportBudget(limiter *serverpool.AuthRateLimiter, window time.Duratio
 	return &transportBudget{
 		limiter:         limiter,
 		effectiveWindow: window,
+		pairsPerSource:  limiter.Limit(),
 		charged:         make(map[string]time.Time),
+		bySource:        make(map[string]*sourcePairs),
 	}
 }
 
@@ -974,34 +1026,122 @@ func (b *transportBudget) blockedFor(source string) (bool, time.Duration) {
 
 // charge counts one failure against the source, unless this key has already
 // been counted against it inside the current window.
+//
+// The pair is kept only when the limiter recorded the failure, which it does
+// not for a new source once its table is full. Kept then, it would charge
+// nothing and grow with every key the unrecorded source fails with, and it
+// would stand in for a charge that never happened: the same key failing again
+// once the limiter had room would not be counted. Not kept, the next failure
+// is charged as a first one (INV-007 holds, since the caller caused it). The
+// limiter is asked under the budget's own lock, so two concurrent failures of
+// one fresh pair are charged once, as they were when the pair was stored
+// before the limiter was asked.
 func (b *transportBudget) charge(source, key string) {
 	if b == nil {
 		return
 	}
 	pair := source + "\x00" + key
 	b.mu.Lock()
-	first, seen := b.charged[pair]
-	fresh := !seen || time.Since(first) > b.effectiveWindow
-	if fresh {
-		b.charged[pair] = time.Now()
+	defer b.mu.Unlock()
+	if first, seen := b.charged[pair]; seen && time.Since(first) <= b.effectiveWindow {
+		return
 	}
-	b.mu.Unlock()
-	if fresh {
-		b.limiter.RecordFailure(source)
+	if !b.limiter.RecordFailure(source) {
+		return
+	}
+	b.keepLocked(source, pair)
+}
+
+// keepLocked remembers that pair was charged now, inside its source's bound.
+//
+// A pair the source already holds is re-opened in place, which is not growth.
+// A fresh one at the bound takes the place of the source's own oldest pair
+// (issue 982), never another source's, since a holding of one key is not taken
+// to admit another (INV-005); stopping at the bound instead would let a source
+// just released from its block fail with fresh keys uncharged until its old
+// pairs lapse. A source the budget does not index yet is a new one, and may
+// first make it forget the sources with no live pair. The caller holds b.mu.
+func (b *transportBudget) keepLocked(source, pair string) {
+	now := time.Now()
+	held, tracked := b.bySource[source]
+	if !tracked {
+		b.forgetLapsedSourcesLocked(now)
+		held = &sourcePairs{pairs: make(map[string]struct{})}
+		b.bySource[source] = held
+	}
+	if _, kept := held.pairs[pair]; !kept && len(held.pairs) >= b.pairsPerSource {
+		b.reclaimOldestLocked(held.pairs)
+	}
+	held.pairs[pair] = struct{}{}
+	held.lastAt = now
+	b.charged[pair] = now
+}
+
+// forgetLapsedSourcesLocked forgets every source none of whose pairs is live,
+// with its pairs, once the index holds as many sources as the limiter's table
+// can (issue 982).
+//
+// The limiter's full table lets a lapsed record go at most an eighth of a
+// window after it lapses and takes a new source in its place, while the sweep
+// forgets a lapsed pair only every few minutes (AUB-005), so each table's
+// worth of sources the limiter took in between used to stay beside the next,
+// and the shorter the window the more of them. Forgetting runs at most once
+// every eighth of a window, as the limiter's own sweep at its cap does, so that
+// a flood of new sources cannot make each of them pay for a pass over the
+// index, and the pass reads each source's last charge rather than its pairs.
+// The caller holds b.mu.
+func (b *transportBudget) forgetLapsedSourcesLocked(now time.Time) {
+	if len(b.bySource) < transportTrackedSources || now.Sub(b.lastForgetAt) < b.effectiveWindow/8 {
+		return
+	}
+	b.lastForgetAt = now
+	for source, held := range b.bySource {
+		if now.Sub(held.lastAt) > b.effectiveWindow {
+			for pair := range held.pairs {
+				delete(b.charged, pair)
+			}
+			delete(b.bySource, source)
+		}
 	}
 }
 
-// cleanup drops lapsed pairs and the limiter's own expired records. It stands
-// in for the limiter's Cleanup wherever a budget owns one.
+// reclaimOldestLocked forgets the oldest of one source's pairs, to make room
+// for the one about to be kept. It scans the source's pairs, which are at most
+// its limit, and only a source at its bound pays for that: one never blocked
+// whose lapsed pairs the sweep (AUB-005) has not reached yet, one whose block
+// has lifted while the pairs that earned it are still held, live or lapsed and
+// not yet swept, or one charged by a request that passed the gates before the
+// block. The caller holds b.mu.
+func (b *transportBudget) reclaimOldestLocked(pairs map[string]struct{}) {
+	oldest := ""
+	var oldestAt time.Time
+	for pair := range pairs {
+		if at := b.charged[pair]; oldest == "" || at.Before(oldestAt) {
+			oldest, oldestAt = pair, at
+		}
+	}
+	delete(pairs, oldest)
+	delete(b.charged, oldest)
+}
+
+// cleanup drops lapsed pairs, every source left without one, and the limiter's
+// own expired records. It stands in for the limiter's Cleanup wherever a
+// budget owns one.
 func (b *transportBudget) cleanup() {
 	if b == nil {
 		return
 	}
 	b.mu.Lock()
 	now := time.Now()
-	for pair, first := range b.charged {
-		if now.Sub(first) > b.effectiveWindow {
-			delete(b.charged, pair)
+	for source, held := range b.bySource {
+		for pair := range held.pairs {
+			if now.Sub(b.charged[pair]) > b.effectiveWindow {
+				delete(held.pairs, pair)
+				delete(b.charged, pair)
+			}
+		}
+		if len(held.pairs) == 0 {
+			delete(b.bySource, source)
 		}
 	}
 	b.mu.Unlock()
