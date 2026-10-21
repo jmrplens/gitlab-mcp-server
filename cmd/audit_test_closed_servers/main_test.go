@@ -289,13 +289,16 @@ func TestMain_WritesTheReportToStdoutAndTheComplaintToStderr(t *testing.T) {
 }
 
 // createFile creates an empty file to stand in for one of the process's
-// streams.
+// streams. The file is closed when the test ends, before the temporary
+// directory holding it is removed: Windows will not remove a file that is
+// still open, and a test that only hands the file to main never closes it.
 func createFile(t *testing.T, path string) *os.File {
 	t.Helper()
 	file, err := os.Create(path)
 	if err != nil {
 		t.Fatalf("prepare %s: %v", path, err)
 	}
+	t.Cleanup(func() { _ = file.Close() })
 	return file
 }
 
