@@ -9,7 +9,7 @@
 	golangci-lint govulncheck check-binary-vulns sonar sonar-status \
 	mdlint mdlint-fix audit-docs check-doc-links check-md-tables \
 	analyze analyze-fix analyze-report install-tools \
-	audit-output audit-tokens audit-tools audit-surface-quality check-surface-quality check-spec-conditions audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
+	audit-output audit-tokens audit-tools audit-surface-quality check-surface-quality check-spec-conditions audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check check-godocs fix-godocs \
 	audit-catalog-first \
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-endpoints audit-1to1-paths-e2e audit-1to1-grants audit-1to1-grants-report audit-1to1-required audit-1to1-required-report audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
@@ -994,7 +994,7 @@ check-md-tables:
 ## audit-docs: run documentation checks in one pass: markdownlint over the top-level
 ## Markdown files, docs/, test/e2e/ and the site pages; the pipe tables; the freshness
 ## of the llms files, the LobeHub manifest, the tool reference, the testing reference
-## and the site statistics; the links; the Go doc comment audit; the surface quality
+## and the site statistics; the links; the Go doc comment gate; the surface quality
 ## and dynamic alias audits; and the site's check, build and lint. Not every
 ## documentation gate: check-doc-tool-names, for one, is a target and a CI step of its own.
 audit-docs:
@@ -1006,7 +1006,7 @@ audit-docs:
 	$(MAKE) check-testing-docs
 	go run ./cmd/audit_metrics/ -site-stats site/src/data/stats.json -check
 	$(MAKE) check-doc-links
-	go run ./cmd/godoc_tool/ audit
+	$(MAKE) check-godocs
 	go run ./cmd/audit_surface_quality/ -view=all
 	go run ./cmd/audit_dynamic_aliases/
 	cd site && pnpm run check
@@ -1049,36 +1049,37 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/30] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/30] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/30] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/30] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
-	run_check "[5/30] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/30] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
-	run_check "[7/30] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/30] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/30] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/30] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
-	run_check "[11/30] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
-	run_check "[12/30] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[13/30] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[14/30] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[15/30] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[16/30] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[17/30] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
-	run_check "[18/30] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
-	run_check "[19/30] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
-	run_check "[20/30] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
-	run_check "[21/30] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
-	run_check "[22/30] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
-	run_check "[23/30] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
-	run_check "[24/30] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
-	run_check "[25/30] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
-	run_check "[26/30] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
-	run_check "[27/30] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
-	run_check "[28/30] fine-grained grants (R-GRANT)" go run ./cmd/audit_1to1/ -scope=grants -gaps-only; \
-	run_check "[29/30] parameter requiredness (R-INPUT)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
-	run_check "[30/30] httptest servers closed while their address is used" go run ./cmd/audit_test_closed_servers/ -check; \
+	run_check "[1/31] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/31] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/31] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/31] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
+	run_check "[5/31] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/31] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
+	run_check "[7/31] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/31] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/31] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/31] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
+	run_check "[11/31] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
+	run_check "[12/31] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[13/31] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[14/31] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[15/31] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[16/31] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[17/31] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
+	run_check "[18/31] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
+	run_check "[19/31] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[20/31] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[21/31] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
+	run_check "[22/31] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
+	run_check "[23/31] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
+	run_check "[24/31] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
+	run_check "[25/31] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
+	run_check "[26/31] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
+	run_check "[27/31] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
+	run_check "[28/31] fine-grained grants (R-GRANT)" go run ./cmd/audit_1to1/ -scope=grants -gaps-only; \
+	run_check "[29/31] parameter requiredness (R-INPUT)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
+	run_check "[30/31] httptest servers closed while their address is used" go run ./cmd/audit_test_closed_servers/ -check; \
+	run_check "[31/31] Go doc comments" go run ./cmd/godoc_tool/ audit --fail-on-findings; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -2503,9 +2504,26 @@ audit-godocs:
 	go run ./cmd/godoc_tool/ audit --include-tests --format=markdown --output=$(ANALYSIS_DIR)/godoc.md
 	@echo "Godoc report saved to $(ANALYSIS_DIR)/godoc.md"
 
-## audit-godocs-check: fail when package, symbol, or test Godoc findings remain.
+## audit-godocs-check: the audit check-godocs gates, with Test, Benchmark, Fuzz
+## and Example functions included, failing while any finding remains. It is not
+## a gate: test functions whose comment is missing or does not open with their
+## name are still found across the tree.
 audit-godocs-check:
 	go run ./cmd/godoc_tool/ audit --include-tests --fail-on-findings
+
+## check-godocs: fail when a package comment is missing, malformed, doubled or
+## outside doc.go; when an exported function, method or type, or a const or var
+## declaring one exported name, has no comment opening with its name (for the
+## const or var, on its group or, in a group without one, on its spec); or when
+## a const or var group declaring several exported names has no comment on the
+## group and leaves a name without one of its own that opens with it. A trailing
+## line comment never counts. It is the godoc audit without test functions, and
+## it is a gate of its own because golangci-lint cannot ask the question: the
+## `comments` exclusion preset silences revive's exported and package-comments
+## rules and staticcheck's ST1000 and ST1020 to ST1022. It parses and never
+## compiles, so it costs seconds. CI gate, and step 31 of make analyze.
+check-godocs:
+	go run ./cmd/godoc_tool/ audit --fail-on-findings
 
 ## fix-godocs: generate and insert godoc-compliant comments for the given paths.
 ## Use --dry-run to preview changes without writing (e.g. make fix-godocs ARGS="--dry-run internal/tools/").

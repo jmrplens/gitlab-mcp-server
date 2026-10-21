@@ -57,7 +57,7 @@ gitlab-mcp-server/
 │   ├── gen_model_results/       # Folds a model evaluation run's shards into the published record
 │   ├── gen_testing_docs/        # Regenerates testing.md managed sections
 │   ├── gen_tool_reference/      # Writes the site's per-domain tool reference from the catalog and domains.json
-│   ├── godoc_tool/              # Go doc auditor + fixer (audit/fix subcommands)
+│   ├── godoc_tool/              # Go doc auditor + fixer (audit/fix subcommands); make check-godocs gates package comments and exported symbols
 │   └── internal/                # Shared helpers for the commands above (actionids, apidocs, auditshared, docgen, mcpsurface)
 ├── internal/
 │   ├── config/                  # Environment variable loading and validation

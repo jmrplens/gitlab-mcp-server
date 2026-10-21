@@ -82,7 +82,7 @@ gitlab-mcp-server/
 │   ├── audit_graphql_shapes/         # GraphQL documents against the structs they decode into (make check-graphql-shapes)
 │   ├── audit_install_buttons/        # One-click install payloads (make check-install-buttons)
 │   ├── audit_binary_vulns/           # Release binaries against the Go vulnerability database (make check-binary-vulns)
-│   ├── godoc_tool/                   # Go doc auditor and fixer
+│   ├── godoc_tool/                   # Go doc auditor and fixer (make check-godocs)
 │   ├── audit_md_escaping/            # GitLab-authored values reaching Markdown unescaped (make check-md-escaping)
 │   ├── audit_metrics/                # Tool, resource and prompt metrics
 │   ├── audit_meta_descriptions/      # Meta-tool prose against the parameters its actions accept (make check-meta-descriptions)
@@ -184,7 +184,7 @@ rewrite across many files, and the result must be verified to build.
 
 ### Adding a New MCP Tool
 
-1. Create `internal/tools/{domain}/` sub-package directory, with a `doc.go` holding the package comment (every package keeps it there; `go run ./cmd/godoc_tool/ audit` reports one anywhere else)
+1. Create `internal/tools/{domain}/` sub-package directory, with a `doc.go` holding the package comment (every package keeps it there; `make check-godocs` fails on one anywhere else)
 2. Create `{domain}.go` with typed input/output structs (no domain prefix — package provides namespace). A multi-word name separates its words with underscores in the **file** only: `merge_requests.go` in `package mergerequests`, since Go's convention and the `stylecheck`/`revive` naming rules refuse underscores in package identifiers and directories follow the package
 3. Create `{domain}_test.go` with table-driven tests using `testutil.NewTestClient` and `httptest`; the test file carries the module's name, underscores included (`merge_requests_test.go`)
 4. Add or update domain-local `ActionSpecs` so the action has one canonical route, owner package, metadata, compatibility policy, individual projection metadata, and tests.

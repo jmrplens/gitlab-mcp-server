@@ -69,7 +69,7 @@ make test                                 # all unit tests, with coverage.out
 make coverage                             # writes coverage.html
 
 # Lint / analyze
-make analyze                              # 30 steps: golangci-lint, govulncheck, markdownlint and the cmd/ audits and record checks
+make analyze                              # 31 steps: golangci-lint, govulncheck, markdownlint and the cmd/ audits and record checks
 make analyze-fix                          # apply gofumpt/goimports/gci/markdownlint --fix
 make golangci-lint                        # Go-only gate
 golangci-lint run --build-tags e2e ./internal/tools/branches/  # one package
@@ -121,11 +121,11 @@ nothing gated them, and
 not the coverage columns, which no two machines agree on; refresh those with
 `make gen-testing-docs`.
 
-Three parts of `audit-docs` run in no CI job and are yours to run before
-pushing: the godoc audit (`go run ./cmd/godoc_tool/ audit`), the dynamic alias
-audit (`go run ./cmd/audit_dynamic_aliases/`) and the surface-quality report
-(`go run ./cmd/audit_surface_quality/ -view=all`; CI runs its gate,
-`make check-surface-quality`).
+The godoc gate, `make check-godocs`, runs in the `generated` job too. Two
+parts of `audit-docs` run in no CI job and are yours to run before pushing:
+the dynamic alias audit (`go run ./cmd/audit_dynamic_aliases/`) and the
+surface-quality report (`go run ./cmd/audit_surface_quality/ -view=all`; CI
+runs its gate, `make check-surface-quality`).
 
 ## Adding a new GitLab API tool
 

@@ -43,7 +43,7 @@ gitlab-mcp-server/
 │   ├── audit_test_subtests/ # Case loops that assert without a t.Run subtest (-fix rewrites the unambiguous ones)
 │   ├── audit_test_closed_servers/ # httptest servers closed while their address is still used later in the function (make check-closed-servers)
 │   ├── bench_resources/    # What the server costs to run, and the charts the docs publish
-│   ├── godoc_tool/         # Godoc auditor + fixer (audit/fix; was audit_godocs + add_docs)
+│   ├── godoc_tool/         # Godoc auditor + fixer (audit/fix; was audit_godocs + add_docs; make check-godocs)
 │   ├── format_md_tables/   # Markdown pipe-table normalizer
 │   ├── measure_conditions/ # Plan and job summary of the on-demand condition coverage workflow (conditions.yml, dispatched by hand)
 │   ├── gen_action_catalog_manifest/ # ActionSpec group-builder manifest

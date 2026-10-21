@@ -35,7 +35,7 @@ Site pages are named by slug: `operations/http-server` is `site/src/content/docs
 
 | Change Type | Affected Documentation |
 |-------------|----------------------|
-| New exported type/function | Its godoc comment (`make audit-godocs-check`), possibly the tools or resources pages of the site |
+| New exported type/function | Its godoc comment (`make check-godocs`), possibly the tools or resources pages of the site |
 | Modified function signature | Godoc comment, tools reference, examples |
 | New MCP tool | The site's per-domain tool reference, which is generated: run `make gen-tool-reference` (a new catalog group first needs its entry in `cmd/gen_tool_reference/domains.json`), `make gen-site-stats` for the counts the site prints and `make gen-action-grants` for the fine-grained table, which holds one row per action |
 | New MCP resource or prompt | Site page `tools/resources-prompts`; `docs/development/architecture.md` (Resources and prompts: where each lives) |

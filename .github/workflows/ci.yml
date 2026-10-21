@@ -333,6 +333,19 @@ jobs:
         run: make check-surface-quality
       - name: Check test-file naming convention
         run: make check-test-file-names
+      # Every package comment in doc.go and in the form go doc reads, and
+      # every exported symbol documented: a function, method, type or single
+      # const or var by a comment opening with its name (a single const or var
+      # in a group without a group comment, by its spec's comment), a const or
+      # var group of several exported names by a comment on the group or on
+      # each name, opening with it, and never by a trailing line comment.
+      # golangci-lint cannot hold either, because the `comments` exclusion
+      # preset in .golangci.yml silences revive's exported and package-comments
+      # rules and staticcheck's ST1000 and ST1020 to ST1022. The audit parses
+      # and never compiles, so it costs seconds; test functions stay outside it
+      # (make audit-godocs-check).
+      - name: Check every package and exported symbol carries its doc comment
+        run: make check-godocs
       - name: Check token footprint
         if: env.FRESHNESS == 'checked'
         run: make check-footprint
