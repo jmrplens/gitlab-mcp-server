@@ -13,10 +13,15 @@ import (
 // The key is chosen by the caller wherever a trusted-proxy header is
 // configured, so without a ceiling the table grows with the number of distinct
 // header values an attacker cares to send and is only ever pruned by [Cleanup]
-// on its own schedule. The secondary budget in the HTTP front door bounds a
-// real source to a few hundred distinct primary keys per window, so this admits
-// several such sources at once and still costs a few hundred kilobytes at the
-// ceiling.
+// on its own schedule. The transport-source budget in the HTTP front door
+// blocks a source once it has failed with a few hundred distinct primary keys
+// in a window, so this admits several such sources at once and still costs a
+// few hundred kilobytes at the ceiling.
+//
+// The same ceiling caps that budget's own table of sources. What it does not
+// do is block a source that arrives once that table is full, since it is never
+// recorded; that saturation is left to the /48 aggregate and to the capacity
+// rules (issues 954 and 958).
 const maxTrackedAuthSources = tenancy.AuthTrackedSources // register row AUB-004
 
 // AuthRateLimiter tracks authentication failures per client IP and blocks
@@ -29,7 +34,9 @@ const maxTrackedAuthSources = tenancy.AuthTrackedSources // register row AUB-004
 // cleared on demand. Saturating the table therefore costs the attacker their
 // own accumulated count and buys them nothing, while the front door's second
 // budget keeps bounding the source it actually came from: that one is keyed
-// on the accepted socket, which no header can change.
+// on the accepted socket, which no header can change. It bounds a source its
+// own table tracks, and that table is capped the same way, so a source arriving
+// once both are full is blocked by neither ([maxTrackedAuthSources]).
 type AuthRateLimiter struct {
 	mu       sync.Mutex
 	failures map[string]*failureRecord
@@ -61,22 +68,35 @@ func NewAuthRateLimiter(maxFails int, window time.Duration) *AuthRateLimiter {
 	}
 }
 
-// RecordFailure records an authentication failure for the given IP.
-func (l *AuthRateLimiter) RecordFailure(ip string) {
+// RecordFailure records an authentication failure for the given IP, and
+// reports whether it did.
+//
+// It does not for a key the full table has no room for, which is the one
+// failure the cap leaves uncounted. A caller that keeps a record of its own
+// about the key should keep it only when this reports true, so that what it
+// keeps is bounded by this table rather than by the keys a caller fails with.
+func (l *AuthRateLimiter) RecordFailure(ip string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	rec, ok := l.failures[ip]
 	if ok && time.Since(rec.firstAt) <= l.window {
 		rec.count++
-		return
+		return true
 	}
 	// A lapsed record is replaced in place, which is not growth. Only a key the
 	// table does not hold has to fit under the cap.
 	if !ok && !l.roomForNewKeyLocked() {
-		return
+		return false
 	}
 	l.failures[ip] = &failureRecord{count: 1, firstAt: time.Now()}
+	return true
+}
+
+// Limit is the count of failures inside a window that blocks a key, as the
+// limiter was built with it.
+func (l *AuthRateLimiter) Limit() int {
+	return l.maxFails
 }
 
 // roomForNewKeyLocked reports whether a key the table does not yet hold may be

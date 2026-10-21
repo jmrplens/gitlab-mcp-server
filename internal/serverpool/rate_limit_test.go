@@ -450,3 +450,50 @@ func TestAuthRateLimiter_AtTheCap_SweepsAnEighthOfAWindowApart(t *testing.T) {
 		}
 	})
 }
+
+// TestAuthRateLimiter_RecordFailure_ReportsWhetherItRecorded holds the answer
+// a caller keeping a record of its own about a key reads (issue 982): kept only
+// for a failure this table counted, that record grows with this table's cap
+// rather than with the keys a caller fails with.
+//
+// Every way a failure is counted answers true: a new key while there is room, a
+// live record counted into, and a lapsed record restarted in place, which needs
+// no room even at the cap. The one failure not counted, a new key the full
+// table has no room for, answers false and leaves the table as it was.
+func TestAuthRateLimiter_RecordFailure_ReportsWhetherItRecorded(t *testing.T) {
+	limiter := NewAuthRateLimiter(2, time.Hour)
+
+	if !limiter.RecordFailure("10.0.0.1") {
+		t.Error("a new key with room in the table was not reported as recorded")
+	}
+	if !limiter.RecordFailure("10.0.0.1") {
+		t.Error("a failure counted into a live record was not reported as recorded")
+	}
+
+	for i := range maxTrackedAuthSources - 1 {
+		limiter.RecordFailure("filler-" + strconv.Itoa(i))
+	}
+	if limiter.RecordFailure("10.0.0.2") {
+		t.Error("a new key the full table did not track was reported as recorded")
+	}
+	if got := tableSize(t, limiter); got != maxTrackedAuthSources {
+		t.Errorf("tracked keys = %d after a refused insert, want the table unchanged at %d", got, maxTrackedAuthSources)
+	}
+
+	limiter.mu.Lock()
+	limiter.failures["10.0.0.1"].firstAt = time.Now().Add(-2 * limiter.window)
+	limiter.mu.Unlock()
+	if !limiter.RecordFailure("10.0.0.1") {
+		t.Error("a lapsed record restarted in place at the cap was not reported as recorded")
+	}
+}
+
+// TestAuthRateLimiter_Limit_IsTheCountThatBlocks pins the figure a caller
+// bounds what it keeps for one key at (issue 982): the failures that block a
+// key, as the limiter was built with them, and nothing derived.
+func TestAuthRateLimiter_Limit_IsTheCountThatBlocks(t *testing.T) {
+	limiter := NewAuthRateLimiter(7, time.Minute)
+	if got := limiter.Limit(); got != 7 {
+		t.Errorf("Limit() = %d, want the 7 failures the limiter blocks at", got)
+	}
+}
