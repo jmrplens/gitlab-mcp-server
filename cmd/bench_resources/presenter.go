@@ -37,20 +37,26 @@ type floodSource interface {
 	close()
 }
 
-// The two ways a verb's credential cannot be presented, both a harness wired
-// wrong rather than anything the server did, and filed as failures of the run.
+// The ways a verb's request cannot be made, each a harness wired wrong rather
+// than anything the server did, and filed as failures of the run.
 var (
 	errNoPresenter   = errors.New("this arm presents no credential but its lanes' own")
 	errCannotPresent = errors.New("this client cannot present a credential other than its own")
+	errCannotFetch   = errors.New("this client cannot fetch a document beside the endpoint")
+	errNoTag         = errors.New("no tag was read for the document this verb revalidates")
 )
 
 // presenter hands out the credentials one arm presents in place of its lanes'
 // own: a new valid token per call, and an invented token per call from a
-// forwarded address and a transport source of its own.
+// forwarded address and a transport source of its own. It also holds the tag
+// each revalidated document was first served with.
 type presenter struct {
 	sources  []floodSource
 	minted   atomic.Uint64
 	invented atomic.Uint64
+	// tags are written once, by learnTags before the arm is driven, and only
+	// read after that.
+	tags map[string]string
 }
 
 // newPresenter builds an arm's presenter against the endpoint it drives, with
@@ -64,7 +70,7 @@ type presenter struct {
 // dial, and every flood request fails and says why.
 func newPresenter(plan fairnessPlan, endpoint string, bearer bool) *presenter {
 	count := plan.floodSources()
-	p := &presenter{}
+	p := &presenter{tags: map[string]string{}}
 	if count == 1 {
 		shared := newHTTPRPC(endpoint, "")
 		shared.bearer = bearer
@@ -115,6 +121,44 @@ func (p *presenter) invent() (floodSource, credential, error) {
 	return p.sources[n%uint64(len(p.sources))], cred, nil
 }
 
+// learnTags reads, once, the entity tag of every document a verb revalidates,
+// from the fetcher's own address, so a revalidation carries a tag the server
+// issued and is answered 304, and no lane's bucket pays for the reading. A
+// plan that revalidates nothing reads nothing.
+func (p *presenter) learnTags(ctx context.Context, client rpcClient, verbIDs []string) error {
+	for _, id := range verbIDs {
+		verb := verbs[id]
+		if !verb.Revalidate {
+			continue
+		}
+		if _, read := p.tags[verb.Document]; read {
+			continue
+		}
+		fetcher, ok := client.(documentFetcher)
+		if !ok {
+			return errCannotFetch
+		}
+		tag, err := fetcher.fetch(ctx, verb.Document, documentRequest{})
+		if err != nil {
+			return fmt.Errorf("reading the tag of %s: %w", verb.Document, err)
+		}
+		p.tags[verb.Document] = tag
+	}
+	return nil
+}
+
+// tag is the entity tag the document at path was first served with.
+func (p *presenter) tag(path string) (string, error) {
+	if p == nil {
+		return "", errNoPresenter
+	}
+	tag, read := p.tags[path]
+	if !read {
+		return "", fmt.Errorf("%w: %s", errNoTag, path)
+	}
+	return tag, nil
+}
+
 // close releases every source's idle connections.
 func (p *presenter) close() {
 	for _, source := range p.sources {
@@ -130,6 +174,9 @@ func (p *presenter) close() {
 // is a client that was issued a token, presented it once and uses it from then
 // on, and the request is one the server answers from memory either way.
 func present(ctx context.Context, in paceInput, verb verbSpec) error {
+	if verb.Document != "" {
+		return fetchDocument(ctx, in, verb)
+	}
 	params := verb.params(in.call)
 	switch verb.Credential {
 	case credentialInvented:
@@ -161,5 +208,26 @@ func present(ctx context.Context, in paceInput, verb verbSpec) error {
 		return err
 	}
 	_, err := in.conn.rpc.call(ctx, verb.Method, params)
+	return err
+}
+
+// fetchDocument sends one document verb's GET over the lane's own connections,
+// from the address the lane arrives from, with the tag the document was first
+// served with when the verb revalidates it. It presents no credential: these
+// are the documents a caller reaches without one.
+func fetchDocument(ctx context.Context, in paceInput, verb verbSpec) error {
+	fetcher, ok := in.conn.rpc.(documentFetcher)
+	if !ok {
+		return errCannotFetch
+	}
+	request := documentRequest{forwardedFor: in.address}
+	if verb.Revalidate {
+		tag, err := in.present.tag(verb.Document)
+		if err != nil {
+			return err
+		}
+		request.ifNoneMatch = tag
+	}
+	_, err := fetcher.fetch(ctx, verb.Document, request)
 	return err
 }

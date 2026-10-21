@@ -1428,6 +1428,108 @@ func TestRunFairness_OAuthVerification_MeasuresTheCeilingAgainstABuildWithout(t 
 	}
 }
 
+// smallDiscoveryOptions are the flags of a discovery run sized for a test: the
+// bound's bucket replaced by one of ten a second and five in hand, which the
+// stand-in is passed as the real server would be, two noisy addresses at a
+// hundred a second each, and a quiet egress address shared by two lanes that
+// offer its bucket four a second between them.
+func smallDiscoveryOptions(t *testing.T, binary, out string) options {
+	t.Helper()
+	withBound(t, "discovery", func(b *boundSpec) {
+		bucket := *b.Bucket
+		bucket.Rate, bucket.Burst = 10, 5
+		b.Bucket = &bucket
+		// Five ticks a token, as the shipped plan has, so the tokens rotate
+		// over the four noisy verbs and each of their rows is served some.
+		b.Defaults = planDefaults{
+			Noisy: 2, NoisyRate: 50,
+			Phase: time.Second, LeadIn: 300 * time.Millisecond, Deadline: 2 * time.Second,
+		}
+	})
+	return options{
+		binary:          binary,
+		record:          "site/src/data/resource-benchmark.json",
+		sampleInterval:  20 * time.Millisecond,
+		fairness:        "discovery",
+		fairnessJSON:    out,
+		fairnessSurface: surfaceDynamic,
+		fairnessQuiet:   2, fairnessQuietRate: 4,
+		fairnessRepeats: 1,
+	}
+}
+
+// TestRunFairness_Discovery_RefusesTheFloodAndNeverTheSharedEgress drives the
+// discovery bound's whole run against the stand-in, which keys its bucket on
+// the address the trusted proxy names as the real server does: the flood from
+// an address per lane, and a hosted client's egress address shared by every
+// quiet lane, each lane fetching the metadata and the card and then calling.
+//
+// It is the end-to-end pin of the answer the default was sized to give: with
+// the bound in force every document the flood asks for past its bucket is
+// refused, a revalidation among them, and not one request from the shared
+// egress address is, its documents and its calls alike; without it nothing is
+// refused at all.
+func TestRunFairness_Discovery_RefusesTheFloodAndNeverTheSharedEgress(t *testing.T) {
+	root := t.TempDir()
+	opts := smallDiscoveryOptions(t, standinBinary(t), filepath.Join(root, "fairness.json"))
+
+	var runErr error
+	captureStdout(t, func() {
+		finishWithin(t, 2*time.Minute, "a two-arm discovery run", func() { runErr = runFairness(opts, root) })
+	})
+	if runErr != nil {
+		t.Fatalf("runFairness: %v", runErr)
+	}
+	doc, err := readFairness(opts.fairnessJSON)
+	if err != nil {
+		t.Fatalf("readFairness: %v", err)
+	}
+	if !slices.Contains(doc.Bound.ArgsOn, "--discovery-rate-limit-rps=10") || !slices.Contains(doc.Bound.ArgsOff, "--discovery-rate-limit-rps=0") {
+		t.Errorf("bound = %+v, want the bucket's switch in force in one arm and off in the other", doc.Bound)
+	}
+	off, _ := doc.Repeats[0].arm(armOff)
+	on, _ := doc.Repeats[0].arm(armOn)
+	if off.refusedAnything() {
+		t.Errorf("the arm without the bound refused: %s", off.summary())
+	}
+	noisy, _ := on.population(populationNoisy)
+	for _, id := range []string{verbLegacyCard, verbCard, verbMetadata, verbCardRevalidate} {
+		t.Run("the flood is refused "+id, func(t *testing.T) {
+			if row, ok := noisy.method(verbs[id].Method); !ok || row.Refused == 0 || row.Served == 0 || row.Failed != 0 {
+				t.Errorf("noisy %s = %+v, want its bucket's worth served and the rest refused", id, row)
+			}
+		})
+	}
+	quiet, _ := on.population(populationQuiet)
+	for _, method := range quiet.Methods {
+		t.Run("the shared egress keeps "+method.Method, func(t *testing.T) {
+			if method.Refused != 0 || method.Failed != 0 || method.Served == 0 {
+				t.Errorf("quiet %s = %+v, want every request served", method.Method, method)
+			}
+		})
+	}
+}
+
+// TestRunFairness_Discovery_StopsWhenATagCannotBeRead covers an arm whose
+// server would not serve the document a verb revalidates: the run stops
+// before driving anything, naming the document, rather than sending
+// revalidations with no tag that the server would answer in full.
+func TestRunFairness_Discovery_StopsWhenATagCannotBeRead(t *testing.T) {
+	root := t.TempDir()
+	opts := smallDiscoveryOptions(t, wrappedStandin(t, "STANDIN_DOCUMENTS_GONE=1"), filepath.Join(root, "fairness.json"))
+
+	var runErr error
+	captureStdout(t, func() {
+		finishWithin(t, time.Minute, "a discovery run whose tags are gone", func() { runErr = runFairness(opts, root) })
+	})
+	if runErr == nil || !strings.Contains(runErr.Error(), "reading the tag of /server-card") || !strings.Contains(runErr.Error(), "HTTP 404") {
+		t.Errorf("runFairness = %v, want the unread tag named with the answer it got", runErr)
+	}
+	if _, err := os.Stat(opts.fairnessJSON); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("a run that stopped wrote %s (%v), want nothing written", opts.fairnessJSON, err)
+	}
+}
+
 // assertArmWithoutCeiling holds the arm that ran the variant: nothing refused
 // by the bound, every invented token refused the way GitLab refuses it, and
 // the flood's verifications in flight at the instance together.

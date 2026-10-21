@@ -243,8 +243,8 @@ const p99MinSamples = 100
 // saturationFloor is the share of the host's cores the arm with the bound off
 // must keep busy for the comparison to mean anything.
 //
-// The bucket is per credential, so a noisy tenant never draws on a quiet one's
-// budget: the only channel by which the bound can help the quiet tenant is
+// The bucket is per credential, or per address, so a noisy tenant never draws
+// on a quiet one's budget: the only channel by which the bound can help the quiet tenant is
 // reduced contention for the machine. On a host the noisy population failed to
 // contend for there is nothing to protect anybody from, and any difference
 // between the arms is noise wearing a verdict.
@@ -624,7 +624,7 @@ func saturationFailure(doc *FairnessDoc) string {
 	}
 	return fmt.Sprintf(
 		"the arm with the bound off kept only %.2f of the host's %d cores busy, below the %.2f this comparison needs. "+
-			"A limit that is per credential can only reach the quiet tenant through contention for the machine, "+
+			"A limit kept per credential or per address can only reach the quiet tenant through contention for the machine, "+
 			"so on a host that was not contended there is nothing here to measure: raise -fairness-noisy or -fairness-noisy-rate",
 		worst, doc.Host.CPUs, floor,
 	)

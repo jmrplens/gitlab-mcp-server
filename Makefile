@@ -1645,7 +1645,10 @@ check-bench-resources:
 ## Minutes on a modest host. Writes bench/fairness.json, which is not committed,
 ## and draws no chart: it touches neither the published record nor the artifacts
 ## check-bench-resources compares. BOUND selects which limit is measured:
-## tools-call-rps, tools-list-rps, tools-list-process or oauth-verification.
+## tools-call-rps, tools-list-rps, tools-list-process, oauth-verification or
+## discovery. discovery is the per-address bucket on the documents served
+## without a credential (register row RTC-008): a flood from an address per
+## noisy lane against a hosted client's egress address the quiet lanes share.
 ## oauth-verification is the OAuth verification ceiling (register row ADM-014):
 ## it builds a second server with the ceiling taken out through the go
 ## command's -overlay, drives a flood of invented tokens against a stand-in

@@ -1027,3 +1027,99 @@ func TestStatusError_KeepsTheJSONRPCErrorItCarried(t *testing.T) {
 		})
 	}
 }
+
+// TestHTTPRPC_Fetch_GetsTheDocumentBesideTheEndpoint verifies the request a
+// document verb sends: a GET of the path on the endpoint's origin, carrying no
+// credential, the forwarded address the lane arrives from and, for a
+// revalidation, the tag, answered by the document's own tag, and that a fetch
+// is held to 200 and a revalidation to 304.
+func TestHTTPRPC_Fetch_GetsTheDocumentBesideTheEndpoint(t *testing.T) {
+	var mu sync.Mutex
+	var seen []*http.Request
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		seen = append(seen, r.Clone(r.Context()))
+		mu.Unlock()
+		w.Header().Set("ETag", `"tag"`)
+		if r.Header.Get("If-None-Match") == `"tag"` {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		_, _ = io.WriteString(w, `{"name":"card"}`)
+	}))
+	defer server.Close()
+	client := newHTTPRPC(server.URL+"/mcp", "a-token")
+	defer client.close()
+
+	tag, err := client.fetch(t.Context(), "/server-card", documentRequest{forwardedFor: "198.19.0.7"})
+	if err != nil || tag != `"tag"` {
+		t.Fatalf("fetch = %q, %v; want the document's tag", tag, err)
+	}
+	if _, err = client.fetch(t.Context(), pathMetadata, documentRequest{ifNoneMatch: tag}); err != nil {
+		t.Fatalf("a revalidation of the tag = %v, want its 304 accepted", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	first, second := seen[0], seen[1]
+	if first.Method != http.MethodGet || first.URL.Path != "/server-card" || first.Header.Get(headerForwardedFor) != "198.19.0.7" ||
+		first.Header.Get("PRIVATE-TOKEN") != "" || first.Header.Get("Authorization") != "" || first.Header.Get("If-None-Match") != "" {
+		t.Errorf("the fetch went out as %s %s with headers %v; want a GET of the path naming the lane's address and no credential",
+			first.Method, first.URL.Path, first.Header)
+	}
+	if second.URL.Path != pathMetadata || second.Header.Get("If-None-Match") != `"tag"` || second.Header.Get(headerForwardedFor) != "" {
+		t.Errorf("the revalidation went to %s carrying %v; want %s with the tag and no forwarded address",
+			second.URL.Path, second.Header, pathMetadata)
+	}
+}
+
+// TestHTTPRPC_Fetch_EveryFailureIsNamed verifies each way a document request
+// can fail reaches the tally as an error that says what failed, the answer the
+// verb was not held to among them, which keeps its status and its JSON-RPC
+// body so a refusal shape can match it.
+func TestHTTPRPC_Fetch_EveryFailureIsNamed(t *testing.T) {
+	truncated := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		_, _ = io.WriteString(w, "short")
+	}))
+	defer truncated.Close()
+	refusing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(w, `{"jsonrpc":"2.0","error":{"code":-42900,"message":"too many"}}`)
+	}))
+	defer refusing.Close()
+	fresh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "{}")
+	}))
+	defer fresh.Close()
+
+	for _, tc := range []struct {
+		name     string
+		endpoint string
+		doc      documentRequest
+		want     string
+	}{
+		{name: "endpoint is not a url", endpoint: "http://bad host", want: "build GET /server-card request"},
+		{name: "nothing listening", endpoint: "http://127.0.0.1:1", want: "GET /server-card:"},
+		{name: "body cut short", endpoint: truncated.URL, want: "read GET /server-card response"},
+		{name: "a refusal", endpoint: refusing.URL, want: "GET /server-card: HTTP 429"},
+		{name: "a revalidation answered in full", endpoint: fresh.URL, doc: documentRequest{ifNoneMatch: `"old"`}, want: "HTTP 200"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := newHTTPRPC(tc.endpoint, "")
+			defer client.close()
+			_, err := client.fetch(t.Context(), "/server-card", tc.doc)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("fetch = %v, want an error saying %q", err, tc.want)
+			}
+		})
+	}
+	t.Run("the refusal keeps its JSON-RPC error", func(t *testing.T) {
+		client := newHTTPRPC(refusing.URL, "")
+		defer client.close()
+		_, err := client.fetch(t.Context(), "/server-card", documentRequest{})
+		var rpc rpcError
+		if responseStatus(err) != http.StatusTooManyRequests || !errors.As(err, &rpc) || rpc.Code != -42900 {
+			t.Errorf("fetch = %v, want a 429 whose JSON-RPC error a refusal shape can read", err)
+		}
+	})
+}

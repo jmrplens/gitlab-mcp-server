@@ -315,3 +315,117 @@ func TestPresent_OwnCredential_GoesOutAsItAlwaysDid(t *testing.T) {
 		t.Errorf("own calls %d and presented %v, want one call with the client's own credential", client.calls.Load(), client.presented())
 	}
 }
+
+// fetchingConn is a scripted client that fetches documents, recording every
+// request and answering each with a tag of its own or the error it is given.
+type fetchingConn struct {
+	scriptedConn
+	mu      sync.Mutex
+	fetched []documentRequest
+	paths   []string
+	refuse  error
+}
+
+func (c *fetchingConn) fetch(_ context.Context, path string, doc documentRequest) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.paths = append(c.paths, path)
+	c.fetched = append(c.fetched, doc)
+	if c.refuse != nil {
+		return "", c.refuse
+	}
+	return `"` + path + `"`, nil
+}
+
+// TestPresenter_LearnTags_ReadsEachRevalidatedDocumentOnce verifies the tags
+// an arm reads before it is driven: one request for each document a verb
+// revalidates, from the client's own address, none for a verb that only
+// fetches or calls, and none twice however many verbs name the document.
+func TestPresenter_LearnTags_ReadsEachRevalidatedDocumentOnce(t *testing.T) {
+	client := &fetchingConn{}
+	p := &presenter{tags: map[string]string{}}
+	verbIDs := []string{verbCall, verbCard, verbCardRevalidate, verbLegacyCard, verbCardRevalidate}
+	if err := p.learnTags(t.Context(), client, verbIDs); err != nil {
+		t.Fatalf("learnTags: %v", err)
+	}
+	if !slices.Equal(client.paths, []string{pathServerCard}) || client.fetched[0] != (documentRequest{}) {
+		t.Errorf("read %v with %v, want the revalidated card alone, read once with nothing forwarded", client.paths, client.fetched)
+	}
+	if tag, err := p.tag(pathServerCard); err != nil || tag != `"/server-card"` {
+		t.Errorf("tag = %q, %v; want the one read", tag, err)
+	}
+}
+
+// TestPresenter_LearnTags_SaysWhatItCouldNotRead verifies a tag that could not
+// be read stops the arm with a reason: a client that fetches no document, and
+// a document the server would not serve.
+func TestPresenter_LearnTags_SaysWhatItCouldNotRead(t *testing.T) {
+	p := &presenter{tags: map[string]string{}}
+	if err := p.learnTags(t.Context(), &scriptedConn{}, []string{verbCardRevalidate}); !errors.Is(err, errCannotFetch) {
+		t.Errorf("learnTags with a client that cannot fetch = %v, want %v", err, errCannotFetch)
+	}
+	refused := errors.New("gone")
+	err := p.learnTags(t.Context(), &fetchingConn{refuse: refused}, []string{verbCardRevalidate})
+	if !errors.Is(err, refused) || !strings.Contains(err.Error(), "reading the tag of /server-card") {
+		t.Errorf("learnTags with the document refused = %v, want the refusal wrapped with the path", err)
+	}
+	if err = p.learnTags(t.Context(), &scriptedConn{}, []string{verbCall, verbCard}); err != nil {
+		t.Errorf("learnTags of a plan revalidating nothing = %v, want nothing read and no error", err)
+	}
+}
+
+// TestPresenter_Tag_RefusesADocumentNobodyRead verifies a revalidation in a
+// plan whose arm read no tag for it is the harness wired wrong, and says so
+// rather than sending an empty tag the server would answer in full.
+func TestPresenter_Tag_RefusesADocumentNobodyRead(t *testing.T) {
+	var none *presenter
+	if _, err := none.tag(pathServerCard); !errors.Is(err, errNoPresenter) {
+		t.Errorf("tag on no presenter = %v, want %v", err, errNoPresenter)
+	}
+	if _, err := (&presenter{tags: map[string]string{}}).tag(pathLegacyCard); !errors.Is(err, errNoTag) || !strings.Contains(err.Error(), pathLegacyCard) {
+		t.Errorf("tag of a document nobody read = %v, want %v naming the path", err, errNoTag)
+	}
+}
+
+// TestPresent_DocumentVerb_FetchesFromTheLanesAddress verifies a document verb
+// goes out as a fetch over the lane's own connections, from the address the
+// lane arrives from, carrying the tag the arm read when it revalidates, and
+// never as a call.
+func TestPresent_DocumentVerb_FetchesFromTheLanesAddress(t *testing.T) {
+	client := &fetchingConn{}
+	p := &presenter{tags: map[string]string{pathServerCard: `"read"`}}
+	in := paceInput{conn: &clientConn{rpc: client}, address: "198.18.0.1", present: p}
+	// sequential: both fetches go through one client and are read back in the order sent.
+	for _, id := range []string{verbMetadata, verbCardRevalidate} {
+		if err := present(t.Context(), in, verbs[id]); err != nil {
+			t.Fatalf("present %s: %v", id, err)
+		}
+	}
+	want := []documentRequest{{forwardedFor: "198.18.0.1"}, {forwardedFor: "198.18.0.1", ifNoneMatch: `"read"`}}
+	if !slices.Equal(client.paths, []string{pathMetadata, pathServerCard}) || !slices.Equal(client.fetched, want) {
+		t.Errorf("fetched %v with %v, want %v", client.paths, client.fetched, want)
+	}
+	if client.calls.Load() != 0 {
+		t.Errorf("a document verb made %d calls, want none", client.calls.Load())
+	}
+}
+
+// TestPresent_DocumentVerb_SaysWhatItCouldNotSend verifies the two ways a
+// document verb cannot be sent, a client that fetches nothing and a
+// revalidation with no tag read, and that a refused fetch reaches the tally.
+func TestPresent_DocumentVerb_SaysWhatItCouldNotSend(t *testing.T) {
+	if err := present(t.Context(), paceInput{conn: &clientConn{rpc: &scriptedConn{}}}, verbs[verbCard]); !errors.Is(err, errCannotFetch) {
+		t.Errorf("a document verb on a client that cannot fetch = %v, want %v", err, errCannotFetch)
+	}
+	client := &fetchingConn{}
+	if err := present(t.Context(), paceInput{conn: &clientConn{rpc: client}}, verbs[verbCardRevalidate]); !errors.Is(err, errNoPresenter) {
+		t.Errorf("a revalidation with no presenter = %v, want %v", err, errNoPresenter)
+	}
+	if len(client.paths) != 0 {
+		t.Errorf("fetched %v for a revalidation with no tag, want nothing sent", client.paths)
+	}
+	refused := errors.New("refused")
+	if err := present(t.Context(), paceInput{conn: &clientConn{rpc: &fetchingConn{refuse: refused}}}, verbs[verbLegacyCard]); !errors.Is(err, refused) {
+		t.Errorf("a refused fetch = %v, want the refusal", err)
+	}
+}

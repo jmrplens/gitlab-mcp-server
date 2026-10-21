@@ -46,6 +46,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -78,6 +79,26 @@ const (
 	verbListInvented = "list-invented"
 )
 
+// The verbs that fetch a document beside the endpoint rather than call a
+// method on it: the three a deployment publishes without a credential, which
+// the discovery bound (register row RTC-008) counts per client address, and a
+// revalidation of the card, which costs a request though it carries no body.
+const (
+	verbCard           = "card"
+	verbCardRevalidate = "card-revalidate"
+	verbLegacyCard     = "legacy-card"
+	verbMetadata       = "metadata"
+)
+
+// The paths those verbs fetch, as a deployment with no --public-url prefix
+// mounts them. oauthArgs publishes no prefix, so the metadata is at the bare
+// RFC 9728 path.
+const (
+	pathServerCard = "/server-card"
+	pathLegacyCard = "/.well-known/mcp/server-card.json"
+	pathMetadata   = "/.well-known/oauth-protected-resource"
+)
+
 // The credentials a verb may present in place of its lane's own.
 //
 // The lane's own is the one admission verified before the phase, or the new
@@ -98,6 +119,12 @@ type verbSpec struct {
 	// Credential is which credential the request presents: the lane's own
 	// when empty, one presented for the first time, or one no GitLab issued.
 	Credential string
+	// Document, when set, is the path a GET fetches beside the endpoint
+	// instead of a method called on it, from the address the lane arrives
+	// from; Revalidate sends the tag the document was first served with, so
+	// the answer is a 304.
+	Document   string
+	Revalidate bool
 	// params builds fresh parameters per request. Fresh because the request
 	// encoder writes the per-request _meta into the map it is handed, so a
 	// shared one would be written by every goroutine at once.
@@ -137,12 +164,31 @@ func callDetail(call toolCall) string { return call.Detail }
 
 func listDetail(toolCall) string { return detailWholeSurface }
 
+// documentVerb is a verb that fetches path, recorded under the method a
+// reader recognizes it by: the GET and the path, and the revalidation apart
+// from the fetch, since a 304 and a hundred and forty kilobytes are not one
+// distribution.
+func documentVerb(id, path string, revalidate bool) verbSpec {
+	method := http.MethodGet + " " + path
+	if revalidate {
+		method += " (revalidated)"
+	}
+	return verbSpec{
+		ID: id, Method: method, Document: path, Revalidate: revalidate,
+		params: listParams, detail: func(toolCall) string { return path },
+	}
+}
+
 // verbs are every request kind a population can be given.
 var verbs = map[string]verbSpec{
-	verbCall:         {ID: verbCall, Method: methodToolsCall, params: callParams, detail: callDetail},
-	verbList:         {ID: verbList, Method: methodToolsList, params: listParams, detail: listDetail},
-	verbCallNew:      {ID: verbCallNew, Method: methodToolsCall, Credential: credentialNew, params: callParams, detail: callDetail},
-	verbListInvented: {ID: verbListInvented, Method: methodToolsList, Credential: credentialInvented, params: listParams, detail: listDetail},
+	verbCall:           {ID: verbCall, Method: methodToolsCall, params: callParams, detail: callDetail},
+	verbList:           {ID: verbList, Method: methodToolsList, params: listParams, detail: listDetail},
+	verbCallNew:        {ID: verbCallNew, Method: methodToolsCall, Credential: credentialNew, params: callParams, detail: callDetail},
+	verbListInvented:   {ID: verbListInvented, Method: methodToolsList, Credential: credentialInvented, params: listParams, detail: listDetail},
+	verbCard:           documentVerb(verbCard, pathServerCard, false),
+	verbCardRevalidate: documentVerb(verbCardRevalidate, pathServerCard, true),
+	verbLegacyCard:     documentVerb(verbLegacyCard, pathLegacyCard, false),
+	verbMetadata:       documentVerb(verbMetadata, pathMetadata, false),
 }
 
 // refusalSpec is one wire shape a bound's refusal arrives in.
@@ -197,6 +243,28 @@ type bucketSpec struct {
 	// where is not a detail: the switches say what to pass, and this says what
 	// a population has to exceed to be refused at all.
 	Metered float64
+	// RateFlag and BurstFlag are the switches the rate and the burst are
+	// passed under, --rate-limit-rps and --rate-limit-burst when empty.
+	RateFlag, BurstFlag string
+	// PerAddress says the bucket is the client address's rather than the
+	// credential's. The noisy population's lanes then arrive from an address
+	// each, a flood from many addresses, and the quiet population's from one
+	// they share, the egress address a hosted client's many users arrive
+	// from, so what one quiet address offers the bucket is what every one of
+	// its lanes offers together.
+	PerAddress bool
+}
+
+// flags are the two switches the bucket is passed under.
+func (b bucketSpec) flags() (rate, burst string) {
+	rate, burst = b.RateFlag, b.BurstFlag
+	if rate == "" {
+		rate = "--rate-limit-rps"
+	}
+	if burst == "" {
+		burst = "--rate-limit-burst"
+	}
+	return rate, burst
 }
 
 // meteredRate is the rate a population must exceed before this bound refuses
@@ -304,15 +372,18 @@ func (s slotSpec) capacity(delay time.Duration) float64 {
 //
 // A metered rate writes its own, from the same numbers the plan is validated
 // against: a bound whose flags said ten and whose validation believed twenty
-// would pass a lead-in check the run then failed.
+// would pass a lead-in check the run then failed. They follow whatever else
+// the arm is started with, which for a bucket on the address is the mode and
+// the proxy its lanes are named through.
 func (b boundSpec) onArgs() []string {
 	if b.Bucket == nil {
 		return b.ArgsOn
 	}
-	return []string{
-		fmt.Sprintf("--rate-limit-rps=%g", b.Bucket.Rate),
-		fmt.Sprintf("--rate-limit-burst=%d", b.Bucket.Burst),
-	}
+	rate, burst := b.Bucket.flags()
+	return append(slices.Clone(b.ArgsOn),
+		fmt.Sprintf("%s=%g", rate, b.Bucket.Rate),
+		fmt.Sprintf("%s=%d", burst, b.Bucket.Burst),
+	)
 }
 
 // meteredShare is the fraction of a population's ticks this bound refuses at
@@ -356,7 +427,12 @@ func (b boundSpec) meteredOffered(s populationSpec) float64 {
 // Capped at the shipped default, since the question is what a bound does for a
 // tenant working at a human rate, and a bound metered high enough to allow
 // more than that does not make the tenant busier.
-func (b boundSpec) quietRate() float64 {
+//
+// lanes is how many of the quiet population's lanes draw on one bucket, one
+// unless the bucket is the address's (see [boundSpec.lanesSharingAKey]):
+// lanes sharing an address share its bucket, so each offers its fraction of
+// the share.
+func (b boundSpec) quietRate(lanes int) float64 {
 	if b.Bucket == nil {
 		return defaultQuietRate
 	}
@@ -365,7 +441,19 @@ func (b boundSpec) quietRate() float64 {
 	if share == 0 {
 		return defaultQuietRate
 	}
-	return min(quietDefaultShare*b.Bucket.meteredRate()/share, defaultQuietRate)
+	return min(quietDefaultShare*b.Bucket.meteredRate()/(share*float64(max(1, lanes))), defaultQuietRate)
+}
+
+// lanesSharingAKey is how many of a population's lanes draw on one bucket of
+// this bound: every lane of the quiet population when the bucket is the
+// address's, since they share the one egress address a hosted client's users
+// arrive from, and otherwise one, a lane being a credential or, for the noisy
+// population against a bucket on the address, an address of its own.
+func (b boundSpec) lanesSharingAKey(population string, credentials int) int {
+	if b.Bucket != nil && b.Bucket.PerAddress && population == populationQuiet {
+		return max(1, credentials)
+	}
+	return 1
 }
 
 // quietDefaultShare and quietMaxShare are how much of a bound a quiet tenant
@@ -637,6 +725,55 @@ var fairnessBounds = []boundSpec{
 			UpstreamDelay: 100 * time.Millisecond,
 		},
 	},
+	{
+		ID:    "discovery",
+		Label: "the per-address bucket on the discovery documents (register row RTC-008)",
+		// Both arms run in OAuth mode, the one mode that publishes the RFC 9728
+		// metadata, behind the trusted proxy on the loopback that oauthArgs
+		// names, so each lane's document requests arrive from an address the
+		// proxy names for it. The arm without the bound switches it off with a
+		// zero, the setting a deployment behind a proxy that limits these paths
+		// uses; the arm with it runs the shipped rate and burst.
+		OAuth:   true,
+		ArgsOff: append(slices.Clone(oauthArgs), "--discovery-rate-limit-rps=0"),
+		ArgsOn:  oauthArgs,
+		Bucket: &bucketSpec{
+			Rate: tenancy.DiscoveryRate, Burst: tenancy.DiscoveryBurst, PerAddress: true,
+			RateFlag: "--discovery-rate-limit-rps", BurstFlag: "--discovery-rate-limit-burst",
+		},
+		Refusals: documentRefusals(verbLegacyCard, verbCard, verbMetadata, verbCardRevalidate),
+		// The flood cycles the three documents and a revalidation from an
+		// address per lane, the legacy card by far the heaviest of them. The
+		// quiet population is a hosted client's egress address: each of its
+		// lanes is a user who fetches the metadata and the card, as a client
+		// does after a 401 challenge, and then calls, all from the one address.
+		NoisyVerbs: []string{verbLegacyCard, verbCard, verbMetadata, verbCardRevalidate},
+		QuietVerbs: []string{verbMetadata, verbCard, verbCall, verbCall},
+		// Sixteen addresses at five times the rate each, so every one of them
+		// is refused four requests in five with the bound in force, and a
+		// lead-in that outlasts the two and a half seconds the burst takes to
+		// drain at that rate. Five and not four: a lane cycles its four verbs
+		// on fixed ticks and its bucket refills a token every so many ticks,
+		// so a multiple of four would hand every token to the same verbs and
+		// the record would say which documents a flood is served by the
+		// schedule's phase rather than by the bucket.
+		Defaults: planDefaults{Noisy: 16, NoisyRate: 5 * tenancy.DiscoveryRate, LeadIn: 10 * time.Second},
+	},
+}
+
+// documentRefusals are the shapes the discovery bound refuses each document
+// verb in: the gate's 429, with the code and the words register row RTC-008
+// holds the server to, one per verb so the bound meters those requests and no
+// other.
+func documentRefusals(ids ...string) []refusalSpec {
+	shape := registerRefusal("RTC-008", httpTooManyRequests)
+	out := make([]refusalSpec, 0, len(ids))
+	for _, id := range ids {
+		refusal := shape
+		refusal.Method = verbs[id].Method
+		out = append(out, refusal)
+	}
+	return out
 }
 
 // rateLimitCode is the JSON-RPC code a bucket refuses with on a method whose
@@ -740,12 +877,6 @@ func fairnessPlanFor(opts options) (fairnessPlan, error) {
 	if err != nil {
 		return fairnessPlan{}, err
 	}
-	// A quiet rate the flag did not name is taken from the bound, since what
-	// counts as quiet is a fact about the bound and not about this command.
-	quietRate := opts.fairnessQuietRate
-	if quietRate <= 0 {
-		quietRate = bound.quietRate()
-	}
 	// The same holds for the upstream round trip, and for every setting the
 	// bound has a default of its own for: a flag the caller typed wins, and a
 	// flag left at the command's default takes the bound's.
@@ -755,12 +886,19 @@ func fairnessPlanFor(opts options) (fairnessPlan, error) {
 	}
 	given := opts.fairnessSet
 	defaults := bound.Defaults
+	quiet := setting(given[flagFairnessQuiet], opts.fairnessQuiet, defaults.Quiet)
+	// A quiet rate the flag did not name is taken from the bound, since what
+	// counts as quiet is a fact about the bound and not about this command.
+	quietRate := opts.fairnessQuietRate
+	if quietRate <= 0 {
+		quietRate = bound.quietRate(bound.lanesSharingAKey(populationQuiet, quiet))
+	}
 	plan := fairnessPlan{
 		ID:      "fairness-" + opts.fairnessSurface + "-" + bound.ID,
 		Surface: opts.fairnessSurface,
 		Bound:   bound,
 		Quiet: populationSpec{
-			Name: populationQuiet, Credentials: setting(given[flagFairnessQuiet], opts.fairnessQuiet, defaults.Quiet),
+			Name: populationQuiet, Credentials: quiet,
 			Rate: quietRate, Verbs: bound.QuietVerbs,
 		},
 		Noisy: populationSpec{
@@ -811,10 +949,11 @@ func (p fairnessPlan) validate() error {
 			"transport-source budget, more than the %d that 127.2.0.0/16 holds: lower -fairness-noisy-rate or -fairness-noisy",
 			sources, maxFloodSources)
 	}
-	// Both populations are measured against the bound by what they offer it
-	// rather than by their rate, which are the same number only for a
-	// population whose every verb the bound meters.
-	noisyOffered := p.Bound.meteredOffered(p.Noisy)
+	// Both populations are measured against the bound by what they offer one
+	// of its buckets rather than by their rate, which are the same number only
+	// for a population whose every verb the bound meters, one lane to a
+	// bucket.
+	noisyOffered := p.offeredPerKey(p.Noisy)
 	drain, bites := p.Bound.drain(noisyOffered)
 	if !bites {
 		return fmt.Errorf("the noisy population offers %g metered requests a second per credential against a bound of %g: "+
@@ -862,21 +1001,48 @@ const minQuietTicks = 4
 //
 // Counted in what the bound actually meters, so a population alternating a
 // metered verb with an unmetered one is judged by the half that reaches the
-// bucket.
+// bucket, and in what one bucket is offered, so lanes sharing an address are
+// judged together.
 func (p fairnessPlan) quietIsQuiet() error {
 	if p.Bound.Bucket == nil {
 		return nil
 	}
-	offered := p.Bound.meteredOffered(p.Quiet)
+	offered := p.offeredPerKey(p.Quiet)
 	ceiling := quietMaxShare * p.Bound.Bucket.meteredRate()
 	if offered <= ceiling {
 		return nil
 	}
-	return fmt.Errorf("the quiet population offers %g metered requests a second per credential against a bound of %g, "+
+	return fmt.Errorf("the quiet population offers %g metered requests a second per bucket against a bound of %g, "+
 		"above the %g this comparison allows it: a population the bound refuses is not the quiet tenant the bound "+
 		"exists to protect, and the run would report on a tenant it was turning away. Lower -fairness-quiet-rate, "+
 		"or leave it unset to take %g from the bound itself",
-		offered, p.Bound.Bucket.meteredRate(), ceiling, p.Bound.quietRate())
+		offered, p.Bound.Bucket.meteredRate(), ceiling, p.Bound.quietRate(p.lanesPerKey(p.Quiet)))
+}
+
+// lanesPerKey is how many of a population's lanes draw on one bucket of the
+// bound (see [boundSpec.lanesSharingAKey]).
+func (p fairnessPlan) lanesPerKey(s populationSpec) int {
+	return p.Bound.lanesSharingAKey(s.Name, s.Credentials)
+}
+
+// offeredPerKey is the metered rate one bucket of the bound is offered by a
+// population: one lane's, times the lanes that share the bucket.
+func (p fairnessPlan) offeredPerKey(s populationSpec) float64 {
+	return p.Bound.meteredOffered(s) * float64(p.lanesPerKey(s))
+}
+
+// laneAddress is the client address a lane's document requests arrive from,
+// named by the trusted proxy the arms of a bucket on the address run behind:
+// one the quiet population's lanes share, the egress address of a hosted
+// client whose many users fetch the documents, and one of its own for each of
+// the noisy population's, a flood from many addresses. Both are in the range
+// RFC 2544 sets aside for benchmarking, which nothing else here names. Only a
+// document request carries it, so what the other verbs present is unchanged.
+func laneAddress(population string, position int) string {
+	if population == populationQuiet {
+		return "198.18.0.1"
+	}
+	return fmt.Sprintf("198.19.%d.%d", position>>8&0xff, position&0xff)
 }
 
 // slotsFill refuses a plan that could not fill a slot bound, or that would
@@ -1037,8 +1203,11 @@ func (p fairnessPlan) refusalsExpected(s populationSpec) float64 {
 	if p.Bound.Bucket == nil {
 		return 0
 	}
-	above := p.Bound.meteredOffered(s) - p.Bound.Bucket.meteredRate()
-	return max(0, above) * float64(s.Credentials) * p.Phase.Seconds()
+	// Counted per bucket: lanes sharing one offer it together, and there are
+	// as many buckets as the lanes make up between them.
+	buckets := float64(s.Credentials) / float64(p.lanesPerKey(s))
+	above := p.offeredPerKey(s) - p.Bound.Bucket.meteredRate()
+	return max(0, above) * buckets * p.Phase.Seconds()
 }
 
 // validate refuses a population that would not be a tenant.

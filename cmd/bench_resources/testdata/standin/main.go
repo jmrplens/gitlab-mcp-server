@@ -39,6 +39,16 @@
 // initialize past that many sessions with a 503, the shape the real server's
 // session ceiling refuses with.
 //
+// It serves the three documents the real server publishes without a
+// credential, the SEP-2127 card, the legacy card and the RFC 9728 metadata, each
+// with an entity tag a revalidation is answered 304 against. A positive
+// --discovery-rate-limit-rps with a positive burst turns on one token bucket
+// per client address for the three, the address being X-Forwarded-For when a
+// request carries it, as the trusted proxy the fairness run names puts it, and
+// the peer otherwise; a request past it is refused 429 in the real gate's code
+// and words, with its Retry-After. STANDIN_DOCUMENTS_GONE answers every
+// document 404, which is how a test reaches a run that cannot read a tag.
+//
 // --auth-mode=oauth admits a bearer token the way the real bearer guard does:
 // one it has verified before at once, and any other only once the instance
 // --gitlab-url names has answered GET /api/v4/user for it, with at most
@@ -108,6 +118,10 @@ const (
 	upstreamLost = "GitLab could not verify this token right now; the instance is unreachable or throttling."
 	rejectedCode = -40100
 	rejected     = "GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance."
+	// The real gate's refusal of a discovery document an address's bucket
+	// could not pay for, and the variable that takes every document away.
+	documentRefusal = "Too many requests for the discovery documents from this address. Retry later."
+	documentsGone   = "STANDIN_DOCUMENTS_GONE"
 )
 
 // request is the subset of a JSON-RPC request the stand-in reads.
@@ -185,6 +199,61 @@ func (b *bound) allow(req request) bool {
 
 // limit is the process-wide bound, built from the flags in main.
 var limit = &bound{buckets: map[string]*rate.Limiter{}}
+
+// documents is the per-address bucket on the discovery documents, built from
+// the flags in main.
+var documents = struct {
+	sync.Mutex
+	on      bool
+	rps     float64
+	burst   int
+	buckets map[string]*rate.Limiter
+}{buckets: map[string]*rate.Limiter{}}
+
+// documentAllowed reports whether the address a request arrives from may have
+// a document now.
+func documentAllowed(r *http.Request) bool {
+	if !documents.on {
+		return true
+	}
+	address := r.Header.Get("X-Forwarded-For")
+	if address == "" {
+		address, _, _ = net.SplitHostPort(r.RemoteAddr)
+	}
+	documents.Lock()
+	bucket, ok := documents.buckets[address]
+	if !ok {
+		bucket = rate.NewLimiter(rate.Limit(documents.rps), documents.burst)
+		documents.buckets[address] = bucket
+	}
+	documents.Unlock()
+	return bucket.Allow()
+}
+
+// serveDocument answers one discovery document: refused when its address's
+// bucket is spent, 304 to a revalidation of its tag, and a small body of its
+// own otherwise.
+func serveDocument(path string) http.HandlerFunc {
+	tag := `"standin` + strings.ReplaceAll(path, "/", "-") + `"`
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, gone := os.LookupEnv(documentsGone); gone {
+			http.NotFound(w, r)
+			return
+		}
+		if !documentAllowed(r) {
+			w.Header().Set("Retry-After", "1")
+			writeGateRefusal(w, http.StatusTooManyRequests, &rpcError{Code: refusalCode, Message: documentRefusal})
+			return
+		}
+		w.Header().Set("ETag", tag)
+		if r.Header.Get("If-None-Match") == tag {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"document": path})
+	}
+}
 
 // oauthGate admits bearer tokens in OAuth mode, verifying each one the first
 // time it is seen under a ceiling on how many are verified at once.
@@ -289,7 +358,12 @@ func main() {
 	flag.String("public-url", "", "accepted and ignored")
 	flag.String("trusted-proxies", "", "accepted and ignored")
 	flag.String("trusted-proxy-header", "", "accepted and ignored")
+	discoveryRPS := flag.Float64("discovery-rate-limit-rps", 0, "positive, with a positive burst, turns on the per-address bucket on the documents")
+	discoveryBurst := flag.Int("discovery-rate-limit-burst", 0, "documents one address is served before that bucket refuses")
 	flag.Parse()
+
+	documents.on = *discoveryRPS > 0 && *discoveryBurst > 0
+	documents.rps, documents.burst = *discoveryRPS, *discoveryBurst
 
 	gate.on = *authMode == "oauth"
 	gate.wait = 100 * time.Millisecond
@@ -423,6 +497,9 @@ func serveHTTP(addr string) error {
 		})
 	})
 	mux.HandleFunc("POST /mcp", handleMCP)
+	for _, path := range []string{"/server-card", "/.well-known/mcp/server-card.json", "/.well-known/oauth-protected-resource"} {
+		mux.HandleFunc("GET "+path, serveDocument(path))
+	}
 	if sessions.stateful {
 		mux.HandleFunc("GET /mcp", handleStream)
 		mux.HandleFunc("DELETE /mcp", handleDelete)

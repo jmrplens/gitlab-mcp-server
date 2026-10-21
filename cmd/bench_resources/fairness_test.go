@@ -552,6 +552,28 @@ func TestBoundSpec_MeteredOffered_CountsOnlyTheVerbsTheBoundRefuses(t *testing.T
 	}
 }
 
+// assertDefaultQuietRateLeavesTheBound holds the rate bound gives the default
+// quiet population to a positive one no busier than the shipped default, and
+// what the lanes sharing one of its buckets offer together to the ceiling a
+// quiet tenant is held under. The lanes sharing a bucket are all of them
+// against a bucket on the address, which they reach from the one egress
+// address a hosted client's users share.
+func assertDefaultQuietRateLeavesTheBound(t *testing.T, bound boundSpec) {
+	t.Helper()
+	lanes := bound.lanesSharingAKey(populationQuiet, defaultQuietCredentials)
+	rate := bound.quietRate(lanes)
+	if rate <= 0 || rate > defaultQuietRate {
+		t.Errorf("quietRate = %g, want a positive rate no busier than the shipped %g", rate, defaultQuietRate)
+	}
+	if bound.Bucket == nil {
+		return
+	}
+	offered := bound.meteredOffered(populationSpec{Rate: rate, Verbs: bound.QuietVerbs}) * float64(lanes)
+	if ceiling := quietMaxShare * bound.Bucket.meteredRate(); offered > ceiling {
+		t.Errorf("the default quiet population offers %g a bucket against a ceiling of %g", offered, ceiling)
+	}
+}
+
 // TestBoundSpec_QuietRate_ComesFromTheBoundRatherThanAConstant verifies the
 // rate a quiet population takes by default leaves it under every declared
 // bound, which one constant cannot do.
@@ -565,17 +587,7 @@ func TestBoundSpec_MeteredOffered_CountsOnlyTheVerbsTheBoundRefuses(t *testing.T
 func TestBoundSpec_QuietRate_ComesFromTheBoundRatherThanAConstant(t *testing.T) {
 	for _, bound := range fairnessBounds {
 		t.Run(bound.ID, func(t *testing.T) {
-			rate := bound.quietRate()
-			if rate <= 0 || rate > defaultQuietRate {
-				t.Errorf("quietRate = %g, want a positive rate no busier than the shipped %g", rate, defaultQuietRate)
-			}
-			if bound.Bucket == nil {
-				return
-			}
-			offered := bound.meteredOffered(populationSpec{Rate: rate, Verbs: bound.QuietVerbs})
-			if ceiling := quietMaxShare * bound.Bucket.meteredRate(); offered > ceiling {
-				t.Errorf("the default quiet population offers %g against a ceiling of %g", offered, ceiling)
-			}
+			assertDefaultQuietRateLeavesTheBound(t, bound)
 		})
 	}
 	t.Run("a bound that meters no rate has no quiet ceiling", func(t *testing.T) {
@@ -595,8 +607,17 @@ func TestBoundSpec_QuietRate_ComesFromTheBoundRatherThanAConstant(t *testing.T) 
 			Refusals:   []refusalSpec{{Status: httpOK, TextPrefix: "x", Method: methodToolsCall}},
 			QuietVerbs: []string{verbCall},
 		}
-		if got := bound.quietRate(); got != 1 {
+		if got := bound.quietRate(1); got != 1 {
 			t.Errorf("quietRate = %g, want a quarter of the 4 a second the bound meters", got)
+		}
+		// Four lanes sharing one bucket offer it together, so each takes a
+		// quarter of the quarter.
+		if got := bound.quietRate(4); got != 0.25 {
+			t.Errorf("quietRate(4 lanes) = %g, want the quarter spread over the four", got)
+		}
+		// A count below one is one lane.
+		if got := bound.quietRate(0); got != 1 {
+			t.Errorf("quietRate(0 lanes) = %g, want the rate of one lane", got)
 		}
 	})
 	t.Run("a bound whose quiet verbs it never meters", func(t *testing.T) {
@@ -605,7 +626,7 @@ func TestBoundSpec_QuietRate_ComesFromTheBoundRatherThanAConstant(t *testing.T) 
 			Refusals:   []refusalSpec{{Status: httpOK, TextPrefix: "x", Method: methodSubscriptionsListen}},
 			QuietVerbs: []string{verbCall},
 		}
-		if got := unmetered.quietRate(); got != defaultQuietRate {
+		if got := unmetered.quietRate(1); got != defaultQuietRate {
 			t.Errorf("quietRate = %g, want the shipped default when the bound meters none of the quiet verbs", got)
 		}
 	})
@@ -623,8 +644,25 @@ func TestBoundSpec_QuietRate_ComesFromTheBoundRatherThanAConstant(t *testing.T) 
 			t.Fatalf("fairnessPlanFor: %v", err)
 		}
 		bound, _ := boundByID("tools-list-rps")
-		if plan.Quiet.Rate != bound.quietRate() {
-			t.Errorf("quiet rate = %g, want the %g the bound names", plan.Quiet.Rate, bound.quietRate())
+		if plan.Quiet.Rate != bound.quietRate(1) {
+			t.Errorf("quiet rate = %g, want the %g the bound names", plan.Quiet.Rate, bound.quietRate(1))
+		}
+	})
+	t.Run("and spreads it over the lanes that share an address", func(t *testing.T) {
+		opts := fairnessOptions()
+		opts.fairness = "discovery"
+		opts.fairnessQuietRate = 0
+		// Eight lanes, as a run with no flags has, and a phase long enough for
+		// the rate they leave each lane to fill a percentile.
+		opts.fairnessQuiet = defaultQuietCredentials
+		opts.fairnessPhase = 4 * time.Second
+		plan, err := fairnessPlanFor(opts)
+		if err != nil {
+			t.Fatalf("fairnessPlanFor: %v", err)
+		}
+		bound, _ := boundByID("discovery")
+		if want := bound.quietRate(plan.Quiet.Credentials); plan.Quiet.Rate != want || want >= bound.quietRate(1) {
+			t.Errorf("quiet rate = %g, want the %g a lane takes with %d sharing the bucket", plan.Quiet.Rate, want, plan.Quiet.Credentials)
 		}
 	})
 }
@@ -687,7 +725,9 @@ func TestFairnessPlan_RefusalsExpected_IsWhatThePopulationOffersAboveTheBound(t 
 //
 // A bound whose flags said ten and whose validation believed twenty would pass
 // a lead-in check the run then failed, and the failure would look like the
-// server's.
+// server's. The bucket's two switches follow whatever else the arm declares,
+// under the names the bucket gives them, the tool-call bucket's when it names
+// none.
 func TestBoundSpec_OnArgs_AreWrittenFromTheBucketTheValidationReads(t *testing.T) {
 	for _, bound := range fairnessBounds {
 		t.Run(bound.ID, func(t *testing.T) {
@@ -698,12 +738,38 @@ func TestBoundSpec_OnArgs_AreWrittenFromTheBucketTheValidationReads(t *testing.T
 				}
 				return
 			}
-			want := fmt.Sprintf("--rate-limit-rps=%g --rate-limit-burst=%d", bound.Bucket.Rate, bound.Bucket.Burst)
+			rate, burst := "--rate-limit-rps", "--rate-limit-burst"
+			if bound.Bucket.RateFlag != "" {
+				rate, burst = bound.Bucket.RateFlag, bound.Bucket.BurstFlag
+			}
+			want := strings.TrimSpace(strings.Join(bound.ArgsOn, " ") +
+				fmt.Sprintf(" %s=%g %s=%d", rate, bound.Bucket.Rate, burst, bound.Bucket.Burst))
 			if args != want {
 				t.Errorf("onArgs = %q, want %q", args, want)
 			}
 		})
 	}
+	t.Run("the arm's own switches are not written into", func(t *testing.T) {
+		// Room to spare behind the declared switch, so an append that did not
+		// copy them first would write the bucket's into the declaration and
+		// the next arm's over the last one's.
+		declared := make([]string, 1, 8)
+		declared[0] = "--auth-mode=oauth"
+		bucket := &bucketSpec{Rate: 1, Burst: 2}
+		bound := boundSpec{ArgsOn: declared, Bucket: bucket}
+		first := bound.onArgs()
+		bucket.Rate = 9
+		bound.onArgs()
+		if got := strings.Join(first, " "); got != "--auth-mode=oauth --rate-limit-rps=1 --rate-limit-burst=2" {
+			t.Errorf("the first arm's switches became %q once a second was written", got)
+		}
+	})
+	t.Run("a bucket names its own switches", func(t *testing.T) {
+		bound := boundSpec{Bucket: &bucketSpec{Rate: 1.5, Burst: 2, RateFlag: "--a", BurstFlag: "--b"}}
+		if got := strings.Join(bound.onArgs(), " "); got != "--a=1.5 --b=2" {
+			t.Errorf("onArgs = %q, want the bucket's own switch names", got)
+		}
+	})
 }
 
 // TestPopulationSpec_Validate_RefusesAVerbThatDoesNotExist verifies a
@@ -1218,6 +1284,198 @@ func TestClassifyExpecting_FilesTheRunsOwnRefusalsApart(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := classifyExpecting(methodToolsList, tc.err, bound.Refusals, bound.Otherwise); got != tc.want {
 				t.Errorf("classifyExpecting = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFairnessBounds_Discovery_IsTheRegistersBucketOnTheAddress verifies the
+// discovery bound is the one register row RTC-008 declares: the shipped rate
+// and burst, passed under the two switches issue 1053 named, keyed on the
+// address, switched off in the other arm with a zero, both arms in the one
+// mode that publishes the RFC 9728 metadata. It refuses each of the four
+// document verbs in the gate's 429, in the code and words the register holds
+// the server to, and meters nothing else, so the quiet population's calls are
+// never its refusals. And a plan of its defaults validates, the noisy addresses
+// offering it five times what it meters, a token every five ticks of a lane
+// cycling four verbs.
+func TestFairnessBounds_Discovery_IsTheRegistersBucketOnTheAddress(t *testing.T) {
+	bound, err := boundByID("discovery")
+	if err != nil {
+		t.Fatalf("boundByID: %v", err)
+	}
+	wantBucket := bucketSpec{
+		Rate: tenancy.DiscoveryRate, Burst: tenancy.DiscoveryBurst, PerAddress: true,
+		RateFlag: "--discovery-rate-limit-rps", BurstFlag: "--discovery-rate-limit-burst",
+	}
+	if bound.Bucket == nil || *bound.Bucket != wantBucket || !bound.OAuth {
+		t.Errorf("bucket %+v, oauth %v; want %+v in OAuth mode", bound.Bucket, bound.OAuth, wantBucket)
+	}
+	if want := append(slices.Clone(oauthArgs), "--discovery-rate-limit-rps=0"); !slices.Equal(bound.ArgsOff, want) {
+		t.Errorf("ArgsOff = %v, want %v", bound.ArgsOff, want)
+	}
+	registered := registerRefusal("RTC-008", httpTooManyRequests)
+	if registered.TextPrefix == "" || registered.Code != tenancy.CodeTooManyRequests {
+		t.Fatalf("the register's refusal of RTC-008 = %+v, want its 429 with words", registered)
+	}
+	for _, id := range []string{verbLegacyCard, verbCard, verbMetadata, verbCardRevalidate} {
+		t.Run(id, func(t *testing.T) {
+			method := verbs[id].Method
+			if !bound.meters(method) {
+				t.Errorf("the bound does not meter %s", method)
+			}
+			refusal := statusError(method, httpTooManyRequests, []byte(`{"jsonrpc":"2.0","error":{"code":-42900,"message":"`+registered.TextPrefix+` Retry later."}}`))
+			if got := classifyOutcome(method, refusal, bound.Refusals); got != outcomeRefused {
+				t.Errorf("the register's refusal of %s classified %q, want refused", method, got)
+			}
+		})
+	}
+	if bound.meters(methodToolsCall) {
+		t.Error("the bound meters tools/call, which it never refuses")
+	}
+	opts := fairnessOptions()
+	opts.fairness = "discovery"
+	opts.fairnessQuietRate = 0
+	opts.fairnessQuiet = defaultQuietCredentials
+	opts.fairnessPhase = defaultFairnessPhase
+	plan, planErr := fairnessPlanFor(opts)
+	if planErr != nil {
+		t.Fatalf("a plan of the bound's defaults: %v", planErr)
+	}
+	if got := plan.offeredPerKey(plan.Noisy); got != 5*tenancy.DiscoveryRate {
+		t.Errorf("each noisy address offers %g, want five times the %d the bound meters", got, tenancy.DiscoveryRate)
+	}
+	// A lane's bucket refills a token every so many of its ticks, and the lane
+	// cycles its verbs on those ticks, so the two counts must share no factor
+	// for the tokens to reach every verb rather than the same ones each time.
+	ticks, verbCount := int(plan.Noisy.Rate)/tenancy.DiscoveryRate, len(bound.NoisyVerbs)
+	common := ticks
+	for rest := verbCount; rest != 0; {
+		common, rest = rest, common%rest
+	}
+	if ticks*tenancy.DiscoveryRate != int(plan.Noisy.Rate) || common != 1 {
+		t.Errorf("a noisy lane at %g a second gets a token every %d ticks over %d verbs, sharing the factor %d: want a whole count sharing none",
+			plan.Noisy.Rate, ticks, verbCount, common)
+	}
+}
+
+// TestDocumentVerb_IsAGETOfItsPathUnderARowOfItsOwn verifies the four document
+// verbs: each a GET of its path with no parameters and the path as its detail,
+// the revalidation a row apart from the fetch of the same document.
+func TestDocumentVerb_IsAGETOfItsPathUnderARowOfItsOwn(t *testing.T) {
+	for _, tc := range []struct {
+		id, path, method string
+		revalidate       bool
+	}{
+		{id: verbCard, path: pathServerCard, method: "GET /server-card"},
+		{id: verbCardRevalidate, path: pathServerCard, method: "GET /server-card (revalidated)", revalidate: true},
+		{id: verbLegacyCard, path: pathLegacyCard, method: "GET /.well-known/mcp/server-card.json"},
+		{id: verbMetadata, path: pathMetadata, method: "GET /.well-known/oauth-protected-resource"},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			verb := verbs[tc.id]
+			if verb.ID != tc.id || verb.Method != tc.method || verb.Document != tc.path || verb.Revalidate != tc.revalidate ||
+				verb.Credential != credentialOwn {
+				t.Errorf("verb = %+v, want a GET of %s as %q", verb, tc.path, tc.method)
+			}
+			if verb.params(toolCall{}) != nil || verb.detail(toolCall{}) != tc.path || verb.key() != tc.method {
+				t.Errorf("params %v, detail %q, row %q; want none, the path and the method", verb.params(toolCall{}), verb.detail(toolCall{}), verb.key())
+			}
+		})
+	}
+}
+
+// TestBoundSpec_LanesSharingAKey_AreTheQuietLanesOfABucketOnTheAddress
+// verifies which lanes draw on one bucket: the whole quiet population against
+// a bucket on the address, one egress address shared, and one lane otherwise,
+// a noisy lane being an address of its own and every other bound's lane a
+// credential.
+func TestBoundSpec_LanesSharingAKey_AreTheQuietLanesOfABucketOnTheAddress(t *testing.T) {
+	onTheAddress := boundSpec{Bucket: &bucketSpec{Rate: 1, Burst: 1, PerAddress: true}}
+	perCredential := boundSpec{Bucket: &bucketSpec{Rate: 1, Burst: 1}}
+	for _, tc := range []struct {
+		name        string
+		bound       boundSpec
+		population  string
+		credentials int
+		want        int
+	}{
+		{name: "the quiet lanes share an address", bound: onTheAddress, population: populationQuiet, credentials: 8, want: 8},
+		{name: "a quiet population of none is one lane", bound: onTheAddress, population: populationQuiet, credentials: 0, want: 1},
+		{name: "a noisy lane is an address of its own", bound: onTheAddress, population: populationNoisy, credentials: 8, want: 1},
+		{name: "a bucket on the credential", bound: perCredential, population: populationQuiet, credentials: 8, want: 1},
+		{name: "a bound with no bucket", bound: boundSpec{}, population: populationQuiet, credentials: 8, want: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.bound.lanesSharingAKey(tc.population, tc.credentials); got != tc.want {
+				t.Errorf("lanesSharingAKey = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFairnessPlan_ABucketOnTheAddress_IsOfferedWhatItsLanesOfferTogether
+// verifies the plan's arithmetic for a bucket the quiet lanes share: the
+// bucket is offered what every lane offers it together, the quiet ceiling is
+// held against that, and the refusals expected are counted per bucket, one for
+// the quiet population and one per noisy lane.
+func TestFairnessPlan_ABucketOnTheAddress_IsOfferedWhatItsLanesOfferTogether(t *testing.T) {
+	bound := boundSpec{
+		Bucket:   &bucketSpec{Rate: 10, Burst: 10, PerAddress: true},
+		Refusals: []refusalSpec{{Status: httpTooManyRequests, Method: verbs[verbCard].Method}},
+	}
+	plan := fairnessPlan{
+		Bound: bound, Phase: 2 * time.Second,
+		Quiet: populationSpec{Name: populationQuiet, Credentials: 4, Rate: 2, Verbs: []string{verbCard, verbCall}},
+		Noisy: populationSpec{Name: populationNoisy, Credentials: 3, Rate: 30, Verbs: []string{verbCard}},
+	}
+	if got := plan.offeredPerKey(plan.Quiet); got != 4 {
+		t.Errorf("the quiet bucket is offered %g, want the four lanes' one a second each", got)
+	}
+	if got := plan.offeredPerKey(plan.Noisy); got != 30 {
+		t.Errorf("a noisy bucket is offered %g, want its one lane's 30", got)
+	}
+	if err := plan.quietIsQuiet(); err != nil {
+		t.Errorf("quietIsQuiet = %v, want four a second against a bucket of ten passed", err)
+	}
+	if got := plan.refusalsExpected(plan.Noisy); got != 20*3*2 {
+		t.Errorf("refusalsExpected(noisy) = %g, want 20 a second above the bound, for each of 3 addresses, over 2 seconds", got)
+	}
+	busy := plan
+	busy.Quiet.Rate = 3
+	if got := busy.refusalsExpected(busy.Quiet); got != 0 {
+		t.Errorf("refusalsExpected(quiet) = %g, want none from a bucket offered 6 of its 10", got)
+	}
+	busy.Quiet.Credentials = 8
+	err := busy.quietIsQuiet()
+	if err == nil || !strings.Contains(err.Error(), "offers 12 metered requests a second per bucket") {
+		t.Errorf("quietIsQuiet with eight lanes = %v, want the shared bucket's twelve a second refused", err)
+	}
+	if got := busy.refusalsExpected(busy.Quiet); got != 2*1*2 {
+		t.Errorf("refusalsExpected(quiet) = %g, want the one shared bucket's 2 a second above the bound over 2 seconds", got)
+	}
+}
+
+// TestLaneAddress_IsOneEgressForTheQuietAndOneEachForTheNoisy verifies the
+// addresses the trusted proxy names for a lane's document requests: the one
+// the whole quiet population shares, and one per noisy lane, distinct for
+// every lane a plan can have.
+func TestLaneAddress_IsOneEgressForTheQuietAndOneEachForTheNoisy(t *testing.T) {
+	if laneAddress(populationQuiet, 0) != laneAddress(populationQuiet, 7) {
+		t.Error("two quiet lanes arrive from different addresses, want the one egress address they share")
+	}
+	for _, tc := range []struct {
+		position int
+		want     string
+	}{
+		{position: 0, want: "198.19.0.0"},
+		{position: 1, want: "198.19.0.1"},
+		{position: 256, want: "198.19.1.0"},
+		{position: 65535, want: "198.19.255.255"},
+	} {
+		t.Run(tc.want, func(t *testing.T) {
+			if got := laneAddress(populationNoisy, tc.position); got != tc.want || got == laneAddress(populationQuiet, tc.position) {
+				t.Errorf("laneAddress(noisy, %d) = %q, want %q and not the quiet egress", tc.position, got, tc.want)
 			}
 		})
 	}

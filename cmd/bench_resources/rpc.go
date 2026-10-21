@@ -382,6 +382,55 @@ func (c *httpRPC) callAs(ctx context.Context, method string, params map[string]a
 // close releases idle connections.
 func (c *httpRPC) close() { c.client.CloseIdleConnections() }
 
+// documentFetcher is a client that can fetch a document published beside the
+// endpoint, the way a discovery client does.
+type documentFetcher interface {
+	fetch(ctx context.Context, path string, doc documentRequest) (string, error)
+}
+
+// documentRequest is what one document request carries besides its path: the
+// client address a trusted proxy names for it, and the entity tag it
+// revalidates, each empty when the request carries none.
+type documentRequest struct {
+	forwardedFor string
+	ifNoneMatch  string
+}
+
+// fetch GETs path on the endpoint's origin over the client's own connections,
+// presenting no credential, and returns the entity tag the answer carried.
+// A revalidation must be answered 304 and any other request 200; anything else
+// is the statusError a refusal is matched against, its JSON-RPC body read as
+// a gate refusal's is.
+func (c *httpRPC) fetch(ctx context.Context, path string, doc documentRequest) (string, error) {
+	label := http.MethodGet + " " + path
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint, http.NoBody)
+	if err != nil {
+		return "", fmt.Errorf("build %s request: %w", label, err)
+	}
+	req.URL.Path, req.URL.RawPath = path, ""
+	if doc.forwardedFor != "" {
+		req.Header.Set(headerForwardedFor, doc.forwardedFor)
+	}
+	want := http.StatusOK
+	if doc.ifNoneMatch != "" {
+		req.Header.Set("If-None-Match", doc.ifNoneMatch)
+		want = http.StatusNotModified
+	}
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", label, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	payload, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read %s response: %w", label, err)
+	}
+	if resp.StatusCode != want {
+		return "", statusError(label, resp.StatusCode, payload)
+	}
+	return resp.Header.Get("ETag"), nil
+}
+
 // eventStreamPayload pulls the JSON message out of an SSE body. The server
 // answers in SSE by default, which is the shape a real client receives.
 func eventStreamPayload(body []byte) ([]byte, error) {

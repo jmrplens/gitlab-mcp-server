@@ -174,6 +174,12 @@ func (r *runner) runFairnessArm(ctx context.Context, plan fairnessPlan, arm stri
 	}
 	present := newPresenter(plan, tgt.endpoint(), plan.Bound.OAuth)
 	defer present.close()
+	// The tag every revalidated document is first served with, read once
+	// before the lead-in and from the default route, so a revalidation is a
+	// 304 and no lane's bucket pays for the reading.
+	if tagErr := present.learnTags(ctx, conns[0].rpc, slices.Concat(plan.Quiet.Verbs, plan.Noisy.Verbs)); tagErr != nil {
+		return FairnessArm{}, tagErr
+	}
 
 	// The lead-in is discarded on purpose and both arms pay it: it drains the
 	// bound's burst, so the measured window reports the bound rather than the
@@ -352,9 +358,10 @@ func drive(ctx context.Context, in driveInput, start time.Time, ticksFor func(po
 			conn, position := conns[index], index-first
 			wg.Go(func() {
 				paceCredential(ctx, paceInput{
-					conn:  conn,
-					pop:   pop.Name,
-					start: start,
+					conn:    conn,
+					pop:     pop.Name,
+					address: laneAddress(pop.Name, position),
+					start:   start,
 					// Credentials are spread across one period rather than
 					// firing together, since a population that fired in step
 					// would offer a burst per period and not a rate.
@@ -376,8 +383,11 @@ func drive(ctx context.Context, in driveInput, start time.Time, ticksFor func(po
 
 // paceInput is one credential's schedule.
 type paceInput struct {
-	conn           *clientConn
-	pop            string
+	conn *clientConn
+	pop  string
+	// address is the client address the lane's document requests arrive
+	// from, which a bucket on the address keys them on.
+	address        string
 	start          time.Time
 	offset, period time.Duration
 	ticks          int
