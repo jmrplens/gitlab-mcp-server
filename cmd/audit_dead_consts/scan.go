@@ -4,12 +4,11 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
-	"path/filepath"
-	"strings"
 
 	"golang.org/x/tools/go/packages"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcegate"
 )
 
 // Constant is one unexported constant declared in this repository.
@@ -92,15 +91,16 @@ func newScanner(root string) *scanner {
 // The test main the go tool synthesizes for a package (`p.test`) is passed
 // over: its one generated file is nobody's source, declares no constant and
 // reads none, and counting it put a package the repository never wrote in
-// the summary of every tested package.
+// the summary of every tested package. A package a load left Go files out of
+// is what a build constraint this platform does not satisfy looks like.
 func (s *scanner) observe(loaded []*packages.Package) {
-	underTest := packagesUnderTest(loaded)
+	underTest := goprogram.PackagesUnderTest(loaded)
 	for _, pkg := range loaded {
-		if isTestMain(pkg, underTest) {
+		if goprogram.IsTestMain(pkg, underTest) {
 			continue
 		}
-		s.packages[trimModulePath(variantName(pkg.PkgPath))] = struct{}{}
-		if hasIgnoredGoFile(pkg) {
+		s.packages[goprogram.TrimModulePath(goprogram.VariantName(pkg.PkgPath))] = struct{}{}
+		if len(goprogram.IgnoredGoFiles(pkg)) > 0 {
 			s.platformPackages[pkg.PkgPath] = struct{}{}
 		}
 		for _, file := range pkg.Syntax {
@@ -135,7 +135,7 @@ func (s *scanner) observeFile(pkg *packages.Package, file *ast.File) {
 		open = append(open, node)
 		switch fn := node.(type) {
 		case *ast.FuncDecl:
-			funcs = append(funcs, funcDeclName(fn))
+			funcs = append(funcs, sourcegate.FuncDeclName(fn))
 		case *ast.FuncLit:
 			funcs = append(funcs, funcLitName(funcs))
 		}
@@ -155,8 +155,8 @@ func (s *scanner) observeFile(pkg *packages.Package, file *ast.File) {
 			}
 			at := s.positionOf(pkg, name.Pos())
 			s.declared[at] = Constant{
-				Package:   trimModulePath(variantName(pkg.PkgPath)),
-				File:      relativePath(at.file, s.root),
+				Package:   goprogram.TrimModulePath(goprogram.VariantName(pkg.PkgPath)),
+				File:      goprogram.RelativePath(at.file, s.root),
 				Line:      at.line,
 				Column:    at.col,
 				Name:      constant.Name(),
@@ -166,33 +166,6 @@ func (s *scanner) observeFile(pkg *packages.Package, file *ast.File) {
 		}
 		return true
 	})
-}
-
-// funcDeclName spells a function the way its file does: the bare name, or
-// `Type.Method` with the receiver's type stripped of its pointer.
-//
-// The receiver is read through its parentheses, as the type checker reads
-// it: `(w (walker))` and `(w *(walker))` declare methods of walker as much as
-// `(w walker)` does, and a key that dropped the receiver there would excuse
-// nothing a reader wrote for it.
-func funcDeclName(fn *ast.FuncDecl) string {
-	if fn.Recv == nil || len(fn.Recv.List) == 0 {
-		return fn.Name.Name
-	}
-	receiver := ast.Unparen(fn.Recv.List[0].Type)
-	if star, isPointer := receiver.(*ast.StarExpr); isPointer {
-		receiver = ast.Unparen(star.X)
-	}
-	switch generic := receiver.(type) {
-	case *ast.IndexExpr:
-		receiver = generic.X
-	case *ast.IndexListExpr:
-		receiver = generic.X
-	}
-	if ident, isIdent := receiver.(*ast.Ident); isIdent {
-		return ident.Name + "." + fn.Name.Name
-	}
-	return fn.Name.Name
 }
 
 // funcLitName is what a function literal's constants are keyed under: the
@@ -245,75 +218,4 @@ func constNames(decl *ast.GenDecl) []*ast.Ident {
 		}
 	}
 	return names
-}
-
-// hasIgnoredGoFile reports whether a load left a Go file of this package out,
-// which is what a build constraint this platform does not satisfy looks like.
-func hasIgnoredGoFile(pkg *packages.Package) bool {
-	for _, file := range pkg.IgnoredFiles {
-		if strings.HasSuffix(file, ".go") {
-			return true
-		}
-	}
-	return false
-}
-
-// packagesUnderTest collects, from one load, the import paths the loader says
-// a test executable was built for. `go list` reports a test variant as
-// "p [q.test]" and fills [packages.Package.ForTest] with q for it; the
-// executable itself arrives as plain "q.test" with ForTest empty, so the
-// variants are where the name of the package under test can be read.
-func packagesUnderTest(loaded []*packages.Package) map[string]struct{} {
-	underTest := make(map[string]struct{})
-	for _, pkg := range loaded {
-		if pkg.ForTest != "" {
-			underTest[pkg.ForTest] = struct{}{}
-		}
-	}
-
-	return underTest
-}
-
-// isTestMain reports whether a loaded package is the test executable the go
-// tool synthesizes for a package under test, "q.test", which is neither source
-// of this repository nor a name a second load can be asked for.
-//
-// The path alone does not answer it. A directory may be named "foo.test", and
-// the package in it then carries a path ending exactly as the synthesized
-// executable does while being source somebody wrote; passing over it would
-// drop every constant it declares and report the package clean. So the path is
-// only believed when the loader also produced a test variant for the package
-// the suffix claims this was built for, which is a fact about the load rather
-// than a guess about a name.
-func isTestMain(pkg *packages.Package, underTest map[string]struct{}) bool {
-	if pkg.Name != "main" || !strings.HasSuffix(pkg.PkgPath, ".test") {
-		return false
-	}
-	_, built := underTest[strings.TrimSuffix(pkg.PkgPath, ".test")]
-
-	return built
-}
-
-// variantName is a package's import path with the test-variant decoration the
-// loader adds taken off, so "p", "p [p.test]" and "p_test [p.test]" are one
-// package. The suffix is decoration on the path rather than part of it, and
-// the external test package keeps its own "_test" name because it really is a
-// different package.
-func variantName(pkgPath string) string {
-	plain, _, _ := strings.Cut(pkgPath, " [")
-	return plain
-}
-
-// trimModulePath names a package the way the repository does.
-func trimModulePath(pkgPath string) string {
-	return strings.TrimPrefix(strings.TrimPrefix(pkgPath, goprogram.ModulePath), "/")
-}
-
-// relativePath renders a file below the repository root, so a finding reads
-// the same wherever the audit was run from.
-func relativePath(path, root string) string {
-	if rel, err := filepath.Rel(root, path); err == nil && !strings.HasPrefix(rel, "..") {
-		return filepath.ToSlash(rel)
-	}
-	return filepath.ToSlash(path)
 }

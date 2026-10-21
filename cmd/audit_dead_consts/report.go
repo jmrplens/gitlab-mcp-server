@@ -1,9 +1,11 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"io"
-	"sort"
+	"slices"
+	"strings"
 )
 
 // Summary is what a run looked at, so a clean report says what it was clean
@@ -53,11 +55,11 @@ func buildReport(found []Constant, declaredCount int, scanned map[string]struct{
 	return report
 }
 
-// ok reports whether the run found nothing to answer for.
-func (r Report) ok() bool { return len(r.Findings) == 0 && len(r.Stale) == 0 }
+// OK reports whether the run found nothing to answer for.
+func (r Report) OK() bool { return len(r.Findings) == 0 && len(r.Stale) == 0 }
 
-// write renders the report.
-func (r Report) write(out io.Writer, verbose bool) {
+// Write renders the report.
+func (r Report) Write(out io.Writer, verbose bool) {
 	for _, constant := range r.Findings {
 		fmt.Fprintf(out, "%s:%d: %s is never read (%s)\n",
 			constant.File, constant.Line, constant.Name, groupNote(constant.GroupSize))
@@ -65,7 +67,7 @@ func (r Report) write(out io.Writer, verbose bool) {
 	for _, key := range r.Stale {
 		fmt.Fprintf(out, "%s: declared unread on purpose, and this run found it read or found it gone\n", key)
 	}
-	if verbose || !r.ok() {
+	if verbose || !r.OK() {
 		fmt.Fprintln(out)
 	}
 	fmt.Fprintf(out, "%s: %d unexported constants in %d packages, %d never read (%d of those in a group the linter cannot see)\n",
@@ -85,14 +87,13 @@ func groupNote(groupSize int) string {
 // sortConstants puts findings in source order: by file, then by line, then
 // by column. The column is what makes the order total, since two constants
 // may share a line but never a position.
+//
+// Each key is compared once, by the three-way comparison, rather than tested
+// for inequality and then ordered: under the inequality a strict and a loose
+// order give the same answer, so the mutation tool's swap of one for the
+// other lived in all three keys and no test could tell them apart.
 func sortConstants(found []Constant) {
-	sort.Slice(found, func(i, j int) bool {
-		if found[i].File != found[j].File {
-			return found[i].File < found[j].File
-		}
-		if found[i].Line != found[j].Line {
-			return found[i].Line < found[j].Line
-		}
-		return found[i].Column < found[j].Column
+	slices.SortFunc(found, func(a, b Constant) int {
+		return cmp.Or(strings.Compare(a.File, b.File), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Column, b.Column))
 	})
 }

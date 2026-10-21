@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcegate"
 	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
@@ -505,6 +506,53 @@ func TestMain_CheckOverANamedPackage_FailsOnItsFinding(t *testing.T) {
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %q, want empty: a finding is not a broken run", stderr)
+	}
+}
+
+// TestMain_InThisProcess_EndsWithTheCodeRunDecided runs main here rather than
+// in a child, with the exit seam standing in for the end of the process, so
+// main itself is measured beside what the child copies show: it reads the
+// process's own flag set, hands run standard output for the report, and ends
+// with the code run decided. The streams are read when main runs, so
+// replacing them here is what main sees.
+func TestMain_InThisProcess_EndsWithTheCodeRunDecided(t *testing.T) {
+	previousExit, previousArgs, previousFlags := sourcegate.Exit, os.Args, flag.CommandLine
+	previousStdout, previousStderr := os.Stdout, os.Stderr
+	t.Cleanup(func() {
+		sourcegate.Exit, os.Args, flag.CommandLine = previousExit, previousArgs, previousFlags
+		os.Stdout, os.Stderr = previousStdout, previousStderr
+	})
+	var codes []int
+	sourcegate.Exit = func(code int) { codes = append(codes, code) }
+	os.Args = []string{toolName, "-check", "-dir", mainModule(t), "./other"}
+	flag.CommandLine = flag.NewFlagSet(toolName, flag.ExitOnError)
+	streams := t.TempDir()
+	stdout, stdoutErr := os.Create(filepath.Join(streams, "stdout"))
+	stderr, stderrErr := os.Create(filepath.Join(streams, "stderr"))
+	if err := errors.Join(stdoutErr, stderrErr); err != nil {
+		t.Fatalf("create the streams: %v", err)
+	}
+	os.Stdout, os.Stderr = stdout, stderr
+
+	main()
+
+	os.Stdout, os.Stderr = previousStdout, previousStderr
+	if err := errors.Join(stdout.Close(), stderr.Close()); err != nil {
+		t.Fatalf("close the streams: %v", err)
+	}
+	if !slices.Equal(codes, []int{1}) {
+		t.Fatalf("exit codes = %v, want the 1 run decided under -check", codes)
+	}
+	written, readErr := os.ReadFile(stdout.Name())
+	complained, complainErr := os.ReadFile(stderr.Name())
+	if err := errors.Join(readErr, complainErr); err != nil {
+		t.Fatalf("read the streams: %v", err)
+	}
+	if want := "other/other.go:3: otherDead is never read (declared on its own)\n"; !strings.HasPrefix(string(written), want) {
+		t.Errorf("stdout = %q, want it to begin %q", written, want)
+	}
+	if len(complained) != 0 {
+		t.Errorf("stderr = %q, want empty: a finding is not a broken run", complained)
 	}
 }
 

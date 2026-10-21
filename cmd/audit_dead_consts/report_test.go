@@ -30,8 +30,8 @@ func TestBuildReport_DeclaredUnread_IsExcusedRatherThanReported(t *testing.T) {
 	if len(report.Stale) != 0 {
 		t.Fatalf("stale = %v, want none: both declarations excused a constant", report.Stale)
 	}
-	if !report.ok() {
-		t.Fatal("ok() = false, want true")
+	if !report.OK() {
+		t.Fatal("OK() = false, want true")
 	}
 }
 
@@ -42,8 +42,8 @@ func TestBuildReport_DeclarationThatExcusedNothing_IsItsOwnFinding(t *testing.T)
 	if len(report.Stale) != len(unreadOnPurpose) {
 		t.Fatalf("stale = %v, want every entry of the table: the run looked at the package and found the constants read", report.Stale)
 	}
-	if report.ok() {
-		t.Fatal("ok() = true, want false: a stale declaration is a finding")
+	if report.OK() {
+		t.Fatal("OK() = true, want false: a stale declaration is a finding")
 	}
 	if report.Summary.Stale != len(report.Stale) {
 		t.Fatalf("Summary.Stale = %d, want %d", report.Summary.Stale, len(report.Stale))
@@ -58,8 +58,8 @@ func TestBuildReport_DeclarationOutsideTheRun_IsNeitherUsedNorStale(t *testing.T
 	if len(report.Stale) != 0 {
 		t.Fatalf("stale = %v, want none: the run never loaded the packages the table names", report.Stale)
 	}
-	if !report.ok() {
-		t.Fatal("ok() = false, want true")
+	if !report.OK() {
+		t.Fatal("OK() = false, want true")
 	}
 }
 
@@ -92,7 +92,7 @@ func TestReportWrite_Findings_NameTheFileLineAndWhetherTheLinterCouldSeeIt(t *te
 	}
 	report := buildReport(found, 20, scannedSet("internal/tools/issues"))
 	var out strings.Builder
-	report.write(&out, false)
+	report.Write(&out, false)
 	text := out.String()
 	for _, want := range []string{
 		"internal/tools/issues/a.go:3: alone is never read (declared on its own)",
@@ -113,7 +113,7 @@ func TestReportWrite_Findings_NameTheFileLineAndWhetherTheLinterCouldSeeIt(t *te
 func TestReportWrite_StaleDeclaration_SaysWhatWentWrongWithIt(t *testing.T) {
 	report := buildReport(nil, 1, scannedSet("internal/tools/dynamic"))
 	var out strings.Builder
-	report.write(&out, false)
+	report.Write(&out, false)
 	text := out.String()
 	if !strings.Contains(text, "declared unread on purpose, and this run found it read or found it gone") {
 		t.Fatalf("report does not explain a stale declaration:\n%s", text)
@@ -130,7 +130,7 @@ func TestReportWrite_StaleDeclaration_SaysWhatWentWrongWithIt(t *testing.T) {
 func TestReportWrite_CleanRun_SaysWhatItWasCleanOver(t *testing.T) {
 	report := buildReport(nil, 5545, scannedSet("internal/tools/issues"))
 	var out strings.Builder
-	report.write(&out, false)
+	report.Write(&out, false)
 	text := out.String()
 	if !strings.Contains(text, "5545 unexported constants in 1 packages, 0 never read") {
 		t.Fatalf("clean report does not say what it covered:\n%s", text)
@@ -171,8 +171,8 @@ func TestSortConstants_FileLineThenColumn_IsTheOrderFindingsAreRead(t *testing.T
 func TestReportWrite_VerboseAndClean_SetsTheSummaryApart(t *testing.T) {
 	report := buildReport(nil, 7, scannedSet("internal/tools/issues"))
 	var quiet, verbose strings.Builder
-	report.write(&quiet, false)
-	report.write(&verbose, true)
+	report.Write(&quiet, false)
+	report.Write(&verbose, true)
 	if strings.HasPrefix(quiet.String(), "\n") {
 		t.Fatalf("quiet clean report starts with a blank line:\n%q", quiet.String())
 	}

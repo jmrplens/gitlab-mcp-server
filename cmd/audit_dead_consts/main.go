@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"runtime"
 	"sort"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcegate"
 )
 
 // toolName is how the report names itself.
@@ -62,13 +62,16 @@ type auditConfig struct {
 	out     io.Writer
 }
 
+// main reads the process's own flag set rather than the command line
+// [sourcegate.Run] builds, so its help names the binary it was started as, and
+// ends through [sourcegate.Exit] with the code [run] decides.
 func main() {
 	dir := flag.String("dir", ".", "repository root the patterns are resolved against")
 	check := flag.Bool("check", false, "exit non-zero when a constant is never read")
 	verbose := flag.Bool("v", false, "name the platform loads the run made")
 	flag.Parse()
 
-	os.Exit(run(auditConfig{
+	sourcegate.Exit(run(auditConfig{
 		dir:      *dir,
 		patterns: patternsOrDefault(flag.Args()),
 		targets:  buildTargets,
@@ -77,38 +80,23 @@ func main() {
 	}, *check, os.Stdout, os.Stderr))
 }
 
-// run scans, reports, and returns the process exit code.
-//
-// Exit 1 covers two different things on purpose, told apart by which stream
-// spoke: a run that could not be made at all says so on stderr, and a run that
-// found something says it on stdout and only fails under -check. A report is
-// worth having without a gate, and a gate is worth having without ceremony.
+// run scans, reports, and returns the process exit code [sourcegate.Finish]
+// decides: a run that could not be made fails on stderr, and one that found
+// something says so on stdout and fails only under -check.
 func run(cfg auditConfig, check bool, stdout, stderr io.Writer) int {
 	report, err := audit(cfg)
-	if err != nil {
-		fmt.Fprintf(stderr, "%s: %v\n", toolName, err)
-		return 1
-	}
-	report.write(stdout, cfg.verbose)
-	if check && !report.ok() {
-		return 1
-	}
-	return 0
+	return sourcegate.Finish(toolName, report, err, check, cfg.verbose, stdout, stderr)
 }
 
 // audit loads the tree, once for the target it runs on and once more per
 // target whose files that load left out, and holds what was declared against
-// what was read.
+// what was read, naming files below the root the first load resolved.
 func audit(cfg auditConfig) (Report, error) {
-	root, err := filepath.Abs(cfg.dir)
+	root, loaded, err := goprogram.LoadRooted(cfg.dir, cfg.patterns, goprogram.Options{Tests: true, Overlay: cfg.overlay})
 	if err != nil {
 		return Report{}, err
 	}
 	found := newScanner(root)
-	loaded, err := goprogram.LoadWith(cfg.dir, cfg.patterns, goprogram.Options{Tests: true, Overlay: cfg.overlay})
-	if err != nil {
-		return Report{}, err
-	}
 	found.observe(loaded)
 	if platformErr := readOtherPlatforms(cfg, found); platformErr != nil {
 		return Report{}, platformErr

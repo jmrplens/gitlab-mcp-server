@@ -23,12 +23,14 @@ import (
 // local one sharing its name and the reverse. An entry that excuses nothing is reported, on the terms
 // every declaration table here is held to: a declaration that has stopped
 // describing the tree is itself a finding.
+//
+// Each reason is one literal rather than a sum of shorter ones: the mutation
+// tool cannot see a package-level initializer, so it reads every `+` joining
+// two literals here as code no test covers, and a string minus a string does
+// not compile, so no test could ever cover it.
 var unreadOnPurpose = map[string]string{
-	"internal/tools/dynamic:aliasSourceCatalog": "the aliasSource block is the vocabulary of a field the alias audit publishes and " +
-		"docs/development/dynamic-search-ranker.md lists, and sourceForCompatibilityAlias converts whatever internal/tools/actioncompat " +
-		"spells rather than naming a member, so two of the five values reach the surface without any code naming them",
-	"internal/tools/dynamic:aliasSourceStandalone": "the same block: actioncompat.SourceStandalone puts \"standalone\" on the wire through " +
-		"that conversion, so the name here documents a value the surface really carries",
+	"internal/tools/dynamic:aliasSourceCatalog":    "the aliasSource block is the vocabulary of a field the alias audit publishes and docs/development/dynamic-search-ranker.md lists, and sourceForCompatibilityAlias converts whatever internal/tools/actioncompat spells rather than naming a member, so two of the five values reach the surface without any code naming them",
+	"internal/tools/dynamic:aliasSourceStandalone": "the same block: actioncompat.SourceStandalone puts \"standalone\" on the wire through that conversion, so the name here documents a value the surface really carries",
 }
 
 // declarationKey is how a constant is named in the declaration table: its
