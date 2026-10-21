@@ -2020,15 +2020,6 @@ func CredentialHash(token string) string {
 	return hex.EncodeToString(mac.Sum(nil)[:credentialHashBytes])
 }
 
-// StartIdleEviction launches a background goroutine that reclaims entries
-// unused for longer than the configured idle timeout. Cancel the context to
-// stop it. It is a no-op when idle eviction is disabled.
-//
-// Idle eviction runs independently of revalidation so that disabling one does
-// not silently disable the other. It also needs no network I/O: an idle entry
-// is dropped on its timestamp alone, which is the point — the entries it
-// reclaims are exactly the ones revalidation would otherwise keep pinging
-// GitLab about on behalf of a client that is gone.
 // recoverSweep keeps a panic raised inside a background sweep from taking the
 // process down, and names the sweep that raised it.
 //
@@ -2072,6 +2063,15 @@ func (p *ServerPool) idleSweepCadence() time.Duration {
 	return max(p.idleTimeout/idleSweepDivisor, idleSweepMinInterval)
 }
 
+// StartIdleEviction launches a background goroutine that reclaims entries
+// unused for longer than the configured idle timeout. Cancel the context to
+// stop it. It is a no-op when idle eviction is disabled.
+//
+// Idle eviction runs independently of revalidation so that disabling one does
+// not silently disable the other. It also needs no network I/O: an idle entry
+// is dropped on its timestamp alone. That is the point, since the entries it
+// reclaims are exactly the ones revalidation would otherwise keep pinging
+// GitLab about on behalf of a client that is gone.
 func (p *ServerPool) StartIdleEviction(ctx context.Context) {
 	if ctx == nil {
 		ctx = context.Background() //nolint:contextcheck // defensive: nil-ctx guard for callers that pass uninitialized context

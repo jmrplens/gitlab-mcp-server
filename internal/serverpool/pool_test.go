@@ -75,6 +75,8 @@ func testConfig(baseURL string) *config.Config {
 // the probe passes verdict-free the way an unreachable port used to.
 var stubGitLabBase string
 
+// TestMain starts the loopback GitLab stub stubGitLabBase names before any
+// test runs, and closes it once all of them have.
 func TestMain(m *testing.M) {
 	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -5396,6 +5398,10 @@ func awaitSweepTicks(t *testing.T, ticks <-chan struct{}, never, stopped string)
 	}
 }
 
+// TestBackgroundSweeps_SurviveAPanickingCallback verifies that a panic in a
+// callback the idle sweep makes costs that tick and not the sweep, which
+// goes on ticking, and that the recovery the sweeps defer logs the sweep and
+// the panic and lets an ordinary return through.
 func TestBackgroundSweeps_SurviveAPanickingCallback(t *testing.T) {
 	t.Run("the idle sweep", func(t *testing.T) {
 		// Two, not one: surviving the panic is the point, and a sweep that

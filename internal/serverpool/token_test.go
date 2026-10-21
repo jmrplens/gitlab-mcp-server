@@ -408,6 +408,11 @@ func assertDisallowedInstanceRefusal(t *testing.T, err error, published string) 
 	}
 }
 
+// TestResolveRequestOptionsFor_MultipleInstances verifies which instance a
+// request's GITLAB-URL header selects when several are published: the one it
+// names, however it is spelled, and a refusal both for a request without the
+// header, rather than the first published instance, and for one naming an
+// instance not published, a lookalike of a published one included.
 func TestResolveRequestOptionsFor_MultipleInstances(t *testing.T) {
 	const (
 		primary   = "https://gitlab.com"
