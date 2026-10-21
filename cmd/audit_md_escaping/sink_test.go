@@ -206,6 +206,36 @@ func TestCardCells_OutOfScope_ReadsNoRow(t *testing.T) {
 	}
 }
 
+// TestCardCells_TwoCellsSpreadFromASlice_ReadsNoRow checks that a card row is
+// read only off cells written one by one.
+//
+// A field-table header is two constants written in place. The builders take
+// their cells as one variadic list, so a call of two arguments that spreads a
+// slice does not type-check and the loader never hands one over; it is built
+// here from a header the rule does read, and must read as no card, since which
+// cell a spread slice puts where is not knowable from the call.
+func TestCardCells_TwoCellsSpreadFromASlice_ReadsNoRow(t *testing.T) {
+	prog := loadFixture(t, cardFixture)
+	pkg := fixturePackage(t, prog, "mdcard")
+	in := sinkFile{pkg: pkg, cards: true}
+
+	read := 0
+	for _, call := range callsNamed(pkg, "MarkdownTableHeader") {
+		if _, ok := in.cardCells(call, "MarkdownTableHeader"); !ok {
+			continue
+		}
+		read++
+		spread := *call
+		spread.Ellipsis = call.Rparen
+		if row, ok := in.cardCells(&spread, "MarkdownTableHeader"); ok {
+			t.Errorf("a header spreading its cells was read as the card row %q", row.text)
+		}
+	}
+	if read == 0 {
+		t.Fatal("no field-table header was read as a card row to spread")
+	}
+}
+
 // TestCardCells_BuilderWithNoCardShape_ReadsNoRow checks that the card shapes
 // are matched by name and that the match is closed.
 //

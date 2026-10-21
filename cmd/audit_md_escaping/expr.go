@@ -593,7 +593,7 @@ func textualDepth(t types.Type, depth int, seen map[types.Type]bool) bool {
 // page even under %v.
 func rendersAsInstant(named *types.Named) bool {
 	obj := named.Obj()
-	if obj == nil || obj.Pkg() == nil || obj.Pkg().Path() != "time" {
+	if obj.Pkg() == nil || obj.Pkg().Path() != "time" {
 		return false
 	}
 	switch obj.Name() {

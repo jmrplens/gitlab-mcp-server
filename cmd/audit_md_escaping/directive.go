@@ -1,6 +1,10 @@
 package main
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
+)
 
 // exemptionDirective is how a value that needs no escaping is declared: in the
 // source, in the package that owns the formatter, never in a list this audit
@@ -115,7 +119,7 @@ func collectDirectives(prog *program, root string) map[directiveKey]Directive {
 					key := directiveKey{pkg: shortPackage(pkg.PkgPath), kind: kind, expression: expression}
 					found[key] = Directive{
 						Package:    key.pkg,
-						File:       relativePath(pos.Filename, root),
+						File:       goprogram.RelativePath(pos.Filename, root),
 						Line:       pos.Line,
 						Kind:       kind,
 						Expression: expression,

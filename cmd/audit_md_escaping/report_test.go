@@ -194,31 +194,6 @@ func TestWriteJSON_Failures_AreReported(t *testing.T) {
 	}
 }
 
-// TestRelativePath_Paths_RenderBelowTheRoot checks that a finding reads the
-// same wherever the audit was run from, and that a file outside the tree keeps
-// the only name it has.
-func TestRelativePath_Paths_RenderBelowTheRoot(t *testing.T) {
-	cases := []struct {
-		name string
-		path string
-		root string
-		want string
-	}{
-		{name: "inside the tree", path: "/repo/internal/tools/x.go", root: "/repo", want: "internal/tools/x.go"},
-		{name: "the root itself", path: "/repo", root: "/repo", want: "."},
-		{name: "outside the tree", path: "/elsewhere/x.go", root: "/repo", want: "/elsewhere/x.go"},
-		{name: "no root at all", path: "/repo/x.go", root: "", want: "/repo/x.go"},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := relativePath(tc.path, tc.root); got != tc.want {
-				t.Errorf("relativePath(%q, %q) = %q, want %q", tc.path, tc.root, got, tc.want)
-			}
-		})
-	}
-}
-
 // TestOrDash_Values_KeepsTheColumn checks that a finding with no enclosing
 // formatter still prints a column where one is expected.
 func TestOrDash_Values_KeepsTheColumn(t *testing.T) {

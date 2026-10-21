@@ -293,6 +293,48 @@ func TestLocalVar_Fixture_SkipsWhatCannotBeFollowed(t *testing.T) {
 	})
 }
 
+// TestIndexUnbalancedAssign_TwoTargetsFromThreeValues_FollowsNone checks that
+// the comma-ok form is recognized by the whole statement and not by its first
+// value alone.
+//
+// Two targets take a comma-ok value only from a single operand: `v, ok :=
+// m[k]`. A statement giving them three values does not type-check, so the
+// loader never hands one over and the statement is built here; were the
+// operand count not asked, its leading index would be followed as what the
+// first target holds, when what it holds is the statement's first value of
+// three, which the audit has no way to line up.
+func TestIndexUnbalancedAssign_TwoTargetsFromThreeValues_FollowsNone(t *testing.T) {
+	scope := types.NewScope(nil, token.NoPos, token.NoPos, "formatter")
+	first := types.NewVar(token.NoPos, nil, "first", types.Typ[types.String])
+	second := types.NewVar(token.NoPos, nil, "second", types.Typ[types.String])
+	scope.Insert(first)
+	scope.Insert(second)
+	firstIdent, secondIdent := ast.NewIdent("first"), ast.NewIdent("second")
+	pkg := untypedPackage()
+	pkg.TypesInfo.Defs[firstIdent] = first
+	pkg.TypesInfo.Defs[secondIdent] = second
+	lookup := &ast.IndexExpr{X: ast.NewIdent("table"), Index: ast.NewIdent("key")}
+	stmt := &ast.AssignStmt{
+		Lhs: []ast.Expr{firstIdent, secondIdent},
+		Tok: token.DEFINE,
+		Rhs: []ast.Expr{lookup, ast.NewIdent("b"), ast.NewIdent("c")},
+	}
+	c := &classifier{assigns: map[*types.Var][]ast.Expr{}, pkgOf: map[ast.Expr]*packages.Package{}}
+
+	c.indexUnbalancedAssign(pkg, stmt)
+
+	for _, v := range []*types.Var{first, second} {
+		t.Run(v.Name(), func(t *testing.T) {
+			if got := c.assigns[v]; len(got) != 1 || got[0] != nil {
+				t.Errorf("%s holds %v, want one assignment the audit cannot follow", v.Name(), got)
+			}
+		})
+	}
+	if _, followed := c.pkgOf[lookup]; followed {
+		t.Error("the leading index was recorded as a value to follow")
+	}
+}
+
 // TestEscapers_Set_RefusesStripControlBytes checks the one helper that must
 // not be read as an answer: it drops the control bytes and leaves both the
 // pipe and the angle bracket, so accepting it would pass exactly the values

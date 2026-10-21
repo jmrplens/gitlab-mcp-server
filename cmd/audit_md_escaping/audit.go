@@ -3,6 +3,8 @@ package main
 import (
 	"go/types"
 	"sort"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 )
 
 // Finding is one value reaching a Markdown construct with nothing between it
@@ -213,7 +215,7 @@ func newFinding(prog *program, s sink, h sinkHole, why, root string) Finding {
 	}
 	return Finding{
 		Package:    shortPackage(s.pkg.PkgPath),
-		File:       relativePath(pos.Filename, root),
+		File:       goprogram.RelativePath(pos.Filename, root),
 		Line:       pos.Line,
 		Func:       enclosingFunc(s.pkg, s.call.Pos()),
 		Context:    h.ctx.String(),

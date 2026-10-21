@@ -2,6 +2,7 @@ package main
 
 import (
 	"go/ast"
+	"go/token"
 	"go/types"
 	"strings"
 	"testing"
@@ -375,6 +376,27 @@ func TestUnwrapRendering_CallItCannotResolve_StopsAtTheCall(t *testing.T) {
 
 	if got != ast.Expr(call) {
 		t.Errorf("unwrapRendering stepped into %s, want the call it could not resolve", types.ExprString(got))
+	}
+}
+
+// TestUnwrapRendering_PassThroughShortOfTheArgumentItCarries_StopsAtTheCall
+// checks that a pass-through is stepped into only when the call holds the
+// argument the table says carries the value.
+//
+// strings.Map carries its second argument. A call to it with one argument
+// does not type-check, so the loader never hands one over and it is built
+// here; stepping into it anyway would read past the end of the arguments.
+func TestUnwrapRendering_PassThroughShortOfTheArgumentItCarries_StopsAtTheCall(t *testing.T) {
+	pkg := untypedPackage()
+	mapFunc := ast.NewIdent("Map")
+	pkg.TypesInfo.Uses[mapFunc] = types.NewFunc(token.NoPos, types.NewPackage("strings", "strings"), "Map",
+		types.NewSignatureType(nil, nil, nil, nil, nil, false))
+	call := &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent("strings"), Sel: mapFunc}, Args: []ast.Expr{ast.NewIdent("mapping")}}
+
+	got := unwrapRendering(pkg, call)
+
+	if got != ast.Expr(call) {
+		t.Errorf("unwrapRendering stepped into %s, want the call short of the argument it carries", types.ExprString(got))
 	}
 }
 

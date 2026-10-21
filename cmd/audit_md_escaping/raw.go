@@ -124,7 +124,7 @@ func rawByType(t types.Type) (kind rawKind, explanation string) {
 		t = types.Unalias(ptr.Elem())
 	}
 	if named, ok := t.(*types.Named); ok {
-		if obj := named.Obj(); obj != nil && obj.Pkg() != nil && obj.Pkg().Path() == "time" && obj.Name() == "Time" {
+		if obj := named.Obj(); obj.Pkg() != nil && obj.Pkg().Path() == "time" && obj.Name() == "Time" {
 			return rawTime, "a time.Time printed in Go's default form"
 		}
 		t = named.Underlying()
