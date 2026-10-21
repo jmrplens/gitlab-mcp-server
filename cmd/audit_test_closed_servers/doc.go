@@ -115,7 +115,10 @@
 // orbitlive), so the test files behind each are read. A file a build
 // constraint still leaves out, a platform or race variant, is not read, and is
 // not silent: any such file that imports net/http/httptest is reported as
-// unjudged and fails the gate. None exists today.
+// unjudged and fails the gate. None exists today. A directory every file of
+// which a constraint leaves out, a suite behind a tag not in that list or a
+// package for one platform only, is not listed by ./... at all, so its files
+// are neither read nor reported.
 //
 // It covers httptest servers only, as decided on issue 1132: a net.Listener
 // closed and then dialed is not followed. Beyond the branch that leaves the
