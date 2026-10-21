@@ -7,6 +7,13 @@ package main
 
 import "slices"
 
+// jointMergeRequest names the merge request the client-go commits these
+// tables cite were prepared for, and where those commits stand since it was
+// closed: each goes out again in a small merge request on its topic, which the
+// register row a reason names will name once it is opened.
+const jointMergeRequest = "gitlab-org/api/client-go!3063 (closed unmerged on 2026-10-21; its commits go out again " +
+	"as small merge requests)"
+
 // The client-go services whose findings these tables answer.
 var (
 	achievementsService = sdkService("Achievements")
@@ -92,17 +99,18 @@ func declaredSDKSent() []sentDeclaration {
 }
 
 // achievementsSDKSent answers the achievements service, whose namespace and
-// users client-go names by id alone until commit 5 of
-// gitlab-org/api/client-go!3063 (row 27) adds what identifies them.
+// users client-go names by id alone until row 27's commit adds what
+// identifies them: commit 5 of gitlab-org/api/client-go!3063, closed
+// unmerged, which goes out again in a small merge request.
 func achievementsSDKSent() []sentDeclaration {
 	declarations := []sentDeclaration{
 		recordedField(achievementsService, "UserAchievement", "awardMessageHtml", "27",
-			"the rendered award message, which commit 5 of gitlab-org/api/client-go!3063 selects; the declaration goes "+
+			"the rendered award message, which commit 5 of "+jointMergeRequest+" selects; the declaration goes "+
 				"stale on the client-go bump that brings it, and achievements then publishes it."),
 	}
 	for _, field := range []string{"avatarUrl", "fullName", "fullPath", "name", "path", "webUrl"} {
 		declarations = append(declarations, recordedField(achievementsService, "Namespace", field, "27",
-			"commit 5 of gitlab-org/api/client-go!3063 selects the achievement's namespace by its name, paths, "+
+			"commit 5 of "+jointMergeRequest+" selects the achievement's namespace by its name, paths, "+
 				"avatar and page beside its id; the declaration goes stale on the client-go bump that brings it, and "+
 				"achievements then publishes the namespace beside namespace_id."))
 	}
@@ -121,10 +129,10 @@ func achievementsSDKSent() []sentDeclaration {
 // document selects the profile's id, name and type and nothing else.
 func scanProfilesSDKSent() []sentDeclaration {
 	const inDefault = "the status document selects the status and the profile's id, name and type. GitLab has served " +
-		"the field wherever it serves scanProfileStatuses (19.0), so it could join that document, and whether it goes " +
-		"to gitlab-org/api/client-go!3063 is not yet decided."
+		"the field wherever it serves scanProfileStatuses (19.0), so it could join that document, and whether a " +
+		"client-go merge request adds it is not yet decided."
 	const optIn = "projectCount is new in GitLab 19.5 and triggerSettings names union members 19.4 added, and an " +
-		"earlier GitLab refuses a document naming either, so a commit prepared for gitlab-org/api/client-go!3063 makes " +
+		"earlier GitLab refuses a document naming either, so a commit prepared for " + jointMergeRequest + " makes " +
 		"both selectable through ListProjectScanProfileStatusesWithOptions and leaves the default document without " +
 		"them; the declaration is reviewed on the client-go bump that brings the commit."
 	declarations := make([]sentDeclaration, 0, 12)
@@ -157,15 +165,15 @@ func scanProfilesSDKSent() []sentDeclaration {
 // terraformSDKSent answers the Terraform state service.
 func terraformSDKSent() []sentDeclaration {
 	const inDefault = "GitLab has served it on every release that serves Terraform states over GraphQL, so it could " +
-		"join the List and Get documents, and whether it goes to gitlab-org/api/client-go!3063 is not yet decided."
+		"join the List and Get documents, and whether a client-go merge request adds it is not yet decided."
 	return []sentDeclaration{
 		recordedField(terraformService, "TerraformState", "versions", "104",
-			"a state's versions are new in GitLab 19.5, and a commit prepared for gitlab-org/api/client-go!3063 adds "+
+			"a state's versions are new in GitLab 19.5, and a commit prepared for "+jointMergeRequest+" adds "+
 				"ListVersions to page through them rather than selecting them in List and Get, which an earlier GitLab "+
 				"would refuse."),
 		recordedField(terraformService, "TerraformState", "permanentDeletionAt", "104",
 			"the field is new in GitLab 19.5 and marked an experiment, so a commit prepared for "+
-				"gitlab-org/api/client-go!3063 makes it selectable through ListWithOptions and GetWithOptions and leaves "+
+				jointMergeRequest+" makes it selectable through ListWithOptions and GetWithOptions and leaves "+
 				"List and Get without it, which an earlier GitLab would refuse."),
 		recordedField(terraformService, "TerraformState", "lockedByUser", "104", "who holds the state's lock: "+inDefault),
 		experimentField(terraformService, "TerraformState", "protectionRuleExists", "19.0", "app/graphql/types/terraform/state_type.rb"),
@@ -229,11 +237,11 @@ func workItemsSDKSent() []sentDeclaration {
 	declarations := []sentDeclaration{
 		recordedField(workItemsService, "WorkItemFeatures", "decisionLog", "106",
 			"the decision log widget, added in GitLab 19.4 and Enterprise only; a commit prepared for "+
-				"gitlab-org/api/client-go!3063 adds it as a field ReturnedFields selects, never by default, since an "+
+				jointMergeRequest+" adds it as a field ReturnedFields selects, never by default, since an "+
 				"earlier GitLab and Community Edition refuse it, and GitLab resolves its decisions for one work item per request."),
 		recordedField(workItemsService, "WorkItemFeatures", "development", "106",
 			"the development widget, whose closingMergeRequestsCount GitLab added in 19.4; a commit prepared for "+
-				"gitlab-org/api/client-go!3063 adds it as a field ReturnedFields selects, never by default, since an "+
+				jointMergeRequest+" adds it as a field ReturnedFields selects, never by default, since an "+
 				"earlier GitLab refuses it."),
 	}
 	for _, field := range []string{"duplicatedToWorkItemUrl", "movedToWorkItemUrl", "promotedToEpicUrl", "hidden", "imported", "reference", "userDiscussionsCount"} {

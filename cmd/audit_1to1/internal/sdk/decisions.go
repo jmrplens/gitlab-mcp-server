@@ -158,7 +158,8 @@ var graphqlDecisions = map[string]decision{
 	// GitLab caps the connection at 100 nodes, so a project holding more states
 	// read as holding 100 (issue 1341). The handler's document selects of each
 	// state exactly what List and Get select; it retires when client-go's List
-	// pages, which upstream-bugs row 104 records as the commit to add to
-	// gitlab-org/api/client-go!3063.
+	// pages, which upstream-bugs row 104 records as a commit not yet sent: it
+	// was to be added to gitlab-org/api/client-go!3063, closed unmerged on
+	// 2026-10-21, and goes out instead in a small merge request on its topic.
 	"terraformstates.listPage": {decisionKeep, "TerraformStates.List takes no first or after and selects no count or pageInfo, so a project with more than 100 states read as holding 100; the handler's paged document selects of each state what List and Get select, and retires when client-go's List pages (docs/development/upstream-bugs.md row 104)"},
 }

@@ -1373,7 +1373,7 @@ name its own merge request once it is opened; rows 93, 95, 113, 115 to 117,
 119, 121, 122 and 133, which were held for it, go out the same way, and row
 107's fields would too if they are decided. No defect the merge request
 carried is fixed upstream by its close. Read at 00:10 UTC on 2026-10-21, the
-merge request was closed at 00:02 UTC and the issue two seconds later, each
+merge request was closed at 00:02 UTC and the issue seven seconds later, each
 with a closing note of ours. The parts other contributors' merge requests
 carry were read again at about 22:10 UTC on 2026-10-20, and had not moved at
 00:10 UTC, through GET requests only:

@@ -89,7 +89,9 @@ const listNotFoundHint = "verify project_path with project.get; uses GraphQL. Te
 // asks for the connection with no first, no after, no count and no pageInfo:
 // GitLab caps a connection at 100 nodes, so a project holding more states
 // read as holding 100 and no more, with nothing to ask for the rest by
-// (upstream-bugs row 104 records it for gitlab-org/api/client-go!3063). The
+// (upstream-bugs row 104 records it: the paged List client-go owes goes out
+// in a small merge request now that gitlab-org/api/client-go!3063, which it
+// was to join, is closed unmerged). The
 // nodes select exactly what client-go's list and get select, so a state reads
 // the same through the list as through the get, which is still client-go's.
 const listStatesQuery = `

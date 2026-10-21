@@ -58,10 +58,11 @@ type rawStatistics struct {
 // entry 7, names which language gives which). A count below a thousand
 // carries no separator, and a JSON number is read as well.
 //
-// It mirrors the UnmarshalJSON client-go's ApplicationStatistics gains in
-// gitlab-org/api/client-go!3063, so that switching this handler to
+// It mirrors the UnmarshalJSON that commit 1 of gitlab-org/api/client-go!3063
+// gives client-go's ApplicationStatistics, so that switching this handler to
 // GetApplicationStatistics once a release carries it changes nothing a
-// caller reads.
+// caller reads. That merge request was closed unmerged on 2026-10-21, and the
+// commit goes out again in a small merge request.
 type delimitedCount int64
 
 // UnmarshalJSON reads a count sent as a JSON number or as a string grouped by
@@ -125,9 +126,10 @@ const statisticsPath = "application/statistics"
 // It builds its own request rather than calling client-go's
 // GetApplicationStatistics, whose ApplicationStatistics declares int64
 // fields and so cannot decode the strings GitLab sends for every count (see
-// [delimitedCount]). Reported as gitlab-org/api/client-go!3063 and tracked in
-// docs/development/upstream-bugs.md, entry 7; once a release carries that
-// change, this handler calls the SDK method directly.
+// [delimitedCount]). Reported in gitlab-org/api/client-go!3063, closed
+// unmerged on 2026-10-21 with its fix to go out again in a small merge
+// request, and tracked in docs/development/upstream-bugs.md, entry 7; once a
+// release carries the fix, this handler calls the SDK method directly.
 func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (GetOutput, error) {
 	raw, err := fetchStatistics(ctx, client, statisticsPath)
 	if err != nil {
