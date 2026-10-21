@@ -385,7 +385,7 @@ readable without opening the tracker:
 | 135 | client-go | [`UpdateSettingsOptions` models twenty-six settings the update route does not take](#updatesettingsoptions-models-twenty-six-settings-the-update-route-does-not-take) | No | No | No | No | Yes, `admin.settings_update` refuses them by name before anything is sent, as it refuses a key client-go does not model |
 | 136 | client-go | [`ListTopicsOptions` and `CreateTopicOptions` model no `organization_id`](#listtopicsoptions-and-createtopicoptions-model-no-organization_id) | No | No | No | No | None; `admin.topic_list` and `admin.topic_create` act on the organization GitLab resolves for the request |
 | 137 | client-go and gitlab-org/gitlab | [`ListPipelineTriggerJobsOptions` models no `include_retried`, which the trigger job routes read and do not declare](#listpipelinetriggerjobsoptions-models-no-include_retried-which-the-trigger-job-routes-read-and-do-not-declare) | No | No | No | No | Yes, `job.list_bridges` adds `include_retried` to the `trigger_jobs` query through a request option, only when the caller asked |
-| 138 | client-go | [`BranchAccessDescription` and `GroupBranchAccessDescription` model no `member_role_name`](#branchaccessdescription-and-groupbranchaccessdescription-model-no-member_role_name) | No, not yet; it goes out as a small merge request at the pace of the ones that replace row 34's joint one | No, not yet | No | No | Yes, every project and group protected branch read and write reads it off the captured response |
+| 138 | client-go | [`BranchAccessDescription` and `GroupBranchAccessDescription` model no `member_role_name`](#branchaccessdescription-and-groupbranchaccessdescription-model-no-member_role_name) | No, not yet; it goes out as a small merge request at the pace of the ones that replace row 34's joint one | No, not yet | No | No | Yes, every project and group protected branch read and write, and the `audit_project_full` prompt, read it off the captured response |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -7810,9 +7810,15 @@ mean false, and the parameter in the page's table.
   `CapturedGroupProtectedBranches`. A name that does not decode as a string
   fails the call rather than reaching the caller as an empty one
   (`TestProtectedBranches_UnreadableCapturedMemberRoleName` and
-  `TestGroupProtectedBranches_UnreadableCapturedMemberRoleName`). The branch
-  protection audit prompt reads the SDK's struct alone and names a custom
-  role by its id. The capture retires when both structs carry the field.
+  `TestGroupProtectedBranches_UnreadableCapturedMemberRoleName`). The
+  `audit_project_full` prompt, the one that renders branch protection, reads
+  it the same way, through `CapturedProtectedBranches` in
+  `handleAuditProjectFull` (`internal/prompts/prompt_audit.go`), names a
+  custom role as the tools do, and reports the section unread when a name
+  does not decode
+  (`TestAuditProjectFull_UnreadableCapturedMemberRoleName_LeavesTheSectionUnread`);
+  `handleAuditBranchProtection` in the same file, which no prompt registers,
+  reads it too. The capture retires when both structs carry the field.
 
 **Where**: `protected_branches.go`, `BranchAccessDescription`, and
 `group_protected_branches.go`, `GroupBranchAccessDescription`, which decode

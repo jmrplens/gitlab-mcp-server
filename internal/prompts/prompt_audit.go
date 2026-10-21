@@ -157,11 +157,19 @@ func handleAuditBranchProtection(ctx context.Context, client *gitlabclient.Clien
 		return nil, fmt.Errorf("audit_branch_protection: failed to get project: %w", err)
 	}
 
+	// The custom role names of the access levels are read off the captured
+	// answer, as the protected branch tools read them, since client-go does
+	// not model member_role_name (upstream register row 138).
+	listCtx, captured := gitlabclient.WithResponseCapture(ctx)
 	protectedBranches, _, err := client.GL().ProtectedBranches.ListProtectedBranches(projectID, &gl.ListProtectedBranchesOptions{
 		PerPage: maxListItems,
-	}, gl.WithContext(ctx))
+	}, gl.WithContext(listCtx))
 	if err != nil {
 		return nil, fmt.Errorf("audit_branch_protection: failed to list protected branches: %w", err)
+	}
+	extras, err := toolutil.CapturedProtectedBranches(captured, len(protectedBranches))
+	if err != nil {
+		return nil, fmt.Errorf("audit_branch_protection: failed to read protected branches: %w", err)
 	}
 
 	var b strings.Builder
@@ -180,8 +188,8 @@ func handleAuditBranchProtection(ctx context.Context, client *gitlabclient.Clien
 		b.WriteString(toolutil.EmojiWarning + " **No protected branches found.** This is a significant security risk.\n\n")
 	} else {
 		b.WriteString("## Protected Branch Details\n\n")
-		for _, pb := range protectedBranches {
-			writeBranchDetail(&b, pb, project.DefaultBranch)
+		for i, pb := range protectedBranches {
+			writeBranchDetail(&b, pb, extras[i], project.DefaultBranch)
 		}
 	}
 
@@ -192,39 +200,46 @@ func handleAuditBranchProtection(ctx context.Context, client *gitlabclient.Clien
 	return promptResult(b.String()), nil
 }
 
-// writeBranchDetail writes the detail section for a single protected branch.
-func writeBranchDetail(b *strings.Builder, pb *gl.ProtectedBranch, defaultBranch string) {
+// writeBranchDetail writes the detail section for a single protected branch,
+// with the custom role names extra carries for its access levels.
+func writeBranchDetail(b *strings.Builder, pb *gl.ProtectedBranch, extra toolutil.ProtectedBranchExtra, defaultBranch string) {
 	suffix := ""
 	if pb.Name == defaultBranch {
 		suffix = " (default)"
 	}
 	fmt.Fprintf(b, "### %s%s\n\n", mdHeading(pb.Name), mdHeading(suffix))
 
-	writeAccessLevelLine(b, "Push access", pb.PushAccessLevels)
-	writeAccessLevelLine(b, "Merge access", pb.MergeAccessLevels)
+	writeAccessLevelLine(b, "Push access", pb.PushAccessLevels, extra.PushAccessLevels)
+	writeAccessLevelLine(b, "Merge access", pb.MergeAccessLevels, extra.MergeAccessLevels)
 	if len(pb.UnprotectAccessLevels) > 0 {
-		writeAccessLevelLine(b, "Unprotect access", pb.UnprotectAccessLevels)
+		writeAccessLevelLine(b, "Unprotect access", pb.UnprotectAccessLevels, extra.UnprotectAccessLevels)
 	}
 	fmt.Fprintf(b, "**Allow force push:** %s\n", toolutil.BoolEmoji(pb.AllowForcePush))
 	fmt.Fprintf(b, "**Code owner approval required:** %s\n\n", toolutil.BoolEmoji(pb.CodeOwnerApprovalRequired))
 }
 
-// writeAccessLevelLine writes a labeled line of branch access levels.
-func writeAccessLevelLine(b *strings.Builder, label string, levels []*gl.BranchAccessDescription) {
+// writeAccessLevelLine writes a labeled line of branch access levels, each
+// with the custom role name the captured extra at its index carries.
+func writeAccessLevelLine(b *strings.Builder, label string, levels []*gl.BranchAccessDescription, extras []toolutil.ProtectedRefAccessExtra) {
 	fmt.Fprintf(b, "**%s:** ", label)
 	if len(levels) == 0 {
 		b.WriteString("No restrictions\n")
 		return
 	}
 	var parts []string
-	for _, al := range levels {
-		parts = append(parts, formatBranchAccessLevel(al))
+	for i, al := range levels {
+		parts = append(parts, formatBranchAccessLevel(al, toolutil.MemberRoleNameAt(extras, i)))
 	}
 	b.WriteString(strings.Join(parts, ", ") + "\n")
 }
 
-// formatBranchAccessLevel formats a BranchAccessDescription for display.
-func formatBranchAccessLevel(al *gl.BranchAccessDescription) string {
+// formatBranchAccessLevel formats a BranchAccessDescription for display: the
+// role a plain grant stands for, or the user, group, custom member role or
+// deploy key a granular grant names, as the protected branch tools' Markdown
+// names them. A custom role is named by memberRoleName, GitLab's name for it,
+// escaped as the GitLab-authored value it is, when the answer carried one,
+// and by its id alone otherwise.
+func formatBranchAccessLevel(al *gl.BranchAccessDescription, memberRoleName string) string {
 	name := toolutil.AccessLevelDescription(al.AccessLevel)
 	if al.UserID != 0 {
 		return fmt.Sprintf("User #%d (%s)", al.UserID, name)
@@ -232,8 +247,14 @@ func formatBranchAccessLevel(al *gl.BranchAccessDescription) string {
 	if al.GroupID != 0 {
 		return fmt.Sprintf("Group #%d (%s)", al.GroupID, name)
 	}
+	if al.MemberRoleID != 0 && memberRoleName != "" {
+		return fmt.Sprintf("Custom role %s #%d (%s)", mdInline(memberRoleName), al.MemberRoleID, name)
+	}
 	if al.MemberRoleID != 0 {
 		return fmt.Sprintf("Custom role #%d (%s)", al.MemberRoleID, name)
+	}
+	if al.DeployKeyID != 0 {
+		return fmt.Sprintf("Deploy key #%d (%s)", al.DeployKeyID, name)
 	}
 	return name
 }
@@ -583,9 +604,17 @@ func handleAuditProjectFull(ctx context.Context, client *gitlabclient.Client, re
 
 	s := scorecardData{project: project}
 
+	// The custom role names of the access levels are read off the captured
+	// answer, as the protected branch tools read them, since client-go does
+	// not model member_role_name (upstream register row 138). An answer whose
+	// names do not decode leaves the section unread, as a failed call does.
+	branchCtx, branchCapture := gitlabclient.WithResponseCapture(ctx)
 	s.branches, _, s.branchesErr = client.GL().ProtectedBranches.ListProtectedBranches(projectID, &gl.ListProtectedBranchesOptions{
 		PerPage: maxListItems,
-	}, gl.WithContext(ctx))
+	}, gl.WithContext(branchCtx))
+	if s.branchesErr == nil {
+		s.branchExtras, s.branchesErr = toolutil.CapturedProtectedBranches(branchCapture, len(s.branches))
+	}
 
 	s.members, _, s.membersErr = client.GL().ProjectMembers.ListAllProjectMembers(projectID, &gl.ListProjectMembersOptions{
 		PerPage: maxListItems,
@@ -621,7 +650,7 @@ func handleAuditProjectFull(ctx context.Context, client *gitlabclient.Client, re
 
 	writeFullScorecard(&b, s)
 	writeFullSettingsSection(&b, project)
-	writeFullBranchSection(&b, s.branches, s.branchesErr)
+	writeFullBranchSection(&b, s.branches, s.branchExtras, s.branchesErr)
 	writeFullAccessSection(&b, s.members, project.SharedWithGroups, s.membersErr)
 	writeFullLabelsSection(&b, s.labels, s.labelsErr)
 	writeFullMilestonesSection(&b, s.milestones, s.milestonesErr)
@@ -651,8 +680,9 @@ func handleAuditProjectFull(ctx context.Context, client *gitlabclient.Client, re
 type scorecardData struct {
 	project *gl.Project
 
-	branches    []*gl.ProtectedBranch
-	branchesErr error
+	branches     []*gl.ProtectedBranch
+	branchExtras []toolutil.ProtectedBranchExtra
+	branchesErr  error
 
 	members    []*gl.ProjectMember
 	membersErr error
@@ -747,8 +777,10 @@ func writeFullSettingsSection(b *strings.Builder, project *gl.Project) {
 	b.WriteString("\n")
 }
 
-// writeFullBranchSection writes the branch protection section of the full audit.
-func writeFullBranchSection(b *strings.Builder, branches []*gl.ProtectedBranch, fetchErr error) {
+// writeFullBranchSection writes the branch protection section of the full
+// audit, each branch's access levels with the custom role names extras holds
+// for it at the same index.
+func writeFullBranchSection(b *strings.Builder, branches []*gl.ProtectedBranch, extras []toolutil.ProtectedBranchExtra, fetchErr error) {
 	b.WriteString("## 2. Branch Protection\n\n")
 	if fetchErr != nil {
 		b.WriteString(unreadSection + ".\n\n")
@@ -760,9 +792,10 @@ func writeFullBranchSection(b *strings.Builder, branches []*gl.ProtectedBranch, 
 	}
 	b.WriteString("| Branch | Push Access | Merge Access | Force Push | Code Owners |\n")
 	b.WriteString("|--------|-----------|-------------|-----------|------------|\n")
-	for _, pb := range branches {
-		push := formatAccessLevels(pb.PushAccessLevels)
-		merge := formatAccessLevels(pb.MergeAccessLevels)
+	for i, pb := range branches {
+		extra := protectedBranchExtraAt(extras, i)
+		push := formatAccessLevels(pb.PushAccessLevels, extra.PushAccessLevels)
+		merge := formatAccessLevels(pb.MergeAccessLevels, extra.MergeAccessLevels)
 		fmt.Fprintf(b, "| %s | %s | %s | %s | %s |\n",
 			mdInline(pb.Name), push, merge, toolutil.BoolEmoji(pb.AllowForcePush), toolutil.BoolEmoji(pb.CodeOwnerApprovalRequired))
 	}
@@ -905,16 +938,31 @@ func writeFullPushRulesSection(b *strings.Builder, pushRule *gl.ProjectPushRules
 	b.WriteString("\n")
 }
 
-// formatAccessLevels formats a slice of BranchAccessDescription for compact display.
-func formatAccessLevels(levels []*gl.BranchAccessDescription) string {
+// formatAccessLevels formats a slice of BranchAccessDescription for compact
+// display: a role grant by its role's name, and a grant to one user, group or
+// custom member role by that principal beside the level, as the detail line
+// of [formatBranchAccessLevel] writes it, since the level alone would read as
+// a grant to everyone who holds that role. extras holds the custom role names
+// captured for the levels, at the same index.
+func formatAccessLevels(levels []*gl.BranchAccessDescription, extras []toolutil.ProtectedRefAccessExtra) string {
 	if len(levels) == 0 {
 		return "-"
 	}
 	var parts []string
-	for _, al := range levels {
-		parts = append(parts, toolutil.AccessLevelDescription(al.AccessLevel))
+	for i, al := range levels {
+		parts = append(parts, formatBranchAccessLevel(al, toolutil.MemberRoleNameAt(extras, i)))
 	}
 	return strings.Join(parts, ", ")
+}
+
+// protectedBranchExtraAt returns the captured extra of the branch at index i,
+// and the zero extra, which names no custom role, for an index extras does not
+// hold.
+func protectedBranchExtraAt(extras []toolutil.ProtectedBranchExtra, i int) toolutil.ProtectedBranchExtra {
+	if i < 0 || i >= len(extras) {
+		return toolutil.ProtectedBranchExtra{}
+	}
+	return extras[i]
 }
 
 // emptyDash returns "-" for empty strings.

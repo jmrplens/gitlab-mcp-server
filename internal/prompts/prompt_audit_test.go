@@ -13,6 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -713,6 +714,7 @@ func TestFormatAccessLevels_NamesTheLevelsThroughTheSharedTable(t *testing.T) {
 	tests := []struct {
 		name   string
 		levels []*gl.BranchAccessDescription
+		extras []toolutil.ProtectedRefAccessExtra
 		want   string
 	}{
 		{name: "no levels is no restriction", levels: nil, want: "-"},
@@ -741,10 +743,20 @@ func TestFormatAccessLevels_NamesTheLevelsThroughTheSharedTable(t *testing.T) {
 			levels: []*gl.BranchAccessDescription{{AccessLevel: 99}},
 			want:   "Level 99",
 		},
+		{
+			name: "a granular grant names its principal, a custom role by its captured name",
+			levels: []*gl.BranchAccessDescription{
+				{AccessLevel: gl.MaintainerPermissions},
+				{AccessLevel: gl.DeveloperPermissions, UserID: 7},
+				{AccessLevel: gl.DeveloperPermissions, MemberRoleID: 8},
+			},
+			extras: []toolutil.ProtectedRefAccessExtra{{}, {}, {MemberRoleName: "Release role"}},
+			want:   "Maintainer, User #7 (Developer), Custom role Release role #8 (Developer)",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := formatAccessLevels(tc.levels); got != tc.want {
+			if got := formatAccessLevels(tc.levels, tc.extras); got != tc.want {
 				t.Errorf("formatAccessLevels() = %q, want %q", got, tc.want)
 			}
 		})
@@ -752,13 +764,15 @@ func TestFormatAccessLevels_NamesTheLevelsThroughTheSharedTable(t *testing.T) {
 }
 
 // TestFormatBranchAccessLevel_NamesEachGrantee verifies that a grant to one
-// user, one group or one custom member role is rendered with its id beside the
-// level's name.
+// user, one group, one custom member role or one deploy key is rendered with
+// its id beside the level's name, and a custom role with GitLab's name for it,
+// escaped, when the answer carried one.
 func TestFormatBranchAccessLevel_NamesEachGrantee(t *testing.T) {
 	tests := []struct {
-		name  string
-		level *gl.BranchAccessDescription
-		want  string
+		name     string
+		level    *gl.BranchAccessDescription
+		roleName string
+		want     string
 	}{
 		{
 			name:  "role grant",
@@ -780,10 +794,21 @@ func TestFormatBranchAccessLevel_NamesEachGrantee(t *testing.T) {
 			level: &gl.BranchAccessDescription{AccessLevel: gl.DeveloperPermissions, MemberRoleID: 12},
 			want:  "Custom role #12 (Developer)",
 		},
+		{
+			name:     "named custom role grant",
+			level:    &gl.BranchAccessDescription{AccessLevel: gl.DeveloperPermissions, MemberRoleID: 12},
+			roleName: "Lead | Dev",
+			want:     "Custom role Lead &#124; Dev #12 (Developer)",
+		},
+		{
+			name:  "deploy key grant",
+			level: &gl.BranchAccessDescription{AccessLevel: gl.MaintainerPermissions, DeployKeyID: 5},
+			want:  "Deploy key #5 (Maintainer)",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := formatBranchAccessLevel(tc.level); got != tc.want {
+			if got := formatBranchAccessLevel(tc.level, tc.roleName); got != tc.want {
 				t.Errorf("formatBranchAccessLevel() = %q, want %q", got, tc.want)
 			}
 		})
@@ -895,6 +920,62 @@ func TestAuditBranchProtection_BranchesAPIError_ReturnsError(t *testing.T) {
 	_, err := handleAuditBranchProtection(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
 	if err == nil {
 		t.Error("expected error when protected branches API fails")
+	}
+}
+
+// branchProtectionAuditClient answers the project and the protected branch
+// listing of the branch protection audit, the listing with body as written.
+func branchProtectionAuditClient(t *testing.T, body string) *gitlabclient.Client {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeProject, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{"path_with_namespace":"group/p","default_branch":"main"}`)
+	})
+	mux.HandleFunc(routeProtectedBranches, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, body)
+	})
+	return newTestClient(t, mux)
+}
+
+// TestAuditBranchProtection_CustomRole_NamedFromTheCapture verifies that the
+// audit names a custom role the way the protected branch tools do: by the
+// member_role_name GitLab sent beside the id, which client-go does not model
+// and the prompt reads off the captured answer, and by the id alone on a level
+// whose answer carried no name.
+func TestAuditBranchProtection_CustomRole_NamedFromTheCapture(t *testing.T) {
+	const body = `[{"id":1,"name":"main",` +
+		`"push_access_levels":[{"id":11,"access_level":30,"member_role_id":8,"member_role_name":"Release role"}],` +
+		`"merge_access_levels":[{"id":12,"access_level":40},{"id":13,"access_level":30,"member_role_id":9}]}]`
+	client := branchProtectionAuditClient(t, body)
+
+	result, err := handleAuditBranchProtection(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
+	if err != nil {
+		t.Fatalf(errMsgUnexpected, err)
+	}
+	text := result.Messages[0].Content.(*mcp.TextContent).Text
+	for _, want := range []string{
+		"**Push access:** Custom role Release role #8 (Developer)\n",
+		"**Merge access:** Maintainer, Custom role #9 (Developer)\n",
+	} {
+		t.Run(strings.TrimSpace(want), func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("audit does not carry %q:\n%s", want, text)
+			}
+		})
+	}
+}
+
+// TestAuditBranchProtection_UnreadableCapturedMemberRoleName_ReturnsError
+// verifies that the audit refuses an answer whose member_role_name is not a
+// string rather than naming the role by its id as if GitLab had sent no name.
+// client-go does not model the key, so the captured read is the only thing
+// that can notice.
+func TestAuditBranchProtection_UnreadableCapturedMemberRoleName_ReturnsError(t *testing.T) {
+	client := branchProtectionAuditClient(t, `[{"id":1,"name":"main","push_access_levels":[{"id":11,"access_level":30,"member_role_id":8,"member_role_name":7}]}]`)
+
+	_, err := handleAuditBranchProtection(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
+	if err == nil || !strings.Contains(err.Error(), "failed to read protected branches") {
+		t.Errorf("handleAuditBranchProtection() error = %v, want the captured read's failure", err)
 	}
 }
 
@@ -1059,6 +1140,56 @@ func TestAuditProjectFull_LabelListing_DoesNotAskForCounts(t *testing.T) {
 	}
 }
 
+// fullAuditBranchesMux answers the project and the protected branch listing
+// of the full audit, the listing with body as written, and refuses every
+// other call, which leaves those sections unread.
+func fullAuditBranchesMux(body string) *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeProject, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{"id":42,"path_with_namespace":"group/my-project","default_branch":"main"}`)
+	})
+	mux.HandleFunc(routeProtectedBranches, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, body)
+	})
+	return mux
+}
+
+// TestAuditProjectFull_CustomRoleGrant_NamedFromTheCapture verifies that the
+// served full audit names a grant to a custom role, by the member_role_name it
+// reads off the captured answer, rather than writing the level alone, which
+// read as a grant to everyone holding that role.
+func TestAuditProjectFull_CustomRoleGrant_NamedFromTheCapture(t *testing.T) {
+	text := getPromptText(t, fullAuditBranchesMux(`[{"id":1,"name":"main",`+
+		`"push_access_levels":[{"id":11,"access_level":40}],`+
+		`"merge_access_levels":[{"id":12,"access_level":30,"member_role_id":8,"member_role_name":"Release role"}]}]`),
+		"audit_project_full", map[string]string{"project_id": "42"})
+
+	if want := "| main | Maintainer | Custom role Release role #8 (Developer) |"; !strings.Contains(text, want) {
+		t.Errorf("full audit does not carry %q:\n%s", want, text)
+	}
+}
+
+// TestAuditProjectFull_UnreadableCapturedMemberRoleName_LeavesTheSectionUnread
+// verifies that an answer whose member_role_name does not decode is treated as
+// a listing the audit could not read, as a refused call is, rather than
+// rendered without the names.
+func TestAuditProjectFull_UnreadableCapturedMemberRoleName_LeavesTheSectionUnread(t *testing.T) {
+	text := getPromptText(t, fullAuditBranchesMux(`[{"id":1,"name":"main",`+
+		`"merge_access_levels":[{"id":12,"access_level":30,"member_role_id":8,"member_role_name":7}]}]`),
+		"audit_project_full", map[string]string{"project_id": "42"})
+
+	for _, want := range []string{
+		"| Default branch protected | " + unreadSection + " |",
+		"## 2. Branch Protection\n\n" + unreadSection + ".\n",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("full audit does not carry %q:\n%s", want, text)
+			}
+		})
+	}
+}
+
 // TestWriteBranchDetail_TheUnprotectLine_AppearsOnlyWhenThereAreGrants
 // verifies the one optional line of a protected branch's detail block.
 //
@@ -1068,7 +1199,7 @@ func TestAuditProjectFull_LabelListing_DoesNotAskForCounts(t *testing.T) {
 // since GitLab sends no unprotect levels for a branch nobody may unprotect.
 func TestWriteBranchDetail_TheUnprotectLine_AppearsOnlyWhenThereAreGrants(t *testing.T) {
 	var b strings.Builder
-	writeBranchDetail(&b, &gl.ProtectedBranch{Name: "main"}, "main")
+	writeBranchDetail(&b, &gl.ProtectedBranch{Name: "main"}, toolutil.ProtectedBranchExtra{}, "main")
 	if strings.Contains(b.String(), "Unprotect access") {
 		t.Errorf("a branch with no unprotect grants wrote an unprotect line:\n%s", b.String())
 	}

@@ -694,7 +694,7 @@ func TestFormatBranchAccessLevel(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := formatBranchAccessLevel(tt.al)
+			got := formatBranchAccessLevel(tt.al, "")
 			if tt.want != "" && !strings.Contains(got, tt.want) {
 				t.Errorf("formatBranchAccessLevel() = %q, want containing %q", got, tt.want)
 			}
@@ -1111,7 +1111,7 @@ func TestWriteFullPushRulesSection(t *testing.T) {
 func TestWriteFullBranchSection(t *testing.T) {
 	t.Run("no_branches", func(t *testing.T) {
 		var b strings.Builder
-		writeFullBranchSection(&b, nil, nil)
+		writeFullBranchSection(&b, nil, nil, nil)
 		out := b.String()
 		if !strings.Contains(out, "**Protected branches:** 0") {
 			t.Errorf("expected zero count, got: %s", out)
@@ -1127,7 +1127,7 @@ func TestWriteFullBranchSection(t *testing.T) {
 				PushAccessLevels: []*gl.BranchAccessDescription{{AccessLevel: 40}},
 			},
 		}
-		writeFullBranchSection(&b, branches, nil)
+		writeFullBranchSection(&b, branches, nil, nil)
 		out := b.String()
 		if !strings.Contains(out, "**Protected branches:** 1") {
 			t.Errorf("expected one branch, got: %s", out)
@@ -1136,6 +1136,44 @@ func TestWriteFullBranchSection(t *testing.T) {
 			t.Errorf("expected branch name, got: %s", out)
 		}
 	})
+
+	t.Run("custom_role_named_from_its_branch_extra", func(t *testing.T) {
+		var b strings.Builder
+		branches := []*gl.ProtectedBranch{
+			{Name: "main", PushAccessLevels: []*gl.BranchAccessDescription{{AccessLevel: 40}}},
+			{Name: "stable", MergeAccessLevels: []*gl.BranchAccessDescription{{AccessLevel: 30, MemberRoleID: 8}}},
+		}
+		extras := []toolutil.ProtectedBranchExtra{
+			{},
+			{MergeAccessLevels: []toolutil.ProtectedRefAccessExtra{{MemberRoleName: "Release role"}}},
+		}
+		writeFullBranchSection(&b, branches, extras, nil)
+		if want := "| stable | - | Custom role Release role #8 (Developer) |"; !strings.Contains(b.String(), want) {
+			t.Errorf("expected %q, got: %s", want, b.String())
+		}
+	})
+}
+
+// TestProtectedBranchExtraAt_InAndOutOfRange pins the bound the full audit's
+// branch table leans on: an index extras holds answers that branch's extra,
+// and one before or past it answers the zero extra, which names no role.
+func TestProtectedBranchExtraAt_InAndOutOfRange(t *testing.T) {
+	extras := []toolutil.ProtectedBranchExtra{{Inherited: true}}
+	for _, tc := range []struct {
+		name  string
+		index int
+		want  bool
+	}{
+		{"held", 0, true},
+		{"past the slice", 1, false},
+		{"before the slice", -1, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := protectedBranchExtraAt(extras, tc.index).Inherited; got != tc.want {
+				t.Errorf("protectedBranchExtraAt(%d).Inherited = %v, want %v", tc.index, got, tc.want)
+			}
+		})
+	}
 }
 
 // TestWriteBranchDetail verifies branch detail output including default suffix
@@ -1143,7 +1181,7 @@ func TestWriteFullBranchSection(t *testing.T) {
 func TestWriteBranchDetail(t *testing.T) {
 	t.Run("default_branch_suffix", func(t *testing.T) {
 		var b strings.Builder
-		writeBranchDetail(&b, &gl.ProtectedBranch{Name: "main"}, "main")
+		writeBranchDetail(&b, &gl.ProtectedBranch{Name: "main"}, toolutil.ProtectedBranchExtra{}, "main")
 		out := b.String()
 		if !strings.Contains(out, "(default)") {
 			t.Errorf("expected (default) suffix, got: %s", out)
@@ -1152,7 +1190,7 @@ func TestWriteBranchDetail(t *testing.T) {
 
 	t.Run("non_default_branch", func(t *testing.T) {
 		var b strings.Builder
-		writeBranchDetail(&b, &gl.ProtectedBranch{Name: "release"}, "main")
+		writeBranchDetail(&b, &gl.ProtectedBranch{Name: "release"}, toolutil.ProtectedBranchExtra{}, "main")
 		out := b.String()
 		if strings.Contains(out, "(default)") {
 			t.Errorf("should not have (default) suffix, got: %s", out)
@@ -1164,7 +1202,7 @@ func TestWriteBranchDetail(t *testing.T) {
 		writeBranchDetail(&b, &gl.ProtectedBranch{
 			Name:                  "feature",
 			UnprotectAccessLevels: []*gl.BranchAccessDescription{{AccessLevel: 40}},
-		}, "main")
+		}, toolutil.ProtectedBranchExtra{}, "main")
 		out := b.String()
 		if !strings.Contains(out, "Unprotect access") {
 			t.Errorf("expected unprotect access line, got: %s", out)
