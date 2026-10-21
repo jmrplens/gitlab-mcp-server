@@ -49,12 +49,12 @@ All measurements are against the current source tree. The catalog is built in-me
 | `individual` / `full`        | Premium  |         1,027 |             1,027 | n/a                            |            683,293 |         9,572 |      692,865 |
 | `dynamic` / `full` (default) | Ultimate |             2 |             1,097 | n/a                            |              1,771 |         9,572 |       11,343 |
 | `dynamic` / `minimal`        | Ultimate |             2 |             1,097 | n/a                            |              1,771 |           170 |        1,941 |
-| `meta` / `full` (opaque)     | Ultimate |            51 |             1,097 | `opaque`                       |            176,771 |         9,572 |      186,343 |
-| `meta` / `minimal` (opaque)  | Ultimate |            51 |             1,097 | `opaque`                       |            176,771 |           170 |      176,941 |
-| `meta` / `full` (compact)    | Ultimate |            51 |             1,097 | `compact`                      |            280,462 |         9,572 |      290,034 |
-| `meta` / `minimal` (compact) | Ultimate |            51 |             1,097 | `compact`                      |            280,462 |           170 |      280,632 |
-| `meta` / `full` (full)       | Ultimate |            51 |             1,097 | `full`                         |            491,278 |         9,572 |      500,850 |
-| `meta` / `minimal` (full)    | Ultimate |            51 |             1,097 | `full`                         |            491,278 |           170 |      491,448 |
+| `meta` / `full` (opaque)     | Ultimate |            51 |             1,097 | `opaque`                       |            176,779 |         9,572 |      186,351 |
+| `meta` / `minimal` (opaque)  | Ultimate |            51 |             1,097 | `opaque`                       |            176,779 |           170 |      176,949 |
+| `meta` / `full` (compact)    | Ultimate |            51 |             1,097 | `compact`                      |            280,470 |         9,572 |      290,042 |
+| `meta` / `minimal` (compact) | Ultimate |            51 |             1,097 | `compact`                      |            280,470 |           170 |      280,640 |
+| `meta` / `full` (full)       | Ultimate |            51 |             1,097 | `full`                         |            491,286 |         9,572 |      500,858 |
+| `meta` / `minimal` (full)    | Ultimate |            51 |             1,097 | `full`                         |            491,286 |           170 |      491,456 |
 | `individual` / `full`        | Ultimate |         1,093 |             1,093 | n/a                            |            724,479 |         9,572 |      734,051 |
 
 ## Interpretation guide

@@ -20,13 +20,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 21,855 |
-| Unit test functions                                   | 20,300 |
-| E2E test functions                                    |  1,555 |
+| Total test functions                                  | 21,870 |
+| Unit test functions                                   | 20,302 |
+| E2E test functions                                    |  1,568 |
 | cmd test functions                                    |  4,821 |
 | Test files (internal/)                                |    719 |
 | Test files (cmd/)                                     |    336 |
-| Test files (test/e2e/)                                |    418 |
+| Test files (test/e2e/)                                |    420 |
 | Tool sub-packages tested                              |    180 |
 | Core packages tested                                  |     33 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 100.0% |
@@ -39,7 +39,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 13,379 | 61.2% |
 | `TestFunc` (no underscore)             |    912 |  4.2% |
-| `TestFunc_Scenario_Expected` (3+ part) |  7,564 | 34.6% |
+| `TestFunc_Scenario_Expected` (3+ part) |  7,579 | 34.7% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          4,027 |        237 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            414 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (180) |         11,038 |        466 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,555 |        418 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| Tool sub-packages (180) |         11,040 |        466 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,568 |        420 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          4,821 |        336 | server entry point and developer command utilities                                              |
-| **Total**               |     **21,855** |  **1,473** |                                                                                                 |
+| **Total**               |     **21,870** |  **1,475** |                                                                                                 |
 
 ### Core Packages
 
@@ -184,7 +184,7 @@
 | epicworkitems           |         14 |          1 |   100.0% |         0 |
 | errortracking           |         23 |          2 |   100.0% |         5 |
 | events                  |         67 |          2 |   100.0% |         2 |
-| externalstatuschecks    |         63 |          3 |   100.0% |         8 |
+| externalstatuschecks    |         65 |          3 |   100.0% |         8 |
 | featureflags            |         53 |          5 |   100.0% |         5 |
 | features                |         21 |          2 |    97.7% |         4 |
 | ffuserlists             |         33 |          3 |   100.0% |         5 |
@@ -310,7 +310,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        136 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,038** |    **466** |          | **1,195** |
+| **Total**               | **11,040** |    **466** |          | **1,195** |
 
 </details>
 
