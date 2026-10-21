@@ -2020,22 +2020,8 @@ func (w *walker) addSite(recorded site, expr ast.Expr) {
 	}
 	w.recorded[expr] = struct{}{}
 	position := w.pkg.Fset.Position(expr.Pos())
-	recorded.Package = trimModulePath(w.pkg.PkgPath)
-	recorded.File = relativePath(position.Filename, w.prog.root)
+	recorded.Package = goprogram.TrimModulePath(w.pkg.PkgPath)
+	recorded.File = goprogram.RelativePath(position.Filename, w.prog.root)
 	recorded.Line = position.Line
 	w.sites = append(w.sites, recorded)
-}
-
-// trimModulePath names a package the way the repository does.
-func trimModulePath(pkgPath string) string {
-	return strings.TrimPrefix(strings.TrimPrefix(pkgPath, goprogram.ModulePath), "/")
-}
-
-// relativePath renders a file below the repository root, so a finding reads
-// the same wherever the audit was run from.
-func relativePath(path, root string) string {
-	if rel, err := filepath.Rel(root, path); err == nil && !strings.HasPrefix(rel, "..") {
-		return filepath.ToSlash(rel)
-	}
-	return filepath.ToSlash(path)
 }

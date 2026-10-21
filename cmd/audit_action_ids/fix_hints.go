@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionids"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 )
 
 // The hint fixer: the one rewrite the report's tool-name rule has an exact
@@ -390,7 +391,7 @@ func fixHintsInFile(root, pkg, file string, admit candidate, ids *actionids.IDs)
 		return false, nil, nil, fmt.Errorf("parse %s: %w", file, parseErr)
 	}
 
-	shown := relativePath(file, root)
+	shown := goprogram.RelativePath(file, root)
 	var edits []replacement
 	ast.Inspect(parsed, func(node ast.Node) bool {
 		lit, ok := node.(*ast.BasicLit)

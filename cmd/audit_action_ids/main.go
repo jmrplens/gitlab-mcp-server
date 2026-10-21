@@ -41,6 +41,10 @@ var defaultSuitePatterns = []string{"./test/e2e/gitlab/..."}
 // that reads this file is the one that empties it.
 const defaultJSONPath = "plan/action-ids.json"
 
+// osExit is os.Exit behind a variable, so a test can run main in its own
+// process and read the code main ends with instead of ending the test binary.
+var osExit = os.Exit
+
 func main() {
 	dir := flag.String("dir", ".", "repository root the patterns are resolved against")
 	jsonPath := flag.String("json", defaultJSONPath, "write the work list here; empty writes none")
@@ -50,7 +54,7 @@ func main() {
 	fixHintTests := flag.Bool("fix-hints-tests", false, "with -fix-hints, rewrite the test files too, so an assertion pinning a sentence moves with it")
 	flag.Parse()
 
-	os.Exit(run(auditConfig{
+	osExit(run(auditConfig{
 		dir:          *dir,
 		patterns:     flag.Args(),
 		jsonPath:     *jsonPath,

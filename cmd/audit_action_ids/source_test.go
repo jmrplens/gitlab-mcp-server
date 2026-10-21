@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -976,53 +977,6 @@ func TestCollectSites_NoPatternMatch_IsAnError(t *testing.T) {
 	}
 }
 
-// TestTrimModulePath_ModulePrefix_IsRemoved holds that a package is named the
-// way the repository names it.
-func TestTrimModulePath_ModulePrefix_IsRemoved(t *testing.T) {
-	cases := map[string]string{
-		"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues": "internal/tools/issues",
-		"github.com/jmrplens/gitlab-mcp-server/v3":                       "",
-		"golang.org/x/tools/go/packages":                                 "golang.org/x/tools/go/packages",
-	}
-	for input, want := range cases {
-		t.Run(input, func(t *testing.T) {
-			if got := trimModulePath(input); got != want {
-				t.Errorf("trimModulePath(%q) = %q, want %q", input, got, want)
-			}
-		})
-	}
-}
-
-// TestRelativePath_OutsideTheRoot_KeepsTheWholePath holds that a file the root
-// does not contain is named in full rather than as a climb out of the
-// repository.
-func TestRelativePath_OutsideTheRoot_KeepsTheWholePath(t *testing.T) {
-	root := filepath.FromSlash("/repo")
-	inside := filepath.Join(root, "internal", "tools", "issues", "action_specs.go")
-	if got := relativePath(inside, root); got != "internal/tools/issues/action_specs.go" {
-		t.Errorf("relativePath inside the root = %q", got)
-	}
-	outside := filepath.FromSlash("/elsewhere/other.go")
-	if got := relativePath(outside, root); got != "/elsewhere/other.go" {
-		t.Errorf("relativePath outside the root = %q", got)
-	}
-	// A relative path against an absolute root is the one pair filepath.Rel
-	// refuses outright rather than answering with a climb, which is the other
-	// way into this branch and the one the case above takes. Both are answered
-	// with the whole path, rendered with slashes like every other answer: a
-	// finding reads the same wherever the audit ran, so the separator is the
-	// report's and never the platform's.
-	//
-	// The root is a real temporary directory rather than the invented one
-	// above, because what makes a path absolute is per platform: Windows calls
-	// a path absolute only with a volume in front of it.
-	absoluteRoot := t.TempDir()
-	unrelatable := filepath.FromSlash("some/other.go")
-	if got := relativePath(unrelatable, absoluteRoot); got != "some/other.go" {
-		t.Errorf("relativePath of a path no root can reach = %q, want %q", got, "some/other.go")
-	}
-}
-
 // TestIsRelatedParamName_NamedSpellings_AreFollowed holds the naming rule the
 // parameter restriction leans on, numbered spellings included.
 func TestIsRelatedParamName_NamedSpellings_AreFollowed(t *testing.T) {
@@ -1746,6 +1700,48 @@ func withABody() {}
 func TestStructType_NoTypeAtAll_IsNoStruct(t *testing.T) {
 	if _, ok := (&walker{}).structType(nil); ok {
 		t.Error("structType(nil) resolved a struct, want none")
+	}
+}
+
+// TestReadsAField_EachSelection_IsAFieldOnlyWhenItReadsOne holds the question
+// the two prose writes ask of a selector before passing it over: a selection
+// the type checker records is a field read only when its kind says so.
+//
+// A string field is never written from a method value, which is a function,
+// so the walk never asks this of one; the selectors are taken from source
+// type-checked here, which is the only way to hold a selection of each kind.
+func TestReadsAField_EachSelection_IsAFieldOnlyWhenItReadsOne(t *testing.T) {
+	const source = `package p
+
+type T struct{ F string }
+
+func (T) M() string { return "" }
+
+var x T
+
+var field = x.F
+
+var method = x.M
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "p.go", source, 0)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	info := &types.Info{Selections: map[*ast.SelectorExpr]*types.Selection{}}
+	if _, checkErr := (&types.Config{}).Check("p", fset, []*ast.File{file}, info); checkErr != nil {
+		t.Fatalf("type-check: %v", checkErr)
+	}
+	w := &walker{pkg: &packages.Package{TypesInfo: info}}
+	got := map[string]bool{}
+	for selector := range info.Selections {
+		got[selector.Sel.Name] = w.readsAField(selector)
+	}
+	if want := map[string]bool{"F": true, "M": false}; !maps.Equal(got, want) {
+		t.Errorf("readsAField by selected name = %v, want %v", got, want)
+	}
+	if w.readsAField(&ast.SelectorExpr{X: ast.NewIdent("strings"), Sel: ast.NewIdent("TrimSpace")}) {
+		t.Error("readsAField read a selector the type checker recorded no selection for as a field")
 	}
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"os"
 	"path/filepath"
 	"slices"
@@ -910,5 +911,56 @@ func TestRun_ACatalogItCannotBuild_IsReportedAndStops(t *testing.T) {
 	}
 	if stdout.Len() != 0 {
 		t.Errorf("stdout = %q, want nothing printed before the catalog exists", stdout.String())
+	}
+}
+
+// TestMain_InThisProcess_EndsWithTheCodeRunDecided runs main here, with the
+// exit seam standing in for the end of the process, so main itself is
+// measured: it reads the process's own flag set, hands run the directory, the
+// work list path and the patterns it read, writes the report to standard
+// output, and ends with the code run decided. An empty -json is what shows
+// the flags were read, since the run then writes no work list. The streams
+// are read when main runs, so replacing them here is what main sees.
+func TestMain_InThisProcess_EndsWithTheCodeRunDecided(t *testing.T) {
+	previousExit, previousArgs, previousFlags := osExit, os.Args, flag.CommandLine
+	previousStdout, previousStderr := os.Stdout, os.Stderr
+	t.Cleanup(func() {
+		osExit, os.Args, flag.CommandLine = previousExit, previousArgs, previousFlags
+		os.Stdout, os.Stderr = previousStdout, previousStderr
+	})
+	var codes []int
+	osExit = func(code int) { codes = append(codes, code) }
+	os.Args = []string{toolName, "-dir", repoRoot(t), "-json=", auditedPattern}
+	flag.CommandLine = flag.NewFlagSet(toolName, flag.ExitOnError)
+	streams := t.TempDir()
+	stdout, stdoutErr := os.Create(filepath.Join(streams, "stdout"))
+	stderr, stderrErr := os.Create(filepath.Join(streams, "stderr"))
+	if err := errors.Join(stdoutErr, stderrErr); err != nil {
+		t.Fatalf("create the streams: %v", err)
+	}
+	os.Stdout, os.Stderr = stdout, stderr
+
+	main()
+
+	os.Stdout, os.Stderr = previousStdout, previousStderr
+	if err := errors.Join(stdout.Close(), stderr.Close()); err != nil {
+		t.Fatalf("close the streams: %v", err)
+	}
+	if !slices.Equal(codes, []int{0}) {
+		t.Fatalf("exit codes = %v, want the 0 a clean run decides", codes)
+	}
+	written, readErr := os.ReadFile(stdout.Name())
+	complained, complainErr := os.ReadFile(stderr.Name())
+	if err := errors.Join(readErr, complainErr); err != nil {
+		t.Fatalf("read the streams: %v", err)
+	}
+	if !strings.Contains(string(written), toolName+":") {
+		t.Errorf("stdout = %q, want the summary line", written)
+	}
+	if strings.Contains(string(written), "wrote ") {
+		t.Errorf("stdout = %q, want no work list written under an empty -json", written)
+	}
+	if len(complained) != 0 {
+		t.Errorf("stderr = %q, want empty: the run was made", complained)
 	}
 }

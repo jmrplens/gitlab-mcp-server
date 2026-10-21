@@ -237,7 +237,7 @@ func (w *walker) visitAssertionCall(call *ast.CallExpr, negated bool) {
 	signature := callee.Signature()
 	index := paramIndex(signature.Params(), helper.param)
 	if index < 0 {
-		w.mismatches[helperCopy{pkg: trimModulePath(callee.Pkg().Path()), name: callee.Name()}] = helper.param
+		w.mismatches[helperCopy{pkg: goprogram.TrimModulePath(callee.Pkg().Path()), name: callee.Name()}] = helper.param
 		return
 	}
 	if helper.predicate != negated {
