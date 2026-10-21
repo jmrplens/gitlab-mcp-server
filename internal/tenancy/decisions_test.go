@@ -541,6 +541,47 @@ func chargesTheAggregate(f Failure) bool {
 	return false
 }
 
+// TestDecisions_SessionRefusal_IsOneAnswerByIssue1102 pins what issue 1102
+// decided for the gate's refusal of a session ID on --stateless=false: one
+// answer, in words true both of a session another credential opened and of one
+// this process does not hold, because it idled out, was deleted, went with its
+// credential's pool entry, or was opened before a restart or on another
+// replica. The words it replaced named the first case only, and so told a
+// client whose own session had ended that it had presented somebody else's.
+//
+// Two answers would need a record of each credential's ended session IDs,
+// state keyed on a value the caller mints and so a row and a capacity of its
+// own, and would still have to be worded so as not to tell a caller that
+// another credential holds the ID, which INV-019 forbids. The one sentence
+// needs neither, so the row stays a rule with no value and no table, its one
+// refusal is the terminated-session 404 the transport prescribes, and the
+// decision is recorded on it. The log tells the two cases apart, which is the
+// gate's business and not the register's.
+func TestDecisions_SessionRefusal_IsOneAnswerByIssue1102(t *testing.T) {
+	d, ok := Lookup("ADM-007")
+	if !ok {
+		t.Fatal("ADM-007 names no row")
+	}
+	if !slices.Equal(d.Decided, []string{"issue 1102"}) {
+		t.Errorf("ADM-007 records %v, want issue 1102's decision", d.Decided)
+	}
+	if want := "a session ID that names no session open for the presented credential"; d.Resource != want {
+		t.Errorf("ADM-007 is about %q, want %q: the refusal answers another credential's session and an ended one alike", d.Resource, want)
+	}
+	if d.Kind != Rule || d.Disposition != Ruled || len(d.Values) != 0 || d.Table || d.AtCapacity != CapacityNone {
+		t.Errorf("ADM-007 is kind %v, disposition %v, values %v, table %v, capacity %v; want a rule that keeps nothing, "+
+			"since telling the cases apart would need a record of ended session IDs", d.Kind, d.Disposition, d.Values, d.Table, d.AtCapacity)
+	}
+	gate := Refusal{
+		Methods: []string{MethodGate}, Channel: Gate, Code: codeInvalidRequest, Status: 404,
+		Prefix: "This session is not open for the presented credential.", Answer: StartOver,
+		At: refuse(pkgServer, "sessionOwnershipFailure"),
+	}
+	if !reflect.DeepEqual(d.Refusals, []Refusal{gate}) {
+		t.Errorf("ADM-007 refuses with %+v; want the one terminated-session 404, true of both cases: %+v", d.Refusals, gate)
+	}
+}
+
 // TestDecisions_TwoMCPClauses_AreDecidedByIssue959 pins what issue 959
 // decided about the two clauses of MCP the server meets in part: the tool-call
 // bucket stays off by default on stdio, and the response profile chosen from
@@ -1012,7 +1053,7 @@ func rowPins() map[string]rowPin {
 		"ADM-007": {Admit, Rule, ClassC, Ruled, KeySession, KeyNone, KeyNone, KeyNone, []refusalPin{
 			{
 				methods: "http", channel: Gate, code: -32600, status: 404,
-				prefix: "This session does not belong to the presented credential.", answer: StartOver,
+				prefix: "This session is not open for the presented credential.", answer: StartOver,
 			},
 		}},
 		"ADM-008": {Admit, Lifetime, ClassC, Valued, KeyEntry, KeyNone, KeyNone, KeyNone, []refusalPin{

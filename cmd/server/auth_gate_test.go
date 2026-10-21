@@ -1103,6 +1103,18 @@ func gateTestEntry(t *testing.T, pool *serverpool.ServerPool, token, gitlabURL s
 	return entry
 }
 
+// wantSessionRefusal is the gate's one answer to a session ID that names no
+// session open for the presented credential, written out rather than read from
+// the code so that a change to the words fails here (issue 1102).
+const wantSessionRefusal = "This session is not open for the presented credential. Start a new session by sending initialize without a session ID."
+
+// The two lines the session check leaves, one per case the wire answer does
+// not tell apart (issue 1102).
+const (
+	foreignSessionLine = "request rejected: session ID does not belong to the presented credential"
+	unheldSessionLine  = "request rejected: session ID names no session open in this process"
+)
+
 // TestMcpServerGate_CheckSessionOwnership_RefusesASessionFromAnotherCredential
 // covers the check that makes a session ID insufficient on its own.
 //
@@ -1115,6 +1127,17 @@ func gateTestEntry(t *testing.T, pool *serverpool.ServerPool, token, gitlabURL s
 // stale or forged, and so is anything belonging to an evicted credential. The
 // refusal is a 404 rather than a 403, which is what the SDK answers for a
 // session it does not know and therefore says nothing about which IDs exist.
+//
+// Every refusal carries the same code and words, which are true of all three
+// cases: telling a client whose own session ended that it presented another
+// credential's was false, and telling a caller that another credential holds
+// the ID is what INV-019 forbids. The log is where the cases part: another
+// credential's session is a WARN line, since it is somebody presenting an ID
+// that is not theirs, and an ID the process does not hold is an INFO line of
+// its own, since an idle timeout, an eviction or a restart produce it every
+// day. A request the check lets through writes neither.
+//
+// Not parallel: it replaces the process-wide default logger.
 func TestMcpServerGate_CheckSessionOwnership_RefusesASessionFromAnotherCredential(t *testing.T) {
 	gitlab := gateStubGitLab(t, false)
 	pool := newGateTestPool(t, okFactory, gitlab)
@@ -1137,17 +1160,31 @@ func TestMcpServerGate_CheckSessionOwnership_RefusesASessionFromAnotherCredentia
 		owners      *sessionOwners
 		sessionID   string
 		wantRefusal bool
+		// line is the message the refusal logs, and level its level; a
+		// request let through logs nothing.
+		line  string
+		level string
 	}{
 		{name: "no session id is nothing to own", owners: sessions},
 		{name: "no ownership table at all is no check", owners: nil, sessionID: otherID},
 		{name: "the credential's own session", owners: sessions, sessionID: ownID},
-		{name: "a session opened by another credential", owners: sessions, sessionID: otherID, wantRefusal: true},
-		{name: "an id this deployment never recorded", owners: sessions, sessionID: "never-opened-here", wantRefusal: true},
-		{name: "a session whose credential has been evicted", owners: evicted, sessionID: evictedID, wantRefusal: true},
+		{
+			name: "a session opened by another credential", owners: sessions, sessionID: otherID, wantRefusal: true,
+			line: foreignSessionLine, level: "WARN",
+		},
+		{
+			name: "an id this deployment never recorded", owners: sessions, sessionID: "never-opened-here", wantRefusal: true,
+			line: unheldSessionLine, level: "INFO",
+		},
+		{
+			name: "a session whose credential has been evicted", owners: evicted, sessionID: evictedID, wantRefusal: true,
+			line: unheldSessionLine, level: "INFO",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			logged := captureJSONLog(t)
 			gate := &mcpServerGate{sessions: tt.owners, challenge: legacyAuthChallenge}
 			r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
 			if tt.sessionID != "" {
@@ -1159,10 +1196,44 @@ func TestMcpServerGate_CheckSessionOwnership_RefusesASessionFromAnotherCredentia
 			if (failure != nil) != tt.wantRefusal {
 				t.Fatalf("failure = %+v, want refused=%v", failure, tt.wantRefusal)
 			}
-			if failure != nil && failure.status != http.StatusNotFound {
-				t.Errorf("status = %d, want %d so the refusal says nothing about which sessions exist", failure.status, http.StatusNotFound)
+			if failure != nil {
+				if failure.status != http.StatusNotFound {
+					t.Errorf("status = %d, want %d so the refusal says nothing about which sessions exist", failure.status, http.StatusNotFound)
+				}
+				if failure.code != errCodeInvalidRequest || failure.message != wantSessionRefusal {
+					t.Errorf("refusal = %d %q, want %d %q, the one answer every case shares", failure.code, failure.message, errCodeInvalidRequest, wantSessionRefusal)
+				}
 			}
+			assertSessionCheckLogged(t, logged.String(), tt.line, tt.level)
 		})
+	}
+}
+
+// assertSessionCheckLogged fails unless, of the two lines the session check
+// writes, exactly the line msg was logged, once and at level, or, with msg
+// empty, neither was. Lines about anything else are not the check's and are
+// not counted: the sessions the test opened run on a real streamable server
+// whose goroutines may log while a case runs.
+func assertSessionCheckLogged(t *testing.T, logged, msg, level string) {
+	t.Helper()
+	var lines []map[string]any
+	for raw := range strings.Lines(logged) {
+		var line map[string]any
+		if err := json.Unmarshal([]byte(raw), &line); err != nil {
+			t.Fatalf("a log line is not JSON: %q: %v", raw, err)
+		}
+		if line["msg"] == foreignSessionLine || line["msg"] == unheldSessionLine {
+			lines = append(lines, line)
+		}
+	}
+	if msg == "" {
+		if len(lines) != 0 {
+			t.Errorf("a request the check let through logged %v, want neither session line", lines)
+		}
+		return
+	}
+	if len(lines) != 1 || lines[0]["msg"] != msg || lines[0]["level"] != level {
+		t.Errorf("the refusal logged %v, want the one %s line %q", lines, level, msg)
 	}
 }
 
@@ -1797,7 +1868,7 @@ func TestMcpServerGate_Middleware_RefusesASessionMintedForAnotherCredential(t *t
 			handler.ServeHTTP(recorder, req)
 
 			if recorder.Code != http.StatusNotFound {
-				t.Fatalf("status = %d, want %d for a session that belongs to another credential: %s",
+				t.Fatalf("status = %d, want %d for a session not open for the credential: %s",
 					recorder.Code, http.StatusNotFound, recorder.Body.String())
 			}
 			if reached.Load() {
@@ -1807,8 +1878,8 @@ func TestMcpServerGate_Middleware_RefusesASessionMintedForAnotherCredential(t *t
 			// body at all, and the refusal must omit the member rather than send
 			// a null id, which is not a legal RequestId.
 			decoded := decodeJSONRPCError(t, recorder.Body.String(), jsonRPCIDFor(method)...)
-			if !strings.Contains(decoded.Error.Message, "does not belong") {
-				t.Errorf("message = %q, want it to say the session belongs to somebody else", decoded.Error.Message)
+			if decoded.Error.Message != wantSessionRefusal {
+				t.Errorf("message = %q, want %q, which is true whichever of the two the ID was", decoded.Error.Message, wantSessionRefusal)
 			}
 		})
 	}
@@ -2794,9 +2865,22 @@ func gateRequestCarrying(t *testing.T, headers map[string]string) *http.Request 
 // announced with its neighbor's remaining time is a different number; the
 // distinct-token block is held by
 // TestMCPServerGate_Blocked_RetryAfterIsTheBlockThatHoldsIt.
+//
+// The two session cases are answered alike on the wire (issue 1102), so the
+// response alone cannot show which branch refused them, and a foreign session
+// whose ID was never recorded would pass as one. Each therefore asserts the
+// line the session check logged as well, and every other case that the check
+// logged neither.
+//
+// Not parallel: it replaces the process-wide default logger.
 func TestMCPServerGate_EachRefusal_CarriesItsOwnStatusAndCode(t *testing.T) {
 	stub := gateStubGitLab(t, false)
 	refusing := gateStubGitLab(t, true)
+	// A session recorded under a credential other than the one the request
+	// presents. The gate answers it in the words it answers a session it does
+	// not hold at all, the case after it (issue 1102).
+	foreign := newSessionOwners(false)
+	foreignID := newIdentifiedSessions(t).recordUnder(t, foreign, "another-credential")
 
 	cases := []struct {
 		name string
@@ -2817,6 +2901,11 @@ func TestMCPServerGate_EachRefusal_CarriesItsOwnStatusAndCode(t *testing.T) {
 		// [assertRetryAfterIsTheBlock].
 		retryAfter time.Duration
 		says       string
+		// line is the message the session check logged, and level its
+		// level; empty for a refusal made before the check, which logs
+		// neither of its lines.
+		line  string
+		level string
 	}{
 		{
 			name: "no credential", instance: stub,
@@ -2881,10 +2970,17 @@ func TestMCPServerGate_EachRefusal_CarriesItsOwnStatusAndCode(t *testing.T) {
 		},
 		{
 			name: "a session another credential owns", instance: stub,
-			arm:   func(g *mcpServerGate) { g.sessions = newSessionOwners(false) },
-			token: gateTestToken, session: "opened-by-somebody-else",
+			arm:   func(g *mcpServerGate) { g.sessions = foreign },
+			token: gateTestToken, session: foreignID,
 			status: http.StatusNotFound, code: errCodeInvalidRequest,
-			says: "does not belong to the presented credential",
+			says: wantSessionRefusal, line: foreignSessionLine, level: "WARN",
+		},
+		{
+			name: "a session this process does not hold", instance: stub,
+			arm:   func(g *mcpServerGate) { g.sessions = newSessionOwners(false) },
+			token: gateTestToken, session: "ended-or-never-opened-here",
+			status: http.StatusNotFound, code: errCodeInvalidRequest,
+			says: wantSessionRefusal, line: unheldSessionLine, level: "INFO",
 		},
 	}
 
@@ -2898,6 +2994,7 @@ func TestMCPServerGate_EachRefusal_CarriesItsOwnStatusAndCode(t *testing.T) {
 			if tc.arm != nil {
 				tc.arm(gate)
 			}
+			logged := captureJSONLog(t)
 			rec := httptest.NewRecorder()
 			gate.middleware(http.NotFoundHandler()).ServeHTTP(rec, gateRequestCarrying(t, map[string]string{
 				"PRIVATE-TOKEN":                   tc.token,
@@ -2919,6 +3016,7 @@ func TestMCPServerGate_EachRefusal_CarriesItsOwnStatusAndCode(t *testing.T) {
 			if !strings.Contains(decoded.Error.Message, tc.says) {
 				t.Errorf("message = %q, want it to carry %q", decoded.Error.Message, tc.says)
 			}
+			assertSessionCheckLogged(t, logged.String(), tc.line, tc.level)
 		})
 	}
 }

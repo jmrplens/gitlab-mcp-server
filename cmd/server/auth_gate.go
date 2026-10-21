@@ -541,8 +541,9 @@ func (g *mcpServerGate) withIdentity(ctx context.Context, r *http.Request) conte
 // own copy unexported, so the name is restated here rather than reached for.
 const mcpSessionIDHeader = "Mcp-Session-Id"
 
-// checkSessionOwnership refuses a request that presents a session ID minted for
-// a different credential.
+// checkSessionOwnership refuses a request that presents a session ID naming no
+// session open for the presented credential: one minted for a different
+// credential, or one this process does not hold.
 //
 // The SDK short-circuits a stateful POST carrying Mcp-Session-Id straight to
 // that session's own transport and never calls the server-resolution function,
@@ -558,6 +559,13 @@ const mcpSessionIDHeader = "Mcp-Session-Id"
 // The go-sdk client does not yet (row 68 of docs/development/upstream-bugs.md,
 // pinned in test/e2e/http/session_not_found_test.go): it keeps the refused
 // session on a call and fails the connection on its stream or a notification.
+//
+// Both cases get the same answer (issue 1102, row ADM-007). Telling them apart
+// on the wire would tell a caller whether another credential holds the ID,
+// which the tenant policy's INV-019 forbids, and would need a record of each
+// credential's ended session IDs, state keyed on a value the caller mints. The
+// log does tell them apart, each case on a line of its own, so an operator can
+// see which one a client met.
 func (g *mcpServerGate) checkSessionOwnership(r *http.Request, entry *serverpool.Entry) *gateFailure {
 	sessionID := r.Header.Get(mcpSessionIDHeader)
 	if sessionID == "" || g.sessions == nil {
@@ -565,9 +573,15 @@ func (g *mcpServerGate) checkSessionOwnership(r *http.Request, entry *serverpool
 	}
 	owner := g.sessions.ownerOfID(sessionID)
 	if owner == "" {
-		// A session ID this deployment never opened, or one whose credential
-		// has since been evicted. Stateless mode issues none at all, so
-		// anything presented there is stale or forged either way.
+		// A session ID this process never recorded, or one it no longer
+		// holds: the session idled out or was deleted, its credential's pool
+		// entry was evicted, or it was opened before a restart or on another
+		// replica. That is an everyday ending rather than a caller presenting
+		// somebody else's handle, so the line is INFO; it is throttled with
+		// the gates' other refusal lines, since a caller can send any ID it
+		// likes. Stateless mode issues no IDs at all, so anything presented
+		// there lands here too.
+		refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: session ID names no session open in this process")
 		return sessionOwnershipFailure()
 	}
 	if owner != entry.Owner() {
@@ -577,13 +591,14 @@ func (g *mcpServerGate) checkSessionOwnership(r *http.Request, entry *serverpool
 	return nil
 }
 
-// sessionOwnershipFailure is the refusal written for a session that belongs to
-// another credential.
+// sessionOwnershipFailure is the refusal written for a session ID that names
+// no session open for the presented credential, in words true both of another
+// credential's session and of one that ended.
 func sessionOwnershipFailure() *gateFailure {
 	return &gateFailure{
 		status:  http.StatusNotFound,
 		code:    errCodeInvalidRequest,
-		message: "This session does not belong to the presented credential. Start a new session by sending initialize without a session ID.",
+		message: "This session is not open for the presented credential. Start a new session by sending initialize without a session ID.",
 	}
 }
 

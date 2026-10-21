@@ -67,7 +67,7 @@ const gateRefusalFix = "The gate's session refusal changed: update the quotation
 // rather than imported, because this module drives the binary from outside.
 const (
 	gateSessionRefusalCode   = -32600
-	gateSessionRefusalPhrase = "does not belong to the presented credential"
+	gateSessionRefusalPhrase = "This session is not open for the presented credential."
 )
 
 // sessionIdleTimeout is the --session-timeout the expiry tests start the
@@ -378,9 +378,10 @@ func TestSessionNotFound_GoSDKClient_ForeignCredential_KeepsTheRefusedSession(t 
 //
 //   - a call, which carries an id: the body is a JSON-RPC error go-sdk decodes,
 //     the connection is kept and the client stays on the dead session, exactly
-//     as with a foreign credential; the application is also told the session
-//     does not belong to its credential, which is the gate's one message for
-//     every session it will not serve;
+//     as with a foreign credential; the application is told the session is not
+//     open for its credential, the gate's one message for every session it will
+//     not serve, which is as true of its own ended session as of another
+//     credential's;
 //   - the standalone GET stream, which a default client keeps open: the
 //     server's closing of the session ends it, the client reconnects, and the
 //     404 to that GET carries a body with no id, which go-sdk cannot decode,

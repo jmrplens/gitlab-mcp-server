@@ -327,12 +327,22 @@ func admitDecisions() []Decision {
 			},
 		},
 		{
+			// One answer whether another credential opened the session or the
+			// process no longer holds it (it idled out, was deleted, went with
+			// its credential's pool entry, or was opened before a restart or
+			// on another replica), by issue 1102's decision: the words used to
+			// name the first case alone, which was false for the second. Two
+			// answers would tell a caller whether another credential holds the
+			// ID (INV-019) and would need a record of each credential's ended
+			// session IDs, keyed on a value the caller mints, so the row keeps
+			// nothing. The gate's log tells the two cases apart.
 			ID: "ADM-007", Question: Admit, Kind: Rule, Class: ClassC, Disposition: Ruled,
-			Resource: "a session presented by a credential other than its owner's",
+			Resource: "a session ID that names no session open for the presented credential",
 			Key:      KeySession, StdioKey: KeyNone,
+			Decided:  []string{"issue 1102"},
 			Findings: []string{"F-22"},
 			Refusals: []Refusal{
-				gateRefusal(404, codeInvalidRequest, "This session does not belong to the presented credential.", StartOver,
+				gateRefusal(404, codeInvalidRequest, "This session is not open for the presented credential.", StartOver,
 					refuse(pkgServer, "sessionOwnershipFailure")),
 			},
 			Sites: []Site{
