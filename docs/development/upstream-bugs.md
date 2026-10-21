@@ -253,7 +253,7 @@ readable without opening the tracker:
 | 3 | client-go | [Panic unmarshalling an issue](#panic-unmarshalling-an-issue-with-no-id) | Yes | Yes | **Yes, v2.59.1** | Was yes | Retired |
 | 4 | client-go | [`UpdateIssueBoardList` cannot decode its own response](#updateissueboardlist-cannot-decode-a-successful-response) | Yes | Yes | **Yes, v3.0.0** | No | Retired |
 | 5 | client-go | [`GetNamespace` breaks on a path lookup](#getnamespace-cannot-decode-a-path-based-lookup) | No, not reproduced | No | No | No | Retired |
-| 6 | client-go | [`SetFeatureFlagOptions` lacks `omitempty`](#setfeatureflagoptions-fields-lack-omitempty) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes |
+| 6 | client-go | [`SetFeatureFlagOptions` lacks `omitempty`](#setfeatureflagoptions-fields-lack-omitempty) | Yes | Yes, [gitlab-org/api/client-go!3150](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3150), open, after [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) closed unmerged on 2026-10-21 | No | No | Yes |
 | 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes |
 | 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | Yes, [modelcontextprotocol/go-sdk#1262](https://github.com/modelcontextprotocol/go-sdk/issues/1262), closed on 2026-10-14 with the change declined: the write deadline is the operator's to handle in a middleware | Yes, theirs, [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232), merged; ours, [modelcontextprotocol/go-sdk#1293](https://github.com/modelcontextprotocol/go-sdk/pull/1293), closed unmerged on 2026-10-14 | Partly, by [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232), not ours, unreleased | No | Yes, permanent for the write deadline since the SDK declined it |
 | 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | Yes, by another user, [modelcontextprotocol/go-sdk#1209](https://github.com/modelcontextprotocol/go-sdk/issues/1209) | Yes, theirs, [modelcontextprotocol/go-sdk#1210](https://github.com/modelcontextprotocol/go-sdk/pull/1210), open | No | Was yes | Yes |
@@ -1495,16 +1495,21 @@ is recorded anywhere this entry could cite.
   opened on 2026-09-27 and closed unmerged on 2026-10-21, the joint merge
   request [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
   describes.
-- **In review**: yes, until 2026-10-21, when the joint merge request was
-  closed unmerged; the commit goes out again in a small merge request on its
-  topic, which this entry will name once it is opened.
-  The commit (`418162ec` until the merge request
-  was rebased onto v3.17.0 at 16:56 UTC on 2026-10-09, `9accb089` after that
-  rebase, `aca7a71b` since its rebase of 2026-10-19) gives
-  the eight optional fields (`key`, `feature_group`, `user`, `group`,
-  `namespace`, `project`, `repository` and `force`) `omitempty` on both halves
-  of the tag and pins that a field the caller set is still sent; `Value` keeps
-  its tags, since GitLab requires it. Read on 2026-10-08 the merge request was
+- **In review**: yes, in
+  [gitlab-org/api/client-go!3150](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3150),
+  opened at 12:43 UTC on 2026-10-21, the first of the small merge requests
+  that send the joint merge request's commits again after it was closed
+  unmerged that day. It carries the commit as `8096d4f4`, based on client-go's
+  main at v3.30.0, and a second commit, `dccd6fe6`, with integration tests
+  that set a boolean, a percentage of actors and a user gate on a live
+  instance; GitLab 19.5.0 refuses all three with `400` on main and accepts
+  them with the fix. The commit gives the eight optional fields (`key`,
+  `feature_group`, `user`, `group`, `namespace`, `project`, `repository` and
+  `force`) `omitempty` on both halves of the tag and pins that a field the
+  caller set is still sent; `Value` keeps its tags, since GitLab requires it.
+  In the joint merge request it was `418162ec` until the merge request was
+  rebased onto v3.17.0 at 16:56 UTC on 2026-10-09, `9accb089` after that
+  rebase and `aca7a71b` since its rebase of 2026-10-19. Read on 2026-10-08 the merge request was
   open with 35 commits, `418162ec` still the 32nd, and had had no review
   activity since 2026-09-30; the triage bot labelled it `idle` at 00:20 UTC on
   2026-10-08. Read at 12:23 UTC on 2026-10-10 the commit is still the 32nd of
