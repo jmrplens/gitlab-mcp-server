@@ -487,8 +487,11 @@ func (c *classifier) classifyReturns(decl *funcDecl, index int, e *env, depth in
 	}
 	// A verdict reached through a caller's argument holds for that call site
 	// and not for the function, so only a verdict the body settled on its own
-	// is worth remembering.
-	if c.bindHits == before {
+	// is worth remembering. The count only grows, so a walk that consulted a
+	// binding is one that left it higher than it found it; asking that rather
+	// than whether it moved at all is what makes the direction it is counted
+	// in part of the rule, where a count that fell would read the same.
+	if throughBinding := c.bindHits > before; !throughBinding {
 		c.returnMemo[key] = worst
 	}
 	return worst, reason
@@ -527,10 +530,12 @@ func qualifiedName(callee *types.Func) string {
 	if recv == nil {
 		return pkgName + "." + callee.Name()
 	}
+	// The receiver's own name follows its last dot, and a receiver declared in
+	// the universe has no dot at all: LastIndex then answers -1, and one past
+	// it is the start of the name. No type renders with a dot in front, so a
+	// test for the dot written as >= 0 or > 0 could not be told apart.
 	recvName := recv.Type().String()
-	if idx := strings.LastIndex(recvName, "."); idx >= 0 {
-		recvName = recvName[idx+1:]
-	}
+	recvName = recvName[strings.LastIndex(recvName, ".")+1:]
 	return pkgName + "." + strings.TrimPrefix(recvName, "*") + "." + callee.Name()
 }
 

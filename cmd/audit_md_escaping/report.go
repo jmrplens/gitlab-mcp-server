@@ -1,11 +1,13 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -66,16 +68,16 @@ func writeSummary(out io.Writer, summary Summary) {
 
 // byCount renders a breakdown, biggest first, so the report opens with where
 // the work is.
+//
+// The keys are ordered by a comparison rather than by a less function. No two
+// keys of a map are equal, so the order has no ties and any sort produces it,
+// and a less function written as inequalities would hold two that no input
+// can tell from their mutations: the count compared under a test that has
+// already found the counts different, and two keys that are never the same.
 func byCount(counts map[string]int) string {
-	keys := make([]string, 0, len(counts))
-	for key := range counts {
-		keys = append(keys, key)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		if counts[keys[i]] != counts[keys[j]] {
-			return counts[keys[i]] > counts[keys[j]]
-		}
-		return keys[i] < keys[j]
+	keys := slices.Collect(maps.Keys(counts))
+	slices.SortFunc(keys, func(a, b string) int {
+		return cmp.Or(cmp.Compare(counts[b], counts[a]), cmp.Compare(a, b))
 	})
 	parts := make([]string, 0, len(keys))
 	for _, key := range keys {

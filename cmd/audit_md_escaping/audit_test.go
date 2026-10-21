@@ -277,6 +277,9 @@ func TestFindingLess_Cases_OrdersByPackageFileLineExpression(t *testing.T) {
 		{name: "later line", other: Finding{Package: "b", File: "b.go", Line: 3}, want: false},
 		{name: "earlier expression", other: Finding{Package: "b", File: "b.go", Line: 2, Expression: "a"}, want: true},
 		{name: "later expression", other: Finding{Package: "b", File: "b.go", Line: 2, Expression: "c"}, want: false},
+		// A finding is not ordered before itself, which is what tells < from
+		// <= in the one comparison the order makes.
+		{name: "the same finding", other: base, want: false},
 	}
 
 	for _, tc := range cases {

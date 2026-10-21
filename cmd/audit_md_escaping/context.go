@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -130,12 +131,13 @@ func (s selection) judges(c mdContext) bool {
 
 // contextNames lists the accepted -contexts values, for the flag's own help
 // and for the error a wrong one produces.
+//
+// The list is grown by append from nothing rather than sized up front: the
+// capacity a sum would give it changes no name it holds, so a mutation of the
+// sum is one no test could tell from the original.
 func contextNames() string {
-	names := make([]string, 0, len(structuralContexts)+len(stagedContexts))
-	for _, c := range structuralContexts {
-		names = append(names, c.String())
-	}
-	for _, c := range stagedContexts {
+	var names []string
+	for _, c := range slices.Concat(structuralContexts, stagedContexts) {
 		names = append(names, c.String())
 	}
 	sort.Strings(names)

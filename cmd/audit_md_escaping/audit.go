@@ -1,7 +1,9 @@
 package main
 
 import (
+	"cmp"
 	"go/types"
+	"slices"
 	"sort"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
@@ -234,25 +236,33 @@ func sortFindings(findings []Finding) {
 }
 
 // findingLess is the order two runs of the audit have to agree on.
+//
+// The fields are compared through cmp.Or rather than a switch of inequalities,
+// and the order is the same: the first field that differs decides. A switch
+// left nothing a mutation run could hold. Its case conditions sit outside every
+// block Go's coverage counts, and the < under a case that has already found the
+// two fields different reads exactly like a <=. Here the only comparison is the
+// final one, and two equal findings tell its two spellings apart.
 func findingLess(a, b Finding) bool {
-	switch {
-	case a.Package != b.Package:
-		return a.Package < b.Package
-	case a.File != b.File:
-		return a.File < b.File
-	case a.Line != b.Line:
-		return a.Line < b.Line
-	default:
-		return a.Expression < b.Expression
-	}
+	return cmp.Or(
+		cmp.Compare(a.Package, b.Package),
+		cmp.Compare(a.File, b.File),
+		cmp.Compare(a.Line, b.Line),
+		cmp.Compare(a.Expression, b.Expression),
+	) < 0
 }
 
-// sortDirectives orders declared exemptions the way findings are ordered.
+// sortDirectives orders declared exemptions the way findings are ordered, by
+// file and then line.
+//
+// It sorts by a comparison rather than by a less function, whose < no test
+// could tell from a <=: under the test that the files differ the two agree,
+// and on the line only a tie tells them apart. Two directives tie only when a
+// //line directive maps both onto one line of one file, since each is a line
+// comment of its own, and they arrive in map order, so a tie has no order to
+// keep: slices.SortFunc orders exactly as sort.Slice did, ties included.
 func sortDirectives(directives []Directive) {
-	sort.Slice(directives, func(i, j int) bool {
-		if directives[i].File != directives[j].File {
-			return directives[i].File < directives[j].File
-		}
-		return directives[i].Line < directives[j].Line
+	slices.SortFunc(directives, func(a, b Directive) int {
+		return cmp.Or(cmp.Compare(a.File, b.File), cmp.Compare(a.Line, b.Line))
 	})
 }

@@ -363,6 +363,15 @@ func TestCardScoped_Files_LeavesThePromptsAndCardItselfAlone(t *testing.T) {
 	}
 }
 
+// TestPromptsPath_UnderTheModulePath_MovesWithIt holds the prompts path, which
+// is written out whole, to the module path it lives under, so a module move
+// still has one place to land.
+func TestPromptsPath_UnderTheModulePath_MovesWithIt(t *testing.T) {
+	if want := modulePath + "/internal/prompts"; promptsPath != want {
+		t.Errorf("promptsPath = %q, want %q", promptsPath, want)
+	}
+}
+
 // mdcardClaimedSource writes a hand card row in a function that declares it is
 // not a card, which is the shape the interactive consent prompts have: a
 // question a caller approves, whose values are escaped by a stronger rule than

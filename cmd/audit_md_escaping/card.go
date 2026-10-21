@@ -66,7 +66,12 @@ func cardHeaderCells(cells []string) bool {
 // promptsPath is the package the card rule leaves alone: a prompt message is
 // text the model reads as instructions, and its lists are the prompt's own
 // layout rather than a tool result about one GitLab object.
-const promptsPath = modulePath + "/internal/prompts"
+//
+// It is written out whole rather than joined onto modulePath, for the reason
+// goprogram.ToolutilPath is: the mutation tool cannot see a package-level
+// declaration and reads the plus of a joined one as never covered.
+// TestPromptsPath_UnderTheModulePath_MovesWithIt holds it to modulePath.
+const promptsPath = "github.com/jmrplens/gitlab-mcp-server/v3/internal/prompts"
 
 // cardScoped reports whether the card rule applies to a file: everywhere
 // under the audited packages except the prompts and the file that declares

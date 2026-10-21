@@ -327,13 +327,14 @@ func (c *classifier) indexValueSpec(pkg *packages.Package, spec *ast.ValueSpec) 
 // indexParams records each parameter of a declared function against its
 // position, so a parameter no caller bound can still be resolved to the
 // arguments every caller passes.
+//
+// A field with no name advances no position, and nothing is lost by it: Go
+// names every parameter of a signature or none of them, so a signature holding
+// an unnamed parameter has no name to record at any position, and a count kept
+// past one could never be read.
 func (c *classifier) indexParams(pkg *packages.Package, obj *types.Func, decl *ast.FuncDecl) {
 	index := 0
 	for _, field := range decl.Type.Params.List {
-		if len(field.Names) == 0 {
-			index++
-			continue
-		}
 		for _, name := range field.Names {
 			if v, ok := pkg.TypesInfo.Defs[name].(*types.Var); ok {
 				c.params[v] = paramRef{fn: obj, index: index}

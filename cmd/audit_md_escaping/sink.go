@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"go/types"
 
+	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -175,11 +176,10 @@ func (f sinkFile) formatSink(call *ast.CallExpr, name string) (sink, bool) {
 	if !known || index >= len(call.Args) {
 		return sink{}, false
 	}
-	tv, ok := f.pkg.TypesInfo.Types[call.Args[index]]
-	if !ok || tv.Value == nil {
-		return sink{}, false
-	}
-	template := constantText(tv)
+	// A template the type checker recorded nothing for, or recorded with no
+	// constant value, reads as the empty text, as an empty constant does, and
+	// none of the three has a hole to split.
+	template := constantText(f.pkg.TypesInfo.Types[call.Args[index]])
 	if template == "" {
 		return sink{}, false
 	}
@@ -306,14 +306,18 @@ func (f sinkFile) cardCallSink(call *ast.CallExpr, callee *types.Func) (sink, bo
 
 // enclosingFunc names the function a position sits in, so a finding points at
 // the formatter rather than only at a line.
+//
+// The containment is asked of astutil rather than written as a range test.
+// The position is always where a call begins, which is never the first or the
+// last byte of a file or of a function, so a range test written with < and
+// one written with <= named the same function for every position this is
+// asked about, and a mutation run could hold neither. A file that does not
+// hold the position answers with itself alone, which holds no declaration.
 func enclosingFunc(pkg *packages.Package, pos token.Pos) string {
 	for _, file := range pkg.Syntax {
-		if pos < file.Pos() || pos > file.End() {
-			continue
-		}
-		for _, decl := range file.Decls {
-			fn, ok := decl.(*ast.FuncDecl)
-			if ok && pos >= fn.Pos() && pos <= fn.End() {
+		path, _ := astutil.PathEnclosingInterval(file, pos, pos)
+		for _, node := range path {
+			if fn, ok := node.(*ast.FuncDecl); ok {
 				return fn.Name.Name
 			}
 		}

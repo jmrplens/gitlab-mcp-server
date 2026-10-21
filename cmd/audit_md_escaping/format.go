@@ -75,19 +75,22 @@ func skipDigits(template string, i int) int {
 
 // explicitArgIndex reads a "[n]" argument selector, returning the zero-based
 // index it names and the offset just past it.
+//
+// A selector with no digits in it is refused by the same test as "[0]": either
+// leaves value at zero, below the first index fmt numbers. A separate count of
+// the digits read would only repeat that test, and a count read for nothing
+// but zero is one whose direction no input can show.
 func explicitArgIndex(template string, i int) (index, after int, ok bool) {
 	if i >= len(template) || template[i] != '[' {
 		return 0, i, false
 	}
 	j := i + 1
 	value := 0
-	digits := 0
 	for j < len(template) && template[j] >= '0' && template[j] <= '9' {
 		value = value*10 + int(template[j]-'0')
-		digits++
 		j++
 	}
-	if digits == 0 || j >= len(template) || template[j] != ']' || value < 1 {
+	if j >= len(template) || template[j] != ']' || value < 1 {
 		return 0, i, false
 	}
 	return value - 1, j + 1, true
