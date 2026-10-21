@@ -318,7 +318,7 @@ func TestRunMain_TheTree_PassesTheGate(t *testing.T) {
 		"exempted literal":    "cmd/server:readinessGate.abandoned: not a decision (literals, server-state): ",
 		"exempted name":       "internal/toolutil:PollMaxTimeout: not a decision (names, tool-argument): ",
 		"verdict":             "; 0 findings, 65 declarations exempted\n",
-		"what the rules read": "(32 refusal returns, 93 refusals, 14 reasons and 31 settings read)",
+		"what the rules read": "(32 refusal returns, 95 refusals, 14 reasons and 31 settings read)",
 	} {
 		t.Run(name, func(t *testing.T) {
 			if !strings.Contains(out, want) {
@@ -358,7 +358,7 @@ func TestProductionRegister_IsTheRegisterAsItIs(t *testing.T) {
 	for _, d := range reg.derivations {
 		keys = append(keys, d.key)
 	}
-	want := []string{"credential", "entry", "owner", "tenant", "verified", "application", "session", "address", "source", "refused"}
+	want := []string{"credential", "entry", "owner", "tenant", "verified", "application", "session", "address", "source", "network", "refused"}
 	if !slices.Equal(keys, want) {
 		t.Fatalf("derivations name keys %v, want %v", keys, want)
 	}
