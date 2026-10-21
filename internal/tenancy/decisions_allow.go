@@ -2,7 +2,8 @@ package tenancy
 
 // allowDecisions are the rows that answer "what may it hold or spend?" (spec:
 // The five questions): the token buckets and what each method is charged to,
-// the listen and watcher ceilings with their process partners, the watch
+// the bucket each address draws on for the documents published without a
+// credential, the listen and watcher ceilings with their process partners, the watch
 // lease, the pool's size, eviction and idle rules, the upstream retry policy,
 // the telemetry identity policy and the lifetime of multi-round-trip request
 // state.
@@ -300,6 +301,105 @@ func allowDecisions() []Decision {
 				enforce(pkgToolutil, "RateLimiter.debit"),
 				enforce(pkgToolutil, "catalogCharge.refund"),
 				rateLimitedError,
+			},
+		},
+		{
+			// The documents this server publishes without a credential (issue
+			// 1053): the SEP-2127 card at every path it is mounted at, the
+			// legacy enumerating card and, in oauth mode, the RFC 9728
+			// protected resource metadata, prefix forms included. One bucket
+			// for the three, per client address, keyed as the authentication
+			// budgets key one (IDN-004: the trusted-proxy rules, an IPv6
+			// address by its /64), so the extension's SHOULD rate-limit is met
+			// by the binary rather than by a proxy in front of it. Every
+			// request to those paths draws on it, a revalidation answered 304
+			// and a CORS preflight among them, since what is bounded is the
+			// request; /health and the MCP endpoint do not.
+			//
+			// It stands with no process partner, which issue 1053 decided and
+			// F-36 records against INV-004: a bucket the whole process shared
+			// would let a flood from many addresses deny discovery to every
+			// caller, the hosted client whose many users fetch the RFC 9728
+			// document from one egress address after a 401 challenge first
+			// among them. What bounds the process against such a flood is
+			// the cost of each document, which the pull request measured, and
+			// the held-request ceiling never sees these requests, which reach
+			// no GitLab.
+			//
+			// Its table holds a bounded number of addresses, and a new one past
+			// it takes the place of the one used least recently, which is how
+			// EvictOldest reads for a bucket: a bucket has no expiry, and the
+			// one dropped is the one whose address has gone longest without
+			// asking, not the one nearest refilling. What that drops is a
+			// record against its own address, which starts again with a full
+			// bucket, so nothing is taken from a key to admit another
+			// (INV-005). Neither that rule nor StopCounting bounds a caller
+			// holding more addresses than the table, which any IPv6 /48 does:
+			// cycling them, it finds each forgotten when it returns, and
+			// against a table that stopped counting, it would fill the table
+			// and then ask uncounted from one more until the sweep. Refusing a
+			// newcomer at the bound would close it only by denying discovery to
+			// every new address while the flood lasts, which is the outcome the
+			// missing process partner avoids, so the gap is part of what F-36
+			// accepts. What eviction changes is the cost: an address that
+			// keeps requesting is never the least recent and stays counted, so
+			// a flood has to keep cycling through more addresses than the
+			// table holds, drawing about one burst from each before it is
+			// forgotten, where a table that stopped counting would let a few
+			// thousand single requests from distinct /64s leave every newcomer
+			// uncounted until its sweep.
+			//
+			// The table is swept on AUB-005's interval of the buckets that
+			// have refilled, which a fresh address would get anyway, so the
+			// sweep changes no answer and only gives the memory back.
+			//
+			// The refusal is the gate's 429, the same next action as every
+			// rate, with a Retry-After the register fixes rather than one read
+			// off the bucket per request, which the decision chose. It is
+			// charged to no budget: the documents are public, and a caller
+			// fetching one has failed nothing.
+			ID: "RTC-008", Question: Allow, Kind: Rate, Class: ClassA, Disposition: Valued,
+			Resource: "requests for the SEP-2127 card, the legacy enumerating card and the RFC 9728 metadata",
+			Key:      KeyAddress, StdioKey: KeyNone, Table: true,
+			StatedUnit: KeyProcess, ReasonUnit: KeyProcess, ProtectsProcess: true,
+			Reason:   "so that no one address can spend the process on documents anybody may fetch",
+			ReasonAt: reasonAt(pkgServer, "discoveryRateLimiter"),
+			Values: []string{
+				"DiscoveryRate", "DiscoveryBurst", "DiscoveryRateMax", "DiscoveryBurstMax",
+				"DiscoveryTrackedAddresses", "DiscoveryRetryAfter",
+			},
+			Source: Configurable, Flags: []string{"--discovery-rate-limit-rps", "--discovery-rate-limit-burst"},
+			Envs: []string{"GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS", "GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST"},
+			// Zero for either switches it off: a bucket of no size refuses
+			// everything, which no operator asking for zero means (INV-015).
+			Config: []string{"DiscoveryRateLimitRPS", "DiscoveryRateLimitBurst"}, Malformed: RefuseStartup, Zero: ZeroOff,
+			AtCapacity: EvictOldest,
+			Decided:    []string{"issue 1053"},
+			Findings:   []string{"F-36"},
+			Refusals: []Refusal{
+				{
+					Methods: []string{MethodGate}, Channel: Gate, Code: CodeTooManyRequests, Status: 429,
+					RetryAfter: RetryAfterRefill, Prefix: "Too many requests for the discovery documents from this address.",
+					Answer: RetryLater, At: refuse(pkgServer, "discoveryRateFailure"),
+				},
+			},
+			Sites: []Site{
+				alias(pkgConfig, "DefaultDiscoveryRateLimitRPS", "DiscoveryRate"),
+				alias(pkgConfig, "DefaultDiscoveryRateLimitBurst", "DiscoveryBurst"),
+				alias(pkgConfig, "MaxDiscoveryRateLimitRPS", "DiscoveryRateMax"),
+				alias(pkgConfig, "MaxDiscoveryRateLimitBurst", "DiscoveryBurstMax"),
+				alias(pkgServer, "discoveryTrackedAddresses", "DiscoveryTrackedAddresses"),
+				alias(pkgServer, "discoveryRetryAfter", "DiscoveryRetryAfter"),
+				enforce(pkgConfig, "loadOverlayDiscoveryRate"),
+				enforce(pkgServer, "validateDiscoveryRateBounds"),
+				enforce(pkgServer, "newDiscoveryRateLimiter"),
+				enforce(pkgServer, "discoveryRateLimiter.middleware"),
+				enforce(pkgServer, "discoveryRateLimiter.allow"),
+				enforce(pkgServer, "discoveryRateLimiter.cleanup"),
+				enforce(pkgServer, "discoveryDocumentPaths"),
+				enforce(pkgServer, "discoveryRateFor"),
+				enforce(pkgServer, "serveHTTPOn"),
+				refuse(pkgServer, "discoveryRateFailure"),
 			},
 		},
 		{

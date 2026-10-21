@@ -85,6 +85,21 @@ const (
 	MaxRateLimitBurst       = tenancy.ToolCallBurstMax // register row RTC-001
 )
 
+// The bucket each client address draws on for the documents an HTTP
+// deployment publishes without a credential: the SEP-2127 server card, the
+// legacy enumerating card and the RFC 9728 protected resource metadata, which
+// share it (register row RTC-008). A rate or a burst of zero turns it off, for
+// a deployment whose reverse proxy already limits those paths. The defaults
+// are what issue 1053's pull request measured, sized so that a hosted
+// client's shared egress address, from which many users fetch the metadata
+// after a 401 challenge, is not refused; the maxima are sanity bounds.
+const (
+	DefaultDiscoveryRateLimitRPS   = tenancy.DiscoveryRate     // register row RTC-008
+	DefaultDiscoveryRateLimitBurst = tenancy.DiscoveryBurst    // register row RTC-008
+	MaxDiscoveryRateLimitRPS       = tenancy.DiscoveryRateMax  // register row RTC-008
+	MaxDiscoveryRateLimitBurst     = tenancy.DiscoveryBurstMax // register row RTC-008
+)
+
 // The two authentication budgets an HTTP deployment charges before a
 // credential is read, and the bounds each is held to.
 //
@@ -332,6 +347,12 @@ type Config struct {
 	AuthFailureWindow      time.Duration
 	AuthDistinctTokenLimit int
 	AuthDistinctWindow     time.Duration
+
+	// DiscoveryRateLimitRPS and DiscoveryRateLimitBurst are the bucket each
+	// client address draws on for the discovery documents, in HTTP mode; see
+	// the constant block above. Zero for either turns it off.
+	DiscoveryRateLimitRPS   float64
+	DiscoveryRateLimitBurst int
 
 	// MetaParamSchema controls how meta-tool input schemas advertise the
 	// shape of the `params` object. Allowed values: "opaque" (default),

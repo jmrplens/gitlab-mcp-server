@@ -164,7 +164,9 @@ const (
 	EvictAcrossKeys
 	// StopCounting stops tracking new keys rather than evicting a record.
 	StopCounting
-	// EvictOldest evicts the record nearest its expiry.
+	// EvictOldest evicts the oldest record: for a record with a lifetime, the
+	// one nearest its expiry, and for a token bucket, which has none, the one
+	// used least recently (RTC-008).
 	EvictOldest
 	// WaitThenRefuse queues for a bounded time, then refuses.
 	WaitThenRefuse
@@ -323,6 +325,10 @@ const (
 	// RetryAfterLongestBlock is the longest block holding the request, at
 	// least one second (AUB-001 to AUB-003, AUB-006).
 	RetryAfterLongestBlock
+	// RetryAfterRefill is a register constant of a bucket's own
+	// ([DiscoveryRetryAfter], RTC-008): the whole second in which a bucket
+	// refilling at its shipped rate has a request to give again.
+	RetryAfterRefill
 )
 
 // Role is what a [Site] is to its decision.
@@ -569,8 +575,14 @@ func (f Finding) Records(invariant string) bool {
 	return has(f.Invariants, invariant)
 }
 
-// AllFindings returns the specification's thirty-five findings, in order, each
+// AllFindings returns the specification's thirty-six findings, in order, each
 // with the issue it is filed as.
+//
+// F-36 is the one a decision recorded rather than a reading of the code found:
+// issue 1053 put the discovery documents' bucket on the address with no
+// process partner beside it, since a bucket the whole process shared would let
+// a flood from many addresses deny discovery to every caller, and the finding
+// is how RTC-008 records that departure from INV-004.
 func AllFindings() []Finding {
 	return []Finding{
 		{ID: "F-01", Issue: 955},
@@ -608,6 +620,7 @@ func AllFindings() []Finding {
 		{ID: "F-33", Issue: 959},
 		{ID: "F-34", Issue: 958, Invariants: []string{"INV-015"}},
 		{ID: "F-35", Issue: 982, Invariants: []string{"INV-010"}},
+		{ID: "F-36", Issue: 1053, Invariants: []string{"INV-004"}},
 	}
 }
 

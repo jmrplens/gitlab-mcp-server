@@ -608,8 +608,13 @@ func admitDecisions() []Decision {
 			},
 		},
 		{
+			// The discovery documents' table (RTC-008) is swept on the same
+			// interval, of the buckets that have refilled: the sweep changes no
+			// answer there and only gives memory back, so a change of this
+			// value made for the authentication tables changes how long a
+			// flood's buckets outlive it and nothing else.
 			ID: "AUB-005", Question: Admit, Kind: Lifetime, Class: ClassP, Disposition: Valued,
-			Resource: "how often the authentication tables are swept",
+			Resource: "how often the authentication tables and the discovery documents' table are swept",
 			Key:      KeyProcess, StdioKey: KeyNone,
 			Values: []string{"AuthSweepInterval"}, Source: Constant, Zero: ZeroNotApplicable,
 			// A var rather than a const, so a test can make the tick arrive;

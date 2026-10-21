@@ -133,9 +133,17 @@ func checkShareOnMintable(d Decision, _ map[string]Decision) []string {
 // checkProcessPartner holds a per-caller number that protects a process
 // resource to a non-configurable process ceiling beside it, and a reason about
 // the process to saying so.
+//
+// A caller's key before admission is held as one after it is: an address is a
+// key a caller holds one of and can mint another of, so a number on it
+// multiplies with every address the caller holds, as one on a credential does
+// with every token. Only a bound on one request is left out, since a request
+// is nobody's holding. RTC-008 is the row this reaches, and it passes by the
+// finding that records issue 1053's decision to leave it without a partner.
 func checkProcessPartner(d Decision, rows map[string]Decision) []string {
 	var out []string
-	if d.ProtectsProcess && d.Key.Axis() == AxisRequester && d.Partner == "" && !d.RecordsDeparture("INV-004") {
+	perCaller := d.Key.Axis() == AxisRequester || d.Key.Axis() == AxisPreAdmission
+	if d.ProtectsProcess && perCaller && d.Partner == "" && !d.RecordsDeparture("INV-004") {
 		out = append(out, fmt.Sprintf("protects a process resource on the %s key with no process partner", d.Key))
 	}
 	if partner, ok := rows[d.Partner]; ok && (partner.Key != KeyProcess || partner.Source != Constant) {

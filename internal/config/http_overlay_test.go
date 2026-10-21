@@ -57,6 +57,9 @@ func TestLoadHTTPEnvOverlay_AbsentVariablesReportNothing(t *testing.T) {
 		"AuthFailureWindow":      overlay.AuthFailureWindow == nil,
 		"AuthDistinctTokenLimit": overlay.AuthDistinctTokenLimit == nil,
 		"AuthDistinctWindow":     overlay.AuthDistinctWindow == nil,
+
+		"DiscoveryRateLimitRPS":   overlay.DiscoveryRateLimitRPS == nil,
+		"DiscoveryRateLimitBurst": overlay.DiscoveryRateLimitBurst == nil,
 	}
 	for field, isNil := range nilFields {
 		t.Run(field, func(t *testing.T) {
@@ -279,7 +282,70 @@ func presentVariableCases() []presentVariableCase {
 			},
 		},
 	}
-	return append(cases, authBudgetPresentCases()...)
+	return append(append(cases, authBudgetPresentCases()...), discoveryRatePresentCases()...)
+}
+
+// discoveryRatePresentCases are the discovery documents' bucket's rows of the
+// table above (register row RTC-008): its two settings with two different
+// values, so one read from its neighbor's variable or reported in its
+// neighbor's field cannot pass, each overlaid without the other, and a zero,
+// which turns the bucket off and is reported rather than read as absent.
+func discoveryRatePresentCases() []presentVariableCase {
+	return []presentVariableCase{
+		{
+			name: "discovery rate limiting",
+			env: map[string]string{
+				"GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS":   "7.5",
+				"GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST": "60",
+			},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				if o.DiscoveryRateLimitRPS == nil || *o.DiscoveryRateLimitRPS != 7.5 {
+					t.Errorf("DiscoveryRateLimitRPS = %v, want 7.5", o.DiscoveryRateLimitRPS)
+				}
+				assertInt(t, "DiscoveryRateLimitBurst", o.DiscoveryRateLimitBurst, 60)
+			},
+		},
+		{
+			// The bounds are inclusive, as the flag's are.
+			name: "the discovery bucket at its maxima",
+			env: map[string]string{
+				"GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS":   "1000",
+				"GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST": "10000",
+			},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				if o.DiscoveryRateLimitRPS == nil || *o.DiscoveryRateLimitRPS != MaxDiscoveryRateLimitRPS {
+					t.Errorf("DiscoveryRateLimitRPS = %v, want %d", o.DiscoveryRateLimitRPS, MaxDiscoveryRateLimitRPS)
+				}
+				assertInt(t, "DiscoveryRateLimitBurst", o.DiscoveryRateLimitBurst, MaxDiscoveryRateLimitBurst)
+			},
+		},
+		{
+			name: "the discovery rate is overlaid without its burst",
+			env:  map[string]string{"GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS": "0"},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				if o.DiscoveryRateLimitRPS == nil || *o.DiscoveryRateLimitRPS != 0 {
+					t.Errorf("DiscoveryRateLimitRPS = %v, want 0 reported", o.DiscoveryRateLimitRPS)
+				}
+				if o.DiscoveryRateLimitBurst != nil {
+					t.Errorf("DiscoveryRateLimitBurst = %d, want it unreported when only the rate was set", *o.DiscoveryRateLimitBurst)
+				}
+			},
+		},
+		{
+			name: "the discovery burst is overlaid without its rate",
+			env:  map[string]string{"GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST": "0"},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				assertInt(t, "DiscoveryRateLimitBurst", o.DiscoveryRateLimitBurst, 0)
+				if o.DiscoveryRateLimitRPS != nil {
+					t.Errorf("DiscoveryRateLimitRPS = %g, want it unreported when only the burst was set", *o.DiscoveryRateLimitRPS)
+				}
+			},
+		},
+	}
 }
 
 // authBudgetPresentCases are the authentication budgets' rows of the table
@@ -393,6 +459,16 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 		{"GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT", "100001", "AUTH_DISTINCT_TOKEN_LIMIT exceeds maximum"},
 		{"GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW", "bogus", "AUTH_DISTINCT_TOKEN_WINDOW"},
 		{"GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW", "25h", "AUTH_DISTINCT_TOKEN_WINDOW 25h0m0s exceeds maximum"},
+		// The discovery documents' bucket (register row RTC-008), refused for a
+		// value that does not parse, one that is not a finite number of zero
+		// or more, and one past the bound the flag is held to.
+		{"GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS", "bogus", "GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS"},
+		{"GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS", "-1", "GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS"},
+		{"GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS", "NaN", "GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS"},
+		{"GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS", "1000.5", "GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS exceeds maximum of 1000 (got 1000.5)"},
+		{"GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST", "bogus", "GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST"},
+		{"GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST", "-1", "GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST"},
+		{"GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST", "10001", "GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST exceeds maximum of 10000 (got 10001)"},
 	}
 
 	for _, tt := range tests {

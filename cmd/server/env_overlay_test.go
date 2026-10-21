@@ -386,6 +386,14 @@ func overlaySettings() []overlaySetting {
 			func(h *httpConfig) { h.authDistinctWindow = 17 * time.Minute },
 		},
 		{
+			"discovery-rate-limit-rps", func(o *config.HTTPEnvOverlay) { rps := 7.5; o.DiscoveryRateLimitRPS = &rps },
+			func(h *httpConfig) { h.discoveryRateLimitRPS = 7.5 },
+		},
+		{
+			"discovery-rate-limit-burst", func(o *config.HTTPEnvOverlay) { o.DiscoveryRateLimitBurst = num(60) },
+			func(h *httpConfig) { h.discoveryRateLimitBurst = 60 },
+		},
+		{
 			"session-timeout", func(o *config.HTTPEnvOverlay) { o.SessionTimeout = dur(2 * time.Hour) },
 			func(h *httpConfig) { h.sessionTimeout = 2 * time.Hour },
 		},

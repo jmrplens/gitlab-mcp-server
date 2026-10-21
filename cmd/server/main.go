@@ -191,6 +191,10 @@ type httpConfig struct {
 	maxRequestBodyBytes   int64
 	tlsCert               string
 	tlsKey                string
+	// discoveryRateLimitRPS and discoveryRateLimitBurst are the bucket each
+	// client address draws on for the discovery documents (RTC-008).
+	discoveryRateLimitRPS   float64
+	discoveryRateLimitBurst int
 	// socketMode is the raw --http-socket-mode text; socketModeParsed is
 	// what runHTTP resolved it to, so the octal is rejected at startup with
 	// the flag's name rather than deep inside the listener.
@@ -302,6 +306,10 @@ func main() {
 		"Distinct credentials one address, an IPv6 one by its /64, may have refused inside --auth-distinct-token-window before it is blocked, for longer each time (0 disables this budget)")
 	flag.DurationVar(&hcfg.authDistinctWindow, "auth-distinct-token-window", config.DefaultAuthDistinctWindow,
 		"Window the distinct-credential budget counts in")
+	flag.Float64Var(&hcfg.discoveryRateLimitRPS, "discovery-rate-limit-rps", config.DefaultDiscoveryRateLimitRPS,
+		"Requests a second one client address, an IPv6 one by its /64, may make for the documents served without a credential: the two server cards and the RFC 9728 metadata, one bucket for the three (0 disables it, for a reverse proxy that limits these paths already)")
+	flag.IntVar(&hcfg.discoveryRateLimitBurst, "discovery-rate-limit-burst", config.DefaultDiscoveryRateLimitBurst,
+		"Requests the discovery documents' bucket holds at once (0 disables it)")
 	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
 	flag.DurationVar(&hcfg.httpIdleTimeout, "http-idle-timeout", defaultHTTPIdleTimeout, "HTTP server idle connection timeout; 0 (default) disables idle closure so nothing above the transport closes idle connections; set a positive duration to recycle idle connections sooner")
 	flag.BoolVar(&hcfg.stateless, "stateless", true, "Stateless streamable HTTP (default; required for MCP protocol 2026-07-28 over HTTP): no Mcp-Session-Id tracking, each POST is self-contained, GET/DELETE return 405. Use -stateless=false to restore legacy stateful sessions")
@@ -585,6 +593,14 @@ FLAGS
                             tools it carries, to one bucket the whole process shares: %d tools a second
                             with %d in hand, not configurable (default 10; 0 disables all of them)
   -rate-limit-burst int     Token-bucket burst size when -rate-limit-rps > 0 (default %d)
+  -discovery-rate-limit-rps float
+                            Requests a second one client address, an IPv6 one by its /64, may make for the
+                            documents served without a credential: both server cards and the RFC 9728
+                            metadata, one bucket for the three. A refusal is 429 with Retry-After (default
+                            %d; 0 disables it, for a reverse proxy that limits these paths already)
+  -discovery-rate-limit-burst int
+                            Requests that bucket holds at once, which a hosted client's shared egress
+                            address spends first (default %d; 0 disables it)
   -auth-failure-limit int   Failed authentications one address, an IPv6 one by its /64, may produce inside
                             -auth-failure-window before it is blocked for the rest of it (default %d; 0
                             disables this budget). Separately, %d /64s of one IPv6 /48 with a credential
@@ -715,6 +731,12 @@ ENVIRONMENT VARIABLES (HTTP mode)
                                     blocked, for longer each time (default %d; 0 disables this budget)
   GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW
                                     Window the distinct-credential budget counts in (default %s)
+  GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS
+                                    Requests a second one client address, an IPv6 one by its /64, may
+                                    make for both server cards and the RFC 9728 metadata, one bucket for
+                                    the three (default %d; 0 disables it)
+  GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST
+                                    Requests that bucket holds at once (default %d; 0 disables it)
 
 JSON CONFIGURATION EXAMPLES
 
@@ -769,14 +791,16 @@ JSON CONFIGURATION EXAMPLES
 		config.DefaultPoolIdleTimeout,
 		tenancy.CatalogProcessRate, tenancy.CatalogProcessBurst,
 		config.DefaultRateLimitBurst,
+		config.DefaultDiscoveryRateLimitRPS, config.DefaultDiscoveryRateLimitBurst,
 		config.DefaultAuthFailureLimit, networkFailingPrefixes, config.DefaultAuthFailureWindow,
 		config.DefaultAuthDistinctTokenLimit, config.DefaultAuthDistinctWindow,
 		config.DefaultGitLabURL,
-		// The ENVIRONMENT block names the same four budgets again, because a
-		// reader who arrived at a variable rather than at its flag is owed the
-		// default there too.
+		// The ENVIRONMENT block names the same four budgets and the discovery
+		// documents' bucket again, because a reader who arrived at a variable
+		// rather than at its flag is owed the default there too.
 		config.DefaultAuthFailureLimit, config.DefaultAuthFailureWindow,
-		config.DefaultAuthDistinctTokenLimit, config.DefaultAuthDistinctWindow)
+		config.DefaultAuthDistinctTokenLimit, config.DefaultAuthDistinctWindow,
+		config.DefaultDiscoveryRateLimitRPS, config.DefaultDiscoveryRateLimitBurst)
 }
 
 // run starts the MCP server with OS signal handling for graceful shutdown.
@@ -1192,6 +1216,9 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, tier edition.Tier
 		TLSCertFile:            hcfg.tlsCert,
 		TLSKeyFile:             hcfg.tlsKey,
 		SocketMode:             hcfg.socketModeParsed,
+		// The discovery documents' bucket (RTC-008), which only this mode has.
+		DiscoveryRateLimitRPS:   hcfg.discoveryRateLimitRPS,
+		DiscoveryRateLimitBurst: hcfg.discoveryRateLimitBurst,
 	}
 }
 
@@ -1262,7 +1289,7 @@ func validateHTTPPoolAndRateBounds(cfg *config.Config) error {
 	if cfg.RateLimitBurst > config.MaxRateLimitBurst {
 		return fmt.Errorf("--rate-limit-burst %d exceeds maximum of %d", cfg.RateLimitBurst, config.MaxRateLimitBurst)
 	}
-	return nil
+	return validateDiscoveryRateBounds(cfg)
 }
 
 // validateTrustedProxyConfig holds the two proxy flags to each other.
@@ -3013,6 +3040,10 @@ func httpStartupAttrs(cfg *config.Config, httpAddr string) []any {
 		"json_response", cfg.JSONResponse,
 		"trusted_proxy_header", cfg.TrustedProxyHeader,
 		"trusted_proxies", cfg.TrustedProxies,
+		// Announced whatever they are, zero included, so an operator who
+		// turned the bucket off reads that it is off (RTC-008).
+		"discovery_rate_limit_rps", cfg.DiscoveryRateLimitRPS,
+		"discovery_rate_limit_burst", cfg.DiscoveryRateLimitBurst,
 		"drain_delay", cfg.DrainDelay,
 		"version", version,
 		"commit", commit,
@@ -3184,7 +3215,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	// The .well-known path the earlier draft recommended keeps the
 	// enumerating SEP-1649 document, and the SEP-2127 card mounted just above
 	// is a different document; see [mountDiscoveryCard] for why both exist.
-	for _, path := range publicPaths(cfg, serverCardLegacyPath) {
+	for _, path := range legacyCardPaths(cfg) {
 		mux.HandleFunc("OPTIONS "+path, cardPreflight)
 		mux.HandleFunc("GET "+path, legacyCardHandler)
 	}
@@ -3194,6 +3225,11 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	var rootHandler http.Handler = mux
 	rootHandler = crossOriginProtectionMiddleware(cfg.TrustedOrigins, rootHandler)
 	rootHandler = corsMiddleware(cfg, rootHandler)
+	// Outside the CORS layer, which answers a trusted origin's preflight
+	// itself, so a preflight on a document path is charged like the request
+	// it precedes; inside host validation, so a request refused for its Host
+	// reaches no document and is charged nothing (RTC-008).
+	rootHandler = discoveryRateFor(ctx, cfg).middleware(rootHandler)
 	// Always installed, because the policy it applies is not always a set of
 	// declared hosts: a wildcard bind declares none and still has to refuse a
 	// name nobody declared on a connection that arrived over loopback, which
@@ -3573,7 +3609,7 @@ func writeUnsupportedProtocolVersion(w http.ResponseWriter, r *http.Request, sup
 // disables, because an operator reading it is about to check the one their
 // proxy or their AI Catalog points at.
 func mountDiscoveryCard(ctx context.Context, cfg *config.Config, mux *http.ServeMux, preflight http.HandlerFunc) {
-	paths := publicPaths(cfg, serverCardPath, mcpEndpointPath+serverCardPath)
+	paths := discoveryCardPaths(cfg)
 	cardJSON, err := buildDiscoveryCardFn(cfg)
 	if err != nil {
 		slog.WarnContext(ctx, "failed to build the server card, these paths answer 503: "+

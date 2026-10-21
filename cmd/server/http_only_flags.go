@@ -120,6 +120,8 @@ var httpOnlyFlags = map[string]httpOnlyFlag{
 	"auth-failure-window":        {},
 	"auth-distinct-token-limit":  {},
 	"auth-distinct-token-window": {},
+	"discovery-rate-limit-rps":   {},
+	"discovery-rate-limit-burst": {},
 }
 
 // refuseWhenOn is the refusal of a flag that switches a protection on: the

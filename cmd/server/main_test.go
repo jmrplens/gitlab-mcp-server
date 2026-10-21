@@ -1681,6 +1681,11 @@ func TestPrintHelp_EachDefaultIsPrintedInItsOwnEntry(t *testing.T) {
 		{entry: "GITLAB_MCP_AUTH_FAILURE_WINDOW", want: fmt.Sprintf("(default %s)", config.DefaultAuthFailureWindow)},
 		{entry: "GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT", want: fmt.Sprintf("(default %d;", config.DefaultAuthDistinctTokenLimit)},
 		{entry: "GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW", want: fmt.Sprintf("(default %s)", config.DefaultAuthDistinctWindow)},
+		// The discovery documents' bucket (RTC-008), in both blocks.
+		{entry: "-discovery-rate-limit-rps float", want: fmt.Sprintf("(default %d; 0 disables it", config.DefaultDiscoveryRateLimitRPS)},
+		{entry: "-discovery-rate-limit-burst int", want: fmt.Sprintf("(default %d; 0 disables it)", config.DefaultDiscoveryRateLimitBurst)},
+		{entry: "GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS", want: fmt.Sprintf("(default %d; 0 disables it)", config.DefaultDiscoveryRateLimitRPS)},
+		{entry: "GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST", want: fmt.Sprintf("(default %d; 0 disables it)", config.DefaultDiscoveryRateLimitBurst)},
 		// The upload limit is written as a size with a suffix, which the
 		// entry used to describe as bytes alone, and its two bounds are held
 		// to the constants config enforces.
@@ -13553,6 +13558,8 @@ func TestMain_HTTPFlags_ReachTheSettingsTheyName(t *testing.T) {
 		"-read-only",
 		"-safe-mode",
 		"-exclude-tools", "gitlab_example_tool",
+		"-discovery-rate-limit-rps", "3.5",
+		"-discovery-rate-limit-burst", "17",
 	)
 
 	if !slices.Equal(exits, []int{1}) {
@@ -13564,6 +13571,8 @@ func TestMain_HTTPFlags_ReachTheSettingsTheyName(t *testing.T) {
 		want any
 	}{
 		{key: "max_clients", want: float64(77)},
+		{key: "discovery_rate_limit_rps", want: 3.5},
+		{key: "discovery_rate_limit_burst", want: float64(17)},
 		{key: "session_timeout", want: float64(17 * time.Minute)},
 		{key: "drain_delay", want: float64(7 * time.Second)},
 		{key: "stateless", want: false},
@@ -13605,6 +13614,8 @@ func TestMain_HTTPFlags_EachRefusalNamesTheFlagThatCarriedTheValue(t *testing.T)
 		{args: []string{"-auth-distinct-token-limit", "100001"}, want: "--auth-distinct-token-limit 100001 exceeds"},
 		{args: []string{"-auth-failure-window", "25h"}, want: "--auth-failure-window 25h0m0s exceeds"},
 		{args: []string{"-auth-distinct-token-window", "25h"}, want: "--auth-distinct-token-window 25h0m0s exceeds"},
+		{args: []string{"-discovery-rate-limit-rps", "1001"}, want: "--discovery-rate-limit-rps 1001 exceeds"},
+		{args: []string{"-discovery-rate-limit-burst", "10001"}, want: "--discovery-rate-limit-burst 10001 exceeds"},
 		{args: []string{"-session-timeout", "25h"}, want: "--session-timeout 25h0m0s exceeds"},
 		{args: []string{"-revalidate-interval", "25h"}, want: "--revalidate-interval 25h0m0s exceeds"},
 		{args: []string{"-pool-idle-timeout", "25h"}, want: "--pool-idle-timeout 25h0m0s exceeds"},

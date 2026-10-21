@@ -53,6 +53,14 @@ func frozenValues() []frozenValue {
 		{"CatalogDivisor", CatalogDivisor, 10},
 		{"CatalogProcessRate", CatalogProcessRate, 3000},
 		{"CatalogProcessBurst", CatalogProcessBurst, 48000},
+		// The discovery documents' bucket issue 1053 added, at the figures its
+		// pull request measured.
+		{"DiscoveryRate", DiscoveryRate, 20},
+		{"DiscoveryBurst", DiscoveryBurst, 200},
+		{"DiscoveryRateMax", DiscoveryRateMax, 1000},
+		{"DiscoveryBurstMax", DiscoveryBurstMax, 10000},
+		{"DiscoveryTrackedAddresses", DiscoveryTrackedAddresses, 4096},
+		{"DiscoveryRetryAfter", DiscoveryRetryAfter, 1 * time.Second},
 		{"UpstreamRetries", UpstreamRetries, 2},
 		{"UpstreamRetryWaitMax", UpstreamRetryWaitMax, 5 * time.Second},
 		{"UpstreamRetryStep", UpstreamRetryStep, 700 * time.Millisecond},

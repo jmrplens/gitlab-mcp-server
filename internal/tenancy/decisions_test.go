@@ -1,6 +1,7 @@
 package tenancy
 
 import (
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -21,6 +22,7 @@ var specRequirementIDs = []string{
 	"ADM-008", "ADM-009", "ADM-010", "ADM-011", "ADM-012", "ADM-013", "ADM-014",
 	"AUB-001", "AUB-002", "AUB-003", "AUB-004", "AUB-005", "AUB-006",
 	"RTC-001", "RTC-002", "RTC-003", "RTC-004", "RTC-005", "RTC-006", "RTC-007",
+	"RTC-008",
 	"HLD-001", "HLD-002", "HLD-003", "HLD-004", "HLD-005", "HLD-006", "HLD-007",
 	"HLD-008", "HLD-009", "HLD-010", "HLD-011",
 	"POL-001", "POL-002", "POL-003", "POL-004", "POL-005", "POL-006", "POL-007",
@@ -97,7 +99,8 @@ func TestDecisions_AreGroupedByQuestion(t *testing.T) {
 // and RQB-012, the pages the latest-pipeline fallback reads, which the
 // latest_pipeline resource runs on every poll of a watch (issue 1242), the
 // twelfth. AUB-006, the /48 aggregate issue 954 added, is the thirty-second
-// valued row.
+// valued row, and RTC-008, the discovery documents' bucket issue 1053 added,
+// the thirty-third.
 func TestDecisions_DispositionCounts(t *testing.T) {
 	counts := map[Disposition]int{}
 	for _, d := range Decisions() {
@@ -108,7 +111,7 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		disposition Disposition
 		want        int
 	}{
-		{"valued", Valued, 32},
+		{"valued", Valued, 33},
 		{"ruled", Ruled, 36},
 		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
@@ -444,6 +447,82 @@ func TestDecisions_NetworkAggregate_IsTheConstantIssue954Added(t *testing.T) {
 	}
 }
 
+// TestDecisions_DiscoveryDocuments_AreBoundedPerAddressByIssue1053 pins what
+// issue 1053 decided for the three documents this server publishes without a
+// credential, the SEP-2127 card, the legacy enumerating card and the RFC 9728
+// metadata: one bucket per client address for the three, keyed as the
+// authentication budgets key an address (an IPv6 one by its /64), and over
+// HTTP alone. The operator sets it through a flag and a variable each for its
+// rate and its burst, a value that does not parse refuses startup, and zero
+// switches it off, for a deployment whose proxy already limits these paths.
+// Its table keeps a bounded number of addresses, and a new one past it takes
+// the place of the one used least recently: what is dropped is a record
+// against its own address, which starts again with a full bucket, never a
+// holding taken from it. Its refusal is a gate 429 whose Retry-After is a
+// register constant, charged to no budget. And it stands with no process
+// partner, by the decision F-36 records as a departure from INV-004: a
+// bucket the whole process shares would let a flood from many addresses deny
+// discovery to every caller.
+func TestDecisions_DiscoveryDocuments_AreBoundedPerAddressByIssue1053(t *testing.T) {
+	d, ok := Lookup("RTC-008")
+	if !ok {
+		t.Fatal("RTC-008 names no row")
+	}
+	got, want := discoveryShapeOf(d), discoveryShape{
+		kind: Rate, key: KeyAddress, stdio: KeyNone, class: ClassA,
+		source: Configurable, malformed: RefuseStartup, zero: ZeroOff,
+		flags:  "--discovery-rate-limit-rps,--discovery-rate-limit-burst",
+		envs:   "GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS,GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST",
+		config: "DiscoveryRateLimitRPS,DiscoveryRateLimitBurst",
+		values: "DiscoveryRate,DiscoveryBurst,DiscoveryRateMax,DiscoveryBurstMax,DiscoveryTrackedAddresses,DiscoveryRetryAfter",
+		table:  true, capacity: EvictOldest,
+		protects: true, findings: "F-36", decided: "issue 1053",
+	}
+	if got != want {
+		t.Errorf("RTC-008 =\n%+v\nwant\n%+v", got, want)
+	}
+	if f, _ := findingByID("F-36"); f.Issue != 1053 || !f.Records("INV-004") {
+		t.Errorf("F-36 = %+v, want it filed as issue 1053's and recording INV-004", f)
+	}
+	gate := Refusal{
+		Methods: []string{MethodGate}, Channel: Gate, Code: CodeTooManyRequests, Status: 429,
+		RetryAfter: RetryAfterRefill, Prefix: "Too many requests for the discovery documents from this address.",
+		Answer: RetryLater, At: refuse(pkgServer, "discoveryRateFailure"),
+	}
+	if !reflect.DeepEqual(d.Refusals, []Refusal{gate}) {
+		t.Errorf("RTC-008 refuses with %+v; want the gate's 429 with the register's Retry-After, charging nothing: %+v", d.Refusals, gate)
+	}
+}
+
+// discoveryShape is what TestDecisions_DiscoveryDocuments_AreBoundedPerAddressByIssue1053
+// holds RTC-008 to, its lists joined so the row compares as one value.
+type discoveryShape struct {
+	kind                        Kind
+	key, stdio                  Key
+	class                       Class
+	source                      Source
+	malformed                   Malformed
+	zero                        Zero
+	flags, envs, config, values string
+	table                       bool
+	capacity                    Capacity
+	protects                    bool
+	partner, findings, decided  string
+}
+
+// discoveryShapeOf reads a row into a discoveryShape.
+func discoveryShapeOf(d Decision) discoveryShape {
+	return discoveryShape{
+		kind: d.Kind, key: d.Key, stdio: d.StdioKey, class: d.Class,
+		source: d.Source, malformed: d.Malformed, zero: d.Zero,
+		flags: strings.Join(d.Flags, ","), envs: strings.Join(d.Envs, ","), config: strings.Join(d.Config, ","),
+		values: strings.Join(d.Values, ","),
+		table:  d.Table, capacity: d.AtCapacity,
+		protects: d.ProtectsProcess, partner: d.Partner,
+		findings: strings.Join(d.Findings, ","), decided: strings.Join(d.Decided, ","),
+	}
+}
+
 // chargesTheAggregate reports whether a charged failure's refusal, the one of
 // the same function, status, prefix and challenge, names AUB-006 among the
 // budgets it is charged to. An uncharged failure charges nothing.
@@ -768,6 +847,7 @@ const (
 	pinListenFull   = "the server cannot open another subscriptions/listen stream now ("
 	pinWatchersFull = "subscriptions: the server cannot watch another resource now"
 	pinRate         = "rate limit exceeded for "
+	pinDiscovery    = "Too many requests for the discovery documents from this address."
 	pinSeveral      = "This deployment serves several GitLab instances"
 	pinSubMeths     = "resources/subscribe,subscriptions/listen"
 	pinCharged      = "AUB-001,AUB-002,AUB-003,AUB-006"
@@ -1060,6 +1140,12 @@ func rowPins() map[string]rowPin {
 		"RTC-006": {Allow, Bound, ClassQ, Valued, KeyRequest, KeyRequest, KeyNone, KeyNone, nil},
 		"RTC-007": {Allow, Rate, ClassP, Valued, KeyProcess, KeyProcess, KeyProcess, KeyProcess, []refusalPin{
 			{methods: "tools/list", channel: RPC, code: -42900, prefix: pinRate, answer: RetryLater},
+		}},
+		"RTC-008": {Allow, Rate, ClassA, Valued, KeyAddress, KeyNone, KeyProcess, KeyProcess, []refusalPin{
+			{
+				methods: "http", channel: Gate, code: -42900, status: 429, retry: RetryAfterRefill,
+				prefix: pinDiscovery, answer: RetryLater,
+			},
 		}},
 		"HLD-001": {Allow, Ceiling, ClassR, Valued, KeyEntry, KeyProcess, KeyEntry, KeyEntry, []refusalPin{
 			{methods: "subscriptions/listen", era: EraModern, channel: RPC, code: -42900, prefix: pinListen, answer: RetryLater},

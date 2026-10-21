@@ -69,12 +69,20 @@ func TestValidate_ShareOnMintable(t *testing.T) {
 }
 
 // TestValidate_ProcessPartner holds a per-caller number protecting a process
-// resource to a constant process partner, or to a finding.
+// resource to a constant process partner, or to a finding. A caller's key
+// before admission is held as one after it is: an address is as mintable as a
+// credential, so a number on it multiplies with every address a caller holds,
+// and RTC-008 passes only by the finding issue 1053 recorded. A bound on one
+// request is no caller's holding and needs no partner.
 func TestValidate_ProcessPartner(t *testing.T) {
 	protects := func(d *Decision) { d.Kind, d.ProtectsProcess = Ceiling, true }
+	onAnAddress := func(d *Decision) { protects(d); d.Kind, d.Class, d.Key = Rate, ClassA, KeyAddress }
 	runRule(t, checkProcessPartner, []ruleCase{
 		{"no partner", row(protects), "no process partner"},
 		{"no partner, recorded", row(func(d *Decision) { protects(d); d.Findings = []string{"F-03"} }), ""},
+		{"no partner on an address", row(onAnAddress), "no process partner"},
+		{"no partner on an address, recorded", row(func(d *Decision) { onAnAddress(d); d.Findings = []string{"F-36"} }), ""},
+		{"no partner on a request", row(func(d *Decision) { protects(d); d.Key = KeyRequest }), ""},
 		{"a constant process partner", row(func(d *Decision) { protects(d); d.Partner = "PROC" }), ""},
 		{"a partner on the entry", row(func(d *Decision) { protects(d); d.Partner = "ENTRY" }), "not a constant keyed on the process"},
 		{"a configurable partner", row(func(d *Decision) { protects(d); d.Partner = "CONF" }), "not a constant keyed on the process"},

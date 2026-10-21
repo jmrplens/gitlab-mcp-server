@@ -63,7 +63,7 @@ const (
 	WatchRateLimitJitter = 0.2
 )
 
-// Rates (RTC-001 to RTC-003, RTC-006, RTC-007).
+// Rates (RTC-001 to RTC-003, RTC-006 to RTC-008).
 const (
 	// ToolCallRateHTTP is the tool-call bucket's refill, in requests a second,
 	// an HTTP deployment gets unless it says otherwise (RTC-001).
@@ -94,6 +94,27 @@ const (
 	CatalogProcessRate = 3000
 	// CatalogProcessBurst is how many tools that bucket holds (RTC-007).
 	CatalogProcessBurst = 48000
+	// DiscoveryRate is the refill, in requests a second, of the bucket one
+	// client address draws on for the documents this server publishes without
+	// a credential, the two server cards and the RFC 9728 metadata, unless the
+	// operator says otherwise (RTC-008).
+	DiscoveryRate = 20
+	// DiscoveryBurst is that bucket's size (RTC-008).
+	DiscoveryBurst = 200
+	// DiscoveryRateMax is the highest refill an operator may configure
+	// (RTC-008).
+	DiscoveryRateMax = 1000
+	// DiscoveryBurstMax is the largest bucket an operator may configure
+	// (RTC-008).
+	DiscoveryBurstMax = 10000
+	// DiscoveryTrackedAddresses is how many client addresses those buckets are
+	// kept for at once; a new address past it takes the place of the one used
+	// least recently (RTC-008).
+	DiscoveryTrackedAddresses = 4096
+	// DiscoveryRetryAfter is the Retry-After a refused discovery request
+	// advertises: the whole second in which a bucket refilling at
+	// DiscoveryRate has a request to give again (RTC-008).
+	DiscoveryRetryAfter = 1 * time.Second
 	// UpstreamRetries is how many times a failed GitLab request is re-sent
 	// (RTC-006).
 	UpstreamRetries = 2
@@ -233,8 +254,8 @@ const (
 	// the failure table, the distinct-credential table and the /48 table
 	// (AUB-004).
 	AuthTrackedSources = 4096
-	// AuthSweepInterval is how often the authentication tables are swept
-	// (AUB-005).
+	// AuthSweepInterval is how often the authentication tables, and the
+	// discovery documents' table of RTC-008, are swept (AUB-005).
 	AuthSweepInterval = 5 * time.Minute
 	// AuthNetworkFailingPrefixes is how many distinct IPv6 /64s inside one
 	// /48 may have a credential refused inside AUB-003's window before the

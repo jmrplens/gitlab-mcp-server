@@ -103,6 +103,12 @@ func applyOverlayNumbers(hcfg *httpConfig, o *config.HTTPEnvOverlay) {
 	if o.AuthDistinctWindow != nil && !hcfg.setFlags["auth-distinct-token-window"] {
 		hcfg.authDistinctWindow = *o.AuthDistinctWindow
 	}
+	if o.DiscoveryRateLimitRPS != nil && !hcfg.setFlags["discovery-rate-limit-rps"] {
+		hcfg.discoveryRateLimitRPS = *o.DiscoveryRateLimitRPS
+	}
+	if o.DiscoveryRateLimitBurst != nil && !hcfg.setFlags["discovery-rate-limit-burst"] {
+		hcfg.discoveryRateLimitBurst = *o.DiscoveryRateLimitBurst
+	}
 }
 
 func applyOverlayDurations(hcfg *httpConfig, o *config.HTTPEnvOverlay) {

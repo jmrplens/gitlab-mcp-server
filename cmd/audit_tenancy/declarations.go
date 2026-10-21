@@ -138,6 +138,7 @@ func productionRules() rules {
 			tenancy.RetryAfterLongestBlock:    {"retryAfterSeconds"},
 			tenancy.RetryAfterFixed:           {"upstreamRetryAfter"},
 			tenancy.RetryAfterUpstreamOrFixed: {"upstreamRetryAfter", "RetryAfter"},
+			tenancy.RetryAfterRefill:          {"discoveryRetryAfter"},
 		},
 
 		lowerCharges: []string{

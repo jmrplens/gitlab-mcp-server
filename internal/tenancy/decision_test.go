@@ -173,24 +173,27 @@ func TestDecision_RecordsDeparture(t *testing.T) {
 	}
 }
 
-// TestAllFindings_AreTheSpecificationsThirtyFiveWithTheirIssues holds the
-// findings register to the specification's thirty-five, in order, each filed
-// as the issue the tracker holds it under.
-func TestAllFindings_AreTheSpecificationsThirtyFiveWithTheirIssues(t *testing.T) {
+// TestAllFindings_AreTheSpecificationsThirtySixWithTheirIssues holds the
+// findings register to the specification's thirty-six, in order, each filed
+// as the issue the tracker holds it under. F-36 is the one issue 1053 recorded
+// with its decision: the discovery documents' bucket stands with no process
+// partner beside it.
+func TestAllFindings_AreTheSpecificationsThirtySixWithTheirIssues(t *testing.T) {
 	issues := map[int][]string{
-		950: {"F-29", "F-30"},
-		951: {"F-03", "F-31"},
-		952: {"F-08", "F-09", "F-17"},
-		953: {"F-12", "F-15", "F-28"},
-		954: {"F-14", "F-25"},
-		955: {"F-01", "F-02", "F-05", "F-06", "F-18", "F-32"},
-		956: {"F-07", "F-10"},
-		957: {"F-13"},
-		958: {"F-11", "F-16", "F-34"},
-		959: {"F-19", "F-33"},
-		960: {"F-04", "F-23", "F-26", "F-27"},
-		961: {"F-20", "F-21", "F-22", "F-24"},
-		982: {"F-35"},
+		950:  {"F-29", "F-30"},
+		951:  {"F-03", "F-31"},
+		952:  {"F-08", "F-09", "F-17"},
+		953:  {"F-12", "F-15", "F-28"},
+		954:  {"F-14", "F-25"},
+		955:  {"F-01", "F-02", "F-05", "F-06", "F-18", "F-32"},
+		956:  {"F-07", "F-10"},
+		957:  {"F-13"},
+		958:  {"F-11", "F-16", "F-34"},
+		959:  {"F-19", "F-33"},
+		960:  {"F-04", "F-23", "F-26", "F-27"},
+		961:  {"F-20", "F-21", "F-22", "F-24"},
+		982:  {"F-35"},
+		1053: {"F-36"},
 	}
 	want := map[string]int{}
 	for issue, ids := range issues {
@@ -199,8 +202,8 @@ func TestAllFindings_AreTheSpecificationsThirtyFiveWithTheirIssues(t *testing.T)
 		}
 	}
 	findings := AllFindings()
-	if len(findings) != 35 || len(want) != 35 {
-		t.Fatalf("%d findings and %d in the issue map, want 35 of each", len(findings), len(want))
+	if len(findings) != 36 || len(want) != 36 {
+		t.Fatalf("%d findings and %d in the issue map, want 36 of each", len(findings), len(want))
 	}
 	for i, f := range findings {
 		t.Run(f.ID, func(t *testing.T) {
@@ -212,8 +215,8 @@ func TestAllFindings_AreTheSpecificationsThirtyFiveWithTheirIssues(t *testing.T)
 			}
 		})
 	}
-	if FindingIssue("F-36") != 0 {
-		t.Error("F-36 names no finding and was given an issue")
+	if FindingIssue("F-37") != 0 {
+		t.Error("F-37 names no finding and was given an issue")
 	}
 }
 
@@ -225,7 +228,7 @@ func TestFinding_Records(t *testing.T) {
 		findings  string
 	}{
 		{"INV-003", "F-04"},
-		{"INV-004", "F-03"},
+		{"INV-004", "F-03,F-36"},
 		{"INV-008", "F-08,F-09"},
 		{"INV-010", "F-29,F-31,F-35"},
 		{"INV-011", "F-07"},

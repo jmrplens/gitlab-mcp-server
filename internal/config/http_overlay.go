@@ -68,6 +68,11 @@ type HTTPEnvOverlay struct {
 	AuthFailureWindow      *time.Duration
 	AuthDistinctTokenLimit *int
 	AuthDistinctWindow     *time.Duration
+
+	// The bucket each client address draws on for the discovery documents
+	// (register row RTC-008), each half overlaid on its own like a budget's.
+	DiscoveryRateLimitRPS   *float64
+	DiscoveryRateLimitBurst *int
 }
 
 // envPresent reports whether name is set to a non-empty value, under either
@@ -93,6 +98,7 @@ func LoadHTTPEnvOverlay() (*HTTPEnvOverlay, error) {
 		loadOverlayBooleans,
 		loadOverlayLimits,
 		loadOverlayAuthAndRate,
+		loadOverlayDiscoveryRate,
 	} {
 		if err := load(overlay); err != nil {
 			return nil, err
@@ -256,6 +262,38 @@ func loadOverlayAuthAndRate(o *HTTPEnvOverlay) error {
 		o.RateLimitBurst = &value
 	}
 	return o.readAuthBudgetEnv()
+}
+
+// loadOverlayDiscoveryRate overlays the two settings of the bucket each client
+// address draws on for the discovery documents (register row RTC-008), each
+// held to the bounds the flags are held to, so an invalid value fails startup
+// naming the variable rather than falling back in silence. Zero is a value
+// like any other here, and switches the bucket off.
+//
+// Only HTTP mode reads them: a stdio server publishes no document, so it has
+// nothing for them to bound.
+func loadOverlayDiscoveryRate(o *HTTPEnvOverlay) error {
+	if envPresent("DISCOVERY_RATE_LIMIT_RPS") {
+		value, err := parseFloatNonNegative(Getenv("DISCOVERY_RATE_LIMIT_RPS"), DefaultDiscoveryRateLimitRPS)
+		if err != nil {
+			return fmt.Errorf("invalid %sDISCOVERY_RATE_LIMIT_RPS value: %w", EnvPrefix, err)
+		}
+		if value > MaxDiscoveryRateLimitRPS {
+			return fmt.Errorf("%sDISCOVERY_RATE_LIMIT_RPS exceeds maximum of %d (got %g)", EnvPrefix, MaxDiscoveryRateLimitRPS, value)
+		}
+		o.DiscoveryRateLimitRPS = &value
+	}
+	if envPresent("DISCOVERY_RATE_LIMIT_BURST") {
+		value, err := parseIntNonNegative(Getenv("DISCOVERY_RATE_LIMIT_BURST"), DefaultDiscoveryRateLimitBurst)
+		if err != nil {
+			return fmt.Errorf("invalid %sDISCOVERY_RATE_LIMIT_BURST value: %w", EnvPrefix, err)
+		}
+		if value > MaxDiscoveryRateLimitBurst {
+			return fmt.Errorf("%sDISCOVERY_RATE_LIMIT_BURST exceeds maximum of %d (got %d)", EnvPrefix, MaxDiscoveryRateLimitBurst, value)
+		}
+		o.DiscoveryRateLimitBurst = &value
+	}
+	return nil
 }
 
 // readAuthBudgetEnv overlays the four authentication-budget settings, each
