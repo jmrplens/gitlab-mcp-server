@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/url"
 	"testing"
 	"time"
 )
@@ -33,11 +34,11 @@ var listen = func(ctx context.Context) (net.Listener, error) {
 // and port trims the scheme.
 func DeadEndpoint(tb testing.TB) string {
 	tb.Helper()
-	url, err := deadEndpoint(tb)
+	address, err := deadEndpoint(tb)
 	if err != nil {
 		tb.Fatalf("netfixture: open a dead endpoint: %v", err)
 	}
-	return url
+	return address
 }
 
 // deadEndpoint opens the listener and starts the loop that hangs up on each
@@ -55,7 +56,7 @@ func deadEndpoint(tb testing.TB) (string, error) {
 		_ = listener.Close()
 		<-done
 	})
-	return "http://" + listener.Addr().String(), nil
+	return (&url.URL{Scheme: "http", Host: listener.Addr().String()}).String(), nil
 }
 
 // hangUpOnEach accepts connections and closes each one at once, until the
