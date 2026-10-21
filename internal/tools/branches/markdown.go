@@ -105,8 +105,8 @@ func accessLevelsSummary(levels []BranchAccessDescriptionOutput) string {
 }
 
 // accessLevelLabel names one access-level entry: the role the level stands
-// for, and the principal the entry names when it grants one user, group or
-// deploy key rather than a role.
+// for, and the principal the entry names when it grants one user, group,
+// custom member role or deploy key rather than a role.
 func accessLevelLabel(l BranchAccessDescriptionOutput) string {
 	label := toolutil.AccessLevelDescription(gl.AccessLevelValue(l.AccessLevel))
 	switch {
@@ -114,6 +114,8 @@ func accessLevelLabel(l BranchAccessDescriptionOutput) string {
 		return fmt.Sprintf("%s (User #%d)", label, l.UserID)
 	case l.GroupID != 0:
 		return fmt.Sprintf("%s (Group #%d)", label, l.GroupID)
+	case l.MemberRoleID != 0:
+		return fmt.Sprintf("%s (Custom Role #%d)", label, l.MemberRoleID)
 	case l.DeployKeyID != 0:
 		return fmt.Sprintf("%s (Deploy Key #%d)", label, l.DeployKeyID)
 	default:

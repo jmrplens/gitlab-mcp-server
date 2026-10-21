@@ -55,8 +55,8 @@ func writeAccessLevels(c *toolutil.Card, heading string, levels []AccessLevelOut
 }
 
 // levelCell renders the role a rule grants, and "-" for a rule that names a
-// user, a group or a deploy key instead, whose access_level is not what
-// decides.
+// user, a group, a custom role or a deploy key instead, whose access_level is
+// not what decides.
 func levelCell(l AccessLevelOutput) string {
 	if granteeCell(l) != "" {
 		return "-"
@@ -72,6 +72,8 @@ func granteeCell(l AccessLevelOutput) string {
 		return fmt.Sprintf("user #%d", l.UserID)
 	case l.GroupID != 0:
 		return fmt.Sprintf("group #%d", l.GroupID)
+	case l.MemberRoleID != 0:
+		return fmt.Sprintf("custom role #%d", l.MemberRoleID)
 	case l.DeployKeyID != 0:
 		return fmt.Sprintf("deploy key #%d", l.DeployKeyID)
 	default:

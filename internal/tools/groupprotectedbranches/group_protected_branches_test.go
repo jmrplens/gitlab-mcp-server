@@ -9,6 +9,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -613,6 +614,103 @@ func TestUpdate_Rename_SendsNameOnlyWhenTheCallerGaveOne(t *testing.T) {
 	}
 }
 
+// customRoleBranchJSON is a group protected branch whose merge rule grants a
+// custom member role, as ee/lib/ee/api/entities/protected_ref_access.rb
+// renders it on an Ultimate instance.
+const customRoleBranchJSON = `{"id":4,"name":"release/*","push_access_levels":[],` +
+	`"merge_access_levels":[{"id":41,"access_level":30,"access_level_description":"Release role","member_role_id":42}],` +
+	`"unprotect_access_levels":[],"allow_force_push":false,"code_owner_approval_required":false}`
+
+// TestCustomRolePermission_ProtectAndUpdate_SendAndPublishMemberRoleID pins
+// member_role_id on both sides of the two writes: a custom role the caller
+// names in allowed_to_merge reaches GitLab on that entry's own key and on no
+// other, and the rule GitLab answers with publishes it on the access level.
+// The role's id is the only id in the request, so a handler that wrote it to
+// the user, group or deploy key key, or dropped it, fails here.
+func TestCustomRolePermission_ProtectAndUpdate_SendAndPublishMemberRoleID(t *testing.T) {
+	allowed := []BranchPermissionInput{{MemberRoleID: new(int64(42))}}
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		call   func(context.Context, *gitlabclient.Client) (Output, error)
+	}{
+		{
+			name:   "protect",
+			method: http.MethodPost,
+			path:   pathGroupProtBranches,
+			call: func(ctx context.Context, client *gitlabclient.Client) (Output, error) {
+				return Protect(ctx, client, ProtectInput{GroupID: "mygroup", Name: "release/*", AllowedToMerge: allowed})
+			},
+		},
+		{
+			name:   "update",
+			method: http.MethodPatch,
+			path:   pathGroupProtBranch,
+			call: func(ctx context.Context, client *gitlabclient.Client) (Output, error) {
+				return Update(ctx, client, UpdateInput{GroupID: "mygroup", Branch: "main", AllowedToMerge: allowed})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entries, out := captureAllowedToMerge(t, tt.method, tt.path, tt.call)
+			assertCustomRoleEntry(t, entries)
+			if len(out.MergeAccessLevels) != 1 || out.MergeAccessLevels[0].MemberRoleID != 42 {
+				t.Errorf("MergeAccessLevels = %+v, want one entry with member_role_id 42", out.MergeAccessLevels)
+			}
+		})
+	}
+}
+
+// captureAllowedToMerge runs call against a mock answering method and path
+// with customRoleBranchJSON, and returns the allowed_to_merge entries of the
+// body the handler sent beside the output it built. The body is decoded on the
+// mock's goroutine, which reports a failure with t.Errorf only.
+func captureAllowedToMerge(t *testing.T, method, path string, call func(context.Context, *gitlabclient.Client) (Output, error)) ([]map[string]any, Output) {
+	t.Helper()
+	var body struct {
+		AllowedToMerge []map[string]any `json:"allowed_to_merge"`
+	}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != method || r.URL.Path != path {
+			http.NotFound(w, r)
+			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode %s body: %v", method, err)
+			http.Error(w, "undecodable body", http.StatusInternalServerError)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, customRoleBranchJSON)
+	}))
+
+	out, err := call(context.Background(), client)
+	if err != nil {
+		t.Fatalf("%s %s error = %v", method, path, err)
+	}
+	return body.AllowedToMerge, out
+}
+
+// assertCustomRoleEntry checks that the one allowed_to_merge entry carries the
+// custom role on member_role_id and on no other key.
+func assertCustomRoleEntry(t *testing.T, entries []map[string]any) {
+	t.Helper()
+	if len(entries) != 1 {
+		t.Fatalf("allowed_to_merge = %#v, want one entry", entries)
+	}
+	entry := entries[0]
+	if got := entry["member_role_id"]; got != float64(42) {
+		t.Errorf("allowed_to_merge[0].member_role_id = %#v, want 42", got)
+	}
+	for _, key := range []string{"id", "user_id", "group_id", "deploy_key_id", "access_level", "_destroy"} {
+		if got, sent := entry[key]; sent {
+			t.Errorf("allowed_to_merge[0].%s = %#v, want the key left out", key, got)
+		}
+	}
+}
+
 // TestUnprotect validates the Unprotect handler for removing group-level
 // protected branch rules. Covers success, missing fields, API errors,
 // and context cancellation.
@@ -710,17 +808,19 @@ func TestToBranchPermissions(t *testing.T) {
 		lvl := 40
 		userID := int64(5)
 		groupID := int64(10)
+		memberRoleID := int64(42)
 		deployKeyID := int64(99)
 		permID := int64(7)
 		destroy := true
 
 		got := toBranchPermissions([]BranchPermissionInput{{
-			ID:          &permID,
-			AccessLevel: &lvl,
-			UserID:      &userID,
-			GroupID:     &groupID,
-			DeployKeyID: &deployKeyID,
-			Destroy:     &destroy,
+			ID:           &permID,
+			AccessLevel:  &lvl,
+			UserID:       &userID,
+			GroupID:      &groupID,
+			MemberRoleID: &memberRoleID,
+			DeployKeyID:  &deployKeyID,
+			Destroy:      &destroy,
 		}})
 		assertBranchPermissionWithAccessLevel(t, got)
 	})
@@ -753,6 +853,7 @@ func assertBranchPermissionWithAccessLevel(t *testing.T, got *[]*gl.GroupBranchP
 	assertInt64Pointer(t, "ID", permission.ID, 7)
 	assertInt64Pointer(t, "UserID", permission.UserID, 5)
 	assertInt64Pointer(t, "GroupID", permission.GroupID, 10)
+	assertInt64Pointer(t, "MemberRoleID", permission.MemberRoleID, 42)
 	assertInt64Pointer(t, "DeployKeyID", permission.DeployKeyID, 99)
 	if permission.Destroy == nil || !*permission.Destroy {
 		t.Errorf("Destroy = %v, want true", permission.Destroy)
@@ -819,9 +920,9 @@ func TestFormatOutputMarkdown_WithAccessLevels(t *testing.T) {
 }
 
 // TestFormatOutputMarkdown_GranularRules pins what the grantee column was added
-// for: a rule naming a user, a group or a deploy key says so, and its Level
-// reads "-" rather than the role number GitLab echoes beside it, which is not
-// what the rule grants.
+// for: a rule naming a user, a group, a custom member role or a deploy key says
+// so, and its Level reads "-" rather than the role number GitLab echoes beside
+// it, which is not what the rule grants.
 func TestFormatOutputMarkdown_GranularRules(t *testing.T) {
 	got := FormatOutputMarkdown(Output{
 		ID:   7,
@@ -830,6 +931,7 @@ func TestFormatOutputMarkdown_GranularRules(t *testing.T) {
 			{ID: 20, AccessLevel: 40, AccessLevelDescription: "Sam Bauch", UserID: 123},
 			{ID: 21, AccessLevel: 40, AccessLevelDescription: "Release managers", GroupID: 55},
 			{ID: 22, AccessLevel: 40, AccessLevelDescription: "deploy-bot", DeployKeyID: 9},
+			{ID: 24, AccessLevel: 30, AccessLevelDescription: "Release role", MemberRoleID: 42},
 			{ID: 23, AccessLevel: 0, AccessLevelDescription: "No one"},
 		},
 		AllowForcePush: true,
@@ -844,6 +946,7 @@ func TestFormatOutputMarkdown_GranularRules(t *testing.T) {
 		"| 20 | - | user #123 | Sam Bauch |\n" +
 		"| 21 | - | group #55 | Release managers |\n" +
 		"| 22 | - | deploy key #9 | deploy-bot |\n" +
+		"| 24 | - | custom role #42 | Release role |\n" +
 		"| 23 | No access |  | No one |\n" +
 		cardHints
 

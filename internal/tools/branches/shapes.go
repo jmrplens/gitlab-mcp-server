@@ -169,7 +169,9 @@ func commitToOutput(c *gl.Commit) *CommitOutput {
 }
 
 // BranchAccessDescriptionOutput mirrors gl.BranchAccessDescription, an entry in
-// a protected branch's push/merge/unprotect access-level arrays.
+// a protected branch's push/merge/unprotect access-level arrays. GitLab sends
+// member_role_id on an entry that grants a custom role, which needs an
+// Ultimate license (ee/lib/ee/api/entities/protected_ref_access.rb).
 type BranchAccessDescriptionOutput struct {
 	ID                     int64  `json:"id"`
 	AccessLevel            int    `json:"access_level"`
@@ -177,6 +179,7 @@ type BranchAccessDescriptionOutput struct {
 	DeployKeyID            int64  `json:"deploy_key_id,omitempty"`
 	UserID                 int64  `json:"user_id,omitempty"`
 	GroupID                int64  `json:"group_id,omitempty"`
+	MemberRoleID           int64  `json:"member_role_id,omitempty" tier:"ultimate"`
 }
 
 // branchAccessDescriptionsToOutput maps a slice of gl.BranchAccessDescription to
@@ -197,6 +200,7 @@ func branchAccessDescriptionsToOutput(in []*gl.BranchAccessDescription) []Branch
 			DeployKeyID:            d.DeployKeyID,
 			UserID:                 d.UserID,
 			GroupID:                d.GroupID,
+			MemberRoleID:           d.MemberRoleID,
 		})
 	}
 	if len(out) == 0 {
@@ -207,14 +211,17 @@ func branchAccessDescriptionsToOutput(in []*gl.BranchAccessDescription) []Branch
 
 // BranchPermissionInput mirrors gl.BranchPermissionOptions, a single fine-grained
 // allowed_to_{push,merge,unprotect} permission entry. Each entry grants access
-// either by a coarse access level or by a specific user, group, or deploy key.
+// either by a coarse access level or by a specific user, group, custom member
+// role, or deploy key. A custom role needs an Ultimate license
+// (doc/api/protected_branches.md).
 type BranchPermissionInput struct {
-	ID          *int64 `json:"id,omitempty"           jsonschema:"ID of an existing access entry to update"`
-	UserID      *int64 `json:"user_id,omitempty"      jsonschema:"Grant access to a specific user by ID"`
-	GroupID     *int64 `json:"group_id,omitempty"     jsonschema:"Grant access to a specific group by ID"`
-	DeployKeyID *int64 `json:"deploy_key_id,omitempty" jsonschema:"Grant access via a specific deploy key by ID"`
-	AccessLevel *int   `json:"access_level,omitempty" jsonschema:"Coarse access level (0=No access, 30=Developer, 40=Maintainer)"`
-	Destroy     *bool  `json:"_destroy,omitempty"     jsonschema:"When true, remove this existing access entry"`
+	ID           *int64 `json:"id,omitempty"             jsonschema:"ID of an existing access entry to update"`
+	UserID       *int64 `json:"user_id,omitempty"        jsonschema:"Grant access to a specific user by ID"`
+	GroupID      *int64 `json:"group_id,omitempty"       jsonschema:"Grant access to a specific group by ID"`
+	MemberRoleID *int64 `json:"member_role_id,omitempty" jsonschema:"Grant access to a custom member role by ID (Ultimate only)" tier:"ultimate"`
+	DeployKeyID  *int64 `json:"deploy_key_id,omitempty"  jsonschema:"Grant access via a specific deploy key by ID"`
+	AccessLevel  *int   `json:"access_level,omitempty"   jsonschema:"Coarse access level (0=No access, 30=Developer, 40=Maintainer)"`
+	Destroy      *bool  `json:"_destroy,omitempty"       jsonschema:"When true, remove this existing access entry"`
 }
 
 // branchPermissionOptions maps a slice of BranchPermissionInput to the SDK
@@ -226,11 +233,12 @@ func branchPermissionOptions(in []BranchPermissionInput) *[]*gl.BranchPermission
 	out := make([]*gl.BranchPermissionOptions, 0, len(in))
 	for _, p := range in {
 		opt := &gl.BranchPermissionOptions{
-			ID:          p.ID,
-			UserID:      p.UserID,
-			GroupID:     p.GroupID,
-			DeployKeyID: p.DeployKeyID,
-			Destroy:     p.Destroy,
+			ID:           p.ID,
+			UserID:       p.UserID,
+			GroupID:      p.GroupID,
+			MemberRoleID: p.MemberRoleID,
+			DeployKeyID:  p.DeployKeyID,
+			Destroy:      p.Destroy,
 		}
 		if p.AccessLevel != nil {
 			opt.AccessLevel = new(gl.AccessLevelValue(*p.AccessLevel))

@@ -9714,7 +9714,7 @@
           ]
         },
         "allowed_to_merge": {
-          "description": "Fine-grained merge access entries (by user, group, deploy key, or access level)",
+          "description": "Fine-grained merge access entries (by user, group, custom role, deploy key, or access level)",
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -9748,6 +9748,13 @@
               },
               "id": {
                 "description": "ID of an existing access entry to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "member_role_id": {
+                "description": "Grant access to a custom member role by ID (Ultimate only)",
                 "type": [
                   "null",
                   "integer"
@@ -9769,7 +9776,7 @@
           ]
         },
         "allowed_to_push": {
-          "description": "Fine-grained push access entries (by user, group, deploy key, or access level)",
+          "description": "Fine-grained push access entries (by user, group, custom role, deploy key, or access level)",
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -9803,6 +9810,13 @@
               },
               "id": {
                 "description": "ID of an existing access entry to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "member_role_id": {
+                "description": "Grant access to a custom member role by ID (Ultimate only)",
                 "type": [
                   "null",
                   "integer"
@@ -9824,7 +9838,7 @@
           ]
         },
         "allowed_to_unprotect": {
-          "description": "Fine-grained unprotect access entries (by user, group, deploy key, or access level)",
+          "description": "Fine-grained unprotect access entries (by user, group, custom role, deploy key, or access level)",
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -9858,6 +9872,13 @@
               },
               "id": {
                 "description": "ID of an existing access entry to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "member_role_id": {
+                "description": "Grant access to a custom member role by ID (Ultimate only)",
                 "type": [
                   "null",
                   "integer"
@@ -9966,6 +9987,9 @@
               "id": {
                 "type": "integer"
               },
+              "member_role_id": {
+                "type": "integer"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -10013,6 +10037,9 @@
               "id": {
                 "type": "integer"
               },
+              "member_role_id": {
+                "type": "integer"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -10046,6 +10073,9 @@
                 "type": "integer"
               },
               "id": {
+                "type": "integer"
+              },
+              "member_role_id": {
                 "type": "integer"
               },
               "user_id": {
@@ -69023,7 +69053,7 @@
   },
   {
     "name": "gitlab_group_protected_branch_get",
-    "description": "Get a single group-level protected branch by name or wildcard. Returns: the protected branch with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id) and force-push and code-owner-approval flags. See also: gitlab_group_protected_branch_list, gitlab_group_protected_branch_update, gitlab_group_protected_branch_unprotect.",
+    "description": "Get a single group-level protected branch by name or wildcard. Returns: the protected branch with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id) and force-push and code-owner-approval flags. See also: gitlab_group_protected_branch_list, gitlab_group_protected_branch_update, gitlab_group_protected_branch_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -69076,6 +69106,9 @@
               "id": {
                 "type": "integer"
               },
+              "member_role_id": {
+                "type": "integer"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -69123,6 +69156,9 @@
               "id": {
                 "type": "integer"
               },
+              "member_role_id": {
+                "type": "integer"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -69156,6 +69192,9 @@
                 "type": "integer"
               },
               "id": {
+                "type": "integer"
+              },
+              "member_role_id": {
                 "type": "integer"
               },
               "user_id": {
@@ -69195,7 +69234,7 @@
   },
   {
     "name": "gitlab_group_protected_branch_list",
-    "description": "List group-level protected branches with search and offset or keyset pagination. Returns: protected branches with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id), force-push and code-owner-approval flags, plus pagination metadata. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_protect, gitlab_group_get.",
+    "description": "List group-level protected branches with search and offset or keyset pagination. Returns: protected branches with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id), force-push and code-owner-approval flags, plus pagination metadata. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_protect, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -69282,6 +69321,9 @@
                     "id": {
                       "type": "integer"
                     },
+                    "member_role_id": {
+                      "type": "integer"
+                    },
                     "user_id": {
                       "type": "integer"
                     }
@@ -69329,6 +69371,9 @@
                     "id": {
                       "type": "integer"
                     },
+                    "member_role_id": {
+                      "type": "integer"
+                    },
                     "user_id": {
                       "type": "integer"
                     }
@@ -69362,6 +69407,9 @@
                       "type": "integer"
                     },
                     "id": {
+                      "type": "integer"
+                    },
+                    "member_role_id": {
                       "type": "integer"
                     },
                     "user_id": {
@@ -69461,7 +69509,7 @@
   },
   {
     "name": "gitlab_group_protected_branch_protect",
-    "description": "Protect a group-level branch or wildcard, optionally with per-user/per-group allowed-to-push, merge, and unprotect entries. Returns: the created protected branch with its push, merge, and unprotect access levels and force-push and code-owner-approval flags. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_update, gitlab_group_protected_branch_unprotect.",
+    "description": "Protect a group-level branch or wildcard, optionally with per-user, per-group or per-custom-role allowed-to-push, merge, and unprotect entries. Returns: the created protected branch with its push, merge, and unprotect access levels and force-push and code-owner-approval flags. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_update, gitlab_group_protected_branch_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -69473,7 +69521,7 @@
           ]
         },
         "allowed_to_merge": {
-          "description": "Users/groups allowed to merge",
+          "description": "Users, groups or custom roles allowed to merge",
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -69507,6 +69555,13 @@
               },
               "id": {
                 "description": "Existing permission ID to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "member_role_id": {
+                "description": "Custom member role ID (Ultimate only)",
                 "type": [
                   "null",
                   "integer"
@@ -69528,7 +69583,7 @@
           ]
         },
         "allowed_to_push": {
-          "description": "Users/groups allowed to push",
+          "description": "Users, groups or custom roles allowed to push",
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -69562,6 +69617,13 @@
               },
               "id": {
                 "description": "Existing permission ID to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "member_role_id": {
+                "description": "Custom member role ID (Ultimate only)",
                 "type": [
                   "null",
                   "integer"
@@ -69583,7 +69645,7 @@
           ]
         },
         "allowed_to_unprotect": {
-          "description": "Users/groups allowed to unprotect",
+          "description": "Users, groups or custom roles allowed to unprotect",
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -69617,6 +69679,13 @@
               },
               "id": {
                 "description": "Existing permission ID to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "member_role_id": {
+                "description": "Custom member role ID (Ultimate only)",
                 "type": [
                   "null",
                   "integer"
@@ -69714,6 +69783,9 @@
               "id": {
                 "type": "integer"
               },
+              "member_role_id": {
+                "type": "integer"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -69761,6 +69833,9 @@
               "id": {
                 "type": "integer"
               },
+              "member_role_id": {
+                "type": "integer"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -69794,6 +69869,9 @@
                 "type": "integer"
               },
               "id": {
+                "type": "integer"
+              },
+              "member_role_id": {
                 "type": "integer"
               },
               "user_id": {
@@ -69906,7 +69984,7 @@
           ]
         },
         "allowed_to_merge": {
-          "description": "Users/groups allowed to merge",
+          "description": "Users, groups or custom roles allowed to merge",
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -69940,6 +70018,13 @@
               },
               "id": {
                 "description": "Existing permission ID to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "member_role_id": {
+                "description": "Custom member role ID (Ultimate only)",
                 "type": [
                   "null",
                   "integer"
@@ -69961,7 +70046,7 @@
           ]
         },
         "allowed_to_push": {
-          "description": "Users/groups allowed to push",
+          "description": "Users, groups or custom roles allowed to push",
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -69995,6 +70080,13 @@
               },
               "id": {
                 "description": "Existing permission ID to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "member_role_id": {
+                "description": "Custom member role ID (Ultimate only)",
                 "type": [
                   "null",
                   "integer"
@@ -70016,7 +70108,7 @@
           ]
         },
         "allowed_to_unprotect": {
-          "description": "Users/groups allowed to unprotect",
+          "description": "Users, groups or custom roles allowed to unprotect",
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -70050,6 +70142,13 @@
               },
               "id": {
                 "description": "Existing permission ID to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "member_role_id": {
+                "description": "Custom member role ID (Ultimate only)",
                 "type": [
                   "null",
                   "integer"
@@ -70130,6 +70229,9 @@
               "id": {
                 "type": "integer"
               },
+              "member_role_id": {
+                "type": "integer"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -70177,6 +70279,9 @@
               "id": {
                 "type": "integer"
               },
+              "member_role_id": {
+                "type": "integer"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -70210,6 +70315,9 @@
                 "type": "integer"
               },
               "id": {
+                "type": "integer"
+              },
+              "member_role_id": {
                 "type": "integer"
               },
               "user_id": {
@@ -206191,6 +206299,9 @@
               "id": {
                 "type": "integer"
               },
+              "member_role_id": {
+                "type": "integer"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -206238,6 +206349,9 @@
               "id": {
                 "type": "integer"
               },
+              "member_role_id": {
+                "type": "integer"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -206271,6 +206385,9 @@
                 "type": "integer"
               },
               "id": {
+                "type": "integer"
+              },
+              "member_role_id": {
                 "type": "integer"
               },
               "user_id": {
@@ -206320,7 +206437,7 @@
           ]
         },
         "allowed_to_merge": {
-          "description": "Fine-grained merge access entries (by user, group, deploy key, or access level)",
+          "description": "Fine-grained merge access entries (by user, group, custom role, deploy key, or access level)",
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -206354,6 +206471,13 @@
               },
               "id": {
                 "description": "ID of an existing access entry to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "member_role_id": {
+                "description": "Grant access to a custom member role by ID (Ultimate only)",
                 "type": [
                   "null",
                   "integer"
@@ -206375,7 +206499,7 @@
           ]
         },
         "allowed_to_push": {
-          "description": "Fine-grained push access entries (by user, group, deploy key, or access level)",
+          "description": "Fine-grained push access entries (by user, group, custom role, deploy key, or access level)",
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -206409,6 +206533,13 @@
               },
               "id": {
                 "description": "ID of an existing access entry to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "member_role_id": {
+                "description": "Grant access to a custom member role by ID (Ultimate only)",
                 "type": [
                   "null",
                   "integer"
@@ -206430,7 +206561,7 @@
           ]
         },
         "allowed_to_unprotect": {
-          "description": "Fine-grained unprotect access entries (by user, group, deploy key, or access level)",
+          "description": "Fine-grained unprotect access entries (by user, group, custom role, deploy key, or access level)",
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -206464,6 +206595,13 @@
               },
               "id": {
                 "description": "ID of an existing access entry to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "member_role_id": {
+                "description": "Grant access to a custom member role by ID (Ultimate only)",
                 "type": [
                   "null",
                   "integer"
@@ -206547,6 +206685,9 @@
               "id": {
                 "type": "integer"
               },
+              "member_role_id": {
+                "type": "integer"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -206594,6 +206735,9 @@
               "id": {
                 "type": "integer"
               },
+              "member_role_id": {
+                "type": "integer"
+              },
               "user_id": {
                 "type": "integer"
               }
@@ -206627,6 +206771,9 @@
                 "type": "integer"
               },
               "id": {
+                "type": "integer"
+              },
+              "member_role_id": {
                 "type": "integer"
               },
               "user_id": {
@@ -206754,6 +206901,9 @@
                     "id": {
                       "type": "integer"
                     },
+                    "member_role_id": {
+                      "type": "integer"
+                    },
                     "user_id": {
                       "type": "integer"
                     }
@@ -206801,6 +206951,9 @@
                     "id": {
                       "type": "integer"
                     },
+                    "member_role_id": {
+                      "type": "integer"
+                    },
                     "user_id": {
                       "type": "integer"
                     }
@@ -206834,6 +206987,9 @@
                       "type": "integer"
                     },
                     "id": {
+                      "type": "integer"
+                    },
+                    "member_role_id": {
                       "type": "integer"
                     },
                     "user_id": {

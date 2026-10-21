@@ -1317,14 +1317,14 @@ func TestFormatProtectedMarkdown(t *testing.T) {
 }
 
 // TestFormatProtectedMarkdown_GranularLevels pins an entry that names one
-// user, group or deploy key rather than a role: the principal is named beside
-// the role the level stands for.
+// user, group, custom member role or deploy key rather than a role: the
+// principal is named beside the role the level stands for.
 func TestFormatProtectedMarkdown_GranularLevels(t *testing.T) {
 	got := FormatProtectedMarkdown(ProtectedOutput{
 		ID:                        7,
 		Name:                      "release/*",
 		PushAccessLevels:          []BranchAccessDescriptionOutput{{AccessLevel: 40, UserID: 3}},
-		MergeAccessLevels:         []BranchAccessDescriptionOutput{{AccessLevel: 30, GroupID: 9}},
+		MergeAccessLevels:         []BranchAccessDescriptionOutput{{AccessLevel: 30, GroupID: 9}, {AccessLevel: 30, MemberRoleID: 12}},
 		UnprotectAccessLevels:     []BranchAccessDescriptionOutput{{AccessLevel: 60, DeployKeyID: 4}},
 		AllowForcePush:            true,
 		CodeOwnerApprovalRequired: true,
@@ -1334,7 +1334,7 @@ func TestFormatProtectedMarkdown_GranularLevels(t *testing.T) {
 	want := "## Protected Branch: release/*\n\n" +
 		"- **ID**: 7\n" +
 		"- **Push Access Levels**: Maintainer (User #3)\n" +
-		"- **Merge Access Levels**: Developer (Group #9)\n" +
+		"- **Merge Access Levels**: Developer (Group #9), Developer (Custom Role #12)\n" +
 		"- **Unprotect Access Levels**: Admin (Deploy Key #4)\n" +
 		"- **Allow Force Push**: ✅\n" +
 		"- **Code Owner Approval Required**: ✅\n" +
@@ -2040,10 +2040,12 @@ func assertCommitLastPipeline(t *testing.T, p *LastPipelineOutput) {
 
 // TestProtectedGet_FullAccessLevelArrays verifies that push/merge/unprotect
 // access-level arrays are surfaced in full (id, access_level, description, and
-// scope ids) rather than collapsed to first-entry scalars.
+// scope ids, the custom member role included) rather than collapsed to
+// first-entry scalars.
 func TestProtectedGet_FullAccessLevelArrays(t *testing.T) {
 	const respJSON = `{"id":1,"name":"main",` +
-		`"push_access_levels":[{"id":11,"access_level":40,"access_level_description":"Maintainers"},{"id":12,"access_level":0,"access_level_description":"u","user_id":7}],` +
+		`"push_access_levels":[{"id":11,"access_level":40,"access_level_description":"Maintainers"},{"id":12,"access_level":0,"access_level_description":"u","user_id":7},` +
+		`{"id":13,"access_level":30,"access_level_description":"Release managers","member_role_id":8}],` +
 		`"merge_access_levels":[{"id":21,"access_level":30,"access_level_description":"Devs","group_id":3}],` +
 		`"unprotect_access_levels":[{"id":31,"access_level":40,"access_level_description":"k","deploy_key_id":5}],` +
 		`"allow_force_push":true,"code_owner_approval_required":false}`
@@ -2059,8 +2061,8 @@ func TestProtectedGet_FullAccessLevelArrays(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ProtectedGet() unexpected error: %v", err)
 	}
-	if len(out.PushAccessLevels) != 2 {
-		t.Fatalf("PushAccessLevels len = %d, want 2", len(out.PushAccessLevels))
+	if len(out.PushAccessLevels) != 3 {
+		t.Fatalf("PushAccessLevels len = %d, want 3", len(out.PushAccessLevels))
 	}
 	if out.PushAccessLevels[0].ID != 11 || out.PushAccessLevels[0].AccessLevel != 40 ||
 		out.PushAccessLevels[0].AccessLevelDescription != "Maintainers" {
@@ -2068,6 +2070,9 @@ func TestProtectedGet_FullAccessLevelArrays(t *testing.T) {
 	}
 	if out.PushAccessLevels[1].UserID != 7 {
 		t.Errorf("push[1].UserID = %d, want 7", out.PushAccessLevels[1].UserID)
+	}
+	if out.PushAccessLevels[2].MemberRoleID != 8 || out.PushAccessLevels[2].UserID != 0 || out.PushAccessLevels[2].GroupID != 0 {
+		t.Errorf("push[2] = %+v, want member_role_id 8 and no user or group", out.PushAccessLevels[2])
 	}
 	if len(out.MergeAccessLevels) != 1 || out.MergeAccessLevels[0].GroupID != 3 {
 		t.Errorf("merge = %+v", out.MergeAccessLevels)
@@ -2432,12 +2437,13 @@ type protectRequest struct {
 // permissionRequest is one allowed_to_{push,merge,unprotect} entry as GitLab
 // receives it.
 type permissionRequest struct {
-	ID          *int64 `json:"id"`
-	UserID      *int64 `json:"user_id"`
-	GroupID     *int64 `json:"group_id"`
-	DeployKeyID *int64 `json:"deploy_key_id"`
-	AccessLevel *int   `json:"access_level"`
-	Destroy     *bool  `json:"_destroy"`
+	ID           *int64 `json:"id"`
+	UserID       *int64 `json:"user_id"`
+	GroupID      *int64 `json:"group_id"`
+	MemberRoleID *int64 `json:"member_role_id"`
+	DeployKeyID  *int64 `json:"deploy_key_id"`
+	AccessLevel  *int   `json:"access_level"`
+	Destroy      *bool  `json:"_destroy"`
 }
 
 // captureProtectRequest runs call against a mock answering method and path with
@@ -2593,12 +2599,13 @@ func TestBranchProtect_AccessLevelsReachTheirOwnFields(t *testing.T) {
 // assertPermissionEntry pins one allowed_to_* entry field by field. Every id
 // the callers below hand it differs from every other, so an entry whose user
 // id was written to the entry id, or whose group id was written to the deploy
-// key, fails here rather than passing on a shared value.
+// key or the custom role, fails here rather than passing on a shared value.
 func assertPermissionEntry(t *testing.T, array string, got, want permissionRequest) {
 	t.Helper()
 	assertOptional(t, array+".id", got.ID, want.ID)
 	assertOptional(t, array+".user_id", got.UserID, want.UserID)
 	assertOptional(t, array+".group_id", got.GroupID, want.GroupID)
+	assertOptional(t, array+".member_role_id", got.MemberRoleID, want.MemberRoleID)
 	assertOptional(t, array+".deploy_key_id", got.DeployKeyID, want.DeployKeyID)
 	assertOptional(t, array+".access_level", got.AccessLevel, want.AccessLevel)
 	assertOptional(t, array+"._destroy", got.Destroy, want.Destroy)
@@ -2643,9 +2650,9 @@ func TestBranchProtect_PermissionEntriesReachTheirOwnArrays(t *testing.T) {
 }
 
 // TestProtectedUpdate_PermissionEntriesReachTheirOwnArrays holds the update
-// path to the same contract, and pins the rename beside it. The deploy key is
-// exercised here rather than on the protect path so all four ways of naming a
-// principal are covered once between the two.
+// path to the same contract, and pins the rename beside it. The deploy key and
+// the custom member role are exercised here rather than on the protect path so
+// all five ways of naming a principal are covered once between the two.
 func TestProtectedUpdate_PermissionEntriesReachTheirOwnArrays(t *testing.T) {
 	got := captureProtectRequest(t, http.MethodPatch, pathProtectedBranches+"/main",
 		`{"id":1,"name":"main-renamed"}`,
@@ -2656,7 +2663,7 @@ func TestProtectedUpdate_PermissionEntriesReachTheirOwnArrays(t *testing.T) {
 				Name:               "main-renamed",
 				AllowedToPush:      []BranchPermissionInput{{DeployKeyID: new(int64(44))}},
 				AllowedToMerge:     []BranchPermissionInput{{GroupID: new(int64(55)), AccessLevel: new(40)}},
-				AllowedToUnprotect: []BranchPermissionInput{{UserID: new(int64(66))}},
+				AllowedToUnprotect: []BranchPermissionInput{{MemberRoleID: new(int64(66))}},
 			})
 			return err
 		})
@@ -2669,7 +2676,7 @@ func TestProtectedUpdate_PermissionEntriesReachTheirOwnArrays(t *testing.T) {
 	assertSingleEntry(t, "allowed_to_merge", got.AllowedToMerge,
 		permissionRequest{GroupID: new(int64(55)), AccessLevel: new(40)})
 	assertSingleEntry(t, "allowed_to_unprotect", got.AllowedToUnprotect,
-		permissionRequest{UserID: new(int64(66))})
+		permissionRequest{MemberRoleID: new(int64(66))})
 }
 
 // ---------------------------------------------------------------------------

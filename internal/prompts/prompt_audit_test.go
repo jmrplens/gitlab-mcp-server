@@ -751,9 +751,10 @@ func TestFormatAccessLevels_NamesTheLevelsThroughTheSharedTable(t *testing.T) {
 	}
 }
 
-// TestFormatBranchAccessLevel_NamesUserAndGroupGrants verifies that a grant to
-// one user or one group is rendered with its id beside the level's name.
-func TestFormatBranchAccessLevel_NamesUserAndGroupGrants(t *testing.T) {
+// TestFormatBranchAccessLevel_NamesEachGrantee verifies that a grant to one
+// user, one group or one custom member role is rendered with its id beside the
+// level's name.
+func TestFormatBranchAccessLevel_NamesEachGrantee(t *testing.T) {
 	tests := []struct {
 		name  string
 		level *gl.BranchAccessDescription
@@ -773,6 +774,11 @@ func TestFormatBranchAccessLevel_NamesUserAndGroupGrants(t *testing.T) {
 			name:  "group grant",
 			level: &gl.BranchAccessDescription{AccessLevel: gl.ReporterPermissions, GroupID: 3},
 			want:  "Group #3 (Reporter)",
+		},
+		{
+			name:  "custom role grant",
+			level: &gl.BranchAccessDescription{AccessLevel: gl.DeveloperPermissions, MemberRoleID: 12},
+			want:  "Custom role #12 (Developer)",
 		},
 	}
 	for _, tc := range tests {

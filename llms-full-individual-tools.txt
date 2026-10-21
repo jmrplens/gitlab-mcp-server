@@ -788,9 +788,9 @@ Protect a branch or wildcard with push/merge/unprotect access levels and optiona
 **Parameters:**
 
 - `allow_force_push` (boolean): Allow force push to this branch
-- `allowed_to_merge` (array of objects): Fine-grained merge access entries (by user, group, deploy key, or access level)
-- `allowed_to_push` (array of objects): Fine-grained push access entries (by user, group, deploy key, or access level)
-- `allowed_to_unprotect` (array of objects): Fine-grained unprotect access entries (by user, group, deploy key, or access level)
+- `allowed_to_merge` (array of objects): Fine-grained merge access entries (by user, group, custom role, deploy key, or access level)
+- `allowed_to_push` (array of objects): Fine-grained push access entries (by user, group, custom role, deploy key, or access level)
+- `allowed_to_unprotect` (array of objects): Fine-grained unprotect access entries (by user, group, custom role, deploy key, or access level)
 - `branch_name` (string) (required): Branch name or wildcard (e.g. 'main' or 'release/*')
 - `code_owner_approval_required` (boolean): Require CODEOWNERS approval for changes to matching files
 - `merge_access_level` (integer): Access level for merge: 0=No access, 30=Developer, 40=Maintainer, 60=Admin (GitLab Self-Managed only). Use an integer.
@@ -5577,7 +5577,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_protected_branch_get
 
-Get a single group-level protected branch by name or wildcard. Returns: the protected branch with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id) and force-push and code-owner-approval flags. See also: gitlab_group_protected_branch_list, gitlab_group_protected_branch_update, gitlab_group_protected_branch_unprotect.
+Get a single group-level protected branch by name or wildcard. Returns: the protected branch with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id) and force-push and code-owner-approval flags. See also: gitlab_group_protected_branch_list, gitlab_group_protected_branch_update, gitlab_group_protected_branch_unprotect.
 
 **Parameters:**
 
@@ -5588,7 +5588,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_protected_branch_list
 
-List group-level protected branches with search and offset or keyset pagination. Returns: protected branches with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id), force-push and code-owner-approval flags, plus pagination metadata. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_protect, gitlab_group_get.
+List group-level protected branches with search and offset or keyset pagination. Returns: protected branches with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id), force-push and code-owner-approval flags, plus pagination metadata. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_protect, gitlab_group_get.
 
 **Parameters:**
 
@@ -5605,14 +5605,14 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_protected_branch_protect
 
-Protect a group-level branch or wildcard, optionally with per-user/per-group allowed-to-push, merge, and unprotect entries. Returns: the created protected branch with its push, merge, and unprotect access levels and force-push and code-owner-approval flags. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_update, gitlab_group_protected_branch_unprotect.
+Protect a group-level branch or wildcard, optionally with per-user, per-group or per-custom-role allowed-to-push, merge, and unprotect entries. Returns: the created protected branch with its push, merge, and unprotect access levels and force-push and code-owner-approval flags. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_update, gitlab_group_protected_branch_unprotect.
 
 **Parameters:**
 
 - `allow_force_push` (boolean): Allow force push
-- `allowed_to_merge` (array of objects): Users/groups allowed to merge
-- `allowed_to_push` (array of objects): Users/groups allowed to push
-- `allowed_to_unprotect` (array of objects): Users/groups allowed to unprotect
+- `allowed_to_merge` (array of objects): Users, groups or custom roles allowed to merge
+- `allowed_to_push` (array of objects): Users, groups or custom roles allowed to push
+- `allowed_to_unprotect` (array of objects): Users, groups or custom roles allowed to unprotect
 - `code_owner_approval_required` (boolean): Require code owner approval
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `merge_access_level` (integer): Merge access level (0=No access, 30=Developer, 40=Maintainer, 60=Admin)
@@ -5641,9 +5641,9 @@ Update a group-level protected branch, adding or removing (_destroy) allowed-to-
 **Parameters:**
 
 - `allow_force_push` (boolean): Allow force push
-- `allowed_to_merge` (array of objects): Users/groups allowed to merge
-- `allowed_to_push` (array of objects): Users/groups allowed to push
-- `allowed_to_unprotect` (array of objects): Users/groups allowed to unprotect
+- `allowed_to_merge` (array of objects): Users, groups or custom roles allowed to merge
+- `allowed_to_push` (array of objects): Users, groups or custom roles allowed to push
+- `allowed_to_unprotect` (array of objects): Users, groups or custom roles allowed to unprotect
 - `branch` (string) (required): Branch name or wildcard
 - `code_owner_approval_required` (boolean): Require code owner approval
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
@@ -13096,9 +13096,9 @@ Update an existing protected branch rule: allow-force-push, CODEOWNERS approval,
 **Parameters:**
 
 - `allow_force_push` (boolean): Allow force push to this branch
-- `allowed_to_merge` (array of objects): Fine-grained merge access entries (by user, group, deploy key, or access level)
-- `allowed_to_push` (array of objects): Fine-grained push access entries (by user, group, deploy key, or access level)
-- `allowed_to_unprotect` (array of objects): Fine-grained unprotect access entries (by user, group, deploy key, or access level)
+- `allowed_to_merge` (array of objects): Fine-grained merge access entries (by user, group, custom role, deploy key, or access level)
+- `allowed_to_push` (array of objects): Fine-grained push access entries (by user, group, custom role, deploy key, or access level)
+- `allowed_to_unprotect` (array of objects): Fine-grained unprotect access entries (by user, group, custom role, deploy key, or access level)
 - `branch_name` (string) (required): Name of the protected branch to update
 - `code_owner_approval_required` (boolean): Require CODEOWNERS approval
 - `name` (string): New name or wildcard for the protected branch rule (rename)

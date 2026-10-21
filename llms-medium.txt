@@ -859,7 +859,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_group_projects: List the projects in a GitLab group.
 - gitlab_group_protected_branch_get: Get a single group-level protected branch by name or wildcard.
 - gitlab_group_protected_branch_list: List group-level protected branches with search and offset or keyset pagination.
-- gitlab_group_protected_branch_protect: Protect a group-level branch or wildcard, optionally with per-user/per-group allowed-to-push, merge, and unprotect entries.
+- gitlab_group_protected_branch_protect: Protect a group-level branch or wildcard, optionally with per-user, per-group or per-custom-role allowed-to-push, merge, and unprotect entries.
 - gitlab_group_protected_branch_unprotect: Unprotect a group-level branch, cascading the removal to all subgroup projects.
 - gitlab_group_protected_branch_update: Update a group-level protected branch, adding or removing (_destroy) allowed-to-push, merge, and unprotect entries.
 - gitlab_group_protected_environment_get: Get a single group-level protected environment by tier name.

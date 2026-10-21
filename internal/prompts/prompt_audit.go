@@ -232,6 +232,9 @@ func formatBranchAccessLevel(al *gl.BranchAccessDescription) string {
 	if al.GroupID != 0 {
 		return fmt.Sprintf("Group #%d (%s)", al.GroupID, name)
 	}
+	if al.MemberRoleID != 0 {
+		return fmt.Sprintf("Custom role #%d (%s)", al.MemberRoleID, name)
+	}
 	return name
 }
 

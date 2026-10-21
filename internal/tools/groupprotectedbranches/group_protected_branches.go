@@ -10,7 +10,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// AccessLevelOutput represents an access description for a group protected branch.
+// AccessLevelOutput represents an access description for a group protected
+// branch. GitLab sends member_role_id on an entry that grants a custom role,
+// which needs an Ultimate license (ee/lib/ee/api/entities/protected_ref_access.rb).
 type AccessLevelOutput struct {
 	ID                     int64  `json:"id"`
 	AccessLevel            int    `json:"access_level"`
@@ -18,6 +20,7 @@ type AccessLevelOutput struct {
 	DeployKeyID            int64  `json:"deploy_key_id,omitempty"`
 	UserID                 int64  `json:"user_id,omitempty"`
 	GroupID                int64  `json:"group_id,omitempty"`
+	MemberRoleID           int64  `json:"member_role_id,omitempty" tier:"ultimate"`
 }
 
 // Output represents a single group-level protected branch.
@@ -49,6 +52,7 @@ func toAccessLevels(src []*gl.GroupBranchAccessDescription) []AccessLevelOutput 
 			DeployKeyID:            a.DeployKeyID,
 			UserID:                 a.UserID,
 			GroupID:                a.GroupID,
+			MemberRoleID:           a.MemberRoleID,
 		}
 	}
 	return out
@@ -66,14 +70,17 @@ func toOutput(b *gl.GroupProtectedBranch) Output {
 	}
 }
 
-// BranchPermissionInput represents a permission entry for protect/update operations.
+// BranchPermissionInput represents a permission entry for protect/update
+// operations. A custom member role needs an Ultimate license
+// (doc/api/group_protected_branches.md).
 type BranchPermissionInput struct {
-	ID          *int64 `json:"id,omitempty"           jsonschema:"Existing permission ID to update"`
-	UserID      *int64 `json:"user_id,omitempty"      jsonschema:"User ID"`
-	GroupID     *int64 `json:"group_id,omitempty"     jsonschema:"Group ID"`
-	DeployKeyID *int64 `json:"deploy_key_id,omitempty" jsonschema:"Deploy key ID"`
-	AccessLevel *int   `json:"access_level,omitempty" jsonschema:"Access level (0=No access, 30=Developer, 40=Maintainer, 60=Admin)"`
-	Destroy     *bool  `json:"_destroy,omitempty"     jsonschema:"Set true to remove this permission"`
+	ID           *int64 `json:"id,omitempty"             jsonschema:"Existing permission ID to update"`
+	UserID       *int64 `json:"user_id,omitempty"        jsonschema:"User ID"`
+	GroupID      *int64 `json:"group_id,omitempty"       jsonschema:"Group ID"`
+	MemberRoleID *int64 `json:"member_role_id,omitempty" jsonschema:"Custom member role ID (Ultimate only)" tier:"ultimate"`
+	DeployKeyID  *int64 `json:"deploy_key_id,omitempty"  jsonschema:"Deploy key ID"`
+	AccessLevel  *int   `json:"access_level,omitempty"   jsonschema:"Access level (0=No access, 30=Developer, 40=Maintainer, 60=Admin)"`
+	Destroy      *bool  `json:"_destroy,omitempty"       jsonschema:"Set true to remove this permission"`
 }
 
 // ListInput defines parameters for the List action which retrieves group-level
@@ -103,9 +110,9 @@ type ProtectInput struct {
 	UnprotectAccessLevel      *int                    `json:"unprotect_access_level,omitempty"    jsonschema:"Unprotect access level (30=Developer, 40=Maintainer, 60=Admin on GitLab Self-Managed). 0 (No access) is not valid here"`
 	AllowForcePush            *bool                   `json:"allow_force_push,omitempty"          jsonschema:"Allow force push"`
 	CodeOwnerApprovalRequired *bool                   `json:"code_owner_approval_required,omitempty" jsonschema:"Require code owner approval"`
-	AllowedToPush             []BranchPermissionInput `json:"allowed_to_push,omitempty"           jsonschema:"Users/groups allowed to push"`
-	AllowedToMerge            []BranchPermissionInput `json:"allowed_to_merge,omitempty"          jsonschema:"Users/groups allowed to merge"`
-	AllowedToUnprotect        []BranchPermissionInput `json:"allowed_to_unprotect,omitempty"      jsonschema:"Users/groups allowed to unprotect"`
+	AllowedToPush             []BranchPermissionInput `json:"allowed_to_push,omitempty"           jsonschema:"Users, groups or custom roles allowed to push"`
+	AllowedToMerge            []BranchPermissionInput `json:"allowed_to_merge,omitempty"          jsonschema:"Users, groups or custom roles allowed to merge"`
+	AllowedToUnprotect        []BranchPermissionInput `json:"allowed_to_unprotect,omitempty"      jsonschema:"Users, groups or custom roles allowed to unprotect"`
 }
 
 // UpdateInput defines parameters for the Update action which modifies a group-level protected branch rule.
@@ -115,9 +122,9 @@ type UpdateInput struct {
 	Name                      string                  `json:"name,omitempty"                      jsonschema:"New branch name or wildcard"`
 	AllowForcePush            *bool                   `json:"allow_force_push,omitempty"          jsonschema:"Allow force push"`
 	CodeOwnerApprovalRequired *bool                   `json:"code_owner_approval_required,omitempty" jsonschema:"Require code owner approval"`
-	AllowedToPush             []BranchPermissionInput `json:"allowed_to_push,omitempty"           jsonschema:"Users/groups allowed to push"`
-	AllowedToMerge            []BranchPermissionInput `json:"allowed_to_merge,omitempty"          jsonschema:"Users/groups allowed to merge"`
-	AllowedToUnprotect        []BranchPermissionInput `json:"allowed_to_unprotect,omitempty"      jsonschema:"Users/groups allowed to unprotect"`
+	AllowedToPush             []BranchPermissionInput `json:"allowed_to_push,omitempty"           jsonschema:"Users, groups or custom roles allowed to push"`
+	AllowedToMerge            []BranchPermissionInput `json:"allowed_to_merge,omitempty"          jsonschema:"Users, groups or custom roles allowed to merge"`
+	AllowedToUnprotect        []BranchPermissionInput `json:"allowed_to_unprotect,omitempty"      jsonschema:"Users, groups or custom roles allowed to unprotect"`
 }
 
 // UnprotectInput defines parameters for the Unprotect action which removes a group-level protected branch rule.
@@ -133,11 +140,12 @@ func toBranchPermissions(input []BranchPermissionInput) *[]*gl.GroupBranchPermis
 	perms := make([]*gl.GroupBranchPermissionOptions, len(input))
 	for i, p := range input {
 		o := &gl.GroupBranchPermissionOptions{
-			ID:          p.ID,
-			UserID:      p.UserID,
-			GroupID:     p.GroupID,
-			DeployKeyID: p.DeployKeyID,
-			Destroy:     p.Destroy,
+			ID:           p.ID,
+			UserID:       p.UserID,
+			GroupID:      p.GroupID,
+			MemberRoleID: p.MemberRoleID,
+			DeployKeyID:  p.DeployKeyID,
+			Destroy:      p.Destroy,
 		}
 		if p.AccessLevel != nil {
 			v := gl.AccessLevelValue(*p.AccessLevel)
