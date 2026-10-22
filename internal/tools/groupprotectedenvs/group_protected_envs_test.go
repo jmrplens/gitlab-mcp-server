@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -295,6 +298,7 @@ func TestProtect(t *testing.T) {
 	groupID := int64(20)
 	inheritType := int64(1)
 	approvals := int64(2)
+	maintainers := []DeployAccessLevelInput{{AccessLevel: &accessLevel40}}
 
 	tests := []struct {
 		name      string
@@ -306,11 +310,11 @@ func TestProtect(t *testing.T) {
 	}{
 		{
 			name:  "creates protected environment with minimal input",
-			input: ProtectInput{GroupID: "mygroup", Name: "staging"},
+			input: ProtectInput{GroupID: "mygroup", Name: "staging", DeployAccessLevels: maintainers},
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertRequestMethod(t, r, http.MethodPost)
 				testutil.AssertRequestPath(t, r, pathGroupProtEnvs)
-				testutil.RespondJSON(w, http.StatusCreated, `{"name":"staging","deploy_access_levels":[],"required_approval_count":0,"approval_rules":[]}`)
+				testutil.RespondJSON(w, http.StatusCreated, `{"name":"staging","deploy_access_levels":[{"id":1,"access_level":40}],"required_approval_count":0,"approval_rules":[]}`)
 			}),
 			wantName: "staging",
 		},
@@ -320,9 +324,10 @@ func TestProtect(t *testing.T) {
 				GroupID: "mygroup",
 				Name:    "production",
 				DeployAccessLevels: []DeployAccessLevelInput{
-					{AccessLevel: &accessLevel40, UserID: &userID, GroupID: &groupID, GroupInheritanceType: &inheritType},
+					{AccessLevel: &accessLevel40},
+					{UserID: &userID},
+					{GroupID: &groupID, GroupInheritanceType: &inheritType},
 				},
-				RequiredApprovalCount: &approvals,
 				ApprovalRules: []ApprovalRuleInput{
 					{AccessLevel: &accessLevel30, UserID: &userID, GroupID: &groupID, RequiredApprovalCount: &approvals, GroupInheritanceType: &inheritType},
 				},
@@ -334,7 +339,7 @@ func TestProtect(t *testing.T) {
 		},
 		{
 			name:  "returns error on API 403",
-			input: ProtectInput{GroupID: "mygroup", Name: "staging"},
+			input: ProtectInput{GroupID: "mygroup", Name: "staging", DeployAccessLevels: maintainers},
 			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 			}),
@@ -391,7 +396,7 @@ func TestProtect_InvalidTierIncludesActionableHint(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":["Name must be one of environment tiers: production, staging, testing, development, other."]}`)
 	}))
 
-	_, err := Protect(context.Background(), client, ProtectInput{GroupID: "mygroup", Name: "production-123"})
+	_, err := Protect(context.Background(), client, ProtectInput{GroupID: "mygroup", Name: "production-123", DeployAccessLevels: []DeployAccessLevelInput{{AccessLevel: new(40)}}})
 	if err == nil {
 		t.Fatal("Protect() error = nil, want invalid tier error")
 	}
@@ -418,8 +423,7 @@ func TestProtect_RequestBody_NamesEveryRuleFieldTheWayGitLabDoes(t *testing.T) {
 	deployUserID, ruleUserID := int64(10), int64(11)
 	deployGroupID, ruleGroupID := int64(20), int64(21)
 	inheritedMembers, directMembers := int64(1), int64(0)
-	approvalCount, ruleApprovals := int64(2), int64(1)
-	description := "Developers"
+	approvalCount, ruleApprovals := int64(0), int64(1)
 
 	tests := []struct {
 		name  string
@@ -431,31 +435,29 @@ func TestProtect_RequestBody_NamesEveryRuleFieldTheWayGitLabDoes(t *testing.T) {
 			input: ProtectInput{
 				GroupID: "mygroup",
 				Name:    "production",
-				DeployAccessLevels: []DeployAccessLevelInput{{
-					AccessLevel:          &accessLevel40,
-					UserID:               &deployUserID,
-					GroupID:              &deployGroupID,
-					GroupInheritanceType: &inheritedMembers,
-				}},
+				DeployAccessLevels: []DeployAccessLevelInput{
+					{AccessLevel: &accessLevel40},
+					{UserID: &deployUserID},
+					{GroupID: &deployGroupID, GroupInheritanceType: &inheritedMembers},
+				},
 				RequiredApprovalCount: &approvalCount,
 				ApprovalRules: []ApprovalRuleInput{{
-					AccessLevel:            &accessLevel30,
-					UserID:                 &ruleUserID,
-					GroupID:                &ruleGroupID,
-					AccessLevelDescription: &description,
-					RequiredApprovalCount:  &ruleApprovals,
-					GroupInheritanceType:   &directMembers,
+					AccessLevel:           &accessLevel30,
+					UserID:                &ruleUserID,
+					GroupID:               &ruleGroupID,
+					RequiredApprovalCount: &ruleApprovals,
+					GroupInheritanceType:  &directMembers,
 				}},
 			},
-			want: `{"approval_rules":[{"access_level":30,"access_level_description":"Developers",` +
+			want: `{"approval_rules":[{"access_level":30,` +
 				`"group_id":21,"group_inheritance_type":0,"required_approvals":1,"user_id":11}],` +
-				`"deploy_access_levels":[{"access_level":40,"group_id":20,"group_inheritance_type":1,"user_id":10}],` +
-				`"name":"production","required_approval_count":2}`,
+				`"deploy_access_levels":[{"access_level":40},{"user_id":10},{"group_id":20,"group_inheritance_type":1}],` +
+				`"name":"production","required_approval_count":0}`,
 		},
 		{
-			name:  "omits a rule collection the caller left empty instead of sending an empty array",
-			input: ProtectInput{GroupID: "mygroup", Name: "staging"},
-			want:  `{"name":"staging"}`,
+			name:  "omits the approval rules the caller left out instead of sending an empty array",
+			input: ProtectInput{GroupID: "mygroup", Name: "staging", DeployAccessLevels: []DeployAccessLevelInput{{AccessLevel: &accessLevel40}}},
+			want:  `{"deploy_access_levels":[{"access_level":40}],"name":"staging"}`,
 		},
 		{
 			name: "omits access_level for a rule that names a user rather than granting a role",
@@ -496,12 +498,49 @@ func TestProtect_Refused_CarriesTheTierHintOnEveryValidationStatus(t *testing.T)
 				testutil.RespondJSON(w, status, `{"message":"Name must be one of environment tiers"}`)
 			}))
 
-			_, err := Protect(context.Background(), client, ProtectInput{GroupID: "mygroup", Name: "production-123"})
+			_, err := Protect(context.Background(), client, ProtectInput{GroupID: "mygroup", Name: "production-123", DeployAccessLevels: []DeployAccessLevelInput{{AccessLevel: new(40)}}})
 			if err == nil {
 				t.Fatalf("Protect() error = nil, want a %d refusal", status)
 			}
 			if !strings.Contains(err.Error(), "valid group protected environment tiers") {
 				t.Errorf("Protect() on %d = %q, want the tier hint", status, err)
+			}
+		})
+	}
+}
+
+// TestProtect_NoDeployAccessLevelLeft_HintSaysWhichEntriesGitLabKeeps asserts
+// what the hint says about the 422 GitLab answers once it has dropped every
+// deploy access level. ProtectedEnvironments::BaseService drops, without a
+// word, an entry whose user is not a Maintainer or Owner of the group or
+// whose group is neither the group, one of its subgroups nor a group it is
+// shared with, and the model then refuses a protect with no deploy access
+// level left. The role and the license are refused with neither status, so
+// the hint names neither.
+func TestProtect_NoDeployAccessLevelLeft_HintSaysWhichEntriesGitLabKeeps(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":["Deploy access levels is too short (minimum is 1 character)"]}`)
+	}))
+
+	_, err := Protect(context.Background(), client, ProtectInput{GroupID: "mygroup", Name: "production", DeployAccessLevels: []DeployAccessLevelInput{{UserID: new(int64(5))}}})
+	if err == nil {
+		t.Fatal("Protect() error = nil, want the 422 refusal")
+	}
+	got := err.Error()
+	for _, tc := range []struct {
+		text string
+		want bool
+	}{
+		{text: "a user_id must name a Maintainer or Owner of the group and a group_id the group, one of its subgroups or a group it is shared with", want: true},
+		{text: "GitLab drops any other entry and refuses a protect left with no deploy access level", want: true},
+		{text: "Owner +"},
+		{text: "Premium"},
+		{text: "Ultimate"},
+		{text: "that exists"},
+	} {
+		t.Run(tc.text, func(t *testing.T) {
+			if strings.Contains(got, tc.text) != tc.want {
+				t.Errorf("Protect() error = %q, contains %q: %t, want %t", got, tc.text, !tc.want, tc.want)
 			}
 		})
 	}
@@ -515,7 +554,7 @@ func TestProtect_Refused_CarriesTheTierHintOnEveryValidationStatus(t *testing.T)
 func TestUpdate(t *testing.T) {
 	accessLevel40 := 40
 	accessLevel30 := 30
-	count := int64(3)
+	count := int64(0)
 	id := int64(1)
 	userID := int64(10)
 	groupID := int64(20)
@@ -532,14 +571,14 @@ func TestUpdate(t *testing.T) {
 		cancelCtx bool
 	}{
 		{
-			name:  "updates approval count",
+			name:  "sends the deprecated approval count at 0",
 			input: UpdateInput{GroupID: "mygroup", Environment: "production", RequiredApprovalCount: &count},
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertRequestMethod(t, r, http.MethodPut)
 				testutil.AssertRequestPath(t, r, pathGroupProtEnv)
-				testutil.RespondJSON(w, http.StatusOK, `{"name":"production","deploy_access_levels":[],"required_approval_count":3,"approval_rules":[]}`)
+				testutil.RespondJSON(w, http.StatusOK, `{"name":"production","deploy_access_levels":[],"required_approval_count":0,"approval_rules":[{"id":5,"user_id":11,"required_approvals":3}]}`)
 			}),
-			wantCount: 3,
+			wantCount: 0,
 		},
 		{
 			name: "updates with new name and deploy access levels and approval rules",
@@ -548,7 +587,9 @@ func TestUpdate(t *testing.T) {
 				Environment: "production",
 				Name:        "prod-v2",
 				DeployAccessLevels: []UpdateDeployAccessLevelInput{
-					{ID: &id, AccessLevel: &accessLevel40, UserID: &userID, GroupID: &groupID, GroupInheritanceType: &inheritType, Destroy: &destroy},
+					{ID: &id, AccessLevel: &accessLevel40, GroupInheritanceType: &inheritType, Destroy: &destroy},
+					{UserID: &userID},
+					{GroupID: &groupID},
 				},
 				ApprovalRules: []UpdateApprovalRuleInput{
 					{ID: &id, AccessLevel: &accessLevel30, UserID: &userID, GroupID: &groupID, RequiredApprovalCount: &approvals, GroupInheritanceType: &inheritType, Destroy: &destroy},
@@ -645,8 +686,7 @@ func TestUpdate_RequestBody_NamesEveryRuleFieldTheWayGitLabDoes(t *testing.T) {
 	deployUserID, ruleUserID := int64(10), int64(11)
 	deployGroupID, ruleGroupID := int64(20), int64(21)
 	inheritedMembers, directMembers := int64(1), int64(0)
-	approvalCount, ruleApprovals := int64(2), int64(1)
-	description := "Developers"
+	approvalCount, ruleApprovals := int64(0), int64(1)
 	destroy := true
 
 	tests := []struct {
@@ -660,35 +700,31 @@ func TestUpdate_RequestBody_NamesEveryRuleFieldTheWayGitLabDoes(t *testing.T) {
 				GroupID:     "mygroup",
 				Environment: "production",
 				Name:        "staging",
-				DeployAccessLevels: []UpdateDeployAccessLevelInput{{
-					ID:                   &deployID,
-					AccessLevel:          &accessLevel40,
-					UserID:               &deployUserID,
-					GroupID:              &deployGroupID,
-					GroupInheritanceType: &inheritedMembers,
-					Destroy:              &destroy,
-				}},
+				DeployAccessLevels: []UpdateDeployAccessLevelInput{
+					{ID: &deployID, AccessLevel: &accessLevel40, Destroy: &destroy},
+					{UserID: &deployUserID},
+					{GroupID: &deployGroupID, GroupInheritanceType: &inheritedMembers},
+				},
 				RequiredApprovalCount: &approvalCount,
 				ApprovalRules: []UpdateApprovalRuleInput{{
-					ID:                     &ruleID,
-					AccessLevel:            &accessLevel30,
-					UserID:                 &ruleUserID,
-					GroupID:                &ruleGroupID,
-					AccessLevelDescription: &description,
-					RequiredApprovalCount:  &ruleApprovals,
-					GroupInheritanceType:   &directMembers,
-					Destroy:                &destroy,
+					ID:                    &ruleID,
+					AccessLevel:           &accessLevel30,
+					UserID:                &ruleUserID,
+					GroupID:               &ruleGroupID,
+					RequiredApprovalCount: &ruleApprovals,
+					GroupInheritanceType:  &directMembers,
+					Destroy:               &destroy,
 				}},
 			},
-			want: `{"approval_rules":[{"_destroy":true,"access_level":30,"access_level_description":"Developers",` +
+			want: `{"approval_rules":[{"_destroy":true,"access_level":30,` +
 				`"group_id":21,"group_inheritance_type":0,"id":5,"required_approvals":1,"user_id":11}],` +
-				`"deploy_access_levels":[{"_destroy":true,"access_level":40,"group_id":20,` +
-				`"group_inheritance_type":1,"id":1,"user_id":10}],"name":"staging","required_approval_count":2}`,
+				`"deploy_access_levels":[{"_destroy":true,"access_level":40,"id":1},{"user_id":10},` +
+				`{"group_id":20,"group_inheritance_type":1}],"name":"staging","required_approval_count":0}`,
 		},
 		{
-			name:  "omits name and both rule collections when the caller only changes the approval count",
+			name:  "omits name and both rule collections when the caller only sends the approval count",
 			input: UpdateInput{GroupID: "mygroup", Environment: "production", RequiredApprovalCount: &approvalCount},
-			want:  `{"required_approval_count":2}`,
+			want:  `{"required_approval_count":0}`,
 		},
 		{
 			name: "omits access_level for a rule that names a user rather than granting a role",
@@ -735,6 +771,131 @@ func TestUpdate_Refused_CarriesTheEnvironmentHintOnEveryStatusItAnswersFor(t *te
 			}
 			if !strings.Contains(err.Error(), "partial updates merge with existing rules") {
 				t.Errorf("Update() on %d = %q, want the environment hint", status, err)
+			}
+		})
+	}
+}
+
+// countingClient returns a client whose mock GitLab counts the requests it is
+// sent into requests and answers each with fullEnvJSON.
+func countingClient(t *testing.T, requests *atomic.Int32) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		testutil.RespondJSON(w, http.StatusOK, fullEnvJSON)
+	}))
+}
+
+// TestProtect_EntriesGitLabRefuses_AreRefusedBeforeAnythingIsSent verifies
+// that a group protect GitLab would refuse for its entries is refused here,
+// with the entry and the rule it breaks named, and that nothing reaches
+// GitLab. The meta and the dynamic surfaces hand a call to the handler as it
+// came, so this is the one check those surfaces have, and find's example used
+// to send a deploy access level naming nothing (issue 1271).
+func TestProtect_EntriesGitLabRefuses_AreRefusedBeforeAnythingIsSent(t *testing.T) {
+	maintainers := []DeployAccessLevelInput{{AccessLevel: new(40)}}
+	cases := []struct {
+		name  string
+		input ProtectInput
+		want  string
+	}{
+		{name: "no deploy access level", input: ProtectInput{}, want: "deploy_access_levels needs at least one entry"},
+		{name: "an entry naming nothing", input: ProtectInput{DeployAccessLevels: []DeployAccessLevelInput{{GroupInheritanceType: new(int64(1))}}}, want: "deploy_access_levels[0] names none of access_level, user_id or group_id"},
+		{name: "an entry naming all three", input: ProtectInput{DeployAccessLevels: []DeployAccessLevelInput{{AccessLevel: new(40), UserID: new(int64(10)), GroupID: new(int64(20))}}}, want: "deploy_access_levels[0] names access_level, user_id and group_id"},
+		{name: "No access", input: ProtectInput{DeployAccessLevels: []DeployAccessLevelInput{{AccessLevel: new(0)}}}, want: "deploy_access_levels[0] grants access_level 0"},
+		{name: "an approval rule naming nothing", input: ProtectInput{DeployAccessLevels: maintainers, ApprovalRules: []ApprovalRuleInput{{RequiredApprovalCount: new(int64(1))}}}, want: "approval_rules[0] names none of access_level, user_id or group_id"},
+		{name: "six approvals", input: ProtectInput{DeployAccessLevels: maintainers, ApprovalRules: []ApprovalRuleInput{{UserID: new(int64(11)), RequiredApprovalCount: new(int64(6))}}}, want: "approval_rules[0] asks for 6 required_approvals"},
+		{name: "the deprecated count", input: ProtectInput{DeployAccessLevels: maintainers, RequiredApprovalCount: new(int64(2))}, want: "required_approval_count is deprecated"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests atomic.Int32
+			input := tc.input
+			input.GroupID, input.Name = "mygroup", "production"
+
+			_, err := Protect(context.Background(), countingClient(t, &requests), input)
+			if err == nil || !strings.HasPrefix(err.Error(), "protectGroupEnvironment: ") || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("Protect() error = %v, want the protect refusal saying %q", err, tc.want)
+			}
+			if got := requests.Load(); got != 0 {
+				t.Errorf("Protect() sent %d requests, want none", got)
+			}
+		})
+	}
+}
+
+// TestUpdate_EntriesGitLabRefuses_AreRefusedBeforeAnythingIsSent is the
+// protect test's counterpart for an update, whose entries may name an
+// existing one by its id: a deploy access level naming neither an id nor a
+// grantee, or two grantees, and an approval rule naming no grantee without
+// _destroy, are refused, and nothing reaches GitLab.
+func TestUpdate_EntriesGitLabRefuses_AreRefusedBeforeAnythingIsSent(t *testing.T) {
+	cases := []struct {
+		name  string
+		input UpdateInput
+		want  string
+	}{
+		{name: "a new entry naming nothing", input: UpdateInput{DeployAccessLevels: []UpdateDeployAccessLevelInput{{GroupInheritanceType: new(int64(0))}}}, want: "deploy_access_levels[0] names neither an existing entry by id nor one of access_level, user_id or group_id"},
+		{name: "an existing entry naming a user and a group", input: UpdateInput{DeployAccessLevels: []UpdateDeployAccessLevelInput{{ID: new(int64(1)), UserID: new(int64(10)), GroupID: new(int64(20))}}}, want: "deploy_access_levels[0] names user_id and group_id"},
+		{name: "an existing approval rule naming nothing", input: UpdateInput{ApprovalRules: []UpdateApprovalRuleInput{{ID: new(int64(5)), RequiredApprovalCount: new(int64(2))}}}, want: "approval_rules[0] names none of access_level, user_id or group_id, and a rule names at least one unless _destroy is true"},
+		{name: "an approval inheritance GitLab does not take", input: UpdateInput{ApprovalRules: []UpdateApprovalRuleInput{{ID: new(int64(5)), GroupID: new(int64(21)), GroupInheritanceType: new(int64(2))}}}, want: "approval_rules[0] sets group_inheritance_type 2"},
+		{name: "the deprecated count", input: UpdateInput{RequiredApprovalCount: new(int64(3))}, want: "required_approval_count is deprecated"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests atomic.Int32
+			input := tc.input
+			input.GroupID, input.Environment = "mygroup", "production"
+
+			_, err := Update(context.Background(), countingClient(t, &requests), input)
+			if err == nil || !strings.HasPrefix(err.Error(), "updateGroupProtectedEnvironment: ") || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("Update() error = %v, want the update refusal saying %q", err, tc.want)
+			}
+			if got := requests.Load(); got != 0 {
+				t.Errorf("Update() sent %d requests, want none", got)
+			}
+		})
+	}
+}
+
+// TestEntryShapes_AnswerEveryFieldTheChecksRead verifies that each of the
+// four entry shapes hands the checks every field it carries, under the field
+// it is: a shape that answered a user as a group would pass an entry naming a
+// user and a group, which GitLab refuses, and one that dropped the id would
+// refuse an existing entry named by it alone.
+func TestEntryShapes_AnswerEveryFieldTheChecksRead(t *testing.T) {
+	id, user, group, inheritance, approvals, destroy := new(int64(1)), new(int64(2)), new(int64(3)), new(int64(1)), new(int64(4)), new(true)
+	level := new(30)
+	cases := []struct {
+		name string
+		got  toolutil.EnvironmentAccess
+		want toolutil.EnvironmentAccess
+	}{
+		{
+			name: "a deploy access level to protect with",
+			got:  DeployAccessLevelInput{AccessLevel: level, UserID: user, GroupID: group, GroupInheritanceType: inheritance}.EnvironmentAccess(),
+			want: toolutil.EnvironmentAccess{AccessLevel: level, UserID: user, GroupID: group, GroupInheritanceType: inheritance},
+		},
+		{
+			name: "an approval rule to protect with",
+			got:  ApprovalRuleInput{AccessLevel: level, UserID: user, GroupID: group, GroupInheritanceType: inheritance, RequiredApprovalCount: approvals}.EnvironmentAccess(),
+			want: toolutil.EnvironmentAccess{AccessLevel: level, UserID: user, GroupID: group, GroupInheritanceType: inheritance, RequiredApprovals: approvals},
+		},
+		{
+			name: "a deploy access level to update with",
+			got:  UpdateDeployAccessLevelInput{ID: id, AccessLevel: level, UserID: user, GroupID: group, GroupInheritanceType: inheritance, Destroy: destroy}.EnvironmentAccess(),
+			want: toolutil.EnvironmentAccess{ID: id, AccessLevel: level, UserID: user, GroupID: group, GroupInheritanceType: inheritance, Destroy: destroy},
+		},
+		{
+			name: "an approval rule to update with",
+			got:  UpdateApprovalRuleInput{ID: id, AccessLevel: level, UserID: user, GroupID: group, GroupInheritanceType: inheritance, RequiredApprovalCount: approvals, Destroy: destroy}.EnvironmentAccess(),
+			want: toolutil.EnvironmentAccess{ID: id, AccessLevel: level, UserID: user, GroupID: group, GroupInheritanceType: inheritance, RequiredApprovals: approvals, Destroy: destroy},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !reflect.DeepEqual(tc.got, tc.want) {
+				t.Errorf("EnvironmentAccess() = %+v, want %+v", tc.got, tc.want)
 			}
 		})
 	}

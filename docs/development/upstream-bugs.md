@@ -101,6 +101,7 @@ for the fork, branch, fix, test and MR workflow.
   - [ListTopicsOptions and CreateTopicOptions model no organization_id](#listtopicsoptions-and-createtopicoptions-model-no-organization_id)
   - [ListPipelineTriggerJobsOptions models no include_retried, which the trigger job routes read and do not declare](#listpipelinetriggerjobsoptions-models-no-include_retried-which-the-trigger-job-routes-read-and-do-not-declare)
   - [BranchAccessDescription and GroupBranchAccessDescription model no member_role_name](#branchaccessdescription-and-groupbranchaccessdescription-model-no-member_role_name)
+  - [The protected environment approval rule options model an access_level_description no route declares](#the-protected-environment-approval-rule-options-model-an-access_level_description-no-route-declares)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -386,6 +387,7 @@ readable without opening the tracker:
 | 136 | client-go | [`ListTopicsOptions` and `CreateTopicOptions` model no `organization_id`](#listtopicsoptions-and-createtopicoptions-model-no-organization_id) | No | No | No | No | None; `admin.topic_list` and `admin.topic_create` act on the organization GitLab resolves for the request |
 | 137 | client-go and gitlab-org/gitlab | [`ListPipelineTriggerJobsOptions` models no `include_retried`, which the trigger job routes read and do not declare](#listpipelinetriggerjobsoptions-models-no-include_retried-which-the-trigger-job-routes-read-and-do-not-declare) | No | No | No | No | Yes, `job.list_bridges` adds `include_retried` to the `trigger_jobs` query through a request option, only when the caller asked |
 | 138 | client-go | [`BranchAccessDescription` and `GroupBranchAccessDescription` model no `member_role_name`](#branchaccessdescription-and-groupbranchaccessdescription-model-no-member_role_name) | No, not yet; it goes out as a small merge request at the pace of the ones that replace row 34's joint one | No, not yet | No | No | Yes, every project and group protected branch read and write, and the `audit_project_full` prompt, read it off the captured response |
+| 139 | client-go | [The protected environment approval rule options model an `access_level_description` no route declares](#the-protected-environment-approval-rule-options-model-an-access_level_description-no-route-declares) | No | No | No | No | Yes, the four project and group protect and update actions no longer offer it |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -8039,6 +8041,58 @@ with.
 
 **Effort**: small: a `MemberRoleName string` with its `json` tag on both
 structs, and a test that each decodes it.
+
+### The protected environment approval rule options model an access_level_description no route declares
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no. All four option structs carry the field at v3.30.0, the
+  version `go.mod` pins.
+- **Blocking**: no.
+- **Workaround**: yes. The four approval rule inputs of
+  `internal/tools/protectedenvs` and `internal/tools/groupprotectedenvs`
+  (`ApprovalRuleInput` and `UpdateApprovalRuleInput` in each) no longer
+  offer `access_level_description`, so `environment.protected_protect`,
+  `environment.protected_update`, `group.protected_env_protect` and
+  `group.protected_env_update` never send it, and the individual tools'
+  item schemas, which are closed, refuse a call that names it
+  (`TestApprovalRuleInputs_OfferNoAccessLevelDescription`, and a case of
+  `TestProtectedEnvironmentSchemas_IndividualTool_HoldsEachEntry` and of
+  `TestGroupProtectedEnvSchemas_IndividualTool_HoldsEachEntry`). Until then
+  the inputs offered it as "Human-readable description of the access level"
+  and the handlers sent it, and a caller who set it changed nothing. Nothing
+  retires: the inputs stay without it whether or not client-go drops it,
+  since GitLab does not take it.
+
+**Where**: `protected_environments.go`, `EnvironmentApprovalRuleOptions`
+(line 156 at v3.30.0) and `UpdateEnvironmentApprovalRuleOptions` (line 211),
+and `group_protected_environments.go`, `GroupEnvironmentApprovalRuleOptions`
+(line 156) and `UpdateGroupEnvironmentApprovalRuleOptions` (line 210), the
+`approval_rules` entries of `ProtectRepositoryEnvironments`,
+`UpdateProtectedEnvironments`, `ProtectGroupEnvironment` and
+`UpdateGroupProtectedEnvironment`.
+
+**What**: the approval rule block of
+[ee/lib/api/protected_environments.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.5.0-ee/ee/lib/api/protected_environments.rb)
+declares `user_id`, `group_id`, `group_inheritance_type`, `id`, `_destroy`,
+`access_level` and `required_approvals`, and nothing else, for the project
+and the group routes alike, and the 19.5.0 live record
+(`docs/development/gitlab-api-live.json`) holds those seven
+`approval_rules[...]` params on all four routes and no
+`approval_rules[access_level_description]`. The routes build the rules from
+`declared_params(include_missing: false)`, so Grape drops the key.
+`access_level_description` is a field GitLab computes and answers with, the
+rule's `humanize` in `ee/app/models/protected_environments/authorizable.rb`,
+which the response structs rightly decode; the four option structs carry it
+as if a caller could set it.
+
+**How we found it**: issue 1271, while stating GitLab's rules about an
+approval rule entry in the item schemas of the four actions: the item schema
+offered a property no route declares.
+
+**Effort**: small: the field removed from the four option structs, a
+breaking change of the module's API, or marked `Deprecated:` with the reason
+until the next major.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

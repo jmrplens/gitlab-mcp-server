@@ -2,11 +2,17 @@
 package groupprotectedenvs
 
 import (
+	"encoding/json"
+	"maps"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/google/jsonschema-go/jsonschema"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -65,6 +71,141 @@ func TestActionSpecs_ProtectRequiresDeployAccessLevels(t *testing.T) {
 	if !schemaRequiredIncludes(schema, "deploy_access_levels") {
 		t.Fatalf("protect required fields = %v, want deploy_access_levels", schema["required"])
 	}
+}
+
+// TestGroupProtectedEnvSchemas_CarryTheTiersAndGitLabsEntryRules verifies the
+// overrides each action carries: the deployment tiers on every parameter that
+// names one, and on the protect and the update the overrides that state
+// GitLab's rules about an entry of deploy_access_levels and approval_rules,
+// the same rules the handlers refuse a call by. Every spec still validates,
+// since each override reaches a property its schema has.
+func TestGroupProtectedEnvSchemas_CarryTheTiersAndGitLabsEntryRules(t *testing.T) {
+	byTool := groupProtectedEnvSpecsByTool(t, ActionSpecs(okClient(t)))
+	tiers := func(params ...string) []toolutil.InputSchemaOverride {
+		overrides := make([]toolutil.InputSchemaOverride, 0, len(params))
+		for _, param := range params {
+			overrides = append(overrides, toolutil.SchemaEnumOverride(param, "production", "staging", "testing", "development", "other"))
+		}
+		return overrides
+	}
+	want := map[string][]toolutil.InputSchemaOverride{
+		"gitlab_group_protected_environment_list":      nil,
+		"gitlab_group_protected_environment_get":       tiers("environment"),
+		"gitlab_group_protected_environment_protect":   append(tiers("name"), toolutil.EnvironmentProtectSchemaOverrides()...),
+		"gitlab_group_protected_environment_update":    append(tiers("environment", "name"), toolutil.EnvironmentUpdateSchemaOverrides()...),
+		"gitlab_group_protected_environment_unprotect": tiers("environment"),
+	}
+	for tool, overrides := range want {
+		t.Run(tool, func(t *testing.T) {
+			spec := byTool[tool]
+			if err := spec.Validate(); err != nil {
+				t.Fatalf("Validate() error = %v", err)
+			}
+			if !reflect.DeepEqual(spec.InputSchemaOverrides, overrides) {
+				t.Errorf("InputSchemaOverrides = %#v, want %#v", spec.InputSchemaOverrides, overrides)
+			}
+		})
+	}
+}
+
+// TestGroupProtectedEnvSchemas_IndividualTool_HoldsEachEntry verifies the
+// input schema the individual protect and update tools are served with, put
+// to the validator the SDK holds their arguments to: an entry GitLab takes
+// passes and one it refuses is refused, a null counting as a field left out.
+func TestGroupProtectedEnvSchemas_IndividualTool_HoldsEachEntry(t *testing.T) {
+	byTool := groupProtectedEnvSpecsByTool(t, ActionSpecs(okClient(t)))
+	maintainers := []any{map[string]any{"access_level": 40}}
+	type call struct {
+		name      string
+		params    map[string]any
+		wantValid bool
+	}
+	tools := []struct {
+		tool  string
+		base  map[string]any
+		calls []call
+	}{
+		{
+			tool: "gitlab_group_protected_environment_protect",
+			base: map[string]any{"group_id": "mygroup", "name": "production"},
+			calls: []call{
+				{name: "a role", params: map[string]any{"deploy_access_levels": maintainers}, wantValid: true},
+				{name: "a role beside a null group", params: map[string]any{"deploy_access_levels": []any{map[string]any{"access_level": 30, "group_id": nil}}}, wantValid: true},
+				{name: "a group with its inheritance", params: map[string]any{"deploy_access_levels": []any{map[string]any{"group_id": 7, "group_inheritance_type": 0}}}, wantValid: true},
+				{name: "no deploy access level", params: map[string]any{"deploy_access_levels": []any{}}},
+				{name: "a deploy entry naming nothing", params: map[string]any{"deploy_access_levels": []any{map[string]any{}}}},
+				{name: "a deploy entry naming a user and a group", params: map[string]any{"deploy_access_levels": []any{map[string]any{"user_id": 5, "group_id": 7}}}},
+				{name: "No access", params: map[string]any{"deploy_access_levels": []any{map[string]any{"access_level": 0}}}},
+				{name: "an approval rule naming all three", params: map[string]any{"deploy_access_levels": maintainers, "approval_rules": []any{map[string]any{"access_level": 30, "user_id": 5, "group_id": 7, "required_approvals": 5}}}, wantValid: true},
+				{name: "an approval rule naming nothing", params: map[string]any{"deploy_access_levels": maintainers, "approval_rules": []any{map[string]any{"required_approvals": 1}}}},
+				{name: "an approval rule with a description GitLab drops", params: map[string]any{"deploy_access_levels": maintainers, "approval_rules": []any{map[string]any{"user_id": 5, "access_level_description": "Release managers"}}}},
+				{name: "the deprecated count at 1", params: map[string]any{"deploy_access_levels": maintainers, "required_approval_count": 1}},
+				{name: "a name outside the tiers", params: map[string]any{"name": "prod", "deploy_access_levels": maintainers}},
+			},
+		},
+		{
+			tool: "gitlab_group_protected_environment_update",
+			base: map[string]any{"group_id": "mygroup", "environment": "production"},
+			calls: []call{
+				{name: "an existing entry by its id", params: map[string]any{"deploy_access_levels": []any{map[string]any{"id": 11}}}, wantValid: true},
+				{name: "a new entry naming nothing", params: map[string]any{"deploy_access_levels": []any{map[string]any{"group_inheritance_type": 1}}}},
+				{name: "an existing entry naming a user and a role", params: map[string]any{"deploy_access_levels": []any{map[string]any{"id": 11, "user_id": 5, "access_level": 40}}}},
+				{name: "an approval rule removed", params: map[string]any{"approval_rules": []any{map[string]any{"id": 21, "_destroy": true}}}, wantValid: true},
+				{name: "an approval rule removed asking for six approvals", params: map[string]any{"approval_rules": []any{map[string]any{"id": 21, "_destroy": true, "group_id": 7, "required_approvals": 6}}}, wantValid: true},
+				{name: "an approval rule kept with _destroy false", params: map[string]any{"approval_rules": []any{map[string]any{"id": 21, "_destroy": false}}}},
+				{name: "an approval rule given five approvals", params: map[string]any{"approval_rules": []any{map[string]any{"id": 21, "user_id": 5, "required_approvals": 5}}}, wantValid: true},
+				{name: "a new approval rule asking for one approval", params: map[string]any{"approval_rules": []any{map[string]any{"group_id": 7, "required_approvals": 1}}}, wantValid: true},
+				{name: "an approval rule given six approvals", params: map[string]any{"approval_rules": []any{map[string]any{"id": 21, "user_id": 5, "required_approvals": 6}}}},
+				{name: "an approval rule kept with _destroy false asking for no approval", params: map[string]any{"approval_rules": []any{map[string]any{"id": 21, "_destroy": false, "access_level": 30, "required_approvals": 0}}}},
+			},
+		},
+	}
+	for _, tool := range tools {
+		t.Run(tool.tool, func(t *testing.T) {
+			projected, err := toolutil.IndividualToolFromActionSpec(byTool[tool.tool], toolutil.IndividualToolProjectionOptions{})
+			if err != nil {
+				t.Fatalf("IndividualToolFromActionSpec(%s) error = %v", tool.tool, err)
+			}
+			resolved := resolvedInputSchema(t, projected.InputSchema)
+			for _, call := range tool.calls {
+				t.Run(call.name, func(t *testing.T) {
+					arguments := maps.Clone(tool.base)
+					maps.Copy(arguments, call.params)
+					if validateErr := resolved.Validate(arguments); (validateErr == nil) != call.wantValid {
+						t.Errorf("Validate(%v) error = %v, want valid %t", arguments, validateErr, call.wantValid)
+					}
+				})
+			}
+		})
+	}
+}
+
+// resolvedInputSchema decodes a served input schema into a resolved
+// jsonschema-go schema, the validator the SDK puts a tool's arguments to.
+func resolvedInputSchema(t *testing.T, schema any) *jsonschema.Resolved {
+	t.Helper()
+	data, err := json.Marshal(schema)
+	if err != nil {
+		t.Fatalf("marshal input schema: %v", err)
+	}
+	var decoded jsonschema.Schema
+	if err = json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("decode input schema: %v", err)
+	}
+	resolved, err := decoded.Resolve(nil)
+	if err != nil {
+		t.Fatalf("resolve input schema: %v", err)
+	}
+	return resolved
+}
+
+// okClient returns a client whose mock GitLab answers every request with 200
+// and no body, for a test that builds the specs and sends nothing.
+func okClient(t *testing.T) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
 }
 
 // TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.

@@ -73,17 +73,24 @@ var environmentTiers = []string{"production", "staging", "testing", "development
 // groupProtectedEnvTierOverrides constrains each tier-valued parameter of a
 // group protected environment action to the documented deployment tiers: the
 // environment being addressed and, on protect and update, the name being set.
+// The protect and the update also carry the overrides that state GitLab's
+// rules about an entry of deploy_access_levels and approval_rules, the same
+// rules their handlers refuse a call by (toolutil.CheckEnvironmentProtect and
+// toolutil.CheckEnvironmentUpdate). The item schemas required nothing, so
+// find's example sent deploy_access_levels [{}], which GitLab refuses (issue
+// 1271).
 func groupProtectedEnvTierOverrides(individualTool string) []toolutil.InputSchemaOverride {
 	switch individualTool {
 	case "gitlab_group_protected_environment_get", "gitlab_group_protected_environment_unprotect":
 		return []toolutil.InputSchemaOverride{toolutil.SchemaEnumOverride("environment", environmentTiers...)}
 	case "gitlab_group_protected_environment_protect":
-		return []toolutil.InputSchemaOverride{toolutil.SchemaEnumOverride("name", environmentTiers...)}
+		return append([]toolutil.InputSchemaOverride{toolutil.SchemaEnumOverride("name", environmentTiers...)},
+			toolutil.EnvironmentProtectSchemaOverrides()...)
 	case "gitlab_group_protected_environment_update":
-		return []toolutil.InputSchemaOverride{
+		return append([]toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("environment", environmentTiers...),
 			toolutil.SchemaEnumOverride("name", environmentTiers...),
-		}
+		}, toolutil.EnvironmentUpdateSchemaOverrides()...)
 	default:
 		return nil
 	}
@@ -137,12 +144,12 @@ var groupProtectedEnvActionMeta = map[string]groupProtectedEnvActionMetaEntry{
 		related: []string{actionList, actionUpdate, actionUnprotect},
 	},
 	"gitlab_group_protected_environment_protect": {
-		usage:   "Protect a group-level environment tier by setting its deploy access levels and approval rules. The gate cascades to every subgroup project. Use when the prompt asks to gate deployments across a group, restrict who can deploy, or require approvals at the group level. deploy_access_levels must be an array of objects such as [{\"access_level\":40}]. Require approvals via approval_rules with required_approvals.",
+		usage:   "Protect a group-level environment tier by setting its deploy access levels and approval rules. The gate cascades to every subgroup project. Use when the prompt asks to gate deployments across a group, restrict who can deploy, or require approvals at the group level. deploy_access_levels must be a non-empty array of objects such as [{\"access_level\":40}], each naming exactly one of access_level, user_id or group_id. Require approvals via approval_rules, each rule naming at least one of the three, with required_approvals from 1 to 5. Access levels are 20 (Reporter), 30 (Developer), 40 (Maintainer) and 60 (Admin).",
 		aliases: []string{"protect a group environment tier", "gate deployments across a group", "restrict group-wide deployment access", "require group deployment approvals"},
 		related: []string{actionGet, actionUpdate, actionUnprotect},
 	},
 	"gitlab_group_protected_environment_update": {
-		usage:   "Change the deploy access levels or approval rules on an already-protected group environment tier. Pass _destroy on an existing entry to remove it. Use when adjusting who can deploy across subgroup projects or how many approvals a group-level gate needs.",
+		usage:   "Change the deploy access levels or approval rules on an already-protected group environment tier. An entry with an id changes that entry, or removes it with _destroy, and a deploy access level without one is added and names exactly one of access_level, user_id or group_id. A deploy access level never names two of them, and an approval rule names at least one unless _destroy is true. Use when adjusting who can deploy across subgroup projects or how many approvals a group-level gate needs.",
 		aliases: []string{"update group protected environment rules", "change group deployment access levels", "adjust group environment approval rules", "edit group deployment gate"},
 		related: []string{actionGet, actionProtect, actionUnprotect},
 	},
@@ -162,9 +169,9 @@ func groupProtectedEnvDescription(individualTool string) string {
 	case "gitlab_group_protected_environment_get":
 		return "Get a single group-level protected environment by tier name. Returns: the environment with its deploy access levels (id, access level, user/group, group inheritance) and approval rules. See also: gitlab_group_protected_environment_list, gitlab_group_protected_environment_update, gitlab_group_protected_environment_unprotect."
 	case "gitlab_group_protected_environment_protect":
-		return "Protect a group-level environment tier with deploy access levels and approval rules. Protection cascades to all subgroup projects. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_update, gitlab_group_protected_environment_unprotect."
+		return "Protect a group-level environment tier with deploy access levels, each naming exactly one of access_level, user_id or group_id, and approval rules, each naming at least one. Protection cascades to all subgroup projects. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_update, gitlab_group_protected_environment_unprotect."
 	case "gitlab_group_protected_environment_update":
-		return "Update a group-level protected environment's deploy access levels and approval rules (use _destroy to remove an entry). Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_protect, gitlab_group_protected_environment_unprotect."
+		return "Update a group-level protected environment's deploy access levels and approval rules (use _destroy to remove an entry). A deploy access level names an existing entry by id or exactly one of access_level, user_id or group_id, and an approval rule at least one of them unless _destroy is true. Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_protect, gitlab_group_protected_environment_unprotect."
 	case "gitlab_group_protected_environment_unprotect":
 		return "Unprotect a group-level environment tier, removing its deployment gates from the group and its subgroup projects. Returns: a success confirmation. See also: gitlab_group_protected_environment_list, gitlab_group_protected_environment_protect."
 	default:

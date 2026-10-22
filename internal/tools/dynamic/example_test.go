@@ -340,6 +340,30 @@ func TestFind_LDAPLinkExamples_NameTheCommonNameAlone(t *testing.T) {
 	}
 }
 
+// TestFind_ProtectedEnvironmentExamples_DeployAsDevelopers verifies the call
+// find and describe offer for the project and the group protect. Each deploy
+// access level names exactly one of a role, a user or a group, and the item
+// schema says so with a oneOf, which the example used to read nothing of: it
+// filled an item's required list alone, which is empty, so it sent
+// deploy_access_levels [{}] and GitLab refused the call it built (issue
+// 1271). Now it fills the first alternative of the item, the role, with the
+// level an example grants everywhere, Developer.
+func TestFind_ProtectedEnvironmentExamples_DeployAsDevelopers(t *testing.T) {
+	registry := NewRegistryFromCatalog(mustCachedCatalog(t, true))
+	for _, action := range []string{"environment.protected_protect", "group.protected_env_protect"} {
+		t.Run(action, func(t *testing.T) {
+			entry, ok := registry.resolveAction(action)
+			if !ok {
+				t.Fatalf("resolveAction(%s) found nothing", action)
+			}
+			params, _ := registry.describeEntry(entry).Example.Arguments["params"].(map[string]any)
+			if got := fmt.Sprint(params["deploy_access_levels"]); got != "[map[access_level:30]]" {
+				t.Errorf("%s example deploy_access_levels = %s, want [map[access_level:30]]", action, got)
+			}
+		})
+	}
+}
+
 // TestExampleFor_FillsTheRequiredParamsAndTheFirstAlternative verifies the
 // shape of the example call: every parameter the schema's root requires, the
 // first alternative group and none of the others, and top-level confirm only

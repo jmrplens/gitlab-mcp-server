@@ -78,7 +78,25 @@ func protectedEnvironmentOptions(individualTool string) toolutil.ActionSpecOptio
 		},
 	}
 	decorateProtectedEnvironmentMeta(&options, individualTool)
+	options.InputSchemaOverrides = protectedEnvironmentEntryOverrides(individualTool)
 	return options
+}
+
+// protectedEnvironmentEntryOverrides states GitLab's rules about an entry of
+// deploy_access_levels and approval_rules in the input schema of the two
+// actions that send them, the same rules their handlers refuse a call by
+// (toolutil.CheckEnvironmentProtect and toolutil.CheckEnvironmentUpdate).
+// The item schemas required nothing, so find's example sent
+// deploy_access_levels [{}], which GitLab refuses (issue 1271).
+func protectedEnvironmentEntryOverrides(individualTool string) []toolutil.InputSchemaOverride {
+	switch individualTool {
+	case "gitlab_protected_environment_protect":
+		return toolutil.EnvironmentProtectSchemaOverrides()
+	case "gitlab_protected_environment_update":
+		return toolutil.EnvironmentUpdateSchemaOverrides()
+	default:
+		return nil
+	}
 }
 
 // decorateProtectedEnvironmentMeta replaces the generic shared Usage, the
@@ -128,12 +146,12 @@ var protectedEnvironmentActionMeta = map[string]protectedEnvironmentActionMetaEn
 		related: []string{actionEnvProtectedList, actionEnvProtectedUpdate, actionEnvProtectedUnprotect},
 	},
 	"gitlab_protected_environment_protect": {
-		usage:   "Protect a project environment (or wildcard tier) by setting its deploy access levels and approval rules. Use when the prompt asks to gate deployments, restrict who can deploy, or require approvals on a project environment. deploy_access_levels must be an array of objects such as [{\"access_level\":40}]. Require approvals via approval_rules with required_approvals.",
+		usage:   "Protect a project environment (or wildcard tier) by setting its deploy access levels and approval rules. Use when the prompt asks to gate deployments, restrict who can deploy, or require approvals on a project environment. deploy_access_levels must be a non-empty array of objects such as [{\"access_level\":40}], each naming exactly one of access_level, user_id or group_id. Require approvals via approval_rules, each rule naming at least one of the three, with required_approvals from 1 to 5. Access levels are 20 (Reporter), 30 (Developer), 40 (Maintainer) and 60 (Admin).",
 		aliases: []string{"protect a project environment", "gate project deployments", "restrict who can deploy to an environment", "require deployment approvals"},
 		related: []string{actionEnvProtectedGet, actionEnvProtectedUpdate, actionEnvProtectedUnprotect},
 	},
 	"gitlab_protected_environment_update": {
-		usage:   "Change the deploy access levels or approval rules on an already-protected project environment. Pass _destroy on an existing entry to remove it. Use when adjusting who can deploy or how many approvals a gated environment needs.",
+		usage:   "Change the deploy access levels or approval rules on an already-protected project environment. An entry with an id changes that entry, or removes it with _destroy, and a deploy access level without one is added and names exactly one of access_level, user_id or group_id. A deploy access level never names two of them, and an approval rule names at least one unless _destroy is true. Use when adjusting who can deploy or how many approvals a gated environment needs.",
 		aliases: []string{"update protected environment rules", "change deployment access levels", "adjust environment approval rules", "edit project deployment gate"},
 		related: []string{actionEnvProtectedGet, actionEnvProtectedProtect, actionEnvProtectedUnprotect},
 	},
@@ -153,9 +171,9 @@ func protectedEnvironmentDescription(individualTool string) string {
 	case "gitlab_protected_environment_get":
 		return "Get a single protected (or wildcard) environment by name. Returns: the environment with its deploy access levels (id, access level, user/group, group inheritance) and approval rules. See also: gitlab_protected_environment_list, gitlab_protected_environment_update, gitlab_protected_environment_unprotect."
 	case "gitlab_protected_environment_protect":
-		return "Protect a single environment or wildcard with deploy access levels and approval rules. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_update, gitlab_protected_environment_unprotect."
+		return "Protect a single environment or wildcard with deploy access levels, each naming exactly one of access_level, user_id or group_id, and approval rules, each naming at least one. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_update, gitlab_protected_environment_unprotect."
 	case "gitlab_protected_environment_update":
-		return "Update a protected environment's deploy access levels and approval rules (use _destroy to remove an entry). Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_protect, gitlab_protected_environment_unprotect."
+		return "Update a protected environment's deploy access levels and approval rules (use _destroy to remove an entry). A deploy access level names an existing entry by id or exactly one of access_level, user_id or group_id, and an approval rule at least one of them unless _destroy is true. Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_protect, gitlab_protected_environment_unprotect."
 	case "gitlab_protected_environment_unprotect":
 		return "Unprotect a single environment or wildcard, removing its deployment gates. Returns: a success confirmation naming the unprotected environment. See also: gitlab_protected_environment_list, gitlab_protected_environment_protect."
 	default:

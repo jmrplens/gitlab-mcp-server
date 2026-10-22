@@ -17,6 +17,17 @@ const (
 	opUnprotectEnvironment = "unprotect environment"
 )
 
+// protectEntriesHint is what a protect GitLab refused with 422 is wrapped
+// with. The handler refuses every entry GitLab's params and models refuse
+// before anything is sent (toolutil.CheckEnvironmentProtect), so what is left
+// is the entries GitLab keeps: ProtectedEnvironments::BaseService drops,
+// without refusing it, an entry whose user has no Developer role or above on
+// the project or whose group the project is not shared with, and the model
+// then refuses a protect left with no deploy access level. It is one literal,
+// since gremlins mutates the + of a concatenated constant and no coverage
+// profile reaches a constant.
+const protectEntriesHint = "a user_id must name a user with the Developer role or above on the project and a group_id a group the project is shared with: GitLab drops any other entry and refuses a protect left with no deploy access level"
+
 // ---------- Input types ----------.
 
 // ListInput holds parameters for listing protected environments. It mirrors
@@ -41,28 +52,40 @@ type GetInput struct {
 type ProtectInput struct {
 	ProjectID             toolutil.StringOrInt     `json:"project_id"                        jsonschema:"Project ID or URL-encoded path,required"`
 	Name                  string                   `json:"name"                              jsonschema:"Environment name to protect,required"`
-	DeployAccessLevels    []DeployAccessLevelInput `json:"deploy_access_levels,omitempty"    jsonschema:"Deploy access levels,required"`
-	RequiredApprovalCount *int64                   `json:"required_approval_count,omitempty" jsonschema:"Required number of approvals"`
-	ApprovalRules         []ApprovalRuleInput      `json:"approval_rules,omitempty"          jsonschema:"Approval rules"`
+	DeployAccessLevels    []DeployAccessLevelInput `json:"deploy_access_levels,omitempty"    jsonschema:"Who may deploy: at least one entry, each naming exactly one of access_level, user_id or group_id,required"`
+	RequiredApprovalCount *int64                   `json:"required_approval_count,omitempty" jsonschema:"Deprecated: GitLab refuses any value but 0. Require approvals with required_approvals on approval_rules instead."`
+	ApprovalRules         []ApprovalRuleInput      `json:"approval_rules,omitempty"          jsonschema:"Who must approve a deployment: each rule names at least one of access_level, user_id or group_id"`
 }
 
 // DeployAccessLevelInput represents an access level for deployment.
 type DeployAccessLevelInput struct {
-	AccessLevel          *int   `json:"access_level,omitempty"           jsonschema:"Access level (0=No access, 30=Developer, 40=Maintainer, 60=Admin)"`
-	UserID               *int64 `json:"user_id,omitempty"                jsonschema:"User ID"`
-	GroupID              *int64 `json:"group_id,omitempty"               jsonschema:"Group ID"`
-	GroupInheritanceType *int64 `json:"group_inheritance_type,omitempty" jsonschema:"Group inheritance type (0=direct, 1=inherited)"`
+	AccessLevel          *int   `json:"access_level,omitempty"           jsonschema:"Role allowed to deploy: 20 (Reporter), 30 (Developer), 40 (Maintainer) or 60 (Admin). Name exactly one of access_level, user_id or group_id."`
+	UserID               *int64 `json:"user_id,omitempty"                jsonschema:"ID of a user allowed to deploy. Name exactly one of access_level, user_id or group_id."`
+	GroupID              *int64 `json:"group_id,omitempty"               jsonschema:"ID of a group whose members may deploy. Name exactly one of access_level, user_id or group_id."`
+	GroupInheritanceType *int64 `json:"group_inheritance_type,omitempty" jsonschema:"Group inheritance type for a group_id entry (0=direct members only, 1=inherited members too)"`
+}
+
+// EnvironmentAccess answers the entry as the checks of GitLab's rules read
+// it.
+func (d DeployAccessLevelInput) EnvironmentAccess() toolutil.EnvironmentAccess {
+	return toolutil.EnvironmentAccess{AccessLevel: d.AccessLevel, UserID: d.UserID, GroupID: d.GroupID, GroupInheritanceType: d.GroupInheritanceType}
 }
 
 // ApprovalRuleInput represents an approval rule for an environment. It mirrors
-// gl.EnvironmentApprovalRuleOptions field-for-field.
+// gl.EnvironmentApprovalRuleOptions field for field but for
+// access_level_description, which neither the protect nor the update route
+// declares, so GitLab drops it (upstream register row 139).
 type ApprovalRuleInput struct {
-	UserID                 *int64  `json:"user_id,omitempty"                  jsonschema:"User ID"`
-	GroupID                *int64  `json:"group_id,omitempty"                 jsonschema:"Group ID"`
-	AccessLevel            *int    `json:"access_level,omitempty"             jsonschema:"Access level"`
-	AccessLevelDescription *string `json:"access_level_description,omitempty"  jsonschema:"Human-readable description of the access level"`
-	RequiredApprovalCount  *int64  `json:"required_approvals,omitempty"       jsonschema:"Required number of approvals"`
-	GroupInheritanceType   *int64  `json:"group_inheritance_type,omitempty"   jsonschema:"Group inheritance type (0=direct, 1=inherited)"`
+	UserID                *int64 `json:"user_id,omitempty"                  jsonschema:"ID of a user who may approve. Name at least one of access_level, user_id or group_id."`
+	GroupID               *int64 `json:"group_id,omitempty"                 jsonschema:"ID of a group whose members may approve. Name at least one of access_level, user_id or group_id."`
+	AccessLevel           *int   `json:"access_level,omitempty"             jsonschema:"Role whose members may approve: 20 (Reporter), 30 (Developer), 40 (Maintainer) or 60 (Admin). Name at least one of access_level, user_id or group_id."`
+	RequiredApprovalCount *int64 `json:"required_approvals,omitempty"       jsonschema:"Approvals this rule requires, 1 to 5 (GitLab's default is 1)"`
+	GroupInheritanceType  *int64 `json:"group_inheritance_type,omitempty"   jsonschema:"Group inheritance type for a group_id rule (0=direct members only, 1=inherited members too)"`
+}
+
+// EnvironmentAccess answers the rule as the checks of GitLab's rules read it.
+func (r ApprovalRuleInput) EnvironmentAccess() toolutil.EnvironmentAccess {
+	return toolutil.EnvironmentAccess{AccessLevel: r.AccessLevel, UserID: r.UserID, GroupID: r.GroupID, GroupInheritanceType: r.GroupInheritanceType, RequiredApprovals: r.RequiredApprovalCount}
 }
 
 // UpdateInput holds parameters for updating a protected environment.
@@ -70,33 +93,44 @@ type UpdateInput struct {
 	ProjectID             toolutil.StringOrInt           `json:"project_id"                        jsonschema:"Project ID or URL-encoded path,required"`
 	Environment           string                         `json:"environment"                       jsonschema:"Environment name,required"`
 	Name                  string                         `json:"name,omitempty"                    jsonschema:"New environment name"`
-	DeployAccessLevels    []UpdateDeployAccessLevelInput `json:"deploy_access_levels,omitempty"    jsonschema:"Updated deploy access levels"`
-	RequiredApprovalCount *int64                         `json:"required_approval_count,omitempty" jsonschema:"Required number of approvals"`
-	ApprovalRules         []UpdateApprovalRuleInput      `json:"approval_rules,omitempty"          jsonschema:"Updated approval rules"`
+	DeployAccessLevels    []UpdateDeployAccessLevelInput `json:"deploy_access_levels,omitempty"    jsonschema:"Deploy access levels to add, change or remove: each entry names an existing one by id or exactly one of access_level, user_id or group_id, and never two of them"`
+	RequiredApprovalCount *int64                         `json:"required_approval_count,omitempty" jsonschema:"Deprecated: GitLab refuses any value but 0. Require approvals with required_approvals on approval_rules instead."`
+	ApprovalRules         []UpdateApprovalRuleInput      `json:"approval_rules,omitempty"          jsonschema:"Approval rules to add, change or remove: each rule names at least one of access_level, user_id or group_id unless _destroy is true"`
 }
 
 // UpdateDeployAccessLevelInput represents an updated access level for deployment.
 type UpdateDeployAccessLevelInput struct {
-	ID                   *int64 `json:"id,omitempty"                     jsonschema:"Existing access level ID to update"`
-	AccessLevel          *int   `json:"access_level,omitempty"           jsonschema:"Access level"`
-	UserID               *int64 `json:"user_id,omitempty"                jsonschema:"User ID"`
-	GroupID              *int64 `json:"group_id,omitempty"               jsonschema:"Group ID"`
-	GroupInheritanceType *int64 `json:"group_inheritance_type,omitempty" jsonschema:"Group inheritance type"`
-	Destroy              *bool  `json:"_destroy,omitempty"               jsonschema:"Set true to remove this access level"`
+	ID                   *int64 `json:"id,omitempty"                     jsonschema:"ID of the existing access level to change or remove. An entry without one adds an access level."`
+	AccessLevel          *int   `json:"access_level,omitempty"           jsonschema:"Role allowed to deploy: 20 (Reporter), 30 (Developer), 40 (Maintainer) or 60 (Admin). Name at most one of access_level, user_id or group_id, and one of them without an id."`
+	UserID               *int64 `json:"user_id,omitempty"                jsonschema:"ID of a user allowed to deploy. Name at most one of access_level, user_id or group_id, and one of them without an id."`
+	GroupID              *int64 `json:"group_id,omitempty"               jsonschema:"ID of a group whose members may deploy. Name at most one of access_level, user_id or group_id, and one of them without an id."`
+	GroupInheritanceType *int64 `json:"group_inheritance_type,omitempty" jsonschema:"Group inheritance type for a group_id entry (0=direct members only, 1=inherited members too)"`
+	Destroy              *bool  `json:"_destroy,omitempty"               jsonschema:"Set true, with the entry's id, to remove this access level"`
+}
+
+// EnvironmentAccess answers the entry as the checks of GitLab's rules read
+// it.
+func (d UpdateDeployAccessLevelInput) EnvironmentAccess() toolutil.EnvironmentAccess {
+	return toolutil.EnvironmentAccess{ID: d.ID, AccessLevel: d.AccessLevel, UserID: d.UserID, GroupID: d.GroupID, GroupInheritanceType: d.GroupInheritanceType, Destroy: d.Destroy}
 }
 
 // UpdateApprovalRuleInput represents an updated approval rule for an
-// environment. It mirrors gl.UpdateEnvironmentApprovalRuleOptions
-// field-for-field.
+// environment. It mirrors gl.UpdateEnvironmentApprovalRuleOptions field for
+// field but for access_level_description, which the update route does not
+// declare, so GitLab drops it (upstream register row 139).
 type UpdateApprovalRuleInput struct {
-	ID                     *int64  `json:"id,omitempty"                       jsonschema:"Existing approval rule ID to update"`
-	UserID                 *int64  `json:"user_id,omitempty"                  jsonschema:"User ID"`
-	GroupID                *int64  `json:"group_id,omitempty"                 jsonschema:"Group ID"`
-	AccessLevel            *int    `json:"access_level,omitempty"             jsonschema:"Access level"`
-	AccessLevelDescription *string `json:"access_level_description,omitempty"  jsonschema:"Human-readable description of the access level"`
-	RequiredApprovalCount  *int64  `json:"required_approvals,omitempty"       jsonschema:"Required number of approvals"`
-	GroupInheritanceType   *int64  `json:"group_inheritance_type,omitempty"   jsonschema:"Group inheritance type"`
-	Destroy                *bool   `json:"_destroy,omitempty"                 jsonschema:"Set true to remove this rule"`
+	ID                    *int64 `json:"id,omitempty"                       jsonschema:"ID of the existing approval rule to change or remove. A rule without one adds a rule."`
+	UserID                *int64 `json:"user_id,omitempty"                  jsonschema:"ID of a user who may approve. Name at least one of access_level, user_id or group_id unless _destroy is true, on an existing rule as well."`
+	GroupID               *int64 `json:"group_id,omitempty"                 jsonschema:"ID of a group whose members may approve. Name at least one of access_level, user_id or group_id unless _destroy is true, on an existing rule as well."`
+	AccessLevel           *int   `json:"access_level,omitempty"             jsonschema:"Role whose members may approve: 20 (Reporter), 30 (Developer), 40 (Maintainer) or 60 (Admin). Name at least one of access_level, user_id or group_id unless _destroy is true, on an existing rule as well."`
+	RequiredApprovalCount *int64 `json:"required_approvals,omitempty"       jsonschema:"Approvals this rule requires, 1 to 5 unless _destroy is true"`
+	GroupInheritanceType  *int64 `json:"group_inheritance_type,omitempty"   jsonschema:"Group inheritance type for a group_id rule (0=direct members only, 1=inherited members too)"`
+	Destroy               *bool  `json:"_destroy,omitempty"                 jsonschema:"Set true, with the rule's id, to remove this rule"`
+}
+
+// EnvironmentAccess answers the rule as the checks of GitLab's rules read it.
+func (r UpdateApprovalRuleInput) EnvironmentAccess() toolutil.EnvironmentAccess {
+	return toolutil.EnvironmentAccess{ID: r.ID, AccessLevel: r.AccessLevel, UserID: r.UserID, GroupID: r.GroupID, GroupInheritanceType: r.GroupInheritanceType, RequiredApprovals: r.RequiredApprovalCount, Destroy: r.Destroy}
 }
 
 // UnprotectInput holds parameters for unprotecting an environment.
@@ -250,19 +284,20 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 	if input.Name == "" {
 		return Output{}, toolutil.ErrFieldRequired("name")
 	}
+	if err := toolutil.CheckEnvironmentProtect(opProtectEnvironment, input.DeployAccessLevels, input.ApprovalRules, input.RequiredApprovalCount); err != nil {
+		return Output{}, err
+	}
 	if err := ctx.Err(); err != nil {
 		return Output{}, toolutil.WrapErrWithMessage(opProtectEnvironment, err)
 	}
 
+	levels := protectEnvironmentAccessOptions(input.DeployAccessLevels)
 	opts := &gl.ProtectRepositoryEnvironmentsOptions{
-		Name: &input.Name,
+		Name:               &input.Name,
+		DeployAccessLevels: &levels,
 	}
 	if input.RequiredApprovalCount != nil {
 		opts.RequiredApprovalCount = input.RequiredApprovalCount
-	}
-	if len(input.DeployAccessLevels) > 0 {
-		levels := protectEnvironmentAccessOptions(input.DeployAccessLevels)
-		opts.DeployAccessLevels = &levels
 	}
 	if len(input.ApprovalRules) > 0 {
 		rules := protectEnvironmentApprovalRuleOptions(input.ApprovalRules)
@@ -274,6 +309,9 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return Output{}, toolutil.WrapErrWithHint(opProtectEnvironment, err,
 				"protecting environments requires Maintainer role and GitLab Premium/Ultimate")
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
+			return Output{}, toolutil.WrapErrWithHint(opProtectEnvironment, err, protectEntriesHint)
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint(opProtectEnvironment, err, http.StatusConflict,
 			"the environment is already protected. Use environment.protected_update to modify access levels")
@@ -297,7 +335,7 @@ func protectEnvironmentAccessOptions(inputs []DeployAccessLevelInput) []*gl.Envi
 func protectEnvironmentApprovalRuleOptions(inputs []ApprovalRuleInput) []*gl.EnvironmentApprovalRuleOptions {
 	rules := make([]*gl.EnvironmentApprovalRuleOptions, 0, len(inputs))
 	for _, input := range inputs {
-		approvalOptions := &gl.EnvironmentApprovalRuleOptions{UserID: input.UserID, GroupID: input.GroupID, AccessLevelDescription: input.AccessLevelDescription, RequiredApprovalCount: input.RequiredApprovalCount, GroupInheritanceType: input.GroupInheritanceType}
+		approvalOptions := &gl.EnvironmentApprovalRuleOptions{UserID: input.UserID, GroupID: input.GroupID, RequiredApprovalCount: input.RequiredApprovalCount, GroupInheritanceType: input.GroupInheritanceType}
 		if input.AccessLevel != nil {
 			accessLevel := gl.AccessLevelValue(int64(*input.AccessLevel))
 			approvalOptions.AccessLevel = &accessLevel
@@ -314,6 +352,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	if input.Environment == "" {
 		return Output{}, toolutil.ErrFieldRequired("environment")
+	}
+	if err := toolutil.CheckEnvironmentUpdate(opUpdateProtectedEnv, input.DeployAccessLevels, input.ApprovalRules, input.RequiredApprovalCount); err != nil {
+		return Output{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return Output{}, toolutil.WrapErrWithMessage(opUpdateProtectedEnv, err)
@@ -363,7 +404,7 @@ func updateEnvironmentAccessOptions(inputs []UpdateDeployAccessLevelInput) []*gl
 func updateEnvironmentApprovalRuleOptions(inputs []UpdateApprovalRuleInput) []*gl.UpdateEnvironmentApprovalRuleOptions {
 	rules := make([]*gl.UpdateEnvironmentApprovalRuleOptions, 0, len(inputs))
 	for _, input := range inputs {
-		aro := &gl.UpdateEnvironmentApprovalRuleOptions{ID: input.ID, UserID: input.UserID, GroupID: input.GroupID, AccessLevelDescription: input.AccessLevelDescription, RequiredApprovalCount: input.RequiredApprovalCount, GroupInheritanceType: input.GroupInheritanceType, Destroy: input.Destroy}
+		aro := &gl.UpdateEnvironmentApprovalRuleOptions{ID: input.ID, UserID: input.UserID, GroupID: input.GroupID, RequiredApprovalCount: input.RequiredApprovalCount, GroupInheritanceType: input.GroupInheritanceType, Destroy: input.Destroy}
 		if input.AccessLevel != nil {
 			accessLevel := gl.AccessLevelValue(int64(*input.AccessLevel))
 			aro.AccessLevel = &accessLevel

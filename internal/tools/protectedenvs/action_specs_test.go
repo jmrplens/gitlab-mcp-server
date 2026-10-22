@@ -3,11 +3,15 @@ package protectedenvs
 
 import (
 	"context"
+	"encoding/json"
+	"maps"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -24,7 +28,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}{
 		{"gitlab_protected_environment_list", map[string]any{"project_id": "42"}},
 		{"gitlab_protected_environment_get", map[string]any{"project_id": "42", "environment": "production"}},
-		{"gitlab_protected_environment_protect", map[string]any{"project_id": "42", "name": "staging"}},
+		{"gitlab_protected_environment_protect", map[string]any{"project_id": "42", "name": "staging", "deploy_access_levels": []any{map[string]any{"access_level": float64(40)}}}},
 		{"gitlab_protected_environment_update", map[string]any{"project_id": "42", "environment": "production"}},
 		{"gitlab_protected_environment_unprotect", map[string]any{"project_id": "42", "environment": "production"}},
 	}
@@ -93,6 +97,160 @@ func TestActionSpecs_ProtectRequiresDeployAccessLevels(t *testing.T) {
 	schema := byTool["gitlab_protected_environment_protect"].Route.InputSchema
 	if !schemaRequiredIncludes(schema, "deploy_access_levels") {
 		t.Fatalf("protect required fields = %v, want deploy_access_levels", schema["required"])
+	}
+}
+
+// TestProtectedEnvironmentSchemas_CarryGitLabsEntryRules verifies that the
+// protect and the update carry the overrides that state GitLab's rules about
+// an entry, the protect's and the update's respectively, that the two read
+// actions and the unprotect carry none, and that every spec still validates:
+// each override reaches a property its schema has.
+func TestProtectedEnvironmentSchemas_CarryGitLabsEntryRules(t *testing.T) {
+	byTool := protectedEnvironmentSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, protectedEnvironmentsActionHandler())))
+	want := map[string][]toolutil.InputSchemaOverride{
+		"gitlab_protected_environment_list":      nil,
+		"gitlab_protected_environment_get":       nil,
+		"gitlab_protected_environment_protect":   toolutil.EnvironmentProtectSchemaOverrides(),
+		"gitlab_protected_environment_update":    toolutil.EnvironmentUpdateSchemaOverrides(),
+		"gitlab_protected_environment_unprotect": nil,
+	}
+	for tool, overrides := range want {
+		t.Run(tool, func(t *testing.T) {
+			spec := byTool[tool]
+			if err := spec.Validate(); err != nil {
+				t.Fatalf("Validate() error = %v", err)
+			}
+			if !reflect.DeepEqual(spec.InputSchemaOverrides, overrides) {
+				t.Errorf("InputSchemaOverrides = %#v, want %#v", spec.InputSchemaOverrides, overrides)
+			}
+		})
+	}
+}
+
+// TestProtectedEnvironmentSchemas_IndividualTool_HoldsEachEntry verifies the
+// input schema the individual protect and update tools are served with, put
+// to the validator the SDK holds their arguments to: an entry GitLab takes
+// passes and one it refuses is refused, a null counting as a field left out.
+func TestProtectedEnvironmentSchemas_IndividualTool_HoldsEachEntry(t *testing.T) {
+	byTool := protectedEnvironmentSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, protectedEnvironmentsActionHandler())))
+	maintainers := []any{map[string]any{"access_level": 40}}
+	tools := []struct {
+		tool  string
+		base  map[string]any
+		calls []schemaCall
+	}{
+		{
+			tool: "gitlab_protected_environment_protect",
+			base: map[string]any{"project_id": "42", "name": "production"},
+			calls: []schemaCall{
+				{name: "a role", params: map[string]any{"deploy_access_levels": maintainers}, wantValid: true},
+				{name: "a role beside a null user", params: map[string]any{"deploy_access_levels": []any{map[string]any{"access_level": 30, "user_id": nil}}}, wantValid: true},
+				{name: "a user with a null role", params: map[string]any{"deploy_access_levels": []any{map[string]any{"user_id": 5, "access_level": nil}}}, wantValid: true},
+				{name: "a group with its inheritance", params: map[string]any{"deploy_access_levels": []any{map[string]any{"group_id": 7, "group_inheritance_type": 1}}}, wantValid: true},
+				{name: "no deploy access level", params: map[string]any{"deploy_access_levels": []any{}}},
+				{name: "a deploy entry naming nothing", params: map[string]any{"deploy_access_levels": []any{map[string]any{}}}},
+				{name: "a deploy entry naming a role and a user", params: map[string]any{"deploy_access_levels": []any{map[string]any{"access_level": 40, "user_id": 5}}}},
+				{name: "No access", params: map[string]any{"deploy_access_levels": []any{map[string]any{"access_level": 0}}}},
+				{name: "an inheritance GitLab does not take", params: map[string]any{"deploy_access_levels": []any{map[string]any{"group_id": 7, "group_inheritance_type": 2}}}},
+				{name: "an approval rule naming a user and two approvals", params: map[string]any{"deploy_access_levels": maintainers, "approval_rules": []any{map[string]any{"user_id": 5, "required_approvals": 2}}}, wantValid: true},
+				{name: "an approval rule naming a role and a group", params: map[string]any{"deploy_access_levels": maintainers, "approval_rules": []any{map[string]any{"access_level": 30, "group_id": 7}}}, wantValid: true},
+				{name: "an approval rule naming nothing", params: map[string]any{"deploy_access_levels": maintainers, "approval_rules": []any{map[string]any{"required_approvals": 2}}}},
+				{name: "six approvals", params: map[string]any{"deploy_access_levels": maintainers, "approval_rules": []any{map[string]any{"access_level": 30, "required_approvals": 6}}}},
+				{name: "no approval", params: map[string]any{"deploy_access_levels": maintainers, "approval_rules": []any{map[string]any{"access_level": 30, "required_approvals": 0}}}},
+				{name: "an approval rule with a description GitLab drops", params: map[string]any{"deploy_access_levels": maintainers, "approval_rules": []any{map[string]any{"user_id": 5, "access_level_description": "Release managers"}}}},
+				{name: "the deprecated count at 0", params: map[string]any{"deploy_access_levels": maintainers, "required_approval_count": 0}, wantValid: true},
+				{name: "the deprecated count at 1", params: map[string]any{"deploy_access_levels": maintainers, "required_approval_count": 1}},
+			},
+		},
+		{
+			tool: "gitlab_protected_environment_update",
+			base: map[string]any{"project_id": "42", "environment": "production"},
+			calls: []schemaCall{
+				{name: "nothing to change", params: map[string]any{}, wantValid: true},
+				{name: "an existing entry by its id", params: map[string]any{"deploy_access_levels": []any{map[string]any{"id": 11, "_destroy": true}}}, wantValid: true},
+				{name: "an existing entry given a role", params: map[string]any{"deploy_access_levels": []any{map[string]any{"id": 11, "access_level": 30}}}, wantValid: true},
+				{name: "a new entry naming a group", params: map[string]any{"deploy_access_levels": []any{map[string]any{"group_id": 7}}}, wantValid: true},
+				{name: "a new entry naming nothing", params: map[string]any{"deploy_access_levels": []any{map[string]any{"_destroy": true}}}},
+				{name: "an existing entry naming a role and a group", params: map[string]any{"deploy_access_levels": []any{map[string]any{"id": 11, "access_level": 30, "group_id": 7}}}},
+				{name: "an approval rule removed", params: map[string]any{"approval_rules": []any{map[string]any{"id": 21, "_destroy": true}}}, wantValid: true},
+				{name: "an approval rule removed asking for no approval", params: map[string]any{"approval_rules": []any{map[string]any{"id": 21, "_destroy": true, "required_approvals": 0}}}, wantValid: true},
+				{name: "an existing approval rule asking for five approvals", params: map[string]any{"approval_rules": []any{map[string]any{"id": 21, "user_id": 5, "required_approvals": 5}}}, wantValid: true},
+				{name: "a new approval rule asking for one approval", params: map[string]any{"approval_rules": []any{map[string]any{"access_level": 40, "required_approvals": 1}}}, wantValid: true},
+				{name: "an existing approval rule asking for no approval", params: map[string]any{"approval_rules": []any{map[string]any{"id": 21, "access_level": 30, "required_approvals": 0}}}},
+				{name: "an approval rule kept with _destroy false asking for six approvals", params: map[string]any{"approval_rules": []any{map[string]any{"id": 21, "_destroy": false, "user_id": 5, "required_approvals": 6}}}},
+				{name: "an approval rule with a null _destroy asking for six approvals", params: map[string]any{"approval_rules": []any{map[string]any{"id": 21, "_destroy": nil, "user_id": 5, "required_approvals": 6}}}},
+				{name: "an existing approval rule naming nothing", params: map[string]any{"approval_rules": []any{map[string]any{"id": 21, "required_approvals": 2}}}},
+				{name: "the deprecated count at 2", params: map[string]any{"required_approval_count": 2}},
+			},
+		},
+	}
+	for _, tool := range tools {
+		t.Run(tool.tool, func(t *testing.T) {
+			projected, err := toolutil.IndividualToolFromActionSpec(byTool[tool.tool], toolutil.IndividualToolProjectionOptions{})
+			if err != nil {
+				t.Fatalf("IndividualToolFromActionSpec(%s) error = %v", tool.tool, err)
+			}
+			resolved := resolvedInputSchema(t, projected.InputSchema)
+			for _, call := range tool.calls {
+				t.Run(call.name, func(t *testing.T) {
+					arguments := maps.Clone(tool.base)
+					maps.Copy(arguments, call.params)
+					if validateErr := resolved.Validate(arguments); (validateErr == nil) != call.wantValid {
+						t.Errorf("Validate(%v) error = %v, want valid %t", arguments, validateErr, call.wantValid)
+					}
+				})
+			}
+		})
+	}
+}
+
+// schemaCall is one call put to a served input schema: its parameters beside
+// the ones every call of the tool carries, and whether the schema takes it.
+type schemaCall struct {
+	name      string
+	params    map[string]any
+	wantValid bool
+}
+
+// resolvedInputSchema decodes a served input schema into a resolved
+// jsonschema-go schema, the validator the SDK puts a tool's arguments to.
+func resolvedInputSchema(t *testing.T, schema any) *jsonschema.Resolved {
+	t.Helper()
+	data, err := json.Marshal(schema)
+	if err != nil {
+		t.Fatalf("marshal input schema: %v", err)
+	}
+	var decoded jsonschema.Schema
+	if err = json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("decode input schema: %v", err)
+	}
+	resolved, err := decoded.Resolve(nil)
+	if err != nil {
+		t.Fatalf("resolve input schema: %v", err)
+	}
+	return resolved
+}
+
+// TestApprovalRuleInputs_OfferNoAccessLevelDescription verifies that neither
+// approval rule shape offers access_level_description. client-go's options
+// carry it, and neither the protect nor the update route declares it, so
+// GitLab drops it and a caller who set it changed nothing (upstream register
+// row 139). The deploy access levels never offered it.
+func TestApprovalRuleInputs_OfferNoAccessLevelDescription(t *testing.T) {
+	byTool := protectedEnvironmentSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, protectedEnvironmentsActionHandler())))
+	for _, tool := range []string{"gitlab_protected_environment_protect", "gitlab_protected_environment_update"} {
+		t.Run(tool, func(t *testing.T) {
+			properties, _ := byTool[tool].Route.InputSchema["properties"].(map[string]any)
+			rules, _ := properties["approval_rules"].(map[string]any)
+			items, _ := rules["items"].(map[string]any)
+			itemProperties, _ := items["properties"].(map[string]any)
+			if len(itemProperties) == 0 {
+				t.Fatalf("approval_rules items carry no properties: %v", rules)
+			}
+			if _, has := itemProperties["access_level_description"]; has {
+				t.Errorf("approval_rules items offer access_level_description: %v", itemProperties)
+			}
+		})
 	}
 }
 
