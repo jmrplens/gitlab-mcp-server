@@ -668,6 +668,24 @@ A blocked write in an HTTP deployment started with `--safe-mode` answers
 operator set a flag, and the variable named would not change anything without a
 restart with the flag removed. Cosmetic, but it is model-facing text.
 
+**Resolved by issue 529, part D6.** `toolutil.SafeModeHint` names both
+spellings, each with the transport that reads it:
+
+```text
+Restart the server with --safe-mode=false in HTTP mode, or GITLAB_MCP_SAFE_MODE=false over stdio, to execute this operation
+```
+
+In HTTP mode a flag passed explicitly wins over its variable, so the flag is
+the spelling that turns safe mode off there whatever the environment says, and
+stdio reads only the variable. The sentence is served prose, so it is ASCII,
+carries no semicolon and names no tool, which
+`TestSafeModeHint_EitherTransport_NamesTheSettingThatTurnsItOff` holds.
+`TestFormatSafeModePreviewMarkdown_WholeOutput_AndRoundTrip` pins the card with
+the hint spelled out and reads it back through `ParseSafeModePreview`, and
+`TestWrapMutatingToolsForSafeMode_MutatingToolReturnsPreview` reads both
+spellings back from the individual surface's card. The site's configuration and
+security pages quote the new hint in both languages.
+
 ### D7: `--oauth-cache-ttl` accepts a value every page says is out of range
 
 | Side | Location                                                                  |
