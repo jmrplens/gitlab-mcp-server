@@ -142,8 +142,11 @@ type refAction struct {
 	params      []param
 	// oneOf lists the alternative parameter sets of which the schema requires
 	// at least one, beside the parameters it always requires, each holding
-	// what it adds to them (actioncatalog.RequiredParamAlternatives).
-	oneOf [][]string
+	// what it adds to them (actioncatalog.RequiredParamAlternatives), and
+	// exclusive says that it requires exactly one of them
+	// (actioncatalog.RequiredParamAlternativesExclusive).
+	oneOf     [][]string
+	exclusive bool
 
 	// domain is the action ID's prefix, which is also the heading the
 	// fine-grained permissions page files the action under.
@@ -280,6 +283,6 @@ func (ra *refAction) finish(group *refGroup, surfaces surfaceNames, index map[st
 		return fmt.Errorf("%s: the individual surface registers no tool %q", ra.id, ra.individual)
 	}
 	ra.description = servedDescription(action, index)
-	ra.params, ra.oneOf = parameters(action.Route.InputSchema, ra.paramTiers)
+	ra.params, ra.oneOf, ra.exclusive = parameters(action.Route.InputSchema, ra.paramTiers)
 	return nil
 }

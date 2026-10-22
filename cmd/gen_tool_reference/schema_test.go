@@ -79,7 +79,7 @@ func TestParameters_Schema_RequiredFirstThenByName(t *testing.T) {
 		"required": []any{"zeta", "mid"},
 		"anyOf":    []any{map[string]any{"required": []any{"alpha"}}, map[string]any{"required": []any{"beta", "zeta"}}},
 	}
-	params, oneOf := parameters(schema, map[string]edition.Tier{"beta": edition.Premium})
+	params, oneOf, _ := parameters(schema, map[string]edition.Tier{"beta": edition.Premium})
 	var order []string
 	for _, p := range params {
 		order = append(order, p.name)
@@ -104,19 +104,27 @@ func TestParameters_Schema_RequiredFirstThenByName(t *testing.T) {
 // TestParameters_Alternatives_ReadAsFindAndTheManifestReadThem verifies that
 // the page states an action's alternatives through actioncatalog, the reading
 // gitlab_find_action and gitlab://tools publish: a root oneOf is read as well
-// as an anyOf, and a keyword with a branch every call already satisfies asks
-// for nothing, so the page does not say a call needs one of its other
-// branches.
+// as an anyOf, a keyword with a branch every call already satisfies asks for
+// nothing, so the page does not say a call needs one of its other branches,
+// and the alternatives of a oneOf alone are exclusive, as find and the
+// manifest say, while those of an anyOf are not.
 func TestParameters_Alternatives_ReadAsFindAndTheManifestReadThem(t *testing.T) {
 	tests := []struct {
-		name   string
-		schema map[string]any
-		want   [][]string
+		name          string
+		schema        map[string]any
+		want          [][]string
+		wantExclusive bool
 	}{
 		{
-			name:   "a root oneOf",
-			schema: map[string]any{"oneOf": []any{map[string]any{"required": []any{"branch"}}, map[string]any{"required": []any{"tag"}}}},
-			want:   [][]string{{"branch"}, {"tag"}},
+			name:          "a root oneOf",
+			schema:        map[string]any{"oneOf": []any{map[string]any{"required": []any{"branch"}}, map[string]any{"required": []any{"tag"}}}},
+			want:          [][]string{{"branch"}, {"tag"}},
+			wantExclusive: true,
+		},
+		{
+			name:   "a root anyOf",
+			schema: map[string]any{"anyOf": []any{map[string]any{"required": []any{"name"}}, map[string]any{"required": []any{"path"}}}},
+			want:   [][]string{{"name"}, {"path"}},
 		},
 		{
 			name: "a branch the root list satisfies",
@@ -129,18 +137,21 @@ func TestParameters_Alternatives_ReadAsFindAndTheManifestReadThem(t *testing.T) 
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, oneOf := parameters(tc.schema, nil)
+			_, oneOf, exclusive := parameters(tc.schema, nil)
 			if !slices.EqualFunc(oneOf, tc.want, slices.Equal[[]string]) {
 				t.Errorf("oneOf = %v, want %v", oneOf, tc.want)
+			}
+			if exclusive != tc.wantExclusive {
+				t.Errorf("exclusive = %t, want %t", exclusive, tc.wantExclusive)
 			}
 		})
 	}
 }
 
 func TestParameters_NoAlternatives_HasNoOneOf(t *testing.T) {
-	_, oneOf := parameters(schemaOf(nil, "a"), nil)
-	if oneOf != nil {
-		t.Errorf("oneOf = %v, want nil", oneOf)
+	_, oneOf, exclusive := parameters(schemaOf(nil, "a"), nil)
+	if oneOf != nil || exclusive {
+		t.Errorf("oneOf = %v, exclusive = %t, want nil and false", oneOf, exclusive)
 	}
 }
 

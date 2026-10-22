@@ -425,6 +425,40 @@ func TestWriteAction_NoIndividualToolAndAlternatives_AreSaid(t *testing.T) {
 	)
 }
 
+// TestWriteAction_ExclusiveAlternatives_SayExactlyOne verifies the sentence
+// an action whose alternatives are exclusive is written with, in each
+// language: exactly one of them, where the alternatives of an anyOf read at
+// least one. The page wrote at least one for both, so the reference told a
+// reader that an LDAP group link could be added by a common name and a filter
+// together, and GitLab refuses that call.
+func TestWriteAction_ExclusiveAlternatives_SayExactlyOne(t *testing.T) {
+	tests := []struct {
+		lang language
+		want string
+	}{
+		{lang: english, want: "Also needs exactly one of: `cn`; `filter`."},
+		{lang: spanish, want: "Además necesita exactamente uno de estos: `cn`; `filter`."},
+	}
+	for _, tc := range tests {
+		t.Run(tc.lang.code, func(t *testing.T) {
+			var b strings.Builder
+			action := &refAction{
+				id: "group.ldap_link_add", name: "ldap_link_add", metaTool: "gitlab_group", individual: "gitlab_group_ldap_link_add",
+				params:    []param{{name: "cn", typ: "`string`"}, {name: "filter", typ: "`string`"}},
+				oneOf:     [][]string{{"cn"}, {"filter"}},
+				exclusive: true,
+				domain:    "group",
+				classic:   finegrained.ClassicAPI, fineGrained: &finegrained.Description{AnyOf: []finegrained.Way{{}}},
+			}
+			writeAction(&b, action, tc.lang, func(id string) string { return "#" + anchor(id) })
+			mustContain(t, b.String(), tc.want)
+			if strings.Contains(b.String(), tc.lang.oneOf[:strings.Index(tc.lang.oneOf, "%s")]) {
+				t.Errorf("page = %q, want no at-least-one sentence for exclusive alternatives", b.String())
+			}
+		})
+	}
+}
+
 func TestQuote_ListsAndClauses_AreSetApart(t *testing.T) {
 	linkTo := func(id string) string { return "/x/#" + anchor(id) }
 	tests := []struct {

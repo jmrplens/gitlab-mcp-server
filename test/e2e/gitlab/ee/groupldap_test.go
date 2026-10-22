@@ -143,7 +143,7 @@ func TestGroupLDAPLinks_BothOrNeitherSelector_AreRefusedBeforeGitLab(t *testing.
 			case surface == harness.SurfaceIndividual:
 				harness.Refused(s, call.id, call.params, harness.FailureInvalidParams)
 			case surface == harness.SurfaceDynamic && call.handler != "not both":
-				harness.ExpectToolError(s, call.id, call.params, "missing one of cn or filter")
+				harness.ExpectToolError(s, call.id, call.params, "missing exactly one of cn or filter")
 			default:
 				refused := harness.ExpectToolError(s, call.id, call.params, call.handler)
 				assertMentions(e, call.name+" refused", refused, "exactly one of cn or filter")

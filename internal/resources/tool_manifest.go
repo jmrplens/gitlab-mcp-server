@@ -131,10 +131,17 @@ type ToolSurfaceEntry struct {
 	RequiredParams []ToolSurfaceRequiredParam `json:"required_params,omitempty"`
 	// RequiredParamsAnyOf lists alternative requirement groups: the schema
 	// accepts a call satisfying at least one group ("name, description or
-	// color", "file_name+content or files"). These names are NOT in
-	// RequiredParams — publishing an alternative as unconditionally
-	// required invites clients to send every branch at once.
+	// color", "file_name+content or files"), or exactly one where
+	// ExclusiveGroups says so. These names are NOT in RequiredParams:
+	// publishing an alternative as unconditionally required invites clients
+	// to send every branch at once.
 	RequiredParamsAnyOf [][]ToolSurfaceRequiredParam `json:"required_params_any_of,omitempty"`
+	// ExclusiveGroups says that a call satisfies exactly one group of
+	// RequiredParamsAnyOf: the groups come from a oneOf, GitLab's
+	// exactly_one_of ("cn or filter" of an LDAP group link), which refuses a
+	// call naming two of them. Read without it, the groups told a client that
+	// a call naming both would do.
+	ExclusiveGroups bool `json:"required_params_exclusive,omitempty"`
 }
 
 // ToolSurfaceRequiredParam names one required parameter of a manifest
@@ -589,6 +596,7 @@ func (snapshot *toolSurfaceSnapshot) addDynamicActions(catalog *actioncatalog.Ca
 			ReadOnly:            action.ReadOnly,
 			RequiredParams:      manifestRequiredParams(action.Route.InputSchema),
 			RequiredParamsAnyOf: manifestAlternativeRequiredParams(action.Route.InputSchema),
+			ExclusiveGroups:     actioncatalog.RequiredParamAlternativesExclusive(action.Route.InputSchema),
 		}
 		if primary, ok := aliases[string(action.ID)]; ok {
 			entry.AliasOf = string(primary.ID)
@@ -645,6 +653,7 @@ func (snapshot *toolSurfaceSnapshot) addMetaActions(catalog *actioncatalog.Catal
 				Destructive:         route.Destructive,
 				RequiredParams:      manifestRequiredParams(route.InputSchema),
 				RequiredParamsAnyOf: manifestAlternativeRequiredParams(route.InputSchema),
+				ExclusiveGroups:     actioncatalog.RequiredParamAlternativesExclusive(route.InputSchema),
 			}
 			snapshot.addMetaEntry(entry, routeSnapshot)
 		}
@@ -664,6 +673,7 @@ func (snapshot *toolSurfaceSnapshot) addMetaAction(action actioncatalog.Action, 
 		ReadOnly:            action.ReadOnly,
 		RequiredParams:      manifestRequiredParams(action.Route.InputSchema),
 		RequiredParamsAnyOf: manifestAlternativeRequiredParams(action.Route.InputSchema),
+		ExclusiveGroups:     actioncatalog.RequiredParamAlternativesExclusive(action.Route.InputSchema),
 	}
 	if primary, ok := aliases[string(action.ID)]; ok {
 		entry.AliasOf = metaManifestID(primary.ToolName, primary.Name)
@@ -869,6 +879,7 @@ func directToolEntry(tool toolSnapshot, kind string) ToolSurfaceEntry {
 		ReadOnly:            tool.ReadOnly,
 		RequiredParams:      requiredParamsFromInputSchema(tool.InputSchema),
 		RequiredParamsAnyOf: alternativeRequiredParamsFromInputSchema(tool.InputSchema),
+		ExclusiveGroups:     exclusiveGroupsFromInputSchema(tool.InputSchema),
 	}
 }
 
@@ -901,6 +912,14 @@ func alternativeRequiredParamsFromInputSchema(inputSchema any) [][]ToolSurfaceRe
 		return nil
 	}
 	return manifestAlternativeRequiredParams(schema)
+}
+
+// exclusiveGroupsFromInputSchema reports whether a call satisfies exactly one
+// of the alternative groups of a tool's input schema, held as any. A schema
+// that is not a map names no groups, so none of them is exclusive.
+func exclusiveGroupsFromInputSchema(inputSchema any) bool {
+	schema, _ := inputSchema.(map[string]any)
+	return actioncatalog.RequiredParamAlternativesExclusive(schema)
 }
 
 func actionTitle(action actioncatalog.Action) string {

@@ -107,9 +107,13 @@ type language struct {
 	idempotent      string
 	notIdempotent   string
 	noParameters    string
-	oneOf           string
-	oneOfJoin       string
-	oneOfAnd        string
+	// oneOf is the sentence naming an action's alternative sets, of which a
+	// call needs at least one, and exactlyOneOf the one naming exclusive
+	// sets, of which it needs exactly one.
+	oneOf        string
+	exactlyOneOf string
+	oneOfJoin    string
+	oneOfAnd     string
 }
 
 // siteRoot is the path the documentation site is served under. The English
@@ -251,6 +255,7 @@ var english = language{
 	notIdempotent: "not idempotent",
 	noParameters:  "No parameters.",
 	oneOf:         "Also needs at least one of: %s.",
+	exactlyOneOf:  "Also needs exactly one of: %s.",
 	oneOfJoin:     "; ",
 	oneOfAnd:      " and ",
 }
@@ -333,6 +338,7 @@ var spanish = language{
 	notIdempotent: "no idempotente",
 	noParameters:  "Sin parámetros.",
 	oneOf:         "Además necesita al menos uno de estos: %s.",
+	exactlyOneOf:  "Además necesita exactamente uno de estos: %s.",
 	oneOfJoin:     "; ",
 	oneOfAnd:      " y ",
 }

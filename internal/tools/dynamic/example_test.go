@@ -304,9 +304,10 @@ func TestFind_ExamplesUseValuesGitLabAccepts(t *testing.T) {
 // describe offer for the two LDAP link actions GitLab declares with
 // exactly_one_of :cn, :filter. Their schemas published both as optional and
 // stated no choice, so the example sent neither and GitLab refused the call
-// it built (issue 1270). Now the two are the alternatives of a oneOf, and the
-// example fills the first, the common name, beside the parameters every call
-// carries, and never the filter as well, which GitLab refuses just the same.
+// it built (issue 1270). Now the two are the alternatives of a oneOf, which
+// find publishes as exclusive groups, and the example fills the first, the
+// common name, beside the parameters every call carries, and never the
+// filter as well, which GitLab refuses just the same.
 func TestFind_LDAPLinkExamples_NameTheCommonNameAlone(t *testing.T) {
 	registry := NewRegistryFromCatalog(mustCachedCatalog(t, true))
 	wantGroups := [][]string{{"cn"}, {"filter"}}
@@ -325,8 +326,8 @@ func TestFind_LDAPLinkExamples_NameTheCommonNameAlone(t *testing.T) {
 				t.Fatalf("resolveAction(%s) found nothing", tc.action)
 			}
 			described := registry.describeEntry(entry)
-			if !reflect.DeepEqual(described.RequiredParamsAnyOf, wantGroups) {
-				t.Errorf("%s required_params_any_of = %v, want %v", tc.action, described.RequiredParamsAnyOf, wantGroups)
+			if !reflect.DeepEqual(described.RequiredParamsAnyOf, wantGroups) || !described.ExclusiveGroups {
+				t.Errorf("%s required_params_any_of = %v, exclusive %t, want %v, exclusive", tc.action, described.RequiredParamsAnyOf, described.ExclusiveGroups, wantGroups)
 			}
 			params, _ := described.Example.Arguments["params"].(map[string]any)
 			if got := slices.Sorted(maps.Keys(params)); !slices.Equal(got, tc.wantParams) {

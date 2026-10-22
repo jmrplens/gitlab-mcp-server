@@ -356,7 +356,11 @@ func writeAction(b *strings.Builder, action *refAction, lang language, linkTo fu
 			}
 			sets = append(sets, strings.Join(names, lang.oneOfAnd))
 		}
-		paragraph(b, fmt.Sprintf(lang.oneOf, strings.Join(sets, lang.oneOfJoin)))
+		sentence := lang.oneOf
+		if action.exclusive {
+			sentence = lang.exactlyOneOf
+		}
+		paragraph(b, fmt.Sprintf(sentence, strings.Join(sets, lang.oneOfJoin)))
 	}
 }
 

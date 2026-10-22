@@ -195,3 +195,48 @@ func TestRequiredParamAlternatives_GroupsOfWhichACallNeedsOne(t *testing.T) {
 		})
 	}
 }
+
+// TestRequiredParamAlternativesExclusive_OnlyAOneOfAlone verifies when the
+// groups [RequiredParamAlternatives] reads are exclusive, so that a call
+// completes exactly one of them rather than at least one: when they come from
+// a root oneOf, GitLab's exactly_one_of as toolutil.SchemaOneOfRequired writes
+// it, and from no anyOf beside it.
+//
+// The groups were published as a choice of which a call satisfies at least
+// one, which is what an anyOf asks, and a oneOf refuses a call satisfying two:
+// a client reading the groups alone was told it could send a common name and
+// a filter together to an LDAP link, which GitLab refuses. An anyOf beside the
+// oneOf makes each group a combination of the two, and a call may complete
+// two such groups through two anyOf branches, so those groups are not
+// exclusive. A oneOf with nothing to ask is no group at all.
+func TestRequiredParamAlternativesExclusive_OnlyAOneOfAlone(t *testing.T) {
+	oneOf := []any{map[string]any{"required": []any{"cn"}}, map[string]any{"required": []any{"filter"}}}
+	anyOf := []any{map[string]any{"required": []any{"name"}}, map[string]any{"required": []any{"path"}}}
+	tests := []struct {
+		name   string
+		schema map[string]any
+		want   bool
+	}{
+		{name: "no schema", schema: nil, want: false},
+		{name: "no alternatives", schema: map[string]any{"required": []any{"group_id"}}, want: false},
+		{name: "a oneOf alone", schema: map[string]any{"required": []any{"group_id"}, "oneOf": oneOf}, want: true},
+		{name: "an anyOf alone", schema: map[string]any{"anyOf": anyOf}, want: false},
+		{name: "an anyOf beside the oneOf", schema: map[string]any{"anyOf": anyOf, "oneOf": oneOf}, want: false},
+		{name: "an anyOf with nothing to ask leaves the oneOf exclusive", schema: map[string]any{"anyOf": []any{map[string]any{"required": []any{}}}, "oneOf": oneOf}, want: true},
+		{
+			name: "a oneOf whose branch the root satisfies asks nothing",
+			schema: map[string]any{
+				"required": []any{"cn"},
+				"oneOf":    oneOf,
+			},
+			want: false,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := RequiredParamAlternativesExclusive(tc.schema); got != tc.want {
+				t.Errorf("RequiredParamAlternativesExclusive() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}

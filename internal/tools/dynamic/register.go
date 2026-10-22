@@ -139,7 +139,8 @@ type SearchResult struct {
 	SchemaURI           string              `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
 	Destructive         bool                `json:"destructive" jsonschema:"Whether this action is marked destructive and requires explicit confirmation."`
 	RequiredParams      []string            `json:"required_params,omitempty" jsonschema:"Required action-specific parameter names to place inside gitlab_execute_action params."`
-	RequiredParamsAnyOf [][]string          `json:"required_params_any_of,omitempty" jsonschema:"Alternative groups: a call also needs every name of one group, not all groups."`
+	RequiredParamsAnyOf [][]string          `json:"required_params_any_of,omitempty" jsonschema:"Alternative groups: a call also needs every name of at least one group, not all groups, and of exactly one when required_params_exclusive is true."`
+	ExclusiveGroups     bool                `json:"required_params_exclusive,omitempty" jsonschema:"True when a call completes exactly one group of required_params_any_of: GitLab refuses a call completing two as it refuses one completing none."`
 	Usage               string              `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
 	WhyThisAction       string              `json:"why_this_action,omitempty" jsonschema:"Compact reason included only for close or ambiguous alternatives."`
 	RelatedActions      []string            `json:"related_actions,omitempty" jsonschema:"Curated nearby action IDs for workflows where ordering matters."`
@@ -179,7 +180,8 @@ type ActionDescription struct {
 	SchemaURI           string                                `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
 	Destructive         bool                                  `json:"destructive" jsonschema:"Whether this action requires explicit confirmation."`
 	RequiredParams      []string                              `json:"required_params,omitempty" jsonschema:"Required action-specific parameter names to place inside gitlab_execute_action params."`
-	RequiredParamsAnyOf [][]string                            `json:"required_params_any_of,omitempty" jsonschema:"Alternative groups: a call also needs every name of one group, not all groups."`
+	RequiredParamsAnyOf [][]string                            `json:"required_params_any_of,omitempty" jsonschema:"Alternative groups: a call also needs every name of at least one group, not all groups, and of exactly one when required_params_exclusive is true."`
+	ExclusiveGroups     bool                                  `json:"required_params_exclusive,omitempty" jsonschema:"True when a call completes exactly one group of required_params_any_of: GitLab refuses a call completing two as it refuses one completing none."`
 	Usage               string                                `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
 	RelatedActions      []string                              `json:"related_actions,omitempty" jsonschema:"Curated nearby action IDs for workflows where ordering matters."`
 	ParamGuidance       map[string]toolutil.ParameterGuidance `json:"parameter_guidance,omitempty" jsonschema:"Parameter binding guidance for commonly confused params."`
@@ -255,9 +257,12 @@ type FindInput struct {
 // RequiredParamsAnyOf is the schema's anyOf or oneOf requirement, kept apart
 // from RequiredParams because it is not one: a call needs every name of one
 // group, and listing every group as required told a model to send them all at
-// once (issue 1175). Both lists are read by actioncatalog, which the
-// gitlab://tools manifest publishes the same two lists from, and the search
-// and describe answers carry them too.
+// once (issue 1175). ExclusiveGroups says when the groups come from a oneOf,
+// of which a call completes exactly one: GitLab's exactly_one_of refuses a
+// call naming two of them, and the groups alone read as a choice of which a
+// call may complete several. All three are read by actioncatalog, which the
+// gitlab://tools manifest publishes the same fields from, and the search and
+// describe answers carry them too.
 type FindResult struct {
 	ID                  string                                `json:"id" jsonschema:"Canonical action ID to pass to gitlab_execute_action."`
 	Tool                string                                `json:"tool" jsonschema:"Backing meta-tool name."`
@@ -266,7 +271,8 @@ type FindResult struct {
 	SchemaURI           string                                `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
 	Destructive         bool                                  `json:"destructive" jsonschema:"Whether this action requires explicit confirmation."`
 	RequiredParams      []string                              `json:"required_params,omitempty" jsonschema:"Required action-specific parameter names to place inside gitlab_execute_action params."`
-	RequiredParamsAnyOf [][]string                            `json:"required_params_any_of,omitempty" jsonschema:"Alternative groups: a call also needs every name of one group, not all groups."`
+	RequiredParamsAnyOf [][]string                            `json:"required_params_any_of,omitempty" jsonschema:"Alternative groups: a call also needs every name of at least one group, not all groups, and of exactly one when required_params_exclusive is true."`
+	ExclusiveGroups     bool                                  `json:"required_params_exclusive,omitempty" jsonschema:"True when a call completes exactly one group of required_params_any_of: GitLab refuses a call completing two as it refuses one completing none."`
 	Usage               string                                `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
 	RelatedActions      []string                              `json:"related_actions,omitempty" jsonschema:"Curated nearby action IDs for workflows where ordering matters."`
 	ParamGuidance       map[string]toolutil.ParameterGuidance `json:"parameter_guidance,omitempty" jsonschema:"Parameter binding guidance for commonly confused params."`
@@ -315,8 +321,11 @@ type actionEntry struct {
 	ReadOnly       bool
 	RequiredParams []string
 	// RequiredParamsAnyOf holds the alternative groups, apart from
-	// RequiredParams, as [actioncatalog.RequiredParamAlternatives] reads them.
+	// RequiredParams, as [actioncatalog.RequiredParamAlternatives] reads them,
+	// and ExclusiveGroups whether a call completes exactly one of them, as
+	// [actioncatalog.RequiredParamAlternativesExclusive] reads it.
 	RequiredParamsAnyOf [][]string
+	ExclusiveGroups     bool
 	Document            searchDocument
 	SearchText          string
 	SearchTokens        []string
@@ -726,6 +735,7 @@ func buildRegistryShape(catalog *actioncatalog.Catalog, aliases []actionAlias) *
 				ReadOnly:            action.ReadOnly,
 				RequiredParams:      actioncatalog.RequiredParams(route.InputSchema),
 				RequiredParamsAnyOf: actioncatalog.RequiredParamAlternatives(route.InputSchema),
+				ExclusiveGroups:     actioncatalog.RequiredParamAlternativesExclusive(route.InputSchema),
 				Document:            document,
 				SearchText:          document.FlatText,
 				SearchTokens:        buildSearchTokens(document.FlatText),
@@ -783,6 +793,7 @@ func (r *Registry) Search(ctx context.Context, _ *mcp.CallToolRequest, input Sea
 			Destructive:         entry.Destructive,
 			RequiredParams:      append([]string(nil), entry.RequiredParams...),
 			RequiredParamsAnyOf: cloneParamGroups(entry.RequiredParamsAnyOf),
+			ExclusiveGroups:     entry.ExclusiveGroups,
 			Usage:               usageHintForEntry(entry),
 			RelatedActions:      r.publishedRelatedActions(entry),
 			Score:               match.score,
@@ -875,6 +886,7 @@ func (r *Registry) Find(ctx context.Context, req *mcp.CallToolRequest, input Fin
 			Destructive:         description.Destructive,
 			RequiredParams:      append([]string(nil), description.RequiredParams...),
 			RequiredParamsAnyOf: description.RequiredParamsAnyOf,
+			ExclusiveGroups:     description.ExclusiveGroups,
 			Usage:               description.Usage,
 			RelatedActions:      append([]string(nil), description.RelatedActions...),
 			ParamGuidance:       cloneParameterGuidance(description.ParamGuidance),
@@ -1046,7 +1058,7 @@ func validateDynamicExecuteParams(entry actionEntry, params map[string]any) *mcp
 		parts = append(parts, fmt.Sprintf("Missing required params: %s.", strings.Join(missing, ", ")))
 	}
 	if len(alternatives) > 0 {
-		parts = append(parts, fmt.Sprintf("Missing %s.", alternativesPhrase(alternatives, plainParamName)))
+		parts = append(parts, fmt.Sprintf("Missing %s.", alternativesPhrase(alternatives, entry.ExclusiveGroups, plainParamName)))
 	}
 	parts = append(parts, fmt.Sprintf("Valid params: %s.", strings.Join(validParams, ", ")))
 	return toolutil.ErrorResult(strings.Join(parts, " "))
@@ -2623,6 +2635,7 @@ func (r *Registry) describeEntry(entry actionEntry) ActionDescription {
 		Destructive:         entry.Destructive,
 		RequiredParams:      append([]string(nil), entry.RequiredParams...),
 		RequiredParamsAnyOf: cloneParamGroups(entry.RequiredParamsAnyOf),
+		ExclusiveGroups:     entry.ExclusiveGroups,
 		Usage:               usageHintForEntry(entry),
 		RelatedActions:      r.publishedRelatedActions(entry),
 		ParamGuidance:       cloneParameterGuidance(entry.Route.ParameterGuidance),
@@ -2893,7 +2906,7 @@ func whyThisActionForEntry(entry actionEntry) string {
 	if usage := usageHintForEntry(entry); usage != "" {
 		return usage
 	}
-	requirements := withAlternatives(strings.Join(entry.RequiredParams, ", "), alternativesPhrase(entry.RequiredParamsAnyOf, plainParamName))
+	requirements := withAlternatives(strings.Join(entry.RequiredParams, ", "), alternativesPhrase(entry.RequiredParamsAnyOf, entry.ExclusiveGroups, plainParamName))
 	if requirements == "" {
 		return fmt.Sprintf("Matches canonical action %s, which has no required params.", entry.ID)
 	}
@@ -4638,7 +4651,7 @@ func searchNextStep(results []SearchResult, confirmationSkipped bool) string {
 	if top.LowConfidence || len(top.AmbiguousWith) > 0 {
 		return fmt.Sprintf("Top result %s needs confirmation; choose the intended canonical action ID before executing.", backtickString(top.ID))
 	}
-	requirements := withAlternatives(compactParamList(top.RequiredParams, 8), alternativesPhrase(top.RequiredParamsAnyOf, backtickString))
+	requirements := withAlternatives(compactParamList(top.RequiredParams, 8), alternativesPhrase(top.RequiredParamsAnyOf, top.ExclusiveGroups, backtickString))
 	if requirements == "" {
 		return fmt.Sprintf("Top result %s has no required params. Execute with params:{} unless optional params are needed.", backtickString(top.ID))
 	}
@@ -4672,10 +4685,11 @@ func compactParamList(params []string, limit int) string {
 }
 
 // alternativesPhrase renders alternative requirement groups as "one of a, b
-// or c", a group of several names joined with " + ", each name written by
-// span. A single group is no choice, since a call needs all of it, so it is
-// written as the group alone. It is empty when there are no groups.
-func alternativesPhrase(groups [][]string, span func(string) string) string {
+// or c", or "exactly one of a, b or c" when they are exclusive, a group of
+// several names joined with " + ", each name written by span. A single group
+// is no choice, since a call needs all of it, so it is written as the group
+// alone. It is empty when there are no groups.
+func alternativesPhrase(groups [][]string, exclusive bool, span func(string) string) string {
 	rendered := make([]string, 0, len(groups))
 	for _, group := range groups {
 		names := make([]string, 0, len(group))
@@ -4691,7 +4705,11 @@ func alternativesPhrase(groups [][]string, span func(string) string) string {
 	if last == 0 {
 		return rendered[0]
 	}
-	return "one of " + strings.Join(rendered[:last], ", ") + " or " + rendered[last]
+	choice := "one of "
+	if exclusive {
+		choice = "exactly one of "
+	}
+	return choice + strings.Join(rendered[:last], ", ") + " or " + rendered[last]
 }
 
 // withAlternatives joins what every call needs and the alternatives phrase
@@ -4775,6 +4793,7 @@ type actionRow struct {
 	destructive    bool
 	requiredParams []string
 	alternatives   [][]string
+	exclusive      bool
 	// guidance and why hold their rendered cell, and are blank exactly when
 	// the column is closed.
 	guidance string
@@ -4799,7 +4818,7 @@ func actionRowCells(row actionRow, cols actionColumns) []string {
 		toolutil.MdCodeSpanCell(row.id),
 		strconv.Itoa(row.score),
 		destructiveCell(row.destructive),
-		requiredParamsCell(row.requiredParams, row.alternatives),
+		requiredParamsCell(row.requiredParams, row.alternatives, row.exclusive),
 		toolutil.EscapeMdTableCell(row.guidance),
 		toolutil.EscapeMdTableCell(row.why),
 	}, cols)
@@ -4818,13 +4837,13 @@ func destructiveCell(destructive bool) string {
 
 // requiredParamsCell names the keys that belong inside the params object, as
 // code spans a caller can copy verbatim: the ones every call needs, then the
-// alternative groups of which a call needs one.
-func requiredParamsCell(params []string, alternatives [][]string) string {
+// alternative groups of which a call needs one, exactly one when exclusive.
+func requiredParamsCell(params []string, alternatives [][]string, exclusive bool) string {
 	spans := make([]string, 0, len(params))
 	for _, param := range params {
 		spans = append(spans, toolutil.MdCodeSpanCell(param))
 	}
-	cell := withAlternatives(strings.Join(spans, ", "), alternativesPhrase(alternatives, toolutil.MdCodeSpanCell))
+	cell := withAlternatives(strings.Join(spans, ", "), alternativesPhrase(alternatives, exclusive, toolutil.MdCodeSpanCell))
 	if cell == "" {
 		return dashCell
 	}
@@ -4845,6 +4864,7 @@ func actionRowsFromSearch(results []SearchResult) []actionRow {
 			destructive:    result.Destructive,
 			requiredParams: result.RequiredParams,
 			alternatives:   result.RequiredParamsAnyOf,
+			exclusive:      result.ExclusiveGroups,
 		}
 		if withGuidance {
 			row.guidance = compactSearchGuidance(result)
@@ -4870,6 +4890,7 @@ func actionRowsFromFind(results []FindResult) []actionRow {
 			destructive:    result.Destructive,
 			requiredParams: result.RequiredParams,
 			alternatives:   result.RequiredParamsAnyOf,
+			exclusive:      result.ExclusiveGroups,
 		}
 		if withGuidance {
 			row.guidance = compactFindGuidance(result)
@@ -4995,7 +5016,7 @@ func writeActionDescription(c *toolutil.Card, action ActionDescription) {
 	c.Code("Action", action.Action)
 	c.Warn("Destructive", action.Destructive)
 	c.Field("Usage", action.Usage)
-	c.Field("Required params", withAlternatives(codeSpanList(action.RequiredParams), alternativesPhrase(action.RequiredParamsAnyOf, backtickString)))
+	c.Field("Required params", withAlternatives(codeSpanList(action.RequiredParams), alternativesPhrase(action.RequiredParamsAnyOf, action.ExclusiveGroups, backtickString)))
 	c.Field("Related actions", codeSpanList(action.RelatedActions))
 	c.Field("Parameter guidance", compactParameterGuidance(action.ParamGuidance, len(action.ParamGuidance), action.RequiredParams...))
 	c.Code("Schema URI", action.SchemaURI)

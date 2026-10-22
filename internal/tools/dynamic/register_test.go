@@ -3440,6 +3440,158 @@ func TestExecute_MissingAlternativesAreNamedAsFindNamesThem(t *testing.T) {
 	}
 }
 
+// TestExclusiveAlternatives_AreSaidToTakeExactlyOne verifies that every answer
+// naming an action's alternative groups says when a call takes exactly one of
+// them: find, search and describe carry required_params_exclusive beside the
+// groups and write "exactly one of" where they write the choice, and execute
+// refuses a call that completes none of them with the same words. The groups
+// of a oneOf, GitLab's exactly_one_of, were published as the groups of an
+// anyOf, of which a call satisfies at least one, so a client reading them was
+// told a call naming both would do, and GitLab refuses that call. An anyOf
+// keeps saying one of, and carries no flag.
+func TestExclusiveAlternatives_AreSaidToTakeExactlyOne(t *testing.T) {
+	selector := func(keyword string) toolutil.ActionRoute {
+		return toolutil.ActionRoute{
+			Handler: func(context.Context, map[string]any) (any, error) { return map[string]any{}, nil },
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"group_id"},
+				"properties": map[string]any{
+					"group_id": map[string]any{"type": "string"},
+					"cn":       map[string]any{"type": "string"},
+					"filter":   map[string]any{"type": "string"},
+				},
+				keyword: []any{map[string]any{"required": []any{"cn"}}, map[string]any{"required": []any{"filter"}}},
+			},
+		}
+	}
+	registry := NewRegistry(map[string]toolutil.ActionMap{
+		"gitlab_widget": {"link": selector("oneOf"), "tag": selector("anyOf")},
+	})
+	tests := []exclusiveAlternativesCase{
+		{
+			action:        "widget.link",
+			wantExclusive: true,
+			wantRefusal:   "Missing exactly one of cn or filter.",
+			wantCell:      "| `widget.link` |",
+			wantLine:      "- **Required params**: `group_id` and exactly one of `cn` or `filter`\n",
+		},
+		{
+			action:      "widget.tag",
+			wantRefusal: "Missing one of cn or filter.",
+			wantCell:    "| `widget.tag` |",
+			wantLine:    "- **Required params**: `group_id` and one of `cn` or `filter`\n",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.action, func(t *testing.T) {
+			t.Run("find", func(t *testing.T) { checkFindSaysExclusive(t, registry, tc) })
+			t.Run("search", func(t *testing.T) { checkSearchSaysExclusive(t, registry, tc) })
+			t.Run("describe", func(t *testing.T) { checkDescribeSaysExclusive(t, registry, tc) })
+			t.Run("execute", func(t *testing.T) { checkExecuteSaysExclusive(t, registry, tc) })
+		})
+	}
+}
+
+// exclusiveAlternativesCase is one action of
+// TestExclusiveAlternatives_AreSaidToTakeExactlyOne and what each answer says
+// about its groups.
+type exclusiveAlternativesCase struct {
+	action        string
+	wantExclusive bool
+	wantRefusal   string
+	wantCell      string
+	wantLine      string
+}
+
+// checkFindSaysExclusive holds find's structured result and table row.
+func checkFindSaysExclusive(t *testing.T, registry *Registry, tc exclusiveAlternativesCase) {
+	t.Helper()
+	result, found, err := registry.Find(t.Context(), nil, FindInput{Query: tc.action})
+	if err != nil || len(found.Results) == 0 {
+		t.Fatalf("Find(%s) = %+v, %v, want matches", tc.action, found, err)
+	}
+	if got := resultFor(t, found.Results, tc.action, func(r FindResult) string { return r.ID }); got.ExclusiveGroups != tc.wantExclusive {
+		t.Errorf("find %s required_params_exclusive = %t, want %t", tc.action, got.ExclusiveGroups, tc.wantExclusive)
+	}
+	assertAlternativesRow(t, "find", textContent(result), tc.wantCell, tc.wantExclusive)
+}
+
+// checkSearchSaysExclusive holds search's structured result and table row.
+func checkSearchSaysExclusive(t *testing.T, registry *Registry, tc exclusiveAlternativesCase) {
+	t.Helper()
+	result, searched, err := registry.Search(t.Context(), nil, SearchInput{Query: tc.action})
+	if err != nil || len(searched.Results) == 0 {
+		t.Fatalf("Search(%s) = %+v, %v, want matches", tc.action, searched, err)
+	}
+	if got := resultFor(t, searched.Results, tc.action, func(r SearchResult) string { return r.ID }); got.ExclusiveGroups != tc.wantExclusive {
+		t.Errorf("search %s required_params_exclusive = %t, want %t", tc.action, got.ExclusiveGroups, tc.wantExclusive)
+	}
+	assertAlternativesRow(t, "search", textContent(result), tc.wantCell, tc.wantExclusive)
+}
+
+// checkDescribeSaysExclusive holds describe's structured action and card line.
+func checkDescribeSaysExclusive(t *testing.T, registry *Registry, tc exclusiveAlternativesCase) {
+	t.Helper()
+	result, described, err := registry.Describe(t.Context(), nil, DescribeInput{Action: tc.action})
+	if err != nil || len(described.Actions) != 1 {
+		t.Fatalf("Describe(%s) = %+v, %v, want one action", tc.action, described, err)
+	}
+	if got := described.Actions[0].ExclusiveGroups; got != tc.wantExclusive {
+		t.Errorf("describe %s required_params_exclusive = %t, want %t", tc.action, got, tc.wantExclusive)
+	}
+	if text := textContent(result); !strings.Contains(text, tc.wantLine) {
+		t.Errorf("describe %s card = %q, want the line %q", tc.action, text, tc.wantLine)
+	}
+}
+
+// checkExecuteSaysExclusive holds execute's refusal of a call completing none
+// of the groups.
+func checkExecuteSaysExclusive(t *testing.T, registry *Registry, tc exclusiveAlternativesCase) {
+	t.Helper()
+	refused, _, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: tc.action, Params: map[string]any{"group_id": "g"}})
+	if err != nil || refused == nil || !refused.IsError {
+		t.Fatalf("Execute(%s) = %+v, %v, want a tool error", tc.action, refused, err)
+	}
+	if text := textContent(refused); !strings.Contains(text, tc.wantRefusal) {
+		t.Errorf("Execute(%s) error text = %q, want it to contain %q", tc.action, text, tc.wantRefusal)
+	}
+}
+
+// resultFor returns the result of results whose ID is id, failing the test
+// when none is.
+func resultFor[R any](t *testing.T, results []R, id string, idOf func(R) string) R {
+	t.Helper()
+	for _, result := range results {
+		if idOf(result) == id {
+			return result
+		}
+	}
+	t.Fatalf("no result for %s among %d", id, len(results))
+	var none R
+	return none
+}
+
+// assertAlternativesRow holds the table row of an action to the choice its
+// groups offer: exactly one of them for exclusive groups, one of them
+// otherwise.
+func assertAlternativesRow(t *testing.T, answer, text, cell string, exclusive bool) {
+	t.Helper()
+	want := "`group_id` and one of `cn` or `filter` |"
+	if exclusive {
+		want = "`group_id` and exactly one of `cn` or `filter` |"
+	}
+	for line := range strings.Lines(text) {
+		if strings.HasPrefix(line, cell) {
+			if !strings.Contains(line, want) {
+				t.Errorf("%s row = %q, want it to end %q", answer, line, want)
+			}
+			return
+		}
+	}
+	t.Errorf("%s answer = %q, want a row starting %q", answer, text, cell)
+}
+
 // TestUnmetAlternatives_DemandsWhatFindPublishes verifies that execute
 // demands of the alternatives exactly what find and the manifest publish,
 // since all three read actioncatalog.RequiredParamAlternatives: an anyOf that
@@ -10761,6 +10913,16 @@ func TestSearchNextStep_AdviceForEachTopResultShape(t *testing.T) {
 			want: "search only proves required params `attribute_id` and one of `name`, `description` or `color`.",
 		},
 		{
+			name: "exclusive alternatives are named as exactly one",
+			results: []SearchResult{{
+				ID:                  "group.ldap_link_add",
+				RequiredParams:      []string{"group_id"},
+				RequiredParamsAnyOf: [][]string{{"cn"}, {"filter"}},
+				ExclusiveGroups:     true,
+			}},
+			want: "search only proves required params `group_id` and exactly one of `cn` or `filter`.",
+		},
+		{
 			name: "alternatives alone are not read as no params at all",
 			results: []SearchResult{{
 				ID:                  "snippet.create",
@@ -12097,22 +12259,26 @@ func TestFormatFindOutput_RequiredParamsCell(t *testing.T) {
 // written for a reader, for every count of groups the phrase distinguishes,
 // and how the phrase joins the params every call needs. A single group is no
 // choice, since a call needs every name of it, so it is written without "one
-// of", which would read as a choice among its names.
+// of", which would read as a choice among its names, exclusive or not.
+// Exclusive groups, of which a call completes exactly one, say so.
 func TestAlternativesPhrase_JoinsTheGroups(t *testing.T) {
 	phrases := []struct {
-		name   string
-		groups [][]string
-		want   string
+		name      string
+		groups    [][]string
+		exclusive bool
+		want      string
 	}{
 		{name: "no groups", groups: nil, want: ""},
 		{name: "one group of one name", groups: [][]string{{"files"}}, want: "`files`"},
 		{name: "one group of several names", groups: [][]string{{"file_name", "content"}}, want: "`file_name` + `content`"},
 		{name: "two groups", groups: [][]string{{"project_ids"}, {"group_ids"}}, want: "one of `project_ids` or `group_ids`"},
 		{name: "three groups", groups: [][]string{{"name"}, {"description"}, {"color"}}, want: "one of `name`, `description` or `color`"},
+		{name: "two exclusive groups", groups: [][]string{{"cn"}, {"filter"}}, exclusive: true, want: "exactly one of `cn` or `filter`"},
+		{name: "one exclusive group", groups: [][]string{{"cn"}}, exclusive: true, want: "`cn`"},
 	}
 	for _, tc := range phrases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := alternativesPhrase(tc.groups, backtickString); got != tc.want {
+			if got := alternativesPhrase(tc.groups, tc.exclusive, backtickString); got != tc.want {
 				t.Fatalf("alternativesPhrase() = %q, want %q", got, tc.want)
 			}
 		})
@@ -12221,6 +12387,11 @@ func TestWhyThisActionForEntry_SaysWhatTheCallNeeds(t *testing.T) {
 			name:  "required params and alternatives",
 			entry: actionEntry{ID: "widget.update", RequiredParams: []string{"widget_id"}, RequiredParamsAnyOf: [][]string{{"name"}, {"color"}}},
 			want:  "Matches canonical action widget.update with required params widget_id and one of name or color.",
+		},
+		{
+			name:  "required params and exclusive alternatives",
+			entry: actionEntry{ID: "widget.link", RequiredParams: []string{"group_id"}, RequiredParamsAnyOf: [][]string{{"cn"}, {"filter"}}, ExclusiveGroups: true},
+			want:  "Matches canonical action widget.link with required params group_id and exactly one of cn or filter.",
 		},
 		{
 			name:  "nothing required",

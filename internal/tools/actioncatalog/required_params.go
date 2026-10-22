@@ -50,7 +50,8 @@ func RequiredParams(schema map[string]any) []string {
 
 // RequiredParamAlternatives returns the alternative requirement groups of an
 // action's input schema, of which a call needs every name of one group, not
-// every group. A schema with one of anyOf and oneOf at its root gives one
+// every group, and of exactly one where [RequiredParamAlternativesExclusive]
+// says so. A schema with one of anyOf and oneOf at its root gives one
 // group per branch, holding the names that branch requires beyond the root
 // "required" list, in the order the branch declares them. A branch that is
 // not an object is skipped.
@@ -73,6 +74,24 @@ func RequiredParamAlternatives(schema map[string]any) [][]string {
 		groups = combineAlternatives(groups, keywordAlternatives(branches, root))
 	}
 	return groups
+}
+
+// RequiredParamAlternativesExclusive reports whether a call completes exactly
+// one of the groups [RequiredParamAlternatives] returns rather than at least
+// one: the groups come from a root oneOf, GitLab's exactly_one_of as
+// toolutil.SchemaOneOfRequired writes it, which refuses a call completing two
+// as it refuses one completing none, and from no anyOf beside it.
+//
+// An anyOf beside the oneOf makes each group a combination of the two, and a
+// call may complete two such groups through two anyOf branches, so those
+// groups are not exclusive and the answer is false. A keyword with nothing to
+// ask contributes no group, so it neither makes the groups exclusive nor
+// stops them being so.
+func RequiredParamAlternativesExclusive(schema map[string]any) bool {
+	root := RequiredParamNames(schema["required"])
+	anyOf, _ := schema["anyOf"].([]any)
+	oneOf, _ := schema["oneOf"].([]any)
+	return len(keywordAlternatives(oneOf, root)) > 0 && len(keywordAlternatives(anyOf, root)) == 0
 }
 
 // combineAlternatives returns the groups that meet the alternatives of two

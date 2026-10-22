@@ -1229,6 +1229,97 @@ func TestManifestRequiredParams_SplitsUnconditionalFromAlternatives(t *testing.T
 	}
 }
 
+// TestToolManifest_ExclusiveGroups_ArePublishedOnEverySurface verifies that
+// every manifest entry naming alternative groups says when a call completes
+// exactly one of them, on each surface and for each way an entry is built: a
+// dynamic action, a meta action from the catalog, a meta action its route
+// alone publishes, and an individual tool read from its own input schema.
+// Groups from a oneOf, GitLab's exactly_one_of, are exclusive; groups from an
+// anyOf are not and carry no flag. The groups alone were documented as a
+// choice of which a call satisfies at least one, which told a client reading
+// the manifest that an LDAP link could be added by a common name and a filter
+// together, and GitLab refuses that call.
+func TestToolManifest_ExclusiveGroups_ArePublishedOnEverySurface(t *testing.T) {
+	selector := func(keyword string) map[string]any {
+		return map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"cn": map[string]any{"type": "string"}, "filter": map[string]any{"type": "string"}},
+			keyword:      []any{map[string]any{"required": []any{"cn"}}, map[string]any{"required": []any{"filter"}}},
+		}
+	}
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_widget", BaseDomain: "widget"})
+	group.SetAction(actioncatalog.Action{Name: "link", Route: toolutil.ActionRoute{InputSchema: selector("oneOf")}})
+	group.SetAction(actioncatalog.Action{Name: "tag", Route: toolutil.ActionRoute{InputSchema: selector("anyOf")}})
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+	routes := catalog.ActionMaps()
+	routes["gitlab_widget"]["unlink"] = toolutil.ActionRoute{InputSchema: selector("oneOf")}
+
+	surfaces := []struct {
+		name string
+		opts ToolSurfaceResourceOptions
+		want map[string]bool
+	}{
+		{
+			name: "dynamic",
+			opts: ToolSurfaceResourceOptions{
+				Surface: toolSurfaceDynamic,
+				Tools:   []*mcp.Tool{{Name: "gitlab_execute_action"}},
+				Catalog: catalog,
+			},
+			want: map[string]bool{"widget.link": true, "widget.tag": false},
+		},
+		{
+			name: "meta",
+			opts: ToolSurfaceResourceOptions{
+				Surface:    toolSurfaceMeta,
+				Tools:      []*mcp.Tool{{Name: "gitlab_widget"}},
+				Catalog:    catalog,
+				MetaRoutes: routes,
+			},
+			want: map[string]bool{"gitlab_widget.link": true, "gitlab_widget.tag": false, "gitlab_widget.unlink": true},
+		},
+		{
+			name: "individual",
+			opts: ToolSurfaceResourceOptions{
+				Surface: toolSurfaceIndividual,
+				Tools: []*mcp.Tool{
+					{Name: "gitlab_widget_link", InputSchema: selector("oneOf")},
+					{Name: "gitlab_widget_tag", InputSchema: selector("anyOf")},
+				},
+			},
+			want: map[string]bool{"gitlab_widget_link": true, "gitlab_widget_tag": false},
+		},
+	}
+	for _, surface := range surfaces {
+		t.Run(surface.name, func(t *testing.T) {
+			session := toolManifestSession(t, surface.opts)
+			entries := make(map[string]ToolSurfaceEntry)
+			for _, entry := range readToolManifest(t, session, "gitlab://tools").Entries {
+				entries[entry.ID] = entry
+			}
+			for id, want := range surface.want {
+				entry, ok := entries[id]
+				if !ok {
+					t.Errorf("manifest has no entry %s among %d", id, len(entries))
+					continue
+				}
+				if len(entry.RequiredParamsAnyOf) != 2 {
+					t.Errorf("%s required_params_any_of = %v, want the two groups", id, entry.RequiredParamsAnyOf)
+				}
+				if entry.ExclusiveGroups != want {
+					t.Errorf("%s required_params_exclusive = %t, want %t", id, entry.ExclusiveGroups, want)
+				}
+				if detail := readToolDetail(t, session, "gitlab://tools/"+id); detail.ExclusiveGroups != want {
+					t.Errorf("%s detail required_params_exclusive = %t, want %t", id, detail.ExclusiveGroups, want)
+				}
+			}
+		})
+	}
+}
+
 // TestToolManifest_RequiredParams_AgreeWithFind verifies that the manifest
 // and gitlab_find_action name the same requirements for every action of the
 // Ultimate catalog, self-managed and GitLab.com: the same params every call
@@ -1307,6 +1398,9 @@ func checkFindAgreesWithManifest(t *testing.T, action actioncatalog.Action, foun
 	}
 	if !slices.EqualFunc(found.RequiredParamsAnyOf, want, slices.Equal[[]string]) {
 		t.Errorf("%s: find required_params_any_of = %v, manifest = %v", action.ID, found.RequiredParamsAnyOf, want)
+	}
+	if exclusive := exclusiveGroupsFromInputSchema(action.Route.InputSchema); found.ExclusiveGroups != exclusive {
+		t.Errorf("%s: find required_params_exclusive = %t, manifest = %t", action.ID, found.ExclusiveGroups, exclusive)
 	}
 }
 

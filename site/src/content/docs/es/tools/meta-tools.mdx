@@ -210,7 +210,7 @@ En la superficie meta el manifiesto lista una entrada `meta_action` por cada acc
 }
 ```
 
-Las entradas llevan además un `title` y una `description`. `required_params` nombra solo los parámetros que la acción exige siempre, cada uno con su tipo JSON; cuando una acción acepta en su lugar uno de varios grupos, estos van en `required_params_any_of`. En la superficie de capacidades `full` el manifiesto lleva también un bloque `subscriptions` que nombra los recursos que aceptan `resources/subscribe` ([Suscripciones a recursos](/gitlab-mcp-server/es/capabilities/subscriptions/)). El recurso de detalle responde también al ID canónico de la acción, así que `gitlab://tools/merge_request.create` devuelve el mismo detalle que `gitlab://tools/gitlab_merge_request.create`.
+Las entradas llevan además un `title` y una `description`. `required_params` nombra solo los parámetros que la acción exige siempre, cada uno con su tipo JSON; cuando una acción acepta en su lugar uno de varios grupos, estos van en `required_params_any_of`, y `required_params_exclusive` es `true` cuando acepta exactamente uno de ellos. En la superficie de capacidades `full` el manifiesto lleva también un bloque `subscriptions` que nombra los recursos que aceptan `resources/subscribe` ([Suscripciones a recursos](/gitlab-mcp-server/es/capabilities/subscriptions/)). El recurso de detalle responde también al ID canónico de la acción, así que `gitlab://tools/merge_request.create` devuelve el mismo detalle que `gitlab://tools/gitlab_merge_request.create`.
 
 ### Incluir los esquemas con `compact` o `full`
 

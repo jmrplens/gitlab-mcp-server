@@ -49,12 +49,12 @@ func stringList(value any) []string {
 }
 
 // parameters reads the parameters of an input schema, the required ones first
-// and each run in name order, and the alternative sets of which a call needs
-// one beside them. Both are actioncatalog's reading, the one
-// gitlab_find_action and gitlab://tools publish, so the page states the
-// requirement a model is told at run time. tiers is the lowest tier at which
-// each parameter is served.
-func parameters(schema map[string]any, tiers map[string]edition.Tier) (params []param, oneOf [][]string) {
+// and each run in name order, the alternative sets of which a call needs one
+// beside them, and whether it needs exactly one of them. All three are
+// actioncatalog's reading, the one gitlab_find_action and gitlab://tools
+// publish, so the page states the requirement a model is told at run time.
+// tiers is the lowest tier at which each parameter is served.
+func parameters(schema map[string]any, tiers map[string]edition.Tier) (params []param, oneOf [][]string, exclusive bool) {
 	required := map[string]bool{}
 	for _, name := range actioncatalog.RequiredParams(schema) {
 		required[name] = true
@@ -73,7 +73,7 @@ func parameters(schema map[string]any, tiers map[string]edition.Tier) (params []
 	slices.SortFunc(params, func(a, b param) int {
 		return cmp.Or(cmp.Compare(requiredRank[a.required], requiredRank[b.required]), cmp.Compare(a.name, b.name))
 	})
-	return params, actioncatalog.RequiredParamAlternatives(schema)
+	return params, actioncatalog.RequiredParamAlternatives(schema), actioncatalog.RequiredParamAlternativesExclusive(schema)
 }
 
 // schemaType renders the type of a property as Markdown: its JSON Schema type

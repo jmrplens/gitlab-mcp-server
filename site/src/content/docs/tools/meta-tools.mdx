@@ -210,7 +210,7 @@ On the meta surface the manifest lists one `meta_action` entry per action of eve
 }
 ```
 
-The entries also carry a `title` and a `description`. `required_params` names only the parameters the action always requires, each with its JSON type; when an action accepts one of several groups instead, they are in `required_params_any_of`. On the `full` capability surface the manifest also carries a `subscriptions` block naming the resources that accept `resources/subscribe` ([Resource subscriptions](/gitlab-mcp-server/capabilities/subscriptions/)). The detail resource answers the canonical action ID too, so `gitlab://tools/merge_request.create` returns the same detail as `gitlab://tools/gitlab_merge_request.create`.
+The entries also carry a `title` and a `description`. `required_params` names only the parameters the action always requires, each with its JSON type; when an action accepts one of several groups instead, they are in `required_params_any_of`, and `required_params_exclusive` is `true` when it accepts exactly one of them. On the `full` capability surface the manifest also carries a `subscriptions` block naming the resources that accept `resources/subscribe` ([Resource subscriptions](/gitlab-mcp-server/capabilities/subscriptions/)). The detail resource answers the canonical action ID too, so `gitlab://tools/merge_request.create` returns the same detail as `gitlab://tools/gitlab_merge_request.create`.
 
 ### Inlining the schemas with `compact` or `full`
 
