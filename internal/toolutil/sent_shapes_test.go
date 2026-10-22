@@ -1155,16 +1155,20 @@ func TestCapturedSplitListReaders_ReadAndHoldTheCount(t *testing.T) {
 // TestMemberRoleNameAt_InAndOutOfRange_ReturnsTheNameOrNothing pins the bound
 // the access level converters lean on: an index the capture holds answers its
 // name, and one before or past the array answers "" rather than panicking.
+// The first level carries a name, since index 0 is where the lower bound sits:
+// a bound that refused it too would answer "" for the first access level of
+// every protected branch, and a nameless first level could not show that.
 func TestMemberRoleNameAt_InAndOutOfRange_ReturnsTheNameOrNothing(t *testing.T) {
-	extras := []ProtectedRefAccessExtra{{}, {MemberRoleName: "Lead"}}
+	extras := []ProtectedRefAccessExtra{{MemberRoleName: "Auditor"}, {}, {MemberRoleName: "Lead"}}
 	for _, testCase := range []struct {
 		name  string
 		index int
 		want  string
 	}{
-		{"a level with no name", 0, ""},
-		{"a level with a name", 1, "Lead"},
-		{"past the array", 2, ""},
+		{"the first level", 0, "Auditor"},
+		{"a level with no name", 1, ""},
+		{"a level with a name", 2, "Lead"},
+		{"past the array", 3, ""},
 		{"before the array", -1, ""},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
