@@ -27,7 +27,15 @@ type SafeModePreview struct {
 }
 
 // SafeModeHint is the operator-facing hint attached to every safe-mode preview.
-const SafeModeHint = "Set GITLAB_MCP_SAFE_MODE=false to execute this operation"
+//
+// It names both spellings because each transport reads a different one: HTTP
+// mode takes --safe-mode, and a flag passed explicitly wins over its variable,
+// while stdio reads only GITLAB_MCP_SAFE_MODE. Naming the variable alone told
+// an HTTP operator who had passed the flag to set something that changes
+// nothing while the flag stands. Both settings are read at startup, hence the
+// restart. The sentence is served prose, so it stays ASCII, carries no
+// semicolon and names no tool.
+const SafeModeHint = "Restart the server with --safe-mode=false in HTTP mode, or GITLAB_MCP_SAFE_MODE=false over stdio, to execute this operation"
 
 // NewSafeModePreview builds a preview for name, marshaling params defensively:
 // when params cannot be marshaled the preview still reports the blocked

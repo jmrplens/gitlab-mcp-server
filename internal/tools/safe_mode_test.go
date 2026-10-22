@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -125,6 +126,14 @@ func TestWrapMutatingToolsForSafeMode_MutatingToolReturnsPreview(t *testing.T) {
 	preview, isPreview := toolutil.ParseSafeModePreview(text)
 	if !isPreview || preview.Tool != "gitlab_create_issue" || preview.Hint != toolutil.SafeModeHint {
 		t.Errorf("ParseSafeModePreview() = %+v, %v; want the preview read back", preview, isPreview)
+	}
+	// The individual surface is the one an HTTP deployment started with
+	// --safe-mode answers on as often as any other, and the hint it reads back
+	// named only the stdio variable, which changes nothing while the flag
+	// stands. It names both spellings, read back from the card as a client
+	// sees it rather than from the constant.
+	if !strings.Contains(preview.Hint, "--safe-mode=false") || !strings.Contains(preview.Hint, "GITLAB_MCP_SAFE_MODE=false") {
+		t.Errorf("preview hint = %q, want it to name both --safe-mode=false and GITLAB_MCP_SAFE_MODE=false", preview.Hint)
 	}
 	var params map[string]any
 	if err := json.Unmarshal(preview.Params, &params); err != nil {

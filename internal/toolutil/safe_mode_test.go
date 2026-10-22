@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -52,6 +53,49 @@ func TestNewSafeModePreview_ParamsThatCannotBeEncoded_StillReportTheBlock(t *tes
 	}
 }
 
+// wantSafeModeHint is the hint every preview carries, spelled out rather than
+// read from [SafeModeHint], so that the whole-output test below pins the
+// sentence an operator reads and not merely that the card repeats a constant.
+const wantSafeModeHint = "Restart the server with --safe-mode=false in HTTP mode, or GITLAB_MCP_SAFE_MODE=false over stdio, to execute this operation"
+
+// TestSafeModeHint_EitherTransport_NamesTheSettingThatTurnsItOff verifies the
+// hint every preview carries, as the operator reads it and as served prose.
+//
+// Safe mode is turned on by --safe-mode in HTTP mode, where a flag passed
+// explicitly wins over its variable, and by GITLAB_MCP_SAFE_MODE over stdio,
+// which reads no flag for it. The hint named only the variable, so an HTTP
+// operator who had passed the flag was told to set something that changes
+// nothing while the flag stands (D6 of the 2026-09 documentation audit). It
+// names both now, and it is held to what every sentence the server serves is
+// held to: ASCII only and no semicolon, which strict gateways reject, and no
+// gitlab_* tool name, which is right on one surface of three.
+func TestSafeModeHint_EitherTransport_NamesTheSettingThatTurnsItOff(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		ok   func(hint string) bool
+	}{
+		{name: "names the HTTP flag", ok: func(hint string) bool { return strings.Contains(hint, "--safe-mode=false") }},
+		{name: "names the stdio variable", ok: func(hint string) bool { return strings.Contains(hint, "GITLAB_MCP_SAFE_MODE=false") }},
+		{name: "is ASCII only", ok: func(hint string) bool {
+			return strings.IndexFunc(hint, func(r rune) bool { return r > unicode.MaxASCII }) < 0
+		}},
+		{name: "carries no semicolon", ok: func(hint string) bool { return !strings.Contains(hint, ";") }},
+		{name: "names no tool", ok: func(hint string) bool { return !strings.Contains(hint, "gitlab_") }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if !tt.ok(SafeModeHint) {
+				t.Errorf("SafeModeHint = %q, want it to hold: %s", SafeModeHint, tt.name)
+			}
+		})
+	}
+}
+
 // TestFormatSafeModePreviewMarkdown_WholeOutput_AndRoundTrip verifies the
 // preview card byte for byte, the way every refusal is rendered, and that
 // ParseSafeModePreview reads the same preview back out of it, which is what
@@ -69,13 +113,13 @@ func TestFormatSafeModePreviewMarkdown_WholeOutput_AndRoundTrip(t *testing.T) {
 		"- **Tool**: `issue.create`\n" +
 		"\n### Parameters\n\n" +
 		"```json\n{\"project_id\":\"42\",\"title\":\"a|b\"}\n```\n" +
-		"\n---\n\U0001F4A1 **Next steps:**\n- " + SafeModeHint + "\n"
+		"\n---\n\U0001F4A1 **Next steps:**\n- " + wantSafeModeHint + "\n"
 	if md != want {
 		t.Errorf("preview card:\n got %q\nwant %q", md, want)
 	}
 
 	parsed, ok := ParseSafeModePreview(md)
-	if !ok || parsed.Status != "blocked" || parsed.Mode != "safe" || parsed.Tool != "issue.create" || parsed.Hint != SafeModeHint {
+	if !ok || parsed.Status != "blocked" || parsed.Mode != "safe" || parsed.Tool != "issue.create" || parsed.Hint != wantSafeModeHint {
 		t.Errorf("ParseSafeModePreview() = %+v, %v; want the preview read back", parsed, ok)
 	}
 	if string(parsed.Params) != `{"project_id":"42","title":"a|b"}` {
