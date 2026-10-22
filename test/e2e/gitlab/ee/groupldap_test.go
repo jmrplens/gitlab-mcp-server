@@ -90,6 +90,78 @@ func TestGroupLDAPLinks_Lifecycle_AddListDeleteAndDeleteForProvider(t *testing.T
 	})
 }
 
+// TestGroupLDAPLinks_BothOrNeitherSelector_AreRefusedBeforeGitLab asks every
+// surface to add and to delete an LDAP link naming both a common name and a
+// filter, and naming neither. GitLab declares exactly_one_of :cn, :filter on
+// both routes (issue 1270), so each call is one it refuses, and the test
+// checks that each is refused here, before it is sent, and that the group's
+// one link is the one the test added by common name and is still there.
+//
+// The link is added, and deleted at the end, with an empty filter beside its
+// common name. A selector with no value counts as none on every surface, as
+// the handler counts it when it builds the request: the individual tool's
+// oneOf used to count the key alone and refuse that call as naming both,
+// which the other two surfaces served.
+//
+// Each surface refuses at the first place that checks, and the test holds
+// each to its own. The individual tool's input schema states the constraint
+// as a oneOf, so the SDK refuses the arguments before the handler runs. The
+// meta dispatcher checks the required list alone and hands both calls to the
+// handler, which refuses a link naming both as well as one naming neither.
+// The dynamic dispatcher refuses a call naming neither itself, since it
+// completes none of the alternatives find publishes, and hands one naming
+// both to the handler. The words asserted are the server's own and none of
+// them is in the hint a GitLab refusal is wrapped with, so a call that
+// reached GitLab would not pass for one refused here.
+func TestGroupLDAPLinks_BothOrNeitherSelector_AreRefusedBeforeGitLab(t *testing.T) {
+	e := harness.New(t)
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("ldapone"))
+		target := map[string]any{"group_id": group.IDParam(), "provider": ldapProvider}
+		cn := e.Name("cn")
+		both := withParams(target, map[string]any{"cn": cn, "filter": "(uid=" + e.Name("uid") + ")"})
+		access := map[string]any{"group_access": ldapGroupAccess}
+
+		byCommonName := withParams(target, map[string]any{"cn": cn, "filter": ""})
+		harness.DoVoid(s, actionGroupLDAPLinkAdd, withParams(byCommonName, access))
+
+		calls := []struct {
+			name    string
+			id      harness.ActionID
+			params  map[string]any
+			handler string
+		}{
+			{name: "an add naming both", id: actionGroupLDAPLinkAdd, params: withParams(both, access), handler: "not both"},
+			{name: "an add naming neither", id: actionGroupLDAPLinkAdd, params: withParams(target, access), handler: "exactly one of cn or filter is required"},
+			{name: "a delete naming both", id: actionGroupLDAPLinkDelete, params: both, handler: "not both"},
+			{name: "a delete naming neither", id: actionGroupLDAPLinkDelete, params: target, handler: "exactly one of cn or filter is required"},
+		}
+		for _, call := range calls {
+			switch {
+			case surface == harness.SurfaceIndividual:
+				harness.Refused(s, call.id, call.params, harness.FailureInvalidParams)
+			case surface == harness.SurfaceDynamic && call.handler != "not both":
+				harness.ExpectToolError(s, call.id, call.params, "missing one of cn or filter")
+			default:
+				refused := harness.ExpectToolError(s, call.id, call.params, call.handler)
+				assertMentions(e, call.name+" refused", refused, "exactly one of cn or filter")
+			}
+		}
+
+		listed := harness.Do[groupldap.ListOutput](s, actionGroupLDAPLinkList, map[string]any{"group_id": group.IDParam()})
+		if len(listed.Links) != 1 || listed.Links[0].CN != cn || listed.Links[0].Filter != "" {
+			e.T.Errorf("the group's LDAP links after the refused calls = %v, want the one link %q added by common name", ldapLinkCNs(listed.Links), cn)
+		}
+
+		harness.DoVoid(s, actionGroupLDAPLinkDelete, byCommonName)
+		if after := harness.Do[groupldap.ListOutput](s, actionGroupLDAPLinkList, map[string]any{"group_id": group.IDParam()}); containsCN(after.Links, cn) {
+			e.T.Errorf("the group's LDAP links still hold %q after its delete with an empty filter", cn)
+		}
+	})
+}
+
 // TestGroupLDAPSync_NoGroupSync_IsRefusedWithTheProviderHint asks a fresh
 // group to sync with LDAP on every surface and checks the refusal names
 // what a caller has to have for it: the provider, the tier and the access.
