@@ -2443,7 +2443,12 @@ func (r *Registry) segmentedSearchMatchesWithScorer(ctx context.Context, terms [
 
 	bestByID := make(map[string]scoredActionEntry)
 	maxWindow := min(maxSegmentTerms, len(terms))
-	for windowSize := maxWindow; windowSize >= minSegmentTerms; windowSize-- {
+	// The windows run from the widest down by a range over their count rather
+	// than by stepping the width down to a floor: a width stepped the wrong
+	// way never reaches the floor, and a window wider than the query runs no
+	// scoring pass, so nothing checks the context and the search never ends.
+	for narrower := range maxWindow - minSegmentTerms + 1 {
+		windowSize := maxWindow - narrower
 		for start := 0; start+windowSize <= len(terms); start++ {
 			window := terms[start : start+windowSize]
 			// One full scoring pass per window, so this loop is where a long
