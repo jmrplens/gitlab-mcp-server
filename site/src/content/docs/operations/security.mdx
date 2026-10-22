@@ -207,7 +207,7 @@ GITLAB_MCP_SAFE_MODE=true
 
 Safe mode keeps the write actions listed but answers each with a preview instead of running it, and it too works per action: on the dynamic and meta surfaces `issue.create` previews while `issue.list` executes.
 
-- The preview is a card headed `Safe mode blocked` and the action, with rows for the status (`blocked`), the mode (`safe`) and the action (its canonical ID on the dynamic and meta surfaces, the tool name on the individual one), the arguments the call would have sent in a JSON block, and the hint `Set GITLAB_MCP_SAFE_MODE=false to execute this operation`. On the individual surface it comes back as an error result, since the tool did not run. Nothing is sent to GitLab
+- The preview is a card headed `Safe mode blocked` and the action, with rows for the status (`blocked`), the mode (`safe`) and the action (its canonical ID on the dynamic and meta surfaces, the tool name on the individual one), the arguments the call would have sent in a JSON block, and the hint `Restart the server with --safe-mode=false in HTTP mode, or GITLAB_MCP_SAFE_MODE=false over stdio, to execute this operation`. On the individual surface it comes back as an error result, since the tool did not run. Nothing is sent to GitLab
 - Read-only actions execute normally
 - If `GITLAB_MCP_READ_ONLY=true` is also set, it takes precedence: the write actions are absent rather than previewed
 

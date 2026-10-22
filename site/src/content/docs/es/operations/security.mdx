@@ -207,7 +207,7 @@ GITLAB_MCP_SAFE_MODE=true
 
 El modo seguro mantiene listadas las acciones de escritura pero responde a cada una con una vista previa en lugar de ejecutarla, y también funciona acción por acción: en las superficies dinámica y meta `issue.create` se previsualiza mientras `issue.list` se ejecuta.
 
-- La vista previa es una tarjeta encabezada por `Safe mode blocked` y la acción, con filas para el estado (`blocked`), el modo (`safe`) y la acción (su ID canónico en las superficies dinámica y meta, el nombre de la herramienta en la individual), los argumentos que habría enviado la llamada en un bloque JSON y la pista `Set GITLAB_MCP_SAFE_MODE=false to execute this operation`. En la superficie individual vuelve como un resultado de error, porque la herramienta no se ejecutó. No se envía nada a GitLab
+- La vista previa es una tarjeta encabezada por `Safe mode blocked` y la acción, con filas para el estado (`blocked`), el modo (`safe`) y la acción (su ID canónico en las superficies dinámica y meta, el nombre de la herramienta en la individual), los argumentos que habría enviado la llamada en un bloque JSON y la pista `Restart the server with --safe-mode=false in HTTP mode, or GITLAB_MCP_SAFE_MODE=false over stdio, to execute this operation`. En la superficie individual vuelve como un resultado de error, porque la herramienta no se ejecutó. No se envía nada a GitLab
 - Las acciones de solo lectura se ejecutan normalmente
 - Si `GITLAB_MCP_READ_ONLY=true` también está configurado, tiene precedencia: las acciones de escritura no existen en lugar de previsualizarse
 

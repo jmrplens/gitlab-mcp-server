@@ -558,7 +558,7 @@ Enable `GITLAB_MCP_READ_ONLY=true` to restrict the server to read-only operation
 
 ## Safe mode
 
-Enable `GITLAB_MCP_SAFE_MODE=true` to intercept mutating actions and answer with a preview of what would be executed, without performing the operation. The preview is a Markdown card: a `⛔ Safe mode blocked` heading naming the action, `Status` and `Mode` rows reading `blocked` and `safe`, a `Tool` row, the arguments it would have sent in a JSON fence, and the hint `Set GITLAB_MCP_SAFE_MODE=false to execute this operation`. On the dynamic and meta surfaces the card names the canonical action and the structured result carries the same fields; on the individual surface it names the tool and comes back as an error result, since the tool produced none of the output its schema describes. Reads work normally. This is useful for:
+Enable `GITLAB_MCP_SAFE_MODE=true` to intercept mutating actions and answer with a preview of what would be executed, without performing the operation. The preview is a Markdown card: a `⛔ Safe mode blocked` heading naming the action, `Status` and `Mode` rows reading `blocked` and `safe`, a `Tool` row, the arguments it would have sent in a JSON fence, and the hint `Restart the server with --safe-mode=false in HTTP mode, or GITLAB_MCP_SAFE_MODE=false over stdio, to execute this operation`. On the dynamic and meta surfaces the card names the canonical action and the structured result carries the same fields; on the individual surface it names the tool and comes back as an error result, since the tool produced none of the output its schema describes. Reads work normally. This is useful for:
 
 - Reviewing operations before execution (dry-run)
 - Training environments where you want to see tool behavior
