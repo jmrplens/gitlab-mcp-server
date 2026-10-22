@@ -1379,7 +1379,8 @@ func TestIsEmptyOrBoilerplateDescription_Scenarios_FlagsUninformativeText(t *tes
 // TestNeedsMarkdownFormatter_Scenarios_SkipsDestructiveAndNamelessSpecs
 // verifies the missing_next_steps precondition: destructive actions never
 // need a formatter, list/detail content always does, a named action does by
-// default, and an unnamed non-list action does not.
+// default, an unnamed read does because it resolves to a detail although it
+// declares no kind, and an unnamed write does not.
 func TestNeedsMarkdownFormatter_Scenarios_SkipsDestructiveAndNamelessSpecs(t *testing.T) {
 	tests := []struct {
 		name string
@@ -1389,7 +1390,8 @@ func TestNeedsMarkdownFormatter_Scenarios_SkipsDestructiveAndNamelessSpecs(t *te
 		{name: "destructive", spec: toolutil.ActionSpec{Name: "branch_delete", Destructive: true}},
 		{name: "list content", spec: toolutil.ActionSpec{Name: "branch_list", ContentKind: toolutil.ActionSpecContentList}, want: true},
 		{name: "named action", spec: toolutil.ActionSpec{Name: "branch_get"}, want: true},
-		{name: "unnamed action", spec: toolutil.ActionSpec{}},
+		{name: "unnamed read resolves to a detail", spec: toolutil.ActionSpec{ReadOnly: true}, want: true},
+		{name: "unnamed write", spec: toolutil.ActionSpec{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

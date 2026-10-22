@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -70,6 +71,52 @@ func TestRegisterSurfaceToolFromSpec_OwnFormatter_IsTheOneServed(t *testing.T) {
 	}
 	if got := surfaceToolResultText(result); !strings.Contains(got, "from its own formatter") {
 		t.Errorf("result text = %q, want the tool's own formatter's text", got)
+	}
+}
+
+// TestRegisterSurfaceToolFromSpec_UndeclaredKind_IsResolvedFromTheSpec
+// verifies a standalone utility's text is annotated with the kind its spec
+// resolves to, a read as a detail and a write as a mutation, although no
+// catalog projected it. The meta and individual surfaces register these
+// tools straight from their specs, so this is the one dispatcher the
+// catalog's resolution never reaches.
+//
+// The annotation is compared by value, since what the client holds was
+// decoded off the transport and is never the server's preset itself.
+func TestRegisterSurfaceToolFromSpec_UndeclaredKind_IsResolvedFromTheSpec(t *testing.T) {
+	cases := []struct {
+		name     string
+		readOnly bool
+		want     *mcp.Annotations
+	}{
+		{name: "a read is a detail", readOnly: true, want: ContentDetail},
+		{name: "a write is a mutation", readOnly: false, want: ContentMutate},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+			route := RouteFunc(func(_ context.Context, _ surfaceToolTestInput) (testOutput, error) {
+				return testOutput{Result: "route"}, nil
+			})
+			spec := NewActionSpec("resolve", route, ActionSpecOptions{
+				ReadOnly:       testCase.readOnly,
+				IndividualTool: IndividualToolSpec{Name: "gitlab_test_resolve", Title: "Test Resolve"},
+			})
+			RegisterSurfaceToolFromSpec(server, spec, SurfaceToolRegisterOptions{Description: "Test tool declaring no content kind."})
+
+			session := newSurfaceToolSession(t, server, nil)
+			result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "gitlab_test_resolve", Arguments: map[string]any{"id": 1}})
+			if err != nil {
+				t.Fatalf("CallTool error: %v", err)
+			}
+			text, ok := result.Content[0].(*mcp.TextContent)
+			if !ok || text.Annotations == nil {
+				t.Fatalf("first block = %+v, want an annotated text block", result.Content[0])
+			}
+			if text.Annotations.Priority != testCase.want.Priority || !slices.Equal(text.Annotations.Audience, testCase.want.Audience) {
+				t.Errorf("annotations = %+v, want %+v", *text.Annotations, *testCase.want)
+			}
+		})
 	}
 }
 

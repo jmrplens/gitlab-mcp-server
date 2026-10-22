@@ -31,8 +31,12 @@ func ActionsFromSpecs(specs []toolutil.ActionSpec) ([]Action, error) {
 			route.EmbeddedResource = spec.EmbeddedResource
 		}
 		// The content kind travels on the route for the same reason: it is
-		// what the dispatcher annotates the result with.
-		route.ContentKind = spec.ContentKind
+		// what the dispatcher annotates the result with. It is resolved here,
+		// once for every surface, so an action that declares none is
+		// annotated with the kind of what it does rather than with the
+		// assistant default (issue 1168).
+		kind := toolutil.ResolveContentKind(spec)
+		route.ContentKind = kind
 		// And so do the historical spellings, because the meta dispatcher
 		// resolves one out of the group's route map and never sees the spec.
 		route.CompatibilityAliases = compatibilityAliasNames(spec.Compatibility.ActionAliases)
@@ -50,7 +54,7 @@ func ActionsFromSpecs(specs []toolutil.ActionSpec) ([]Action, error) {
 			GitLabDotComOnly:       spec.GitLabDotComOnly,
 			OwnerPackage:           spec.OwnerPackage,
 			IndividualTool:         toolutil.CloneIndividualToolSpec(spec.IndividualTool),
-			ContentKind:            spec.ContentKind,
+			ContentKind:            kind,
 			NotFoundPolicy:         spec.NotFoundPolicy,
 			EmbeddedResourcePolicy: spec.EmbeddedResourcePolicy,
 			EmbeddedResource:       spec.EmbeddedResource,

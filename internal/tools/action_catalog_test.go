@@ -1320,6 +1320,69 @@ func TestTable_CoversTheCatalog(t *testing.T) {
 	}
 }
 
+// TestBuildActionCatalog_EveryAction_ResolvesToListDetailOrMutate holds the
+// content kind of every action the server can serve to what the action does
+// (issue 1168): the Ultimate catalog on a self-managed instance and on
+// GitLab.com, with the MCP group and the standalone actions, since those are
+// every action any tier of either serves. Each resolves to list, detail or
+// mutate, never the assistant default it fell back to while only five
+// packages declared a kind; the action and the route the dispatchers annotate
+// from carry the same one; a write is a mutation; no read is; and a read
+// whose output is a collection envelope is a list.
+//
+// A new action therefore cannot reach a client annotated as nothing in
+// particular, and an override that called a write a detail, or a page of rows
+// something else, fails here rather than being served.
+func TestBuildActionCatalog_EveryAction_ResolvesToListDetailOrMutate(t *testing.T) {
+	instances := []struct {
+		name   string
+		client *gitlabclient.Client
+	}{{name: "self-managed", client: UnboundClient(false)}, {name: "GitLab.com", client: UnboundClient(true)}}
+	for _, instance := range instances {
+		t.Run(instance.name, func(t *testing.T) {
+			catalog := mustBuildActionCatalog(t, instance.client, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+			catalog, err := dynamictools.AddStandaloneCatalog(catalog, instance.client, dynamictools.StandaloneOptions{})
+			if err != nil {
+				t.Fatalf("AddStandaloneCatalog() error = %v", err)
+			}
+			counts := map[string]int{}
+			for _, action := range catalog.Actions() {
+				if problem := contentKindProblem(action); problem != "" {
+					t.Errorf("%s: %s", action.ID, problem)
+					continue
+				}
+				counts[action.Route.ContentKind]++
+			}
+			for _, kind := range []string{toolutil.ActionSpecContentList, toolutil.ActionSpecContentDetail, toolutil.ActionSpecContentMutate} {
+				if counts[kind] == 0 {
+					t.Errorf("no action resolves to %s, so the rule for it was never exercised", kind)
+				}
+			}
+			t.Logf("%d actions: %d list, %d detail, %d mutate", catalog.CountActions(),
+				counts[toolutil.ActionSpecContentList], counts[toolutil.ActionSpecContentDetail], counts[toolutil.ActionSpecContentMutate])
+		})
+	}
+}
+
+// contentKindProblem says what is wrong with an action's resolved content
+// kind, or nothing when it is the one its behavior calls for.
+func contentKindProblem(action actioncatalog.Action) string {
+	kind := action.Route.ContentKind
+	switch {
+	case kind != toolutil.ActionSpecContentList && kind != toolutil.ActionSpecContentDetail && kind != toolutil.ActionSpecContentMutate:
+		return fmt.Sprintf("resolves to content kind %q, want list, detail or mutate", kind)
+	case action.ContentKind != kind:
+		return fmt.Sprintf("the action carries content kind %q and its route %q, want one value", action.ContentKind, kind)
+	case !action.ReadOnly && kind != toolutil.ActionSpecContentMutate:
+		return fmt.Sprintf("is a write annotated as %s, want mutate", kind)
+	case action.ReadOnly && kind == toolutil.ActionSpecContentMutate:
+		return "is a read annotated as a mutation"
+	case action.ReadOnly && toolutil.CollectionShapeOf(action.Route.OutputType).IsCollection() && kind != toolutil.ActionSpecContentList:
+		return fmt.Sprintf("reads a collection envelope and is annotated as %s, want list", kind)
+	}
+	return ""
+}
+
 // mustBuildDynamicActionCatalogForTest builds dynamic action catalog for test test fixtures and fails the test on error.
 func mustBuildDynamicActionCatalogForTest(t *testing.T, client *gitlabclient.Client, enterprise bool) *actioncatalog.Catalog {
 	t.Helper()

@@ -1,6 +1,7 @@
 package actioncatalog
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -61,6 +62,67 @@ func TestGroupFromSpecs_ProjectsSpecMetadata(t *testing.T) {
 	}
 	action := group.Actions["get"]
 	assertProjectedActionMetadata(t, action)
+}
+
+// kindItem, kindListOutput and kindObjectOutput are the two shapes a read
+// answers with: a page of objects, and one object carrying a list of its own.
+type kindItem struct {
+	ID int64 `json:"id"`
+}
+
+type kindListOutput struct {
+	toolutil.HintableOutput
+	Items      []kindItem                `json:"items"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
+}
+
+type kindObjectOutput struct {
+	toolutil.HintableOutput
+	Name   string     `json:"name"`
+	Labels []kindItem `json:"labels"`
+}
+
+// kindRoute is projectionTestRoute answering with outputType.
+func kindRoute(outputType reflect.Type) toolutil.ActionRoute {
+	route := projectionTestRoute()
+	route.OutputType = outputType
+	return route
+}
+
+// TestGroupFromSpecs_UndeclaredContentKind_IsResolvedOnTheActionAndItsRoute
+// verifies the catalog annotates every action with the kind of what it does
+// when its spec declares none (issue 1168): a list read, a read of one object
+// and a write each reach the action, and the route the dispatchers annotate
+// from, as list, detail and mutate, and a declared kind is kept as the
+// override it is. Before, the route carried the declaration alone, so every
+// action that declared nothing was served the assistant default.
+func TestGroupFromSpecs_UndeclaredContentKind_IsResolvedOnTheActionAndItsRoute(t *testing.T) {
+	specs := []toolutil.ActionSpec{
+		toolutil.NewReadActionSpec("list", kindRoute(reflect.TypeFor[kindListOutput]()), toolutil.ActionSpecOptions{OwnerPackage: "projects"}),
+		toolutil.NewReadActionSpec("get", kindRoute(reflect.TypeFor[kindObjectOutput]()), toolutil.ActionSpecOptions{OwnerPackage: "projects"}),
+		toolutil.NewCreateActionSpec("create", kindRoute(reflect.TypeFor[kindObjectOutput]()), toolutil.ActionSpecOptions{OwnerPackage: "projects"}),
+		toolutil.NewReadActionSpec("statuses", kindRoute(reflect.TypeFor[kindObjectOutput]()), toolutil.ActionSpecOptions{
+			OwnerPackage: "projects",
+			ContentKind:  toolutil.ActionSpecContentList,
+		}),
+	}
+	group, err := GroupFromSpecs(GroupOptions{ToolName: "gitlab_project"}, specs)
+	if err != nil {
+		t.Fatalf("GroupFromSpecs() error = %v", err)
+	}
+	want := map[string]string{
+		"list":     toolutil.ActionSpecContentList,
+		"get":      toolutil.ActionSpecContentDetail,
+		"create":   toolutil.ActionSpecContentMutate,
+		"statuses": toolutil.ActionSpecContentList,
+	}
+	for name, kind := range want {
+		t.Run(name, func(t *testing.T) {
+			action := group.Actions[name]
+			assertProjectedString(t, "content kind", action.ContentKind, kind)
+			assertProjectedString(t, "route content kind", action.Route.ContentKind, kind)
+		})
+	}
 }
 
 // assertProjectedActionMetadata holds the action GroupFromSpecs projected

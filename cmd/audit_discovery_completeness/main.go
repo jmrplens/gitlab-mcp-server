@@ -505,10 +505,13 @@ func hasInputEmptyFields(fields []fieldFinding, flagName string) bool {
 	return false
 }
 
-// isListOrDetailContent reports whether the spec's ContentKind is one where
-// next-step hints are commonly expected (list/detail).
+// isListOrDetailContent reports whether the spec's content kind is one where
+// next-step hints are commonly expected (list/detail). The kind is the one the
+// catalog serves, [toolutil.ResolveContentKind], rather than the declaration:
+// almost no spec declares one, and a read declaring none is still a list or a
+// detail on every surface.
 func isListOrDetailContent(spec toolutil.ActionSpec) bool {
-	switch strings.ToLower(strings.TrimSpace(spec.ContentKind)) {
+	switch strings.ToLower(toolutil.ResolveContentKind(spec)) {
 	case toolutil.ActionSpecContentList, toolutil.ActionSpecContentDetail:
 		return true
 	}

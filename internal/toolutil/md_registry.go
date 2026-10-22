@@ -70,9 +70,10 @@ func RegisterMarkdown[T any](fn func(T) string) {
 // RegisterMarkdownAnnotated registers a Markdown string formatter for type T
 // whose results carry ann, one of the [ContentList], [ContentDetail] and
 // [ContentMutate] presets; nil means [ContentAssistant]. The dispatchers
-// override it with the annotation the action's declared content kind
-// resolves to, so a formatter reached through the catalog is annotated by
-// the spec and a formatter reached any other way by this.
+// override it with the annotation of the route's content kind, the one
+// [ResolveContentKind] gives the action, so a formatter reached through the
+// catalog is annotated by what the action does and a formatter reached any
+// other way by this.
 //
 // A second registration for a type is refused and recorded: the first one
 // stays, since a registration that silently replaced another is how one
@@ -361,14 +362,16 @@ func MarkdownFormatterCount() int {
 	return len(RegisteredMarkdownTypes())
 }
 
-// AnnotationsForContentKind maps an action's declared content kind
+// AnnotationsForContentKind maps an action's content kind
 // ([ActionSpecContentList], [ActionSpecContentDetail],
-// [ActionSpecContentMutate], [ActionSpecContentAssistant],
-// [ActionSpecContentImage]) to the content annotation its text block
-// carries, in one place, so the kind a spec declares and the annotation the
-// dispatcher serves cannot disagree. An image action's text block is for the
-// assistant like any other; the image block itself carries [ContentUser]. An
-// empty or unknown kind is the assistant default.
+// [ActionSpecContentMutate]) to the content annotation its text block
+// carries, in one place, so the kind a route carries and the annotation the
+// dispatcher serves cannot disagree. A result that carries an image is
+// annotated by its kind like any other, a read of a raw file being a detail;
+// the image block itself carries [ContentUser]. An empty or unknown kind is
+// the assistant default, which no catalog action reaches: the catalog
+// resolves every action's kind ([ResolveContentKind]), and only a route
+// assembled by hand arrives with none.
 func AnnotationsForContentKind(kind string) *mcp.Annotations {
 	switch strings.TrimSpace(kind) {
 	case ActionSpecContentList:
@@ -388,7 +391,7 @@ func AnnotationsForContentKind(kind string) *mcp.Annotations {
 // becomes the JSON rendering rather than reaching the client with no
 // content block; an error result is returned as it is, with no structured
 // output, since the action produced none of what its schema describes;
-// every text block is annotated with the action's declared content kind and
+// every text block is annotated with the route's content kind and
 // every image block for the user; the next-step hints the Markdown carries
 // are set on the typed output when its type declares them; and the canonical
 // resource is embedded last, so the JSON it carries agrees with the

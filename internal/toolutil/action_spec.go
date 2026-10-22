@@ -99,11 +99,9 @@ type IndividualToolAnnotationOverrides struct {
 // The values an ActionSpec's ContentKind, NotFoundPolicy, EmbeddedResourcePolicy
 // and RichResultPolicy accept, one block per field; validation refuses any other.
 const (
-	ActionSpecContentList      = "list"
-	ActionSpecContentDetail    = "detail"
-	ActionSpecContentMutate    = "mutate"
-	ActionSpecContentAssistant = "assistant"
-	ActionSpecContentImage     = "image"
+	ActionSpecContentList   = "list"
+	ActionSpecContentDetail = "detail"
+	ActionSpecContentMutate = "mutate"
 
 	ActionSpecNotFoundNone      = "none"
 	ActionSpecNotFoundResult    = "not_found_result"
@@ -759,13 +757,50 @@ func validateOptionalActionSpecPolicy(actionName, fieldName, value string, allow
 	return fmt.Errorf("action spec %q has unsupported %s %q", actionName, fieldName, value)
 }
 
+// ResolveContentKind returns the content kind an action's result is annotated
+// with ([AnnotationsForContentKind]): the kind its spec declares, or else the
+// one derived from what the action does.
+//
+//   - A write, any action that is not read-only, is [ActionSpecContentMutate],
+//     whatever it answers with: creating a merge train entry answers with the
+//     train, and the result a client should rank is still the confirmation of a
+//     write.
+//   - A read whose output is a list is [ActionSpecContentList]. That is a
+//     collection envelope, the shape R-PAGE recognizes ([CollectionShapeOf]),
+//     or an output publishing a pagination block, which says by itself that it
+//     is one page of a longer list. The second half is the difference between
+//     the two readers: R-PAGE asks who owes a caller a pagination block, and
+//     an output already carrying one owes nothing whatever sits beside its
+//     list, while here the block is the evidence. Without it the project list,
+//     which carries its projects in two alternative lists, would be a detail.
+//   - Any other read is [ActionSpecContentDetail], a text blob such as a job
+//     trace or a raw file included: what a client ranks is a read of one
+//     thing.
+//
+// A declaration is the override, and an override that agrees with the
+// derivation answers nothing, which the catalog's tests refuse. It is the way
+// to call a list what the shape cannot see is one: a list published beside an
+// echo of the scope it was asked for, or a count, or two lists side by side,
+// with no pagination block. Validation admits only the three kinds above, so a
+// declaration cannot name the assistant default either.
+func ResolveContentKind(spec ActionSpec) string {
+	if kind := strings.TrimSpace(spec.ContentKind); kind != "" {
+		return kind
+	}
+	if !spec.ReadOnly {
+		return ActionSpecContentMutate
+	}
+	if shape := CollectionShapeOf(spec.Route.OutputType); shape.IsCollection() || shape.Pagination != "" {
+		return ActionSpecContentList
+	}
+	return ActionSpecContentDetail
+}
+
 func actionSpecContentKinds() map[string]struct{} {
 	return map[string]struct{}{
-		ActionSpecContentList:      {},
-		ActionSpecContentDetail:    {},
-		ActionSpecContentMutate:    {},
-		ActionSpecContentAssistant: {},
-		ActionSpecContentImage:     {},
+		ActionSpecContentList:   {},
+		ActionSpecContentDetail: {},
+		ActionSpecContentMutate: {},
 	}
 }
 

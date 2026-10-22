@@ -704,9 +704,10 @@ func TestRegisteredMarkdownTypes_Registrations_AreListedSorted(t *testing.T) {
 }
 
 // TestAnnotationsForContentKind_Kinds_MapToOnePresetEach verifies the one
-// mapping from a declared content kind to the annotation a result carries,
-// with the assistant default for an image action's text, an empty kind and a
-// kind nothing declares.
+// mapping from a content kind to the annotation a result carries, with the
+// assistant default for an empty kind, which only a route assembled by hand
+// carries, and for a kind no spec can declare, the retired assistant and
+// image spellings among them.
 func TestAnnotationsForContentKind_Kinds_MapToOnePresetEach(t *testing.T) {
 	cases := []struct {
 		name string
@@ -716,8 +717,8 @@ func TestAnnotationsForContentKind_Kinds_MapToOnePresetEach(t *testing.T) {
 		{name: "list", kind: ActionSpecContentList, want: ContentList},
 		{name: "detail", kind: ActionSpecContentDetail, want: ContentDetail},
 		{name: "mutate", kind: ActionSpecContentMutate, want: ContentMutate},
-		{name: "assistant", kind: ActionSpecContentAssistant, want: ContentAssistant},
-		{name: "image text", kind: ActionSpecContentImage, want: ContentAssistant},
+		{name: "retired assistant", kind: "assistant", want: ContentAssistant},
+		{name: "retired image", kind: "image", want: ContentAssistant},
 		{name: "empty", kind: "", want: ContentAssistant},
 		{name: "unknown", kind: "poster", want: ContentAssistant},
 	}
@@ -738,8 +739,8 @@ func hintedTextResult() *mcp.CallToolResult {
 // TestFinishToolResult_Envelope_NilErrorAndImageResults verifies the envelope
 // half of the tail every dispatcher shares: a nil result becomes the JSON
 // rendering, an error result passes through with no structured output, a
-// nil output stays nil, and an image action's text block is for the
-// assistant while its image block is for the user.
+// nil output stays nil, and an image read's text block carries the route's
+// kind while its image block is for the user.
 func TestFinishToolResult_Envelope_NilErrorAndImageResults(t *testing.T) {
 	route := ActionRoute{ContentKind: ActionSpecContentDetail}
 
@@ -770,9 +771,9 @@ func TestFinishToolResult_Envelope_NilErrorAndImageResults(t *testing.T) {
 			&mcp.TextContent{Text: "meta"},
 			&mcp.ImageContent{Data: []byte{1}, MIMEType: "image/png"},
 		}}
-		got, _ := FinishToolResult(withImage, mdTestOutput{}, ActionRoute{ContentKind: ActionSpecContentImage}, nil)
-		if ann := got.Content[0].(*mcp.TextContent).Annotations; ann != ContentAssistant {
-			t.Errorf("image action's text annotated %+v, want the assistant default", ann)
+		got, _ := FinishToolResult(withImage, mdTestOutput{}, route, nil)
+		if ann := got.Content[0].(*mcp.TextContent).Annotations; ann != ContentDetail {
+			t.Errorf("image read's text annotated %+v, want the detail preset", ann)
 		}
 		if ann := got.Content[1].(*mcp.ImageContent).Annotations; ann != ContentUser {
 			t.Errorf("image block annotated %+v, want the user preset", ann)

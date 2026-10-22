@@ -463,6 +463,19 @@ func TestActionSpecValidate_RejectsUnsupportedIndividualPolicies(t *testing.T) {
 			want: "unsupported content kind",
 		},
 		{
+			// The two kinds that only ever named the assistant default, which
+			// no catalog action is served since the catalog derives a kind
+			// for every one (issue 1168).
+			name: "assistant content kind",
+			opts: ActionSpecOptions{ContentKind: "assistant"},
+			want: "unsupported content kind",
+		},
+		{
+			name: "image content kind",
+			opts: ActionSpecOptions{ContentKind: "image"},
+			want: "unsupported content kind",
+		},
+		{
 			name: "not found policy",
 			opts: ActionSpecOptions{NotFoundPolicy: "custom_404"},
 			want: "unsupported not-found policy",
@@ -1644,6 +1657,88 @@ func TestNewActionSpec_SharedInputSchemaDerivesOnce(t *testing.T) {
 	})
 	if sameMap(overridden.Route.InputSchema, first.Route.InputSchema) {
 		t.Fatal("a spec with overrides shared the schema of one without")
+	}
+}
+
+// kindTextOutput is a read whose result is one block of text, the shape of a
+// job trace or a raw file.
+type kindTextOutput struct {
+	HintableOutput
+	Content string `json:"content"`
+}
+
+// TestResolveContentKind_WhatTheActionDoes_DecidesTheKind verifies the rule
+// every catalog action's annotation comes from: a declaration is kept as it
+// is, a write is a mutation whatever it answers with, a read is a list when
+// its output is a collection envelope or publishes a pagination block, and
+// any other read is a detail, a text blob included (issue 1168).
+func TestResolveContentKind_WhatTheActionDoes_DecidesTheKind(t *testing.T) {
+	t.Parallel()
+
+	route := func(outputType reflect.Type) ActionRoute { return ActionRoute{OutputType: outputType} }
+	cases := []struct {
+		name string
+		spec ActionSpec
+		want string
+	}{
+		{
+			name: "a declaration wins over the derivation",
+			spec: ActionSpec{ReadOnly: true, ContentKind: ActionSpecContentList, Route: route(reflect.TypeFor[shapeObjectOutput]())},
+			want: ActionSpecContentList,
+		},
+		{
+			name: "a declaration is read trimmed",
+			spec: ActionSpec{ContentKind: "  detail ", Route: route(reflect.TypeFor[shapeListOutput]())},
+			want: ActionSpecContentDetail,
+		},
+		{
+			name: "a blank declaration is no declaration",
+			spec: ActionSpec{ReadOnly: true, ContentKind: "   ", Route: route(reflect.TypeFor[shapeListOutput]())},
+			want: ActionSpecContentList,
+		},
+		{
+			name: "a write answering with a list is a mutation",
+			spec: ActionSpec{Route: route(reflect.TypeFor[shapePaginatedListOutput]())},
+			want: ActionSpecContentMutate,
+		},
+		{
+			name: "a write answering with nothing typed is a mutation",
+			spec: ActionSpec{Destructive: true},
+			want: ActionSpecContentMutate,
+		},
+		{
+			name: "a read answering with a collection envelope is a list",
+			spec: ActionSpec{ReadOnly: true, Route: route(reflect.TypeFor[shapeListOutput]())},
+			want: ActionSpecContentList,
+		},
+		{
+			name: "a read answering with a page beside something of its own is a list",
+			spec: ActionSpec{ReadOnly: true, Route: route(reflect.TypeFor[*shapePagedObjectOutput]())},
+			want: ActionSpecContentList,
+		},
+		{
+			name: "a read answering with one object is a detail",
+			spec: ActionSpec{ReadOnly: true, Route: route(reflect.TypeFor[shapeObjectOutput]())},
+			want: ActionSpecContentDetail,
+		},
+		{
+			name: "a read answering with a text blob is a detail",
+			spec: ActionSpec{ReadOnly: true, Route: route(reflect.TypeFor[kindTextOutput]())},
+			want: ActionSpecContentDetail,
+		},
+		{
+			name: "a read with no output type is a detail",
+			spec: ActionSpec{ReadOnly: true},
+			want: ActionSpecContentDetail,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if got := ResolveContentKind(testCase.spec); got != testCase.want {
+				t.Errorf("ResolveContentKind() = %q, want %q", got, testCase.want)
+			}
+		})
 	}
 }
 

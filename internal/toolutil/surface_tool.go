@@ -41,7 +41,14 @@ func RegisterSurfaceToolFromSpec(server *mcp.Server, spec ActionSpec, opts Surfa
 	// Standalone utility schemas are static per tool name (no tier pruning
 	// at this layer), so the compiled form is safely shared across servers.
 	CompileToolSchemas(tool, "standalone|"+tool.Name)
-	mcp.AddTool[map[string]any, any](server, tool, surfaceToolHandler(tool.Name, spec.Route, formatResult))
+	// No catalog projected this spec, and the catalog is where every other
+	// action's content kind is resolved, so the route is given it here. This
+	// is the meta and individual surfaces' one dispatcher of a spec, and
+	// without it the guided flows and project discovery would answer with the
+	// assistant default that no catalog action is served any more.
+	route := spec.Route
+	route.ContentKind = ResolveContentKind(spec)
+	mcp.AddTool[map[string]any, any](server, tool, surfaceToolHandler(tool.Name, route, formatResult))
 }
 
 func surfaceToolHandler(toolName string, route ActionRoute, formatResult FormatResultFunc) mcp.ToolHandlerFor[map[string]any, any] {

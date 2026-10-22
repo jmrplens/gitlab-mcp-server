@@ -105,11 +105,11 @@ type ActionRoute struct {
 	// expand from the call's parameters and embed in a successful result. The
 	// catalog sets it from the action's spec when the spec's policy embeds.
 	EmbeddedResource string
-	// ContentKind is the content kind the action's spec declares, which
-	// [FinishToolResult] resolves to the annotation every text block of the
+	// ContentKind is the content kind of the action's result, which
+	// [FinishToolResult] turns into the annotation every text block of the
 	// result carries through [AnnotationsForContentKind]. The catalog sets it
-	// from the spec, so the declared kind and the served annotation are one
-	// value.
+	// to what [ResolveContentKind] answers for the spec, the declared kind or
+	// the derived one, so the kind and the served annotation are one value.
 	ContentKind string
 	// ActionID is the canonical catalog ID of the action this route runs,
 	// such as issue.list. The catalog sets it, and so does the projection of a
