@@ -54,7 +54,12 @@
 // adds, and nothing here holds it to GitLab. The one exactly_one_of published
 // as the oneOf a toolutil.SchemaOneOfRequired override adds is an LDAP group
 // link's cn or filter; the others, such as a snippet's files or content, are
-// still an anyOf or not stated at all, and this scope does not find them. A
+// still an anyOf or not stated at all, and this scope does not find them. The
+// rules an element of a list is held to, such as a protected environment's
+// deploy access level naming exactly one of a role, a user or a group, are
+// stated in the item schema by a toolutil.SchemaItemsOneOfRequired override or
+// one of its siblings, and the record writes each field of the element as an
+// optional param, so this scope cannot hold them to GitLab either. A
 // requirement GitLab states in a `given` block is written by the record as
 // unconditional, which is what the conditional declarations answer. And a
 // field an input names differently from GitLab without an alias is unplaced
