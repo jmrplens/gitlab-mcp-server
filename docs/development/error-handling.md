@@ -19,6 +19,7 @@ it names another package.
 | `internal/toolutil/errors.go`           | `WrapErr`, `WrapErrWithMessage`, `WrapErrWithHint`, `WrapErrWithStatusHint`, `ExtractGitLabMessage`, `ClassifyError`, `ClassifyHTTPStatus`, `IsHTTPStatus`, `IsPermissionRefusal`, `ContainsAny`, `SanitizeError` |
 | `internal/gitlab/credential_refusal.go` | `UnauthorizedNamesCredential` and `RefusalMayBePermission`, the two readings of a refusal that the description, the hints and the HTTP pool share                                                                 |
 | `internal/gitlab/granular_refusal.go`   | `ParseGranularRefusal`, which reads GitLab's fine-grained token refusals                                                                                                                                          |
+| `internal/toolutil/moved_project.go`    | `IsMovedProjectRefusal`, which reads a 405 refusing a moved project's old path                                                                                                                                    |
 | `internal/toolutil/not_found.go`        | `NotFoundResult`, `ActionRoute.WrapNotFound` and `ParamText`, the informational 404 for get handlers                                                                                                              |
 | `internal/toolutil/confirm.go`          | The destructive action confirmation flow                                                                                                                                                                          |
 | `internal/toolutil/output.go`           | `SuccessResult`, `ErrorResult`, `ErrorResultAnnotated`                                                                                                                                                            |
@@ -32,21 +33,21 @@ it names another package.
 Inspects the error chain and returns the sentence that describes it, checking
 in this order:
 
-| Error                                | Description                                                                                             |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| `nil`                                | "unknown error"                                                                                         |
-| `context.Canceled`                   | "the request was canceled by the client"                                                                |
-| `context.DeadlineExceeded`           | "the request exceeded its deadline and was canceled"                                                    |
-| `gitlabclient.ErrUnboundClient`      | `UnattributedRequestMessage`: the request could not be attributed to a credential and was not sent      |
-| `gitlabclient.ErrDestinationRefused` | `DestinationRefusedMessage`: this server refused to connect to that address                             |
-| A fine-grained token refusal         | The refusal in GitLab's terms (below)                                                                   |
-| A GitLab answer, REST or GraphQL     | `ClassifyHTTPStatus` of the status, except a 401 that names the credential (below)                      |
-| Connection refused                   | "GitLab server is unreachable (connection refused). Check GITLAB_URL and whether the server is running" |
-| DNS failure                          | "GitLab server hostname could not be resolved (DNS error). Check GITLAB_URL"                            |
-| Timeout                              | "Request to GitLab timed out. The server may be overloaded or unreachable"                              |
-| TLS or certificate error             | "TLS/SSL handshake failed. If using self-signed certificates, set GITLAB_MCP_SKIP_TLS_VERIFY=true"      |
-| Another `*url.Error`                 | "network error reaching GitLab (\<op\>)"                                                                |
-| Anything else                        | "unexpected error"                                                                                      |
+| Error                                | Description                                                                                                                          |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `nil`                                | "unknown error"                                                                                                                      |
+| `context.Canceled`                   | "the request was canceled by the client"                                                                                             |
+| `context.DeadlineExceeded`           | "the request exceeded its deadline and was canceled"                                                                                 |
+| `gitlabclient.ErrUnboundClient`      | `UnattributedRequestMessage`: the request could not be attributed to a credential and was not sent                                   |
+| `gitlabclient.ErrDestinationRefused` | `DestinationRefusedMessage`: this server refused to connect to that address                                                          |
+| A fine-grained token refusal         | The refusal in GitLab's terms (below)                                                                                                |
+| A GitLab answer, REST or GraphQL     | `ClassifyHTTPStatus` of the status, except a 401 that names the credential and a 405 that refuses a moved project's old path (below) |
+| Connection refused                   | "GitLab server is unreachable (connection refused). Check GITLAB_URL and whether the server is running"                              |
+| DNS failure                          | "GitLab server hostname could not be resolved (DNS error). Check GITLAB_URL"                                                         |
+| Timeout                              | "Request to GitLab timed out. The server may be overloaded or unreachable"                                                           |
+| TLS or certificate error             | "TLS/SSL handshake failed. If using self-signed certificates, set GITLAB_MCP_SKIP_TLS_VERIFY=true"                                   |
+| Another `*url.Error`                 | "network error reaching GitLab (\<op\>)"                                                                                             |
+| Anything else                        | "unexpected error"                                                                                                                   |
 
 Cancellation is checked first because a cancelled request often surfaces as a
 transport failure underneath, which every later branch would describe as
@@ -256,6 +257,54 @@ and in its heading. The linked items are decoded by client-go, which reads a
 `workItemWidgetLinkedItemsGQL.unwrap`, so they need nothing here. A new decoder
 of a connection whose node type declares neither does the same.
 
+### Why a 405 can name the project's path
+
+GitLab keeps a redirect from every path a project had, and `find_project!` in
+`lib/api/helpers.rb` follows a GET through it and, once it has found that the
+caller can read the project, refuses every other method that names the
+project by an old path with 405 and the message
+`Non GET methods are not allowed for moved projects`. Most project endpoints
+look `:id` up through it; the few that use `find_project` follow the redirect
+for every method
+([row 92 of the upstream bugs register](upstream-bugs.md#the-rest-api-page-does-not-say-a-non-get-request-to-a-moved-projects-old-path-is-answered-405)).
+The 405 sentence of `ClassifyHTTPStatus` read as a statement about the merge
+request, issue or branch the call was about, so a model looked there for the
+reason and never retried with the ID (issue 1133).
+
+The GET is followed with the credential only while the redirect stays on the
+configured instance: `credentialSafeRedirect` in `internal/gitlab/redirect.go`
+drops the credential headers on a hop to another host or from https to http,
+and GitLab builds the `Location` from its external URL. Where that URL names
+another host than the one this server was configured with, the GET by the old
+path is followed without the token, a private project is answered 404, and
+`project.get` cannot name the ID; the project has to be found by its ID or its
+current path another way.
+
+`IsMovedProjectRefusal` in `internal/toolutil/moved_project.go` reads the
+refusal two ways: a 405 whose body carries that message, read from the body
+rather than from client-go's `{message: ...}` rendering, and a 405 answered to
+a HEAD request whose project segment is a path, because GitLab refuses a HEAD
+the same way and its answer has no body. `project_moved?` is false for a
+numeric ID, so a HEAD by ID is never this refusal, and every other 405 (a
+merge request that cannot be merged, a token of the wrong kind) keeps the
+status sentence. `ClassifyError` describes the refusal as a path the project no
+longer has and names `project.get`, which given the old path is followed to
+the new location and answers the ID and the current path.
+
+A handler that keys a hint on the 405 of a request other than a GET, HEAD
+included, that names a project by `:id` checks the predicate first and wraps
+with `WrapErrWithMessage`, since GitLab refused before the route looked at
+anything the hint is about. A 405 to a GET is never this refusal, since the
+redirect is followed, and neither is one to a route that names no project, so
+`milestones.GetBurndownChartEvents` and `accesstokens.PersonalRotateSelf` need
+no check. Three handlers have one: `mergerequests.Merge`, whose blocker
+diagnosis reads the merge request through a GET that the redirect answers,
+`cancelAutoMergeFailure`, whose deprecated route counts a 405 as nothing to
+cancel, and `rotateSelfAccessToken`, whose 405 otherwise means the wrong kind
+of token, while a project's and a group's access tokens, both project bot
+users, reach the project lookup that refuses the old path. Nothing retries the call with the ID on the caller's behalf: a write stays a
+refusal the caller can see.
+
 ---
 
 ## Wrapping in a handler
@@ -417,14 +466,15 @@ is in [Command-Line Utilities](cmd-utilities.md#the-rule-over-served-prose).
 
 ### Which function
 
-| Scenario                                | Function                                  | Example                                                                          |
-| --------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------- |
-| Read (list, get, search)                | `WrapErr`                                 | `WrapErr("listBranches", err)`                                                   |
-| Get that returned 404                   | `NotFoundResult`, through `WrapNotFound`  | `NotFoundResult("Branch", "main in project 42", hints...)`                       |
-| Write (create, update, delete)          | `WrapErrWithMessage`                      | `WrapErrWithMessage("fileCreate", err)`                                          |
-| A known corrective action               | `WrapErrWithHint`                         | `WrapErrWithHint("branchDelete", err, "use branch.unprotect first")`             |
-| A hint for one status (the common case) | `WrapErrWithStatusHint`                   | `WrapErrWithStatusHint("issueGet", err, 404, "verify issue_iid")`                |
-| A permission refused with 401 or 403    | `IsPermissionRefusal` + `WrapErrWithHint` | `if toolutil.IsPermissionRefusal(err) { WrapErrWithHint("mrMerge", err, hint) }` |
+| Scenario                                | Function                                             | Example                                                                          |
+| --------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Read (list, get, search)                | `WrapErr`                                            | `WrapErr("listBranches", err)`                                                   |
+| Get that returned 404                   | `NotFoundResult`, through `WrapNotFound`             | `NotFoundResult("Branch", "main in project 42", hints...)`                       |
+| Write (create, update, delete)          | `WrapErrWithMessage`                                 | `WrapErrWithMessage("fileCreate", err)`                                          |
+| A known corrective action               | `WrapErrWithHint`                                    | `WrapErrWithHint("branchDelete", err, "use branch.unprotect first")`             |
+| A hint for one status (the common case) | `WrapErrWithStatusHint`                              | `WrapErrWithStatusHint("issueGet", err, 404, "verify issue_iid")`                |
+| A permission refused with 401 or 403    | `IsPermissionRefusal` + `WrapErrWithHint`            | `if toolutil.IsPermissionRefusal(err) { WrapErrWithHint("mrMerge", err, hint) }` |
+| A hint on a non-GET 405 to a project    | `IsMovedProjectRefusal` + `WrapErrWithMessage` first | `if toolutil.IsMovedProjectRefusal(err) { WrapErrWithMessage("mrMerge", err) }`  |
 
 ---
 

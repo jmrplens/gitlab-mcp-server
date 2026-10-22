@@ -339,7 +339,7 @@ readable without opening the tracker:
 | 89 | gitlab-org/gitlab | [WorkItem declares the project boundary only, so a group's work item is null to a fine-grained token](#workitem-declares-the-project-boundary-only-so-a-groups-work-item-is-null-to-a-fine-grained-token) | Yes, by another user, [gitlab-org/gitlab#630483](https://gitlab.com/gitlab-org/gitlab/-/issues/630483) | Yes, [gitlab-org/gitlab!259765](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259765), merged; the issue it closes was closed as completed on 2026-10-12 | **Yes, 19.5.0**: merged on 2026-10-11 before the 19.5 cut, although its milestone says 19.6 | No longer: the permission table is taken from 19.5.0-ee, and the epic actions are withheld by `Namespace` (row 87) and `WorkItemType` (row 88) instead | Retired |
 | 90 | gitlab-org/gitlab | [The pending-permission check exempts every type named `*Edge` or `*Payload`](#the-pending-permission-check-exempts-every-type-named-edge-or-payload) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260959](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260959), merged | **Yes, unreleased**: merged on 2026-10-15 in milestone 19.6 and deployed to GitLab.com at 13:47 UTC that day | No | Not needed; the live record computes the undeclared set itself |
 | 91 | gitlab-org/gitlab | [`available_for_permission` ignores `available_for`](#available_for_permission-ignores-available_for) | No | No | No | No | Not needed; the live record names the first permission a token can be granted |
-| 92 | gitlab-org/gitlab | [The REST API page does not say a non-GET request to a moved project's old path is answered 405](#the-rest-api-page-does-not-say-a-non-get-request-to-a-moved-projects-old-path-is-answered-405) | Yes, by the merge request | Yes, [gitlab-org/gitlab!259297](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259297), merged | **Yes, 19.5.0** | No | Not yet, with [issue 1133](https://github.com/jmrplens/gitlab-mcp-server/issues/1133) |
+| 92 | gitlab-org/gitlab | [The REST API page does not say a non-GET request to a moved project's old path is answered 405](#the-rest-api-page-does-not-say-a-non-get-request-to-a-moved-projects-old-path-is-answered-405) | Yes, by the merge request | Yes, [gitlab-org/gitlab!259297](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259297), merged | **Yes, 19.5.0** | No | Yes, since [issue 1133](https://github.com/jmrplens/gitlab-mcp-server/issues/1133): the refusal is described and names the retry with the ID |
 | 93 | client-go | [`OrbitGraphStatusProjects` does not model the projects the indexer gave up on](#orbitgraphstatusprojects-does-not-model-the-projects-the-indexer-gave-up-on) | No | No | No | No | Yes |
 | 94 | gitlab-org/gitlab | [A board name GitLab cannot save is answered as a success](#a-board-name-gitlab-cannot-save-is-answered-as-a-success) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260458](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260458), merged | **Yes, 19.5.0** | No | None taken |
 | 95 | client-go | [`ListGroupMilestonesOptions` misspells `include_descendants` and `GroupMilestone` drops the web URL and project](#listgroupmilestonesoptions-misspells-include_descendants-and-groupmilestone-drops-the-web-url-and-project) | `web_url`: yes, by another contributor; the rest: no | `web_url`: [gitlab-org/api/client-go!3126](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3126), merged | **`web_url`: v3.26.0**, not ours | No | Retired for `web_url` at the v3.29.0 pin; yes for `include_descendants` and `project_id` |
@@ -11000,13 +11000,25 @@ the disagreement.
   **19.5.0**, tagged on 2026-10-15.
 - **Blocking**: no. A request that names the project by its ID or by its
   current path is never refused this way.
-- **Workaround**: not yet.
-  [Issue 1133](https://github.com/jmrplens/gitlab-mcp-server/issues/1133) is
-  for this server to describe the refusal, so that a model retries with the
-  project's ID instead of reading the generic 405 sentence of
-  `internal/toolutil/errors.go`, "the action cannot be performed on this
-  resource in its current state", as a statement about the merge request,
-  issue or branch it was acting on.
+- **Workaround**: yes, since
+  [issue 1133](https://github.com/jmrplens/gitlab-mcp-server/issues/1133).
+  `toolutil.IsMovedProjectRefusal` reads the refusal by GitLab's message or,
+  for a `HEAD`, by the request naming the project by a path, and
+  `ClassifyError` describes it as a path the project no longer has, naming
+  `project.get` and the retry with the numeric ID or the current path, where
+  the generic 405 sentence of `internal/toolutil/errors.go`, "the action
+  cannot be performed on this resource in its current state", read as a
+  statement about the merge request, issue or branch the call was acting on.
+  `merge_request.merge`, `merge_request.cancel_auto_merge` and
+  `access.token_project_rotate_self` check it before their own reading of a
+  405. `TestProject_MovedOldPath_ReadsFollowAndWritesNameTheRetry` in
+  `test/e2e/gitlab/common` holds the description against a Docker instance,
+  on every surface, for a file create, the `HEAD` of
+  `repository.file_metadata`, a merge and an auto-merge cancel, and holds the
+  merge of a draft to not being explained by the draft. An instance on 19.5
+  or later is sent the cancel route 19.5 added, so the deprecated route's
+  reading of a 405, the self-rotation and `repository.file_raw_metadata` are
+  held by the handler tests alone.
 
 **Where**: the [Redirects](https://docs.gitlab.com/api/rest/#redirects)
 section of `doc/api/rest/_index.md`, and `find_project!` in
@@ -11027,7 +11039,11 @@ non-`GET` request with the old path is processed there as usual
 (`POST /projects/:id/trigger/pipeline` is one). `HEAD` is refused too, since
 the helper's `get?` check is false for it whether Grape serves it through a
 `GET` route, as for a raw file, or through one declared with `head`, as for a
-file's metadata, and its refusal has no body.
+file's metadata, and its refusal has no body. Read on GitLab.com on
+2026-10-22 through `gitlab-org/gitlab-ce`, the old path of
+`gitlab-org/gitlab-foss`, a `HEAD` of the project and of a file's metadata
+is answered `405` with an empty body, while the `GET` of the same routes is
+answered `301`.
 
 **Fix merged**: the merge request adds to the section which methods are
 refused, the response body and what to send instead. It leaves `HEAD` out of
@@ -11036,12 +11052,15 @@ endpoints rather than all of them, for the `find_project` exceptions above.
 
 **What it costs this server**: it passes `project_id` to GitLab as given, so a
 model that names a project by a path it saw before the move can read the
-project and then fail every write to it, and two reads as well,
+project and then fail its writes at every endpoint that looks it up through
+`find_project!`, and two reads as well,
 `repository.file_metadata` and `repository.file_raw_metadata`, which are
-`HEAD` requests. The error leads with the generic 405 sentence, with GitLab's
-message after it, and three handlers that key on the status alone give a wrong
-cause instead: `merge_request.merge`, `merge_request.cancel_auto_merge` and
-`access.token_project_rotate_self`. Issue 1133 records each.
+`HEAD` requests. Until issue 1133 the error led with the generic 405 sentence,
+with GitLab's message after it, and three handlers that key on the status
+alone gave a wrong cause instead: `merge_request.merge`,
+`merge_request.cancel_auto_merge` and `access.token_project_rotate_self`. The
+workaround above answers each, and leaves the refusal a refusal: nothing
+retries the call with the ID on the caller's behalf.
 
 **How we found it**: answering GitLab Duo's one finding on
 [gitlab-org/gitlab!255704](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255704)
