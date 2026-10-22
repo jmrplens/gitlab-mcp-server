@@ -12,10 +12,13 @@ package common
 import (
 	"bytes"
 	"encoding/base64"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/jobtokenscope"
@@ -354,34 +357,123 @@ func TestJob_Artifacts_LargeArchiveAndBinaryFile(t *testing.T) {
 	})
 }
 
-// The job of jobLongLogCIYAML and the line its log ends with.
+// The jobs of jobLongLogCIYAML, the one the runner timestamps and the one it
+// does not, the line their logs end with, and the progress line each prints
+// as three writes.
 const (
-	jobLongLogJob   = "long-log"
-	jobLongLogFatal = "FATAL unit test TestCheckout failed expected 200 got 500"
+	jobLongLogJob          = "long-log"
+	jobLongLogUntimedJob   = "long-log-untimestamped"
+	jobLongLogFatal        = "FATAL unit test TestCheckout failed expected 200 got 500"
+	jobLongLogProgressLine = "progress 1\rprogress 2\rprogress done"
 )
 
-// jobLongLogCIYAML runs one job that prints three thousand lines, some 160
-// KB with the runner's own output, and then fails with jobLongLogFatal.
+// jobLongLogCIYAML runs two jobs that print three thousand lines, some 160
+// KB with the runner's own output, then a progress line in three writes a
+// second apart, the first two ending in a carriage return, and then fail with
+// jobLongLogFatal. The first runs with the runner's timestamps (FF_TIMESTAMPS)
+// and the second without, both set on the job so neither depends on the
+// runner's default. A write whose bytes after its last line break hold a
+// carriage return is one the runner flushes as a line of its own when it
+// timestamps the log, and the next piece continues it, so the timestamped log
+// holds the progress line in three pieces.
 const jobLongLogCIYAML = `stages:
   - test
 
-` + jobLongLogJob + `:
+.long-log:
   stage: test
   script:
     - 'for i in $(seq 1 3000); do echo "installing dependency number $i of the build ......"; done'
+    - 'printf "progress 1\r"; sleep 1; printf "progress 2\r"; sleep 1; echo "progress done"'
     - 'echo "` + jobLongLogFatal + `"'
     - exit 1
   tags: []
+
+` + jobLongLogJob + `:
+  extends: .long-log
+  variables:
+    FF_TIMESTAMPS: "true"
+
+` + jobLongLogUntimedJob + `:
+  extends: .long-log
+  variables:
+    FF_TIMESTAMPS: "false"
 `
+
+// runnerTimestampHeader is GitLab's pattern for the header the runner writes
+// in front of every line of a log it timestamps
+// (Gitlab::Ci::Trace::Stream::TIMESTAMP_HEADER_REGEX), anchored at the start
+// of a line.
+var runnerTimestampHeader = regexp.MustCompile(`^[0-9]{4}-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9]\.[0-9]{6}Z [0-9a-f]{2}[EO][+ ]`)
+
+// runnerTimestampFlag is where, in a line of a log the runner timestamps, the
+// byte that flags the line as continuing the one before it stands: the last
+// of the 32 bytes of its header.
+const runnerTimestampFlag = 31
+
+// requireRunnerLogShapes holds the run to what the scenario needs of the
+// runner, read from the two logs as GitLab stores them before any trace is
+// read through the server. The job run with FF_TIMESTAMPS "true" wrote a
+// header in front of every line, and flushed the second write of the progress
+// line as a piece flagged + after the first. The job run with "false" wrote no
+// header at all, and the progress line as one line. The assertions on the
+// traces read only what the server returns, and a log the runner did not
+// timestamp passes them all, so a runner that stopped honoring the flag would
+// otherwise leave the scenario green with nothing stripped or joined.
+func requireRunnerLogShapes(e *harness.Env, project fixture.Project, pipeline fixture.Pipeline) {
+	e.T.Helper()
+	listed, _, err := e.Client().GL().Jobs.ListPipelineJobs(project.ID, pipeline.ID, &gl.ListJobsOptions{}, gl.WithContext(e.Ctx))
+	if err != nil {
+		e.T.Fatalf("listing the jobs of pipeline %d: %v", pipeline.ID, err)
+	}
+	stored := func(name string) []string {
+		for _, job := range listed {
+			if job == nil || job.Name != name {
+				continue
+			}
+			raw, _, readErr := e.Client().GL().Jobs.GetTraceFile(project.ID, job.ID, gl.WithContext(e.Ctx))
+			if readErr != nil {
+				e.T.Fatalf("reading the log of job %q (%d) from GitLab: %v", name, job.ID, readErr)
+			}
+			var log strings.Builder
+			_, _ = raw.WriteTo(&log)
+			return traceLines(log.String())
+		}
+		e.T.Fatalf("pipeline %d holds no job named %q", pipeline.ID, name)
+		return nil
+	}
+
+	stamped := stored(jobLongLogJob)
+	if i := slices.IndexFunc(stamped, func(line string) bool { return !runnerTimestampHeader.MatchString(line) }); i >= 0 {
+		e.T.Fatalf("line %d of job %q, run with FF_TIMESTAMPS \"true\", opens with no timestamp header: %q; the scenario needs the runner to timestamp it", i, jobLongLogJob, stamped[i])
+	}
+	if !slices.ContainsFunc(stamped, func(line string) bool { return strings.HasPrefix(line[runnerTimestampFlag:], "+progress 2\r") }) {
+		e.T.Fatalf("job %q, run with FF_TIMESTAMPS \"true\", holds no piece \"progress 2\" flagged as continuing the line before it; the scenario needs the runner to flush a write that ends in a carriage return as a piece", jobLongLogJob)
+	}
+	untimed := stored(jobLongLogUntimedJob)
+	if i := slices.IndexFunc(untimed, runnerTimestampHeader.MatchString); i >= 0 {
+		e.T.Fatalf("line %d of job %q, run with FF_TIMESTAMPS \"false\", opens with a timestamp header: %q; the scenario needs the runner to leave it untimestamped", i, jobLongLogUntimedJob, untimed[i])
+	}
+	if !slices.Contains(untimed, jobLongLogProgressLine) {
+		e.T.Fatalf("job %q, run with FF_TIMESTAMPS \"false\", does not hold the progress line %q as one line", jobLongLogUntimedJob, jobLongLogProgressLine)
+	}
+}
 
 // TestJob_Trace_LongLogKeepsItsFailure runs a job whose log is longer than
 // the 100 KB one trace read returns and ends in a failure, and reads it on
 // every surface: the log keeps its end, the failure included, says how much
-// of its beginning it left out, and carries none of the runner's color codes
-// or section markers; tail_lines returns exactly the last lines of that end,
-// and reaches the failure once it asks for as many lines as the failure is
-// from the end. The read used to keep the first 100 KB, so the failure was
-// exactly what it dropped.
+// of its beginning it left out, and carries none of the runner's color codes,
+// section markers or timestamp headers, with the progress line the runner
+// wrote in pieces whole again; tail_lines returns exactly the last lines of
+// that end, and reaches the failure once it asks for as many lines as the
+// failure is from the end. The same job run without timestamps reads as the
+// same lines, empty lines aside. Before any of that, the two logs as GitLab
+// stores them are held
+// to what the runner writes with the flag on and off, so the scenario cannot
+// pass on a runner that wrote neither header nor pieces. The read used to keep
+// the first 100 KB, so the failure was
+// exactly what it dropped, and then kept the header at the start of every
+// line, with each piece of a line the runner flushed early as a line of its
+// own.
 func TestJob_Trace_LongLogKeepsItsFailure(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedRunner), harness.Locks(harness.LockRunner))
 
@@ -396,6 +488,7 @@ func TestJob_Trace_LongLogKeepsItsFailure(t *testing.T) {
 		if pipeline.Status != "failed" {
 			e.T.Fatalf("pipeline %d ended as %q, want failed", pipeline.ID, pipeline.Status)
 		}
+		requireRunnerLogShapes(e, project, pipeline)
 		return run{project: project, pipeline: pipeline}
 	}, func(e *harness.Env, surface harness.Surface, r run) {
 		s := e.On(surface)
@@ -413,13 +506,22 @@ func TestJob_Trace_LongLogKeepsItsFailure(t *testing.T) {
 		if strings.Contains(trace.Trace, "\x1b[") || strings.Contains(trace.Trace, "section_start:") {
 			e.T.Errorf("the log still carries terminal markup: %q", firstLine(trace.Trace))
 		}
+		lines := traceLines(trace.Trace)
+		if i := slices.IndexFunc(lines, runnerTimestampHeader.MatchString); i >= 0 {
+			e.T.Errorf("line %d of the log still carries the runner's timestamp header: %q", i, lines[i])
+		}
+		if !slices.Contains(lines, jobLongLogProgressLine) {
+			e.T.Errorf("the log does not carry the progress line %q whole, as one line", jobLongLogProgressLine)
+		}
+		untimed := jobNamed(e, listed, jobLongLogUntimedJob)
+		plain := harness.Do[jobs.TraceOutput](s, actionJobTrace, map[string]any{"project_id": r.project.IDParam(), "job_id": untimed.ID})
+		assertSameLogText(e, trace.Trace, plain.Trace)
 
 		// The runner writes lines of its own after the script's last output,
 		// the cleanup section and "ERROR: Job failed" among them, and how many
 		// is the runner's to decide, so the tails are held to the end of the
 		// log read whole: five lines are its last five, and as many lines as
 		// the failure is from the end start at the failure.
-		lines := traceLines(trace.Trace)
 		failure := slices.IndexFunc(lines, func(line string) bool { return strings.Contains(line, jobLongLogFatal) })
 		if failure < 0 || len(lines) < 5 {
 			e.T.Fatalf("the long log read whole has %d lines and its failure at %d, want five or more and the failure", len(lines), failure)
@@ -440,6 +542,40 @@ func TestJob_Trace_LongLogKeepsItsFailure(t *testing.T) {
 // one dropped.
 func traceLines(trace string) []string {
 	return strings.Split(strings.TrimSuffix(trace, "\n"), "\n")
+}
+
+// assertSameLogText holds the end of a log the runner timestamped, as the
+// server reads it, to the end of the same job's log written without
+// timestamps: the lines both reach, counted back from their ends, are the
+// same lines, which they are only once the headers are gone and the lines the
+// runner wrote in pieces are whole again. Both ends start at a line, and each
+// is cut to the same number of bytes of text, so one may reach a line further
+// back than the other. The empty lines of both are left out. When it
+// timestamps a log, the runner (19.5) writes the marker that closes the
+// job's last section as a piece of its own and the verdict after it ("ERROR:
+// Job failed") on a line it does not flag as continuing that piece, so
+// GitLab's viewer does not join them and neither does the server: the
+// timestamped text holds an empty line where the marker was, and the
+// untimestamped log carries the verdict on the marker's line. The runner also
+// ends a log it timestamps with a line break of its own when its last write
+// has none.
+func assertSameLogText(e *harness.Env, timestamped, plain string) {
+	e.T.Helper()
+	trim := func(trace string) []string {
+		return slices.DeleteFunc(strings.Split(trace, "\n"), func(line string) bool { return line == "" })
+	}
+	stamped, untimed := trim(timestamped), trim(plain)
+	shared := min(len(stamped), len(untimed))
+	if shared < 1000 {
+		e.T.Errorf("the timestamped log ends in %d lines and the untimestamped one in %d, want a thousand or more of each", len(stamped), len(untimed))
+	}
+	stamped, untimed = stamped[len(stamped)-shared:], untimed[len(untimed)-shared:]
+	for i := range shared {
+		if stamped[i] != untimed[i] {
+			e.T.Errorf("of the last %d lines both logs reach, line %d reads %q in the timestamped log and %q in the untimestamped one", shared, i, stamped[i], untimed[i])
+			return
+		}
+	}
 }
 
 // TestJob_ProjectWide_ListsAndDeletesArtifacts lists the jobs of a shared
