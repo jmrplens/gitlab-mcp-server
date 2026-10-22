@@ -47,20 +47,80 @@ func SchemaRootOverride(values map[string]any) InputSchemaOverride {
 }
 
 // SchemaAnyOfRequired returns a root override that requires at least one of the
-// supplied property names to be present.
+// supplied property names to be present: GitLab's at_least_one_of.
 func SchemaAnyOfRequired(propertyNames ...string) InputSchemaOverride {
+	return requiredAlternatives("anyOf", propertyNames, presentBranch)
+}
+
+// SchemaOneOfRequired returns a root override that requires exactly one of the
+// supplied property names to carry a value: GitLab's exactly_one_of, which
+// refuses a call that sends two of them as it refuses one that sends none.
+//
+// A name counts only when its value is not an empty string. A handler decodes
+// such a field into a string and leaves an empty one out of the request, so
+// GitLab is asked with the names that carry a value, and those are the ones
+// its exactly_one_of counts. A branch counting the name alone would refuse a
+// call with a common name beside an empty filter as naming both, and the
+// handler serves that call by sending the common name.
+//
+// Only a schema validator holds a call to one branch: the SDK's, on the
+// individual tool and on the meta tool when its parameter schema is full. The
+// meta dispatcher checks the root required list alone, and the dynamic one
+// reads the branches as the alternative groups find publishes and refuses a
+// call that completes none of them, not one that completes two. So the
+// handler of an action carrying this override refuses a call naming more than
+// one of the names before it sends anything, as groupldap's do.
+func SchemaOneOfRequired(propertyNames ...string) InputSchemaOverride {
+	return requiredAlternatives("oneOf", propertyNames, valuedBranch)
+}
+
+// requiredAlternatives returns a root override holding, under keyword, one
+// branch per property name, built by branch. Names are trimmed, a blank one
+// is left out and a repeated one kept once, and no name left is no override,
+// which [ActionSpec.Validate] refuses as empty.
+//
+// A repeated name matters to oneOf: a call sending it would satisfy both of
+// its branches, and oneOf refuses a call that satisfies more than one, so
+// every call naming it would be refused.
+func requiredAlternatives(keyword string, propertyNames []string, branch func(string) map[string]any) InputSchemaOverride {
 	branches := make([]any, 0, len(propertyNames))
+	seen := make(map[string]bool, len(propertyNames))
 	for _, propertyName := range propertyNames {
 		propertyName = strings.TrimSpace(propertyName)
-		if propertyName == "" {
+		if propertyName == "" || seen[propertyName] {
 			continue
 		}
-		branches = append(branches, map[string]any{"required": []string{propertyName}})
+		seen[propertyName] = true
+		branches = append(branches, branch(propertyName))
 	}
 	if len(branches) == 0 {
 		return InputSchemaOverride{}
 	}
-	return SchemaRootOverride(map[string]any{"anyOf": branches})
+	return SchemaRootOverride(map[string]any{keyword: branches})
+}
+
+// presentBranch is an anyOf branch: the name present, whatever its value. It
+// declares nothing but its required list, a type least of all.
+// [LockdownInputSchemas] closes every object schema it reaches through anyOf
+// or oneOf, and a branch typed as an object would be closed with no
+// properties of its own, refusing every property a call sends.
+func presentBranch(propertyName string) map[string]any {
+	return map[string]any{"required": []string{propertyName}}
+}
+
+// valuedBranch is a oneOf branch: the name present with a value that is not
+// an empty string. minLength holds a string alone, so a name of another type
+// counts as soon as it is present. The branch declares no type and leaves the
+// call's other properties open, because the lockdown closes a schema that has
+// properties and no type as well, and closed it would refuse every property
+// but the one it names. The root stays closed, so a call still sends nothing
+// the schema does not name.
+func valuedBranch(propertyName string) map[string]any {
+	return map[string]any{
+		"required":             []string{propertyName},
+		"properties":           map[string]any{propertyName: map[string]any{"minLength": 1}},
+		"additionalProperties": true,
+	}
 }
 
 // applyInputSchemaOverrides patches schema in place with each override that

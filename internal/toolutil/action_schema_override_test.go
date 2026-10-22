@@ -1,12 +1,16 @@
 // action_schema_override_test.go tests the canonical parameter injections
 // applied to every action input schema: the pagination bounds, the date/time
-// and URI formats, and the instance-wide enums.
+// and URI formats, and the instance-wide enums; and the root overrides that
+// state a requirement across parameters.
 package toolutil
 
 import (
+	"encoding/json"
 	"maps"
 	"reflect"
 	"testing"
+
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 // TestApplyCanonicalParamRanges_TypeGuard verifies that the pagination bounds
@@ -248,6 +252,139 @@ func TestApplyInputSchemaOverrides_NilSchema_SkipsEveryOverride(t *testing.T) {
 	if len(schema) != 0 {
 		t.Errorf("a nil schema gained content: %v", schema)
 	}
+}
+
+// TestSchemaOneOfRequired_Names_OneUntypedBranchEach verifies the override
+// GitLab's exactly_one_of is published with: one oneOf branch per name, each
+// requiring that name alone with a value that is not empty, open to the
+// call's other properties and declaring no type; names trimmed and blank ones
+// left out; a repeated name kept once; and no override at all when no name is
+// left, which [ActionSpec.Validate] refuses as empty.
+//
+// A repeated name is the case oneOf does not forgive where anyOf does: a call
+// that sends the name satisfies both of its branches, and oneOf refuses a call
+// that satisfies more than one, so the override would refuse every call that
+// named it.
+func TestSchemaOneOfRequired_Names_OneUntypedBranchEach(t *testing.T) {
+	branches := func(names ...string) InputSchemaOverride {
+		oneOf := make([]any, 0, len(names))
+		for _, name := range names {
+			oneOf = append(oneOf, map[string]any{
+				"required":             []string{name},
+				"properties":           map[string]any{name: map[string]any{"minLength": 1}},
+				"additionalProperties": true,
+			})
+		}
+		return InputSchemaOverride{Values: map[string]any{"oneOf": oneOf}}
+	}
+	cases := []struct {
+		name  string
+		names []string
+		want  InputSchemaOverride
+	}{
+		{name: "two names give two branches", names: []string{"cn", "filter"}, want: branches("cn", "filter")},
+		{name: "names are trimmed and blank ones left out", names: []string{" cn ", "", "  ", "filter"}, want: branches("cn", "filter")},
+		{name: "a repeated name is one branch", names: []string{"cn", "filter", " cn"}, want: branches("cn", "filter")},
+		{name: "no name left is no override", names: []string{"", " "}, want: InputSchemaOverride{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := SchemaOneOfRequired(tc.names...); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("SchemaOneOfRequired(%q) = %#v, want %#v", tc.names, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestSchemaAnyOfRequired_RepeatedName_IsOneBranch verifies that the anyOf
+// override reads its names the way the oneOf one does, through the same
+// helper: a repeated name is one branch rather than two, which anyOf would
+// have tolerated and which published the same alternative twice.
+func TestSchemaAnyOfRequired_RepeatedName_IsOneBranch(t *testing.T) {
+	want := InputSchemaOverride{Values: map[string]any{"anyOf": []any{
+		map[string]any{"required": []string{"name"}},
+		map[string]any{"required": []string{"path"}},
+	}}}
+	if got := SchemaAnyOfRequired("name", "path", "name "); !reflect.DeepEqual(got, want) {
+		t.Errorf("SchemaAnyOfRequired(name, path, name) = %#v, want %#v", got, want)
+	}
+}
+
+// TestSchemaOneOfRequired_LockedDownSchema_AcceptsExactlyOneName verifies the
+// override as a client receives it: applied to an input schema and locked
+// down the way tools/list serves every tool, the schema accepts a call that
+// names one of the two and refuses a call that names both or neither.
+//
+// The lockdown is why a branch declares no type and leaves the call's other
+// properties open. It closes every object schema it reaches through oneOf,
+// one with properties and no type included, and a closed branch knows only
+// the name it requires, so it refuses every other property a call sends: the
+// call naming the common name alone would be refused for carrying the group
+// beside it, and no call at all would pass.
+//
+// A name counts only with a value that is not empty, which is how the handler
+// reads it: it leaves an empty selector out of the request, so a call with an
+// empty filter beside a common name is served as the common name alone, and
+// one whose only selector is empty names none.
+func TestSchemaOneOfRequired_LockedDownSchema_AcceptsExactlyOneName(t *testing.T) {
+	schema := map[string]any{
+		"type":     "object",
+		"required": []any{"group_id"},
+		"properties": map[string]any{
+			"group_id": map[string]any{"type": "string"},
+			"cn":       map[string]any{"type": "string"},
+			"filter":   map[string]any{"type": "string"},
+		},
+	}
+	applyInputSchemaOverrides(schema, []InputSchemaOverride{SchemaOneOfRequired("cn", "filter")})
+	locked, isMap := lockedDownSchema(schema).(map[string]any)
+	if !isMap {
+		t.Fatalf("lockedDownSchema() = %T, want a map", lockedDownSchema(schema))
+	}
+	resolved := resolveSchemaForTest(t, locked)
+
+	cases := []struct {
+		name      string
+		arguments map[string]any
+		wantValid bool
+	}{
+		{name: "the common name alone", arguments: map[string]any{"group_id": "g", "cn": "engineers"}, wantValid: true},
+		{name: "the filter alone", arguments: map[string]any{"group_id": "g", "filter": "(dept=eng)"}, wantValid: true},
+		{name: "both", arguments: map[string]any{"group_id": "g", "cn": "engineers", "filter": "(dept=eng)"}},
+		{name: "neither", arguments: map[string]any{"group_id": "g"}},
+		{name: "the common name beside an empty filter", arguments: map[string]any{"group_id": "g", "cn": "engineers", "filter": ""}, wantValid: true},
+		{name: "the filter beside an empty common name", arguments: map[string]any{"group_id": "g", "cn": "", "filter": "(dept=eng)"}, wantValid: true},
+		{name: "an empty common name alone", arguments: map[string]any{"group_id": "g", "cn": ""}},
+		{name: "both empty", arguments: map[string]any{"group_id": "g", "cn": "", "filter": ""}},
+		{name: "a property the schema does not name", arguments: map[string]any{"group_id": "g", "cn": "engineers", "extra": "x"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := resolved.Validate(tc.arguments)
+			if (err == nil) != tc.wantValid {
+				t.Errorf("Validate(%v) error = %v, want valid %t", tc.arguments, err, tc.wantValid)
+			}
+		})
+	}
+}
+
+// resolveSchemaForTest decodes a schema map into a resolved jsonschema-go
+// schema, the validator the SDK puts a tool's arguments to.
+func resolveSchemaForTest(t *testing.T, schema map[string]any) *jsonschema.Resolved {
+	t.Helper()
+	data, err := json.Marshal(schema)
+	if err != nil {
+		t.Fatalf("marshal schema: %v", err)
+	}
+	var decoded jsonschema.Schema
+	if err = json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("decode schema: %v", err)
+	}
+	resolved, err := decoded.Resolve(nil)
+	if err != nil {
+		t.Fatalf("resolve schema: %v", err)
+	}
+	return resolved
 }
 
 // TestSchemaOverrideTarget_NestedObjectProperty verifies an override path
