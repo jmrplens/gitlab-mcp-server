@@ -439,6 +439,37 @@ func TestExampleValue_SatisfiesEachConstraint(t *testing.T) {
 			want: []any{map[string]any{"content": "value", "file_path": "path/to/file"}},
 		},
 		{
+			name:  "an array of objects fills the first alternative of each item",
+			param: "deploy_access_levels",
+			schema: map[string]any{"type": []any{"null", "array"}, "minItems": 1, "items": map[string]any{
+				"type": "object",
+				"oneOf": []any{
+					map[string]any{"required": []string{"access_level"}},
+					map[string]any{"required": []string{"user_id"}},
+				},
+				"properties": map[string]any{
+					"access_level": map[string]any{"type": []any{"null", "integer"}, "enum": []any{20, 30, 40, 60, nil}},
+					"user_id":      map[string]any{"type": []any{"null", "integer"}},
+				},
+			}},
+			want: []any{map[string]any{"access_level": 30}},
+		},
+		{
+			name:  "an object fills its required fields and its first alternative",
+			param: "rule",
+			schema: map[string]any{
+				"type":     "object",
+				"required": []any{"name"},
+				"anyOf":    []any{map[string]any{"required": []any{"group_id"}}, map[string]any{"required": []any{"user_id"}}},
+				"properties": map[string]any{
+					"name":     map[string]any{"type": "string"},
+					"group_id": map[string]any{"type": "integer"},
+					"user_id":  map[string]any{"type": "integer"},
+				},
+			},
+			want: map[string]any{"group_id": 123, "name": "value"},
+		},
+		{
 			name:  "an object fills its required fields only",
 			param: "configuration",
 			schema: map[string]any{"type": "object", "required": []any{"url", "access_token"}, "properties": map[string]any{

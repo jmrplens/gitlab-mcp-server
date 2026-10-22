@@ -44,13 +44,9 @@ var patternExamples = []string{exampleHexColor, exampleURL}
 // offered all three of name, description and color, the last as "value",
 // which its hex pattern refuses.
 func exampleFor(entry actionEntry, schema map[string]any) ActionExample {
-	names := actioncatalog.RequiredParams(schema)
-	if alternatives := actioncatalog.RequiredParamAlternatives(schema); len(alternatives) > 0 {
-		names = append(names, alternatives[0]...)
-	}
 	arguments := map[string]any{
 		"action": entry.ID,
-		"params": exampleObject(schema, names),
+		"params": exampleObject(schema),
 	}
 	if entry.Destructive {
 		arguments["confirm"] = true
@@ -61,8 +57,17 @@ func exampleFor(entry actionEntry, schema map[string]any) ActionExample {
 	}
 }
 
-// exampleObject fills the named properties of an object schema.
-func exampleObject(schema map[string]any, names []string) map[string]any {
+// exampleObject fills the properties an object schema asks of every value:
+// the ones its required list names and the first of its alternative groups,
+// none of the others. The call's params are one such object, and so is an
+// element of a list whose item schema says which of its fields an element
+// names, as a protected environment's deploy access level names exactly one
+// of a role, a user or a group (issue 1271).
+func exampleObject(schema map[string]any) map[string]any {
+	names := actioncatalog.RequiredParams(schema)
+	if alternatives := actioncatalog.RequiredParamAlternatives(schema); len(alternatives) > 0 {
+		names = append(names, alternatives[0]...)
+	}
 	properties := actionSchemaProperties(schema)
 	object := make(map[string]any, len(names))
 	for _, name := range names {
@@ -75,7 +80,8 @@ func exampleObject(schema map[string]any, names []string) map[string]any {
 // exampleValue returns a value for one parameter that its own schema accepts:
 // a value of its enum, otherwise a value of the type the schema declares,
 // shaped by its format and pattern, an array of one item and an object
-// holding its required fields. A schema that declares no type it can fill is
+// holding its required fields and its first alternative group, as the call's
+// params do. A schema that declares no type it can fill is
 // answered from its first oneOf or anyOf branch, and a parameter with no
 // schema at all keeps the placeholder its name suggests.
 //
@@ -106,7 +112,7 @@ func exampleValue(name string, schema map[string]any) any {
 		items, _ := schema["items"].(map[string]any)
 		return []any{exampleValue(strings.TrimSuffix(name, "s"), items)}
 	case "object":
-		return exampleObject(schema, actioncatalog.RequiredParams(schema))
+		return exampleObject(schema)
 	}
 	if branch := firstSchemaBranch(schema); branch != nil {
 		return exampleValue(name, branch)
