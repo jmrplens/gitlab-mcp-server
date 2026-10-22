@@ -3,6 +3,7 @@
 package toolutil
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -565,70 +566,210 @@ func TestStripLogMarkup_LeavesTheTextOfAJobLog(t *testing.T) {
 	}
 }
 
-// TestLogMarkupRawOffset_FindsTheByteTheStrippedTextKeeps verifies that the
-// offset LogMarkupRawOffset gives for each byte of a stripped log is where
-// that byte stands in the log as written, so the log from there strips to the
-// stripped text from there, and that the end of the stripped text is the end
-// of the log, whatever markup trails it. The cases hold markup before, after
-// and between kept text, a section marker inside an escape sequence, which
-// only the second pass removes, and a log that is nothing but markup.
-func TestLogMarkupRawOffset_FindsTheByteTheStrippedTextKeeps(t *testing.T) {
+// The headers GitLab Runner writes in front of every line of a job log it
+// timestamps (FF_TIMESTAMPS), as the issue's run showed them: the time to the
+// microsecond, the stream number, O for stdout or E for stderr, and a space,
+// or a + when the line continues the one before it.
+const (
+	stdoutHeader    = "2026-10-13T18:57:48.608003Z 00O "
+	stdoutContinued = "2026-10-13T18:57:48.608670Z 00O+"
+	stderrHeader    = "2026-10-13T18:57:49.252704Z 01E "
+	stderrContinued = "2026-10-13T18:57:49.275895Z 01E+"
+)
+
+// runnerHeaderAtStart is GitLab's own pattern for that header
+// (Gitlab::Ci::Trace::Stream::TIMESTAMP_HEADER_REGEX), anchored at the start
+// of the text, which the tests read logs with independently of the code under
+// test.
+var runnerHeaderAtStart = regexp.MustCompile(`^[0-9]{4}-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9]\.[0-9]{6}Z [0-9a-f]{2}[EO][+ ]`)
+
+// runnerHeaderAtALineStart matches the header at the start of any line.
+var runnerHeaderAtALineStart = regexp.MustCompile(`(?m)^[0-9]{4}-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9]\.[0-9]{6}Z [0-9a-f]{2}[EO][+ ]`)
+
+// TestStripLogMarkup_TimestampedLog_ReadsAsTheLogViewerShowsIt verifies that
+// the header the runner writes in front of every line of a log it timestamps
+// is removed, stream marker and all, and that a line it wrote in pieces is
+// joined back the way GitLab's job log viewer joins it: each piece flagged
+// with + continues the line before it in the log, whichever stream that line
+// came from, and a piece with no line before it starts the text. The runner
+// flags a piece as continuing the line before it on its own stream, so where
+// two streams interleave the joined text is the one the viewer shows and not
+// the one the job printed, which the case of a continuation after a line of
+// the other stream holds. The pieces are the two the runner's writer makes, a
+// line longer than its 8 KiB buffer, which can end inside an escape sequence,
+// and a write whose bytes after its last line break hold a carriage return,
+// which flushes a progress display at each step and the runner's own section
+// marker apart from the header text after it. The prefix used to reach every
+// line of the text, so a line read 2026-10-13T18:57:48.608003Z 00O ERROR and a
+// split line arrived as several lines.
+func TestStripLogMarkup_TimestampedLog_ReadsAsTheLogViewerShowsIt(t *testing.T) {
+	long := strings.Repeat("a", 8193)
+	tests := []struct{ name, in, want string }{
+		{"every line's header", stdoutHeader + "Running with gitlab-runner 19.4.1\n" + stdoutHeader + "$ make test\n", "Running with gitlab-runner 19.4.1\n$ make test\n"},
+		{"a stderr line", stderrHeader + "warning: deprecated\n", "warning: deprecated\n"},
+		{"a header with nothing after it", stdoutHeader + "\n" + stdoutHeader, "\n"},
+		{"a line longer than the runner's buffer", stdoutHeader + long + "\n" + stdoutContinued + "tail\n", long + "tail\n"},
+		{"a progress line flushed at each carriage return", stdoutHeader + "10%\r\n" + stdoutContinued + "20%\r\n" + stdoutContinued + "done\n", "10%\r20%\rdone\n"},
+		{"a section marker flushed apart from its header", stdoutHeader + "section_start:1791747389:step_script\r\x1b[0K\n" + stdoutContinued + "\x1b[0K\x1b[36;1mExecuting\x1b[0;m\n", "Executing\n"},
+		{"an escape sequence split by a flush", stdoutHeader + "red \x1b[31\n" + stdoutContinued + ";1mtext\x1b[0;m\n", "red text\n"},
+		{"the end of a failed job", stdoutHeader + "section_end:1791747390:step_script\r\x1b[0K\n" + stdoutContinued + "\n" + stdoutHeader + "\x1b[31;1mERROR: Job failed: exit code 1\x1b[0;m\n", "\nERROR: Job failed: exit code 1\n"},
+		{"a continuation joins the line before it, whatever its stream", stdoutHeader + "out\n" + stderrHeader + "err\n" + stdoutContinued + " more\n" + stderrContinued + " and more\n", "out\nerr more and more\n"},
+		{"a continuation with no line before it", stdoutContinued + "tail\n" + stdoutHeader + "next\n", "tail\nnext\n"},
+		{"a header inside a line is text", "see " + stdoutHeader + "x\n", "see " + stdoutHeader + "x\n"},
+		{"a time without microseconds is text", "2026-10-13T18:57:48Z 00O x\n", "2026-10-13T18:57:48Z 00O x\n"},
+		{"a stream number in capitals is text", "2026-10-13T18:57:48.608003Z 0AO x\n", "2026-10-13T18:57:48.608003Z 0AO x\n"},
+		{"a stream other than O or E is text", "2026-10-13T18:57:48.608003Z 00X x\n", "2026-10-13T18:57:48.608003Z 00X x\n"},
+		{"a flag other than a space or a plus is text", "2026-10-13T18:57:48.608003Z 00O-x\n", "2026-10-13T18:57:48.608003Z 00O-x\n"},
+		{"a header cut short is text", stdoutHeader[:31], stdoutHeader[:31]},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := StripLogMarkup(tt.in); got != tt.want {
+				t.Errorf("StripLogMarkup(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// timestampLog writes s as GitLab Runner writes a log it timestamps: a header
+// in front of every line, and a line broken after each carriage return that
+// does not end it and after every piece bytes of it, each piece after the
+// first flagged as continuing the line before it. A break after a carriage
+// return is a write that ends there, which the runner flushes as a piece the
+// way it flushes each step of a progress display; it flushes a write whole, so
+// it never breaks a write that goes on past its carriage return. A break
+// every piece bytes is the runner flushing a line longer than its buffer,
+// with the buffer shrunk so that a piece can end anywhere. Joined back, it is
+// s.
+func timestampLog(s string, piece int) string {
+	var b strings.Builder
+	for line := range strings.SplitAfterSeq(s, "\n") {
+		if line == "" {
+			continue
+		}
+		b.WriteString(stdoutHeader)
+		written := 0
+		for i := range len(line) {
+			b.WriteByte(line[i])
+			written++
+			if i+1 < len(line) && line[i+1] != '\n' && (line[i] == '\r' || written == piece) {
+				b.WriteString("\n" + stdoutContinued)
+				written = 0
+			}
+		}
+	}
+	return b.String()
+}
+
+// TestScanLogMarkup_RawOffset_FindsWhereTheTextFromThereBegins verifies that
+// the offset RawOffset gives for each byte of a stripped log is where the
+// text from that byte begins in the log as written: the start of the line,
+// its header and leading markup included, when the byte starts a line of the
+// text, and the byte itself otherwise, past every header, marker and
+// sequence before it. The cases hold markup before, after and between kept
+// text, a section marker inside an escape sequence, which only the last pass
+// removes, two section markers before the text of one line, as adjacent
+// sections write them, a log that is nothing but markup, and timestamped
+// lines, one of them written in two pieces.
+func TestScanLogMarkup_RawOffset_FindsWhereTheTextFromThereBegins(t *testing.T) {
 	tests := []struct {
 		name string
 		in   string
 		want []int // the offset for every n from 0 to the stripped length
 	}{
 		{"plain text", "ab", []int{0, 1, 2}},
-		{"markup before", "\x1b[0Kab", []int{4, 5, 6}},
+		{"markup before", "\x1b[0Kab", []int{0, 5, 6}},
 		{"markup between", "a\x1b[31mb", []int{0, 6, 7}},
 		{"markup after", "ab\x1b[0;m", []int{0, 1, 7}},
-		{"a section marker and its header", "section_start:1:x\r\x1b[0Kab\n", []int{22, 23, 24, 25}},
+		{"a section marker and its header", "section_start:1:x\r\x1b[0Kab\n", []int{0, 23, 24, 25}},
 		{"a marker inside an escape sequence", "a\x1b[section_start:1:x\r0Kb", []int{0, 23, 24}},
-		{"nothing but markup", "\x1b[0K\x1b[0K", []int{8}},
+		{"two section markers before the text", "section_end:1:a\rsection_start:2:b\rxy", []int{0, 35, 36}},
+		{"nothing but markup", "\x1b[0K\x1b[0K", []int{0}},
+		{"lines with markup", "a\x1b[0Kb\nc\x1b[31md\x1b[0me\n", []int{0, 5, 6, 7, 13, 18, 19, 20}},
+		{"timestamped lines", stdoutHeader + "ab\n" + stdoutHeader + "c", []int{0, 33, 34, 35, 68}},
+		{"a line in two pieces", stdoutHeader + "ab\n" + stdoutContinued + "c\n", []int{0, 33, 67, 68, 69}},
+		{"a continuation with no line before it", stdoutContinued + "a", []int{0, 33}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stripped := StripLogMarkup(tt.in)
-			if len(tt.want) != len(stripped)+1 {
-				t.Fatalf("the case lists %d offsets for %q, which strips to %d bytes", len(tt.want), tt.in, len(stripped))
+			scanned := ScanLogMarkup(tt.in)
+			if scanned.Text != StripLogMarkup(tt.in) || len(tt.want) != len(scanned.Text)+1 {
+				t.Fatalf("the case lists %d offsets for %q, which scans to %q", len(tt.want), tt.in, scanned.Text)
 			}
 			for n, want := range tt.want {
-				if got := LogMarkupRawOffset(tt.in, n); got != want {
-					t.Errorf("LogMarkupRawOffset(%q, %d) = %d, want %d", tt.in, n, got, want)
+				if got := scanned.RawOffset(n); got != want {
+					t.Errorf("ScanLogMarkup(%q).RawOffset(%d) = %d, want %d", tt.in, n, got, want)
 				}
 			}
 		})
 	}
 }
 
-// FuzzLogMarkupRawOffset holds LogMarkupRawOffset to what a caller relies on
-// for any text and any offset into its stripped form: the log from the offset
-// it gives strips to the stripped text from that offset, and the offsets
-// never decrease as the stripped offset grows.
-func FuzzLogMarkupRawOffset(f *testing.F) {
+// FuzzScanLogMarkup_RawOffset holds ScanLogMarkup to what a caller relies on
+// for any text and any offset into its stripped form. The offsets never decrease
+// and stay inside the log. The log up to the offset strips to the text up to
+// it. The log from the offset strips to the text from it, whenever the offset
+// starts a line of the log or what follows it does not read as a runner
+// header, since a log is read from its start as a line start. Each line of
+// the text begins where a line of the log does. And a log written with the
+// runner's timestamps reads as the log written without them, once nothing in
+// it opens a line with what reads as a header of its own.
+func FuzzScanLogMarkup_RawOffset(f *testing.F) {
 	for _, seed := range []string{
 		"plain line\n",
 		"section_start:1791747389:prepare_executor\r\x1b[0K\x1b[0K\x1b[36;1mPreparing\x1b[0;m\n",
 		"a\x1b[section_start:1:x\r0Kb",
 		"section_start:1:step[collapsed=true]\r\x1b[0KRunning\nsection_end:2:step\r\x1b[0K\n",
 		"\x1b[0K\x1b[0K",
+		stdoutHeader + "Running\n" + stderrHeader + "warning\n",
+		stdoutHeader + "section_start:1:step\r\x1b[0K\n" + stdoutContinued + "\x1b[36;1mStep\x1b[0;m\n",
+		stdoutHeader + "red \x1b[31\n" + stdoutContinued + ";1mtext\n" + stdoutContinued,
+		stdoutContinued + "tail\n" + stdoutHeader + "\n",
 	} {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
-		stripped := StripLogMarkup(s)
+		scanned := ScanLogMarkup(s)
+		if scanned.Text != StripLogMarkup(s) {
+			t.Fatalf("ScanLogMarkup(%q).Text = %q, and StripLogMarkup gives %q", s, scanned.Text, StripLogMarkup(s))
+		}
 		previous := 0
-		for n := 0; n <= len(stripped); n++ {
-			offset := LogMarkupRawOffset(s, n)
+		for n := 0; n <= len(scanned.Text); n++ {
+			offset := scanned.RawOffset(n)
 			if offset < previous || offset > len(s) {
-				t.Fatalf("LogMarkupRawOffset(%q, %d) = %d, after %d for %d", s, n, offset, previous, n-1)
+				t.Fatalf("RawOffset(%d) of %q = %d, after %d for %d", n, s, offset, previous, n-1)
 			}
-			if got := StripLogMarkup(s[offset:]); got != stripped[n:] {
-				t.Fatalf("StripLogMarkup(%q[%d:]) = %q, want %q", s, offset, got, stripped[n:])
-			}
+			checkRawOffset(t, s, scanned.Text, n, offset)
 			previous = offset
 		}
+		if !runnerHeaderAtALineStart.MatchString(s) {
+			for _, piece := range []int{1, 3, 8192} {
+				if got := StripLogMarkup(timestampLog(s, piece)); got != scanned.Text {
+					t.Fatalf("StripLogMarkup(timestampLog(%q, %d)) = %q, want %q", s, piece, got, scanned.Text)
+				}
+			}
+		}
 	})
+}
+
+// checkRawOffset holds the offset RawOffset gave for n in the log s, which
+// strips to stripped, to what FuzzScanLogMarkup_RawOffset states of it: the
+// log up to it strips to the text up to n, the log from it strips to the
+// text from n unless it starts inside a line of the log at what reads as a
+// header, and it starts a line of the log whenever n starts a line of the
+// text.
+func checkRawOffset(t *testing.T, s, stripped string, n, offset int) {
+	t.Helper()
+	if got := StripLogMarkup(s[:offset]); got != stripped[:n] {
+		t.Fatalf("StripLogMarkup(%q[:%d]) = %q, want %q", s, offset, got, stripped[:n])
+	}
+	atALine := offset == 0 || s[offset-1] == '\n'
+	if got := StripLogMarkup(s[offset:]); got != stripped[n:] && (atALine || !runnerHeaderAtStart.MatchString(s[offset:])) {
+		t.Fatalf("StripLogMarkup(%q[%d:]) = %q, want %q", s, offset, got, stripped[n:])
+	}
+	if (n == 0 || stripped[n-1] == '\n') && !atALine {
+		t.Fatalf("RawOffset(%d) of %q = %d, which starts no line of the log, for a line of the text", n, s, offset)
+	}
 }
 
 // TestStripControlBytes verifies that the C0 and C1 control ranges and DEL are

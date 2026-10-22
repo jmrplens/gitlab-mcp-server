@@ -27,8 +27,12 @@ const maxTraceBytes = 100 << 10
 
 // traceWindowBytes is how much of the end of a log [Trace] reads and strips
 // of the runner's markup, 1000 KB, ten times the [maxTraceBytes] it returns:
-// markup is a fraction of a colored line, so the last 1000 KB of any log a
-// runner writes hold more than 100 KB of text.
+// markup, the 32-byte timestamp header of a timestamped line included, is a
+// fraction of a colored line, so the last 1000 KB of a log whose lines carry
+// more than a few bytes of text, timestamped or not, hold more than 100 KB of
+// text. A log of shorter lines, such as empty lines or a progress display
+// written a character at a time, is answered with the text the window holds
+// ([traceTail]).
 const traceWindowBytes = 1000 << 10
 
 // maxTraceTailLines bounds the tail_lines a caller may ask [Trace] for. A
@@ -234,7 +238,8 @@ type TraceInput struct {
 // TraceOutput holds the trace (log) of a CI/CD job, the end of it when it
 // is longer than one response carries. Truncated is set when anything was
 // left out, and OmittedBytes counts the bytes of the log, as GitLab stores
-// it with the runner's markup, that come before the part returned.
+// it with the runner's markup and timestamps, that come before the part
+// returned.
 type TraceOutput struct {
 	toolutil.HintableOutput
 	JobID        int64  `json:"job_id"`
@@ -244,10 +249,12 @@ type TraceOutput struct {
 }
 
 // Trace retrieves the log of a CI/CD job via the GitLab Jobs trace API
-// (GET /projects/:id/jobs/:job_id/trace), without the runner's terminal
-// markup ([toolutil.StripLogMarkup]), the last tail_lines of it when the
-// caller asked for them, and its last [maxTraceBytes] at most
-// ([logTail]), reading only the end of the log ([traceTail]). It used to
+// (GET /projects/:id/jobs/:job_id/trace), without the runner's markup
+// ([toolutil.ScanLogMarkup]): its timestamp headers, with the lines it wrote
+// in pieces joined, so tail_lines counts the lines the job printed, its
+// section markers and its escape sequences. It returns the last tail_lines of
+// that text when the caller asked for them, and its last [maxTraceBytes] at
+// most ([logTail]), reading only the end of the log ([traceTail]). It used to
 // return the first [maxTraceBytes], and a job's failure is almost always at
 // the end of its log.
 func Trace(ctx context.Context, client *gitlabclient.Client, input TraceInput) (TraceOutput, error) {
@@ -289,15 +296,19 @@ func Trace(ctx context.Context, client *gitlabclient.Client, input TraceInput) (
 // 0 when nothing was left out.
 //
 // It reads only the last window bytes of the log and strips the markup of
-// those alone, so a call costs a few windows whatever the log's size, up to
-// the client's response ceiling; it used to copy the whole log and strip all
-// of it to keep 100 KB. The part read starts at the first line that begins
-// inside it, where the markup strips as it would in the whole log, since no
-// sequence or marker spans a line break, or at a character when it holds no
-// line break before its last byte. The end of the log is then exactly what
-// stripping the whole log gives whenever the part read holds more text than
-// [maxTraceBytes]; a part that holds less, all markup but a little text, is
-// returned whole and what comes before it is counted as left out.
+// those alone ([toolutil.ScanLogMarkup]), so a call costs a few windows
+// whatever the log's size, up to the client's response ceiling; it used to
+// copy the whole log and strip all of it to keep 100 KB. The part read starts
+// at the first line that begins inside it ([firstLineInside]), where the
+// markup strips as it would in the whole log, since no header, marker or
+// sequence crosses the end of a line once the pieces the runner wrote a line
+// in are joined, or at a character when it holds no line start before its
+// last byte. The end of the log is then exactly what stripping the whole log
+// gives whenever the part read holds more text than [maxTraceBytes]; a part
+// that holds less, all markup but a little text, is returned whole and what
+// comes before it is counted as left out. The offset of the end returned is
+// mapped back to the log by [toolutil.LogText.RawOffset], which reads the
+// line it falls in and not the part again.
 //
 // client-go hands the body back already read, so its size is known and the
 // read cannot fail.
@@ -306,15 +317,12 @@ func traceTail(r *bytes.Reader, tailLines, window int) (log string, omitted int)
 	start := max(size-window, 0)
 	buf := make([]byte, size-start)
 	_, _ = r.ReadAt(buf, int64(start)) // a bytes.Reader holding size bytes fills buf whole
-	skip := 0
+	part := toolutil.ScanLogMarkup(string(buf))
+	from := 0
 	if start > 0 {
-		skip = bytes.IndexByte(buf[:len(buf)-1], '\n') + 1
-		for skip < len(buf)-1 && !utf8.RuneStart(buf[skip]) {
-			skip++
-		}
+		from = firstLineInside(part, len(buf))
 	}
-	raw := string(buf[skip:])
-	text := toolutil.StripLogMarkup(raw)
+	text := part.Text[from:]
 	log = text
 	if tailLines > 0 {
 		log = lastLines(log, tailLines)
@@ -323,27 +331,26 @@ func traceTail(r *bytes.Reader, tailLines, window int) (log string, omitted int)
 	if start == 0 && len(log) == len(text) {
 		return log, 0
 	}
-	return log, start + skip + rawOffset(raw, text, len(text)-len(log))
+	return log, start + part.RawOffset(len(part.Text)-len(log))
 }
 
-// rawOffset returns where, in raw, the log as written, the part of text, its
-// stripped form, from n on begins: past as many line breaks as text[:n]
-// holds, since stripping keeps every one of them, and then, when n falls
-// inside a line, as far into that line as [toolutil.LogMarkupRawOffset]
-// maps it. raw from there strips to text from n. Counting line breaks reads
-// the part once and allocates nothing, where mapping the whole part through
-// the markup would cost another pass of the regular expressions over it.
-func rawOffset(raw, text string, n int) int {
-	lineStart := strings.LastIndexByte(text[:n], '\n') + 1
-	offset := 0
-	for range strings.Count(text[:lineStart], "\n") {
-		offset += strings.IndexByte(raw[offset:], '\n') + 1
+// firstLineInside returns where, in the text of a part of size bytes read
+// from inside a log, the first line that begins inside the part begins. The
+// part's own first line may begin before the part does, and a line the runner
+// wrote in pieces begins at its first piece, so a part that starts inside
+// such a line leaves out the pieces of it the part holds as well. When the
+// part holds no line start before its last byte, the text is cut at its first
+// character instead, so what is kept of valid UTF-8 stays valid, keeping its
+// last byte whatever bytes come before it.
+func firstLineInside(part toolutil.LogText, size int) int {
+	if i := strings.IndexByte(part.Text, '\n') + 1; i > 0 && part.RawOffset(i) < size {
+		return i
 	}
-	if lineStart == n {
-		return offset
+	from := 0
+	for from < len(part.Text)-1 && !utf8.RuneStart(part.Text[from]) {
+		from++
 	}
-	line, _, _ := strings.Cut(raw[offset:], "\n")
-	return offset + toolutil.LogMarkupRawOffset(line, n-lineStart)
+	return from
 }
 
 // lastLines returns the last n lines of s, keeping a final line break, and

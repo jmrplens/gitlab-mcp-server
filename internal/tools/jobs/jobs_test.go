@@ -15,7 +15,6 @@ import (
 	"reflect"
 	"runtime"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -198,6 +197,81 @@ func markupLog(size int) string {
 	return b.String()
 }
 
+// The headers GitLab Runner writes in front of each line of a log it
+// timestamps (FF_TIMESTAMPS): a space after the stream when the line is a
+// line of its own, a + when it continues the one before it.
+const (
+	traceStdoutHeader    = "2026-10-13T18:57:48.608003Z 00O "
+	traceStdoutContinued = "2026-10-13T18:57:48.608670Z 00O+"
+)
+
+// sectionMarkerWriteEnd ends the write GitLab Runner makes of a section
+// marker of its own: the marker's carriage return and the erase-line
+// sequence after it, with no line break.
+const sectionMarkerWriteEnd = "\r\x1b[0K"
+
+// timestamped writes log as GitLab Runner writes it with FF_TIMESTAMPS: a
+// header in front of every line, and a line broken after each section
+// marker's write, the piece after it flagged as continuing the line before
+// it. The runner writes a section marker of its own as one write ending in
+// sectionMarkerWriteEnd, flushes that write whole as a line of the log, since
+// it holds a carriage return after its last line break, and the header text
+// it writes next continues that line.
+func timestamped(log string) string {
+	var b strings.Builder
+	b.Grow(2 * len(log))
+	for line := range strings.SplitAfterSeq(log, "\n") {
+		if line == "" {
+			continue
+		}
+		b.WriteString(traceStdoutHeader)
+		b.WriteString(strings.ReplaceAll(line, sectionMarkerWriteEnd, sectionMarkerWriteEnd+"\n"+traceStdoutContinued))
+	}
+	return b.String()
+}
+
+// TestJobTrace_TimestampedLog_ReadsAsTheJobPrintedIt verifies that a log the
+// runner wrote with timestamps reads as the same log written without them,
+// over a log longer than the part Trace reads: the header in front of every
+// line is gone and the pieces the runner flushed each section marker in are
+// one line again, so the end kept is the same and tail_lines counts the lines
+// the job printed. The header used to stay at the start of every line, and
+// every section marker's line came back as two.
+func TestJobTrace_TimestampedLog_ReadsAsTheJobPrintedIt(t *testing.T) {
+	plain := markupLog(1200 << 10)
+	log := timestamped(plain)
+	for _, tc := range []struct {
+		name      string
+		tailLines int
+	}{
+		{"the end of the log", 0},
+		{"the last five lines", 5},
+		{"the last two hundred lines", 200},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := TraceInput{ProjectID: "42", JobID: 100, TailLines: tc.tailLines}
+			want, err := Trace(t.Context(), serveTrace(t, plain), input)
+			if err != nil {
+				t.Fatalf("Trace(untimestamped) error: %v", err)
+			}
+			got, err := Trace(t.Context(), serveTrace(t, log), input)
+			if err != nil {
+				t.Fatalf("Trace(timestamped) error: %v", err)
+			}
+			if got.Trace != want.Trace || !got.Truncated {
+				t.Errorf("the timestamped log answered %d bytes starting %q, truncated %v; want the %d bytes the untimestamped one answers, starting %q", len(got.Trace), firstTraceLine(got.Trace), got.Truncated, len(want.Trace), firstTraceLine(want.Trace))
+			}
+			assertTailOfLog(t, log, got.Trace, got.OmittedBytes)
+		})
+	}
+}
+
+// firstTraceLine returns the first line of a log, for a failure message.
+func firstTraceLine(log string) string {
+	line, _, _ := strings.Cut(log, "\n")
+	return line
+}
+
 // allocatedBy returns how many bytes f allocated on the heap.
 func allocatedBy(f func()) uint64 {
 	var before, after runtime.MemStats
@@ -215,31 +289,42 @@ func allocatedBy(f func()) uint64 {
 // copied and stripped of markup. Trace used to copy the whole log and strip
 // all of it before keeping 100 KB: more than 1 GiB allocated for this log,
 // with several copies of it held at once, for every call of the 192 the
-// process holds open at most.
+// process holds open at most. A log the runner timestamped is held to the
+// same bound, its headers and the lines it wrote in pieces included.
 func TestJobTrace_LongLog_ReadsOnlyItsEnd(t *testing.T) {
-	log := markupLog(64 << 20)
-	client := serveTrace(t, log)
-	client.SetMaxResponseBytes(int64(len(log)) + 1)
-	read := allocatedBy(func() {
-		if _, _, err := client.GL().Jobs.GetTraceFile("42", 100, gl.WithContext(t.Context())); err != nil {
-			t.Fatalf("GetTraceFile() error: %v", err)
-		}
-	})
-	var out TraceOutput
-	traced := allocatedBy(func() {
-		var err error
-		if out, err = Trace(t.Context(), client, TraceInput{ProjectID: "42", JobID: 100}); err != nil {
-			t.Fatalf("Trace() error: %v", err)
-		}
-	})
-	t.Logf("Trace allocated %d bytes, client-go's read alone %d", traced, read)
-	// A race build reallocates what sync.Pool hands back (jobs_race_test.go),
-	// so the bound is held only where allocation is what the server pays.
-	if !raceEnabled && traced > read+20*traceWindowBytes {
-		t.Errorf("Trace allocated %d bytes and client-go's read alone %d, want at most twenty windows of %d between them", traced, read, traceWindowBytes)
-	}
-	if !strings.HasSuffix(out.Trace, "FATAL unit test TestCheckout failed expected 200 got 500\n") || !out.Truncated {
-		t.Errorf("Trace ends %q, truncated %v; want the failure line, truncated", out.Trace[max(0, len(out.Trace)-80):], out.Truncated)
+	for _, tc := range []struct {
+		name string
+		log  func() string
+	}{
+		{"untimestamped", func() string { return markupLog(64 << 20) }},
+		{"timestamped", func() string { return timestamped(markupLog(40 << 20)) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			log := tc.log()
+			client := serveTrace(t, log)
+			client.SetMaxResponseBytes(int64(len(log)) + 1)
+			read := allocatedBy(func() {
+				if _, _, err := client.GL().Jobs.GetTraceFile("42", 100, gl.WithContext(t.Context())); err != nil {
+					t.Fatalf("GetTraceFile() error: %v", err)
+				}
+			})
+			var out TraceOutput
+			traced := allocatedBy(func() {
+				var err error
+				if out, err = Trace(t.Context(), client, TraceInput{ProjectID: "42", JobID: 100}); err != nil {
+					t.Fatalf("Trace() error: %v", err)
+				}
+			})
+			t.Logf("Trace allocated %d bytes, client-go's read alone %d, for a log of %d bytes", traced, read, len(log))
+			// A race build reallocates what sync.Pool hands back (jobs_race_test.go),
+			// so the bound is held only where allocation is what the server pays.
+			if !raceEnabled && traced > read+20*traceWindowBytes {
+				t.Errorf("Trace allocated %d bytes and client-go's read alone %d, want at most twenty windows of %d between them", traced, read, traceWindowBytes)
+			}
+			if !strings.HasSuffix(out.Trace, "FATAL unit test TestCheckout failed expected 200 got 500\n") || !out.Truncated {
+				t.Errorf("Trace ends %q, truncated %v; want the failure line, truncated", out.Trace[max(0, len(out.Trace)-80):], out.Truncated)
+			}
+		})
 	}
 }
 
@@ -3370,8 +3455,9 @@ func traceTailOf(log string, tailLines, window int) (string, int) {
 
 // assertTailOfLog holds what traceTail returned for log to what it promises:
 // the log from omitted on, as GitLab stores it, strips to exactly the text
-// returned, and that text starts a line whenever the stripped log has a line
-// break before it.
+// returned, the log up to omitted strips to the text before it, so the two
+// make the text of the whole log, and the text returned starts a line of that
+// text whenever the text has a line break before it.
 func assertTailOfLog(t *testing.T, log, kept string, omitted int) {
 	t.Helper()
 	if omitted < 0 || omitted > len(log) {
@@ -3380,7 +3466,11 @@ func assertTailOfLog(t *testing.T, log, kept string, omitted int) {
 	if got := toolutil.StripLogMarkup(log[omitted:]); got != kept {
 		t.Errorf("the log from byte %d strips to %d bytes, not the %d returned", omitted, len(got), len(kept))
 	}
-	if omitted > 0 && strings.Contains(toolutil.StripLogMarkup(log[:omitted]), "\n") && log[omitted-1] != '\n' {
+	before := toolutil.StripLogMarkup(log[:omitted])
+	if text := toolutil.StripLogMarkup(log); before+kept != text {
+		t.Errorf("the log up to byte %d strips to %d bytes, which with the %d returned do not make the %d of the whole log", omitted, len(before), len(kept), len(text))
+	}
+	if strings.Contains(before, "\n") && !strings.HasSuffix(before, "\n") {
 		t.Errorf("the text returned starts inside a line, at byte %d", omitted)
 	}
 }
@@ -3389,32 +3479,39 @@ func assertTailOfLog(t *testing.T, log, kept string, omitted int) {
 // only the end of a log returns what stripping and cutting the whole log
 // returns, with and without tail_lines, when the end read holds more text
 // than one response carries: the part read starts at a line, where the
-// markup strips as it does in the whole log.
+// markup strips as it does in the whole log. A log the runner timestamped
+// gives the text of the same log written without timestamps, its headers
+// gone and the lines it wrote in pieces whole.
 func TestTraceTail_EndOfALongLog_IsWhatTheWholeLogGives(t *testing.T) {
-	log := markupLog(600 << 10)
-	text := toolutil.StripLogMarkup(log)
-	for _, tc := range []struct {
-		name      string
-		tailLines int
-		window    int
-	}{
-		{"the end of the log", 0, 300 << 10},
-		{"the last five lines", 5, 300 << 10},
-		{"more lines than the part read holds", 10000, 300 << 10},
-		{"a window over the whole log", 0, 1 << 20},
+	plain := markupLog(600 << 10)
+	text := toolutil.StripLogMarkup(plain)
+	for _, written := range []struct{ name, log string }{
+		{"untimestamped", plain},
+		{"timestamped", timestamped(plain)},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			want := text
-			if tc.tailLines > 0 {
-				want = lastLines(want, tc.tailLines)
-			}
-			want = logTail(want, maxTraceBytes)
-			kept, omitted := traceTailOf(log, tc.tailLines, tc.window)
-			if kept != want {
-				t.Errorf("kept %d bytes ending %q, want the %d the whole log gives", len(kept), kept[max(0, len(kept)-40):], len(want))
-			}
-			assertTailOfLog(t, log, kept, omitted)
-		})
+		for _, tc := range []struct {
+			name      string
+			tailLines int
+			window    int
+		}{
+			{"the end of the log", 0, 300 << 10},
+			{"the last five lines", 5, 300 << 10},
+			{"more lines than the part read holds", 10000, 300 << 10},
+			{"a window over the whole log", 0, 1 << 20},
+		} {
+			t.Run(written.name+"/"+tc.name, func(t *testing.T) {
+				want := text
+				if tc.tailLines > 0 {
+					want = lastLines(want, tc.tailLines)
+				}
+				want = logTail(want, maxTraceBytes)
+				kept, omitted := traceTailOf(written.log, tc.tailLines, tc.window)
+				if kept != want {
+					t.Errorf("kept %d bytes starting %q, want the %d the whole log gives", len(kept), firstTraceLine(kept), len(want))
+				}
+				assertTailOfLog(t, written.log, kept, omitted)
+			})
+		}
 	}
 }
 
@@ -3423,8 +3520,18 @@ func TestTraceTail_EndOfALongLog_IsWhatTheWholeLogGives(t *testing.T) {
 // line break only as the last byte, which leaves the part read whole rather
 // than empty, a part holding no character start at all, which keeps the last
 // byte, and a part that is nearly all markup, returned whole with what comes
-// before it counted as left out.
+// before it counted as left out. A part that starts inside a line the runner
+// wrote in pieces starts at the line after it, past the pieces that continue
+// it, which used to come back as a line of their own.
 func TestTraceTail_TheEdgesOfThePartRead(t *testing.T) {
+	t.Run("a part starting inside a line written in pieces", func(t *testing.T) {
+		log := traceStdoutHeader + "first piece\r\n" + traceStdoutContinued + "second piece\r\n" + traceStdoutContinued + "third piece\n" + traceStdoutHeader + "last\n"
+		kept, omitted := traceTailOf(log, 0, len(log)-5)
+		if kept != "last\n" || omitted != strings.LastIndex(log, traceStdoutHeader) {
+			t.Errorf("kept %q, %d omitted; want the last line and everything before its header omitted", kept, omitted)
+		}
+		assertTailOfLog(t, log, kept, omitted)
+	})
 	t.Run("one long line", func(t *testing.T) {
 		log := strings.Repeat("é", 200<<10) + "x" // an odd length, so the part read starts on the second byte of a character
 		kept, omitted := traceTailOf(log, 0, 150<<10)
@@ -3464,25 +3571,6 @@ func TestTraceTail_TheEdgesOfThePartRead(t *testing.T) {
 		}
 		assertTailOfLog(t, log, kept, omitted)
 	})
-}
-
-// TestRawOffset_FindsWhereTheStrippedTextBegins verifies rawOffset at a line
-// start, which it reaches by counting line breaks, inside a line, which it
-// maps through the markup of that line alone, and at the end of the text.
-func TestRawOffset_FindsWhereTheStrippedTextBegins(t *testing.T) {
-	const raw = "a\x1b[0Kb\nc\x1b[31md\x1b[0me\n"
-	text := toolutil.StripLogMarkup(raw)
-	for _, tc := range []struct {
-		n, want int
-	}{
-		{0, 0}, {1, 5}, {3, 7}, {4, 13}, {5, 18}, {7, len(raw)},
-	} {
-		t.Run(strconv.Itoa(tc.n), func(t *testing.T) {
-			if got := rawOffset(raw, text, tc.n); got != tc.want {
-				t.Errorf("rawOffset(%q, %q, %d) = %d, want %d", raw, text, tc.n, got, tc.want)
-			}
-		})
-	}
 }
 
 // TestLastLines_ALeadingLineBreak_StaysOutOfTheLastLines verifies that a log

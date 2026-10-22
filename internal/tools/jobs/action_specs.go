@@ -244,7 +244,7 @@ func jobOptionsForAction(individualTool string, extraTags ...string) toolutil.Ac
 		}
 		options.IndividualTool.Description = "List CI bridge (trigger) jobs for one pipeline with status filters and page-number pagination. Returns: bridge summaries with status and downstream pipeline references. See also: gitlab_job_list, gitlab_pipeline_get, gitlab_job_get."
 	case "gitlab_job_trace":
-		options.Usage = "Get job log output (trace) for troubleshooting and diagnostics, without the runner's color codes and section markers. Use with a known job_id after selecting a relevant job from list/get calls. A log over 100 KB keeps its end, where a failure usually is, and tail_lines narrows it to its last lines."
+		options.Usage = "Get job log output (trace) for troubleshooting and diagnostics, without the runner's color codes, section markers and timestamps. Use with a known job_id after selecting a relevant job from list/get calls. A log over 100 KB keeps its end, where a failure usually is, and tail_lines narrows it to its last lines."
 		options.Aliases = []string{"get job log", "job trace", "show job output"}
 		options.RelatedActions = []string{actionJobGet, actionJobListProject, actionJobRetry, actionJobCancel}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{

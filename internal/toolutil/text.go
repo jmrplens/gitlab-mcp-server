@@ -40,28 +40,155 @@ var ansiControlSequence = regexp.MustCompile(`\x1b\[[\x30-\x3f]*[\x20-\x2f]*[\x4
 // which GitLab's log viewer folds on and every other reader sees as noise.
 var logSectionMarker = regexp.MustCompile(`section_(?:start|end):[0-9]+:[A-Za-z0-9_.-]+(?:\[[^\]\r\n]*\])?\r?`)
 
-// StripLogMarkup removes the terminal markup GitLab Runner writes into a CI
-// job log, the ANSI control sequences and the section markers, and leaves
-// the text a person reads. [StripControlBytes] drops only the ESC byte of a
-// sequence, so a log went out as "[0K[36;1mPreparing" beside
+// runnerLogHeader matches, at the start of the text it is given, the header
+// GitLab Runner writes in front of every line of a job log it timestamps
+// (FF_TIMESTAMPS): the UTC time to the microsecond, a space, the stream number
+// as two hex digits, O for stdout or E for stderr, and a space, or a + when
+// the line continues the one before it. It is GitLab's own pattern for the
+// header (Gitlab::Ci::Trace::Stream::TIMESTAMP_HEADER_REGEX), anchored.
+var runnerLogHeader = regexp.MustCompile(`^[0-9]{4}-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9]\.[0-9]{6}Z [0-9a-f]{2}[EO][+ ]`)
+
+// runnerLogHeaderLength is the length of every header [runnerLogHeader]
+// matches, whose last byte is the continuation flag.
+const runnerLogHeaderLength = 32
+
+// StripLogMarkup removes the markup GitLab Runner writes into a CI job log
+// and leaves the text a person reads, as [ScanLogMarkup] reads it: the header
+// in front of every line of a log the runner timestamps, the section markers
+// and the ANSI control sequences. [StripControlBytes] drops only the ESC byte
+// of a sequence, so a log went out as "[0K[36;1mPreparing" beside
 // "section_start:1791747389:prepare_executor", and the structured channel
-// carried the raw bytes. A lone ESC that starts no sequence is left for
-// [StripControlBytes] to drop where text becomes Markdown.
+// carried the raw bytes; the header reached every line of a timestamped log
+// as "2026-10-13T18:57:48.608003Z 00O ". A lone ESC that starts no sequence
+// is left for [StripControlBytes] to drop where text becomes Markdown.
 func StripLogMarkup(s string) string {
-	return ansiControlSequence.ReplaceAllString(logSectionMarker.ReplaceAllString(s, ""), "")
+	return ScanLogMarkup(s).Text
 }
 
-// LogMarkupRawOffset returns where, in the log s as written, the byte that
-// [StripLogMarkup] keeps at offset n stands, n running from 0 to the length
-// of the stripped text, whose end is the end of s: s from that offset strips
-// to the stripped text from n. It maps n back through the two passes
-// StripLogMarkup makes, the escape sequences of the text the section markers
-// were removed from and then the markers of s, since a marker inside a
-// sequence leaves a sequence only the second pass sees.
-func LogMarkupRawOffset(s string, n int) int {
-	withoutMarkers := logSectionMarker.ReplaceAllString(s, "")
-	n = offsetWithSpans(ansiControlSequence.FindAllStringIndex(withoutMarkers, -1), n)
-	return offsetWithSpans(logSectionMarker.FindAllStringIndex(s, -1), n)
+// LogText is a CI job log as [ScanLogMarkup] reads it: the text a person
+// reads, kept beside the log as written so that where a part of the text
+// begins in the log ([LogText.RawOffset]) is found without reading the log
+// again.
+type LogText struct {
+	// Text is the log without the runner's markup.
+	Text string
+	// raw is the log as written.
+	raw string
+	// lines holds, for each line of Text, the offset in raw at which it
+	// begins: a line the runner wrote in pieces begins where its first piece
+	// does, header included.
+	lines []int
+}
+
+// ScanLogMarkup reads the CI job log s the way GitLab's job log viewer reads
+// it. The header the runner writes in front of a line of a log it timestamps
+// is removed, stream marker and all, and a line flagged as continuing the one
+// before it is joined to the line before it in the log, whichever stream that
+// line came from, as the viewer joins it. The runner writes a line in pieces
+// when it outgrows its 8 KiB buffer, and when what a write holds after its
+// last line break carries a carriage return, which is how the runner's own
+// section markers and most progress displays reach it. It flags a piece as
+// continuing the line before it on the same stream, so a piece of one stream
+// that follows a line of the other is joined to that line, and the text then
+// reads as the viewer shows it rather than as the job printed it. Then the
+// section markers and the escape sequences of the joined text are removed,
+// in that order, since a marker inside a sequence leaves a sequence only the
+// second pass sees, and a piece can end inside either.
+//
+// A header is recognized where a line of s begins, line by line. GitLab
+// decides once per log, from its first line, whether the log is timestamped;
+// deciding per line reads every log a runner writes as GitLab does, and reads
+// any part of a log that starts at a line as that part reads in the whole
+// log, which a read of the end of a long log relies on. What it costs is a
+// log written without timestamps that prints, at the start of a line, text
+// that reads as a header: that text is removed as one, and when it is
+// flagged + the line it opens is joined to the line before it.
+//
+// Carriage returns are kept. GitLab's viewer clears a line at a bare one,
+// which applies as much to a log written without timestamps and is not done
+// here.
+func ScanLogMarkup(s string) LogText {
+	spans, lines := runnerHeaderSpans(s)
+	text := ansiControlSequence.ReplaceAllString(logSectionMarker.ReplaceAllString(withoutSpans(s, spans), ""), "")
+	return LogText{Text: text, raw: s, lines: lines}
+}
+
+// RawOffset returns where, in the log as written, the part of the text from
+// offset n on begins, n running from 0 to the length of the text: the start
+// of its line, header and leading markup included, when n starts a line of
+// the text, and otherwise the byte the text keeps at n, past every header,
+// marker and sequence before it. The log up to that offset strips to the text
+// up to n, and the log from it strips to the text from n whenever the offset
+// starts a line of the log or what follows it does not read as a header,
+// since a log is read from its start as from the start of a line. Only the
+// line n falls in is mapped back through the passes [ScanLogMarkup] makes,
+// which no header, marker or sequence crosses the end of.
+func (l LogText) RawOffset(n int) int {
+	lineStart := strings.LastIndexByte(l.Text[:n], '\n') + 1
+	line := strings.Count(l.Text[:lineStart], "\n")
+	start := l.lines[line]
+	if n == lineStart {
+		return start
+	}
+	end := len(l.raw)
+	if line+1 < len(l.lines) {
+		end = l.lines[line+1]
+	}
+	return start + lineRawOffset(l.raw[start:end], n-lineStart)
+}
+
+// lineRawOffset maps the offset n of the text a line of a job log strips to
+// back to the byte it stands at in the line as written, through the passes
+// [ScanLogMarkup] makes, the last first: the escape sequences of the text the
+// markers were removed from, the markers of the joined text, and the headers
+// of the line.
+func lineRawOffset(line string, n int) int {
+	spans, _ := runnerHeaderSpans(line)
+	joined := withoutSpans(line, spans)
+	n = offsetWithSpans(ansiControlSequence.FindAllStringIndex(logSectionMarker.ReplaceAllString(joined, ""), -1), n)
+	n = offsetWithSpans(logSectionMarker.FindAllStringIndex(joined, -1), n)
+	return offsetWithSpans(spans, n)
+}
+
+// runnerHeaderSpans returns, in order, the spans of the job log s that the
+// runner's headers take, a header that continues the line before it taking
+// that line's break with it, and where each line of s begins once the lines
+// that continue it are joined to it. A continuation flag on the first line of
+// s has no line to join and is read as a header like any other.
+func runnerHeaderSpans(s string) (spans [][]int, lines []int) {
+	start := 0
+	for line := range strings.SplitAfterSeq(s, "\n") {
+		header := runnerLogHeader.MatchString(line)
+		joins := header && start > 0 && line[runnerLogHeaderLength-1] == '+'
+		switch {
+		case joins:
+			spans = append(spans, []int{start - 1, start + runnerLogHeaderLength})
+		case header:
+			spans = append(spans, []int{start, start + runnerLogHeaderLength})
+			lines = append(lines, start)
+		default:
+			lines = append(lines, start)
+		}
+		start += len(line)
+	}
+	return spans, lines
+}
+
+// withoutSpans returns s with the spans removed, s itself when there are
+// none.
+func withoutSpans(s string, spans [][]int) string {
+	if len(spans) == 0 {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	kept := 0
+	for _, span := range spans {
+		b.WriteString(s[kept:span[0]])
+		kept = span[1]
+	}
+	b.WriteString(s[kept:])
+	return b.String()
 }
 
 // offsetWithSpans maps an offset in a text the spans were removed from to
