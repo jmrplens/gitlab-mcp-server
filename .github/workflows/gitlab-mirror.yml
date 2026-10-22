@@ -44,7 +44,12 @@ jobs:
     name: "🪞 Mirror repository"
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    # Dependabot runs without Actions secrets, so the SSH key would be empty
+    # and the job could only fail. Its branches reach GitLab with the next
+    # push to main or the six-hourly scheduled run, which mirrors every ref.
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     steps:
       - name: Configure GitLab SSH key
         env:
@@ -68,7 +73,12 @@ jobs:
 
       - name: Push branches and tags to GitLab
         env:
-          GIT_SSH_COMMAND: ssh -i ~/.ssh/gitlab_mirror -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes
+          # IPv4 only: gitlab.com publishes an AAAA record and GitHub-hosted
+          # runners have no IPv6 route, so an IPv6 attempt can only fail. The
+          # run of 2026-10-14 14:56Z died on "connect to host gitlab.com port
+          # 22: Network is unreachable" while the runs before and after it
+          # mirrored fine.
+          GIT_SSH_COMMAND: ssh -i ~/.ssh/gitlab_mirror -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o AddressFamily=inet -o ConnectTimeout=20
         run: |
           set -euo pipefail
           git init --bare mirror.git
@@ -86,9 +96,24 @@ jobs:
           # refspec is the equivalent form, but `--force` is explicit
           # and easier to grep for. --prune keeps the GitLab side tidy
           # by removing refs that have been deleted on GitHub.
-          git -C mirror.git push --force --prune gitlab \
-            '+refs/heads/*:refs/heads/*' \
-            '+refs/tags/*:refs/tags/*'
+          #
+          # Retried because a transient network failure between the runner
+          # and gitlab.com is the usual way this step fails. Retrying is safe:
+          # every attempt force-pushes the same refspec, so a push that did
+          # land is simply repeated as a no-op.
+          for attempt in 1 2 3; do
+            if git -C mirror.git push --force --prune gitlab \
+              '+refs/heads/*:refs/heads/*' \
+              '+refs/tags/*:refs/tags/*'; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::GitLab push attempt ${attempt} failed; retrying in $((attempt * 20)) s"
+              sleep $((attempt * 20))
+            fi
+          done
+          echo "::error::GitLab push failed after 3 attempts"
+          exit 1
 
   releases:
     name: "🔗 Sync linked releases"
