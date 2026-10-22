@@ -20,13 +20,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 22,043 |
-| Unit test functions                                   | 20,433 |
-| E2E test functions                                    |  1,610 |
+| Total test functions                                  | 22,060 |
+| Unit test functions                                   | 20,448 |
+| E2E test functions                                    |  1,612 |
 | cmd test functions                                    |  4,925 |
-| Test files (internal/)                                |    721 |
+| Test files (internal/)                                |    723 |
 | Test files (cmd/)                                     |    348 |
-| Test files (test/e2e/)                                |    423 |
+| Test files (test/e2e/)                                |    424 |
 | Tool sub-packages tested                              |    180 |
 | Core packages tested                                  |     34 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 100.0% |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,445 | 61.0% |
+| `TestFunc_Scenario` (2-part)           | 13,444 | 60.9% |
 | `TestFunc` (no underscore)             |    912 |  4.1% |
-| `TestFunc_Scenario_Expected` (3+ part) |  7,686 | 34.9% |
+| `TestFunc_Scenario_Expected` (3+ part) |  7,704 | 34.9% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,043 |        239 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            414 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (180) |         11,051 |        466 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,610 |        423 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| Core packages           |          4,051 |        241 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Tools orchestration     |            416 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Tool sub-packages (180) |         11,056 |        466 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,612 |        424 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          4,925 |        348 | server entry point and developer command utilities                                              |
-| **Total**               |     **22,043** |  **1,492** |                                                                                                 |
+| **Total**               |     **22,060** |  **1,495** |                                                                                                 |
 
 ### Core Packages
 
@@ -91,15 +91,15 @@
 | testutil/netfixture      |         8 |   100.0% | Package netfixture gives a test an HTTP address that stops answering without giving its port away.                                                                                                                                                                                                                                  |
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil                 |     1,299 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **4,043** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil                 |     1,307 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**             | **4,051** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
 | projects          |   498 |   100.0% |    57 |
-| mergerequests     |   343 |   100.0% |    30 |
+| mergerequests     |   345 |   100.0% |    30 |
 | dynamic           |   321 |   100.0% |     2 |
 | groups            |   317 |   100.0% |    37 |
 | issues            |   296 |   100.0% |    21 |
@@ -117,11 +117,11 @@
 | branches          |   115 |   100.0% |    10 |
 | snippets          |   114 |   100.0% |    15 |
 | groupmilestones   |   110 |   100.0% |     8 |
-| accesstokens      |   108 |   100.0% |    18 |
+| accesstokens      |   109 |   100.0% |    18 |
 | mrapprovals       |   108 |   100.0% |     7 |
 | pipelineschedules |   108 |   100.0% |    11 |
 | groupmembers      |   107 |   100.0% |    10 |
-| files             |   100 |   100.0% |     8 |
+| files             |   101 |   100.0% |     8 |
 | milestones        |    97 |   100.0% |     9 |
 
 ### Complete Tool Sub-Package Test Counts
@@ -132,9 +132,9 @@
 | Sub-package             |      Tests | Test Files | Coverage |     Tools |
 | ----------------------- | ---------: | ---------: | -------: | --------: |
 | accessrequests          |         58 |          4 |   100.0% |         8 |
-| accesstokens            |        108 |          2 |   100.0% |        18 |
+| accesstokens            |        109 |          2 |   100.0% |        18 |
 | achievements            |         67 |          3 |   100.0% |        12 |
-| actioncatalog           |         71 |          8 |   100.0% |         0 |
+| actioncatalog           |         72 |          8 |   100.0% |         0 |
 | actioncompat            |         61 |          3 |   100.0% |         1 |
 | actiongrants            |          6 |          1 |   100.0% |         0 |
 | adminspecs              |         17 |          1 |   100.0% |        92 |
@@ -189,7 +189,7 @@
 | featureflags            |         53 |          5 |   100.0% |         5 |
 | features                |         21 |          2 |    97.7% |         4 |
 | ffuserlists             |         33 |          3 |   100.0% |         5 |
-| files                   |        100 |          2 |   100.0% |         8 |
+| files                   |        101 |          2 |   100.0% |         8 |
 | freezeperiods           |         43 |          3 |   100.0% |         5 |
 | geo                     |         63 |          3 |   100.0% |         8 |
 | gitignoretemplates      |         24 |          2 |   100.0% |         2 |
@@ -238,7 +238,7 @@
 | markdown                |         10 |          1 |   100.0% |         1 |
 | memberroles             |         58 |          4 |   100.0% |         6 |
 | members                 |         77 |          3 |   100.0% |         6 |
-| mergerequests           |        343 |          5 |   100.0% |        30 |
+| mergerequests           |        345 |          5 |   100.0% |        30 |
 | mergetrains             |         27 |          2 |   100.0% |         4 |
 | metadata                |          9 |          1 |   100.0% |         1 |
 | milestones              |         97 |          2 |   100.0% |         9 |
@@ -311,7 +311,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        136 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,051** |    **466** |          | **1,195** |
+| **Total**               | **11,056** |    **466** |          | **1,195** |
 
 </details>
 

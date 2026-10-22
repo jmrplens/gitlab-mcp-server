@@ -5347,7 +5347,7 @@ Action guidance:
 - token_scope_patch: Enable or disable the inbound CI/CD job token scope for a project. Enabling restricts which projects' job tokens may access this project to the inbound allowlist.
 - token_scope_remove_group: Remove a group from this project's CI/CD job token allowlist, revoking inbound job token access for the group's projects. Destructive. Confirm project_id and target_group_id first.
 - token_scope_remove_project: Remove a project from another project's CI/CD job token inbound allowlist, revoking its inbound job token access. Destructive. Confirm project_id and target_project_id first.
-- trace: Get job log output (trace) for troubleshooting and diagnostics, without the runner's color codes and section markers. Use with a known job_id after selecting a relevant job from list/get calls. A log over 100 KB keeps its end, where a failure usually is, and tail_lines narrows it to its last lines.
+- trace: Get job log output (trace) for troubleshooting and diagnostics, without the runner's color codes, section markers and timestamps. Use with a known job_id after selecting a relevant job from list/get calls. A log over 100 KB keeps its end, where a failure usually is, and tail_lines narrows it to its last lines.
 - wait: Poll a CI job by project_id and job_id until it reaches a terminal state or times out. Use this to block on a job before reading its result, with progress notifications on each poll.
 Parameter guidance:
 - artifacts.file_type: artifact_type. Source: Omit for the archive of the job's artifacts:paths. Name a report type only when the job declares it under artifacts:reports in .gitlab-ci.yml. Avoid: A report type the job did not produce answers 404, the same as a job whose artifacts expired.

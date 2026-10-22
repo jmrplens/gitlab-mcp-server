@@ -2138,7 +2138,7 @@
         "expires_at"
       ],
       "identifiers": {
-        ":project_id": 2
+        ":project_id": 3
       }
     },
     {
@@ -6996,7 +6996,7 @@
         "ref"
       ],
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -7010,7 +7010,7 @@
         "content"
       ],
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -7064,7 +7064,7 @@
         "ref"
       ],
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -12572,7 +12572,7 @@
       ],
       "identifiers": {
         ":merge_request_id": 7,
-        ":project_id": 2
+        ":project_id": 3
       }
     },
     {
@@ -12678,7 +12678,7 @@
       "path": "/projects/:project_id/merge_requests/:merge_request_id/cancel_auto_merge",
       "identifiers": {
         ":merge_request_id": 1,
-        ":project_id": 2
+        ":project_id": 3
       }
     },
     {
@@ -12688,7 +12688,7 @@
       "path": "/projects/:project_id/merge_requests/:merge_request_id/cancel_merge_when_pipeline_succeeds",
       "identifiers": {
         ":merge_request_id": 1,
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -12743,7 +12743,7 @@
       ],
       "identifiers": {
         ":merge_request_id": 1,
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
