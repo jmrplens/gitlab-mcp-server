@@ -174,7 +174,10 @@ function writePlatformPackage(plat, version, binariesDir, outDir, checksums) {
     version,
     description: `gitlab-mcp-server prebuilt binary for ${plat.os} ${plat.cpu}. Installed automatically as an optional dependency of @jmrp.io/gitlab-mcp-server.`,
     license: "MIT",
-    funding: "https://github.com/sponsors/jmrplens",
+    funding: [
+      { type: "github", url: "https://github.com/sponsors/jmrplens" },
+      { type: "ko-fi", url: "https://ko-fi.com/jmrplens" },
+    ],
     author: "José M. Requena Plens",
     homepage: "https://docs.jmrp.io/gitlab-mcp-server",
     repository: mainRepository,
