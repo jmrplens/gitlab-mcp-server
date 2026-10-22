@@ -52,7 +52,7 @@ func groupLDAPOptions(individualTool string) toolutil.ActionSpecOptions {
 		options.RelatedActions = []string{actionGroupGet, actionGroupLDAPLinkAdd, actionGroupLDAPSync}
 		options.IndividualTool.Description = "List a GitLab group's LDAP group links. Returns: each link's CN/filter, provider, and access level. See also: gitlab_group_ldap_link_add, gitlab_group_ldap_sync, gitlab_group_get."
 	case "gitlab_group_ldap_link_add":
-		options.Usage = "Add an LDAP group link to a group by CN or filter (Premium/Ultimate). After adding links you can trigger group.ldap_sync to apply membership immediately."
+		options.Usage = "Add an LDAP group link to a group by CN or filter (Premium/Ultimate). Send exactly one of cn or filter, not both: GitLab refuses a link that names both or neither. After adding links you can trigger group.ldap_sync to apply membership immediately."
 		options.Aliases = []string{"add ldap link", "create group ldap mapping", "link ldap group"}
 		options.RelatedActions = []string{actionGroupLDAPLinkList, actionGroupLDAPSync, "group.ldap_link_delete"}
 		// group_access is numeric only here (the handler passes the integer
@@ -62,8 +62,10 @@ func groupLDAPOptions(individualTool string) toolutil.ActionSpecOptions {
 			toolutil.SchemaPropertyOverride("group_access", map[string]any{
 				"enum": []any{0, 5, 10, 15, 20, 25, 30, 40, 50},
 			}),
+			// GitLab declares exactly_one_of :cn, :filter on this route.
+			toolutil.SchemaOneOfRequired("cn", "filter"),
 		}
-		options.IndividualTool.Description = "Add an LDAP group link to a GitLab group by CN or filter (Premium/Ultimate). Returns: the created link with its CN/filter, provider, access level, and member role ID. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_sync, gitlab_group_ldap_link_delete."
+		options.IndividualTool.Description = "Add an LDAP group link to a GitLab group by CN or filter (Premium/Ultimate). Send exactly one of cn or filter, not both. Returns: the created link with its CN/filter, provider, access level, and member role ID. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_sync, gitlab_group_ldap_link_delete."
 	case "gitlab_group_ldap_sync":
 		options.Usage = "Trigger an LDAP synchronization for a group's LDAP group links (Premium/Ultimate). Use after adding or editing LDAP links, or when group membership looks stale, to reconcile members against LDAP now. The API accepts the request and runs the sync asynchronously in the background."
 		options.Aliases = []string{"sync ldap", "synchronize group ldap", "trigger ldap sync", "refresh ldap membership", "reconcile ldap members"}
@@ -78,10 +80,12 @@ func groupLDAPOptions(individualTool string) toolutil.ActionSpecOptions {
 		}
 		options.IndividualTool.Description = "Trigger an asynchronous LDAP sync for a GitLab group's LDAP links. Returns: a confirmation that the sync was queued. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_link_add, gitlab_group_get."
 	case "gitlab_group_ldap_link_delete":
-		options.Usage = "Delete an LDAP group link from a group by CN or filter and the LDAP provider (Premium/Ultimate). Pass the same CN or filter and provider used to create the link. Trigger group.ldap_sync afterwards to reconcile membership."
+		options.Usage = "Delete an LDAP group link from a group by CN or filter and the LDAP provider (Premium/Ultimate). Send exactly one of cn or filter, not both, with the provider: the same ones used to create the link. Trigger group.ldap_sync afterwards to reconcile membership."
 		options.Aliases = []string{"delete ldap link", "remove group ldap mapping", "unlink ldap group"}
 		options.RelatedActions = []string{actionGroupLDAPLinkList, actionGroupLDAPLinkAdd, actionGroupLDAPSync}
-		options.IndividualTool.Description = "Delete a GitLab group's LDAP link by CN or filter (Premium/Ultimate). Returns: a success confirmation. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_link_add, gitlab_group_ldap_sync."
+		// GitLab declares exactly_one_of :cn, :filter on this route too.
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{toolutil.SchemaOneOfRequired("cn", "filter")}
+		options.IndividualTool.Description = "Delete a GitLab group's LDAP link by CN or filter (Premium/Ultimate). Send exactly one of cn or filter, not both. Returns: a success confirmation. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_link_add, gitlab_group_ldap_sync."
 	case "gitlab_group_ldap_link_delete_for_provider":
 		options.Usage = "Delete an LDAP group link for a specific provider by CN (Premium/Ultimate). Use when the same CN is linked through more than one LDAP provider and only one provider's link should be removed."
 		options.Aliases = []string{"delete ldap link for provider", "remove ldap mapping for provider", "unlink ldap group for provider"}

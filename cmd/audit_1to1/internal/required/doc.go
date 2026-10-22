@@ -50,9 +50,13 @@
 // A constraint across fields. GitLab's at_least_one_of and exactly_one_of
 // (a member added by user_id or username, a project created with a name or a
 // path) are not in the record, which writes each of those params as optional;
-// the schemas say them with an anyOf a toolutil.SchemaAnyOfRequired override adds,
-// and nothing here holds the anyOf to GitLab. A requirement GitLab states in a
-// `given` block is written by the record as unconditional, which is what the
-// conditional declarations answer. And a field an input names differently
-// from GitLab without an alias is unplaced rather than judged.
+// the schemas say them with an anyOf a toolutil.SchemaAnyOfRequired override
+// adds, and nothing here holds it to GitLab. The one exactly_one_of published
+// as the oneOf a toolutil.SchemaOneOfRequired override adds is an LDAP group
+// link's cn or filter; the others, such as a snippet's files or content, are
+// still an anyOf or not stated at all, and this scope does not find them. A
+// requirement GitLab states in a `given` block is written by the record as
+// unconditional, which is what the conditional declarations answer. And a
+// field an input names differently from GitLab without an alias is unplaced
+// rather than judged.
 package required

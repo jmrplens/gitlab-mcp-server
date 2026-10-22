@@ -2,11 +2,17 @@
 package groupldap
 
 import (
+	"encoding/json"
+	"maps"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/google/jsonschema-go/jsonschema"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -112,6 +118,151 @@ func TestGroupLDAPOptions_UnknownIndividualTool_KeepsTheSharedMetadata(t *testin
 	if options.IndividualTool.Description != "" {
 		t.Errorf("IndividualTool.Description = %q, want empty: the switch is what writes one", options.IndividualTool.Description)
 	}
+}
+
+// TestLDAPLinkSelectors_Schema_StatesExactlyOneOfCNOrFilter verifies that the
+// two actions GitLab declares with exactly_one_of :cn, :filter (the add and
+// the delete by CN or filter, ee/lib/api/ldap_group_links.rb) publish that
+// constraint where a caller reads it: a oneOf of the two in the input schema,
+// which is what find's example and the individual tool's validation read, and
+// the words exactly one and not both in the Usage, the individual tool's
+// description and the description of each of the two parameters.
+//
+// The schema used to publish both as optional and say neither the choice nor
+// the constraint, so find's example sent neither and GitLab refused the call
+// it built (issue 1270).
+func TestLDAPLinkSelectors_Schema_StatesExactlyOneOfCNOrFilter(t *testing.T) {
+	byTool := groupLDAPSpecsByTool(t, ActionSpecs(okClient(t)))
+	wantOneOf := []any{
+		map[string]any{"required": []string{"cn"}, "properties": map[string]any{"cn": map[string]any{"minLength": 1}}, "additionalProperties": true},
+		map[string]any{"required": []string{"filter"}, "properties": map[string]any{"filter": map[string]any{"minLength": 1}}, "additionalProperties": true},
+	}
+
+	for _, name := range []string{"gitlab_group_ldap_link_add", "gitlab_group_ldap_link_delete"} {
+		t.Run(name, func(t *testing.T) {
+			spec := byTool[name]
+			if err := spec.Validate(); err != nil {
+				t.Fatalf("%s: Validate() error = %v", name, err)
+			}
+			if got := spec.Route.InputSchema["oneOf"]; !reflect.DeepEqual(got, wantOneOf) {
+				t.Errorf("%s: input schema oneOf = %#v, want %#v", name, got, wantOneOf)
+			}
+			for where, text := range selectorTexts(spec) {
+				for _, phrase := range []string{"exactly one of cn or filter", "not both"} {
+					if !strings.Contains(text, phrase) {
+						t.Errorf("%s: %s = %q, want it to say %q", name, where, text, phrase)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestLDAPLinkSelectors_IndividualSchema_CountsASelectorWithAValue verifies
+// the input schema the individual tools of the add and the delete by CN or
+// filter are served with, put to the validator the SDK holds their arguments
+// to: one selector passes, both or neither are refused, and a selector with
+// an empty value counts as none, as the handler counts it.
+//
+// The oneOf counted a selector by its key alone, so the individual tool
+// refused a common name beside an empty filter as naming both, a call the
+// handler serves by sending the common name, and the meta and dynamic
+// surfaces served it: one call had two answers.
+func TestLDAPLinkSelectors_IndividualSchema_CountsASelectorWithAValue(t *testing.T) {
+	byTool := groupLDAPSpecsByTool(t, ActionSpecs(okClient(t)))
+	calls := []struct {
+		name      string
+		selectors map[string]any
+		wantValid bool
+	}{
+		{name: "the common name alone", selectors: map[string]any{"cn": "engineers"}, wantValid: true},
+		{name: "the filter alone", selectors: map[string]any{"filter": "(dept=eng)"}, wantValid: true},
+		{name: "the common name beside an empty filter", selectors: map[string]any{"cn": "engineers", "filter": ""}, wantValid: true},
+		{name: "the filter beside an empty common name", selectors: map[string]any{"cn": "", "filter": "(dept=eng)"}, wantValid: true},
+		{name: "both", selectors: map[string]any{"cn": "engineers", "filter": "(dept=eng)"}},
+		{name: "neither", selectors: map[string]any{}},
+		{name: "an empty common name alone", selectors: map[string]any{"cn": ""}},
+	}
+	for _, tool := range []struct {
+		name string
+		base map[string]any
+	}{
+		{name: "gitlab_group_ldap_link_add", base: map[string]any{"group_id": "mygroup", "group_access": 30, "provider": "main"}},
+		{name: "gitlab_group_ldap_link_delete", base: map[string]any{"group_id": "mygroup", "provider": "main"}},
+	} {
+		t.Run(tool.name, func(t *testing.T) {
+			projected, err := toolutil.IndividualToolFromActionSpec(byTool[tool.name], toolutil.IndividualToolProjectionOptions{})
+			if err != nil {
+				t.Fatalf("IndividualToolFromActionSpec(%s) error = %v", tool.name, err)
+			}
+			resolved := resolvedInputSchema(t, projected.InputSchema)
+			for _, call := range calls {
+				t.Run(call.name, func(t *testing.T) {
+					arguments := maps.Clone(tool.base)
+					maps.Copy(arguments, call.selectors)
+					if validateErr := resolved.Validate(arguments); (validateErr == nil) != call.wantValid {
+						t.Errorf("Validate(%v) error = %v, want valid %t", arguments, validateErr, call.wantValid)
+					}
+				})
+			}
+		})
+	}
+}
+
+// resolvedInputSchema decodes a served input schema into a resolved
+// jsonschema-go schema, the validator the SDK puts a tool's arguments to.
+func resolvedInputSchema(t *testing.T, schema any) *jsonschema.Resolved {
+	t.Helper()
+	data, err := json.Marshal(schema)
+	if err != nil {
+		t.Fatalf("marshal input schema: %v", err)
+	}
+	var decoded jsonschema.Schema
+	if err = json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("decode input schema: %v", err)
+	}
+	resolved, err := decoded.Resolve(nil)
+	if err != nil {
+		t.Fatalf("resolve input schema: %v", err)
+	}
+	return resolved
+}
+
+// TestLDAPLinkActions_WithoutASelectorChoice_CarryNoOneOf verifies that the
+// three LDAP actions that take no selector, or a common name alone, publish
+// no oneOf: a constraint on a choice they do not offer would refuse calls
+// GitLab serves.
+func TestLDAPLinkActions_WithoutASelectorChoice_CarryNoOneOf(t *testing.T) {
+	byTool := groupLDAPSpecsByTool(t, ActionSpecs(okClient(t)))
+	for _, name := range []string{"gitlab_group_ldap_link_list", "gitlab_group_ldap_sync", "gitlab_group_ldap_link_delete_for_provider"} {
+		t.Run(name, func(t *testing.T) {
+			if got, has := byTool[name].Route.InputSchema["oneOf"]; has {
+				t.Errorf("%s: input schema oneOf = %#v, want none", name, got)
+			}
+		})
+	}
+}
+
+// selectorTexts returns the four places a selector action states its choice,
+// keyed by where each is read: its Usage, its individual tool description and
+// the schema descriptions of cn and filter.
+func selectorTexts(spec toolutil.ActionSpec) map[string]string {
+	texts := map[string]string{"Usage": spec.Usage, "IndividualTool.Description": spec.IndividualTool.Description}
+	properties, _ := spec.Route.InputSchema["properties"].(map[string]any)
+	for _, param := range []string{"cn", "filter"} {
+		property, _ := properties[param].(map[string]any)
+		texts[param+" description"], _ = property["description"].(string)
+	}
+	return texts
+}
+
+// okClient returns a client whose mock GitLab answers every request with 200
+// and no body, for a test that builds the specs and sends nothing.
+func okClient(t *testing.T) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
 }
 
 func aliasHas(aliases []string, sub string) bool {

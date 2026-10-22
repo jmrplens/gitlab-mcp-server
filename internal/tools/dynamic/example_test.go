@@ -300,6 +300,45 @@ func TestFind_ExamplesUseValuesGitLabAccepts(t *testing.T) {
 	}
 }
 
+// TestFind_LDAPLinkExamples_NameTheCommonNameAlone verifies the call find and
+// describe offer for the two LDAP link actions GitLab declares with
+// exactly_one_of :cn, :filter. Their schemas published both as optional and
+// stated no choice, so the example sent neither and GitLab refused the call
+// it built (issue 1270). Now the two are the alternatives of a oneOf, and the
+// example fills the first, the common name, beside the parameters every call
+// carries, and never the filter as well, which GitLab refuses just the same.
+func TestFind_LDAPLinkExamples_NameTheCommonNameAlone(t *testing.T) {
+	registry := NewRegistryFromCatalog(mustCachedCatalog(t, true))
+	wantGroups := [][]string{{"cn"}, {"filter"}}
+	cases := []struct {
+		action      string
+		wantParams  []string
+		wantConfirm bool
+	}{
+		{action: "group.ldap_link_add", wantParams: []string{"cn", "group_access", "group_id", "provider"}},
+		{action: "group.ldap_link_delete", wantParams: []string{"cn", "group_id", "provider"}, wantConfirm: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.action, func(t *testing.T) {
+			entry, ok := registry.resolveAction(tc.action)
+			if !ok {
+				t.Fatalf("resolveAction(%s) found nothing", tc.action)
+			}
+			described := registry.describeEntry(entry)
+			if !reflect.DeepEqual(described.RequiredParamsAnyOf, wantGroups) {
+				t.Errorf("%s required_params_any_of = %v, want %v", tc.action, described.RequiredParamsAnyOf, wantGroups)
+			}
+			params, _ := described.Example.Arguments["params"].(map[string]any)
+			if got := slices.Sorted(maps.Keys(params)); !slices.Equal(got, tc.wantParams) {
+				t.Errorf("%s example fills %v, want %v", tc.action, got, tc.wantParams)
+			}
+			if confirm, _ := described.Example.Arguments["confirm"].(bool); confirm != tc.wantConfirm {
+				t.Errorf("%s example confirm = %t, want %t", tc.action, confirm, tc.wantConfirm)
+			}
+		})
+	}
+}
+
 // TestExampleFor_FillsTheRequiredParamsAndTheFirstAlternative verifies the
 // shape of the example call: every parameter the schema's root requires, the
 // first alternative group and none of the others, and top-level confirm only

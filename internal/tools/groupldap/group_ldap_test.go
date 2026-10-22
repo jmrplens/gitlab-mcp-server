@@ -8,8 +8,10 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -164,6 +166,54 @@ func TestAPIErrorIncludesActionableHint(t *testing.T) {
 	}
 }
 
+// TestLinkHints_NameOnlyWhatEachActionTakes verifies the hint a GitLab
+// refusal of each LDAP action is wrapped with: only the add and the delete by
+// CN or filter take the choice between a common name and a filter, so only
+// they are told to send exactly one of the two. The list and the sync take
+// the group alone, and the delete for a provider a common name and the
+// provider; the hint all five shared told each of those to provide a filter,
+// which the delete for a provider does not even accept.
+func TestLinkHints_NameOnlyWhatEachActionTakes(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"refused"}`)
+	}))
+	ctx := context.Background()
+	_, listErr := List(ctx, client, ListInput{GroupID: "mygroup"})
+	_, syncErr := Sync(ctx, client, SyncInput{GroupID: "mygroup"})
+	_, addErr := Add(ctx, client, AddInput{GroupID: "mygroup", CN: "engineers", GroupAccess: 30, Provider: "main"})
+	deleteErr := DeleteWithCNOrFilter(ctx, client, DeleteWithCNOrFilterInput{GroupID: "mygroup", CN: "engineers", Provider: "main"})
+	providerErr := DeleteForProvider(ctx, client, DeleteForProviderInput{GroupID: "mygroup", Provider: "main", CN: "engineers"})
+	tests := []struct {
+		name string
+		err  error
+		want []string
+		deny []string
+	}{
+		{name: "list", err: listErr, want: []string{"group.get", "LDAP provider", "Premium/Ultimate", "Owner access"}, deny: []string{"cn or filter", "provide exactly"}},
+		{name: "sync", err: syncErr, want: []string{"group.get", "LDAP provider", "Premium/Ultimate", "Owner access"}, deny: []string{"cn or filter", "provide exactly"}},
+		{name: "add", err: addErr, want: []string{"exactly one of cn or filter", "LDAP provider name", "Premium/Ultimate", "Owner access"}},
+		{name: "delete by cn or filter", err: deleteErr, want: []string{"exactly one of cn or filter", "LDAP provider name", "Premium/Ultimate", "Owner access"}},
+		{name: "delete for a provider", err: providerErr, want: []string{"the cn and the LDAP provider name of the link", "Premium/Ultimate", "Owner access"}, deny: []string{"cn or filter"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.err == nil {
+				t.Fatal("error = nil, want GitLab's refusal")
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(tc.err.Error(), want) {
+					t.Errorf("error %q does not contain %q", tc.err.Error(), want)
+				}
+			}
+			for _, deny := range tc.deny {
+				if strings.Contains(tc.err.Error(), deny) {
+					t.Errorf("error %q contains %q, which names a parameter the action does not take", tc.err.Error(), deny)
+				}
+			}
+		})
+	}
+}
+
 // TestAdd verifies the Add handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -306,14 +356,13 @@ func TestAdd_Selectors_SendOnlyTheOnesTheCallerSet(t *testing.T) {
 			},
 		},
 		{
-			name: "a caller who names both sends both, with the member role beside them",
+			name: "a member role travels beside the selector",
 			input: AddInput{
-				GroupID: "mygroup", CN: "admins", Filter: "(dept=eng)",
+				GroupID: "mygroup", CN: "admins",
 				GroupAccess: 50, Provider: "main", MemberRoleID: &memberRole,
 			},
 			want: map[string]any{
 				"cn":             "admins",
-				"filter":         "(dept=eng)",
 				"group_access":   float64(50),
 				"provider":       "main",
 				"member_role_id": float64(42),
@@ -374,8 +423,8 @@ func TestDeleteWithCNOrFilter(t *testing.T) {
 			}),
 		},
 		{
-			name:  "deletes with all options set",
-			input: DeleteWithCNOrFilterInput{GroupID: "mygroup", CN: "cn1", Filter: "(uid=*)", Provider: "ldap2"},
+			name:  "deletes by Filter with Provider set",
+			input: DeleteWithCNOrFilterInput{GroupID: "mygroup", Filter: "(uid=*)", Provider: "ldap2"},
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusNoContent)
 			}),
@@ -442,9 +491,9 @@ func TestDeleteWithCNOrFilter_Selectors_SendOnlyTheOnesTheCallerSet(t *testing.T
 			want:  url.Values{"cn": {"engineers"}, "provider": {"ldap2"}},
 		},
 		{
-			name:  "all three travel when the caller sets all three",
-			input: DeleteWithCNOrFilterInput{GroupID: "mygroup", CN: "engineers", Filter: "(dept=eng)", Provider: "ldap2"},
-			want:  url.Values{"cn": {"engineers"}, "filter": {"(dept=eng)"}, "provider": {"ldap2"}},
+			name:  "a provider travels beside a filter as well",
+			input: DeleteWithCNOrFilterInput{GroupID: "mygroup", Filter: "(dept=eng)", Provider: "ldap2"},
+			want:  url.Values{"filter": {"(dept=eng)"}, "provider": {"ldap2"}},
 		},
 	}
 
@@ -463,6 +512,86 @@ func TestDeleteWithCNOrFilter_Selectors_SendOnlyTheOnesTheCallerSet(t *testing.T
 				t.Errorf("request query = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// selectorRefusals are the two calls GitLab's exactly_one_of on cn and filter
+// refuses, as each handler's error states them. A link that named both was
+// sent to GitLab, which refused it as mutually exclusive, until the handlers
+// refused that call themselves.
+var selectorRefusals = []struct {
+	name   string
+	cn     string
+	filter string
+	want   []string
+}{
+	{name: "both", cn: "engineers", filter: "(dept=eng)", want: []string{"exactly one of cn or filter", "not both"}},
+	{name: "neither", want: []string{"exactly one of cn or filter is required"}},
+}
+
+// countingClient returns a client whose mock GitLab counts the requests it is
+// sent and answers each as the action would succeed, so a refusal that let a
+// request through is seen as one sent rather than as a GitLab error.
+func countingClient(t *testing.T) (*gitlabclient.Client, *atomic.Int32) {
+	t.Helper()
+	var requests atomic.Int32
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusCreated, `{"cn":"engineers","group_access":30,"provider":"main"}`)
+	}))
+	return client, &requests
+}
+
+// TestAdd_BothOrNeitherSelector_IsRefusedBeforeAnyRequest verifies that Add
+// refuses a link naming both a common name and a filter, and one naming
+// neither, with an error that says exactly one of the two is sent, and that
+// neither call reaches GitLab.
+func TestAdd_BothOrNeitherSelector_IsRefusedBeforeAnyRequest(t *testing.T) {
+	for _, tc := range selectorRefusals {
+		t.Run(tc.name, func(t *testing.T) {
+			client, requests := countingClient(t)
+			_, err := Add(context.Background(), client, AddInput{
+				GroupID: "mygroup", CN: tc.cn, Filter: tc.filter, GroupAccess: 30, Provider: "main",
+			})
+			assertSelectorRefusal(t, "Add", err, tc.want, requests)
+		})
+	}
+}
+
+// TestDeleteWithCNOrFilter_BothOrNeitherSelector_IsRefusedBeforeAnyRequest
+// verifies the same two refusals for the delete, which GitLab declares with
+// the same exactly_one_of: a delete naming both would otherwise be sent with
+// both in its query.
+func TestDeleteWithCNOrFilter_BothOrNeitherSelector_IsRefusedBeforeAnyRequest(t *testing.T) {
+	for _, tc := range selectorRefusals {
+		t.Run(tc.name, func(t *testing.T) {
+			client, requests := countingClient(t)
+			err := DeleteWithCNOrFilter(context.Background(), client, DeleteWithCNOrFilterInput{
+				GroupID: "mygroup", CN: tc.cn, Filter: tc.filter, Provider: "main",
+			})
+			assertSelectorRefusal(t, "DeleteWithCNOrFilter", err, tc.want, requests)
+		})
+	}
+}
+
+// assertSelectorRefusal holds a handler's answer to a selector refusal: an
+// error carrying every wanted phrase, and no request sent.
+func assertSelectorRefusal(t *testing.T, handler string, err error, want []string, requests *atomic.Int32) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("%s() error = nil, want the call refused", handler)
+	}
+	for _, phrase := range want {
+		if !strings.Contains(err.Error(), phrase) {
+			t.Errorf("%s() error = %q, want it to say %q", handler, err.Error(), phrase)
+		}
+	}
+	if sent := requests.Load(); sent != 0 {
+		t.Errorf("%s() sent %d request(s), want the call refused before any", handler, sent)
 	}
 }
 

@@ -2,6 +2,7 @@ package groupldap
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -10,7 +11,48 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-const groupLDAPLinkHint = "verify group_id with group.get; provide either cn or filter, and use the LDAP provider name configured on the GitLab instance; requires Premium/Ultimate and Owner access"
+// The hints a GitLab refusal of an LDAP action is wrapped with, one per shape
+// of input, each written out whole. Only the add and the delete by CN or
+// filter choose between a common name and a filter; the list and the sync
+// take the group alone, and the delete for a provider takes a common name and
+// the provider, and no filter at all.
+const (
+	groupLDAPHint         = "verify group_id with group.get; group LDAP links need an LDAP provider configured on the GitLab instance; requires Premium/Ultimate and Owner access"
+	groupLDAPLinkHint     = "verify group_id with group.get; provide exactly one of cn or filter, and use the LDAP provider name configured on the GitLab instance; requires Premium/Ultimate and Owner access"
+	groupLDAPProviderHint = "verify group_id with group.get; pass the cn and the LDAP provider name of the link, as configured on the GitLab instance; requires Premium/Ultimate and Owner access"
+)
+
+// The operations the two link actions that take a selector report under.
+const (
+	opAddLink    = "add group LDAP link"
+	opDeleteLink = "delete group LDAP link"
+)
+
+// selectorError refuses a link call that names both a common name and a
+// filter, or neither, before anything is sent. GitLab declares
+// exactly_one_of :cn, :filter on the add and on the delete by CN or filter
+// (ee/lib/api/ldap_group_links.rb) and refuses the first call with "cn, filter
+// are mutually exclusive" and the second with "cn, filter are missing, exactly
+// one parameter must be provided". Refusing here saves the round trip and
+// words the refusal the same on every surface: the meta surface reaches it
+// with both calls and the dynamic one with a call naming both, which neither
+// dispatcher refuses, while the individual tool's oneOf and the dynamic
+// dispatcher refuse the rest first.
+//
+// A selector counts as named when it is not empty, which is also when the
+// handlers send it. GitLab counts a key it is sent whatever its value, and it
+// is sent only the selectors counted here, so the two agree, and the oneOf
+// counts the same way (toolutil.SchemaOneOfRequired): a common name beside an
+// empty filter is served on every surface.
+func selectorError(operation, cn, filter string) error {
+	if cn != "" && filter != "" {
+		return fmt.Errorf("%s: send exactly one of cn or filter, not both", operation)
+	}
+	if cn == "" && filter == "" {
+		return fmt.Errorf("%s: exactly one of cn or filter is required", operation)
+	}
+	return nil
+}
 
 // Output represents a single group LDAP link.
 type Output struct {
@@ -67,7 +109,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) && groupExists(ctx, client, input.GroupID) {
 			return ListOutput{Links: []Output{}}, nil
 		}
-		return ListOutput{}, toolutil.WrapErrWithHint("list group LDAP links", err, groupLDAPLinkHint)
+		return ListOutput{}, toolutil.WrapErrWithHint("list group LDAP links", err, groupLDAPHint)
 	}
 	out := make([]Output, len(links))
 	for i, l := range links {
@@ -79,8 +121,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // AddInput holds parameters for adding a group LDAP link.
 type AddInput struct {
 	GroupID      string `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	CN           string `json:"cn,omitempty" jsonschema:"LDAP Common Name (CN)"`
-	Filter       string `json:"filter,omitempty" jsonschema:"LDAP filter"`
+	CN           string `json:"cn,omitempty" jsonschema:"LDAP Common Name (CN) of the group to link. Send exactly one of cn or filter, not both."`
+	Filter       string `json:"filter,omitempty" jsonschema:"LDAP filter selecting the users to link. Send exactly one of cn or filter, not both."`
 	GroupAccess  int    `json:"group_access" jsonschema:"Default access level for members of the LDAP group: 0 (No access), 5 (Minimal access), 10 (Guest), 15 (Planner), 20 (Reporter), 25 (Security Manager), 30 (Developer), 40 (Maintainer), 50 (Owner),required"`
 	Provider     string `json:"provider" jsonschema:"LDAP provider name,required"`
 	MemberRoleID *int64 `json:"member_role_id,omitempty" jsonschema:"Custom member role ID"`
@@ -94,8 +136,8 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 	if input.Provider == "" {
 		return Output{}, toolutil.ErrFieldRequired("provider")
 	}
-	if input.CN == "" && input.Filter == "" {
-		return Output{}, toolutil.ErrFieldRequired("cn or filter")
+	if err := selectorError(opAddLink, input.CN, input.Filter); err != nil {
+		return Output{}, err
 	}
 	access := gl.AccessLevelValue(input.GroupAccess)
 	opts := &gl.AddGroupLDAPLinkOptions{
@@ -111,7 +153,7 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 	}
 	link, _, err := client.GL().Groups.AddGroupLDAPLink(input.GroupID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithHint("add group LDAP link", err, groupLDAPLinkHint)
+		return Output{}, toolutil.WrapErrWithHint(opAddLink, err, groupLDAPLinkHint)
 	}
 	return toOutput(link), nil
 }
@@ -119,8 +161,8 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 // DeleteWithCNOrFilterInput holds parameters for deleting a group LDAP link by CN or filter.
 type DeleteWithCNOrFilterInput struct {
 	GroupID  string `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	CN       string `json:"cn,omitempty" jsonschema:"LDAP Common Name to delete"`
-	Filter   string `json:"filter,omitempty" jsonschema:"LDAP filter to delete"`
+	CN       string `json:"cn,omitempty" jsonschema:"LDAP Common Name of the link to delete. Send exactly one of cn or filter, not both."`
+	Filter   string `json:"filter,omitempty" jsonschema:"LDAP filter of the link to delete. Send exactly one of cn or filter, not both."`
 	Provider string `json:"provider,omitempty" jsonschema:"LDAP provider name,required"`
 }
 
@@ -129,8 +171,8 @@ func DeleteWithCNOrFilter(ctx context.Context, client *gitlabclient.Client, inpu
 	if input.GroupID == "" {
 		return toolutil.ErrFieldRequired("group_id")
 	}
-	if input.CN == "" && input.Filter == "" {
-		return toolutil.ErrFieldRequired("cn or filter")
+	if err := selectorError(opDeleteLink, input.CN, input.Filter); err != nil {
+		return err
 	}
 	opts := &gl.DeleteGroupLDAPLinkWithCNOrFilterOptions{}
 	if input.CN != "" {
@@ -144,7 +186,7 @@ func DeleteWithCNOrFilter(ctx context.Context, client *gitlabclient.Client, inpu
 	}
 	_, err := client.GL().Groups.DeleteGroupLDAPLinkWithCNOrFilter(input.GroupID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithHint("delete group LDAP link", err, groupLDAPLinkHint)
+		return toolutil.WrapErrWithHint(opDeleteLink, err, groupLDAPLinkHint)
 	}
 	return nil
 }
@@ -163,7 +205,7 @@ func Sync(ctx context.Context, client *gitlabclient.Client, input SyncInput) (De
 	}
 	_, err := client.GL().Groups.SyncGroupWithLDAP(input.GroupID, gl.WithContext(ctx))
 	if err != nil {
-		return DeleteOutput{}, toolutil.WrapErrWithHint("sync group with LDAP", err, groupLDAPLinkHint)
+		return DeleteOutput{}, toolutil.WrapErrWithHint("sync group with LDAP", err, groupLDAPHint)
 	}
 	return DeleteOutput{Status: "success", Message: "LDAP synchronization started; it runs asynchronously in the background."}, nil
 }
@@ -188,7 +230,7 @@ func DeleteForProvider(ctx context.Context, client *gitlabclient.Client, input D
 	}
 	_, err := client.GL().Groups.DeleteGroupLDAPLinkForProvider(input.GroupID, input.Provider, input.CN, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithHint("delete group LDAP link for provider", err, groupLDAPLinkHint)
+		return toolutil.WrapErrWithHint("delete group LDAP link for provider", err, groupLDAPProviderHint)
 	}
 	return nil
 }
