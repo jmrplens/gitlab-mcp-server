@@ -321,9 +321,17 @@ func answeredStatus(glErr *gl.ErrorResponse) int {
 // whether a refused call ends the caller's credential at once, so a copy here
 // could describe a permission refusal to the model while the pool treats the
 // same answer as a revoked token, or the reverse.
+//
+// A 405 that refuses a moved project's old path says more as well
+// ([IsMovedProjectRefusal]): it is described as that, naming project.get and
+// the retry with the ID, since the status sentence sent a model to look at the
+// state of what the call was about. Every other 405 keeps that sentence.
 func classifyGitLabResponse(glErr *gl.ErrorResponse, status int) string {
 	if status == http.StatusUnauthorized && gitlabclient.UnauthorizedNamesCredential(answeredRequest(glErr), glErr.Body) {
 		return rejectedTokenDescription()
+	}
+	if isMovedProjectRefusal(glErr) {
+		return movedProjectDescription
 	}
 	return ClassifyHTTPStatus(status)
 }

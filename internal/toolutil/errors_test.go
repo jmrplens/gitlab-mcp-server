@@ -2713,6 +2713,109 @@ func TestWrapErrWithHint_ComposesTheWholeLine(t *testing.T) {
 	}
 }
 
+// The answer find_project! (lib/api/helpers.rb at v19.4.1-ee) gives a request
+// other than a GET that names a moved project by its old path, how client-go
+// renders its message, the description it gets, and the paths the cases send,
+// escaped as client-go escapes them. The description is spelled out for the
+// reason the classifications above are.
+const (
+	movedProjectBody       = `{"message":"Non GET methods are not allowed for moved projects"}`
+	movedProjectMessage    = "{message: Non GET methods are not allowed for moved projects}"
+	movedProjectMergePath  = "projects/e2e-group%2Fold-name/merge_requests/1/merge"
+	movedProjectFilePath   = "projects/e2e-group%2Fold-name/repository/files/README%2Emd"
+	numericProjectFilePath = "projects/42/repository/files/README%2Emd"
+	genericNotAllowedBody  = `{"message":"405 Method Not Allowed"}`
+	movedProjectSemantic   = "method not allowed: the project was named by a path it no longer has, since it or a group above it was renamed or transferred. " +
+		"GitLab follows a GET to the project's new location and refuses every other method, HEAD included, that names it by an old path. " +
+		"Retry with the numeric project ID or the current path, both of which project.get returns for the old path"
+)
+
+// TestClassifyError_MovedProject_NamesThePathAndTheRetry verifies that a 405
+// refusing a moved project's old path is described as that, and that every
+// other 405 keeps the sentence it had.
+//
+// GitLab follows a GET to a moved project's new location and refuses every
+// other method that names it by an old path with 405, which the status
+// sentence described as the state of the merge request, issue or branch the
+// call was about, so a model looked for a reason there and never retried with
+// the ID. The refusal is told apart by its message, and a HEAD, whose answer
+// has no body to carry one, by naming the project by a path. A merge request
+// that cannot be merged answers 405 too, and a HEAD naming the project by its
+// ID cannot be this refusal, since project_moved? is false for an ID.
+func TestClassifyError_MovedProject_NamesThePathAndTheRetry(t *testing.T) {
+	tests := []struct {
+		name         string
+		method, path string
+		body         string
+		want         string
+	}{
+		{name: "a write naming the project by its old path", method: http.MethodPut, path: movedProjectMergePath, body: movedProjectBody, want: movedProjectSemantic},
+		{name: "a HEAD naming the project by its old path", method: http.MethodHead, path: movedProjectFilePath, want: movedProjectSemantic},
+		{name: "a HEAD naming the project by its numeric ID", method: http.MethodHead, path: numericProjectFilePath, want: notAllowedSemantic},
+		{name: "a merge request that cannot be merged", method: http.MethodPut, path: movedProjectMergePath, body: genericNotAllowedBody, want: notAllowedSemantic},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := restAnswer(t, tt.method, tt.path, http.StatusMethodNotAllowed, tt.body)
+			if got := ClassifyError(err); got != tt.want {
+				t.Errorf("ClassifyError() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestWrapErrFamily_MovedProject_ComposesTheWholeLine pins what each wrapper
+// makes of the moved project refusal: the description takes the
+// classification's place and nothing else moves, so GitLab's message is
+// parenthesised where the wrapper quotes one, a HEAD's answer has none to
+// quote, and a hint bound to another status is left out.
+func TestWrapErrFamily_MovedProject_ComposesTheWholeLine(t *testing.T) {
+	const hint = "verify the file path with repository.tree"
+	tests := []struct {
+		name         string
+		method, path string
+		body         string
+		wrap         func(error) error
+		want         func(requestLine string) string
+	}{
+		{
+			name: "WrapErr", method: http.MethodPut, path: movedProjectMergePath, body: movedProjectBody,
+			wrap: func(err error) error { return WrapErr("mrMerge", err) },
+			want: func(line string) string {
+				return "mrMerge: " + movedProjectSemantic + ": " + line + " " + movedProjectMessage
+			},
+		},
+		{
+			name: "WrapErrWithMessage", method: http.MethodPut, path: movedProjectMergePath, body: movedProjectBody,
+			wrap: func(err error) error { return WrapErrWithMessage("mrMerge", err) },
+			want: func(line string) string {
+				return "mrMerge: " + movedProjectSemantic + " (" + movedProjectMessage + "): " + line + " " + movedProjectMessage
+			},
+		},
+		{
+			name: "WrapErrWithHint", method: http.MethodPut, path: movedProjectMergePath, body: movedProjectBody,
+			wrap: func(err error) error { return WrapErrWithHint("mrMerge", err, hint) },
+			want: func(line string) string {
+				return "mrMerge: " + movedProjectSemantic + " (" + movedProjectMessage + "). Suggestion: " + hint + ": " + line + " " + movedProjectMessage
+			},
+		},
+		{
+			name: "WrapErrWithStatusHint on a HEAD", method: http.MethodHead, path: movedProjectFilePath,
+			wrap: func(err error) error { return WrapErrWithStatusHint("fileGetMetaData", err, http.StatusNotFound, hint) },
+			want: func(line string) string { return "fileGetMetaData: " + movedProjectSemantic + ": " + line },
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			serverURL, err := restAnswer(t, tt.method, tt.path, http.StatusMethodNotAllowed, tt.body)
+			line := tt.method + " " + serverURL + "/api/v4/" + tt.path + ": 405"
+			if got, want := tt.wrap(err).Error(), tt.want(line); got != want {
+				t.Errorf("wrapped error = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 // The two sentences a 401 is described with, spelled out for the same reason
 // the classifications above are.
 const (
@@ -2777,8 +2880,16 @@ func gitLabClientFor(t *testing.T, baseURL string) *gl.Client {
 // of client-go's own error value rather than of a fixture shaped like one.
 func restAnswer(t *testing.T, method, path string, status int, body string) (string, error) {
 	t.Helper()
+	return restAnswerUnder(t, "", method, path, status, body)
+}
+
+// restAnswerUnder is [restAnswer] for an instance served under the relative
+// URL root root, empty for none. The address it returns is the server's,
+// without the root.
+func restAnswerUnder(t *testing.T, root, method, path string, status int, body string) (string, error) {
+	t.Helper()
 	server := answeringServer(t, status, body)
-	client := gitLabClientFor(t, server.URL)
+	client := gitLabClientFor(t, server.URL+root)
 	req, err := client.NewRequest(method, path, nil, nil)
 	if err != nil {
 		t.Fatalf("NewRequest(%s %s) error = %v", method, path, err)

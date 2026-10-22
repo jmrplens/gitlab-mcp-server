@@ -2989,3 +2989,77 @@ func assertingWriteHandler(t *testing.T, method string, status int, want map[str
 		testutil.RespondJSON(w, status, `{"file_path":"script.sh","branch":"feature"}`)
 	}
 }
+
+// movedProjectBody is GitLab's answer to a request other than a GET that names
+// a moved project by its old path (find_project! in lib/api/helpers.rb at
+// v19.4.1-ee), and wantMovedProjectRetry the part of the description
+// toolutil gives it that names the way out.
+const (
+	movedProjectBody      = `{"message":"Non GET methods are not allowed for moved projects"}`
+	wantMovedProjectRetry = "Retry with the numeric project ID or the current path, both of which project.get returns for the old path"
+)
+
+// TestFileHandlers_MovedProjectOldPath_NameTheRetry verifies what a file write
+// and the two metadata reads say when GitLab answers 405 because they named a
+// moved project by its old path.
+//
+// GitLab follows a GET to a moved project's new location and refuses every
+// other method, so a write is refused with its message, and the metadata
+// reads too, since both are HEAD requests and a HEAD is not a GET. A HEAD's
+// answer has no body, so the server below writes the message and net/http
+// drops it on the way, as GitLab's would be dropped. The ID is never refused
+// this way, so a 405 to a HEAD naming the project by it keeps the status
+// sentence.
+func TestFileHandlers_MovedProjectOldPath_NameTheRetry(t *testing.T) {
+	const oldPath = "e2e-group/old-name"
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		call      func(*gitlabclient.Client, toolutil.StringOrInt) error
+		projectID toolutil.StringOrInt
+		wantRetry bool
+	}{
+		{
+			name: "a file create by the old path", projectID: oldPath, wantRetry: true,
+			call: func(c *gitlabclient.Client, project toolutil.StringOrInt) error {
+				_, err := Create(ctx, c, CreateInput{ProjectID: project, FilePath: testFileMainGo, Branch: "main", Content: "package main", CommitMessage: "add main.go"})
+				return err
+			},
+		},
+		{
+			name: "the metadata read by the old path", projectID: oldPath, wantRetry: true,
+			call: func(c *gitlabclient.Client, project toolutil.StringOrInt) error {
+				_, err := GetMetaData(ctx, c, MetaDataInput{ProjectID: project, FilePath: testFileMainGo, Ref: "main"})
+				return err
+			},
+		},
+		{
+			name: "the raw metadata read by the old path", projectID: oldPath, wantRetry: true,
+			call: func(c *gitlabclient.Client, project toolutil.StringOrInt) error {
+				_, err := GetRawFileMetaData(ctx, c, RawMetaDataInput{ProjectID: project, FilePath: testFileMainGo, Ref: "main"})
+				return err
+			},
+		},
+		{
+			name: "the metadata read by the numeric ID", projectID: "42",
+			call: func(c *gitlabclient.Client, project toolutil.StringOrInt) error {
+				_, err := GetMetaData(ctx, c, MetaDataInput{ProjectID: project, FilePath: testFileMainGo, Ref: "main"})
+				return err
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusMethodNotAllowed, movedProjectBody)
+			}))
+			err := tt.call(client, tt.projectID)
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if got := strings.Contains(err.Error(), wantMovedProjectRetry); got != tt.wantRetry {
+				t.Errorf("error = %q, naming the retry with the ID = %v, want %v", err, got, tt.wantRetry)
+			}
+		})
+	}
+}
