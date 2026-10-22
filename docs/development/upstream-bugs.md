@@ -325,8 +325,8 @@ readable without opening the tracker:
 | 75 | gitlab-org/orbit/knowledge-graph | [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types) | Yes, [gitlab-org/orbit/knowledge-graph#1329](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1329), closed by the merge | Yes, [gitlab-org/orbit/knowledge-graph!2650](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2650), merged; the follow-up making the schema require it, [gitlab-org/orbit/knowledge-graph!2691](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2691), merged | **Yes, Orbit v0.137.0**, which GitLab.com served on 2026-10-05; it serves 0.145.0 on 2026-10-16 | No | Not needed: GitLab.com served the corrected schema, and `orbit.query`'s guidance stated the rule too, with [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031); since 2026-10-15 GitLab.com reads every query as GQL, whose path names its relationship type in the pattern, and `orbit.query` teaches that, with [issue 1414](https://github.com/jmrplens/gitlab-mcp-server/issues/1414) |
 | 76 | gitlab-org/orbit/knowledge-graph | [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both) | Yes, [gitlab-org/orbit/knowledge-graph#1330](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1330), closed by the merge | Yes, [gitlab-org/orbit/knowledge-graph!2651](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2651), merged | **Yes, Orbit v0.137.0**, which GitLab.com served on 2026-10-05; it serves 0.145.0 on 2026-10-16 | No; a result could be silently incomplete until then | Not needed: GitLab.com served the corrected schema, and `orbit.query`'s guidance said the default is `outgoing` too, with [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031); since 2026-10-15 GitLab.com reads every query as GQL, where the undirected `--` takes both directions and `->` or `<-` one, and `orbit.query` teaches that, with [issue 1414](https://github.com/jmrplens/gitlab-mcp-server/issues/1414) |
 | 77 | gitlab-org/gitlab | [The context commit list is annotated with `Commit` and presents `CommitWithLink`](#the-context-commit-list-is-annotated-with-commit-and-presents-commitwithlink) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260487](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260487), merged | **Yes, 19.5.0** | No | Audit half retired: the live record is taken from 19.5.0-ee; the captured read stays for client-go |
-| 78 | gitlab-org/gitlab | [An unknown severity on a pipeline's findings list answers 500](#an-unknown-severity-on-a-pipelines-findings-list-answers-500) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260459](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260459), open, with row 79, the GraphQL reference approved and the backend reviewer's suggestion added on 2026-10-14, waiting on that review again | No | No | Yes |
-| 79 | gitlab-org/gitlab | [An unknown report type on a pipeline's findings list is dropped and filters out every finding](#an-unknown-report-type-on-a-pipelines-findings-list-is-dropped-and-filters-out-every-finding) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260459](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260459), open, with row 78, the GraphQL reference approved and the backend reviewer's suggestion added on 2026-10-14, waiting on that review again | No | No | Yes |
+| 78 | gitlab-org/gitlab | [An unknown severity on a pipeline's findings list answers 500](#an-unknown-severity-on-a-pipelines-findings-list-answers-500) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260459](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260459), open, for this row alone since 2026-10-22, when row 79's report type check came out after its backend reviewer chose on 2026-10-21 to keep it to severities; that push reset the GraphQL reference's approval, and it waits on the backend review again | No | No | Yes |
+| 79 | gitlab-org/gitlab | [An unknown report type on a pipeline's findings list is dropped and filters out every finding](#an-unknown-report-type-on-a-pipelines-findings-list-is-dropped-and-filters-out-every-finding) | Yes, by the merge request of row 78, whose description still names it | Yes, until 2026-10-22, in [gitlab-org/gitlab!260459](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260459), whose backend reviewer chose on 2026-10-21 to keep it to row 78, since refusing a report type GitLab answers today is a breaking change, and whose report type check came out on 2026-10-22; nothing open fixes it, and it is left to [gitlab-org/gitlab#355840](https://gitlab.com/gitlab-org/gitlab/-/issues/355840), open since 2022 with no commitment, which asks for the argument to be typed with an enum | No | No | Yes |
 | 80 | gitlab-org/gitlab | [The scan profile attach mutation drops the reason it refused a name](#the-scan-profile-attach-mutation-drops-the-reason-it-refused-a-name) | No | No | No | No | Yes |
 | 81 | golang/go | [go/types reads an imported generic instance another checker is expanding](#gotypes-reads-an-imported-generic-instance-another-checker-is-expanding) | Yes, by another user, [golang/go#81122](https://github.com/golang/go/issues/81122) | Yes, [golang/go#81871](https://github.com/golang/go/pull/81871), imported as [go.dev/cl/841585](https://go.dev/cl/841585), open; a reminder of 2026-10-14 had no answer by 2026-10-16 | No | No; without the workaround it fails race runs of the tooling tests at random | Yes |
 | 82 | gitlab-org/gitlab, then client-go | [The admin token route takes no granular scopes, and no client-go create option carries them](#the-admin-token-route-takes-no-granular-scopes-and-no-client-go-create-option-carries-them) | GitLab half yes, by GitLab, [gitlab-org/gitlab#630541](https://gitlab.com/gitlab-org/gitlab/-/issues/630541), assigned to this project's maintainer since 2026-10-08 and closed as fixed on 2026-10-14; client-go half yes, by the merge request | GitLab half yes, [gitlab-org/gitlab!260958](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260958), merged, closing that issue, and a correction of its history line from 19.5 to 19.6, [gitlab-org/gitlab!263024](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/263024), open; client-go half yes, as commits 40 and 41 of [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) from 2026-10-17, closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet; earlier attempts by other users, [gitlab-org/gitlab!245585](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/245585) and [gitlab-org/api/client-go!2978](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/2978), closed unmerged | **The GitLab half, unreleased**: merged on 2026-10-13 in milestone 19.5, after the 19.5 cut, so 19.6 is its first release; deployed to GitLab.com at 09:06 UTC on 2026-10-14. The client-go half, no | No | None taken; the five token create actions send classic scopes only, tracked in [issue 1115](https://github.com/jmrplens/gitlab-mcp-server/issues/1115) |
@@ -11620,16 +11620,18 @@ while moving `orbit.query` to version 12 of the DSL for issue 1031.
 
 ### An unknown severity on a pipeline's findings list answers 500
 
-- **Reported**: yes, by the merge request below, which covers
+- **Reported**: yes, by the merge request below, which covered
   [row 79](#an-unknown-report-type-on-a-pipelines-findings-list-is-dropped-and-filters-out-every-finding)
-  as well.
+  as well until 2026-10-22.
 - **In review**: yes,
   [gitlab-org/gitlab!260459](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260459),
-  "Refuse unknown filter values on pipeline security findings", opened from the
-  community fork at 18:28 UTC on 2026-10-07 and readied at 18:33 (Fix in
-  review, below). The documentation automation requested @sarahwatt for the
-  regenerated GraphQL reference, and no backend reviewer was assigned that
-  evening. Its fork pipeline failed on `graphql-verify`, which asks for the two
+  "Refuse unknown severities on pipeline security findings" since 00:04 UTC on
+  2026-10-22 and "Refuse unknown filter values on pipeline security findings"
+  before, opened from the community fork at 18:28 UTC on 2026-10-07 and
+  readied at 18:33 (Fix in review, below). The documentation automation
+  requested @sarahwatt for the regenerated GraphQL reference, and no backend
+  reviewer was assigned that evening. Its fork pipeline failed on
+  `graphql-verify`, which asks for the two
   introspection results under `public/-/graphql/` to be regenerated after the
   argument descriptions changed, so the branch needed one more change before a
   review. It had it that evening: at 22:17 UTC the single commit was amended
@@ -11653,8 +11655,31 @@ while moving `orbit.query` to version 12 of the DSL for issue 1031.
   for the review again, and the fork pipeline passed. Read on 2026-10-16
   @idurham's approval stands, three approvals are still to come, it has no
   milestone, and a bot reminded the reviewer at 21:30 UTC on 2026-10-15.
+  @uokeadu approved it at 16:25 UTC on 2026-10-20 with a question: whether
+  refusing an unsupported report type is acceptable as a bug fix, since
+  `reportType: ["sast", "generic"]` answered the SAST findings and would now
+  answer an error. We answered at 17:23 UTC that it is not: GitLab's breaking
+  change policy counts a value the API stops accepting as breaking and none of
+  its exemptions applies, and master's answer to that list is right, since a
+  pipeline finding's report type is its scan's type and no scan type is
+  `generic` or `container_scanning_for_registry`, so the description and the
+  request spec of `f9a8c904` were wrong about mixed lists. We offered either
+  to check report types against `::Vulnerabilities::Finding.report_types`, the
+  values the REST route on the same finder takes, or to drop the report type
+  check. At 20:31 UTC on 2026-10-21 @uokeadu chose the second, keeping the
+  merge request to severity validation and leaving report types to the issue
+  below, and withdrew the approval at 20:32. At 00:04 UTC on 2026-10-22 we
+  pushed the branch, still on master `07c80d80`. Its first three commits were
+  rewritten as `a18b4b5b`, `6327eab5` and `a93faa75`, with the first one's
+  message, which becomes the squash commit, reworded to the severity check
+  alone, and a fourth commit, `21a19bd7`, removes the report type check, its
+  specs, the request spec for the mixed list and the report types listed in
+  the argument's description; we retitled the merge request, rewrote its
+  description to match and answered in the thread. The push reset @idurham's
+  approval. Read at 00:16 UTC that day it has no approval, its fork pipeline
+  is running and it waits on @uokeadu's review again.
   The merge request leaves the move to an enum of severities and an enum of
-  report types to
+  report types, and since 2026-10-22 the report types themselves, to
   [gitlab-org/gitlab#355840](https://gitlab.com/gitlab-org/gitlab/-/issues/355840)
   (2022, open), to which it is related.
 - **Merged**: no.
@@ -11684,29 +11709,44 @@ argument nor the value. The value is looked up as written, so the lowercase
 severities the enum is keyed by work and an uppercase one would not; this
 server sends them lowercased, which is why the handler judges them in any case.
 
-**Fix in review**: the resolver validates `severity` and `reportType` before
-the finder runs, against the enums the finder reads
-(`Security::Finding.severities` and `Security::Scan.scan_types`), and answers an
-unknown value with a `Gitlab::Graphql::Errors::ArgumentError` naming the
-argument, the value and the values it takes; the argument descriptions list
-those values and the GraphQL reference is regenerated. The argument types stay
-`[String!]`: typing them with enums, which the proposal here preferred, changes
-a type every client declaring the variables as strings is refused for, the
+**Fix in review**: the resolver validates `severity` before the finder runs,
+against the enum the finder reads (`Security::Finding.severities`), and answers
+an unknown value with a `Gitlab::Graphql::Errors::ArgumentError` naming the
+argument, the value and the values it takes; the argument's description lists
+those values and the GraphQL reference and both introspection results are
+regenerated. It refuses no request that succeeds today: the finder reads the
+severities while it builds its query, so an unknown severity answers `500`
+whether or not the list also holds a known one. The argument type stays
+`[String!]`: typing it with an enum, which the proposal here preferred, changes
+a type every client declaring the variable as a string is refused for, the
 pipeline security tab's own query among them, and GitLab's deprecation process
 counts that as a breaking change, so the merge request leaves the migration to
-the issue GitLab already has open for it. A list mixing a known
-and an unknown value is refused whole, and the values stay case sensitive, as
-they are today; the merge request asks the reviewer about both choices. When a
-release carries it, `findingSeverities` in `securityfindings` only duplicates
-what GitLab refuses itself.
+the issue GitLab already has open for it. The values stay case sensitive, as
+they are today. Until 2026-10-22 it refused an unknown `reportType` as well,
+which [row 79](#an-unknown-report-type-on-a-pipelines-findings-list-is-dropped-and-filters-out-every-finding)
+records. When a release carries it, `findingSeverities` in `securityfindings`
+only duplicates what GitLab refuses itself.
 
 ### An unknown report type on a pipeline's findings list is dropped and filters out every finding
 
 - **Reported**: yes, by the merge request of
-  [row 78](#an-unknown-severity-on-a-pipelines-findings-list-answers-500).
-- **In review**: yes,
+  [row 78](#an-unknown-severity-on-a-pipelines-findings-list-answers-500),
+  whose description still names it and, since 2026-10-22, leaves it to
+  [gitlab-org/gitlab#355840](https://gitlab.com/gitlab-org/gitlab/-/issues/355840).
+- **In review**: yes, until 2026-10-22, in
   [gitlab-org/gitlab!260459](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260459),
-  open, the one row 78 follows.
+  the one row 78 follows, which refused an unknown report type from
+  2026-10-07. Its backend reviewer asked on 2026-10-20 whether that refusal
+  is acceptable as a bug fix, we answered that it is a breaking change, and on
+  2026-10-21 they chose to keep the merge request to severities; the check,
+  its specs and the request spec for a mixed list came out in `21a19bd7` at
+  00:04 UTC on 2026-10-22, and report types answer as they do on master.
+  Nothing open fixes this row:
+  [gitlab-org/gitlab#355840](https://gitlab.com/gitlab-org/gitlab/-/issues/355840),
+  open since 2022, in the backlog with no commitment and with no assignee,
+  asks for the argument to be typed with an enum, which would refuse the
+  value in the schema and which GitLab's deprecation process counts as a
+  breaking change too.
 - **Merged**: no.
 - **Blocking**: no. The request succeeds, which is the problem: the answer is
   an empty page that reads as a pipeline whose scans found nothing.
@@ -11717,7 +11757,8 @@ what GitLab refuses itself.
   and `GENERIC`). `SARIF` is the gap the workaround cannot close: `Security::Scan`
   gained `sarif` at 18.11 while the action needs 18.5, so on 18.5 to 18.10 the
   value passes the check and GitLab drops it, and the input's description says
-  so. What retires the workaround is GitLab validating the argument itself.
+  so. What retires the workaround is GitLab refusing the value itself, which
+  the enum the issue above asks for would do and nothing in review does.
 
 **Where**: the `report_type` argument of `Pipeline.securityReportFindings`
 (`ee/app/graphql/resolvers/pipeline_security_report_findings_resolver.rb`),
@@ -11731,22 +11772,31 @@ for `sarif`.
 
 **What**: a value `Security::Scan` has no scan type for is removed by the
 intersection without a word, and a filter left empty matches no scan, so the
-answer is an empty list rather than an error. A misspelled report type, one
-the vulnerability list takes and a pipeline scan never records, and one a
-newer GitLab added all read the same way, as a clean pipeline.
+answer is an empty list rather than an error. A misspelled report type, an
+uppercase one such as `SAST`, and one a newer GitLab added all read the same
+way, as a clean pipeline. For the two values the vulnerability list takes and
+a pipeline scan never records, `generic` and `container_scanning_for_registry`,
+the empty answer is the right one: a pipeline finding's report type is its
+scan's type and no scan type is either, so no pipeline has findings of them,
+and a list naming one beside a known type answers the known type's findings.
+We read that at master `07c80d80` on 2026-10-20, answering the review of row
+78's merge request.
 
-**Fix in review**: the resolver check of
+**Fix withdrawn**: from 2026-10-07 to 2026-10-22 the resolver check of
 [row 78](#an-unknown-severity-on-a-pipelines-findings-list-answers-500)
-refuses a `reportType` value `Security::Scan.scan_types` does not have, in the
+refused a `reportType` value `Security::Scan.scan_types` does not have, in the
 resolver rather than in the finder, because the finder's REST caller,
 `GET /projects/:id/vulnerability_findings`, defaults `report_type` to every
 vulnerability report type, `generic` and `container_scanning_for_registry`
-included, and relies on `sanitize_scan_types` to drop them. That REST route
-keeps dropping either one asked for alone, which the merge request names and
-offers to fix there or in a follow-up. When a release carries it,
-`findingReportTypes` in `securityfindings` only duplicates GitLab's refusal on
-the releases that have it, and still decides on the older ones, `SARIF` before
-18.11 among them.
+included, and relies on `sanitize_scan_types` to drop them. It came out because
+it refused requests GitLab answers today with an empty or a partial list, and
+GitLab's breaking change policy counts a value the API stops accepting as
+breaking. What is left is the proposal of
+[gitlab-org/gitlab#355840](https://gitlab.com/gitlab-org/gitlab/-/issues/355840),
+an enum type for the argument, which needs the deprecation process as well.
+Until a release refuses the value, `findingReportTypes` in `securityfindings`
+is the only check on every version, with the `SARIF` gap before 18.11 the
+workaround above names.
 
 ### The scan profile attach mutation drops the reason it refused a name
 
