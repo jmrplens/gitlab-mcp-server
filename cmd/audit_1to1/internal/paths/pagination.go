@@ -59,6 +59,16 @@ import (
 // route declares the params but the action reads a single object" case is
 // answered, structurally, rather than one entry at a time.
 //
+// The reading is [toolutil.CollectionShapeOf], and it lives there rather than
+// here because the server asks the same question: an action whose output is a
+// collection envelope is annotated as a list ([toolutil.ResolveContentKind]),
+// so the rule that decides who owes a pagination block and the rule that
+// decides which results rank as list rows cannot read an envelope differently.
+// The content kind reads more besides: an output that already carries a
+// pagination block, and a list an action declares because its shape reads as
+// one object. This check asks about neither, so a list of the second kind
+// that GitLab pages and the handler does not is outside what it sees.
+//
 // # The grain, and what it costs
 //
 // The join from an action to an endpoint is the package, because the inventory
@@ -201,166 +211,15 @@ func (c UnpaginatedCollection) declared() bool { return c.Category != "" }
 const paginationGrain = "package: an action is asked about when the package that owns it was recorded calling an endpoint GitLab paginates, " +
 	"not when its own endpoint was seen. The endpoints on a finding are that package's, and one of them may belong to a sibling action."
 
-// paginationShapes are the blocks an output publishes to say where the page it
-// carries sits in the whole.
-//
-// They are named as types rather than matched by name, so that renaming one in
-// internal/toolutil breaks this build instead of quietly emptying the set and
-// turning every paginated action into a finding.
-var paginationShapes = map[reflect.Type]bool{
-	reflect.TypeFor[toolutil.PaginationOutput]():               true,
-	reflect.TypeFor[toolutil.GraphQLPaginationOutput]():        true,
-	reflect.TypeFor[toolutil.GraphQLForwardPaginationOutput](): true,
-	reflect.TypeFor[toolutil.GraphQLPageInfo]():                true,
-}
-
-// hintsShape is the block every output embeds that carries the server's own
-// next-step hints. It is framing rather than content, so it is taken out before
-// a collection envelope is counted.
-var hintsShape = reflect.TypeFor[toolutil.HintableOutput]()
-
-// embedDepth bounds the walk through embedded structs. Go forbids a struct from
-// embedding itself by value, but a pointer embed can cycle, and a walk that
-// cannot end is worse than one that stops short: six levels is deeper than any
-// output type here and is reached by none of them.
-const embedDepth = 6
-
-// outputShape is what one output type publishes, in the two terms this rule
-// asks about.
-type outputShape struct {
-	// Pagination names the block found, empty for a type carrying none.
-	Pagination string
-	// Collection is the json name of the single list the type publishes, empty
-	// unless the type is a collection envelope.
-	Collection string
-}
-
-// isCollection reports whether the type is the envelope of a list.
-func (s outputShape) isCollection() bool { return s.Collection != "" }
-
-// inspectOutput reads an action's output type the way encoding/json will write
-// it: an untagged embed's fields are promoted into the type around it, and a
-// field the tag hides publishes nothing.
-//
-// A pagination block found anywhere in that walk counts, embedded or named,
-// because either way the key reaches the model.
-func inspectOutput(outputType reflect.Type) outputShape {
-	root := dereference(outputType)
-	if root == nil || root.Kind() != reflect.Struct {
-		return outputShape{}
+// typeName is the name of an output type with its pointers followed, which is
+// how a finding names the type a reader goes to change. It is asked only of a
+// type [toolutil.CollectionShapeOf] found to be a collection envelope, and so
+// only of a type that is there.
+func typeName(outputType reflect.Type) string {
+	for outputType.Kind() == reflect.Pointer {
+		outputType = outputType.Elem()
 	}
-
-	var walk outputWalk
-	walk.visit(root, 0)
-
-	// One list and nothing else beside it is the envelope of a collection.
-	// Anything else is an object that happens to carry a list, whose caller
-	// asked for the object.
-	if walk.lists != 1 || walk.content {
-		walk.shape.Collection = ""
-	}
-	return walk.shape
-}
-
-// outputWalk is what one pass over an output type has found so far: the shape
-// being assembled, and the tally that decides whether the type is an envelope.
-//
-// The tally cannot live on the shape, because it is not part of the answer: a
-// reader of a finding needs the list's name and the pagination block, and what
-// else sits beside them is the working the rule showed itself.
-//
-// The lists are counted because an envelope holds exactly one. The content
-// beside them is only ever asked whether there is any, so it is a flag: kept
-// as a count, it read the same whether it went up or down, and a decrement in
-// its place survived every test.
-type outputWalk struct {
-	shape   outputShape
-	lists   int
-	content bool
-}
-
-// visit reads one struct's fields, following the untagged embeds that promote
-// their fields into it.
-func (w *outputWalk) visit(structType reflect.Type, depth int) {
-	if depth > embedDepth {
-		return
-	}
-	for field := range structType.Fields() {
-		w.field(field, depth)
-	}
-}
-
-// field classifies one field as framing, an embed to follow, the list, or
-// content beside it.
-//
-// A field the reflect package lists always has a type, and dereferencing a
-// pointer chain ends at a type, so there is no nil to guard against here; the
-// guard that stood here could only ever be passed.
-func (w *outputWalk) field(field reflect.StructField, depth int) {
-	fieldType := dereference(field.Type)
-	if paginationShapes[fieldType] {
-		if w.shape.Pagination == "" {
-			w.shape.Pagination = fieldType.Name()
-		}
-		return
-	}
-	if field.Anonymous && fieldType.Kind() == reflect.Struct {
-		if fieldType != hintsShape {
-			w.visit(fieldType, depth+1)
-		}
-		return
-	}
-	name, published := publishedName(field)
-	if !published {
-		return
-	}
-	if listOfObjects(fieldType) {
-		w.lists++
-		if w.shape.Collection == "" {
-			w.shape.Collection = name
-		}
-		return
-	}
-	w.content = true
-}
-
-// publishedName is the json key a field reaches a model under, and whether it
-// reaches one at all.
-func publishedName(field reflect.StructField) (string, bool) {
-	if field.PkgPath != "" {
-		return "", false
-	}
-	name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
-	if name == "-" {
-		return "", false
-	}
-	if name == "" {
-		return field.Name, true
-	}
-	return name, true
-}
-
-// listOfObjects reports whether the type is a list whose elements are objects,
-// which is the shape a page of GitLab's answer takes. A list of strings is a
-// value rather than a collection a caller pages through: a project's topics are
-// not a page of topics.
-func listOfObjects(fieldType reflect.Type) bool {
-	if fieldType.Kind() != reflect.Slice {
-		return false
-	}
-	// A slice always names its element type, so what dereference returns here
-	// is never the nil it keeps for a route registered without a type.
-	return dereference(fieldType.Elem()).Kind() == reflect.Struct
-}
-
-// dereference follows pointers to the type underneath, and returns nil for a
-// nil type so that a route registered without one is skipped rather than
-// panicking the audit.
-func dereference(t reflect.Type) reflect.Type {
-	for t != nil && t.Kind() == reflect.Pointer {
-		t = t.Elem()
-	}
-	return t
+	return outputType.Name()
 }
 
 // requestPaginates reports whether an action offers a caller page or per_page,
@@ -477,8 +336,8 @@ func unpaginatedCollections(actions []requestinventory.Action, offset, keyset ma
 		if !action.ReadOnly {
 			continue
 		}
-		shape := inspectOutput(action.Route.OutputType)
-		if !shape.isCollection() {
+		shape := toolutil.CollectionShapeOf(action.Route.OutputType)
+		if !shape.IsCollection() {
 			continue
 		}
 		counts.Actions++
@@ -493,11 +352,10 @@ func unpaginatedCollections(actions []requestinventory.Action, offset, keyset ma
 			continue
 		}
 		counts.Unpaginated++
-		outputType := dereference(action.Route.OutputType)
 		found = append(found, UnpaginatedCollection{
 			Action:           action.ID,
 			Package:          pkg,
-			Type:             outputType.Name(),
+			Type:             typeName(action.Route.OutputType),
 			Collection:       shape.Collection,
 			RequestPaginates: requestPaginates(action.Route.InputSchema),
 			Endpoints:        endpoints,

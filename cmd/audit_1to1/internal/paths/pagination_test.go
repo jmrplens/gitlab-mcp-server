@@ -34,187 +34,33 @@ type fixturePaginatedListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// fixtureCursorListOutput pages with a cursor rather than a page number, which
-// is what a GraphQL connection publishes.
-type fixtureCursorListOutput struct {
-	Nodes    []fixtureItem                    `json:"nodes"`
-	PageInfo toolutil.GraphQLPaginationOutput `json:"page_info"`
-}
-
 // fixtureObjectOutput is one object that happens to carry a list under it. Its
 // caller asked for the object, so it is not a collection read and admitting it
-// is what turned this rule's finding list from 24 into 79.
+// is what turned this rule's finding list from 24 into 79. Every other shape
+// the reading tells apart is pinned where the reading lives, in
+// internal/toolutil's collection_shape_test.go.
 type fixtureObjectOutput struct {
 	toolutil.HintableOutput
 	Name   string        `json:"name"`
 	Labels []fixtureItem `json:"labels"`
 }
 
-// fixtureScalarListOutput publishes a list of strings, which is a value rather
-// than a collection anybody pages: a project's topics are not a page of topics.
-type fixtureScalarListOutput struct {
-	Topics []string `json:"topics"`
-}
-
-// fixtureTwoListsOutput publishes two lists, so no single one of them is the
-// response.
-type fixtureTwoListsOutput struct {
-	Added   []fixtureItem `json:"added"`
-	Removed []fixtureItem `json:"removed"`
-}
-
-// fixtureEmbeddedListOutput reaches its list through an untagged embed, which
-// encoding/json promotes into the type around it.
-type fixtureEmbeddedListOutput struct {
-	fixtureEmbeddedBody
-}
-
-type fixtureEmbeddedBody struct {
-	Keys []fixtureItem `json:"keys"`
-}
-
-// fixtureHiddenFieldOutput carries a field the json tag hides, which reaches no
-// model and so is not content beside the list.
-type fixtureHiddenFieldOutput struct {
-	Keys     []fixtureItem `json:"keys"`
-	internal string        //nolint:unused // present to prove an unexported field publishes nothing
-	Skipped  string        `json:"-"`
-}
-
-// FixtureEmbeddedScalar is an exported named string a type embeds. An embed is
-// only promoted when it is a struct: encoding/json writes this one under its
-// own type name, so it is content beside a list rather than something to walk
-// into.
-type FixtureEmbeddedScalar string
-
-// fixtureEmbeddedScalarOutput is a list with one of those beside it, which is
-// therefore not a collection envelope.
-type fixtureEmbeddedScalarOutput struct {
-	FixtureEmbeddedScalar
-	Keys []fixtureItem `json:"keys"`
-}
-
-// fixtureUnexportedScalar is the same thing under an unexported name, which
-// encoding/json writes nowhere at all, so the list is alone after all.
-type fixtureUnexportedScalar string //nolint:unused // present as an embed, whose value nothing reads
-
-type fixtureUnexportedScalarOutput struct {
-	fixtureUnexportedScalar               //nolint:unused // the embed is the subject: it publishes nothing
-	Keys                    []fixtureItem `json:"keys"`
-}
-
-// The six-deep chain below stands at the embed bound: encoding/json promotes
-// the list at the bottom of it into the type at the top, and the walk reads to
-// exactly that level. The seven-deep chain is one past it.
-
-type (
-	fixtureDepth6    struct{ fixtureDepth5 }
-	fixtureDepth5    struct{ fixtureDepth4 }
-	fixtureDepth4    struct{ fixtureDepth3 }
-	fixtureDepth3    struct{ fixtureDepth2 }
-	fixtureDepth2    struct{ fixtureDepth1 }
-	fixtureDepth1    struct{ fixtureDepthBody }
-	fixtureDepthBody struct {
-		Keys []fixtureItem `json:"keys"`
-	}
-)
-
-type fixtureDepth7 struct{ fixtureDepth6 }
-
-// TestInspectOutput_CollectionEnvelope_IsOneListAndNothingElse verifies the one
-// structural decision this rule makes, because everything downstream rests on
-// it: an action reads a collection when its output is a list and its framing,
-// and an object carrying a list is a single-object read whose caller was never
-// promised the list.
-func TestInspectOutput_CollectionEnvelope_IsOneListAndNothingElse(t *testing.T) {
+// TestTypeName_FollowsPointers_ToTheTypeAFindingNames verifies that a finding
+// names the type a reader edits, whether the route declared it by value or
+// through a pointer to it.
+func TestTypeName_FollowsPointers_ToTheTypeAFindingNames(t *testing.T) {
 	cases := []struct {
-		name           string
-		outputType     reflect.Type
-		wantCollection string
-		wantPagination string
+		name       string
+		outputType reflect.Type
 	}{
-		{
-			name:           "a list and its hints is a collection",
-			outputType:     reflect.TypeFor[fixtureListOutput](),
-			wantCollection: "tokens",
-		},
-		{
-			name:           "a pagination block is framing rather than content",
-			outputType:     reflect.TypeFor[fixturePaginatedListOutput](),
-			wantCollection: "tokens",
-			wantPagination: "PaginationOutput",
-		},
-		{
-			name:           "a cursor block counts as pagination too",
-			outputType:     reflect.TypeFor[fixtureCursorListOutput](),
-			wantCollection: "nodes",
-			wantPagination: "GraphQLPaginationOutput",
-		},
-		{
-			name:       "an object carrying a list is not a collection",
-			outputType: reflect.TypeFor[fixtureObjectOutput](),
-		},
-		{
-			name:       "a list of strings is a value, not a collection",
-			outputType: reflect.TypeFor[fixtureScalarListOutput](),
-		},
-		{
-			name:       "two lists are no single response",
-			outputType: reflect.TypeFor[fixtureTwoListsOutput](),
-		},
-		{
-			name:           "an embedded list is promoted into the type around it",
-			outputType:     reflect.TypeFor[fixtureEmbeddedListOutput](),
-			wantCollection: "keys",
-		},
-		{
-			name:           "a hidden field is not content beside the list",
-			outputType:     reflect.TypeFor[fixtureHiddenFieldOutput](),
-			wantCollection: "keys",
-		},
-		{
-			name:           "a pointer to the envelope reads the same",
-			outputType:     reflect.TypeFor[*fixtureListOutput](),
-			wantCollection: "tokens",
-		},
-		{
-			name:       "an embedded named scalar is content beside the list",
-			outputType: reflect.TypeFor[fixtureEmbeddedScalarOutput](),
-		},
-		{
-			name:           "an embedded unexported scalar reaches no model and is not content",
-			outputType:     reflect.TypeFor[fixtureUnexportedScalarOutput](),
-			wantCollection: "keys",
-		},
-		{
-			name:           "an embed chain as deep as the bound is still read",
-			outputType:     reflect.TypeFor[fixtureDepth6](),
-			wantCollection: "keys",
-		},
-		{
-			name:       "an embed chain past the bound is not read",
-			outputType: reflect.TypeFor[fixtureDepth7](),
-		},
-		{
-			name:       "a route registered with no output type is skipped",
-			outputType: nil,
-		},
-		{
-			name:       "a type that is no struct is skipped",
-			outputType: reflect.TypeFor[[]fixtureItem](),
-		},
+		{name: "a value type", outputType: reflect.TypeFor[fixtureListOutput]()},
+		{name: "a pointer to it", outputType: reflect.TypeFor[*fixtureListOutput]()},
+		{name: "a pointer to a pointer to it", outputType: reflect.TypeFor[**fixtureListOutput]()},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			shape := inspectOutput(testCase.outputType)
-			if shape.Collection != testCase.wantCollection {
-				t.Errorf("collection = %q, want %q", shape.Collection, testCase.wantCollection)
-			}
-			if shape.Pagination != testCase.wantPagination {
-				t.Errorf("pagination = %q, want %q", shape.Pagination, testCase.wantPagination)
-			}
-			if shape.isCollection() != (testCase.wantCollection != "") {
-				t.Errorf("isCollection() = %t, want %t", shape.isCollection(), testCase.wantCollection != "")
+			if got := typeName(testCase.outputType); got != "fixtureListOutput" {
+				t.Errorf("typeName(%v) = %q, want %q", testCase.outputType, got, "fixtureListOutput")
 			}
 		})
 	}
