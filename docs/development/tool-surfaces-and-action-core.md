@@ -440,7 +440,6 @@ func ProjectSpecs(client *gitlabclient.Client, _ bool) []toolutil.ActionSpec {
       OpenWorld:      true,
       OwnerPackage:   "projects",
       IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_project_list"},
-      ContentKind:    "list",
     }),
   }
 }
@@ -451,6 +450,55 @@ sharing mutable schema, guidance, alias, tag, or related-action slices. When a
 spec wraps a route, route-local aliases, tags, usage, related actions, and
 parameter guidance become defaults; explicit `ActionSpecOptions` values may add
 or override the metadata for that spec.
+
+### Content kind
+
+The annotation a result's text is served with is decided by the action's
+content kind, never by its formatter: `toolutil.FinishToolResult`, the tail
+every dispatcher applies, sets every text block to
+`toolutil.AnnotationsForContentKind(route.ContentKind)`. The kind is derived,
+not declared. `actioncatalog.ActionsFromSpecs` resolves it once per action
+through `toolutil.ResolveContentKind`, for the action and the route the meta,
+dynamic and individual dispatchers annotate from, and
+`toolutil.RegisterSurfaceToolFromSpec` does the same for the standalone
+utilities the meta and individual surfaces register from their specs:
+
+| What the action does                                                   | Kind     | Preset          | Priority |
+| ---------------------------------------------------------------------- | -------- | --------------- | -------: |
+| Anything that is not read-only, whatever it answers with               | `mutate` | `ContentMutate` |      0.8 |
+| A read whose output is a collection envelope or has a pagination block | `list`   | `ContentList`   |      0.4 |
+| Any other read, a text blob such as a job trace or a raw file included | `detail` | `ContentDetail` |      0.6 |
+
+A collection envelope is the shape R-PAGE recognizes, one list of objects and
+nothing beside it but the hints and pagination blocks, and both read it
+through `toolutil.CollectionShapeOf` so the two rules cannot read an envelope
+differently. The pagination block is the one place the derivation reads more
+than R-PAGE: R-PAGE asks who owes a caller a block, and a type already
+publishing one owes nothing, while here the block says by itself that the
+result is one page of a list. `project.list` carries its projects in two
+alternative lists, so it is no envelope, and it is still a list.
+
+`ActionSpecOptions.ContentKind` is the override, for the case the shape cannot
+show: a list published beside an echo of the scope it was asked for, or a
+count, or two lists side by side, with no pagination block. Five actions
+declare one (`admin.bulk_import_entity_failures`, `mr_review.changes_get`,
+`repository.list_submodules`, `runner.controller_scope_list`,
+`security_scan_profile.list_project_statuses`), and validation admits only
+`list`, `detail` and `mutate`. A declaration that agrees with the derivation
+answers nothing, and
+`TestCollectedActionSpecs_ContentKindDeclarations_OverrideTheDerivation`
+refuses it, on the collected specs, the `gitlab_server` group's and the
+standalone utilities'. R-PAGE reads envelopes only, so it asks nothing about a
+declared list: no check holds one that GitLab pages to a pagination block.
+`TestBuildActionCatalog_EveryAction_ResolvesToListDetailOrMutate` holds every
+action of both Ultimate catalogs, with the standalone actions, to one of the
+three kinds: a write to `mutate`, a collection read to `list`, and a read that
+takes a page and publishes one list of objects to `list` as well, which is
+what makes a new list of that shape declare the override. A new action is
+therefore never served the `ContentAssistant` default (0.7) that an empty kind
+maps to. That default is what every action but five packages' got until issue
+1168, which is why the presets the output format reference documents were
+never sent.
 
 ### Cross-links
 
@@ -550,6 +598,10 @@ The migration is enforced by source-level tests and audits:
   builder manifest without writing files.
 - `TestActionCatalog_BaselineCountsDoNotRegress` keeps CE, Enterprise, and
   GitLab.com Enterprise catalog action counts stable.
+- `TestBuildActionCatalog_EveryAction_ResolvesToListDetailOrMutate` and
+  `TestCollectedActionSpecs_ContentKindDeclarations_OverrideTheDerivation` hold
+  every action's content kind to what it does and every declared kind to an
+  override ([Content kind](#content-kind)).
 - `make audit-dynamic-aliases` and
   `go run ./cmd/audit_surface_quality/` (with `-view=metadata` or `-view=output`
   for individual checks) are the post-metadata-change surface audits.

@@ -167,22 +167,22 @@ El servidor envía las dos partes en cada llamada con éxito y deja la elección
 Los próximos pasos se escriben en las dos partes para que un cliente que lea cualquiera de ellas los reciba. Hay dos comportamientos de cliente conocidos y resueltos:
 
 - Cuando un resultado lleva `structuredContent`, Codex entrega a su modelo solo ese JSON y descarta el Markdown ([openai/codex#10334](https://github.com/openai/codex/issues/10334)), que es un motivo más para que los próximos pasos estén también en el JSON ([OpenAI Codex](/gitlab-mcp-server/es/install/clients/#openai-codex)).
-- Las compilaciones de Codex que incluye ChatGPT.app rechazan una `priority` fraccionaria, así que para una sesión que se identifica como Codex el servidor redondea cada prioridad a `0` o `1`; `GITLAB_MCP_CLIENT_COMPAT=off` lo desactiva.
+- Las compilaciones de Codex que incluye ChatGPT.app rechazan una `priority` fraccionaria, así que para una sesión que se identifica como Codex el servidor redondea cada prioridad a `0` o `1`, lo que deja el texto de una lista en `0` y cualquier otro preajuste en `1`; `GITLAB_MCP_CLIENT_COMPAT=off` lo desactiva.
 
 ## Anotaciones de contenido
 
 Cada bloque de texto que anota el servidor lleva dos [anotaciones de MCP](https://modelcontextprotocol.io/specification/2025-11-25/server/utilities/annotations): `audience`, para quién es el bloque, y `priority`, de 0 a 1, cuánto importa frente al resto del resultado.
 
-| Anotación               | Audiencia   | Prioridad | La lleva                                                                                                                                                  |
-| ----------------------- | ----------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ContentList`           | `assistant` | 0.4       | El texto de una acción que declara el tipo de contenido `list`                                                                                            |
-| `ContentDetail`         | `assistant` | 0.6       | El texto de una acción que declara `detail`, y toda respuesta de no encontrado                                                                            |
-| `ContentMutate`         | `assistant` | 0.8       | El texto de una acción que declara `mutate`, y los rechazos que escribe el propio servidor, como una acción retenida o un parámetro obligatorio que falta |
-| `ContentAssistant`      | `assistant` | 0.7       | El texto de cualquier otra acción: una que declara `assistant` o `image`, o ningún tipo                                                                   |
-| `ContentUser`           | `user`      | 0.8       | El bloque de imagen de una subida o de una visualización                                                                                                  |
-| `ResourceMachineDetail` | `assistant` | 0.6       | El bloque de recurso que incrusta un get                                                                                                                  |
+| Anotación               | Audiencia   | Prioridad | La lleva                                                                                                                                                                                 |
+| ----------------------- | ----------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ContentList`           | `assistant` | 0.4       | El texto de una lectura que devuelve una lista                                                                                                                                           |
+| `ContentDetail`         | `assistant` | 0.6       | El texto de cualquier otra lectura, y toda respuesta de no encontrado                                                                                                                    |
+| `ContentMutate`         | `assistant` | 0.8       | El texto de toda escritura, y los rechazos que escribe el propio servidor, como una acción retenida o un parámetro obligatorio que falta                                                 |
+| `ContentAssistant`      | `assistant` | 0.7       | La anotación por defecto de un resultado cuya acción no nombra un tipo de contenido; ningún resultado con éxito de una herramienta la lleva, porque el catálogo da un tipo a cada acción |
+| `ContentUser`           | `user`      | 0.8       | El bloque de imagen de una subida o de una visualización                                                                                                                                 |
+| `ResourceMachineDetail` | `assistant` | 0.6       | El bloque de recurso que incrusta un get                                                                                                                                                 |
 
-La anotación del texto de un resultado con éxito la decide la acción, no su formateador: la entrada de una acción en el catálogo puede declarar un tipo de contenido (`list`, `detail`, `mutate`, `assistant` o `image`), y todos los despachadores anotan el texto con el preajuste de ese tipo. Hoy pocas acciones declaran uno, y una acción que no declara ninguno lleva `ContentAssistant`. Un resultado de error conserva la anotación con la que se escribió.
+La anotación del texto de un resultado con éxito la decide la acción, no su formateador. El catálogo deriva el tipo de contenido de cada acción de lo que hace la acción: una escritura, que es toda acción que no es de solo lectura, es `mutate` responda lo que responda; una lectura cuyo resultado es una lista, o una página de una lista, es `list`; y cualquier otra lectura es `detail`, incluidos el log de un job, un fichero en bruto o Markdown renderizado. La entrada de una acción en el catálogo puede declarar su tipo en su lugar, y lo hacen cinco listas porque su resultado lleva algo junto a la lista. Todos los despachadores, en todas las superficies, anotan el texto con el preajuste de ese tipo. Un resultado de error conserva la anotación con la que se escribió.
 
 ### Qué significa `audience: ["assistant"]`
 
@@ -190,7 +190,7 @@ El Markdown es para que el modelo razone sobre él, no para mostrarlo. Un client
 
 ### Qué significa la prioridad
 
-`priority` dice cuánto importa un bloque frente a los demás bloques del mismo resultado, y un valor más alto significa más. Los preajustes ordenan los tipos de respuesta, un rechazo o el resultado de una acción declarada `mutate` a 0.8 por encima de una lista a 0.4, y un cliente puede usar el valor o ignorarlo.
+`priority` dice cuánto importa un bloque frente a los demás bloques del mismo resultado, y un valor más alto significa más. Los preajustes ordenan los tipos de respuesta, un rechazo o el resultado de una escritura a 0.8 por encima de la lectura de un objeto a 0.6 y de una lista a 0.4, y un cliente puede usar el valor o ignorarlo.
 
 ## Anotaciones de herramienta
 

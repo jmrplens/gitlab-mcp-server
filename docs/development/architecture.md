@@ -459,11 +459,13 @@ the result:
 `toolutil.FinishToolResult` is the one tail every dispatcher applies, on every
 surface: it falls back to the JSON rendering when the formatter returned
 nothing, returns an error result as it is with no structured output, annotates
-every text block with the action's declared content kind
-(`AnnotationsForContentKind(route.ContentKind)`, which is `ContentAssistant`
-for an action that declares none), sets the next-step hints the Markdown
-carries on the output when its type implements `HintSetter`, and embeds the
-canonical resource last.
+every text block with the action's content kind
+(`AnnotationsForContentKind(route.ContentKind)`, the kind the catalog derives
+from what the action does unless its spec declares an override: `mutate` for a
+write, `list` for a read of a list, `detail` for any other read; see
+[Content kind](tool-surfaces-and-action-core.md#content-kind)), sets the
+next-step hints the Markdown carries on the output when its type implements
+`HintSetter`, and embeds the canonical resource last.
 
 ### Output schemas per action
 

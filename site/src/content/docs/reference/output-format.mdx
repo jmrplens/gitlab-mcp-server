@@ -167,22 +167,22 @@ The server sends both parts on every successful call and leaves the choice to th
 The next steps are written into both parts so that a client reading either one gets them. Two client behaviours are known and handled:
 
 - When a result carries `structuredContent`, Codex hands its model only that JSON and drops the Markdown ([openai/codex#10334](https://github.com/openai/codex/issues/10334)), which is one more reason the next steps are in the JSON too ([OpenAI Codex](/gitlab-mcp-server/install/clients/#openai-codex)).
-- The Codex builds bundled with ChatGPT.app refuse a fractional `priority`, so for a session that identifies itself as Codex the server rounds every priority to `0` or `1`; `GITLAB_MCP_CLIENT_COMPAT=off` turns that off.
+- The Codex builds bundled with ChatGPT.app refuse a fractional `priority`, so for a session that identifies itself as Codex the server rounds every priority to `0` or `1`, which puts a list's text at `0` and every other preset at `1`; `GITLAB_MCP_CLIENT_COMPAT=off` turns that off.
 
 ## Content annotations
 
 Every text block the server annotates carries two [MCP annotations](https://modelcontextprotocol.io/specification/2025-11-25/server/utilities/annotations): `audience`, who the block is for, and `priority`, from 0 to 1, how much it matters beside the rest of the result.
 
-| Annotation              | Audience    | Priority | Carried by                                                                                                                                         |
-| ----------------------- | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ContentList`           | `assistant` | 0.4      | The text of an action that declares the `list` content kind                                                                                        |
-| `ContentDetail`         | `assistant` | 0.6      | The text of an action that declares `detail`, and every not-found answer                                                                           |
-| `ContentMutate`         | `assistant` | 0.8      | The text of an action that declares `mutate`, and the refusals the server writes itself, such as a withheld action or a missing required parameter |
-| `ContentAssistant`      | `assistant` | 0.7      | The text of every other action: one that declares `assistant` or `image`, or no kind at all                                                        |
-| `ContentUser`           | `user`      | 0.8      | The image block of an upload or a visualization                                                                                                    |
-| `ResourceMachineDetail` | `assistant` | 0.6      | The resource block a get embeds                                                                                                                    |
+| Annotation              | Audience    | Priority | Carried by                                                                                                                                       |
+| ----------------------- | ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ContentList`           | `assistant` | 0.4      | The text of a read that returns a list                                                                                                           |
+| `ContentDetail`         | `assistant` | 0.6      | The text of any other read, and every not-found answer                                                                                           |
+| `ContentMutate`         | `assistant` | 0.8      | The text of every write, and the refusals the server writes itself, such as a withheld action or a missing required parameter                    |
+| `ContentAssistant`      | `assistant` | 0.7      | The default for a result whose action names no content kind; no tool's successful result carries it, since the catalog gives every action a kind |
+| `ContentUser`           | `user`      | 0.8      | The image block of an upload or a visualization                                                                                                  |
+| `ResourceMachineDetail` | `assistant` | 0.6      | The resource block a get embeds                                                                                                                  |
 
-The annotation of a successful result's text is decided by the action, not by its formatter: an action's catalog entry may declare a content kind (`list`, `detail`, `mutate`, `assistant` or `image`), and every dispatcher annotates the text with the preset for that kind. Few actions declare one today, and an action that declares none carries `ContentAssistant`. An error result keeps the annotation it was written with.
+The annotation of a successful result's text is decided by the action, not by its formatter. The catalog derives every action's content kind from what the action does: a write, which is any action that is not read-only, is `mutate` whatever it answers with; a read whose result is a list, or one page of a list, is `list`; and any other read is `detail`, a job trace, a raw file or rendered Markdown included. An action's catalog entry may declare its kind instead, which five lists do because their result carries something beside the list. Every dispatcher, on every surface, annotates the text with the preset for that kind. An error result keeps the annotation it was written with.
 
 ### What `audience: ["assistant"]` means
 
@@ -190,7 +190,7 @@ The Markdown is for the model to reason over, not for display. A client that sho
 
 ### What priority means
 
-`priority` says how much a block matters relative to the other blocks of the same result, higher meaning more. The presets rank the kinds of answer, a refusal or the result of an action declared `mutate` at 0.8 above a list at 0.4, and a client may use the value or ignore it.
+`priority` says how much a block matters relative to the other blocks of the same result, higher meaning more. The presets rank the kinds of answer, a refusal or the result of a write at 0.8 above a read of one object at 0.6 and a list at 0.4, and a client may use the value or ignore it.
 
 ## Tool annotations
 
