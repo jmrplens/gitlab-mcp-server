@@ -207,9 +207,11 @@ type UnpaginatedCollection struct {
 // declared reports whether a declaration accounts for this finding.
 func (c UnpaginatedCollection) declared() bool { return c.Category != "" }
 
-// paginationGrain is what [PaginationCheck.Grain] says, spelled once.
-const paginationGrain = "package: an action is asked about when the package that owns it was recorded calling an endpoint GitLab paginates, " +
-	"not when its own endpoint was seen. The endpoints on a finding are that package's, and one of them may belong to a sibling action."
+// paginationGrain is what [PaginationCheck.Grain] says, spelled once. It is
+// one literal rather than two joined with +, because gremlins reads that + as
+// arithmetic and reports its mutant as not covered: a constant initializer
+// carries no statement counter, and the - it would become does not compile.
+const paginationGrain = "package: an action is asked about when the package that owns it was recorded calling an endpoint GitLab paginates, not when its own endpoint was seen. The endpoints on a finding are that package's, and one of them may belong to a sibling action."
 
 // typeName is the name of an output type with its pointers followed, which is
 // how a finding names the type a reader goes to change. It is asked only of a

@@ -17,23 +17,27 @@ const (
 	actionScopeRemoveRunner   = "controller_scope_remove_runner"
 )
 
-// runnerDomain is the catalog domain internal/tools/runners aggregates these
-// specs into. An ActionSpec carries the bare name above, and every surface
-// resolves the domain-qualified form below, so anything that hands a model an
-// action ID reads the prefixed constant.
-const runnerDomain = "runner."
-
-// The canonical catalog IDs the bare names project to. Both readers of an
-// action ID take them from here: the RelatedActions cross-links and the
-// markdown next-step hints. A bare name resolves to nothing on any surface,
-// and nothing in the repository checks these strings, so keeping one block is
-// what keeps a hint from answering a model "unknown action".
+// The canonical catalog IDs the bare names project to, in the runner domain
+// internal/tools/runners aggregates these specs into. An ActionSpec carries
+// the bare name above, and every surface resolves the domain-qualified form
+// below, so both readers of an action ID take it from here: the
+// RelatedActions cross-links and the markdown next-step hints. A bare name
+// resolves to nothing on any surface, so keeping one block is what keeps a
+// hint from answering a model "unknown action".
+//
+// They are spelled whole rather than joined from the domain and the bare
+// names, because gremlins reads a + in a constant initializer as arithmetic and
+// reports its mutant as not covered: the initializer carries no statement
+// counter, and the - it would become does not compile. What the join
+// guaranteed, that each ID is the domain and a bare name this package
+// registers, TestMarkdownHints_NameTheSameCanonicalIDs holds instead, against
+// the domain the tests pin to the individual tool names.
 const (
-	catalogScopeList           = runnerDomain + actionScopeList
-	catalogScopeAddInstance    = runnerDomain + actionScopeAddInstance
-	catalogScopeRemoveInstance = runnerDomain + actionScopeRemoveInstance
-	catalogScopeAddRunner      = runnerDomain + actionScopeAddRunner
-	catalogScopeRemoveRunner   = runnerDomain + actionScopeRemoveRunner
+	catalogScopeList           = "runner.controller_scope_list"
+	catalogScopeAddInstance    = "runner.controller_scope_add_instance"
+	catalogScopeRemoveInstance = "runner.controller_scope_remove_instance"
+	catalogScopeAddRunner      = "runner.controller_scope_add_runner"
+	catalogScopeRemoveRunner   = "runner.controller_scope_remove_runner"
 )
 
 // ActionSpecs returns canonical specs for runner controller scope actions.

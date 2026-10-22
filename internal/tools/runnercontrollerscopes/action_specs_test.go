@@ -15,6 +15,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// runnerDomain is the catalog domain internal/tools/runners aggregates these
+// specs into, the oracle the published IDs are held to. The package spells
+// its IDs whole, so nothing in it reads the domain; the tests below hold it
+// to the individual tool names and every published ID to it.
+const runnerDomain = "runner."
+
 // TestActionSpecs_CallAllRoutes exercises every runner controller scope tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := runnerControllerScopeSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, runnerControllerScopesActionHandler())))
@@ -46,17 +52,15 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 
 // TestActionSpecs_RelatedActions_NameCanonicalCatalogIDs holds every
 // RelatedActions entry to an ID a surface can actually resolve: the domain
-// prefix plus the name of another spec here. Nothing else in the repository
-// checks these strings, and a bare action name passes every gate while
-// answering a model "unknown action" the moment it follows the cross-link.
+// prefix plus the name of another spec here. A bare action name answers a
+// model "unknown action" the moment it follows the cross-link.
 //
-// The domain itself is pinned through the individual tool names, which the doc
-// and e2e gates already hold: every tool this package registers is prefixed
-// gitlab_<domain>_, so a domain invented here stops matching them. Without that
-// line both sides of the comparison come out of runnerDomain and the test is a
-// tautology, because the constant is what builds the published IDs as well as
-// the oracle they are held to: spelling it "runners." would move the two
-// together and nothing here or anywhere else would fail.
+// The published IDs are spelled whole and the oracle is runnerDomain plus a
+// registered name, so a published ID with a wrong domain fails here. The
+// oracle's domain is pinned in turn through the individual tool names, which
+// the doc and e2e gates already hold: every tool this package registers is
+// prefixed gitlab_<domain>_, so a domain invented in the oracle stops matching
+// them.
 func TestActionSpecs_RelatedActions_NameCanonicalCatalogIDs(t *testing.T) {
 	specs := ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
 
@@ -90,10 +94,11 @@ func TestActionSpecs_RelatedActions_NameCanonicalCatalogIDs(t *testing.T) {
 // cross-links above and the hints a card closes with come from one block, and
 // this is what says that block still names the actions this package registers.
 //
-// The names are what this holds, not the domain in front of them, which comes
-// out of runnerDomain on both sides here. The domain is pinned once, against
-// the individual tool names, in the test above; asserting it a second time
-// would be a copy of a guard rather than a second property.
+// The hinted IDs are spelled whole, so this holds both halves of each: the
+// name, which must be one this package registers, and the domain in front of
+// it, which must be runnerDomain, the oracle the test above pins to the
+// individual tool names. It is what the join from the domain and the bare
+// names guaranteed before the IDs were spelled whole.
 func TestMarkdownHints_NameTheSameCanonicalIDs(t *testing.T) {
 	specs := ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
 

@@ -1033,17 +1033,18 @@ func isEmptyOrBoilerplateDescription(propSchema map[string]any) bool {
 	if trimmed == "" {
 		return true
 	}
-	// Drop the leading "The " for the boilerplate check. A bare "id" needs no
-	// case of its own: it is two characters, so the length test above has
-	// already answered it, and a case below that one could never run.
-	lc := strings.ToLower(trimmed)
-	switch {
-	case len(trimmed) < 4:
-		return true
-	case strings.HasPrefix(lc, "the ") && len(trimmed) <= len("the x")+2:
+	// A bare "id" needs no test of its own: it is two characters, so the
+	// length test answers it, and a test after that one could never run.
+	if len(trimmed) < 4 {
 		return true
 	}
-	return false
+	// Drop the leading "The " for the boilerplate check. The two tests are
+	// plain conditions rather than the cases of a tagless switch, whose
+	// conditions Go's coverage counts nowhere, so gremlins could report their
+	// mutants only as not covered although the boundary cases of
+	// TestIsEmptyOrBoilerplateDescription_Scenarios_FlagsUninformativeText
+	// pin every one.
+	return strings.HasPrefix(strings.ToLower(trimmed), "the ") && len(trimmed) <= len("the x")+2
 }
 
 func packageFor(byPackage map[string]*packageReport, owner string) *packageReport {
