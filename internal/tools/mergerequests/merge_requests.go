@@ -921,7 +921,10 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 // caller's alone: GitLab applies the merge request's own flag when it is left
 // out and keeps the branch on an explicit false, and the handler used to send
 // the flag in place of the caller's false. The read also lets a 405 be
-// explained by what blocks the merge.
+// explained by what blocks the merge, unless GitLab refused it for naming a
+// moved project by its old path: the read is a GET, which GitLab follows to
+// the new location, so it answers the merge request, while the merge is
+// refused before GitLab looks at the merge request at all.
 func Merge(ctx context.Context, client *gitlabclient.Client, input MergeInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -971,15 +974,29 @@ func Merge(ctx context.Context, client *gitlabclient.Client, input MergeInput) (
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	mr, resp, err := client.GL().MergeRequests.AcceptMergeRequest(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		if resp != nil && resp.StatusCode == http.StatusMethodNotAllowed && fetchErr == nil {
-			return Output{}, diagnoseMergeBlocker(input.MRIID, prefetched, err)
-		}
-		if toolutil.IsPermissionRefusal(err) {
-			return Output{}, toolutil.WrapErrWithHint("mrMerge", err, hintMergeRefused)
-		}
-		return Output{}, toolutil.WrapErrWithMessage("mrMerge", err)
+		return Output{}, mergeFailure(input.MRIID, resp, prefetched, fetchErr, err)
 	}
 	return mergeRequestOutput("mrMerge", mr, captured)
+}
+
+// mergeFailure is the error of a merge GitLab refused with err, answered with
+// resp: the moved project refusal as ClassifyError describes it, a 405 the
+// pre-fetched merge request explains by what blocks it, the merge permission
+// hint for a refusal of the caller's permission, and GitLab's message
+// otherwise. The moved project refusal comes first, since GitLab gives it
+// before it looks at the merge request, which the pre-fetch read through the
+// redirect all the same.
+func mergeFailure(mrIID int64, resp *gl.Response, prefetched *gl.MergeRequest, fetchErr, err error) error {
+	if toolutil.IsMovedProjectRefusal(err) {
+		return toolutil.WrapErrWithMessage("mrMerge", err)
+	}
+	if resp != nil && resp.StatusCode == http.StatusMethodNotAllowed && fetchErr == nil {
+		return diagnoseMergeBlocker(mrIID, prefetched, err)
+	}
+	if toolutil.IsPermissionRefusal(err) {
+		return toolutil.WrapErrWithHint("mrMerge", err, hintMergeRefused)
+	}
+	return toolutil.WrapErrWithMessage("mrMerge", err)
 }
 
 // Approve adds an approval to the specified merge request and returns the
@@ -2027,8 +2044,13 @@ func postCancelAutoMerge(ctx context.Context, client *gitlabclient.Client, path 
 // hint for a 404. Each route names its own nothing-to-cancel statuses: 409 on
 // cancel_auto_merge, and on the deprecated route the 405 and 406 its page
 // documents, which it does not answer with (it sends 201 and its error hash),
-// and which say nothing about a cancel on the new route.
+// and which say nothing about a cancel on the new route. A 405 refusing a
+// moved project's old path comes first, on either route, since GitLab gives
+// it before it looks at the merge request.
 func cancelAutoMergeFailure(err error, nothingToCancel ...int) error {
+	if toolutil.IsMovedProjectRefusal(err) {
+		return toolutil.WrapErrWithMessage(opCancelAutoMerge, err)
+	}
 	for _, status := range nothingToCancel {
 		if toolutil.IsHTTPStatus(err, status) {
 			return toolutil.WrapErrWithHint(opCancelAutoMerge, err, hintNoAutoMergeToCancel)

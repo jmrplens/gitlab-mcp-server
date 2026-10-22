@@ -840,6 +840,14 @@ func rotateSelfAccessToken(ctx context.Context, scopeID toolutil.StringOrInt, ex
 		// and a bot token that is not one of this project's or group's with
 		// 401 (:46), which is the same status its API guard answers a revoked
 		// token with. So the kind is the 405 and the 401 names both of its own.
+		// The project lookup between the two (:43) answers 405 too, with its
+		// own message, to a token naming a moved project by an old path. A
+		// project's and a group's access tokens both reach that lookup, since
+		// each is a project bot user, so its 405 is not the wrong kind, and it
+		// is read first.
+		if toolutil.IsMovedProjectRefusal(err) {
+			return Output{}, toolutil.WrapErrWithMessage(operation, err)
+		}
 		if toolutil.IsHTTPStatus(err, http.StatusMethodNotAllowed) {
 			return Output{}, toolutil.WrapErrWithHint(operation, err, hintResourceTokenRotateSelfWrongKind)
 		}

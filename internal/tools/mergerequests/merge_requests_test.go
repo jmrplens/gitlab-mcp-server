@@ -2122,6 +2122,57 @@ func TestCancelAutoMerge_NewRouteRefusals_AreHintedByWhatTheyMean(t *testing.T) 
 	}
 }
 
+// TestCancelAutoMerge_MovedProjectOldPath_IsNotNothingToCancel verifies that a
+// cancel naming a moved project by its old path, which GitLab refuses with
+// 405, is told to retry with the ID on both routes. The deprecated route's
+// page documents 405 as nothing to cancel, so the handler hinted that the
+// merge request was merged, closed or never set to auto-merge, none of which
+// GitLab had looked at.
+//
+// The stand-in refuses the route the version names under the old path, the
+// one request GitLab refuses this way, and answers anything else not found,
+// so a cancel that named the project another way would not read as refused.
+// The path is read escaped, since r.URL.Path decodes the %2F of the segment.
+func TestCancelAutoMerge_MovedProjectOldPath_IsNotNothingToCancel(t *testing.T) {
+	const oldPathMR = "/api/v4/projects/e2e-group%2Fold-name/merge_requests/1/"
+	tests := []struct {
+		name, version, route string
+	}{
+		{name: "the deprecated route", version: "19.4.1-ee", route: "cancel_merge_when_pipeline_succeeds"},
+		{name: "cancel_auto_merge", version: "19.5.0-ee", route: "cancel_auto_merge"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var refused atomic.Bool
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == pathVersion:
+					testutil.RespondJSON(w, http.StatusOK, `{"version":"`+tt.version+`"}`)
+				case r.Method == http.MethodPost && r.URL.EscapedPath() == oldPathMR+tt.route:
+					refused.Store(true)
+					testutil.RespondJSON(w, http.StatusMethodNotAllowed, movedProjectBody)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+
+			_, err := CancelAutoMerge(t.Context(), client, GetInput{ProjectID: "e2e-group/old-name", MRIID: 1})
+			if err == nil {
+				t.Fatal("CancelAutoMerge() error = nil, want the 405 reported")
+			}
+			if !refused.Load() {
+				t.Fatalf("CancelAutoMerge() never sent POST %s%s, so GitLab's refusal was not what it read: %v", oldPathMR, tt.route, err)
+			}
+			if !strings.Contains(err.Error(), wantMovedProjectRetry) {
+				t.Errorf("error = %q, want it to name the retry with the ID", err)
+			}
+			if strings.Contains(err.Error(), hintNoAutoMergeToCancel) {
+				t.Errorf("error = %q, must not say there was nothing to cancel", err)
+			}
+		})
+	}
+}
+
 // TestCancelAutoMerge_VersionUnknown_TheVersionReadCarriesTheCallersContext
 // verifies that the read of the version, the first request a client holding
 // none sends, carries the caller's context, so an abandoned call ends there:
@@ -5625,6 +5676,58 @@ func TestMerge_405MultipleBlockers(t *testing.T) {
 	}
 	if !strings.Contains(errMsg, "discussion") {
 		t.Errorf("expected discussion blocker, got: %v", err)
+	}
+}
+
+// movedProjectBody is GitLab's answer to a request other than a GET that names
+// a moved project by its old path (find_project! in lib/api/helpers.rb at
+// v19.4.1-ee), and wantMovedProjectRetry the part of the description
+// toolutil gives it that names the way out.
+const (
+	movedProjectBody      = `{"message":"Non GET methods are not allowed for moved projects"}`
+	wantMovedProjectRetry = "Retry with the numeric project ID or the current path, both of which project.get returns for the old path"
+)
+
+// TestMerge_MovedProjectOldPath_IsNotDiagnosedAsABlocker verifies that a merge
+// naming a moved project by its old path is told to retry with the ID, rather
+// than told what blocks the merge request.
+//
+// The pre-fetch is a GET, which GitLab follows to the project's new location,
+// so it answers the merge request, here a draft with a pipeline running. The
+// merge is a PUT, which GitLab refuses with 405 before it looks at the merge
+// request at all, and the handler used to answer that 405 with the blockers
+// it read, which are not why the merge was refused and which a model would
+// try to clear.
+func TestMerge_MovedProjectOldPath_IsNotDiagnosedAsABlocker(t *testing.T) {
+	const oldPath = "e2e-group/old-name"
+	mrBlocked := `{"id":100,"iid":1,"title":"Draft: Test","state":"opened","detailed_merge_status":"ci_still_running","has_conflicts":false,"blocking_discussions_resolved":true,"draft":true}`
+	var fetched atomic.Bool
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/"+oldPath+"/merge_requests/1":
+			http.Redirect(w, r, pathMR1, http.StatusMovedPermanently)
+		case r.Method == http.MethodGet && r.URL.Path == pathMR1:
+			fetched.Store(true)
+			testutil.RespondJSON(w, http.StatusOK, mrBlocked)
+		case r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/"+oldPath+"/merge_requests/1/merge":
+			testutil.RespondJSON(w, http.StatusMethodNotAllowed, movedProjectBody)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	_, err := Merge(t.Context(), client, MergeInput{ProjectID: oldPath, MRIID: 1})
+	if err == nil {
+		t.Fatal("Merge() error = nil, want the 405 reported")
+	}
+	if !fetched.Load() {
+		t.Fatal("the pre-fetch did not follow the redirect to the project's new location, so the blockers were never read")
+	}
+	if !strings.Contains(err.Error(), wantMovedProjectRetry) {
+		t.Errorf("Merge() error = %q, want it to name the retry with the ID", err)
+	}
+	if strings.Contains(err.Error(), "cannot be merged") {
+		t.Errorf("Merge() error = %q, must not diagnose a blocker GitLab never reached", err)
 	}
 }
 

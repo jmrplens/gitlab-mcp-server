@@ -2896,3 +2896,32 @@ func TestSelfRoutes_WrongCredentialKind_HintedOnGitLabsStatus(t *testing.T) {
 		})
 	}
 }
+
+// TestProjectRotateSelf_MovedProjectOldPath_IsNotTheWrongKind verifies that a
+// project access token rotating itself through its project's old path is told
+// to retry with the ID, not that it is the wrong kind of token.
+//
+// The route refuses the wrong kind with 405 before it looks the project up
+// (resource_access_tokens/self_rotation.rb:40-41), and the project lookup,
+// find_project!, refuses a non-GET request naming a moved project by its old
+// path with 405 too, with its own message. Only a resource access token's bot
+// user reaches it, a project's or a group's naming a project it can read,
+// since every other kind is refused first. The handler used to read the
+// status alone, and told a project or group access token that only a project
+// or group access token could rotate itself here.
+func TestProjectRotateSelf_MovedProjectOldPath_IsNotTheWrongKind(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusMethodNotAllowed, `{"message":"Non GET methods are not allowed for moved projects"}`)
+	}))
+
+	_, err := ProjectRotateSelf(t.Context(), client, ProjectRotateSelfInput{ProjectID: "e2e-group/old-name"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if want := "Retry with the numeric project ID or the current path"; !strings.Contains(err.Error(), want) {
+		t.Errorf(fmtExpErrContaining, want, err)
+	}
+	if strings.Contains(err.Error(), hintResourceTokenRotateSelfWrongKind) {
+		t.Errorf("error = %q, must not say the token is the wrong kind", err)
+	}
+}
