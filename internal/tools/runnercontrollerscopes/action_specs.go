@@ -47,7 +47,7 @@ const (
 // "Returns: … See also: …" individual-tool description) per the 1:1 audit.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		runnerControllerScopeReadSpec(actionScopeList, toolutil.RouteAction(client, List), "gitlab_runner_controller_scope_list", listScopeMeta()),
+		runnerControllerScopeListSpec(actionScopeList, toolutil.RouteAction(client, List), "gitlab_runner_controller_scope_list", listScopeMeta()),
 		runnerControllerScopeCreateSpec(actionScopeAddInstance, toolutil.RouteAction(client, AddInstanceScope), "gitlab_runner_controller_scope_add_instance", addInstanceScopeMeta()),
 		runnerControllerScopeDeleteSpec(actionScopeRemoveInstance, toolutil.DestructiveAction(client, removeInstanceScopeOutput), "gitlab_runner_controller_scope_remove_instance", removeInstanceScopeMeta()),
 		runnerControllerScopeCreateSpec(actionScopeAddRunner, toolutil.RouteAction(client, AddRunnerScope), "gitlab_runner_controller_scope_add_runner", addRunnerScopeMeta()),
@@ -145,8 +145,15 @@ func removeRunnerScopeOutput(ctx context.Context, client *gitlabclient.Client, i
 	return out, nil
 }
 
-func runnerControllerScopeReadSpec(name string, route toolutil.ActionRoute, individualTool string, meta scopeActionMeta) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, runnerControllerScopeOptions(individualTool, meta))
+// runnerControllerScopeListSpec builds the one read, the scope listing. It
+// declares itself a list because the output's shape cannot show it: the
+// instance-level and the runner-level scopings are two lists side by side,
+// with no pagination block, which the catalog would derive as a read of one
+// object.
+func runnerControllerScopeListSpec(name string, route toolutil.ActionRoute, individualTool string, meta scopeActionMeta) toolutil.ActionSpec {
+	options := runnerControllerScopeOptions(individualTool, meta)
+	options.ContentKind = toolutil.ActionSpecContentList
+	return toolutil.NewReadActionSpec(name, route, options)
 }
 
 func runnerControllerScopeCreateSpec(name string, route toolutil.ActionRoute, individualTool string, meta scopeActionMeta) toolutil.ActionSpec {

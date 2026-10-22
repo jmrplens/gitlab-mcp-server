@@ -235,7 +235,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminUpdateSpec("bulk_import_cancel", ownerBulkImports, toolutil.RouteAction(client, bulkimports.Cancel), "gitlab_cancel_bulk_import"),
 		adminReadSpec("bulk_import_entity_list", ownerBulkImports, toolutil.RouteAction(client, bulkimports.ListEntities), "gitlab_list_bulk_import_entities"),
 		adminReadSpec("bulk_import_entity_get", ownerBulkImports, toolutil.RouteAction(client, bulkimports.GetEntity), "gitlab_get_bulk_import_entity"),
-		adminReadSpec("bulk_import_entity_failures", ownerBulkImports, toolutil.RouteAction(client, bulkimports.ListEntityFailures), "gitlab_list_bulk_import_entity_failures"),
+		adminListSpec("bulk_import_entity_failures", ownerBulkImports, toolutil.RouteAction(client, bulkimports.ListEntityFailures), "gitlab_list_bulk_import_entity_failures"),
 		adminReadSpec("error_tracking_list", ownerErrorTracking, toolutil.RouteAction(client, errortracking.ListClientKeys), "gitlab_list_error_tracking_client_keys"),
 		adminCreateSpec("error_tracking_create", ownerErrorTracking, toolutil.RouteAction(client, errortracking.CreateClientKey), "gitlab_create_error_tracking_client_key"),
 		adminDeleteSpec("error_tracking_delete", ownerErrorTracking, toolutil.DestructiveVoidAction(client, errortracking.DeleteClientKey), "gitlab_delete_error_tracking_client_key"),
@@ -274,6 +274,15 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 
 func adminReadSpec(name, owner string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, adminOptions(owner, individualTool))
+}
+
+// adminListSpec is adminReadSpec for a list the output's shape cannot show:
+// one published beside the identifiers it was asked for, with no pagination
+// block, which the catalog would derive as a read of one object.
+func adminListSpec(name, owner string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := adminOptions(owner, individualTool)
+	options.ContentKind = toolutil.ActionSpecContentList
+	return toolutil.NewReadActionSpec(name, route, options)
 }
 
 func adminCreateSpec(name, owner string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

@@ -129,7 +129,6 @@ func securityAttributeOptions(individualTool, description string) toolutil.Actio
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "securityattributes",
-		ContentKind:    toolutil.ActionSpecContentMutate,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool), Description: description},
 	}
 }

@@ -69,6 +69,68 @@ func TestCollectedActionSpecs_ProjectIntoActionCatalog(t *testing.T) {
 	}
 }
 
+// TestCollectedActionSpecs_ContentKindDeclarations_OverrideTheDerivation
+// holds every content kind a spec declares to the one thing a declaration is
+// for: naming a kind the catalog would otherwise get wrong (issue 1168).
+//
+// The catalog derives the kind from what the action does
+// ([toolutil.ResolveContentKind]), so a declaration agreeing with it answers
+// nothing and would only hide the derivation from the next reader. Five
+// packages declared a kind on every action before the derivation existed,
+// nearly all of them what the derivation gives; what is left is the handful
+// of lists whose output carries something beside the list and no pagination
+// block. The specs of both instances are read, since GitLab.com collects
+// actions a self-managed instance does not, and so are the two kinds of spec
+// the catalog takes from elsewhere: the gitlab_server group's, which the
+// catalog adds after the collected groups, and the standalone utilities',
+// which the meta and individual surfaces register from their own projection.
+// That projection carries no declaration today, and reading it is what holds
+// one to this rule the day it does.
+func TestCollectedActionSpecs_ContentKindDeclarations_OverrideTheDerivation(t *testing.T) {
+	instances := []struct {
+		name   string
+		dotcom bool
+	}{{name: "self-managed"}, {name: "GitLab.com", dotcom: true}}
+	for _, instance := range instances {
+		t.Run(instance.name, func(t *testing.T) {
+			declarations := 0
+			for _, group := range everyDeclaringSpecGroup(t, UnboundClient(instance.dotcom)) {
+				for _, spec := range group.Actions {
+					if strings.TrimSpace(spec.ContentKind) == "" {
+						continue
+					}
+					declarations++
+					undeclared := spec
+					undeclared.ContentKind = ""
+					if derived := toolutil.ResolveContentKind(undeclared); derived == strings.TrimSpace(spec.ContentKind) {
+						t.Errorf("%s %s declares content kind %q, which the catalog derives anyway; remove the declaration",
+							group.ToolName, spec.Name, spec.ContentKind)
+					}
+				}
+			}
+			if declarations == 0 {
+				t.Error("no spec declares a content kind, so the rule was never exercised")
+			}
+		})
+	}
+}
+
+// everyDeclaringSpecGroup is every spec a content kind can be declared on,
+// grouped by the tool that serves it: the collected domain groups, the
+// gitlab_server group's specs, and each standalone utility's projection.
+func everyDeclaringSpecGroup(t *testing.T, client *gitlabclient.Client) []ActionSpecGroup {
+	t.Helper()
+	groups := append(CollectActionSpecs(client), ActionSpecGroup{ToolName: "gitlab_server", Actions: mcpHealthActionSpecs(client)})
+	for _, standalone := range StandaloneSurfaceToolSpecs(client) {
+		spec, err := standalone.ActionSpec()
+		if err != nil {
+			t.Fatalf("%s ActionSpec() error = %v", standalone.Name, err)
+		}
+		groups = append(groups, ActionSpecGroup{ToolName: standalone.Name, Actions: []toolutil.ActionSpec{spec}})
+	}
+	return groups
+}
+
 // TestCollectedActionSpecs_KnownGuidancePreserved covers CollectedActionSpecs with table-driven subtests for known guidance preserved.
 func TestCollectedActionSpecs_KnownGuidancePreserved(t *testing.T) {
 	specsByTool, err := actionSpecGroupsByTool(CollectActionSpecs(newGitLabDotComClient(t)))

@@ -19,7 +19,7 @@ const (
 // ActionSpecs returns canonical specs for merge request changes and diff version actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		mrChangeReadSpec("changes_get", toolutil.RouteAction(client, Get), "gitlab_mr_changes_get"),
+		mrChangeListSpec("changes_get", toolutil.RouteAction(client, Get), "gitlab_mr_changes_get"),
 		mrChangeReadSpec("raw_diffs", toolutil.RouteAction(client, RawDiffs), "gitlab_mr_raw_diffs"),
 		mrChangeReadSpec("diff_versions_list", toolutil.RouteAction(client, ListDiffVersions), "gitlab_mr_diff_versions_list"),
 		mrChangeReadSpec("diff_version_get", toolutil.RouteAction(client, GetDiffVersion), "gitlab_mr_diff_version_get"),
@@ -34,6 +34,17 @@ func mrChangeReadSpec(name string, route toolutil.ActionRoute, individualTool st
 	options := mrChangeOptions(individualTool)
 	decorateMRChangeMeta(&options, individualTool)
 	return toolutil.NewReadActionSpec(name, route, options)
+}
+
+// mrChangeListSpec is mrChangeReadSpec for the changed files, a list the
+// output's shape cannot show: GitLab pages the diffs, and one page of them is
+// published beside the merge_request_iid it was asked for and the paths whose
+// diff came back empty, with no pagination block, which the catalog would
+// derive as a read of one object.
+func mrChangeListSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	spec := mrChangeReadSpec(name, route, individualTool)
+	spec.ContentKind = toolutil.ActionSpecContentList
+	return spec
 }
 
 // decorateMRChangeMeta applies the per-action discovery metadata, replacing the

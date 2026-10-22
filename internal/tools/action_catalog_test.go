@@ -6,6 +6,7 @@ import (
 	"maps"
 	"net/http"
 	"os"
+	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
@@ -1327,12 +1328,17 @@ func TestTable_CoversTheCatalog(t *testing.T) {
 // every action any tier of either serves. Each resolves to list, detail or
 // mutate, never the assistant default it fell back to while only five
 // packages declared a kind; the action and the route the dispatchers annotate
-// from carry the same one; a write is a mutation; no read is; and a read
-// whose output is a collection envelope is a list.
+// from carry the same one; a write is a mutation; no read is; a read whose
+// output is a collection envelope is a list; and so is a read that takes a page
+// and publishes one list of objects, whatever sits beside it.
 //
 // A new action therefore cannot reach a client annotated as nothing in
 // particular, and an override that called a write a detail, or a page of rows
-// something else, fails here rather than being served.
+// something else, fails here rather than being served. The last rule is the
+// one the derivation cannot apply itself: a page of a list published beside
+// an echo of its scope reads as one object to the shape, and the input that
+// takes a page is what says it is not, so such an action fails here until it
+// declares the list override.
 func TestBuildActionCatalog_EveryAction_ResolvesToListDetailOrMutate(t *testing.T) {
 	instances := []struct {
 		name   string
@@ -1379,8 +1385,50 @@ func contentKindProblem(action actioncatalog.Action) string {
 		return "is a read annotated as a mutation"
 	case action.ReadOnly && toolutil.CollectionShapeOf(action.Route.OutputType).IsCollection() && kind != toolutil.ActionSpecContentList:
 		return fmt.Sprintf("reads a collection envelope and is annotated as %s, want list", kind)
+	case action.ReadOnly && takesAPage(action.Route) && publishedObjectLists(action.Route.OutputType) == 1 && kind != toolutil.ActionSpecContentList:
+		return fmt.Sprintf("takes a page and publishes one list of objects, and is annotated as %s; declare the list override", kind)
 	}
 	return ""
+}
+
+// takesAPage reports whether a route's input schema accepts a page number,
+// which every paginated GitLab list takes through toolutil.PaginationInput.
+func takesAPage(route toolutil.ActionRoute) bool {
+	properties, _ := route.InputSchema["properties"].(map[string]any)
+	_, ok := properties["page"]
+	return ok
+}
+
+// publishedObjectLists counts the lists of objects an output type publishes,
+// following the untagged embeds whose fields encoding/json promotes. A read of
+// one object that carries several lists, such as a group with its projects
+// and its shared projects, is not a page of any one of them, so only a single
+// list is read as the page the input asks for.
+func publishedObjectLists(outputType reflect.Type) int {
+	if outputType == nil || derefType(outputType).Kind() != reflect.Struct {
+		return 0
+	}
+	outputType = derefType(outputType)
+	lists := 0
+	for field := range outputType.Fields() {
+		fieldType := derefType(field.Type)
+		switch {
+		case field.Anonymous && fieldType.Kind() == reflect.Struct && field.Tag.Get("json") == "":
+			lists += publishedObjectLists(fieldType)
+		case !field.IsExported() || field.Tag.Get("json") == "-":
+		case fieldType.Kind() == reflect.Slice && derefType(fieldType.Elem()).Kind() == reflect.Struct:
+			lists++
+		}
+	}
+	return lists
+}
+
+// derefType follows pointers to the type underneath.
+func derefType(t reflect.Type) reflect.Type {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	return t
 }
 
 // mustBuildDynamicActionCatalogForTest builds dynamic action catalog for test test fixtures and fails the test on error.

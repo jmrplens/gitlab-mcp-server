@@ -48,7 +48,6 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 // getSpec builds the canonical read spec for a single saved view.
 func getSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	opts := savedViewOptions("gitlab_work_item_saved_view_get")
-	opts.ContentKind = toolutil.ActionSpecContentDetail
 	opts.Usage = "Get one work item saved view by namespace_path plus its numeric saved_view_id. This is the only action that returns the view's filters, so use it whenever the prompt asks what a view actually matches."
 	opts.Aliases = append(opts.Aliases, "get work item saved view", "show saved view filters", "read saved view definition")
 	opts.RelatedActions = []string{actionList, actionUpdate, actionDelete}
@@ -59,7 +58,6 @@ func getSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 // listSpec builds the canonical read spec for a page of saved views.
 func listSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	opts := savedViewOptions("gitlab_work_item_saved_view_list")
-	opts.ContentKind = toolutil.ActionSpecContentList
 	opts.Usage = "List the work item saved views under one group or project namespace, with cursor pagination. Use this to discover a view's numeric ID before getting, updating, subscribing to, or deleting it. Filters are omitted from every entry, so read them with " + actionGet + "."
 	opts.Aliases = append(opts.Aliases, "list work item saved views", "show saved views for namespace", "find saved work item filters")
 	opts.RelatedActions = []string{actionGet, actionCreate, actionWorkItemList}
@@ -199,7 +197,6 @@ func savedViewOptions(individualTool string) toolutil.ActionSpecOptions {
 		RelatedActions: []string{actionGet, actionList},
 		OpenWorld:      true,
 		OwnerPackage:   "workitemsavedviews",
-		ContentKind:    toolutil.ActionSpecContentMutate,
 		IndividualTool: toolutil.IndividualToolSpec{
 			Name:  individualTool,
 			Title: toolutil.TitleFromName(individualTool),

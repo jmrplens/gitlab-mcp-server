@@ -25,7 +25,7 @@ const (
 // Description in "Returns: … See also: …" form.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		submoduleReadSpec("list_submodules", toolutil.RouteAction(client, List), "gitlab_list_repository_submodules"),
+		submoduleListSpec("list_submodules", toolutil.RouteAction(client, List), "gitlab_list_repository_submodules"),
 		submoduleReadSpec("read_submodule_file", toolutil.RouteAction(client, Read), "gitlab_read_repository_submodule_file"),
 		submoduleUpdateSpec("update_submodule", toolutil.RouteAction(client, Update), "gitlab_update_repository_submodule"),
 	}
@@ -35,6 +35,15 @@ func submoduleReadSpec(name string, route toolutil.ActionRoute, individualTool s
 	options := submoduleOptions(individualTool)
 	decorateSubmoduleMeta(&options, individualTool)
 	return toolutil.NewReadActionSpec(name, route, options)
+}
+
+// submoduleListSpec is submoduleReadSpec for the listing, a list the output's
+// shape cannot show: the submodules are published beside their count, with no
+// pagination block, which the catalog would derive as a read of one object.
+func submoduleListSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	spec := submoduleReadSpec(name, route, individualTool)
+	spec.ContentKind = toolutil.ActionSpecContentList
+	return spec
 }
 
 func submoduleUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

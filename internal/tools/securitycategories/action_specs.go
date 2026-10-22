@@ -67,7 +67,6 @@ func securityCategoryOptions(individualTool, description string) toolutil.Action
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "securitycategories",
-		ContentKind:    toolutil.ActionSpecContentMutate,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool), Description: description},
 	}
 }

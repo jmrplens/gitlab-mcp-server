@@ -206,7 +206,6 @@ func userAchievementReorderSpec(route toolutil.ActionRoute) toolutil.ActionSpec 
 
 func userListSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	opts := achievementOptions(toolUserList)
-	opts.ContentKind = toolutil.ActionSpecContentList
 	opts.Usage = "List the awards one user holds, found by username and paginated by cursor. This is the person-centered view: achievement.recipients answers the opposite question, who holds one badge. Set include_hidden to also return awards the user hid from their profile, which only they and namespace maintainers or owners can see."
 	opts.Aliases = append(opts.Aliases, "list a user's achievements", "what badges does this person hold", "show achievements on a profile")
 	opts.RelatedActions = []string{actionRecipients, actionUserAchievementReorder, actionAward}
@@ -231,7 +230,6 @@ func userListSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 
 func listSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	opts := achievementOptions(toolList)
-	opts.ContentKind = toolutil.ActionSpecContentList
 	opts.Usage = "List the achievements a namespace defines, found by its full_path and paginated by cursor. This is the action that turns a namespace path into the numeric achievement_id every other action needs. It returns badge definitions, not who holds them, which is what achievement.recipients answers."
 	opts.Aliases = append(opts.Aliases, "list achievements in a namespace", "what badges does this group define", "find an achievement id")
 	opts.RelatedActions = []string{actionRecipients, actionCreate, actionAward}
@@ -247,7 +245,6 @@ func listSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 
 func recipientsSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	opts := achievementOptions(toolRecipients)
-	opts.ContentKind = toolutil.ActionSpecContentList
 	opts.Usage = "List every award of one achievement, including repeat awards to the same person and awards already revoked. Use achievement.unique_users instead to count distinct holders, and achievement.user_list to look at one person rather than one badge. Each entry carries the user_achievement_id that revoke and delete take."
 	opts.Aliases = append(opts.Aliases, "who holds this achievement", "list awards of a badge", "show achievement recipients")
 	opts.RelatedActions = []string{actionUniqueUsers, actionUserList, actionRevoke}
@@ -263,7 +260,6 @@ func recipientsSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 
 func uniqueUsersSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	opts := achievementOptions(toolUniqueUsers)
-	opts.ContentKind = toolutil.ActionSpecContentList
 	opts.Usage = "List the distinct users who hold one achievement, counting a person once however many times they were awarded it. Use achievement.recipients instead when the award records themselves are wanted, because this action returns user profiles and carries no user_achievement_id to revoke or delete with."
 	opts.Aliases = append(opts.Aliases, "distinct holders of an achievement", "how many people have this badge", "unique achievement recipients")
 	opts.RelatedActions = []string{actionRecipients, actionUserList, actionList}
@@ -290,7 +286,6 @@ func achievementOptions(individualTool string) toolutil.ActionSpecOptions {
 		Tags:         []string{"achievement", "badge", "user", "namespace", "graphql"},
 		OpenWorld:    true,
 		OwnerPackage: "achievements",
-		ContentKind:  toolutil.ActionSpecContentMutate,
 		IndividualTool: toolutil.IndividualToolSpec{
 			Name:  individualTool,
 			Title: toolutil.TitleFromName(individualTool),

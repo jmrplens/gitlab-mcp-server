@@ -293,22 +293,24 @@ func TestActionSpecs_IDGuidanceSeparatesTheTwoIdentifiers(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_ListActionsAreListContent asserts the paginated reads declare
-// the list content kind, which is what drives the next-step hints and the
-// Markdown formatter lookup for a list result.
+// TestActionSpecs_ListActionsAreListContent asserts the paginated reads
+// resolve to the list content kind and the writes to mutate, which is the
+// annotation their results are served with. Neither is declared: the catalog
+// derives both from what each action does, and a declaration that agreed with
+// it would answer nothing.
 func TestActionSpecs_ListActionsAreListContent(t *testing.T) {
 	byAction := specsByAction(t)
 	for _, action := range []string{"list", "user_list", "recipients", "unique_users"} {
 		t.Run(action, func(t *testing.T) {
-			if got := byAction[action].ContentKind; got != toolutil.ActionSpecContentList {
-				t.Errorf("ContentKind = %q, want %q", got, toolutil.ActionSpecContentList)
+			if got := toolutil.ResolveContentKind(byAction[action]); got != toolutil.ActionSpecContentList {
+				t.Errorf("ResolveContentKind() = %q, want %q", got, toolutil.ActionSpecContentList)
 			}
 		})
 	}
 	for _, action := range []string{"create", "update", "delete", "award", "revoke"} {
 		t.Run(action, func(t *testing.T) {
-			if got := byAction[action].ContentKind; got != toolutil.ActionSpecContentMutate {
-				t.Errorf("ContentKind = %q, want %q", got, toolutil.ActionSpecContentMutate)
+			if got := toolutil.ResolveContentKind(byAction[action]); got != toolutil.ActionSpecContentMutate {
+				t.Errorf("ResolveContentKind() = %q, want %q", got, toolutil.ActionSpecContentMutate)
 			}
 		})
 	}

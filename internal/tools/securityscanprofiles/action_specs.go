@@ -68,6 +68,9 @@ func detachSpec(name string, route toolutil.ActionRoute, individualTool, descrip
 // profile statuses on a project.
 func listProjectStatusesSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := scanProfileOptions(individualTool, description)
+	// A list the output's shape cannot show: the statuses are published beside
+	// the project_full_path they were asked for, with no pagination block, so
+	// the catalog would derive a detail.
 	options.ContentKind = toolutil.ActionSpecContentList
 	options.Usage = "List the security scan profile statuses for a project by full path (namespace/project). Use this to check which scan profiles are active, pending, failing, or not configured before attaching or detaching."
 	options.Aliases = []string{"list scan profile statuses", "get project scan profile status", "show security scan configuration status", "check scan profile status"}
@@ -82,7 +85,6 @@ func scanProfileOptions(individualTool, description string) toolutil.ActionSpecO
 		OpenWorld:      true,
 		Edition:        "ultimate",
 		OwnerPackage:   "securityscanprofiles",
-		ContentKind:    toolutil.ActionSpecContentMutate,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool), Description: description},
 	}
 }
