@@ -334,6 +334,24 @@ func DoAnswer[O any](s *Session, id ActionID, params map[string]any, opts ...Cal
 	return output, answer.text
 }
 
+// DoResult runs an action like Do and hands back the whole tool result rather
+// than what it decodes into, for a test whose subject is the envelope the
+// server wrapped the answer in: the annotation a content block carries, or a
+// block beside the text. It goes through the projection like every other verb,
+// so it names the tool the surface registers and the coverage record credits
+// the action, which a raw call does neither of.
+func DoResult(s *Session, id ActionID, params map[string]any, opts ...CallOption) *mcp.CallToolResult {
+	s.env.T.Helper()
+
+	resolved := resolveCallOptions(opts)
+	answer := s.invoke(id, params, resolved)
+	if !answer.ok() {
+		s.env.T.Fatalf("%s: %s%s", callLabel(id, resolved), answer.describe(), s.conn.failureContext())
+		return nil
+	}
+	return answer.result
+}
+
 // Try runs an action and hands back both halves, for a test whose subject is
 // the failure itself rather than a named class of it.
 func Try[O any](s *Session, id ActionID, params map[string]any, opts ...CallOption) (O, error) {

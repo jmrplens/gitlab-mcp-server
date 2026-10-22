@@ -1,8 +1,10 @@
 //go:build e2e
 
-// mcp_annotations_test.go covers the MCP tool annotations the binary publishes
-// on tools/list: the destructive and read-only hints a client reads to decide
-// whether a tool needs confirmation and whether it is safe to retry.
+// mcp_annotations_test.go covers the MCP annotations the binary publishes: the
+// destructive and read-only hints on tools/list a client reads to decide
+// whether a tool needs confirmation and whether it is safe to retry, and the
+// content annotations a result's text carries, which rank a list, a read and
+// a write against each other.
 //
 // The hints are catalog metadata, but nothing else in this suite reads them
 // off the served surface: the sweeps and the tier test compare names and
@@ -14,9 +16,13 @@
 package common
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
 
@@ -138,6 +144,67 @@ func TestAnnotations_EveryToolIsAnnotated(t *testing.T) {
 			t.Logf("checked %d %s tools for complete annotations", len(tools), surface)
 		})
 	}
+}
+
+// The priorities of the three content annotation presets a result's text is
+// served with, as the output format reference documents them: a page of list
+// rows ranks below a read of one object, and both below the confirmation of a
+// write.
+const (
+	listPriority   = 0.4
+	detailPriority = 0.6
+	mutatePriority = 0.8
+)
+
+// TestAnnotations_ResultPriority_FollowsWhatTheActionDoes runs a list, a read
+// of one object and a write on every surface, and holds the text each answers
+// with to the preset of its kind: 0.4, 0.6 and 0.8, all three for the
+// assistant (issue 1168).
+//
+// None of the three actions declares a content kind, which is the point. Only
+// five packages declared one, and every other action was served the
+// assistant default of 0.7 whether it listed, read or wrote, so a client
+// ranking a write's confirmation above a page of rows had nothing to rank by.
+// The kind is derived by the catalog now, and only the served result shows
+// that the derivation reached every dispatcher.
+func TestAnnotations_ResultPriority_FollowsWhatTheActionDoes(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("priority"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		params := map[string]any{"project_id": project.IDParam()}
+
+		assertTextPriority(e, "branch.list", harness.DoResult(s, actionBranchList, params), listPriority)
+		assertTextPriority(e, "project.get", harness.DoResult(s, actionProjectGet, params), detailPriority)
+		assertTextPriority(e, "branch.create", harness.DoResult(s, actionBranchCreate, withParams(params, map[string]any{
+			"branch_name": "priority/" + e.Name("br"),
+			"ref":         project.DefaultBranch,
+		})), mutatePriority)
+	})
+}
+
+// assertTextPriority fails unless the first text block of a result is for
+// the assistant at the priority given.
+func assertTextPriority(e *harness.Env, label string, result *mcp.CallToolResult, want float64) {
+	e.T.Helper()
+	for _, content := range result.Content {
+		text, ok := content.(*mcp.TextContent)
+		if !ok {
+			continue
+		}
+		switch {
+		case text.Annotations == nil:
+			e.T.Errorf("%s: the text block carries no annotations, want priority %v for the assistant", label, want)
+		case text.Annotations.Priority != want:
+			e.T.Errorf("%s: the text block has priority %v, want %v", label, text.Annotations.Priority, want)
+		case !slices.Equal(text.Annotations.Audience, []mcp.Role{"assistant"}):
+			e.T.Errorf("%s: the text block is for %v, want the assistant", label, text.Annotations.Audience)
+		}
+		return
+	}
+	e.T.Errorf("%s: the result carries no text block among %d content block(s)", label, len(result.Content))
 }
 
 // nameHasDestructiveVerb reports whether an individual tool name carries a

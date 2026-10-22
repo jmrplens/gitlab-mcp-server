@@ -26,14 +26,17 @@ func TestPlanted_PremiumInCommon_Reported(t *testing.T) {
 }
 
 // TestPlanted_DiscardedResult_Reported throws the answers of the
-// result-bearing verbs away, four ways, the last through a parenthesized
-// callee.
+// result-bearing verbs away, six ways, the fourth through a parenthesized
+// callee and the last two through the verbs that hand back the server's words
+// and the whole tool result.
 func TestPlanted_DiscardedResult_Reported(t *testing.T) {
 	s := harness.New(t).Session()
 	_ = harness.Do[map[string]any](s, "issue.get", nil)
 	_, _ = harness.Try[map[string]any](s, "issue.get", nil)
 	harness.Eventually(s, "issue.get", nil, func(map[string]any) bool { return true })
 	_ = (harness.Do[map[string]any])(s, "issue.get", nil)
+	_, _ = harness.DoAnswer[map[string]any](s, "issue.get", nil)
+	_ = harness.DoResult(s, "issue.get", nil)
 }
 
 // TestPlanted_KeptResult_Clean reads its answers, so the same verbs are not
@@ -49,6 +52,12 @@ func TestPlanted_KeptResult_Clean(t *testing.T) {
 	}
 	if _, err := harness.Try[map[string]any](s, listIssues, nil); err != nil {
 		t.Log(err)
+	}
+	if _, said := harness.DoAnswer[map[string]any](s, listIssues, nil); said != "" {
+		t.Log(said)
+	}
+	if harness.DoResult(s, listIssues, nil) != nil {
+		t.Log("a result")
 	}
 	_ = harness.Refused(s, listIssues, nil, harness.FailureNotFound)
 	_ = harness.ExpectToolError(s, listIssues, nil, "not found")

@@ -77,6 +77,19 @@ func Do[O any](s *Session, id ActionID, params map[string]any) O {
 	return output
 }
 
+// DoAnswer runs an action and hands back its answer with the server's words.
+func DoAnswer[O any](s *Session, id ActionID, params map[string]any) (O, string) {
+	var output O
+	_, _, _ = s, id, params
+	return output, ""
+}
+
+// DoResult runs an action and hands back the whole tool result.
+func DoResult(s *Session, id ActionID, params map[string]any) map[string]any {
+	_, _, _ = s, id, params
+	return nil
+}
+
 // DoVoid runs an action whose answer the test does not read.
 func DoVoid(s *Session, id ActionID, params map[string]any) {
 	_, _, _ = s, id, params

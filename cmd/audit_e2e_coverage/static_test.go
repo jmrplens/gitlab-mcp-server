@@ -120,6 +120,8 @@ func TestRunStatic_PlantedDefects_EachReported(t *testing.T) {
 			"test/e2e/gitlab/common/planted_test.go the result of Do(a non-constant id) is discarded: read it, or call DoVoid",
 			"test/e2e/gitlab/common/planted_test.go the result of Do(issue.get) is discarded: read it, or call DoVoid",
 			"test/e2e/gitlab/common/planted_test.go the result of Do(issue.get) is discarded: read it, or call DoVoid",
+			"test/e2e/gitlab/common/planted_test.go the result of DoAnswer(issue.get) is discarded: read it, or call DoVoid",
+			"test/e2e/gitlab/common/planted_test.go the result of DoResult(issue.get) is discarded: read it, or call DoVoid",
 			"test/e2e/gitlab/common/planted_test.go the result of Eventually(issue.get) is discarded: read it, or call DoVoid",
 			"test/e2e/gitlab/common/planted_test.go the result of Try(issue.get) is discarded: read it, or call DoVoid",
 		}},

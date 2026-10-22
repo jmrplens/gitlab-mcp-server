@@ -33,14 +33,17 @@ type verbShape struct {
 	// idArg is the index of the ActionID parameter.
 	idArg int
 	// resultBearing is whether discarding the verb's answer is a finding:
-	// Do and Eventually decode an answer the test is expected to read, and
-	// Try hands both halves back for the test to judge.
+	// Do and Eventually decode an answer the test is expected to read,
+	// DoAnswer adds the server's own words to it, DoResult hands back the
+	// whole tool result, and Try hands both halves back for the test to judge.
 	resultBearing bool
 }
 
 // harnessVerbs are the harness calls that name an action.
 var harnessVerbs = map[string]verbShape{
 	"Do":              {idArg: 1, resultBearing: true},
+	"DoAnswer":        {idArg: 1, resultBearing: true},
+	"DoResult":        {idArg: 1, resultBearing: true},
 	"DoVoid":          {idArg: 1},
 	"Try":             {idArg: 1, resultBearing: true},
 	"Refused":         {idArg: 1},
