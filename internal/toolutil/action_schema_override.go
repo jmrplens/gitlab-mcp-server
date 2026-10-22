@@ -2,6 +2,7 @@ package toolutil
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -75,28 +76,149 @@ func SchemaOneOfRequired(propertyNames ...string) InputSchemaOverride {
 }
 
 // requiredAlternatives returns a root override holding, under keyword, one
-// branch per property name, built by branch. Names are trimmed, a blank one
-// is left out and a repeated one kept once, and no name left is no override,
-// which [ActionSpec.Validate] refuses as empty.
-//
-// A repeated name matters to oneOf: a call sending it would satisfy both of
-// its branches, and oneOf refuses a call that satisfies more than one, so
-// every call naming it would be refused.
+// branch per property name, built by branch, and no override when no name is
+// left, which [ActionSpec.Validate] refuses as empty.
 func requiredAlternatives(keyword string, propertyNames []string, branch func(string) map[string]any) InputSchemaOverride {
-	branches := make([]any, 0, len(propertyNames))
-	seen := make(map[string]bool, len(propertyNames))
-	for _, propertyName := range propertyNames {
-		propertyName = strings.TrimSpace(propertyName)
-		if propertyName == "" || seen[propertyName] {
-			continue
-		}
-		seen[propertyName] = true
-		branches = append(branches, branch(propertyName))
-	}
+	branches := alternativeBranches(propertyNames, branch)
 	if len(branches) == 0 {
 		return InputSchemaOverride{}
 	}
 	return SchemaRootOverride(map[string]any{keyword: branches})
+}
+
+// alternativeBranches returns one branch per property name, built by branch,
+// in the order the names come.
+func alternativeBranches(propertyNames []string, branch func(string) map[string]any) []any {
+	names := alternativeNames(propertyNames)
+	branches := make([]any, 0, len(names))
+	for _, name := range names {
+		branches = append(branches, branch(name))
+	}
+	return branches
+}
+
+// alternativeNames returns the property names an alternative is built of:
+// trimmed, a blank one left out and a repeated one kept once.
+//
+// A repeated name matters to oneOf: a call sending it would satisfy both of
+// its branches, and oneOf refuses a call that satisfies more than one, so
+// every call naming it would be refused.
+func alternativeNames(propertyNames []string) []string {
+	names := make([]string, 0, len(propertyNames))
+	for _, propertyName := range propertyNames {
+		propertyName = strings.TrimSpace(propertyName)
+		if propertyName != "" && !slices.Contains(names, propertyName) {
+			names = append(names, propertyName)
+		}
+	}
+	return names
+}
+
+// SchemaItemsOverride returns an input-schema override applied to the item
+// schema of the list parameter at propertyPath rather than to the list: what
+// each element of it must be. A path that reaches no list is no target, and
+// [ActionSpec.Validate] refuses it.
+func SchemaItemsOverride(propertyPath string, values map[string]any) InputSchemaOverride {
+	return InputSchemaOverride{PropertyPath: strings.TrimSpace(propertyPath), Items: true, Values: cloneSchemaMap(values)}
+}
+
+// SchemaItemsOneOfRequired returns an items override that requires each
+// element of the list at propertyPath to carry exactly one of propertyNames
+// with a value that is not null: GitLab's ExactlyOnePresentValidator on the
+// records a list of nested attributes creates, which refuses an element
+// naming two as it refuses one naming none.
+//
+// Only a schema validator holds an element to one branch, as with
+// [SchemaOneOfRequired]: the meta and the dynamic dispatchers read no item
+// schema at all, so the handler of an action carrying this override refuses
+// such an element itself before it sends anything.
+func SchemaItemsOneOfRequired(propertyPath string, propertyNames ...string) InputSchemaOverride {
+	return itemsAlternatives(propertyPath, "oneOf", alternativeBranches(propertyNames, nonNullBranch))
+}
+
+// SchemaItemsAnyOfRequired returns an items override that requires each
+// element of the list at propertyPath to carry at least one of propertyNames
+// with a value that is not null: GitLab's at_least_one_of inside a list's
+// param block.
+func SchemaItemsAnyOfRequired(propertyPath string, propertyNames ...string) InputSchemaOverride {
+	return itemsAlternatives(propertyPath, "anyOf", alternativeBranches(propertyNames, nonNullBranch))
+}
+
+// SchemaItemsAnyOfRequiredUnlessTrue is [SchemaItemsAnyOfRequired] with an
+// exemption: an element whose flag is true needs none of the names. It is
+// Grape's at_least_one_of inside a given block on that flag, the shape GitLab
+// gives a list of nested attributes whose _destroy removes an element instead
+// of describing one. A blank flag exempts nothing.
+func SchemaItemsAnyOfRequiredUnlessTrue(propertyPath, flag string, propertyNames ...string) InputSchemaOverride {
+	branches := alternativeBranches(propertyNames, nonNullBranch)
+	if flag = strings.TrimSpace(flag); flag != "" && len(branches) > 0 {
+		branches = append(branches, trueBranch(flag))
+	}
+	return itemsAlternatives(propertyPath, "anyOf", branches)
+}
+
+// SchemaItemsAtMostOneOf returns an items override that refuses an element of
+// the list at propertyPath carrying two or more of propertyNames with a value
+// that is not null, and asks nothing of one carrying none: the half of
+// exactly one that an element naming an existing record by its id is held
+// to, where the id may stand in for the names. Fewer than two names
+// constrain nothing and are no override.
+//
+// It is a not over one branch per pair of names. The lockdown does not
+// descend into not, and each pair leaves the element's other properties open
+// anyway, since a closed pair would match only an element carrying the pair
+// and nothing else, and the not would let every other element through.
+func SchemaItemsAtMostOneOf(propertyPath string, propertyNames ...string) InputSchemaOverride {
+	names := alternativeNames(propertyNames)
+	var pairs []any
+	for i, first := range names {
+		for _, second := range names[i+1:] {
+			pairs = append(pairs, nonNullPropertiesBranch(first, second))
+		}
+	}
+	if len(pairs) == 0 {
+		return InputSchemaOverride{}
+	}
+	return SchemaItemsOverride(propertyPath, map[string]any{"not": map[string]any{"anyOf": pairs}})
+}
+
+// itemsAlternatives returns an items override holding branches under
+// keyword, and no override when there are none.
+func itemsAlternatives(propertyPath, keyword string, branches []any) InputSchemaOverride {
+	if len(branches) == 0 {
+		return InputSchemaOverride{}
+	}
+	return SchemaItemsOverride(propertyPath, map[string]any{keyword: branches})
+}
+
+// nonNullBranch is an items branch: the name present with a value that is not
+// null.
+func nonNullBranch(propertyName string) map[string]any {
+	return nonNullPropertiesBranch(propertyName)
+}
+
+// nonNullPropertiesBranch is a branch requiring every one of propertyNames
+// with a value that is not null. An element's fields decode into pointers,
+// which a null leaves nil, and a handler sends the fields that are not nil,
+// so a name counts as GitLab will count it only once its value is not null.
+// The branch declares no type and leaves the element's other properties open,
+// for the reason [valuedBranch] gives.
+func nonNullPropertiesBranch(propertyNames ...string) map[string]any {
+	properties := make(map[string]any, len(propertyNames))
+	for _, name := range propertyNames {
+		properties[name] = map[string]any{"not": map[string]any{"type": "null"}}
+	}
+	return map[string]any{"required": propertyNames, "properties": properties, "additionalProperties": true}
+}
+
+// trueBranch is a branch requiring flag to be true, the exemption of
+// [SchemaItemsAnyOfRequiredUnlessTrue].
+func trueBranch(flag string) map[string]any {
+	return map[string]any{
+		"required":             []string{flag},
+		"properties":           map[string]any{flag: map[string]any{"const": true}},
+		"additionalProperties": true,
+	}
 }
 
 // presentBranch is an anyOf branch: the name present, whatever its value. It
@@ -135,7 +257,7 @@ func applyInputSchemaOverrides(schema map[string]any, overrides []InputSchemaOve
 		return
 	}
 	for _, override := range overrides {
-		target := schemaOverrideTarget(schema, strings.TrimSpace(override.PropertyPath))
+		target := overrideTarget(schema, override)
 		if target == nil {
 			continue
 		}
@@ -334,12 +456,29 @@ func FilterOverridesForSchema(schema map[string]any, overrides []InputSchemaOver
 	}
 	out := make([]InputSchemaOverride, 0, len(overrides))
 	for _, override := range overrides {
-		path := strings.TrimSpace(override.PropertyPath)
-		if path == "" || schemaOverrideTarget(schema, path) != nil {
+		if isRootOverride(override) || overrideTarget(schema, override) != nil {
 			out = append(out, override)
 		}
 	}
 	return out
+}
+
+// isRootOverride reports whether override patches the schema root, which an
+// override with no path does unless it targets items: the root is no list.
+func isRootOverride(override InputSchemaOverride) bool {
+	return strings.TrimSpace(override.PropertyPath) == "" && !override.Items
+}
+
+// overrideTarget returns the schema node override patches: the property its
+// path names, or the item schema of the list there when it targets items, and
+// nil when the path reaches nothing or, for an items override, no list.
+func overrideTarget(root map[string]any, override InputSchemaOverride) map[string]any {
+	target := schemaOverrideTarget(root, strings.TrimSpace(override.PropertyPath))
+	if !override.Items {
+		return target
+	}
+	items, _ := target["items"].(map[string]any)
+	return resolveSchemaRef(root, items)
 }
 
 func validateInputSchemaOverrides(spec ActionSpec) error {
@@ -353,13 +492,14 @@ func validateInputSchemaOverrides(spec ActionSpec) error {
 		if len(override.Values) == 0 {
 			return fmt.Errorf("action spec %q has empty input schema override", spec.Name)
 		}
-		propertyPath := strings.TrimSpace(override.PropertyPath)
-		if propertyPath == "" {
+		if isRootOverride(override) || overrideTarget(spec.Route.InputSchema, override) != nil {
 			continue
 		}
-		if schemaOverrideTarget(spec.Route.InputSchema, propertyPath) == nil {
-			return fmt.Errorf("action spec %q has input schema override for unknown property path %q", spec.Name, propertyPath)
+		propertyPath := strings.TrimSpace(override.PropertyPath)
+		if override.Items {
+			return fmt.Errorf("action spec %q has input schema override for the items of %q, which is no list", spec.Name, propertyPath)
 		}
+		return fmt.Errorf("action spec %q has input schema override for unknown property path %q", spec.Name, propertyPath)
 	}
 	return nil
 }
@@ -406,6 +546,7 @@ func cloneInputSchemaOverrides(overrides []InputSchemaOverride) []InputSchemaOve
 	for _, override := range overrides {
 		out = append(out, InputSchemaOverride{
 			PropertyPath: strings.TrimSpace(override.PropertyPath),
+			Items:        override.Items,
 			Values:       cloneSchemaMap(override.Values),
 		})
 	}

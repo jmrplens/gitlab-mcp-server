@@ -1576,7 +1576,8 @@ func TestDefaultScopeParameterGuidance_UnknownName_ReturnsZero(t *testing.T) {
 
 // TestInputSchemaOverridesKey_NamesTheOverrides verifies the part of the
 // spec transform name that comes from the overrides: none is empty, a set is
-// its JSON, and a set the encoder refuses has no name at all.
+// its JSON, an items override says so in its name and no other does, and a
+// set the encoder refuses has no name at all.
 func TestInputSchemaOverridesKey_NamesTheOverrides(t *testing.T) {
 	t.Parallel()
 
@@ -1586,6 +1587,10 @@ func TestInputSchemaOverridesKey_NamesTheOverrides(t *testing.T) {
 	overrides := []InputSchemaOverride{{PropertyPath: "state", Values: map[string]any{"enum": []any{"opened"}}}}
 	if got, nameable := inputSchemaOverridesKey(overrides); got != `[{"PropertyPath":"state","Values":{"enum":["opened"]}}]` || !nameable {
 		t.Errorf("inputSchemaOverridesKey(overrides) = %q, %t", got, nameable)
+	}
+	onItems := []InputSchemaOverride{SchemaItemsOverride("rules", map[string]any{"minProperties": 1})}
+	if got, nameable := inputSchemaOverridesKey(onItems); got != `[{"PropertyPath":"rules","Items":true,"Values":{"minProperties":1}}]` || !nameable {
+		t.Errorf("inputSchemaOverridesKey(items override) = %q, %t", got, nameable)
 	}
 	if got, nameable := inputSchemaOverridesKey(unencodableOverrides()); nameable || got != "" {
 		t.Errorf("inputSchemaOverridesKey(unencodable) = %q, %t; want no name", got, nameable)

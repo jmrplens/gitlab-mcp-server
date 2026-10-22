@@ -73,8 +73,17 @@ type CompatibilityPolicy struct {
 // action input schema. PropertyPath is a dot-separated input property path; an
 // empty path applies Values at the schema root. Array properties automatically
 // traverse through their items schema for nested paths.
+//
+// Items applies Values to the item schema of the list at PropertyPath rather
+// than to the list itself: what each element must be, such as the grantee an
+// entry of a protected environment's deploy_access_levels names. A path
+// reaching no list is no target, the root included. The overrides are encoded
+// into the name their derived schema is memoized under (see
+// [inputSchemaOverridesKey]), and Items is left out of a name when it is
+// false, so every override that does not target items keeps the name it had.
 type InputSchemaOverride struct {
 	PropertyPath string
+	Items        bool `json:",omitempty"`
 	Values       map[string]any
 }
 
