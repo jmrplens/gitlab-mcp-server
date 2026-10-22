@@ -75,8 +75,14 @@ func SafeModeActionFunc(name string) ActionFunc {
 
 // The rows and the heading a preview card is made of, shared by the writer
 // and by [ParseSafeModePreview], which reads the card back.
+//
+// The heading prefix is [EmojiStop] and the words written out whole rather
+// than joined onto it: the mutation tool cannot see a package-level
+// declaration and reads the plus of a joined one as never covered.
+// TestFormatSafeModePreviewMarkdown_WholeOutput_AndRoundTrip spells the card
+// out with EmojiStop, so it holds the two to each other.
 const (
-	safeModeHeadingPrefix = EmojiStop + " Safe mode blocked "
+	safeModeHeadingPrefix = "⛔ Safe mode blocked "
 	safeModeStatusRow     = "- **Status**: "
 	safeModeModeRow       = "- **Mode**: "
 	safeModeToolRow       = "- **Tool**: "
