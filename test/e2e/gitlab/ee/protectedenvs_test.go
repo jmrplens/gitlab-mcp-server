@@ -101,6 +101,58 @@ func TestProtectedEnvironments_Lifecycle_ProtectsUpdatesAndUnprotects(t *testing
 	})
 }
 
+// TestProtectedEnvironments_EntriesGitLabRefuses_AreRefusedBeforeGitLab asks
+// every surface to protect an environment with a deploy access level naming
+// nothing, the call find's example used to build (issue 1271), with one
+// naming both a role and a user, and with an approval rule naming nothing.
+// GitLab refuses each of the three, and the test checks that each is refused
+// here, before it is sent, and that the environment is not protected
+// afterwards.
+//
+// Each surface refuses at the first place that checks. The individual tool's
+// input schema states the rules in its item schemas, so the SDK refuses the
+// arguments before the handler runs. The meta and the dynamic dispatchers read
+// no item schema and hand the call to the handler, which refuses it with words
+// that name the entry and the rule, and none of them is in the hint a GitLab
+// refusal is wrapped with, so a call that reached GitLab would not pass for
+// one refused here.
+func TestProtectedEnvironments_EntriesGitLabRefuses_AreRefusedBeforeGitLab(t *testing.T) {
+	e := harness.New(t)
+	user := e.Runtime().UserID
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("penvrule"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		name := e.Name("staging")
+		target := map[string]any{"project_id": project.IDParam(), "name": name}
+		maintainers := []map[string]any{{"access_level": accessLevelMaintainer}}
+
+		calls := []struct {
+			params  map[string]any
+			refusal string
+		}{
+			{params: withParams(target, map[string]any{"deploy_access_levels": []map[string]any{{}}}), refusal: "deploy_access_levels[0] names none of access_level, user_id or group_id"},
+			{params: withParams(target, map[string]any{"deploy_access_levels": []map[string]any{{"access_level": accessLevelMaintainer, "user_id": user}}}), refusal: "deploy_access_levels[0] names access_level and user_id"},
+			{params: withParams(target, map[string]any{"deploy_access_levels": maintainers, "approval_rules": []map[string]any{{"required_approvals": 1}}}), refusal: "approval_rules[0] names none of access_level, user_id or group_id"},
+		}
+		for _, call := range calls {
+			if surface == harness.SurfaceIndividual {
+				harness.Refused(s, actionProtectedEnvProtect, call.params, harness.FailureInvalidParams)
+				continue
+			}
+			harness.ExpectToolError(s, actionProtectedEnvProtect, call.params, call.refusal)
+		}
+
+		listed := harness.Do[protectedenvs.ListOutput](s, actionProtectedEnvList, map[string]any{"project_id": project.IDParam()})
+		for _, environment := range listed.Environments {
+			if environment.Name == name {
+				e.T.Errorf("the refused calls protected %q: %+v", name, environment)
+			}
+		}
+	})
+}
+
 // TestDeploymentApproval_ProtectedEnvironment_RefusesTheDeployer creates
 // an environment, protects it with a one-approval rule naming the run's
 // user, deploys to it, and asks that user to approve the deployment, which

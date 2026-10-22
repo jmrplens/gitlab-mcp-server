@@ -119,3 +119,49 @@ func TestGroupProtectedEnvironments_Lifecycle_RefusesANameOutsideTheTiers(t *tes
 		}
 	})
 }
+
+// TestGroupProtectedEnvironments_EntriesGitLabRefuses_AreRefusedBeforeGitLab
+// asks every surface to protect the production tier of a group of its own
+// with a deploy access level naming nothing, the call find's example used to
+// build (issue 1271), with one naming both a role and a user, and with an
+// approval rule naming nothing. GitLab refuses each of the three, and the test
+// checks that each is refused here, before it is sent, and that the tier is
+// not protected afterwards.
+//
+// The individual tool's item schemas refuse the arguments before the handler
+// runs, and the meta and the dynamic dispatchers, which read no item schema,
+// hand the call to the handler, which refuses it with words that name the
+// entry and the rule. None of them is in the hint a GitLab refusal is wrapped
+// with, so a call that reached GitLab would not pass for one refused here.
+func TestGroupProtectedEnvironments_EntriesGitLabRefuses_AreRefusedBeforeGitLab(t *testing.T) {
+	e := harness.New(t)
+	user := e.Runtime().UserID
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("gperule"))
+		target := map[string]any{"group_id": group.IDParam(), "name": productionTier}
+		maintainers := []map[string]any{{"access_level": maintainerAccessLevel}}
+
+		calls := []struct {
+			params  map[string]any
+			refusal string
+		}{
+			{params: withParams(target, map[string]any{"deploy_access_levels": []map[string]any{{}}}), refusal: "deploy_access_levels[0] names none of access_level, user_id or group_id"},
+			{params: withParams(target, map[string]any{"deploy_access_levels": []map[string]any{{"access_level": maintainerAccessLevel, "user_id": user}}}), refusal: "deploy_access_levels[0] names access_level and user_id"},
+			{params: withParams(target, map[string]any{"deploy_access_levels": maintainers, "approval_rules": []map[string]any{{"required_approvals": 1}}}), refusal: "approval_rules[0] names none of access_level, user_id or group_id"},
+		}
+		for _, call := range calls {
+			if surface == harness.SurfaceIndividual {
+				harness.Refused(s, actionGroupProtectedEnvProtect, call.params, harness.FailureInvalidParams)
+				continue
+			}
+			harness.ExpectToolError(s, actionGroupProtectedEnvProtect, call.params, call.refusal)
+		}
+
+		listed := harness.Do[groupprotectedenvs.ListOutput](s, actionGroupProtectedEnvList, map[string]any{"group_id": group.IDParam()})
+		if containsEnvName(listed.Environments, productionTier) {
+			e.T.Errorf("the refused calls protected %s: %v", productionTier, protectedEnvNames(listed.Environments))
+		}
+	})
+}
