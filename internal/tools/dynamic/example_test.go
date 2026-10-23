@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"net/mail"
 	"net/url"
 	"reflect"
+	"regexp"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +19,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // exampleCatalog names one catalog a server can serve: a tier on a
@@ -68,7 +72,8 @@ func buildServedCatalog(t *testing.T, served exampleCatalog) *actioncatalog.Cata
 // model to send a call that fails before it reaches GitLab: a hex color filled
 // with "value", every branch of an anyOf filled at once, a date written as
 // its template. The schema is validated as published, and the formats the
-// validator leaves to annotation (date, date-time, uri) are checked here. The
+// validator leaves to annotation (date, date-time, uri, email, hostname) are
+// checked here. The
 // example is also put to execute's own check of the params, which is what
 // refuses a call before any handler runs.
 //
@@ -438,6 +443,27 @@ func TestExampleValue_SatisfiesEachConstraint(t *testing.T) {
 		{name: "a date-time format takes a timestamp", param: "expires_at", schema: map[string]any{"type": "string", "format": "date-time"}, want: exampleDateTime},
 		{name: "a uri format takes a URL whatever the name", param: "bitbucket_server_url", schema: map[string]any{"type": "string", "format": "uri"}, want: exampleURL},
 		{name: "an unknown format keeps the placeholder", param: "title", schema: map[string]any{"type": "string", "format": "markdown"}, want: "value"},
+		{name: "an email format takes an address", param: "email", schema: map[string]any{"type": "string", "format": "email"}, want: exampleEmail},
+		{name: "an email format takes an address whatever the name", param: "bitbucket_email", schema: map[string]any{"type": "string", "format": "email"}, want: exampleEmail},
+		{name: "a hostname format takes a host name", param: "domain", schema: map[string]any{"type": "string", "format": "hostname"}, want: exampleHostname},
+		{name: "a SHA is a full hex SHA", param: "sha", schema: map[string]any{"type": "string"}, want: exampleSHA},
+		{name: "a name ending in a SHA is a full hex SHA", param: "commit_sha", schema: map[string]any{"type": "string"}, want: exampleSHA},
+		{name: "a full SHA pattern keeps the SHA", param: "sha", schema: map[string]any{"type": "string", "pattern": toolutil.FullCommitSHAPattern}, want: exampleSHA},
+		{name: "a duration is an hour", param: "duration", schema: map[string]any{"type": "string"}, want: exampleDuration},
+		{name: "a digest pattern takes a digest", param: "subject_digest", schema: map[string]any{"type": "string", "pattern": `^(sha256:)?[0-9A-Fa-f]{64}$`}, want: exampleDigest},
+		{name: "a cron pattern takes a cron expression", param: "freeze_start", schema: map[string]any{"type": "string", "pattern": toolutil.CronPattern}, want: exampleCron},
+		{
+			name:   "a fingerprint pattern takes the SHA256 form",
+			param:  "fingerprint",
+			schema: map[string]any{"type": "string", "pattern": `^((sha256|SHA256):[A-Za-z0-9+/]{43}=?|(MD5:)?[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){15})$`},
+			want:   exampleFingerprint,
+		},
+		{
+			name:   "a repository path pattern starts with the project's path",
+			param:  "repository_path_pattern",
+			schema: map[string]any{"type": "string", "pattern": `^[a-z0-9]+(([._/]|__|-*)[a-z0-9*])*$`},
+			want:   exampleProjectPath + "/*",
+		},
 		{name: "a string named like an identifier takes its digits", param: "user_id", schema: map[string]any{"type": "string"}, want: "123"},
 		{name: "an integer named like an identifier", param: "attribute_id", schema: map[string]any{"type": "integer"}, want: 123},
 		{name: "an integer whose placeholder is a path", param: "namespace_id", schema: map[string]any{"type": "integer"}, want: 123},
@@ -584,9 +610,35 @@ func checkExampleFormat(format, value, path string) error {
 		if err == nil && (parsed.Scheme == "" || parsed.Host == "") {
 			err = fmt.Errorf("%q is not an absolute URI", value)
 		}
+	case "email":
+		var address *mail.Address
+		address, err = mail.ParseAddress(value)
+		if err == nil && address.Address != value {
+			err = fmt.Errorf("%q is not a bare address", value)
+		}
+	case "hostname":
+		err = checkHostname(value)
 	}
 	if err != nil {
 		return fmt.Errorf("%s does not satisfy format %q: %w", path, format, err)
+	}
+	return nil
+}
+
+// hostnameLabel is one label of a host name as RFC 1123 writes it, which is
+// what JSON Schema's hostname format names.
+var hostnameLabel = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
+
+// checkHostname refuses a value that is no host name: longer than 253
+// characters, or holding a label RFC 1123 does not allow.
+func checkHostname(value string) error {
+	if len(value) > 253 {
+		return fmt.Errorf("%q is longer than a host name may be", value)
+	}
+	for label := range strings.SplitSeq(value, ".") {
+		if !hostnameLabel.MatchString(label) {
+			return fmt.Errorf("%q holds the label %q, which no host name does", value, label)
+		}
 	}
 	return nil
 }
