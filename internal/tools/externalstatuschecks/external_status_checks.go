@@ -438,9 +438,9 @@ func RetryFailedExternalStatusCheckForProjectMR(ctx context.Context, client *git
 type SetProjectStatusInput struct {
 	ProjectID             toolutil.StringOrInt `json:"project_id"                jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID                 int64                `json:"merge_request_iid"                    jsonschema:"Merge request internal ID,required"`
-	SHA                   string               `json:"sha"                       jsonschema:"Head SHA of the merge request source branch,required"`
+	SHA                   string               `json:"sha"                       jsonschema:"Full SHA of the merge request's head commit, 40 hex characters or 64 in a SHA-256 repository, as merge_request.get returns it in sha. GitLab answers 409 when it is not the head,required"`
 	ExternalStatusCheckID int64                `json:"external_status_check_id"  jsonschema:"External status check ID to update,required"`
-	Status                string               `json:"status"                    jsonschema:"Status value (e.g. passed, failed),required"`
+	Status                string               `json:"status"                    jsonschema:"Status to set: passed, failed or pending,required"`
 }
 
 // SetProjectMRExternalStatusCheckStatus sets the status of an external status check for a project merge request.
@@ -478,7 +478,7 @@ func SetProjectMRExternalStatusCheckStatus(ctx context.Context, client *gitlabcl
 				"setting a status check's status needs permission to approve the merge request")
 		}
 		return toolutil.WrapErrWithStatusHint("setProjectMRExternalStatusCheckStatus", err, http.StatusBadRequest,
-			"sha must match the current MR head (use merge_request.get to confirm); status must be 'passed' or 'failed'; only the external service that created the check (HMAC-authenticated) can set its status")
+			"sha must match the current MR head (use merge_request.get to confirm); status must be 'passed', 'failed' or 'pending'; only the external service that created the check (HMAC-authenticated) can set its status")
 	}
 	return nil
 }

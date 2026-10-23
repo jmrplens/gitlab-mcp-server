@@ -794,7 +794,7 @@ func PostComment(ctx context.Context, client *gitlabclient.Client, input PostCom
 // keyset pagination via order_by/sort/page_token.
 type StatusesInput struct {
 	ProjectID  toolutil.StringOrInt `json:"project_id"  jsonschema:"Project ID or URL-encoded path,required"`
-	SHA        string               `json:"sha"         jsonschema:"Commit SHA,required"`
+	SHA        string               `json:"sha"         jsonschema:"Full commit SHA, 40 hex characters or 64 in a SHA-256 repository. GitLab lists the statuses of the pipelines that ran on exactly this SHA, so a branch name or an abbreviated SHA lists none,required"`
 	Ref        string               `json:"ref,omitempty"        jsonschema:"Branch or tag name filter"`
 	Stage      string               `json:"stage,omitempty"      jsonschema:"Stage name filter"`
 	Name       string               `json:"name,omitempty"       jsonschema:"Status name filter"`

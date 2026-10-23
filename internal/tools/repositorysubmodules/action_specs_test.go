@@ -11,6 +11,8 @@
 // package emits rather than from the constants that produced it: the
 // RelatedActions of every spec, and the IDs the rendered Markdown hints name,
 // so an ID added later is covered without this file being touched.
+//
+// It also holds the update's commit_sha to the full SHA Gitaly requires.
 package repositorysubmodules_test
 
 import (
@@ -39,6 +41,26 @@ func TestActionSpecs_RelatedActionsResolveInTheCatalog(t *testing.T) {
 		t.Run(spec.Name, func(t *testing.T) {
 			for _, related := range spec.RelatedActions {
 				assertResolves(t, catalog, related, "RelatedActions")
+			}
+		})
+	}
+}
+
+// TestActionSpecs_UpdateCommitSHA_IsHeldToAFullSHA verifies that the update
+// publishes commit_sha with toolutil.FullCommitSHAPattern. Gitaly refuses an
+// object ID shorter than the repository's hash, so the schema tells a model
+// to send the full SHA, and find's example fills it with one rather than the
+// "value" GitLab refused (issue 1272). The two reads take no SHA.
+func TestActionSpecs_UpdateCommitSHA_IsHeldToAFullSHA(t *testing.T) {
+	for _, spec := range repositorysubmodules.ActionSpecs(nil) {
+		t.Run(spec.Name, func(t *testing.T) {
+			properties, _ := spec.Route.InputSchema["properties"].(map[string]any)
+			sha, has := properties["commit_sha"].(map[string]any)
+			if want := spec.Name == "update_submodule"; has != want {
+				t.Fatalf("%s has a commit_sha property: %t, want %t", spec.Name, has, want)
+			}
+			if has && sha["pattern"] != toolutil.FullCommitSHAPattern {
+				t.Errorf("%s commit_sha pattern = %v, want toolutil.FullCommitSHAPattern", spec.Name, sha["pattern"])
 			}
 		})
 	}

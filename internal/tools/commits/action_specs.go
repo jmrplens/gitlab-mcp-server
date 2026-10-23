@@ -133,7 +133,18 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 		options.Usage = "List the pipeline/external statuses of a commit, filtered by ref, stage, name, or pipeline_id, with pagination. Use this to check CI/CD or integration check results for a commit."
 		options.Aliases = []string{"commit statuses", "list commit statuses", "show commit checks", "ci status for commit"}
 		options.RelatedActions = []string{actionCommitStatusSet, actionCommitGet, actionPipelineList}
-		options.ParameterGuidance["sha"] = shaGuidance()
+		// GitLab finds the commit by any revision and then selects the
+		// statuses whose pipeline sha equals the value as written, so a
+		// branch name or an abbreviated SHA answers an empty list: the one
+		// commit route here held to a full SHA (issue 1272).
+		options.ParameterGuidance["sha"] = toolutil.ParameterGuidance{
+			SemanticRole:   "commit_sha",
+			ValueSource:    "Full commit SHA from list output or a pipeline's sha. A branch name or an abbreviated SHA lists no status.",
+			ExampleBinding: `params.sha:"5957a570eee0ac4580ec027fb874ad7514d1e576"`,
+		}
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPatternOverride("sha", toolutil.FullCommitSHAPattern),
+		}
 		options.IndividualTool.Description = "List the statuses of a commit (CI jobs and external integrations), filtered by ref, stage, name, or pipeline. Returns: status entries with state, name, ref, coverage, pipeline ID, timestamps, and author user object, plus pagination metadata. See also: gitlab_commit_status_set, gitlab_commit_get, gitlab_pipeline_list."
 	case "commit_status_set":
 		options.Usage = "Set the pipeline/check status of a commit SHA (pending, running, success, failed, canceled, skipped). Use this for external CI or reporting integrations that publish commit check results."

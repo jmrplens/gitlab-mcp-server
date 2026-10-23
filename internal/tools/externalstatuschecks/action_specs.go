@@ -34,7 +34,23 @@ func externalStatusCheckCreateSpec(name string, route toolutil.ActionRoute, indi
 func externalStatusCheckUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := externalStatusCheckOptions(individualTool)
 	decorateExternalStatusCheckMeta(&options, individualTool)
+	if name == "set_project_mr_status" {
+		options.InputSchemaOverrides = setStatusSchemaOverrides()
+	}
 	return toolutil.NewUpdateActionSpec(name, route, options)
+}
+
+// setStatusSchemaOverrides hold a status a merge request's check is set to
+// to what GitLab takes (ee/lib/api/status_checks.rb): the merge request's
+// head as a full SHA, which GitLab compares with diff_head_sha and answers
+// 409 when the two differ, and one of the three statuses its values list.
+// find's example wrote "value" for both, and GitLab refused the call
+// (issue 1272).
+func setStatusSchemaOverrides() []toolutil.InputSchemaOverride {
+	return []toolutil.InputSchemaOverride{
+		toolutil.SchemaPatternOverride("sha", toolutil.FullCommitSHAPattern),
+		toolutil.SchemaEnumOverride("status", "passed", "failed", "pending"),
+	}
 }
 
 func externalStatusCheckDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -139,7 +155,7 @@ var externalStatusCheckActionMeta = map[string]externalStatusCheckActionMetaEntr
 		description: "Retry a failed external status check for a merge request. Returns: a success confirmation. See also: gitlab_list_project_mr_external_status_checks, gitlab_set_project_mr_external_status_check_status.",
 	},
 	"gitlab_set_project_mr_external_status_check_status": {
-		usage:       "Set the status (passed or failed) of an external status check for a merge request, identified by sha and external_status_check_id. Typically called by the HMAC-authenticated external service that owns the check. Requires permission to approve the merge request and an Ultimate license.",
+		usage:       "Set the status (passed, failed or pending) of an external status check for a merge request, identified by external_status_check_id and the full SHA of the merge request's head commit. Typically called by the HMAC-authenticated external service that owns the check. Requires permission to approve the merge request and an Ultimate license.",
 		aliases:     []string{"set merge request status check status", "report external status check result", "pass or fail status check"},
 		related:     []string{actionListProjectMR, "external_status_check.retry_project"},
 		description: "Set the status of an external status check for a merge request. Returns: a success confirmation. See also: gitlab_list_project_mr_external_status_checks, gitlab_retry_failed_external_status_check_for_project_mr.",

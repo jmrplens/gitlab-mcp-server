@@ -46,9 +46,16 @@ func submoduleListSpec(name string, route toolutil.ActionRoute, individualTool s
 	return spec
 }
 
+// submoduleUpdateSpec builds the update action, whose commit_sha is held to a
+// full commit SHA: Gitaly refuses an object ID shorter than the repository's
+// hash, which the update service answers as invalid parameters, and a branch
+// name is no object ID at all (issue 1272).
 func submoduleUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := submoduleOptions(individualTool)
 	decorateSubmoduleMeta(&options, individualTool)
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+		toolutil.SchemaPatternOverride("commit_sha", toolutil.FullCommitSHAPattern),
+	}
 	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 

@@ -2,6 +2,7 @@
 package externalstatuschecks
 
 import (
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -49,6 +50,32 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	spec := byTool["gitlab_delete_project_external_status_check"]
 	if !spec.Destructive || !spec.Route.Destructive {
 		t.Error("delete action should be destructive")
+	}
+}
+
+// TestActionSpecs_SetStatus_TakesTheHeadSHAAndAStatusGitLabKnows verifies the
+// schema of the action that sets a merge request's check: sha carries
+// toolutil.FullCommitSHAPattern, since GitLab compares it with the head's
+// full SHA and answers 409 otherwise, and status the three values GitLab's
+// API lists, so find's example sends a SHA and passed where it sent "value"
+// for both (issue 1272). No other action carries either.
+func TestActionSpecs_SetStatus_TakesTheHeadSHAAndAStatusGitLabKnows(t *testing.T) {
+	for _, spec := range ActionSpecs(nil) {
+		t.Run(spec.Name, func(t *testing.T) {
+			properties, _ := spec.Route.InputSchema["properties"].(map[string]any)
+			sha, _ := properties["sha"].(map[string]any)
+			status, _ := properties["status"].(map[string]any)
+			wantPattern, wantEnum := any(nil), any(nil)
+			if spec.Name == "set_project_mr_status" {
+				wantPattern, wantEnum = toolutil.FullCommitSHAPattern, []any{"passed", "failed", "pending"}
+			}
+			if got := sha["pattern"]; got != wantPattern {
+				t.Errorf("%s sha pattern = %v, want %v", spec.Name, got, wantPattern)
+			}
+			if got := status["enum"]; fmt.Sprint(got) != fmt.Sprint(wantEnum) {
+				t.Errorf("%s status enum = %v, want %v", spec.Name, got, wantEnum)
+			}
+		})
 	}
 }
 
