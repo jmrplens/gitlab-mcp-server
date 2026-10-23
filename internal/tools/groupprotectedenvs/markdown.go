@@ -75,15 +75,18 @@ func levelCell(accessLevel int, userID, groupID int64) string {
 // granteeCell names who a granular rule is about, and nothing for a rule that
 // grants a role to everyone who holds it. GitLab sends zero for the id it is
 // not about, which used to be rendered as a numeric 0 in a column of its own.
+//
+// The conditions are early returns rather than the cases of a tagless switch,
+// whose expressions no coverage profile places, so gremlins reported their
+// mutants not covered although the tests render both kinds of rule.
 func granteeCell(userID, groupID int64) string {
-	switch {
-	case userID != 0:
+	if userID != 0 {
 		return fmt.Sprintf("user #%d", userID)
-	case groupID != 0:
-		return fmt.Sprintf("group #%d", groupID)
-	default:
-		return ""
 	}
+	if groupID != 0 {
+		return fmt.Sprintf("group #%d", groupID)
+	}
+	return ""
 }
 
 // inheritanceCell says whether a group rule reaches the group's inherited
