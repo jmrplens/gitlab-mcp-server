@@ -679,7 +679,9 @@ func TestUpdate_NotFoundIncludesActionableHint(t *testing.T) {
 // caller asked for a rename, so a handler that always sent it would rename
 // every environment it was asked to edit to the empty string, and one that
 // never sent it would silently drop the rename. Neither is visible in a
-// response the mock was told to send back.
+// response the mock was told to send back. An entry that names an existing
+// one by its id alone is sent too: the update's rules let the id stand in for
+// a grantee, so toolutil.CheckEnvironmentUpdate must not refuse it.
 func TestUpdate_RequestBody_NamesEveryRuleFieldTheWayGitLabDoes(t *testing.T) {
 	accessLevel30, accessLevel40 := 30, 40
 	deployID, ruleID := int64(1), int64(5)
@@ -720,6 +722,16 @@ func TestUpdate_RequestBody_NamesEveryRuleFieldTheWayGitLabDoes(t *testing.T) {
 				`"group_id":21,"group_inheritance_type":0,"id":5,"required_approvals":1,"user_id":11}],` +
 				`"deploy_access_levels":[{"_destroy":true,"access_level":40,"id":1},{"user_id":10},` +
 				`{"group_id":20,"group_inheritance_type":1}],"name":"staging","required_approval_count":0}`,
+		},
+		{
+			name: "sends an entry that names an existing one by its id alone, to remove it",
+			input: UpdateInput{
+				GroupID:            "mygroup",
+				Environment:        "production",
+				DeployAccessLevels: []UpdateDeployAccessLevelInput{{ID: &deployID, Destroy: &destroy}},
+				ApprovalRules:      []UpdateApprovalRuleInput{{ID: &ruleID, Destroy: &destroy}},
+			},
+			want: `{"approval_rules":[{"_destroy":true,"id":5}],"deploy_access_levels":[{"_destroy":true,"id":1}]}`,
 		},
 		{
 			name:  "omits name and both rule collections when the caller only sends the approval count",
