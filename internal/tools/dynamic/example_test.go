@@ -1,7 +1,9 @@
 package dynamic
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"net/mail"
@@ -88,6 +90,320 @@ func TestFind_EveryExampleSatisfiesItsInputSchema(t *testing.T) {
 				checkPublishedExample(t, entry, registry.describeEntry(entry))
 			}
 		})
+	}
+}
+
+// formatBearingKind is one kind of string whose form GitLab checks, told by
+// the parameter's name or description: what the parameter's published schema
+// states about it, and what find's example sends for it.
+type formatBearingKind struct {
+	// what names the kind in a failure.
+	what string
+	// names matches the names of the parameters that hold it.
+	names *regexp.Regexp
+	// descriptions matches the descriptions that say a parameter holds it,
+	// whatever its name. Nil when the name alone tells.
+	descriptions *regexp.Regexp
+	// declared reports what the schema of the parameter at path, in the
+	// action id, fails to state, or nil.
+	declared func(id, path string, schema map[string]any) error
+	// example reports what is wrong with the value the example sends, or
+	// nil. params is the whole example, for a value GitLab holds to another
+	// parameter.
+	example func(value string, params map[string]any) error
+}
+
+// fullSHAParams are the parameters GitLab holds to a full commit SHA, each
+// with the reason. Every other parameter named for a SHA also takes a ref
+// name or an abbreviated SHA, which GitLab resolves to the commit, so a
+// pattern there would refuse the branch names that work today; it gets a hex
+// example and no pattern, as decided on issue 1272.
+var fullSHAParams = map[string]string{
+	"external_status_check.set_project_mr_status sha": "GitLab compares it with the merge request's diff_head_sha and answers 409 when the two differ",
+	"repository.update_submodule commit_sha":          "Gitaly refuses an object ID shorter than the repository's hash, which the service answers as invalid parameters",
+	"repository.commit_statuses sha":                  "GitLab finds the commit by any revision and then selects the statuses whose pipeline sha equals the value, so a branch name or an abbreviated SHA answers an empty list",
+}
+
+// formatBearingExemptions are the parameters a kind's name or description
+// matches that do not hold it, each with the reason, keyed as "action path".
+// A key no catalog serves any more fails the test.
+var formatBearingExemptions = map[string]string{}
+
+// formatBearingKinds are the kinds of string GitLab checks the form of that a
+// required parameter of the catalog holds. A duration and a SHA on a route
+// that takes a ref name declare no pattern, and say why.
+var formatBearingKinds = []formatBearingKind{
+	{
+		what:         "an email address",
+		names:        regexp.MustCompile(`^(.+_)?email$`),
+		descriptions: regexp.MustCompile(`(?i)\bemail address\b`),
+		declared:     declaresFormat("email"),
+		example:      satisfiesFormat("email"),
+	},
+	{
+		what:     "an absolute URL",
+		names:    regexp.MustCompile(`^(.+_)?(url|uri)$`),
+		declared: declaresFormat("uri"),
+		example:  satisfiesFormat("uri"),
+	},
+	{
+		what:         "a host name",
+		names:        regexp.MustCompile(`^(domain|hostname)$`),
+		descriptions: regexp.MustCompile(`(?i)\bdomain name\b`),
+		declared:     declaresFormat("hostname"),
+		example:      satisfiesFormat("hostname"),
+	},
+	{
+		what:     "a date",
+		names:    regexp.MustCompile(`^((.+_)?date|.+_(at|after|before))$`),
+		declared: declaresOneOfFormats("date", "date-time"),
+		example: func(value string, _ map[string]any) error {
+			if checkExampleFormat("date", value, "") == nil {
+				return nil
+			}
+			return checkExampleFormat("date-time", value, fmt.Sprintf("%q", value))
+		},
+	},
+	{
+		what:  "a git object SHA",
+		names: regexp.MustCompile(`^(.+_)?sha$`),
+		declared: func(id, path string, schema map[string]any) error {
+			if _, full := fullSHAParams[id+" "+path]; full {
+				return declaresPattern(
+					[]string{strings.Repeat("0a", 20), strings.Repeat("0a", 32)},
+					[]string{strings.Repeat("0A", 20), "0a1b2c3", "main", strings.Repeat("0a", 26)},
+				)(id, path, schema)
+			}
+			return declaresNoPattern("it also takes a ref name or an abbreviated SHA")(id, path, schema)
+		},
+		example: matches(`^[0-9a-f]{40}$`),
+	},
+	{
+		what:         "a cron expression",
+		names:        regexp.MustCompile(`^(cron|freeze_start|freeze_end)$`),
+		descriptions: regexp.MustCompile(`(?i)\bcron expression\b`),
+		declared: declaresPattern(
+			[]string{"0 1 * * *", "*/15 9-17 * * mon-fri", "0 0 1,15 * *", "0 0 * * 1#2", "0 0 L * *", "30 0 1 * * *", "@daily", "@hourly", " 0 1 * * * "},
+			[]string{"every day", "daily", "0 1 * *", "0 1 * * * * *", "@reboot", "@DAILY", ""},
+		),
+		example: matches(`^[0-9*/,-]+( [0-9*/,-]+){4}$`),
+	},
+	{
+		what:     "a duration",
+		names:    regexp.MustCompile(`^duration$`),
+		declared: declaresNoPattern("GitLab also takes forms such as 1 hour that a pattern would refuse"),
+		example:  matches(`^([0-9]+(mo|[wdhm]))+$`),
+	},
+	{
+		what:  "a SHA-256 digest",
+		names: regexp.MustCompile(`^(.+_)?digest$`),
+		declared: declaresPattern(
+			[]string{strings.Repeat("0a", 32), strings.Repeat("0A", 32), "sha256:" + strings.Repeat("0a", 32)},
+			[]string{strings.Repeat("0a", 20), strings.Repeat("0a", 31) + "0", "SHA256:" + strings.Repeat("0a", 32), "value"},
+		),
+		example: matches(`^[0-9a-f]{64}$`),
+	},
+	{
+		what:  "an SSH key fingerprint",
+		names: regexp.MustCompile(`^fingerprint$`),
+		declared: declaresPattern(
+			[]string{
+				"SHA256:" + strings.Repeat("A", 43),
+				"sha256:" + strings.Repeat("a", 43) + "=",
+				strings.TrimSuffix(strings.Repeat("aa:", 16), ":"),
+				"MD5:" + strings.TrimSuffix(strings.Repeat("0F:", 16), ":"),
+			},
+			[]string{"SHA256:abc123", "aa:bb:cc", "MD5:aa:bb:cc", "value"},
+		),
+		example: func(value string, _ map[string]any) error {
+			digest, ok := strings.CutPrefix(value, "SHA256:")
+			if !ok {
+				return fmt.Errorf("%q is not the SHA256 form ssh-keygen prints", value)
+			}
+			if decoded, err := base64.RawStdEncoding.DecodeString(digest); err != nil || len(decoded) != 32 {
+				return fmt.Errorf("%q does not hold the 32 bytes of a SHA-256 digest", value)
+			}
+			return nil
+		},
+	},
+	{
+		what:  "a container repository path pattern",
+		names: regexp.MustCompile(`^repository_path_pattern$`),
+		declared: declaresPattern(
+			[]string{"group/project/*", "group/project/image-*", "group/project", "my.group/my_project/*"},
+			[]string{"Group/Project/*", "*/image", "group//project", "group/project/"},
+		),
+		example: func(value string, params map[string]any) error {
+			project, _ := params["project_id"].(string)
+			if project == "" || !strings.HasPrefix(strings.ToLower(value), strings.ToLower(project)) {
+				return fmt.Errorf("%q does not start with the example's project path %q, which GitLab requires", value, project)
+			}
+			return nil
+		},
+	},
+}
+
+// declaresFormat returns a declared check requiring the format given.
+func declaresFormat(format string) func(id, path string, schema map[string]any) error {
+	return declaresOneOfFormats(format)
+}
+
+// declaresOneOfFormats returns a declared check requiring one of the formats
+// given.
+func declaresOneOfFormats(formats ...string) func(id, path string, schema map[string]any) error {
+	return func(_, _ string, schema map[string]any) error {
+		if format, _ := schema["format"].(string); slices.Contains(formats, format) {
+			return nil
+		}
+		return fmt.Errorf("declares format %v, want %s", schema["format"], strings.Join(formats, " or "))
+	}
+}
+
+// declaresPattern returns a declared check requiring a pattern that accepts
+// every value of accepts and refuses every value of refuses: values a call is
+// served with, as GitLab or the handler before it reads them, and values
+// GitLab refuses, so the pattern states the rule rather than any shape.
+func declaresPattern(accepts, refuses []string) func(id, path string, schema map[string]any) error {
+	return func(_, _ string, schema map[string]any) error {
+		pattern, ok := schema["pattern"].(string)
+		if !ok {
+			return errors.New("declares no pattern")
+		}
+		expression, err := regexp.Compile(pattern)
+		if err != nil {
+			return fmt.Errorf("declares the pattern %q, which does not compile: %w", pattern, err)
+		}
+		for _, value := range accepts {
+			if !expression.MatchString(value) {
+				return fmt.Errorf("declares the pattern %q, which refuses %q, a value GitLab takes", pattern, value)
+			}
+		}
+		for _, value := range refuses {
+			if expression.MatchString(value) {
+				return fmt.Errorf("declares the pattern %q, which accepts %q, a value GitLab refuses", pattern, value)
+			}
+		}
+		return nil
+	}
+}
+
+// declaresNoPattern returns a declared check requiring no pattern, for the
+// reason given.
+func declaresNoPattern(reason string) func(id, path string, schema map[string]any) error {
+	return func(_, _ string, schema map[string]any) error {
+		if pattern, ok := schema["pattern"]; ok {
+			return fmt.Errorf("declares the pattern %v, and it should declare none: %s", pattern, reason)
+		}
+		return nil
+	}
+}
+
+// satisfiesFormat returns an example check holding the value to a format, as
+// the catalog-wide test checks the formats the validator leaves to
+// annotation.
+func satisfiesFormat(format string) func(value string, params map[string]any) error {
+	return func(value string, _ map[string]any) error {
+		return checkExampleFormat(format, value, fmt.Sprintf("%q", value))
+	}
+}
+
+// matches returns an example check holding the value to an expression.
+func matches(expression string) func(value string, params map[string]any) error {
+	compiled := regexp.MustCompile(expression)
+	return func(value string, _ map[string]any) error {
+		if !compiled.MatchString(value) {
+			return fmt.Errorf("%q does not match %s", value, expression)
+		}
+		return nil
+	}
+}
+
+// TestFind_FormatBearingParams_DeclareTheirFormatAndExampleIt verifies, for
+// every action of every catalog a server can serve, that a string find's
+// example fills whose form GitLab checks, as the parameter's name or
+// description says, is published with that form and filled with a value of
+// it. The example used to write "value" for each of them, an email address,
+// a commit SHA, a cron expression, a duration, a redirect URI among them, and
+// GitLab refused the call it built (issue 1272).
+//
+// The kinds are formatBearingKinds. Each states what the schema declares, a
+// format, or a pattern held to values GitLab takes and refuses, and what the
+// example sends. A duration declares no pattern, since GitLab also takes forms
+// such as 1 hour, and a SHA declares one only where GitLab holds it to a full
+// SHA, fullSHAParams, which also fails on an entry no catalog serves. Only
+// the parameters find's example fills are held, the required ones and the
+// first alternative group, as decided on the issue.
+func TestFind_FormatBearingParams_DeclareTheirFormatAndExampleIt(t *testing.T) {
+	seen := map[string]bool{}
+	for _, served := range servedCatalogs {
+		t.Run(served.name, func(t *testing.T) {
+			registry := NewRegistryFromCatalog(buildServedCatalog(t, served))
+			for _, entry := range registry.entries {
+				description := registry.describeEntry(entry)
+				params, _ := description.Example.Arguments["params"].(map[string]any)
+				visitExampleStrings(description.InputSchema, params, "", "", func(path, name string, schema map[string]any, value string) {
+					seen[description.ID+" "+path] = true
+					checkFormatBearingString(t, description.ID, params, path, name, schema, value)
+				})
+			}
+		})
+	}
+	for table, declared := range map[string]map[string]string{"fullSHAParams": fullSHAParams, "formatBearingExemptions": formatBearingExemptions} {
+		t.Run(table, func(t *testing.T) {
+			for key := range declared {
+				if !seen[key] {
+					t.Errorf("%q is declared in %s, and no example of any catalog fills it", key, table)
+				}
+			}
+		})
+	}
+}
+
+// checkFormatBearingString holds one string find's example fills, the one at
+// path in the example params of the action id, to every kind its name or its
+// schema's description says it holds, unless an exemption names it.
+func checkFormatBearingString(t *testing.T, id string, params map[string]any, path, name string, schema map[string]any, value string) {
+	t.Helper()
+	if _, exempt := formatBearingExemptions[id+" "+path]; exempt {
+		return
+	}
+	paramDescription, _ := schema["description"].(string)
+	for _, kind := range formatBearingKinds {
+		if !kind.names.MatchString(name) && (kind.descriptions == nil || !kind.descriptions.MatchString(paramDescription)) {
+			continue
+		}
+		if err := kind.declared(id, path, schema); err != nil {
+			t.Errorf("%s %s holds %s, and its schema %v", id, path, kind.what, err)
+		}
+		if err := kind.example(value, params); err != nil {
+			t.Errorf("%s %s holds %s, and its example %v", id, path, kind.what, err)
+		}
+	}
+}
+
+// visitExampleStrings calls visit for every string an example value holds,
+// with its path in the params, the name of the parameter it belongs to and
+// the schema that describes it. An element of a list is named for the list
+// and its path ends in [].
+func visitExampleStrings(schema map[string]any, value any, path, name string, visit func(path, name string, schema map[string]any, value string)) {
+	switch typed := value.(type) {
+	case string:
+		visit(path, name, schema, typed)
+	case map[string]any:
+		properties, _ := schema["properties"].(map[string]any)
+		for child, childValue := range typed {
+			childSchema, _ := properties[child].(map[string]any)
+			childPath := child
+			if path != "" {
+				childPath = path + "." + child
+			}
+			visitExampleStrings(childSchema, childValue, childPath, child, visit)
+		}
+	case []any:
+		items, _ := schema["items"].(map[string]any)
+		for _, childValue := range typed {
+			visitExampleStrings(items, childValue, path+"[]", name, visit)
+		}
 	}
 }
 
@@ -273,6 +589,15 @@ func TestFind_PublishedAlternativesAreCopies(t *testing.T) {
 // level every one of these routes accepts, the member roles' 10 to 50
 // included, and an enum that holds it is answered with it rather than with
 // its first value, No access.
+//
+// The rest are the strings of issue 1272, whose form GitLab checks and which
+// the example filled with "value": an email address, a redirect or site URL,
+// a cron expression, a duration, a Pages domain, a digest, a commit SHA where
+// a full one is required and where a ref would do, a key fingerprint, a
+// container path pattern starting with the project's path, and the access
+// levels and the check status GitLab lists. The catalog-wide rule over the
+// same strings is TestFind_FormatBearingParams_DeclareTheirFormatAndExampleIt;
+// these name the value each action is offered.
 func TestFind_ExamplesUseValuesGitLabAccepts(t *testing.T) {
 	registry := NewRegistryFromCatalog(mustCachedCatalog(t, true))
 	tests := []struct {
@@ -290,15 +615,45 @@ func TestFind_ExamplesUseValuesGitLabAccepts(t *testing.T) {
 		{action: "group.ldap_link_add", param: "group_access", want: 30},
 		{action: "member_role.create_group", param: "base_access_level", want: 30},
 		{action: "member_role.create_instance", param: "base_access_level", want: 30},
+		// Issue 1272: a string whose form GitLab checks, each of which the
+		// example filled with "value".
+		{action: "user.add_email", param: "email", want: exampleEmail},
+		{action: "user.create", param: "email", want: exampleEmail},
+		{action: "admin.import_bitbucket", param: "bitbucket_email", want: exampleEmail},
+		{action: "admin.application_create", param: "redirect_uri", want: exampleURL},
+		{action: "admin.bulk_import_start", param: "configuration.url", want: exampleURL},
+		{action: "geo.create", param: "url", want: exampleURL},
+		{action: "pipeline.schedule_create", param: "cron", want: exampleCron},
+		{action: "environment.freeze_create", param: "freeze_start", want: exampleCron},
+		{action: "environment.freeze_create", param: "freeze_end", want: exampleCron},
+		{action: "issue.spent_time_add", param: "duration", want: exampleDuration},
+		{action: "merge_request.time_estimate_set", param: "duration", want: exampleDuration},
+		{action: "project.pages_domain_create", param: "domain", want: exampleHostname},
+		{action: "attestation.list", param: "subject_digest", want: exampleDigest},
+		{action: "external_status_check.set_project_mr_status", param: "sha", want: exampleSHA},
+		{action: "external_status_check.set_project_mr_status", param: "status", want: "passed"},
+		{action: "repository.update_submodule", param: "commit_sha", want: exampleSHA},
+		{action: "repository.commit_get", param: "sha", want: exampleSHA},
+		{action: "repository.commit_discussion_list", param: "commit_sha", want: exampleSHA},
+		{action: "environment.deployment_create", param: "sha", want: exampleSHA},
+		{action: "user.key_get_by_fingerprint", param: "fingerprint", want: exampleFingerprint},
+		{action: "package.registry_rule_create", param: "repository_path_pattern", want: exampleProjectPath + "/*"},
+		{action: "package.registry_rule_create", param: "minimum_access_level_for_push", want: "maintainer"},
+		{action: "package.registry_tag_rule_create", param: "minimum_access_level_for_push", want: "maintainer"},
+		{action: "package.registry_tag_rule_create", param: "minimum_access_level_for_delete", want: "maintainer"},
 	}
 	for _, tc := range tests {
-		t.Run(tc.action, func(t *testing.T) {
+		t.Run(tc.action+" "+tc.param, func(t *testing.T) {
 			entry, ok := registry.resolveAction(tc.action)
 			if !ok {
 				t.Fatalf("resolveAction(%s) found nothing", tc.action)
 			}
-			params, _ := registry.describeEntry(entry).Example.Arguments["params"].(map[string]any)
-			if got := params[tc.param]; fmt.Sprint(got) != fmt.Sprint(tc.want) {
+			got := registry.describeEntry(entry).Example.Arguments["params"]
+			for name := range strings.SplitSeq(tc.param, ".") {
+				object, _ := got.(map[string]any)
+				got = object[name]
+			}
+			if fmt.Sprint(got) != fmt.Sprint(tc.want) {
 				t.Errorf("%s example %s = %#v, want %#v", tc.action, tc.param, got, tc.want)
 			}
 		})
