@@ -22,14 +22,15 @@ func attestationReadSpec(name string, route toolutil.ActionRoute, individualTool
 	meta := attestationActionMeta[individualTool]
 
 	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
-		Aliases:           append([]string{individualTool}, meta.aliases...),
-		Tags:              []string{"security", "attestation"},
-		Usage:             meta.usage,
-		RelatedActions:    meta.related,
-		ParameterGuidance: meta.guidance,
-		OpenWorld:         true,
-		Edition:           "premium",
-		OwnerPackage:      "attestations",
+		Aliases:              append([]string{individualTool}, meta.aliases...),
+		Tags:                 []string{"security", "attestation"},
+		Usage:                meta.usage,
+		RelatedActions:       meta.related,
+		ParameterGuidance:    meta.guidance,
+		InputSchemaOverrides: meta.overrides,
+		OpenWorld:            true,
+		Edition:              "premium",
+		OwnerPackage:         "attestations",
 		IndividualTool: toolutil.IndividualToolSpec{
 			Name:        individualTool,
 			Title:       toolutil.TitleFromName(individualTool),
@@ -45,8 +46,17 @@ type attestationActionMetaEntry struct {
 	aliases     []string
 	related     []string
 	guidance    map[string]toolutil.ParameterGuidance
+	overrides   []toolutil.InputSchemaOverride
 	description string
 }
+
+// subjectDigestPattern is the form of the subject_digest the list takes, the
+// one [subjectDigest] accepts once the blanks around it are trimmed: 64 hex
+// characters in either case, after an optional sha256: prefix in the lower
+// case OCI writes. The schema publishes it so a model knows the form, and
+// find's example fills the digest with a digest rather than the "value"
+// GitLab refused (issue 1272).
+const subjectDigestPattern = `^(sha256:)?[0-9A-Fa-f]{64}$`
 
 // attestationActionMeta maps each individual attestation tool to its non-generic
 // discovery metadata: action-specific Usage, distinctive supply-chain Aliases,
@@ -77,6 +87,7 @@ var attestationActionMeta = map[string]attestationActionMetaEntry{
 				CommonConfusions: []string{"Use the artifact's SHA-256 content digest, not a Git commit SHA (40 hex characters), a package version, or an attestation IID."},
 			},
 		},
+		overrides:   []toolutil.InputSchemaOverride{toolutil.SchemaPatternOverride("subject_digest", subjectDigestPattern)},
 		description: "List SLSA build provenance attestations for a project artifact by subject digest (Ultimate). Returns: each attestation's id, iid, project_id, build_id, status, predicate_kind, predicate_type, subject_digest, download_url, and created/updated/expire timestamps, with pagination metadata. See also: gitlab_download_attestation, gitlab_package_list, gitlab_project_get.",
 	},
 	"gitlab_download_attestation": {
