@@ -76,6 +76,27 @@ func TestActionSpecs_VariableValueGuidance(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_Cron_IsHeldToACronLine verifies that the two actions that
+// send a cron expression publish it with toolutil.CronPattern, so a model
+// reading the schema knows the form GitLab parses, and find's example fills it
+// with a cron line rather than the "value" GitLab refused (issue 1272). No
+// other action carries the pattern.
+func TestActionSpecs_Cron_IsHeldToACronLine(t *testing.T) {
+	sendsCron := map[string]bool{"gitlab_pipeline_schedule_create": true, "gitlab_pipeline_schedule_update": true}
+	for _, spec := range ActionSpecs(testutil.NewTestClient(t, pipelineScheduleActionHandler())) {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			properties, _ := spec.Route.InputSchema["properties"].(map[string]any)
+			cron, hasCron := properties["cron"].(map[string]any)
+			if hasCron != sendsCron[spec.IndividualTool.Name] {
+				t.Fatalf("%s has a cron property: %t, want %t", spec.IndividualTool.Name, hasCron, sendsCron[spec.IndividualTool.Name])
+			}
+			if hasCron && cron["pattern"] != toolutil.CronPattern {
+				t.Errorf("%s cron pattern = %v, want toolutil.CronPattern", spec.IndividualTool.Name, cron["pattern"])
+			}
+		})
+	}
+}
+
 // TestActionSpecs_DeleteOutputs verifies delete routes preserve their success messages.
 func TestActionSpecs_DeleteOutputs(t *testing.T) {
 	byTool := pipelineScheduleSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, pipelineScheduleActionHandler())))

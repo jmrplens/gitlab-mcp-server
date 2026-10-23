@@ -301,6 +301,13 @@ func pipelineScheduleOptions(actionName, individualTool string) toolutil.ActionS
 			toolutil.SchemaEnumOverride("scope", "active", "inactive"),
 		}
 	}
+	if actionName == "schedule_create" || actionName == "schedule_update" {
+		// GitLab refuses a schedule whose cron Fugit cannot parse (CronValidator),
+		// and find's example wrote "value" for it (issue 1272).
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPatternOverride("cron", toolutil.CronPattern),
+		}
+	}
 	if actionName == "schedule_create_variable" || actionName == "schedule_edit_variable" {
 		options.ParameterGuidance["value"] = toolutil.ParameterGuidance{
 			SemanticRole: "pipeline_schedule_variable_value",

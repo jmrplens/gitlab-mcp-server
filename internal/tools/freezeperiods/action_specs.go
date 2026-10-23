@@ -70,14 +70,26 @@ func freezePeriodOptions(actionName, individualTool string) toolutil.ActionSpecO
 		}
 	}
 
+	// GitLab refuses a freeze period whose start or end Fugit cannot parse
+	// (CronValidator on both), and find's example wrote "value" for each
+	// (issue 1272).
+	var overrides []toolutil.InputSchemaOverride
+	if actionName == "freeze_create" || actionName == "freeze_update" {
+		overrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPatternOverride("freeze_start", toolutil.CronPattern),
+			toolutil.SchemaPatternOverride("freeze_end", toolutil.CronPattern),
+		}
+	}
+
 	return toolutil.ActionSpecOptions{
-		Aliases:           aliases,
-		Tags:              []string{"environment", "freeze_period", "deployment"},
-		Usage:             usage,
-		RelatedActions:    []string{"environment.list", "environment.deployment_list", "pipeline.list"},
-		ParameterGuidance: guidance,
-		OpenWorld:         true,
-		OwnerPackage:      "freezeperiods",
-		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		Aliases:              aliases,
+		Tags:                 []string{"environment", "freeze_period", "deployment"},
+		Usage:                usage,
+		RelatedActions:       []string{"environment.list", "environment.deployment_list", "pipeline.list"},
+		ParameterGuidance:    guidance,
+		InputSchemaOverrides: overrides,
+		OpenWorld:            true,
+		OwnerPackage:         "freezeperiods",
+		IndividualTool:       toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }

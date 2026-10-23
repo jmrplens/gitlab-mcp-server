@@ -196,6 +196,31 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	t.Error("expected text content in cancellation result")
 }
 
+// TestActionSpecs_FreezeWindow_IsHeldToCronLines verifies that the two
+// actions that send a freeze window publish its start and its end with
+// toolutil.CronPattern, so a model reading the schema knows the form GitLab
+// parses, and find's example fills each with a cron line rather than the
+// "value" GitLab refused (issue 1272). The other three actions take no cron.
+func TestActionSpecs_FreezeWindow_IsHeldToCronLines(t *testing.T) {
+	sendsWindow := map[string]bool{"gitlab_create_freeze_period": true, "gitlab_update_freeze_period": true}
+	for _, spec := range ActionSpecs(nil) {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			properties, _ := spec.Route.InputSchema["properties"].(map[string]any)
+			for _, name := range []string{"freeze_start", "freeze_end"} {
+				t.Run(name, func(t *testing.T) {
+					property, has := properties[name].(map[string]any)
+					if has != sendsWindow[spec.IndividualTool.Name] {
+						t.Fatalf("%s has a %s property: %t, want %t", spec.IndividualTool.Name, name, has, sendsWindow[spec.IndividualTool.Name])
+					}
+					if has && property["pattern"] != toolutil.CronPattern {
+						t.Errorf("%s %s pattern = %v, want toolutil.CronPattern", spec.IndividualTool.Name, name, property["pattern"])
+					}
+				})
+			}
+		})
+	}
+}
+
 func freezePeriodSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))
