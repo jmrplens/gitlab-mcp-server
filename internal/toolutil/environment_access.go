@@ -124,14 +124,19 @@ func checkEnvironmentAccess[D, A EnvironmentAccessEntry](operation string, deplo
 // deployAccessProblem says what a deploy access level breaks, empty when
 // nothing. On an update an entry with an id needs no grantee, since it names
 // the existing entry it changes or removes.
+//
+// The conditions are early returns rather than the cases of a tagless switch,
+// whose expressions no coverage profile places, which leaves their mutants
+// unmeasured.
 func deployAccessProblem(access EnvironmentAccess, update bool) string {
 	grantees := access.grantees()
-	switch {
-	case len(grantees) > 1:
+	if len(grantees) > 1 {
 		return "names " + joinNames(grantees) + ", and an entry names exactly one of access_level, user_id or group_id"
-	case len(grantees) == 1 || (update && access.ID != nil):
+	}
+	if len(grantees) == 1 || (update && access.ID != nil) {
 		return access.valueProblem()
-	case update:
+	}
+	if update {
 		return "names neither an existing entry by id nor one of access_level, user_id or group_id"
 	}
 	return "names none of access_level, user_id or group_id, and an entry names exactly one"
@@ -247,16 +252,8 @@ func requiredApprovalsRange() map[string]any {
 // GitLab accepts: an enum without it would refuse a call such as
 // {"user_id": 5, "access_level": null}.
 func environmentValueOverrides() []InputSchemaOverride {
-	levels := make([]any, 0, len(environmentAccessLevels)+1)
-	for _, level := range environmentAccessLevels {
-		levels = append(levels, level)
-	}
-	inheritance := make([]any, 0, len(environmentInheritanceTypes)+1)
-	for _, value := range environmentInheritanceTypes {
-		inheritance = append(inheritance, value)
-	}
-	levels = append(levels, nil)
-	inheritance = append(inheritance, nil)
+	levels := nullableEnum(environmentAccessLevels)
+	inheritance := nullableEnum(environmentInheritanceTypes)
 	return []InputSchemaOverride{
 		SchemaPropertyOverride("deploy_access_levels.access_level", map[string]any{"enum": levels}),
 		SchemaPropertyOverride("deploy_access_levels.group_inheritance_type", map[string]any{"enum": inheritance}),
@@ -264,4 +261,16 @@ func environmentValueOverrides() []InputSchemaOverride {
 		SchemaPropertyOverride("approval_rules.group_inheritance_type", map[string]any{"enum": inheritance}),
 		SchemaPropertyOverride("required_approval_count", map[string]any{"minimum": 0, "maximum": 0}),
 	}
+}
+
+// nullableEnum returns values as the members of an enum, followed by null.
+// The slice is sized by append alone: a capacity worked out beforehand would
+// change nothing anyone can observe, and gremlins reported the arithmetic
+// that computed it as a mutant no test could kill.
+func nullableEnum[T int | int64](values []T) []any {
+	var enum []any
+	for _, value := range values {
+		enum = append(enum, value)
+	}
+	return append(enum, nil)
 }
