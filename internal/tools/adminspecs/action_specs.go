@@ -434,8 +434,8 @@ func adminTags(owner string) []string {
 }
 
 // adminInputSchemaOverrides returns the JSON Schema patches for admin actions
-// whose parameters GitLab restricts to a closed set, or whose description read
-// as a value list when the value is free-form. Every enum is taken from the
+// whose parameters GitLab restricts to a closed set or to a format, or whose
+// description read as a value list when the value is free-form. Every enum is taken from the
 // GitLab API documentation, or from the `values:` list the API enforces when
 // the documentation names none (bulk import statuses), never from the SDK,
 // which types all of these as plain strings. Descriptions are replaced only
@@ -463,8 +463,19 @@ func adminInputSchemaOverrides(individualTool string) []toolutil.InputSchemaOver
 		}
 	case "gitlab_start_bulk_import":
 		// Docs: https://docs.gitlab.com/api/bulk_imports/#start-a-new-group-or-project-migration
+		// The source instance's URL sits inside configuration, where the
+		// central URL format does not reach, so find's example published it
+		// with no format (issue 1272).
 		return []toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("entities.source_type", "group_entity", "project_entity"),
+			toolutil.SchemaFormatOverride("configuration.url", "uri"),
+		}
+	case "gitlab_import_from_bitbucket_cloud":
+		// API: lib/api/import_bitbucket.rb sends bitbucket_email to Bitbucket
+		// as the account the API token authenticates, an Atlassian account's
+		// email address, and find's example wrote "value" for it (issue 1272).
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaFormatOverride("bitbucket_email", "email"),
 		}
 	case "gitlab_list_custom_attributes", "gitlab_get_custom_attribute", "gitlab_set_custom_attribute", "gitlab_delete_custom_attribute":
 		// Docs: https://docs.gitlab.com/api/custom_attributes/ (users, groups, projects);

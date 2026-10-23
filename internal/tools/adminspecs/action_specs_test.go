@@ -446,8 +446,9 @@ func TestActionSpecs_NoGenericMetadata(t *testing.T) {
 
 // TestActionSpecs_InputSchemaOverrides_ConstrainTheServedInputSchema verifies
 // that every admin parameter GitLab restricts to a closed set is served with
-// that set, and that the two parameters the package deliberately leaves
-// free-form are served with the corrected description instead.
+// that set, that the two parameters the package deliberately leaves
+// free-form are served with the corrected description instead, and that the
+// two whose form GitLab checks are served with their format.
 //
 // The expected values are spelled out here rather than read back from
 // adminInputSchemaOverrides, so the assertion is about what a model is shown
@@ -470,6 +471,7 @@ func TestActionSpecs_InputSchemaOverrides_ConstrainTheServedInputSchema(t *testi
 		path        string
 		wantEnum    []string
 		description string
+		wantFormat  string
 	}{
 		{action: "broadcast_message_create", path: "broadcast_type", wantEnum: []string{"banner", "notification"}},
 		{action: "broadcast_message_create", path: "theme", wantEnum: broadcastThemes},
@@ -491,6 +493,11 @@ func TestActionSpecs_InputSchemaOverrides_ConstrainTheServedInputSchema(t *testi
 		{action: "db_migration_mark", path: "database", description: "Database the migration belongs to. Defaults to main."},
 		{action: "feature_set", path: "project", description: "Project path such as gitlab-org/gitlab-foss. Separate several paths with commas."},
 		{action: "terraform_state_unlock", path: "name", description: "Terraform state name. Use params.name for values such as production or eval-unlock-123. Do not use id."},
+		// A format rather than a set: the source instance's URL, inside the
+		// configuration object the central URL format does not reach, and the
+		// Atlassian account's email (issue 1272).
+		{action: "bulk_import_start", path: "configuration.url", wantFormat: "uri"},
+		{action: "import_bitbucket", path: "bitbucket_email", wantFormat: "email"},
 	}
 
 	for _, tt := range tests {
@@ -502,6 +509,9 @@ func TestActionSpecs_InputSchemaOverrides_ConstrainTheServedInputSchema(t *testi
 			property := schemaPropertyAt(t, spec.Route.InputSchema, tt.path)
 			if got := schemaEnumValues(t, property); !slices.Equal(got, tt.wantEnum) {
 				t.Fatalf("%s %s enum = %v, want %v", tt.action, tt.path, got, tt.wantEnum)
+			}
+			if got := property["format"]; tt.wantFormat != "" && got != tt.wantFormat {
+				t.Fatalf("%s %s format = %v, want %s", tt.action, tt.path, got, tt.wantFormat)
 			}
 			if tt.description == "" {
 				return
@@ -540,6 +550,7 @@ func TestActionSpecs_InputSchemaOverrides_CoverExactlyTheDocumentedActions(t *te
 		"custom_attr_set",
 		"db_migration_mark",
 		"feature_set",
+		"import_bitbucket",
 		"import_bitbucket_server",
 		"import_github",
 		"terraform_state_unlock",

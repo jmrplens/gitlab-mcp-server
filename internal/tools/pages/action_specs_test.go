@@ -94,6 +94,28 @@ func TestActionSpecs_ProjectGuidance_OnlyTheInstanceWideListingTakesNoProject(t 
 	}
 }
 
+// TestActionSpecs_Domain_IsAHostName verifies that the four actions naming a
+// Pages domain publish it with the hostname format, since GitLab validates a
+// domain with its hostname validator, so find's example names example.com
+// where it wrote "value" (issue 1272). The domain is the guided parameter of
+// exactly those four, and no other action takes one.
+func TestActionSpecs_Domain_IsAHostName(t *testing.T) {
+	byTool := pagesSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, pagesActionHandler())))
+
+	for toolName, spec := range byTool {
+		t.Run(toolName, func(t *testing.T) {
+			properties, _ := spec.Route.InputSchema["properties"].(map[string]any)
+			domain, has := properties["domain"].(map[string]any)
+			if _, guided := spec.ParameterGuidance["domain"]; has != guided {
+				t.Fatalf("%s has a domain property: %t, and domain guidance: %t", toolName, has, guided)
+			}
+			if has && domain["format"] != "hostname" {
+				t.Errorf("%s domain format = %v, want hostname", toolName, domain["format"])
+			}
+		})
+	}
+}
+
 // TestActionSpecs_CallAllRoutes exercises every Pages tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := pagesSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, pagesActionHandler())))

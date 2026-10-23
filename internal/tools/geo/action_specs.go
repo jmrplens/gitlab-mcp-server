@@ -48,13 +48,28 @@ func geoReadSpec(name string, route toolutil.ActionRoute, individualTool string)
 func geoCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := geoOptions(individualTool)
 	decorateGeoMeta(&options, individualTool)
+	options.InputSchemaOverrides = geoURLOverrides(name)
 	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
 func geoUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := geoOptions(individualTool)
 	decorateGeoMeta(&options, individualTool)
+	options.InputSchemaOverrides = geoURLOverrides(name)
 	return toolutil.NewUpdateActionSpec(name, route, options)
+}
+
+// geoURLOverrides publishes the url of a site the create or the edit sends as
+// an absolute URL, which GitLab validates as an addressable URL. The central
+// format reaches a plain string alone, and the url is a pointer the SDK
+// writes as a nullable one, so find's example published it with no format
+// (issue 1272). internal_url keeps none: GitLab allows it blank, which a
+// format would not. The other actions send no url.
+func geoURLOverrides(name string) []toolutil.InputSchemaOverride {
+	if name != "create" && name != "edit" {
+		return nil
+	}
+	return []toolutil.InputSchemaOverride{toolutil.SchemaFormatOverride("url", "uri")}
 }
 
 func geoDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

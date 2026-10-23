@@ -196,6 +196,30 @@ func TestGeoActionMeta_EveryEntryIsComplete(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_SiteURL_IsAnAbsoluteURL verifies that the create and the
+// edit publish a site's url with the uri format GitLab's addressable URL
+// validation stands for, where the nullable string the SDK wrote carried
+// none and find's example published no format (issue 1272), and that the
+// internal_url GitLab allows blank stays without one. No other action takes
+// a url.
+func TestActionSpecs_SiteURL_IsAnAbsoluteURL(t *testing.T) {
+	for _, spec := range ActionSpecs(nil) {
+		t.Run(spec.Name, func(t *testing.T) {
+			properties, _ := spec.Route.InputSchema["properties"].(map[string]any)
+			url, has := properties["url"].(map[string]any)
+			if want := spec.Name == "create" || spec.Name == "edit"; has != want {
+				t.Fatalf("%s has a url property: %t, want %t", spec.Name, has, want)
+			}
+			if has && url["format"] != "uri" {
+				t.Errorf("%s url format = %v, want uri", spec.Name, url["format"])
+			}
+			if internal, ok := properties["internal_url"].(map[string]any); ok && internal["format"] != nil {
+				t.Errorf("%s internal_url format = %v, want none, since GitLab allows it blank", spec.Name, internal["format"])
+			}
+		})
+	}
+}
+
 func geoSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

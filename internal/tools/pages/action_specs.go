@@ -96,24 +96,29 @@ func pagesOptions(actionName, individualTool string) toolutil.ActionSpecOptions 
 		}
 	}
 
+	// A Pages domain is a host name: GitLab validates it with the hostname
+	// validator, and find's example wrote "value" for it (issue 1272).
+	var overrides []toolutil.InputSchemaOverride
 	if actionName == "pages_domain_get" || actionName == "pages_domain_create" || actionName == "pages_domain_update" || actionName == "pages_domain_delete" {
 		guidance["domain"] = toolutil.ParameterGuidance{
 			SemanticRole:   "pages_domain",
 			ValueSource:    "Fully qualified domain name of the Pages domain.",
 			ExampleBinding: `params.domain:"example.com"`,
 		}
+		overrides = []toolutil.InputSchemaOverride{toolutil.SchemaFormatOverride("domain", "hostname")}
 	}
 
 	aliases := append([]string{individualTool}, meta.aliases...)
 
 	return toolutil.ActionSpecOptions{
-		Aliases:           aliases,
-		Tags:              []string{"project", "pages"},
-		Usage:             meta.usage,
-		RelatedActions:    append([]string(nil), meta.related...),
-		ParameterGuidance: guidance,
-		OpenWorld:         true,
-		OwnerPackage:      "pages",
+		Aliases:              aliases,
+		Tags:                 []string{"project", "pages"},
+		Usage:                meta.usage,
+		RelatedActions:       append([]string(nil), meta.related...),
+		ParameterGuidance:    guidance,
+		InputSchemaOverrides: overrides,
+		OpenWorld:            true,
+		OwnerPackage:         "pages",
 		IndividualTool: toolutil.IndividualToolSpec{
 			Name:        individualTool,
 			Title:       toolutil.TitleFromName(individualTool),
