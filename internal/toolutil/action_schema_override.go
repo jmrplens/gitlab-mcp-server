@@ -31,6 +31,31 @@ func SchemaFormatOverride(propertyPath, format string) InputSchemaOverride {
 	return SchemaPropertyOverride(propertyPath, map[string]any{"format": format})
 }
 
+// SchemaPatternOverride returns an input-schema override that sets the JSON
+// Schema `pattern` of the string parameter at propertyPath: the form GitLab
+// holds the value to where no format names it, such as [CronPattern] or
+// [FullCommitSHAPattern].
+func SchemaPatternOverride(propertyPath, pattern string) InputSchemaOverride {
+	return SchemaPropertyOverride(propertyPath, map[string]any{"pattern": pattern})
+}
+
+// FullCommitSHAPattern is the pattern of a full commit SHA, for a parameter
+// GitLab holds to one rather than to any revision: 40 lower-case hex digits,
+// or 64 in a SHA-256 repository. Git writes an object ID in lower case and
+// GitLab compares these as text, so an upper-case SHA names no commit there.
+// A parameter that also takes a branch, a tag or an abbreviated SHA, which
+// GitLab resolves to the commit, gets no pattern: it would refuse the branch
+// names that work there (issue 1272).
+const FullCommitSHAPattern = `^([0-9a-f]{40}|[0-9a-f]{64})$`
+
+// CronPattern is the pattern of a cron expression as GitLab parses one, with
+// Fugit: five fields, six with seconds first, or one of the @ shortcuts Fugit
+// expands, blanks around it allowed. A field is held to no syntax of its own,
+// since Fugit takes names, ranges, steps, L, # and % in one, so the pattern
+// refuses what is no cron line at all, every day or four fields, and leaves a
+// field GitLab cannot read to GitLab.
+const CronPattern = `^\s*(@(yearly|annually|monthly|weekly|daily|midnight|noon|hourly)|\S+(\s+\S+){4,5})\s*$`
+
 // SchemaApproverIDsOverride widens the array item type of an
 // [ApproverIDsFilter] parameter so both numeric user IDs and the "Any"/"None"
 // literals pass input validation. Without it the reflected schema advertises
@@ -286,12 +311,14 @@ const (
 	formatDateTime = "date-time"
 	formatDate     = "date"
 	formatURI      = "uri"
+	formatEmail    = "email"
 )
 
-// canonicalParamFormats maps GitLab-universal date/time input parameters to
-// their JSON Schema `format`. GitLab dates are always ISO 8601 — never locale
-// ordered (DD/MM vs MM/DD): timestamp filters take an ISO 8601 date-time and
-// date-only fields take YYYY-MM-DD. These names carry the same format across
+// canonicalParamFormats maps GitLab-universal input parameters, dates and
+// times, URLs and email addresses, to their JSON Schema `format`. GitLab
+// dates are always ISO 8601, never locale ordered (DD/MM vs MM/DD):
+// timestamp filters take an ISO 8601 date-time and date-only fields take
+// YYYY-MM-DD. These names carry the same format across
 // every endpoint, so the format is injected centrally (single source of truth)
 // by [NewActionSpec]. expires_at is date-only (YYYY-MM-DD) for the access
 // tokens, members, service accounts, invites, and share endpoints (client-go
@@ -329,6 +356,13 @@ var canonicalParamFormats = map[string]string{
 	"external_url":         formatURI,
 	"remote_url":           formatURI,
 	"bitbucket_server_url": formatURI,
+	// An OAuth application's redirect URI is an absolute URL wherever GitLab
+	// takes one, and an email is an address on every endpoint that names a
+	// parameter so: a user's, an invitation's, a service account's. Both
+	// used to carry no format, and find's example filled them with "value",
+	// which GitLab refuses (issue 1272).
+	"redirect_uri": formatURI,
+	"email":        formatEmail,
 }
 
 // canonicalParamRange is an inclusive integer bound for a numeric parameter.
