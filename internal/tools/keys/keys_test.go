@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -347,22 +348,67 @@ func TestGetKeyByFingerprint_APIError(t *testing.T) {
 	if !strings.HasPrefix(err.Error(), "key_get_by_fingerprint:") {
 		t.Errorf("error %q is not attributed to key_get_by_fingerprint", err)
 	}
+	if strings.Contains(err.Error(), fingerprintHint) {
+		t.Errorf("error %q carries the fingerprint hint, which is about a 400 or a 404 and not a 403", err)
+	}
 }
 
-// TestGetKeyByFingerprint_NotFound_HintsAtTheFingerprintFormat asserts the 404
-// hint names the two fingerprint spellings GitLab accepts, since a fingerprint
-// that matches nothing is far more often mistyped than absent.
-func TestGetKeyByFingerprint_NotFound_HintsAtTheFingerprintFormat(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
+// TestGetKeyByFingerprint_RefusedOrUnmatched_HintsAtTheFingerprintForms
+// asserts the two answers a fingerprint itself brings carry the hint naming
+// the forms GitLab reads: 400, which GitLab answers to a fingerprint in any
+// other form ("Failed to return the key"), and 404, a fingerprint in either
+// form that names no key, which is more often mistyped than absent. The 404
+// was the only one hinted, with forms GitLab refuses: an MD5: label it does
+// not read and 32 hex pairs where it reads 16.
+func TestGetKeyByFingerprint_RefusedOrUnmatched_HintsAtTheFingerprintForms(t *testing.T) {
+	for _, status := range []int{http.StatusBadRequest, http.StatusNotFound} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(status)
+			}))
 
-	_, err := GetKeyByFingerprint(t.Context(), client, GetByFingerprintInput{Fingerprint: "SHA256:abc123"})
-	if err == nil {
-		t.Fatal("expected error for a fingerprint GitLab matches to no key")
+			_, err := GetKeyByFingerprint(t.Context(), client, GetByFingerprintInput{Fingerprint: "SHA256:abc123"})
+			if err == nil {
+				t.Fatalf("expected an error for a %d answer", status)
+			}
+			if !strings.HasPrefix(err.Error(), "key_get_by_fingerprint:") || !strings.Contains(err.Error(), fingerprintHint) {
+				t.Errorf("error %q does not carry the fingerprint hint under its own operation", err)
+			}
+		})
 	}
-	if !strings.Contains(err.Error(), "SHA256:base64") || !strings.Contains(err.Error(), "MD5:") {
-		t.Errorf("error %q does not hint at the accepted fingerprint formats", err)
+}
+
+// TestGetKeyByFingerprint_MD5Label_IsRemovedBeforeTheRequest asserts that an
+// MD5 fingerprint copied as ssh-keygen -l -E md5 prints it, after its MD5:
+// label, reaches GitLab as the hex pairs alone, the form GitLab reads, and
+// that a SHA256 fingerprint keeps the label GitLab tells the two forms apart
+// by.
+func TestGetKeyByFingerprint_MD5Label_IsRemovedBeforeTheRequest(t *testing.T) {
+	const pairs = "ba:81:59:68:d7:6c:cd:02:02:bf:6a:9b:55:4e:af:d1"
+	cases := []struct {
+		name string
+		sent string
+		want string
+	}{
+		{name: "an MD5 fingerprint after its label", sent: "MD5:" + pairs, want: pairs},
+		{name: "an MD5 fingerprint without one", sent: pairs, want: pairs},
+		{name: "a SHA256 fingerprint", sent: "SHA256:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8", want: "SHA256:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got atomic.Value
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got.Store(r.URL.Query().Get("fingerprint"))
+				testutil.RespondJSON(w, http.StatusOK, `{"id":10,"title":"Deploy Key","key":"ssh-rsa BBBB...","user":{"id":2}}`)
+			}))
+
+			if _, err := GetKeyByFingerprint(t.Context(), client, GetByFingerprintInput{Fingerprint: tc.sent}); err != nil {
+				t.Fatalf("GetKeyByFingerprint(%q) error = %v", tc.sent, err)
+			}
+			if got.Load() != tc.want {
+				t.Errorf("GetKeyByFingerprint(%q) sent fingerprint %v, want %q", tc.sent, got.Load(), tc.want)
+			}
+		})
 	}
 }
 

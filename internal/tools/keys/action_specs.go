@@ -63,6 +63,7 @@ func decorateKeyMeta(options *toolutil.ActionSpecOptions, individualTool string)
 	if meta.description != "" {
 		options.IndividualTool.Description = meta.description
 	}
+	options.InputSchemaOverrides = meta.overrides
 }
 
 // keyActionMetaEntry is the discovery metadata for one admin key-lookup action.
@@ -71,7 +72,15 @@ type keyActionMetaEntry struct {
 	aliases     []string
 	related     []string
 	description string
+	overrides   []toolutil.InputSchemaOverride
 }
+
+// fingerprintPattern is the form of the fingerprint the lookup takes: SHA256:
+// (or sha256:, which GitLab reads alike) and the 43 base64 characters of a
+// SHA-256 digest, the padding allowed, or the 16 colon-separated hex pairs of
+// an MD5 digest, after the MD5: label the handler removes. GitLab refuses any
+// other form with 400, and find's example wrote "value" (issue 1272).
+const fingerprintPattern = `^((sha256|SHA256):[A-Za-z0-9+/]{43}=?|(MD5:)?[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){15})$`
 
 // keyActionMeta maps each individual key-lookup tool to its discovery
 // metadata. RelatedActions point at the per-user SSH-key surface (user.*)
@@ -84,9 +93,10 @@ var keyActionMeta = map[string]keyActionMetaEntry{
 		description: "Look up an SSH key by its global ID and return the owning user. Returns: the key ID, title, public key, creation time, and the owning user (ID, username, name). See also: gitlab_get_ssh_key, gitlab_list_ssh_keys, gitlab_list_ssh_keys_for_user.",
 	},
 	"gitlab_get_key_by_fingerprint": {
-		usage:       "Look up a single SSH key or deploy key by its fingerprint and return the owning user. Admin-only on self-managed instances. Accepts the modern SHA256:base64 form or the legacy MD5:aa:bb:cc hex-pairs form. Use when you have only a key fingerprint (for example from an auth log) and need to identify its owner.",
+		usage:       "Look up a single SSH key or deploy key by its fingerprint and return the owning user. Admin-only on self-managed instances. Accepts the modern SHA256:base64 form or the legacy MD5 form of 16 hex pairs, with or without its MD5: label. Use when you have only a key fingerprint (for example from an auth log) and need to identify its owner.",
 		aliases:     []string{"get ssh key by fingerprint", "look up ssh key owner by fingerprint", "find ssh key from fingerprint", "whose ssh key has this fingerprint"},
 		related:     []string{"user.get_ssh_key", "user.ssh_keys", "user.ssh_keys_for_user"},
 		description: "Look up an SSH key or deploy key by fingerprint and return the owning user. Returns: the key ID, title, public key, creation time, and the owning user (ID, username, name). See also: gitlab_get_ssh_key, gitlab_list_ssh_keys, gitlab_list_ssh_keys_for_user.",
+		overrides:   []toolutil.InputSchemaOverride{toolutil.SchemaPatternOverride("fingerprint", fingerprintPattern)},
 	},
 }
