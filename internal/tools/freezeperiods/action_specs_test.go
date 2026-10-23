@@ -4,6 +4,7 @@ package freezeperiods
 import (
 	"context"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -39,6 +40,34 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 	if byTool["gitlab_update_freeze_period"].ParameterGuidance["freeze_period_id"].SemanticRole == "" {
 		t.Fatal("gitlab_update_freeze_period should define freeze_period_id parameter guidance")
+	}
+}
+
+// TestActionSpecs_EachAction_TakesItsAliasesAndUsageFromTheTable verifies
+// that every action is served the aliases and the Usage freezePeriodActionMeta
+// holds under its name, none of them empty, and that the table names no
+// action the package does not serve, so a misspelled key cannot leave an
+// action with no discovery metadata unnoticed.
+func TestActionSpecs_EachAction_TakesItsAliasesAndUsageFromTheTable(t *testing.T) {
+	specs := ActionSpecs(nil)
+	for _, spec := range specs {
+		t.Run(spec.Name, func(t *testing.T) {
+			meta, ok := freezePeriodActionMeta[spec.Name]
+			if !ok || meta.usage == "" || len(meta.aliases) == 0 {
+				t.Fatalf("freezePeriodActionMeta[%q] = %+v, %t, want an entry with aliases and a usage", spec.Name, meta, ok)
+			}
+			if spec.Usage != meta.usage {
+				t.Errorf("%s Usage = %q, want %q", spec.Name, spec.Usage, meta.usage)
+			}
+			for _, alias := range meta.aliases {
+				if !slices.Contains(spec.Aliases, alias) {
+					t.Errorf("%s Aliases = %v, missing %q", spec.Name, spec.Aliases, alias)
+				}
+			}
+		})
+	}
+	if len(freezePeriodActionMeta) != len(specs) {
+		t.Errorf("freezePeriodActionMeta holds %d actions, and the package serves %d", len(freezePeriodActionMeta), len(specs))
 	}
 }
 
