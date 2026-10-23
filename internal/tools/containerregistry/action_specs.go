@@ -96,7 +96,7 @@ func registryOptions(individualTool string) toolutil.ActionSpecOptions {
 	case toolRegistryProtList:
 		usage = "List container registry protection rules for a project."
 	case toolRegistryProtCreate:
-		usage = "Create a container registry protection rule for a project."
+		usage = "Create a container registry protection rule for a project, with a repository path pattern that starts with the project's full path and at least one of the two minimum access levels."
 	case toolRegistryProtUpdate:
 		usage = "Update a container registry protection rule in a project."
 	case toolRegistryProtDelete:
@@ -112,16 +112,54 @@ func registryOptions(individualTool string) toolutil.ActionSpecOptions {
 	}
 
 	options := toolutil.ActionSpecOptions{
-		Aliases:        []string{individualTool},
-		Tags:           []string{"container", "package", "registry"},
-		Usage:          usage,
-		RelatedActions: []string{actionProjectGet, "package.list"},
-		OpenWorld:      true,
-		OwnerPackage:   "containerregistry",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		Aliases:              []string{individualTool},
+		Tags:                 []string{"container", "package", "registry"},
+		Usage:                usage,
+		RelatedActions:       []string{actionProjectGet, "package.list"},
+		InputSchemaOverrides: registryInputSchemaOverrides(individualTool),
+		OpenWorld:            true,
+		OwnerPackage:         "containerregistry",
+		IndividualTool:       toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 	applyRegistryDiscovery(&options, individualTool)
 	return options
+}
+
+// repositoryPathPatternForm is the form GitLab holds a container repository
+// path pattern to (Gitlab::Regex.container_repository_name_regex, with *
+// allowed): lower-case names joined by ., _, /, __ or dashes, a * standing
+// for a character. GitLab also refuses a pattern that does not start with
+// the project's full path, a rule across two parameters no pattern states,
+// so the description says it.
+const repositoryPathPatternForm = `^[a-z0-9]+(([._/]|__|-*)[a-z0-9*])*$`
+
+// registryInputSchemaOverrides states what GitLab checks on the parameters a
+// protection rule is created or updated with, where find's example wrote
+// "value" and GitLab refused the call (issue 1272): the form of a repository
+// path pattern, and the three minimum access levels a create takes, which
+// lib/api/project_container_registry_protection_rules.rb and its tag rule
+// sibling list as values. A repository rule's create also names at least
+// one of its two levels, GitLab's at_least_one_of, which the example left
+// out. An update's levels also take an empty string, which removes one, and
+// keep no enum.
+func registryInputSchemaOverrides(individualTool string) []toolutil.InputSchemaOverride {
+	switch individualTool {
+	case toolRegistryProtCreate:
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaPatternOverride("repository_path_pattern", repositoryPathPatternForm),
+			toolutil.SchemaEnumOverride("minimum_access_level_for_push", "maintainer", "owner", "admin"),
+			toolutil.SchemaEnumOverride("minimum_access_level_for_delete", "maintainer", "owner", "admin"),
+			toolutil.SchemaAnyOfRequired("minimum_access_level_for_push", "minimum_access_level_for_delete"),
+		}
+	case toolRegistryProtUpdate:
+		return []toolutil.InputSchemaOverride{toolutil.SchemaPatternOverride("repository_path_pattern", repositoryPathPatternForm)}
+	case toolRegistryTagProtCreate:
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("minimum_access_level_for_push", "maintainer", "owner", "admin"),
+			toolutil.SchemaEnumOverride("minimum_access_level_for_delete", "maintainer", "owner", "admin"),
+		}
+	}
+	return nil
 }
 
 // applyRegistryDiscovery layers per-tool discovery metadata (natural-language

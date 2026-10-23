@@ -3,7 +3,9 @@ package containerregistry
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -57,6 +59,96 @@ func TestTagProtectionMetadata_Discoverability(t *testing.T) {
 	}
 	if tags := byTool["gitlab_registry_list_tags"]; !slices.Contains(tags.RelatedActions, "package.registry_tag_rule_list") {
 		t.Errorf("registry_list_tags should cross-reference tag protection, got %v", tags.RelatedActions)
+	}
+}
+
+// TestActionSpecs_ProtectionRules_StateWhatGitLabChecks verifies the schemas
+// of the protection rule actions, where find's example wrote "value" for a
+// path pattern and for both access levels of a tag rule, and GitLab refused
+// the call (issue 1272): a repository path pattern carries
+// repositoryPathPatternForm on the create and the update, the levels of both
+// creates carry the three values GitLab lists, and a repository rule's
+// create names at least one of its two levels, as GitLab's at_least_one_of
+// does, so the example sends one. The updates' levels keep no enum, since an
+// empty string removes one, and no other action carries any of it.
+func TestActionSpecs_ProtectionRules_StateWhatGitLabChecks(t *testing.T) {
+	levels := "[maintainer owner admin]"
+	want := map[string]map[string]string{
+		toolRegistryProtCreate: {
+			"repository_path_pattern":         repositoryPathPatternForm,
+			"minimum_access_level_for_push":   levels,
+			"minimum_access_level_for_delete": levels,
+		},
+		toolRegistryProtUpdate: {"repository_path_pattern": repositoryPathPatternForm},
+		toolRegistryTagProtCreate: {
+			"minimum_access_level_for_push":   levels,
+			"minimum_access_level_for_delete": levels,
+		},
+	}
+	for _, spec := range ActionSpecs(nil) {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			wantAnyOf := ""
+			if spec.IndividualTool.Name == toolRegistryProtCreate {
+				wantAnyOf = "[map[required:[minimum_access_level_for_push]] map[required:[minimum_access_level_for_delete]]]"
+			}
+			gotAnyOf := ""
+			if anyOf, ok := spec.Route.InputSchema["anyOf"]; ok {
+				gotAnyOf = fmt.Sprint(anyOf)
+			}
+			if gotAnyOf != wantAnyOf {
+				t.Errorf("%s anyOf = %s, want %q", spec.IndividualTool.Name, gotAnyOf, wantAnyOf)
+			}
+			properties, _ := spec.Route.InputSchema["properties"].(map[string]any)
+			for _, name := range []string{"repository_path_pattern", "minimum_access_level_for_push", "minimum_access_level_for_delete"} {
+				t.Run(name, func(t *testing.T) {
+					property, _ := properties[name].(map[string]any)
+					if got := statedRule(property); got != want[spec.IndividualTool.Name][name] {
+						t.Errorf("%s %s states %q, want %q", spec.IndividualTool.Name, name, got, want[spec.IndividualTool.Name][name])
+					}
+				})
+			}
+		})
+	}
+}
+
+// statedRule returns what a property's schema states about its value: its
+// enum written out, else its pattern, else nothing.
+func statedRule(property map[string]any) string {
+	if enum, ok := property["enum"]; ok {
+		return fmt.Sprint(enum)
+	}
+	pattern, _ := property["pattern"].(string)
+	return pattern
+}
+
+// TestRepositoryPathPatternForm_HoldsGitLabsRule verifies the path pattern
+// form against GitLab's own regular expression, each value put to it as
+// Ruby reads it: lower-case names joined by the separators it allows, with a
+// * for any character, are taken, and an upper-case name, a leading *, an
+// empty segment or a trailing separator are refused.
+func TestRepositoryPathPatternForm_HoldsGitLabsRule(t *testing.T) {
+	form := regexp.MustCompile(repositoryPathPatternForm)
+	cases := []struct {
+		value string
+		want  bool
+	}{
+		{value: "group/project/*", want: true},
+		{value: "group/project/image-*", want: true},
+		{value: "group/project", want: true},
+		{value: "my.group/my_project/*", want: true},
+		{value: "group__x/project---y", want: true},
+		{value: "Group/Project/*", want: false},
+		{value: "*/image", want: false},
+		{value: "group//project", want: false},
+		{value: "group/project/", want: false},
+		{value: "", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.value, func(t *testing.T) {
+			if got := form.MatchString(tc.value); got != tc.want {
+				t.Errorf("repositoryPathPatternForm matches %q = %t, want %t", tc.value, got, tc.want)
+			}
+		})
 	}
 }
 

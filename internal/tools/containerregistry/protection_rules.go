@@ -86,9 +86,9 @@ func ListProtectionRules(ctx context.Context, client *gitlabclient.Client, input
 // CreateProtectionRuleInput defines the repository path pattern and access thresholds for a new rule.
 type CreateProtectionRuleInput struct {
 	ProjectID                   toolutil.StringOrInt         `json:"project_id" jsonschema:"Project ID or path,required"`
-	RepositoryPathPattern       string                       `json:"repository_path_pattern" jsonschema:"Repository path pattern (e.g. my-project/my-image*),required"`
-	MinimumAccessLevelForPush   gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level for push (maintainer, owner, admin)"`
-	MinimumAccessLevelForDelete gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level for delete (maintainer, owner, admin)"`
+	RepositoryPathPattern       string                       `json:"repository_path_pattern" jsonschema:"Repository path pattern: the project's full path in lower case, then the path of the images to protect, where * matches any characters (e.g. my-group/my-project/my-image*). GitLab refuses a pattern that does not start with the project's full path,required"`
+	MinimumAccessLevelForPush   gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level for push (maintainer, owner, admin). Send at least one of the two levels"`
+	MinimumAccessLevelForDelete gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level for delete (maintainer, owner, admin). Send at least one of the two levels"`
 }
 
 // CreateProtectionRule creates a container registry protection rule.
@@ -126,7 +126,7 @@ func CreateProtectionRule(ctx context.Context, client *gitlabclient.Client, inpu
 type UpdateProtectionRuleInput struct {
 	ProjectID                   toolutil.StringOrInt          `json:"project_id" jsonschema:"Project ID or path,required"`
 	RuleID                      int64                         `json:"rule_id" jsonschema:"Protection rule ID,required"`
-	RepositoryPathPattern       string                        `json:"repository_path_pattern,omitempty" jsonschema:"Repository path pattern"`
+	RepositoryPathPattern       string                        `json:"repository_path_pattern,omitempty" jsonschema:"Repository path pattern: the project's full path in lower case, then the path of the images to protect, where * matches any characters. GitLab refuses a pattern that does not start with the project's full path"`
 	MinimumAccessLevelForPush   *gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level for push (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the delete level stays set. Omit the field to leave it untouched"`
 	MinimumAccessLevelForDelete *gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level for delete (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the push level stays set. Omit the field to leave it untouched"`
 }
