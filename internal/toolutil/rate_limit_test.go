@@ -926,6 +926,16 @@ func TestAttachRateLimit_GatesCompletionWithoutBlockingIt(t *testing.T) {
 	})
 }
 
+// TestDefaultThrottleWindow_Value_IsTenSeconds pins the reporting interval for
+// refusals in the unit it is read in. It is written as nanoseconds, so that no
+// product sits at package level where coverage never reaches it, and this
+// holds the nanoseconds to the ten seconds its comment names.
+func TestDefaultThrottleWindow_Value_IsTenSeconds(t *testing.T) {
+	if defaultThrottleWindow != 10*time.Second {
+		t.Errorf("defaultThrottleWindow = %v, want 10s", defaultThrottleWindow)
+	}
+}
+
 // TestRateLimiter_RefusalIsReportedAndSelfSuppressed pins that a throttled
 // deployment says so, without saying it ninety-five times a second.
 //

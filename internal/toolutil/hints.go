@@ -118,7 +118,11 @@ const (
 	defusedHintsHeading = "&#128161; **Next steps:**"
 	// hintsBlockOpening is the whole opening of a server-authored section: the
 	// horizontal rule, the heading, and the newline before the first bullet.
-	hintsBlockOpening = "---\n" + hintsHeading + "\n"
+	// It is written out whole rather than joined to hintsHeading, because a
+	// join at package level sits in no block Go's coverage counts, and
+	// TestHintsBlockOpening_IsTheRuleTheHeadingAndANewline holds the two to
+	// each other.
+	hintsBlockOpening = "---\n\U0001F4A1 **Next steps:**\n"
 )
 
 // DefuseHintsHeading rewrites every copy of the server's guidance heading in s

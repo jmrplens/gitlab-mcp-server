@@ -12,6 +12,19 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// TestHintsBlockOpening_IsTheRuleTheHeadingAndANewline holds the opening of a
+// server-authored section to the heading it is written with: a horizontal
+// rule, the heading, and the newline before the first bullet. The opening is
+// written out whole, so that no join sits at package level where coverage
+// never reaches it, and this is what keeps the two spellings from drifting
+// apart: WriteHints writes the opening and DefuseHintsHeading looks for the
+// heading.
+func TestHintsBlockOpening_IsTheRuleTheHeadingAndANewline(t *testing.T) {
+	if want := "---\n" + hintsHeading + "\n"; hintsBlockOpening != want {
+		t.Errorf("hintsBlockOpening = %q, want %q", hintsBlockOpening, want)
+	}
+}
+
 // TestWriteHints_MultipleHints verifies that WriteHints appends multiple hint
 // lines as a formatted next-steps section to a strings.Builder.
 func TestWriteHints_MultipleHints(t *testing.T) {

@@ -28,8 +28,10 @@ import (
 const (
 	// minInt64AsFloat is math.MinInt64 exactly, and the bound is inclusive:
 	// -2^63 is a power of two, so a float64 holds it without rounding and the
-	// conversion back to int64 is exact.
-	minInt64AsFloat = -float64(1 << 63)
+	// conversion back to int64 is exact. It is the constant converted rather
+	// than a negation written here, which at package level sits in no block
+	// Go's coverage counts.
+	minInt64AsFloat = float64(math.MinInt64)
 	// maxInt64AsFloatExclusive is 2^63, the smallest float64 an int64 cannot
 	// hold. There is no representable float64 between math.MaxInt64 and it:
 	// float64(math.MaxInt64) rounds *up* to 2^63, so a bound written as
@@ -2803,16 +2805,13 @@ func currentMetaParamSchemaMode() string {
 	return metaParamSchemaMode
 }
 
-const (
-	// paramsResourceHint is appended to the description of the params property
-	// in every meta-tool input schema, regardless of mode. It points the LLM at
-	// the per-action detail available via the gitlab://tools resource.
-	paramsResourceHint = " For the JSON Schema of a specific action's `params`, read the MCP resource `gitlab://tools/{tool}.{action}` (replace placeholders with the tool name and the chosen action)."
-
-	// metaToolParamsDescription is the canonical description for the params
-	// property generated in every meta-tool input schema.
-	metaToolParamsDescription = "Action-specific parameters as a JSON object. Required and optional fields differ per action. This envelope schema stays broad. Runtime validation applies the chosen action's schema after reserved meta keys like `confirm` are stripped." + paramsResourceHint
-)
+// metaToolParamsDescription is the canonical description for the params
+// property generated in every meta-tool input schema, regardless of mode. Its
+// last sentence points the LLM at the per-action detail available via the
+// gitlab://tools resource. It is written out whole rather than joined from two
+// constants, because a join at package level sits in no block Go's coverage
+// counts.
+const metaToolParamsDescription = "Action-specific parameters as a JSON object. Required and optional fields differ per action. This envelope schema stays broad. Runtime validation applies the chosen action's schema after reserved meta keys like `confirm` are stripped. For the JSON Schema of a specific action's `params`, read the MCP resource `gitlab://tools/{tool}.{action}` (replace placeholders with the tool name and the chosen action)."
 
 // BuildMetaToolSchema returns the input schema for a meta-tool given the
 // chosen mode. Unknown modes silently fall back to MetaParamSchemaOpaque so

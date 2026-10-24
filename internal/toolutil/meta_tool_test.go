@@ -6763,6 +6763,9 @@ func TestIntegerFromString_Int64Bounds(t *testing.T) {
 	if float64(math.MaxInt64) != maxInt64AsFloatExclusive {
 		t.Fatalf("float64(math.MaxInt64) = %v, want it to round up to 2^63 = %v", float64(math.MaxInt64), maxInt64AsFloatExclusive)
 	}
+	if minInt64AsFloat != -9223372036854775808.0 || int64(minInt64AsFloat) != math.MinInt64 {
+		t.Fatalf("minInt64AsFloat = %v, want -2^63, which converts back to math.MinInt64 exactly", minInt64AsFloat)
+	}
 
 	cases := []struct {
 		name    string

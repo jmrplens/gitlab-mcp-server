@@ -86,11 +86,16 @@ type RateLimiter struct {
 	catalog     *RateLimiter
 }
 
-// defaultThrottleWindow is the reporting interval for refusals.
+// defaultThrottleWindow is the reporting interval for refusals, 10 seconds.
 //
 // Long enough that a sustained flood costs six lines a minute, short enough
 // that a burst is visible while it is happening.
-const defaultThrottleWindow = 10 * time.Second
+//
+// It is written as nanoseconds rather than as a product of time.Second: a
+// product at package level is an arithmetic mutant no coverage profile
+// reaches, so gremlins reports it as never covered although every test that
+// reads the window reads it.
+const defaultThrottleWindow time.Duration = 10e9
 
 // methodToolsCall is the JSON-RPC method this limiter meters. It is also the
 // name a refusal is logged under when the call was refused before the tool it
