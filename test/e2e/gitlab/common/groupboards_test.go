@@ -1,11 +1,11 @@
 //go:build e2e
 
 // groupboards_test.go covers the Free half of the group board family: the
-// reads and the rename of a board, and the label columns on one. The board
-// itself comes from the fixture library, which makes it the way the boards
-// page does, since every group may have one board on every edition and
-// only a second one is Premium; the Premium create and delete live in the
-// ee package.
+// reads and the rename of a board, the switches that hide and show its Open
+// and Closed lists, and the label columns on one. The board itself comes
+// from the fixture library, which makes it the way the boards page does,
+// since every group may have one board on every edition and only a second
+// one is Premium; the Premium create and delete live in the ee package.
 
 package common
 
@@ -85,6 +85,58 @@ func TestGroupBoards_FixtureBoard_ListGetAndRename(t *testing.T) {
 		renamed := harness.Do[groupboards.GroupBoardOutput](s, actionGroupBoardUpdate, withParams(byID, map[string]any{"name": "Renamed " + board.Name}))
 		if renamed.ID != board.ID || renamed.Name != "Renamed "+board.Name {
 			e.T.Errorf("group_board_update answered board %d %q, want %d renamed", renamed.ID, renamed.Name, board.ID)
+		}
+	})
+}
+
+// TestGroupBoards_ListSwitches_HideAndShowTheOpenAndClosedLists hides both
+// lists of a fixture board and reads the board back, then shows the Open
+// list again in a call that leaves the Closed one out, and then the Closed
+// list in a call that leaves the Open one out, reading the board back after
+// each, on every surface against a board of the surface's own. So each
+// switch reaches GitLab as true and as false, and a switch the call leaves
+// out keeps its list hidden in one call and shown in the other. GitLab takes
+// both switches on every tier (issue 1241).
+func TestGroupBoards_ListSwitches_HideAndShowTheOpenAndClosedLists(t *testing.T) {
+	e := harness.New(t)
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("boardswitch"))
+		board := fixture.NewGroupBoard(e, group, "board")
+		byID := map[string]any{"group_id": group.IDParam(), "board_id": board.ID}
+
+		hidden := harness.Do[groupboards.GroupBoardOutput](s, actionGroupBoardUpdate, withParams(byID, map[string]any{"hide_backlog_list": true, "hide_closed_list": true}))
+		if hidden.ID != board.ID || !hidden.HideBacklogList || !hidden.HideClosedList {
+			e.T.Errorf("group_board_update answered board %d with hide_backlog_list %t and hide_closed_list %t, want board %d with both lists hidden",
+				hidden.ID, hidden.HideBacklogList, hidden.HideClosedList, board.ID)
+		}
+		read := harness.Do[groupboards.GroupBoardOutput](s, actionGroupBoardGet, byID)
+		if !read.HideBacklogList || !read.HideClosedList {
+			e.T.Errorf("group_board_get reads hide_backlog_list %t and hide_closed_list %t after hiding both, want both hidden",
+				read.HideBacklogList, read.HideClosedList)
+		}
+
+		shown := harness.Do[groupboards.GroupBoardOutput](s, actionGroupBoardUpdate, withParams(byID, map[string]any{"hide_backlog_list": false}))
+		if shown.HideBacklogList || !shown.HideClosedList {
+			e.T.Errorf("group_board_update answered hide_backlog_list %t and hide_closed_list %t, want the Open list shown and the Closed one still hidden",
+				shown.HideBacklogList, shown.HideClosedList)
+		}
+		read = harness.Do[groupboards.GroupBoardOutput](s, actionGroupBoardGet, byID)
+		if read.HideBacklogList || !read.HideClosedList {
+			e.T.Errorf("group_board_get reads hide_backlog_list %t and hide_closed_list %t after showing the Open list, want it shown and the Closed one still hidden",
+				read.HideBacklogList, read.HideClosedList)
+		}
+
+		both := harness.Do[groupboards.GroupBoardOutput](s, actionGroupBoardUpdate, withParams(byID, map[string]any{"hide_closed_list": false}))
+		if both.HideBacklogList || both.HideClosedList {
+			e.T.Errorf("group_board_update answered hide_backlog_list %t and hide_closed_list %t, want the Closed list shown and the Open one still shown",
+				both.HideBacklogList, both.HideClosedList)
+		}
+		read = harness.Do[groupboards.GroupBoardOutput](s, actionGroupBoardGet, byID)
+		if read.HideBacklogList || read.HideClosedList {
+			e.T.Errorf("group_board_get reads hide_backlog_list %t and hide_closed_list %t after showing the Closed list, want both shown",
+				read.HideBacklogList, read.HideClosedList)
 		}
 	})
 }
