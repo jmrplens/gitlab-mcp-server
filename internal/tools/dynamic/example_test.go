@@ -169,6 +169,12 @@ var formatBearingKinds = []formatBearingKind{
 	{
 		what:  "a git object SHA",
 		names: regexp.MustCompile(`^(.+_)?sha$`),
+		// The element of a list of SHAs, named for a list that is not
+		// (merge_request.context_commits_create's commits). A list that
+		// also takes branch names says so beside its SHAs, as
+		// repository.merge_base's refs does, and a ref that also takes a
+		// SHA says "commit SHA".
+		descriptions: regexp.MustCompile(`(?i)\blist of commit SHAs\b`),
 		declared: func(id, path string, schema map[string]any) error {
 			if _, full := fullSHAParams[id+" "+path]; full {
 				return declaresPattern(
@@ -398,7 +404,10 @@ func checkFormatBearingString(t *testing.T, id string, params map[string]any, pa
 // visitExampleStrings calls visit for every string an example value holds,
 // with its path in the params, the name of the parameter it belongs to and
 // the schema that describes it. An element of a list is named for the list
-// and its path ends in [].
+// and its path ends in []. Its schema is the list's item schema, described by
+// the list's own description when it carries none: a list of strings is
+// described where the list is ("List of commit SHAs ..."), and an element
+// read without it would hold no kind, as the context commits' did.
 func visitExampleStrings(schema map[string]any, value any, path, name string, visit func(path, name string, schema map[string]any, value string)) {
 	switch typed := value.(type) {
 	case string:
@@ -414,11 +423,28 @@ func visitExampleStrings(schema map[string]any, value any, path, name string, vi
 			visitExampleStrings(childSchema, childValue, childPath, child, visit)
 		}
 	case []any:
-		items, _ := schema["items"].(map[string]any)
+		items := elementSchema(schema)
 		for _, childValue := range typed {
 			visitExampleStrings(items, childValue, path+"[]", name, visit)
 		}
 	}
+}
+
+// elementSchema returns the schema of an element of the list schema
+// describes: its item schema, given the list's description when it carries
+// none of its own.
+func elementSchema(schema map[string]any) map[string]any {
+	items, _ := schema["items"].(map[string]any)
+	description, described := schema["description"]
+	if _, own := items["description"]; own || !described {
+		return items
+	}
+	element := maps.Clone(items)
+	if element == nil {
+		element = map[string]any{}
+	}
+	element["description"] = description
+	return element
 }
 
 // TestExampleValue_SchemaExamples_AreOfferedFirst verifies that a parameter
@@ -609,10 +635,11 @@ func TestFind_PublishedAlternativesAreCopies(t *testing.T) {
 // a cron expression, a duration, a Pages domain, a digest, a commit SHA where
 // a full one is required and where a ref would do, a key fingerprint, a
 // container path pattern starting with the project's path, the access
-// levels and the check status GitLab lists, and a changelog's semantic
-// version. The catalog-wide rule over the
-// same strings is TestFind_FormatBearingParams_DeclareTheirFormatAndExampleIt;
-// these name the value each action is offered.
+// levels and the check status GitLab lists, a changelog's semantic version,
+// and the commit SHAs of a merge request's context commits. The
+// catalog-wide rule over the same strings is
+// TestFind_FormatBearingParams_DeclareTheirFormatAndExampleIt; these name the
+// value each action is offered.
 func TestFind_ExamplesUseValuesGitLabAccepts(t *testing.T) {
 	registry := NewRegistryFromCatalog(mustCachedCatalog(t, true))
 	tests := []struct {
@@ -658,6 +685,8 @@ func TestFind_ExamplesUseValuesGitLabAccepts(t *testing.T) {
 		{action: "package.registry_tag_rule_create", param: "minimum_access_level_for_delete", want: "maintainer"},
 		{action: "repository.changelog_add", param: "version", want: exampleVersion},
 		{action: "repository.changelog_generate", param: "version", want: exampleVersion},
+		{action: "merge_request.context_commits_create", param: "commits", want: []any{exampleSHA}},
+		{action: "merge_request.context_commits_delete", param: "commits", want: []any{exampleSHA}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.action+" "+tc.param, func(t *testing.T) {
@@ -852,6 +881,7 @@ func TestExampleValue_SatisfiesEachConstraint(t *testing.T) {
 		{name: "a boolean", param: "active", schema: map[string]any{"type": "boolean"}, want: true},
 		{name: "a nullable array of identifiers", param: "user_achievement_ids", schema: map[string]any{"type": []any{"null", "array"}, "items": map[string]any{"type": "integer"}}, want: []any{123}},
 		{name: "an array of strings", param: "scopes", schema: map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, want: []any{"value"}},
+		{name: "an array of commits holds a full hex SHA", param: "commits", schema: map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, want: []any{exampleSHA}},
 		{
 			name:  "an array of objects fills each item's required fields",
 			param: "files",

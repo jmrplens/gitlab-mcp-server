@@ -320,7 +320,9 @@ func firstSchemaBranch(schema map[string]any) map[string]any {
 // duration, both published with no pattern because one would refuse values
 // GitLab takes (issue 1272); and a container repository's path pattern, which
 // GitLab holds to the project's own path, a rule across two parameters that
-// no pattern can state.
+// no pattern can state. A commit is a SHA as well: it is the name
+// [exampleValue] gives the element of a list of commits, which is what
+// merge_request.context_commits_create and context_commits_delete send.
 func placeholderForParam(name string) any {
 	switch name {
 	case "project_id", "target_project_id":
@@ -329,6 +331,8 @@ func placeholderForParam(name string) any {
 		return examplePathPattern
 	case "duration":
 		return exampleDuration
+	case "sha", "commit":
+		return exampleSHA
 	case "group_id", "namespace_id":
 		return "group/subgroup"
 	case "file_path", "artifact_path":
@@ -345,7 +349,7 @@ func placeholderForParam(name string) any {
 	if identifierParam(name) {
 		return exampleIdentifier
 	}
-	if name == "sha" || strings.HasSuffix(name, "_sha") {
+	if strings.HasSuffix(name, "_sha") {
 		return exampleSHA
 	}
 	if strings.Contains(name, "date") {
