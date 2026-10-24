@@ -1022,9 +1022,11 @@ jobs:
           esac
 
   # Configuration invariants nothing else in this pipeline can see: pinned
-  # actions, release jobs that run no code resolved at run time, stated
-  # Dependabot cooldowns, a security policy that names the shipping major, and
-  # installers that verify the release signature.
+  # actions, release jobs that run no code resolved at run time and no Go
+  # command that builds beyond this module and the standard library, stated
+  # Dependabot cooldowns, a security policy that names the shipping major,
+  # installers that verify the release signature, and every script that is not
+  # Go declared with the reason it stays.
   supply-chain:
     name: "🔗 Supply chain"
     runs-on: ubuntu-latest

@@ -1,7 +1,7 @@
 // Command audit_supply_chain audits the release supply chain's configuration
 // invariants.
 //
-// Five properties, each of which was false at some point and each of which is
+// Six properties, each of which was false at some point and each of which is
 // invisible to every other gate in this repository:
 //
 //  1. Every uses: in .github/workflows is pinned to a 40-character commit SHA,
@@ -115,6 +115,21 @@
 //  4. SECURITY.md names the major version the repository actually ships.
 //  5. Both installers verify the release's Sigstore bundle, not only a
 //     checksums.txt fetched from the same mutable release.
+//  6. Every script in another language than Go the tree holds is declared in
+//     declarations.go with the reason it has to stay, since repository
+//     tooling is a Go command under cmd/ (or under test/e2e/ for the e2e
+//     orchestration). A script is a file with a shell, Node, Python,
+//     PowerShell, Ruby or Perl extension, or one with no extension that opens
+//     with #!, found the way the other walkers here find source, except that
+//     the dot-directories at the root this repository tracks files in are
+//     read (.github, .claude but its worktrees/, .plugin and .vscode): every
+//     other dot-directory, a tool's state, and another checkout are skipped,
+//     and so are the site, plan/, npm/packages/ and every node_modules, dist
+//     and testdata. A script no declaration names fails the
+//     gate the day it is added; a declaration that names no script, gives a
+//     category this command does not define, gives no reason or names an item
+//     of issue 1114 wrongly is a finding, and so is an item of pendingPorts no
+//     pending port names any longer.
 //
 // Rules 1 and 2 do not stop at a uses: line. The action a step names is
 // opened and its steps are judged as though the workflow had written them: a

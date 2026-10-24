@@ -177,6 +177,12 @@ internal/tools/
     └── markdown.go          # Markdown formatters (self-registered via init())
 ```
 
+### Repository Tooling
+
+Tooling this repository runs, its auditors, generators and release steps, is a Go command under `cmd/`, sharing what it needs through `cmd/internal/`, or under `test/e2e/` for the end-to-end orchestration. A Go command runs natively on every platform a contributor uses, is tested with the rest of the module, and needs no interpreter or package installed at run time in CI, so new tooling is written as one.
+
+A script in another language is the exception, and `make check-supply-chain` holds the tree to a table of the ones allowed to exist (`declaredScripts` in `cmd/audit_supply_chain/declarations.go`), each with the reason it has to stay: an installer that runs before any binary of ours exists, the entry point a distribution hands its own runtime, Ruby GitLab evaluates, thin glue around another program's command line, run by a job where setting up Go would cost more than it saves or by a make target, or fixture content. The scripts still being ported are declared as pending, each with the item of issue 1114 that ports it. A new script fails the gate until it is declared, and the [command-line utilities reference](docs/development/cmd-utilities.md#audit_supply_chain) says what each category means.
+
 ## Testing
 
 ### Requirements

@@ -127,6 +127,198 @@ var declaredGuardedMatches = map[string]guardedMatch{
 	},
 }
 
+// The reasons a script in another language than Go may be declared for. Each
+// but the last is a reason it has to stay; the last is a reason it is still
+// here, which leaves the table with the item of issue 1114 that ports it.
+const (
+	scriptRunsBeforeAnyBinary    = "runs-before-any-binary"
+	scriptDistributionEntryPoint = "distribution-entry-point"
+	scriptEvaluatedInGitLab      = "evaluated-in-gitlab"
+	scriptJobGlue                = "job-glue"
+	scriptFixtureContent         = "fixture-content"
+	scriptPortPending            = "port-pending"
+)
+
+// scriptCategories are the reasons a declaration of a script may give, each
+// with what it means.
+var scriptCategories = map[string]string{
+	scriptRunsBeforeAnyBinary:    "it runs on a machine before any binary of this repository is there, as the curl | sh and irm | iex installers do",
+	scriptDistributionEntryPoint: "it is the entry point a distribution hands its own runtime, which no binary of ours can be",
+	scriptEvaluatedInGitLab:      "it is evaluated inside the GitLab container by gitlab-rails runner, embedded by the Go command that runs it",
+	scriptJobGlue:                "it is thin glue around another program's command line, run by a job where setting up Go would cost more than it saves or by a make target; the reason names the jobs and targets that run it",
+	scriptFixtureContent:         "it is content pushed to an instance as a fixture, not tooling",
+	scriptPortPending:            "an item of issue 1114 ports it into Go, and it leaves the table with that item",
+}
+
+// scriptDeclaration is why one script in another language than Go may be in
+// the tree: a category, the reason in words, and for a port still pending the
+// item of issue 1114 that ports it, whose line in [pendingPorts] is then the
+// reason.
+type scriptDeclaration struct {
+	category string
+	reason   string
+	item     int
+}
+
+// pendingPorts are the items of issue 1114 that move a script of this tree
+// into Go and have not landed, each with what the scripts become. An item no
+// pending script names any longer has landed, and its line is reported until
+// it goes.
+var pendingPorts = map[int]string{
+	1:  "the shared release-assets package (checksums.txt, digests, ELF, Mach-O and PE identification) and the commands built on it: the release binaries' ELF interpreter check and the preflight's release order",
+	2:  "one packaging command that builds the .mcpb bundles as deterministically as zip -X -D does and checks the packages server.json declares",
+	3:  "a schema check of the plugin manifests against the schemas each declares",
+	4:  "one coverage command over cmd/internal/golist that stages the module copy and still drives gremlins and gobco",
+	5:  "a command that tells a runtime crash from a failing test in a go test -json stream",
+	6:  "a Go orchestrator for the Docker e2e runs under test/e2e/, the gitlab-rails snippets embedded",
+	7:  "the Orbit fixture setup and indexer wait beside cmd/gen_orbit_record",
+	8:  "the SonarCloud scan beside the coverage command",
+	11: "the em dash and skip-command gate over the diff and the pull request description",
+	12: "the documentation link check, sharing a walker with cmd/audit_doc_tool_names",
+	13: "one command that builds and validates the npm, PyPI and NuGet packages and verifies what each registry published",
+	14: "the release stamp beside cmd/gen_lhm_manifest, written byte for byte as jq writes it today",
+	15: "Go tests that drive what stays through os/exec and httptest, or node:test inside site/ for the site's own steps",
+}
+
+// declaredScripts are the scripts in another language than Go this
+// repository holds, keyed by their repository-relative path, or by a
+// directory written with a trailing slash for every script below it. A
+// script no entry declares is reported, which is how a new one fails the gate
+// the day it is added, and so is an entry that names no script in the tree,
+// on the terms every declaration table in this repository is held to.
+var declaredScripts = map[string]scriptDeclaration{
+	".github/scripts/cosign-sign-retry.sh": {
+		category: scriptJobGlue,
+		reason:   "retries cosign's keyless signing in release.yml's sign-attest job when the ambient OIDC endpoint answers with an error body, around the cosign the job installed",
+	},
+	".github/scripts/go-test-crash-aware.sh": {category: scriptPortPending, item: 5},
+	".github/scripts/needs-verdict.sh": {
+		category: scriptJobGlue,
+		reason:   "reads the needs context in ci.yml's checks job and in its ci job, the required CI verdict, two sparse fan-ins that set up no toolchain",
+	},
+	".github/scripts/referrers-fallback-repair.sh": {
+		category: scriptJobGlue,
+		reason:   "rewrites ghcr.io's referrers fallback tags with crane and jq in release.yml's sign-attest job",
+	},
+	"cmd/gen_api_live/introspect.rb": {
+		category: scriptEvaluatedInGitLab,
+		reason:   "cmd/gen_api_live embeds it and hands it to gitlab-rails runner inside the booted GitLab, where Ruby is what runs",
+	},
+	"mcpb/linux/launch.sh": {
+		category: scriptDistributionEntryPoint,
+		reason:   "the Linux entry point of the .mcpb bundle: there is no fat Linux binary, so a native launcher could not pick its own architecture",
+	},
+	"npm/gitlab-mcp-server/cli.js": {
+		category: scriptDistributionEntryPoint,
+		reason:   "the npm package's bin, which npx runs with Node to choose the platform package's binary",
+	},
+	"scripts/build-mcpb.sh":                            {category: scriptPortPending, item: 2},
+	"scripts/build-npm.mjs":                            {category: scriptPortPending, item: 13},
+	"scripts/build_mcpb_sh_test.py":                    {category: scriptPortPending, item: 2},
+	"scripts/build_nuget.py":                           {category: scriptPortPending, item: 13},
+	"scripts/build_pypi.py":                            {category: scriptPortPending, item: 13},
+	"scripts/check-doc-links.mjs":                      {category: scriptPortPending, item: 12},
+	"scripts/check-em-dash.sh":                         {category: scriptPortPending, item: 11},
+	"scripts/check-openplugin.sh":                      {category: scriptPortPending, item: 3},
+	"scripts/check-spec-conditions.sh":                 {category: scriptPortPending, item: 4},
+	"scripts/check_doc_links_test.py":                  {category: scriptPortPending, item: 12},
+	"scripts/check_elf_interp.py":                      {category: scriptPortPending, item: 1},
+	"scripts/check_elf_interp_test.py":                 {category: scriptPortPending, item: 1},
+	"scripts/check_em_dash_sh_test.py":                 {category: scriptPortPending, item: 11},
+	"scripts/check_spec_conditions_sh_test.py":         {category: scriptPortPending, item: 4},
+	"scripts/coverage-conditions.sh":                   {category: scriptPortPending, item: 4},
+	"scripts/coverage-mutants.sh":                      {category: scriptPortPending, item: 4},
+	"scripts/coverage_conditions_sh_test.py":           {category: scriptPortPending, item: 4},
+	"scripts/coverage_mutants_sh_test.py":              {category: scriptPortPending, item: 4},
+	"scripts/e2e_docker_images_test.py":                {category: scriptPortPending, item: 6},
+	"scripts/e2e_fixture_addresses_test.py":            {category: scriptPortPending, item: 6},
+	"scripts/e2e_gitlab_exceptions_test.py":            {category: scriptPortPending, item: 6},
+	"scripts/e2e_release_gate_test.py":                 {category: scriptPortPending, item: 6},
+	"scripts/e2e_skip_gate_test.py":                    {category: scriptPortPending, item: 6},
+	"scripts/ensure_playwright_chromium_sh_test.py":    {category: scriptPortPending, item: 15},
+	"scripts/fetch_release_assets_sh_test.py":          {category: scriptPortPending, item: 15},
+	"scripts/install_sh_test.py":                       {category: scriptPortPending, item: 15},
+	"scripts/mcpb_launch_sh_test.py":                   {category: scriptPortPending, item: 15},
+	"scripts/mcpb_manifest_test.py":                    {category: scriptPortPending, item: 15},
+	"scripts/npm_cli_js_test.py":                       {category: scriptPortPending, item: 15},
+	"scripts/packaging_checksums_test.py":              {category: scriptPortPending, item: 1},
+	"scripts/publish_npm_sh_test.py":                   {category: scriptPortPending, item: 15},
+	"scripts/release-order.sh":                         {category: scriptPortPending, item: 1},
+	"scripts/release_order_sh_test.py":                 {category: scriptPortPending, item: 1},
+	"scripts/setup-orbit-fixtures.sh":                  {category: scriptPortPending, item: 7},
+	"scripts/setup_orbit_fixtures_sh_test.py":          {category: scriptPortPending, item: 7},
+	"scripts/site_check_i18n_code_test.py":             {category: scriptPortPending, item: 15},
+	"scripts/site_normalize_html_test.py":              {category: scriptPortPending, item: 15},
+	"scripts/site_version_token_test.py":               {category: scriptPortPending, item: 15},
+	"scripts/smoke_test_image_sh_test.py":              {category: scriptPortPending, item: 15},
+	"scripts/sonar-scan.sh":                            {category: scriptPortPending, item: 8},
+	"scripts/update-homebrew-tap.sh":                   {category: scriptPortPending, item: 14},
+	"scripts/update-server-json-sha.sh":                {category: scriptPortPending, item: 14},
+	"scripts/update_homebrew_tap_sh_test.py":           {category: scriptPortPending, item: 14},
+	"scripts/update_server_json_sha_sh_test.py":        {category: scriptPortPending, item: 14},
+	"scripts/validate-npm.mjs":                         {category: scriptPortPending, item: 13},
+	"scripts/validate-server-json-packages.sh":         {category: scriptPortPending, item: 2},
+	"scripts/validate_npm_test.py":                     {category: scriptPortPending, item: 13},
+	"scripts/validate_nuget.py":                        {category: scriptPortPending, item: 13},
+	"scripts/validate_nuget_test.py":                   {category: scriptPortPending, item: 13},
+	"scripts/validate_pypi.py":                         {category: scriptPortPending, item: 13},
+	"scripts/validate_pypi_test.py":                    {category: scriptPortPending, item: 13},
+	"scripts/validate_server_json_packages_sh_test.py": {category: scriptPortPending, item: 2},
+	"scripts/verify_published_packages.py":             {category: scriptPortPending, item: 13},
+	"scripts/verify_published_packages_test.py":        {category: scriptPortPending, item: 13},
+	"scripts/ensure-playwright-chromium.sh": {
+		category: scriptJobGlue,
+		reason:   "installs the Chromium the site's build drives, in ci.yml's site jobs and pages.yml, which set up Node and pnpm and no Go",
+	},
+	"scripts/fetch-release-assets.sh": {
+		category: scriptJobGlue,
+		reason:   "downloads and verifies the release assets in each publisher job of release.yml, the step that checks what its job then runs",
+	},
+	"scripts/install.ps1": {
+		category: scriptRunsBeforeAnyBinary,
+		reason:   "the irm | iex installer, which fetches and verifies the release binary on a machine that holds none",
+	},
+	"scripts/install.sh": {
+		category: scriptRunsBeforeAnyBinary,
+		reason:   "the curl | sh installer, which fetches and verifies the release binary on a machine that holds none",
+	},
+	"scripts/publish-npm.sh": {
+		category: scriptJobGlue,
+		reason:   "wraps npm publish in release.yml's npm job and make publish-npm; item 13 rewires it to the package command",
+	},
+	"scripts/publish-nuget.sh": {
+		category: scriptJobGlue,
+		reason:   "wraps dotnet nuget push in release.yml's nuget job and make publish-nuget; item 13 rewires it to the package command",
+	},
+	"scripts/publish-pypi.sh": {
+		category: scriptJobGlue,
+		reason:   "wraps twine for make publish-pypi, the out-of-band publish from a maintainer's machine, which no job runs yet; item 13 rewires it to the package command",
+	},
+	"scripts/smoke-test-image.sh": {
+		category: scriptJobGlue,
+		reason:   "drives docker against the built images in ci.yml's and release.yml's docker jobs",
+	},
+	"test/e2e/scripts/audit-command.sh":              {category: scriptPortPending, item: 6},
+	"test/e2e/scripts/docker-images.sh":              {category: scriptPortPending, item: 6},
+	"test/e2e/scripts/enterprise-activation-code.sh": {category: scriptPortPending, item: 6},
+	"test/e2e/scripts/fixture-addresses.sh":          {category: scriptPortPending, item: 6},
+	"test/e2e/scripts/gitlab-exceptions.sh":          {category: scriptPortPending, item: 6},
+	"test/e2e/scripts/register-runner.sh":            {category: scriptPortPending, item: 6},
+	"test/e2e/scripts/release-gate.sh":               {category: scriptPortPending, item: 6},
+	"test/e2e/scripts/run-docker-e2e.sh":             {category: scriptPortPending, item: 6},
+	"test/e2e/scripts/setup-bitbucket.sh":            {category: scriptPortPending, item: 6},
+	"test/e2e/scripts/setup-gitlab.sh":               {category: scriptPortPending, item: 6},
+	"test/e2e/scripts/skip-gate.sh":                  {category: scriptPortPending, item: 6},
+	"test/e2e/scripts/wait-for-gitlab.sh": {
+		category: scriptJobGlue,
+		reason:   "polls a GitLab container with curl until it answers, in ee-schema.yml's job and in run-docker-e2e.sh; issue 1114 keeps it as glue beside the e2e orchestration item 6 ports",
+	},
+	"test/fixtures/orbit/": {
+		category: scriptFixtureContent,
+		reason:   "Python the Orbit live tests push to GitLab.com for its Knowledge Graph to index, which is what those tests query",
+	},
+}
+
 // guardKey is a declaration of a guarded match as its key spells it: the
 // pinned action without its commit, the index of the step in its steps, and
 // the rule's name.

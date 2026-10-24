@@ -3119,7 +3119,7 @@ func TestRun_CleanRepository_PrintsTheSuccessLine(t *testing.T) {
 		t.Fatalf("run() = %d, want 0 (stdout %q, stderr %q)", code, stdout.String(), stderr.String())
 	}
 	want := "supply-chain audit passed: pinned actions, locked release jobs, " +
-		"stated cooldowns, current security policy, signature-verifying installers\n"
+		"stated cooldowns, current security policy, signature-verifying installers, declared scripts\n"
 	if stdout.String() != want {
 		t.Errorf("run() stdout = %q, want %q", stdout.String(), want)
 	}
@@ -3180,7 +3180,7 @@ func TestRun_Violations_ReportEveryFinding(t *testing.T) {
 
 	root := brokenRepository(t)
 	var stdout, stderr bytes.Buffer
-	if code := run([]string{"--root", root}, &stdout, &stderr, tables{}); code != 1 {
+	if code := run([]string{"--root", root}, &stdout, &stderr, installerTables()); code != 1 {
 		t.Fatalf("run() = %d, want 1 (stdout %q, stderr %q)", code, stdout.String(), stderr.String())
 	}
 	lines := splitLines(stdout.String())
@@ -3229,7 +3229,7 @@ func TestRun_Record_WritesWhatTheAuditReadThenAudits(t *testing.T) {
 	})
 
 	var stdout, stderr bytes.Buffer
-	if code := run([]string{"--root", root, "-record"}, &stdout, &stderr, tables{}); code != 0 {
+	if code := run([]string{"--root", root, "-record"}, &stdout, &stderr, installerTables()); code != 0 {
 		t.Fatalf("run(-record) = %d, want 0 (stdout %q, stderr %q)", code, stdout.String(), stderr.String())
 	}
 	if !strings.HasPrefix(stdout.String(), "recorded 1 actions in "+actionRecordPath+"\nsupply-chain audit passed") {
@@ -3245,7 +3245,7 @@ func TestRun_Record_WritesWhatTheAuditReadThenAudits(t *testing.T) {
 	}
 
 	stdout.Reset()
-	if code := run([]string{"--root", root}, &stdout, &stderr, tables{}); code != 0 {
+	if code := run([]string{"--root", root}, &stdout, &stderr, installerTables()); code != 0 {
 		t.Errorf("run() on the recorded tree = %d, want 0 (stdout %q)", code, stdout.String())
 	}
 }
@@ -3507,7 +3507,7 @@ func TestAudit_UnverifiedInstaller_NamesTheOneThatFailed(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	problems, err := audit(root, tables{})
+	problems, err := audit(root, installerTables())
 	if err != nil {
 		t.Fatalf("audit: %v", err)
 	}
@@ -4009,6 +4009,16 @@ func writeWorkflow(t *testing.T, root, name, body string) {
 	if err := os.WriteFile(filepath.Join(directory, name), []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile %s: %v", name, err)
 	}
+}
+
+// installerTables are tables that declare the two installers brokenRepository
+// holds and nothing else, so a test of another property reads only its own
+// findings.
+func installerTables() tables {
+	return tables{scripts: map[string]scriptDeclaration{
+		"scripts/install.sh":  {category: scriptRunsBeforeAnyBinary, reason: "the curl | sh installer"},
+		"scripts/install.ps1": {category: scriptRunsBeforeAnyBinary, reason: "the irm | iex installer"},
+	}}
 }
 
 // brokenRepository builds the smallest tree the audit can read end to end,

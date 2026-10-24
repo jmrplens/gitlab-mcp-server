@@ -604,6 +604,8 @@ type tables struct {
 	declarations map[string]declaration
 	unjudged     map[string]declaration
 	guarded      map[string]guardedMatch
+	scripts      map[string]scriptDeclaration
+	ports        map[int]string
 }
 
 // supplyChainAudit is one audit of one repository root: the tables it judges
@@ -1087,7 +1089,8 @@ func auditWith(root string, declared tables, store *actionStore) ([]string, erro
 	if err != nil {
 		return nil, err
 	}
-	return append(problems, checkInstallers(installSh, installPS1)...), nil
+	problems = append(problems, checkInstallers(installSh, installPS1)...)
+	return append(problems, scriptProblems(scriptsInTree(root), declared)...), nil
 }
 
 // auditWorkflows applies the pinning rule and the credentialed-job rules to
@@ -1351,7 +1354,7 @@ func run(args []string, stdout, stderr io.Writer, declared tables) int {
 		return 1
 	}
 	fmt.Fprint(stdout, "supply-chain audit passed: pinned actions, locked release jobs, "+
-		"stated cooldowns, current security policy, signature-verifying installers\n")
+		"stated cooldowns, current security policy, signature-verifying installers, declared scripts\n")
 	return 0
 }
 
