@@ -207,19 +207,18 @@ govulncheck -tags e2e,collectore2e,httpe2e,orbitlive,stdioe2e ./...
 
 It remains separate because it is a vulnerability database scanner, not a normal lint rule inside `golangci-lint`.
 
-#### Accepted-advisory allowlist
+#### No accepted advisory
 
-`govulncheck` has no native ignore mechanism, so `make govulncheck` runs through
-[`scripts/govulncheck.sh`](../../scripts/govulncheck.sh). The wrapper runs
-`govulncheck` unchanged and, when advisories are reported, passes **only if every
-reported advisory ID is on its allowlist**. Any advisory not on the list — that
-is, any newly introduced or fixable one — still fails the build. Running
-`govulncheck` directly (as in the example above) shows the raw findings without
-the allowlist.
+`make govulncheck`, and step 5 of `make analyze`, run `govulncheck` itself, and
+its exit status is the gate: it fails when **our code calls** a vulnerable
+symbol. `govulncheck` has no native ignore mechanism, and this repository
+accepts no advisory, so nothing stands between the scanner and the verdict.
+Until issue 1114 (item 10) retired it, `scripts/govulncheck.sh` stood there: a
+wrapper that would have passed a scan whose every reported advisory sat on its
+allowlist, and that was a pass-through for as long as the list was empty, which
+was every run since the entry below left it.
 
-Accepted advisories (keep the list in the script in sync with this table):
-
-**None.** The allowlist is empty and should stay that way. It held one entry,
+The list held one entry,
 [`GO-2026-5932`](https://pkg.go.dev/vuln/GO-2026-5932), "the
 `golang.org/x/crypto/openpgp` package is unmaintained, unsafe by design, and has
 known security issues". It reached the binary through
@@ -258,19 +257,17 @@ nothing in this repository calls into openpgp. What a shipped binary carries
 is a different question, and `make check-binary-vulns` (below) is the gate
 that asks it.
 
-That distinction is also what the wrapper gates on. It defers to govulncheck's
-own exit status, which reports whether **our code calls** a vulnerable symbol,
-rather than scraping advisory IDs out of the printed text. Scraping was the
-earlier design and it made the gate depend on a flag the caller passed:
-`scripts/govulncheck.sh -show verbose ./...` failed while the same scan without
-the flag passed, because module-level results are printed only at the higher
-verbosity.
+That distinction is also why the exit status is the gate rather than the
+printed text. The wrapper's first design scraped advisory IDs out of the
+output, which made the gate depend on a flag the caller passed: a scan with
+`-show verbose` failed while the same scan without the flag passed, because
+module-level results are printed only at the higher verbosity.
 
-An entry here is a vulnerability shipped on purpose in code we actually call.
-
-To accept a new advisory, add its OSV ID to `ALLOWLIST` in
-`scripts/govulncheck.sh` and add a row here with the justification. To retire one
-(e.g. once a fix ships), remove it from both.
+Accepting an advisory would be shipping a vulnerability on purpose in code we
+actually call. If one ever has to be, the argument (why no bump can fix it, and
+why the reachable path is inert) and the mechanism that excuses exactly that
+advisory arrive together, as a Go command beside the others under `cmd/`, held
+to a declaration table on the terms every declaration table here is held to.
 
 #### The release binaries, at module grain
 

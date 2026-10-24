@@ -58,7 +58,6 @@ security:
           - internal/capguard/**
           - internal/toolutil/fileutils*.go
           - internal/toolutil/filesource*.go
-          - scripts/govulncheck.sh
           - scripts/install.sh
           - scripts/install.ps1
 

@@ -946,10 +946,12 @@ golangci-lint:
 	golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS)
 
 ## govulncheck: scan Go dependencies for known CVEs using call-graph analysis.
-## Only reports vulnerabilities where the vulnerable function is actually called.
+## Only reports vulnerabilities where the vulnerable function is actually called,
+## and its exit status is the gate: no advisory is accepted, so there is no list
+## to hold beside it (docs/development/static-analysis.md).
 ## Docs: https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck
 govulncheck:
-	./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS)
+	govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS)
 
 ## check-binary-vulns: build every target .goreleaser.yml names and hold each binary to the vulnerability database at module grain, which is how a scanner reading a shipped binary or its SBOM judges it.
 ## Fails on an advisory cmd/audit_binary_vulns/declarations.go does not accept, and on a declaration that no longer matches anything.
@@ -1054,7 +1056,7 @@ analyze:
 	run_check "[2/31] golangci-lint fmt" golangci-lint fmt --diff; \
 	run_check "[3/31] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
 	run_check "[4/31] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
-	run_check "[5/31] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[5/31] govulncheck" govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
 	run_check "[6/31] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
 	run_check "[7/31] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
 	run_check "[8/31] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
