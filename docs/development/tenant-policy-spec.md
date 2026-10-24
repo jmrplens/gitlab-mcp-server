@@ -158,7 +158,9 @@ which `HLD-001` breaks.
 
 A new limit, or a change to an existing one, meets every invariant below. Existing code
 that does not is a finding, filed as an issue; nothing here requires it to change.
-`Validate` holds a row to eleven of them, in three ways:
+`Validate` holds a row to eleven of them, and to two items of the
+[validation checklist](#validation-checklist) that read them for what a row holds and
+where its value comes from, in three ways:
 
 - **With no exception**: a share on any mintable key (`INV-003`); a charge to anything but
   a budget before admission (`INV-007`); a refusal on a channel its method cannot carry,
