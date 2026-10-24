@@ -4800,18 +4800,41 @@ func TestNormalizeStructuredObjectFields_NoReflectableFields_ReturnsValue(t *tes
 	}
 }
 
-// TestNormalizeStructuredObjectFields_ApprovalCountWithoutPrincipal_DefaultsAccessLevel
+// TestNormalizeStructuredObjectFields_ApprovalCountWithoutPrincipal_AddsNoAccessLevel
 // verifies that an approval-rule object carrying only a required approval
-// count (no access_level/user_id/group_id principal) receives the
-// Maintainer access level 40 default.
-func TestNormalizeStructuredObjectFields_ApprovalCountWithoutPrincipal_DefaultsAccessLevel(t *testing.T) {
+// count, under its name or an alias, comes out with no grantee added.
+//
+// GitLab refuses an approval rule that names none of access_level, user_id
+// and group_id, and the protected environment handlers refuse it before it is
+// sent, with words that name the rule. Decoding used to give such a rule the
+// Maintainer role, so on the meta and dynamic surfaces the call reached GitLab
+// as a rule letting Maintainers approve, and an update of an existing rule
+// moved its grantee to them, while the individual surface's schema refused the
+// same call. The alias still becomes required_approvals.
+func TestNormalizeStructuredObjectFields_ApprovalCountWithoutPrincipal_AddsNoAccessLevel(t *testing.T) {
 	type approvalRule struct {
-		RequiredApprovals int `json:"required_approvals"`
-		AccessLevel       int `json:"access_level"`
+		ID                *int64 `json:"id,omitempty"`
+		RequiredApprovals *int64 `json:"required_approvals,omitempty"`
+		AccessLevel       *int   `json:"access_level,omitempty"`
+		UserID            *int64 `json:"user_id,omitempty"`
+		GroupID           *int64 `json:"group_id,omitempty"`
 	}
-	got := normalizeStructuredObjectFields(map[string]any{"required_approvals": 2}, reflect.TypeFor[approvalRule]())
-	if got["access_level"] != 40 {
-		t.Errorf("normalizeStructuredObjectFields(count only)[access_level] = %v, want 40", got["access_level"])
+	tests := []struct {
+		name  string
+		value map[string]any
+		want  map[string]any
+	}{
+		{name: "the count alone", value: map[string]any{"required_approvals": 2}, want: map[string]any{"required_approvals": 2}},
+		{name: "the count under an alias", value: map[string]any{"approvals_required": 2}, want: map[string]any{"required_approvals": 2}},
+		{name: "an existing rule's id and its count", value: map[string]any{"id": 7, "required_approvals": 3}, want: map[string]any{"id": 7, "required_approvals": 3}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeStructuredObjectFields(tt.value, reflect.TypeFor[approvalRule]())
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("normalizeStructuredObjectFields(%v) = %v, want %v", tt.value, got, tt.want)
+			}
+		})
 	}
 }
 

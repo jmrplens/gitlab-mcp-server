@@ -1387,9 +1387,11 @@ func normalizeStructuredObjectFields(value map[string]any, target reflect.Type) 
 			delete(updated, alias)
 		}
 	}
-	if acceptsJSONField(fields, "required_approvals") && acceptsJSONField(fields, "access_level") && hasStructuredApprovalCount(value) && !hasStructuredApprovalPrincipal(value) {
-		clone()["access_level"] = 40
-	}
+	// An approval rule that names a count and no grantee is left as it is.
+	// GitLab refuses it, and so do the protected environment handlers, before
+	// it is sent; giving it the Maintainer role here, as this did, granted
+	// approval to a role the caller never named, and on an update moved an
+	// existing rule's grantee to it.
 	if acceptsJSONField(fields, "access_level") {
 		updated := cloneAccessLevelAliases(value, clone)
 		if accessLevel, ok := gitLabRoleAccessLevel(updated["access_level"]); ok {
@@ -1410,33 +1412,6 @@ func normalizeStructuredObjectFields(value map[string]any, target reflect.Type) 
 		return out
 	}
 	return value
-}
-
-func hasStructuredApprovalCount(value map[string]any) bool {
-	_, ok := value["required_approvals"]
-	if ok {
-		return true
-	}
-	for _, alias := range []string{"required_approval_count", "approval_count", "approvals_required"} {
-		if _, aliasOK := value[alias]; aliasOK {
-			return true
-		}
-	}
-	return false
-}
-
-func hasStructuredApprovalPrincipal(value map[string]any) bool {
-	for _, name := range []string{"access_level", "user_id", "group_id"} {
-		if _, ok := value[name]; ok {
-			return true
-		}
-	}
-	for _, alias := range []string{"deploy_access_level", "group_access_level", "project_access_level", "machine_user_access_level"} {
-		if _, ok := value[alias]; ok {
-			return true
-		}
-	}
-	return false
 }
 
 func coercePaginationBoolean(name string, value any, target reflect.Type) (any, bool) {

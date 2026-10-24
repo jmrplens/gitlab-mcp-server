@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -67,6 +68,56 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 				t.Fatal("expected route error")
 			}
 		})
+	}
+}
+
+// TestActionSpecs_ApprovalRuleNamingNoGrantee_IsRefusedThroughTheRoute
+// verifies that an approval rule naming a count and no grantee is refused when
+// it comes through the canonical route, the one the meta and dynamic surfaces
+// call, and that no request reaches GitLab.
+//
+// The route decodes its arguments with toolutil.UnmarshalParams before the
+// handler checks them. Decoding used to give such a rule the Maintainer role,
+// so the protect went to GitLab as a rule letting Maintainers approve and the
+// update of an existing rule moved its grantee to them, while the individual
+// tool's schema refused both calls.
+func TestActionSpecs_ApprovalRuleNamingNoGrantee_IsRefusedThroughTheRoute(t *testing.T) {
+	var requests atomic.Int32
+	byTool := protectedEnvironmentSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		testutil.RespondJSON(w, http.StatusCreated, `{"name":"staging"}`)
+	}))))
+	maintainers := []any{map[string]any{"access_level": float64(40)}}
+	const noGrantee = "approval_rules[0] names none of access_level, user_id or group_id"
+
+	tests := []struct {
+		name string
+		tool string
+		args map[string]any
+	}{
+		{name: "protect with a count alone", tool: "gitlab_protected_environment_protect", args: map[string]any{
+			"project_id": "42", "name": "staging", "deploy_access_levels": maintainers,
+			"approval_rules": []any{map[string]any{"required_approvals": float64(1)}},
+		}},
+		{name: "protect with a count under an alias", tool: "gitlab_protected_environment_protect", args: map[string]any{
+			"project_id": "42", "name": "staging", "deploy_access_levels": maintainers,
+			"approval_rules": []any{map[string]any{"approvals_required": float64(2)}},
+		}},
+		{name: "update of an existing rule with a count alone", tool: "gitlab_protected_environment_update", args: map[string]any{
+			"project_id": "42", "environment": "production",
+			"approval_rules": []any{map[string]any{"id": float64(7), "required_approvals": float64(2)}},
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
+			if err == nil || !strings.Contains(err.Error(), noGrantee) {
+				t.Fatalf("Route.Handler(%s) error = %v, want one containing %q", tt.tool, err, noGrantee)
+			}
+		})
+	}
+	if sent := requests.Load(); sent != 0 {
+		t.Errorf("%d request(s) reached GitLab, want none", sent)
 	}
 }
 

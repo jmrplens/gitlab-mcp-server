@@ -1359,44 +1359,6 @@ func TestCloneAccessLevelAliasesDirect(t *testing.T) {
 	}
 }
 
-// TestHasStructuredApprovalCountDirect verifies the approval-count
-// detector accepts both the canonical field and the alias family.
-func TestHasStructuredApprovalCountDirect(t *testing.T) {
-	for _, key := range []string{"required_approvals", "required_approval_count", "approval_count", "approvals_required"} {
-		t.Run(key, func(t *testing.T) {
-			if !hasStructuredApprovalCount(map[string]any{key: 2}) {
-				t.Errorf("hasStructuredApprovalCount(%s) = false, want true", key)
-			}
-		})
-	}
-	if hasStructuredApprovalCount(map[string]any{"other": 1}) {
-		t.Error("hasStructuredApprovalCount(other) = true, want false")
-	}
-	if hasStructuredApprovalCount(map[string]any{}) {
-		t.Error("hasStructuredApprovalCount(empty) = true, want false")
-	}
-}
-
-// TestHasStructuredApprovalPrincipalDirect verifies the principal
-// detector accepts both canonical fields and the access-level alias
-// family used for protected-branch entries.
-func TestHasStructuredApprovalPrincipalDirect(t *testing.T) {
-	canonical := []string{"access_level", "user_id", "group_id"}
-	aliases := []string{"deploy_access_level", "group_access_level", "project_access_level", "machine_user_access_level"}
-
-	for _, key := range append(canonical, aliases...) {
-		if !hasStructuredApprovalPrincipal(map[string]any{key: 1}) {
-			t.Errorf("hasStructuredApprovalPrincipal(%s) = false, want true", key)
-		}
-	}
-	if hasStructuredApprovalPrincipal(map[string]any{"name": "alice"}) {
-		t.Error("hasStructuredApprovalPrincipal(name) = true, want false")
-	}
-	if hasStructuredApprovalPrincipal(map[string]any{}) {
-		t.Error("hasStructuredApprovalPrincipal(empty) = true, want false")
-	}
-}
-
 // TestSchemaPropertyHasTypeDirect verifies the schema-property type
 // detector covers string, []string, []any, and non-object inputs.
 func TestSchemaPropertyHasTypeDirect(t *testing.T) {
