@@ -328,6 +328,81 @@ func TestClient_StatefulSessionsStillWork(t *testing.T) {
 	}
 }
 
+// TestClient_StatelessAnswersCarryNoSession verifies the other half of
+// TestClient_StatefulSessionsStillWork, on the default stateless transport: no
+// answer issues an Mcp-Session-Id, neither the initialize a pre-2026-07-28
+// client opens with nor a call made without a session, and neither under
+// --json-response nor without it. Each answer is the one the call asked for:
+// tools/list lists gitlab_find_action and a gitlab_find_action call finds the
+// project listing.
+//
+// A session id on a stateless answer sends a conforming client back with it
+// to a server that keeps no session. scripts/validate-http-stateless.sh was
+// the one place that asserted this of the binary, against a real GitLab and a
+// token, so nothing in CI ran it; cmd/server held it only against the
+// in-process handler. This holds the binary to it on every push.
+func TestClient_StatelessAnswersCarryNoSession(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	initialize := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"compat-test","version":"1"}}}`
+	find := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gitlab_find_action","arguments":{"query":"list projects"},` +
+		`"_meta":{"io.modelcontextprotocol/protocolVersion":"` + protocolVersion + `","io.modelcontextprotocol/clientCapabilities":{}}}}`
+
+	modes := []struct {
+		name        string
+		contentType string
+		flags       []string
+	}{
+		{name: "streamed answers", contentType: "text/event-stream"},
+		{name: "--json-response", contentType: "application/json", flags: []string{"--json-response"}},
+	}
+	for _, mode := range modes {
+		t.Run(mode.name, func(t *testing.T) {
+			srv := startServer(t, nil, append([]string{"--gitlab-url=" + gitlab.url}, mode.flags...)...)
+
+			calls := []struct {
+				name    string
+				body    string
+				version string
+				carries string
+			}{
+				{name: "an initialize at 2025-11-25", body: initialize, version: "2025-11-25"},
+				{name: "a tools/list at 2025-11-25 carrying no session", body: legacyToolsListBody, version: "2025-11-25", carries: "gitlab_find_action"},
+				{name: "a tools/list at 2026-07-28", body: toolsListBody, version: protocolVersion, carries: "gitlab_find_action"},
+				{name: "a gitlab_find_action call at 2026-07-28", body: find, version: protocolVersion, carries: "project.list"},
+			}
+			for _, call := range calls {
+				t.Run(call.name, func(t *testing.T) {
+					got := srv.do(t, request{
+						method: http.MethodPost, path: "/mcp", body: call.body,
+						headers: map[string]string{"PRIVATE-TOKEN": "glpat-x", "MCP-Protocol-Version": call.version},
+					})
+					assertStatelessAnswer(t, got, mode.contentType, call.carries)
+				})
+			}
+		})
+	}
+}
+
+// assertStatelessAnswer holds one answer of the stateless transport to what
+// TestClient_StatelessAnswersCarryNoSession asks of it: a 200 carrying no
+// Mcp-Session-Id, the content type its mode answers with, and, when carries
+// names one, the text the call's answer has to hold.
+func assertStatelessAnswer(t *testing.T, got response, contentType, carries string) {
+	t.Helper()
+	if got.status != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", got.status, http.StatusOK, got.body)
+	}
+	if session := got.header.Get("Mcp-Session-Id"); session != "" {
+		t.Errorf("the stateless transport answered with Mcp-Session-Id %q, want none", session)
+	}
+	if ct := got.header.Get("Content-Type"); !strings.HasPrefix(ct, contentType) {
+		t.Errorf("Content-Type = %q, want %s", ct, contentType)
+	}
+	if !strings.Contains(got.body, carries) {
+		t.Errorf("the answer does not carry %q: %s", carries, truncate(got.body))
+	}
+}
+
 // TestClient_JSONResponseMode verifies --json-response: the same call answered
 // as application/json rather than an SSE stream, for clients that cannot read
 // one.
