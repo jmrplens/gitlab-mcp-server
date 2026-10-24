@@ -1495,8 +1495,15 @@ func assertEmbeddedIssue(t *testing.T, surface string, result *mcp.CallToolResul
 
 // newDynamicMCPSession builds a fresh find/execute session over the same
 // canonical catalog cmd/server hands the dynamic surface, with the given
-// GitLab backend.
+// GitLab backend, at the Free tier.
 func newDynamicMCPSession(t *testing.T, handler http.Handler) *mcp.ClientSession {
+	t.Helper()
+	return newTierDynamicMCPSession(t, handler, edition.Free)
+}
+
+// newTierDynamicMCPSession is newDynamicMCPSession over the catalog the given
+// tier serves, for an action a Free instance does not have.
+func newTierDynamicMCPSession(t *testing.T, handler http.Handler, tier edition.Tier) *mcp.ClientSession {
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
@@ -1504,7 +1511,7 @@ func newDynamicMCPSession(t *testing.T, handler http.Handler) *mcp.ClientSession
 	if err != nil {
 		t.Fatalf("create test gitlab client: %v", err)
 	}
-	catalog, err := BuildActionCatalog(client, ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+	catalog, err := BuildActionCatalog(client, ActionCatalogOptions{Tier: tier, IncludeMCP: true})
 	if err != nil {
 		t.Fatalf("BuildActionCatalog() error = %v", err)
 	}
@@ -1558,6 +1565,98 @@ func TestEmbeddedResource_GetEmbedsOnEverySurface(t *testing.T) {
 		}
 		assertEmbeddedIssue(t, "dynamic", result)
 	})
+}
+
+// TestProtectedEnvironmentApprovalRule_NamingNoGrantee_IsRefusedOnEverySurface
+// asks each surface to protect a project environment and a group's tier with
+// an approval rule that names a count and no grantee, and requires every one
+// to refuse it with nothing sent to GitLab.
+//
+// GitLab refuses such a rule, and the three surfaces reach that refusal by
+// different paths: the individual tool's item schema, the handler behind the
+// meta tool, and the handler behind execute after the dynamic surface's
+// compatibility normalization. Two decoding steps on the way used to give the
+// rule the Maintainer role, toolutil's for meta and dynamic and actioncompat's
+// for dynamic alone, so the call reached GitLab granting approval to a role
+// the caller never named.
+func TestProtectedEnvironmentApprovalRule_NamingNoGrantee_IsRefusedOnEverySurface(t *testing.T) {
+	var posts atomic.Int32
+	backend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			posts.Add(1)
+		}
+		respondJSON(w, http.StatusCreated, `{"name":"staging","deploy_access_levels":[{"access_level":40}]}`)
+	})
+	rule := []any{map[string]any{"required_approvals": 1}}
+	maintainers := []any{map[string]any{"access_level": 40}}
+	project := map[string]any{"project_id": "42", "name": "staging", "deploy_access_levels": maintainers, "approval_rules": rule}
+	group := map[string]any{"group_id": "7", "name": "staging", "deploy_access_levels": maintainers, "approval_rules": rule}
+	individual := newMCPSession(t, backend, true)
+	meta := newMetaMCPSession(t, backend, true)
+	execute := newTierDynamicMCPSession(t, backend, edition.Ultimate)
+
+	tests := []struct {
+		name      string
+		session   *mcp.ClientSession
+		params    *mcp.CallToolParams
+		schemaful bool
+	}{
+		{
+			name: "individual project", session: individual, schemaful: true,
+			params: &mcp.CallToolParams{Name: "gitlab_protected_environment_protect", Arguments: project},
+		},
+		{
+			name: "individual group", session: individual, schemaful: true,
+			params: &mcp.CallToolParams{Name: "gitlab_group_protected_environment_protect", Arguments: group},
+		},
+		{
+			name: "meta project", session: meta,
+			params: &mcp.CallToolParams{Name: "gitlab_environment", Arguments: map[string]any{"action": "protected_protect", "params": project}},
+		},
+		{
+			name: "meta group", session: meta,
+			params: &mcp.CallToolParams{Name: "gitlab_group", Arguments: map[string]any{"action": "protected_env_protect", "params": group}},
+		},
+		{
+			name: "dynamic project", session: execute,
+			params: &mcp.CallToolParams{Name: "gitlab_execute_action", Arguments: map[string]any{"action": "environment.protected_protect", "params": project}},
+		},
+		{
+			name: "dynamic group", session: execute,
+			params: &mcp.CallToolParams{Name: "gitlab_execute_action", Arguments: map[string]any{"action": "group.protected_env_protect", "params": group}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			before := posts.Load()
+			result, callErr := tt.session.CallTool(context.Background(), tt.params)
+			if sent := posts.Load() - before; sent != 0 {
+				t.Errorf("%d POST(s) reached GitLab, want none", sent)
+			}
+			assertApprovalRuleRefused(t, tt.params.Name, result, callErr, tt.schemaful)
+		})
+	}
+}
+
+// assertApprovalRuleRefused holds one surface's answer to an approval rule
+// naming no grantee: the schema's refusal on the individual surface, as an
+// error or an error result, and elsewhere a tool error whose words name the
+// rule, which no hint a GitLab refusal is wrapped with carries.
+func assertApprovalRuleRefused(t *testing.T, tool string, result *mcp.CallToolResult, callErr error, schemaful bool) {
+	t.Helper()
+	const noGrantee = "approval_rules[0] names none of access_level, user_id or group_id"
+	if schemaful {
+		if callErr == nil && (result == nil || !result.IsError) {
+			t.Fatalf("CallTool(%s) = %+v, want the schema's refusal", tool, result)
+		}
+		return
+	}
+	if callErr != nil {
+		t.Fatalf("CallTool(%s) error = %v, want a tool error naming the rule", tool, callErr)
+	}
+	if !result.IsError || !strings.Contains(extractTextContent(result), noGrantee) {
+		t.Fatalf("CallTool(%s) = isError %t, %q, want a tool error containing %q", tool, result.IsError, extractTextContent(result), noGrantee)
+	}
 }
 
 // TestEmbeddedResource_EncodedProjectPath_EmbedsTheURIThatReadsIt calls

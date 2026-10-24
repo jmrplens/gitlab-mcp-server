@@ -14,7 +14,6 @@ const parameterAliasExplanationSource = "dynamic_action_scoped"
 const (
 	reasonNormalizeAccessLevel           = "normalized GitLab access level name to numeric level"
 	reasonProtectedEnvAccessLevels       = "protected environment access levels must be arrays of objects with numeric access_level"
-	reasonProtectedEnvApprovalCount      = "protected environment approval counts belong in approval_rules.required_approvals"
 	reasonProtectedEnvApprovalRules      = "protected environment approval rules must be arrays of objects with numeric access_level and required_approvals"
 	reasonPaginationBoolean              = "pagination limit parameters use numeric values; true selects the default page size"
 	reasonProtectedBranchName            = "group protected branch protect uses name for the branch or wildcard to protect"
@@ -201,16 +200,12 @@ func defaultParameterAliases() []ParameterAlias {
 		parameterAlias(actionGroupProtectedBranchProtect, "merge_access_level", "merge_access_level", reasonNormalizeAccessLevel),
 		parameterAlias(actionGroupProtectedEnvProtect, "deploy_access_levels", "deploy_access_levels", reasonProtectedEnvAccessLevels),
 		parameterAlias(actionGroupProtectedEnvProtect, "approval_rules", "approval_rules", reasonProtectedEnvApprovalRules),
-		normalizerOnlyParameterAlias(actionGroupProtectedEnvProtect, "required_approval_count", "approval_rules", reasonProtectedEnvApprovalCount),
 		parameterAlias(actionGroupProtectedEnvUpdate, "deploy_access_levels", "deploy_access_levels", reasonProtectedEnvAccessLevels),
 		parameterAlias(actionGroupProtectedEnvUpdate, "approval_rules", "approval_rules", reasonProtectedEnvApprovalRules),
-		normalizerOnlyParameterAlias(actionGroupProtectedEnvUpdate, "required_approval_count", "approval_rules", reasonProtectedEnvApprovalCount),
 		parameterAlias(actionProjectProtectedEnvProtect, "deploy_access_levels", "deploy_access_levels", reasonProtectedEnvAccessLevels),
 		parameterAlias(actionProjectProtectedEnvProtect, "approval_rules", "approval_rules", reasonProtectedEnvApprovalRules),
-		normalizerOnlyParameterAlias(actionProjectProtectedEnvProtect, "required_approval_count", "approval_rules", reasonProtectedEnvApprovalCount),
 		parameterAlias(actionProjectProtectedEnvUpdate, "deploy_access_levels", "deploy_access_levels", reasonProtectedEnvAccessLevels),
 		parameterAlias(actionProjectProtectedEnvUpdate, "approval_rules", "approval_rules", reasonProtectedEnvApprovalRules),
-		normalizerOnlyParameterAlias(actionProjectProtectedEnvUpdate, "required_approval_count", "approval_rules", reasonProtectedEnvApprovalCount),
 		parameterAlias(actionProjectPushRuleAdd, "deny_unsigned_commits", "reject_unsigned_commits", reasonProjectPushRuleUnsigned),
 		parameterAlias(actionProjectPushRuleEdit, "deny_unsigned_commits", "reject_unsigned_commits", reasonProjectPushRuleUnsigned),
 		parameterAlias(actionFeatureFlagCreate, "new_version_flag", "version", "feature flag creation uses version for the flag API version"),
@@ -356,30 +351,11 @@ func normalizeProtectedEnvironmentParams(state *paramNormalization) {
 	if state.accepts("approval_rules") && normalizeProtectedEnvironmentAccessEntries(state, "approval_rules", reasonProtectedEnvApprovalRules) {
 		state.record("approval_rules", "approval_rules", reasonProtectedEnvApprovalRules)
 	}
-	if state.accepts("approval_rules") {
-		normalizeProtectedEnvironmentApprovalCount(state)
-	}
-}
-
-func normalizeProtectedEnvironmentApprovalCount(state *paramNormalization) {
-	value, ok := state.out["required_approval_count"]
-	if !ok {
-		return
-	}
-	if _, hasRules := state.out["approval_rules"]; hasRules {
-		updated := state.clone()
-		delete(updated, "required_approval_count")
-		state.record("required_approval_count", "approval_rules", reasonProtectedEnvApprovalCount)
-		return
-	}
-	count, converted := integerValue(value)
-	if !converted {
-		return
-	}
-	updated := state.clone()
-	delete(updated, "required_approval_count")
-	updated["approval_rules"] = []any{map[string]any{"access_level": 40, "required_approvals": count}}
-	state.record("required_approval_count", "approval_rules", reasonProtectedEnvApprovalCount)
+	// A top-level required_approval_count is left as the caller sent it. It
+	// used to be promoted to an approval rule granted to Maintainers, a role
+	// nobody named, or dropped beside approval_rules; GitLab refuses the
+	// deprecated count above 0, and the handlers refuse it first with words
+	// that point at approval_rules, as on the meta and individual surfaces.
 }
 
 func normalizeProtectedEnvironmentAccessEntries(state *paramNormalization, name, _ string) bool {
@@ -466,20 +442,11 @@ func normalizeProtectedEnvironmentAccessEntry(entry map[string]any, approvalRule
 			}
 			delete(updated, alias)
 		}
-		if _, hasRequired := updated["required_approvals"]; hasRequired && !protectedEnvironmentAccessEntryHasPrincipal(updated) {
-			updated["access_level"] = 40
-		}
+		// A rule naming a count and no grantee gets none: the handlers refuse
+		// it as GitLab does, where giving it the Maintainer role granted
+		// approval to a role the caller never named.
 	}
 	return updated
-}
-
-func protectedEnvironmentAccessEntryHasPrincipal(entry map[string]any) bool {
-	for _, name := range []string{"access_level", "user_id", "group_id"} {
-		if _, ok := entry[name]; ok {
-			return true
-		}
-	}
-	return false
 }
 
 func normalizeProjectMemberAccessLevelParams(state *paramNormalization) {

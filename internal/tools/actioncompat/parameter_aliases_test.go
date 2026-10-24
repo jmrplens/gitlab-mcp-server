@@ -291,12 +291,12 @@ func TestNormalizeParamsWithExplanation_EnterpriseCompatibilityBranches(t *testi
 			wantAliases: []string{"deploy_access_levels->deploy_access_levels", "approval_rules->approval_rules"},
 		},
 		{
-			name:             "protected environment approval count maps to approval rules",
+			name:             "protected environment deprecated approval count is left for the handler",
 			actionID:         "environment.protected_update",
 			params:           map[string]any{"required_approval_count": 1},
 			schemaProperties: []string{"required_approval_count", "approval_rules"},
-			wantParams:       map[string]any{"approval_rules": []any{map[string]any{"access_level": 40, "required_approvals": 1}}},
-			wantAliases:      []string{"required_approval_count->approval_rules"},
+			wantParams:       map[string]any{"required_approval_count": 1},
+			wantAliases:      []string{},
 		},
 		{
 			name:             "pagination boolean maps to numeric page size",
@@ -307,12 +307,12 @@ func TestNormalizeParamsWithExplanation_EnterpriseCompatibilityBranches(t *testi
 			wantAliases:      []string{"first->first"},
 		},
 		{
-			name:             "approval rule count gets default maintainer principal",
+			name:             "approval rule count alone gets no grantee",
 			actionID:         "environment.protected_protect",
 			params:           map[string]any{"approval_rules": []any{map[string]any{"required_approvals": 1}}},
 			schemaProperties: []string{"approval_rules"},
-			wantParams:       map[string]any{"approval_rules": []any{map[string]any{"access_level": 40, "required_approvals": 1}}},
-			wantAliases:      []string{"approval_rules->approval_rules"},
+			wantParams:       map[string]any{"approval_rules": []any{map[string]any{"required_approvals": 1}}},
+			wantAliases:      []string{},
 		},
 	}
 
@@ -674,8 +674,15 @@ func TestNormalizeProjectPushRuleParams_UnsignedCommitAlias(t *testing.T) {
 }
 
 // TestNormalizeProtectedEnvironmentParams_AccessEntriesAndApprovalCount verifies
-// the full protected environment normalization pipeline including primitive access
-// levels, object entries, and required_approval_count promotion.
+// the full protected environment normalization pipeline: primitive access
+// levels, object entries, and a top-level required_approval_count left as the
+// caller sent it.
+//
+// The count used to be promoted to an approval rule granted to Maintainers,
+// a role the caller never named, or dropped when approval_rules came beside
+// it. GitLab refuses the deprecated count above 0, and the handlers refuse it
+// before it is sent with words that point at approval_rules, so it reaches
+// them as it came, as it does on the meta and individual surfaces.
 func TestNormalizeProtectedEnvironmentParams_AccessEntriesAndApprovalCount(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -706,17 +713,15 @@ func TestNormalizeProtectedEnvironmentParams_AccessEntriesAndApprovalCount(t *te
 			wantAliases: []string{"deploy_access_levels->deploy_access_levels"},
 		},
 		{
-			name:     "required_approval_count promotes to approval_rules",
-			actionID: actionProjectProtectedEnvProtect,
-			params:   map[string]any{"required_approval_count": 2},
-			schema:   []string{"approval_rules"},
-			wantParams: map[string]any{
-				"approval_rules": []any{map[string]any{"access_level": 40, "required_approvals": 2}},
-			},
-			wantAliases: []string{"required_approval_count->approval_rules"},
+			name:        "required_approval_count alone is left as it came",
+			actionID:    actionProjectProtectedEnvProtect,
+			params:      map[string]any{"required_approval_count": 2},
+			schema:      []string{"approval_rules"},
+			wantParams:  map[string]any{"required_approval_count": 2},
+			wantAliases: []string{},
 		},
 		{
-			name:     "required_approval_count dropped when approval_rules already present",
+			name:     "required_approval_count beside approval_rules is kept",
 			actionID: actionProjectProtectedEnvProtect,
 			params: map[string]any{
 				"approval_rules":          []any{map[string]any{"access_level": 40, "required_approvals": 1}},
@@ -724,9 +729,10 @@ func TestNormalizeProtectedEnvironmentParams_AccessEntriesAndApprovalCount(t *te
 			},
 			schema: []string{"approval_rules"},
 			wantParams: map[string]any{
-				"approval_rules": []any{map[string]any{"access_level": 40, "required_approvals": 1}},
+				"approval_rules":          []any{map[string]any{"access_level": 40, "required_approvals": 1}},
+				"required_approval_count": 2,
 			},
-			wantAliases: []string{"required_approval_count->approval_rules"},
+			wantAliases: []string{},
 		},
 	}
 	for _, tc := range tests {
@@ -743,7 +749,10 @@ func TestNormalizeProtectedEnvironmentParams_AccessEntriesAndApprovalCount(t *te
 }
 
 // TestProtectedEnvironmentAccessEntryHelpers verifies the fine-grained entry
-// normalization and principal-detection helpers used by protected env params.
+// normalization helpers used by protected env params: a primitive level
+// wraps to an object, an access level alias is promoted, an approval count
+// alias becomes required_approvals, and a rule naming only a count gets no
+// grantee, since the handlers refuse it as GitLab does.
 func TestProtectedEnvironmentAccessEntryHelpers(t *testing.T) {
 	// protectedEnvironmentPrimitiveAccessEntry: numeric access level wraps to object.
 	if entry, ok := protectedEnvironmentPrimitiveAccessEntry(float64(30)); !ok || entry["access_level"] != 30 {
@@ -767,34 +776,27 @@ func TestProtectedEnvironmentAccessEntryHelpers(t *testing.T) {
 	if approvalEntry["required_approvals"] != 3 {
 		t.Fatalf("approvalEntry.required_approvals = %#v, want 3", approvalEntry["required_approvals"])
 	}
-	// No principal → default access_level=40 is added.
-	if approvalEntry["access_level"] != 40 {
-		t.Fatalf("approvalEntry.access_level = %#v, want 40 (default principal)", approvalEntry["access_level"])
+	// No grantee is added: the rule reaches the handler naming only its count.
+	if level, has := approvalEntry["access_level"]; has {
+		t.Fatalf("approvalEntry.access_level = %#v, want none: the caller named no grantee", level)
 	}
-
-	// protectedEnvironmentAccessEntryHasPrincipal detects presence of principal keys.
-	if !protectedEnvironmentAccessEntryHasPrincipal(map[string]any{"access_level": 40}) {
-		t.Fatal("hasPrincipal with access_level should return true")
-	}
-	if !protectedEnvironmentAccessEntryHasPrincipal(map[string]any{"user_id": 1}) {
-		t.Fatal("hasPrincipal with user_id should return true")
-	}
-	if !protectedEnvironmentAccessEntryHasPrincipal(map[string]any{"group_id": 5}) {
-		t.Fatal("hasPrincipal with group_id should return true")
-	}
-	if protectedEnvironmentAccessEntryHasPrincipal(map[string]any{"required_approvals": 2}) {
-		t.Fatal("hasPrincipal without principal key should return false")
+	if want := (map[string]any{"required_approvals": 3}); !reflect.DeepEqual(approvalEntry, want) {
+		t.Fatalf("approvalEntry = %#v, want %#v", approvalEntry, want)
 	}
 }
 
-// TestProtectedEnvironmentApprovalCount_NonIntegerValue verifies the
-// normalizeProtectedEnvironmentApprovalCount function returns early when
-// required_approval_count is present but cannot be converted to an integer.
-func TestProtectedEnvironmentApprovalCount_NonIntegerValue(t *testing.T) {
+// TestProtectedEnvironmentApprovalCount_AnyValue_IsLeftForTheHandler verifies
+// that a top-level required_approval_count is never rewritten, whatever its
+// value: no explanation is recorded and the parameter reaches the handler as
+// the caller sent it, an integer count included, which used to be promoted to
+// an approval rule granted to Maintainers.
+func TestProtectedEnvironmentApprovalCount_AnyValue_IsLeftForTheHandler(t *testing.T) {
 	tests := []struct {
 		name  string
 		value any
 	}{
+		{name: "zero", value: 0},
+		{name: "a count", value: 2},
 		{name: "non-numeric string", value: "not-a-number"},
 		{name: "boolean", value: true},
 		{name: "float with fraction", value: 2.5},
@@ -1280,17 +1282,17 @@ func TestNormalizeParamsWithExplanation_TargetNotInSchema_LeavesParamsAlone(t *t
 	}
 }
 
-// TestNormalizeProtectedEnvironmentParams_RuleWithoutApprovals_KeepsEntryAsIs
-// asserts that the maintainer default is attached to an approval rule for one
-// reason only: the rule asks for approvals and names nobody to give them.
+// TestNormalizeProtectedEnvironmentParams_RuleWithoutGrantee_KeepsEntryAsIs
+// asserts that an approval rule naming no grantee reaches the handler as the
+// caller wrote it, whether or not it asks for approvals.
 //
-// GitLab rejects an approval rule that names no principal, so the normalizer
-// supplies access_level 40 for a caller who sent a bare required_approvals.
-// A rule that asks for no approvals is not that case, and filling one in would
-// invent a maintainer approval requirement the caller never wrote. Both
-// subtests send a rule with no principal so that the approval count alone
-// decides, which is the operand this pins.
-func TestNormalizeProtectedEnvironmentParams_RuleWithoutApprovals_KeepsEntryAsIs(t *testing.T) {
+// GitLab rejects an approval rule that names no principal, and the handlers
+// refuse it before it is sent with words that name the rule. The normalizer
+// used to supply access_level 40 for a caller who sent a bare
+// required_approvals, which invented a Maintainer approval requirement the
+// caller never wrote and, on an update, moved an existing rule's grantee.
+// Both subtests send a rule with no principal.
+func TestNormalizeProtectedEnvironmentParams_RuleWithoutGrantee_KeepsEntryAsIs(t *testing.T) {
 	schema := schemaWithProperties("id", "name", "approval_rules")
 
 	t.Run("no approvals asked for leaves the rule untouched", func(t *testing.T) {
@@ -1312,13 +1314,13 @@ func TestNormalizeProtectedEnvironmentParams_RuleWithoutApprovals_KeepsEntryAsIs
 		}
 	})
 
-	t.Run("approvals asked for with no principal defaults to maintainer", func(t *testing.T) {
+	t.Run("approvals asked for with no principal get no grantee", func(t *testing.T) {
 		params := map[string]any{
 			"id":             42,
 			"name":           "production",
 			"approval_rules": []any{map[string]any{"required_approvals": 2}},
 		}
-		normalized, _ := NormalizeParamsWithExplanation("environment.protected_update", params, schema)
+		normalized, explanations := NormalizeParamsWithExplanation("environment.protected_update", params, schema)
 		rules, ok := normalized["approval_rules"].([]any)
 		if !ok || len(rules) != 1 {
 			t.Fatalf("approval_rules = %#v, want one entry", normalized["approval_rules"])
@@ -1327,8 +1329,11 @@ func TestNormalizeProtectedEnvironmentParams_RuleWithoutApprovals_KeepsEntryAsIs
 		if !entryOK {
 			t.Fatalf("approval rule = %#v, want an object", rules[0])
 		}
-		if entry["access_level"] != 40 {
-			t.Fatalf("approval rule = %#v, want access_level 40 supplied for a rule that names no principal", entry)
+		if want := (map[string]any{"required_approvals": 2}); !reflect.DeepEqual(entry, want) {
+			t.Fatalf("approval rule = %#v, want %#v with no access_level supplied", entry, want)
+		}
+		if len(explanations) != 0 {
+			t.Fatalf("explanations = %#v, want none for a rule nothing had to be done to", explanationAliases(explanations))
 		}
 	})
 }
