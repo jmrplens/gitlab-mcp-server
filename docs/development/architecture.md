@@ -592,19 +592,23 @@ returns one page of up to 100 items and says how complete it is in `_meta`,
 under `io.github.jmrplens/pageInfo` (`returned`, `total` when GitLab sent it,
 `complete`). A consumer that needs the whole collection uses the tool surface.
 
-## Smoke-validating stateless HTTP
+## Stateless HTTP on the real binary
 
-`make validate-http-stateless` builds the binary, and
-`make validate-http-stateless-docker` the image, and both run
-`scripts/validate-http-stateless.sh` against it with `--stateless
---json-response`, reading `GITLAB_URL` and `GITLAB_TOKEN` from the environment
-or from `.env`. The script waits for `/health`, then checks that a `tools/list`
-POST answers `application/json` with no `Mcp-Session-Id` and lists
-`gitlab_find_action`, that a `gitlab_find_action` call returns matches, and
-that a `GET` on the endpoint answers `405`. In docker mode the instance URL has
-to be reachable from inside the container (for the Docker e2e GitLab,
-`http://host.docker.internal:8929`). It needs a real GitLab and a token, so
-nothing in CI runs it.
+What a stateless deployment answers is held on the real binary by the HTTP
+transport module, `test/e2e/http` (`make test-e2e-http`), which needs no
+GitLab and no token and runs on every CI push.
+`TestClient_StatelessAnswersCarryNoSession` holds four answers of the default
+transport, with and without `--json-response`, to carrying no
+`Mcp-Session-Id`: the initialize a 2025-11-25 client opens with, a
+`tools/list` at that revision carrying no session, a `tools/list` at
+2026-07-28 and a `gitlab_find_action` call. It also holds each `tools/list` to
+listing `gitlab_find_action` and the call to finding the project listing; `TestClient_JSONResponseMode` holds `--json-response` to
+answering `application/json`; and the stateless half of
+`TestGate_StatefulGETAndDELETEAreAuthenticated` holds a `GET` and a `DELETE`
+on the endpoint to `405`. These replaced
+`scripts/validate-http-stateless.sh` (issue 1114, item 9), which made the same
+checks against a binary or an image and a real GitLab, and which nothing in CI
+ran.
 
 ## New contributor quick start
 
