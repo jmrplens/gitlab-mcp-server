@@ -1066,6 +1066,8 @@ func TestCentralTierFilter_BoardScopeInputsArePremium(t *testing.T) {
 		{name: "group_board_update_labels", id: groupBoardUpdate, field: "labels", premiumOnly: true},
 		{name: "group_board_update_weight", id: groupBoardUpdate, field: "weight", premiumOnly: true},
 		{name: "group_board_update_name", id: groupBoardUpdate, field: "name"},
+		{name: "group_board_update_hide_backlog_list", id: groupBoardUpdate, field: "hide_backlog_list"},
+		{name: "group_board_update_hide_closed_list", id: groupBoardUpdate, field: "hide_closed_list"},
 		{name: "board_list_create_assignee_id", id: projectListCreate, field: "assignee_id", premiumOnly: true},
 		{name: "board_list_create_milestone_id", id: projectListCreate, field: "milestone_id", premiumOnly: true},
 		{name: "board_list_create_iteration_id", id: projectListCreate, field: "iteration_id", premiumOnly: true},

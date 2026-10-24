@@ -4,6 +4,8 @@ package groupboards
 import (
 	"context"
 	"net/http"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -218,6 +220,43 @@ func TestActionSpecs_Editions_BoardCreateAndDeleteArePremium(t *testing.T) {
 				t.Errorf("%s has Edition %q, want %q", spec.Name, spec.Edition, want)
 			}
 		})
+	}
+}
+
+// TestActionSpecs_GroupBoardUpdate_OffersTheListSwitches holds the group board
+// update to what GitLab's route takes on every tier and the project board
+// update already offers: hide_backlog_list and hide_closed_list in its input
+// schema, neither tagged with a tier so that a Free catalog keeps them, and a
+// description and usage line that say the Open and Closed lists can be
+// toggled. The update offered neither switch, and its prose said only rename
+// and scope (issue 1241).
+func TestActionSpecs_GroupBoardUpdate_OffersTheListSwitches(t *testing.T) {
+	spec := groupBoardSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t))))["gitlab_group_board_update"]
+
+	props, _ := spec.Route.InputSchema["properties"].(map[string]any)
+	inputType := reflect.TypeFor[UpdateGroupBoardInput]()
+	for _, sw := range []struct{ key, field string }{
+		{"hide_backlog_list", "HideBacklogList"},
+		{"hide_closed_list", "HideClosedList"},
+	} {
+		t.Run(sw.key, func(t *testing.T) {
+			if _, ok := props[sw.key]; !ok {
+				t.Errorf("the update's input schema has no %s", sw.key)
+			}
+			field, ok := inputType.FieldByName(sw.field)
+			if !ok {
+				t.Fatalf("UpdateGroupBoardInput has no field %s", sw.field)
+			}
+			if tier := field.Tag.Get("tier"); tier != "" {
+				t.Errorf("%s is tagged tier %q, want no tier: GitLab takes it on every tier", sw.field, tier)
+			}
+		})
+	}
+	if !strings.Contains(spec.IndividualTool.Description, "list visibility") {
+		t.Errorf("the update's description = %q, want it to name the list visibility", spec.IndividualTool.Description)
+	}
+	if !strings.Contains(spec.Usage, "toggle its Open and Closed columns") {
+		t.Errorf("the update's usage = %q, want it to say the Open and Closed columns can be toggled", spec.Usage)
 	}
 }
 

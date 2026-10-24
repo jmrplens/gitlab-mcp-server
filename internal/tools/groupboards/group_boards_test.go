@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"reflect"
 	"regexp"
@@ -320,6 +321,58 @@ func TestUpdateGroupBoard_SendsOnlyTheFieldTheCallerSet(t *testing.T) {
 			input := tc.input
 			input.GroupID, input.BoardID = toolutil.StringOrInt("42"), 1
 			if _, err := UpdateGroupBoard(context.Background(), client, input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !reflect.DeepEqual(gotBody, tc.want) {
+				t.Errorf("PUT body = %#v, want %#v", gotBody, tc.want)
+			}
+		})
+	}
+}
+
+// TestUpdateGroupBoard_ListSwitches_ReachTheBodyOnlyWhenSet pins the whole PUT
+// body for the two list switches GitLab's group board update takes on every
+// tier and client-go's UpdateGroupIssueBoardOptions does not model (register
+// row 98). The group update offered neither, so a group board's Open and
+// Closed lists could not be hidden or shown (issue 1241). Each case is built
+// from the parameters a model sends, so the switches are read as the catalog
+// reads them, and false is sent as false rather than read as unset. The two
+// switches take values from the same two possibilities, so the cases give
+// them opposite values to tell the two apart, and one case sets a switch
+// beside the name to show the switches and client-go's own fields go out in
+// one body.
+func TestUpdateGroupBoard_ListSwitches_ReachTheBodyOnlyWhenSet(t *testing.T) {
+	cases := []struct {
+		name   string
+		params map[string]any
+		want   map[string]any
+	}{
+		{"backlog hidden", map[string]any{"hide_backlog_list": true}, map[string]any{"hide_backlog_list": true}},
+		{"closed shown", map[string]any{"hide_closed_list": false}, map[string]any{"hide_closed_list": false}},
+		{"backlog shown and closed hidden", map[string]any{"hide_backlog_list": false, "hide_closed_list": true}, map[string]any{"hide_backlog_list": false, "hide_closed_list": true}},
+		{"closed hidden beside a rename", map[string]any{"name": "Renamed", "hide_closed_list": true}, map[string]any{"name": "Renamed", "hide_closed_list": true}},
+		{"neither switch", map[string]any{"name": "Renamed"}, map[string]any{"name": "Renamed"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			params := map[string]any{"group_id": "42", "board_id": 1}
+			maps.Copy(params, tc.params)
+			input, err := toolutil.UnmarshalParams[UpdateGroupBoardInput](params)
+			if err != nil {
+				t.Fatalf("UnmarshalParams(%v) error: %v", tc.params, err)
+			}
+			var gotBody map[string]any
+			mux := http.NewServeMux()
+			mux.HandleFunc("/api/v4/groups/42/boards/1", func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodPut)
+				if decodeErr := json.NewDecoder(r.Body).Decode(&gotBody); decodeErr != nil {
+					t.Errorf("decode request body: %v", decodeErr)
+				}
+				testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"Board","hide_backlog_list":false,"hide_closed_list":true}`)
+			})
+			client := testutil.NewTestClient(t, mux)
+
+			if _, err = UpdateGroupBoard(t.Context(), client, input); err != nil {
 				t.Fatalf(fmtUnexpErr, err)
 			}
 			if !reflect.DeepEqual(gotBody, tc.want) {
@@ -643,7 +696,7 @@ func TestFormatGroupBoardMarkdown_AllFields(t *testing.T) {
 		"| 11 | Iteration: Sprint 3 | 1 | - | - | - |\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'group.group_board_create_list' to add a column to this board\n" +
-		"- Use action 'group.group_board_update' to rename this board, and on Premium and Ultimate change its scope\n" +
+		"- Use action 'group.group_board_update' to rename this board or toggle its Open and Closed lists, and on Premium and Ultimate change its scope\n" +
 		"- Use action 'group.group_board_delete' to remove this board\n"
 	if md != want {
 		t.Errorf("FormatGroupBoardMarkdown()\n got %q\nwant %q", md, want)
@@ -1212,7 +1265,7 @@ func TestFormatGroupBoardMarkdown_Minimal(t *testing.T) {
 		"- **Hide Closed**: " + toolutil.EmojiCross + "\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'group.group_board_create_list' to add a column to this board\n" +
-		"- Use action 'group.group_board_update' to rename this board, and on Premium and Ultimate change its scope\n" +
+		"- Use action 'group.group_board_update' to rename this board or toggle its Open and Closed lists, and on Premium and Ultimate change its scope\n" +
 		"- Use action 'group.group_board_delete' to remove this board\n"
 	if md != want {
 		t.Errorf("FormatGroupBoardMarkdown()\n got %q\nwant %q", md, want)
@@ -1448,7 +1501,7 @@ func TestMarkdownHelpers_NilFallbacks(t *testing.T) {
 		"| 9 |  | 0 | - | - | - |\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'group.group_board_create_list' to add a column to this board\n" +
-		"- Use action 'group.group_board_update' to rename this board, and on Premium and Ultimate change its scope\n" +
+		"- Use action 'group.group_board_update' to rename this board or toggle its Open and Closed lists, and on Premium and Ultimate change its scope\n" +
 		"- Use action 'group.group_board_delete' to remove this board\n"
 	if md != want {
 		t.Errorf("FormatGroupBoardMarkdown()\n got %q\nwant %q", md, want)

@@ -157,10 +157,23 @@ func rawCreateGroupBoard(ctx context.Context, client *gitlabclient.Client, group
 	return &board, resp, err
 }
 
-// rawUpdateGroupBoard issues a raw REST PUT updating a group issue board,
-// decoding the full documented response into a [groupIssueBoardAPI] so the
-// SDK-missing hide_*_list/assignee/weight fields are surfaced.
-func rawUpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, groupID string, boardID int64, opts *gl.UpdateGroupIssueBoardOptions) (*groupIssueBoardAPI, *gl.Response, error) {
+// updateGroupBoardBody is the body of a group board update: every field
+// client-go's UpdateGroupIssueBoardOptions models, and the two list switches
+// GitLab's route takes on every tier and that struct does not (register row 98
+// of docs/development/upstream-bugs.md). A switch left nil is left out, so
+// GitLab keeps that list as it is. The type retires when a client-go release
+// models the switches.
+type updateGroupBoardBody struct {
+	gl.UpdateGroupIssueBoardOptions
+	HideBacklogList *bool `url:"hide_backlog_list,omitempty" json:"hide_backlog_list,omitempty"`
+	HideClosedList  *bool `url:"hide_closed_list,omitempty" json:"hide_closed_list,omitempty"`
+}
+
+// rawUpdateGroupBoard issues a raw REST PUT updating a group issue board with
+// the body [updateGroupBoardBody] carries, decoding the full documented
+// response into a [groupIssueBoardAPI] so the SDK-missing
+// hide_*_list/assignee/weight fields are surfaced.
+func rawUpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, groupID string, boardID int64, opts *updateGroupBoardBody) (*groupIssueBoardAPI, *gl.Response, error) {
 	path := fmt.Sprintf("groups/%s/boards/%d", gl.PathEscape(groupID), boardID)
 	req, err := newRawRequest(ctx, client, http.MethodPut, path, opts)
 	if err != nil {
@@ -364,14 +377,23 @@ func CreateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Cr
 // (Timebox::None and Timebox::Any). AssigneeID is a pointer because GitLab
 // looks the assignee up by its ID and clears the scope when no user has it,
 // which 0 never matches (issue 1306).
+//
+// HideBacklogList and HideClosedList carry no tier tag, since GitLab takes
+// both on every tier (update_params_ce in lib/api/boards_responses.rb), and are
+// pointers because false shows a list again and has to reach GitLab rather
+// than be read as unset. client-go's UpdateGroupIssueBoardOptions models
+// neither (register row 98 of docs/development/upstream-bugs.md), so they go
+// out in [updateGroupBoardBody] (issue 1241).
 type UpdateGroupBoardInput struct {
-	GroupID     toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
-	BoardID     int64                `json:"board_id" jsonschema:"Board ID,required"`
-	Name        string               `json:"name,omitempty" jsonschema:"Board name"`
-	AssigneeID  *int64               `json:"assignee_id,omitempty" tier:"premium" jsonschema:"User ID of the assignee the board is scoped to. Pass 0 to remove the assignee from the scope. Omit the field to leave it untouched"`
-	MilestoneID *int64               `json:"milestone_id,omitempty" tier:"premium" jsonschema:"Milestone ID the board is scoped to: 0 for issues with no milestone, -1 to remove the milestone from the scope, -2 for upcoming and -3 for started milestones. Omit the field to leave it untouched"`
-	Labels      []string             `json:"labels,omitempty" tier:"premium" jsonschema:"Label names the board is scoped to. Pass [] to remove every label from the scope. Omit the field to leave it untouched"`
-	Weight      *int64               `json:"weight,omitempty" tier:"premium" jsonschema:"Weight from 0 to 9 the board is scoped to"`
+	GroupID         toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
+	BoardID         int64                `json:"board_id" jsonschema:"Board ID,required"`
+	Name            string               `json:"name,omitempty" jsonschema:"Board name"`
+	AssigneeID      *int64               `json:"assignee_id,omitempty" tier:"premium" jsonschema:"User ID of the assignee the board is scoped to. Pass 0 to remove the assignee from the scope. Omit the field to leave it untouched"`
+	MilestoneID     *int64               `json:"milestone_id,omitempty" tier:"premium" jsonschema:"Milestone ID the board is scoped to: 0 for issues with no milestone, -1 to remove the milestone from the scope, -2 for upcoming and -3 for started milestones. Omit the field to leave it untouched"`
+	Labels          []string             `json:"labels,omitempty" tier:"premium" jsonschema:"Label names the board is scoped to. Pass [] to remove every label from the scope. Omit the field to leave it untouched"`
+	Weight          *int64               `json:"weight,omitempty" tier:"premium" jsonschema:"Weight from 0 to 9 the board is scoped to"`
+	HideBacklogList *bool                `json:"hide_backlog_list,omitempty" jsonschema:"Hide the board's Open list (true) or show it (false). Omit the field to leave it untouched"`
+	HideClosedList  *bool                `json:"hide_closed_list,omitempty" jsonschema:"Hide the board's Closed list (true) or show it (false). Omit the field to leave it untouched"`
 }
 
 // UpdateGroupBoard updates a group issue board.
@@ -382,7 +404,7 @@ func UpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Up
 	if input.BoardID == 0 {
 		return GroupBoardOutput{}, toolutil.WrapErrWithMessage("group_board_update", toolutil.ErrFieldRequired("board_id"))
 	}
-	opts := &gl.UpdateGroupIssueBoardOptions{}
+	opts := &updateGroupBoardBody{HideBacklogList: input.HideBacklogList, HideClosedList: input.HideClosedList}
 	if input.Name != "" {
 		opts.Name = new(input.Name)
 	}
@@ -397,9 +419,10 @@ func UpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Up
 	if input.Weight != nil {
 		opts.Weight = input.Weight
 	}
-	// Raw REST fetch so the documented hide_backlog_list/hide_closed_list/
-	// assignee/weight fields (absent from client-go's gl.GroupIssueBoard) are
-	// surfaced on the updated board.
+	// Raw REST request so the two list switches reach GitLab and the
+	// documented hide_backlog_list/hide_closed_list/assignee/weight fields
+	// (absent from client-go's gl.GroupIssueBoard) are surfaced on the updated
+	// board.
 	board, _, err := rawUpdateGroupBoard(ctx, client, string(input.GroupID), input.BoardID, opts)
 	if err != nil {
 		// Nothing this input sends is refused, so no hint is written for one
