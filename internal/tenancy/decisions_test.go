@@ -908,6 +908,61 @@ func TestDecisions_CapacityRule_AnswersF11UnderIssue958(t *testing.T) {
 	}
 }
 
+// TestDecisions_UnreasonedBounds_StateTheirReasonUnderIssue958 pins the five
+// rows F-16 recorded as bounds no setting reaches with no reason stated, which
+// issue 958 answered by stating one: the rejected-token cache, the credential
+// age ceiling, the unexplained-401 interval, the probe bound and the upstream
+// retries. Each records the issue and carries F-16 no longer. F-16 stays on
+// the four whose default or fallback is written in two places, which a later
+// change of code answers: the revalidation interval, the pool size and the
+// idle timeout, which the pool states a second time, and the transport-source
+// budget's window fallback, whose 500 states its reason here too.
+func TestDecisions_UnreasonedBounds_StateTheirReasonUnderIssue958(t *testing.T) {
+	for _, id := range []string{"ADM-006", "ADM-008", "ADM-010", "POL-006", "RTC-006"} {
+		t.Run(id, func(t *testing.T) {
+			d, _ := Lookup(id)
+			if d.Fixed == "" || !slices.Contains(d.Decided, "issue 958") || d.Carries("F-16") {
+				t.Errorf("%s: fixed %q, decided %v, findings %v; want a reason, issue 958 recorded and no F-16",
+					id, d.Fixed, d.Decided, d.Findings)
+			}
+		})
+	}
+	if d, _ := Lookup("AUB-002"); d.Fixed == "" {
+		t.Error("AUB-002 states no reason its 500 is fixed")
+	}
+	var carrying []string
+	for _, d := range Decisions() {
+		if d.Carries("F-16") {
+			carrying = append(carrying, d.ID)
+		}
+	}
+	if want := []string{"ADM-009", "AUB-002", "POL-001", "POL-004"}; !slices.Equal(carrying, want) {
+		t.Errorf("F-16 is carried by %v, want %v", carrying, want)
+	}
+}
+
+// TestDecisions_GoOptions_AreTheValuesOnlyTestsSet pins the rows whose value
+// only a Go option reaches, which no production code sets and no operator can:
+// the pool's credential age option (ADM-008), and the watcher manager's
+// Options fields, its per-credential ceiling (HLD-003) and its lease, cadence
+// and lifetime (HLD-007). Each says why its value is fixed, as a constant
+// does, and no other row is declared a Go option's.
+func TestDecisions_GoOptions_AreTheValuesOnlyTestsSet(t *testing.T) {
+	var options []string
+	for _, d := range Decisions() {
+		if d.Source != OptionOnly {
+			continue
+		}
+		options = append(options, d.ID)
+		if d.Fixed == "" {
+			t.Errorf("%s: a Go option's value with no reason it is fixed", d.ID)
+		}
+	}
+	if want := []string{"ADM-008", "HLD-003", "HLD-007"}; !slices.Equal(options, want) {
+		t.Errorf("the rows only a Go option reaches are %v, want %v", options, want)
+	}
+}
+
 // TestLookup_FindsARowAndRefusesAnUnknownID reads one row back and asks for one
 // that does not exist.
 func TestLookup_FindsARowAndRefusesAnUnknownID(t *testing.T) {

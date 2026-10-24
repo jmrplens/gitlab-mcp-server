@@ -167,9 +167,12 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   configurable or not keyed on the process, and a reason about the process on a row that
   does not say it protects one (`INV-004`); a valued row that does not say what zero means (`INV-015`); a variable without the
   `GITLAB_MCP_` prefix, or a configurable value with no flag, variable or malformed-value
-  policy (`INV-017`); and a behavior at capacity the capacity rule does not allow for the
+  policy (`INV-017`); a behavior at capacity the capacity rule does not allow for the
   row's kind, key and table, which is how `INV-005` and `INV-010` are read for what each
-  structure holds (`VAL-006`, issue 958; see [Validation checklist](#validation-checklist)).
+  structure holds (`VAL-006`, issue 958; see [Validation checklist](#validation-checklist));
+  and a value no operator setting reaches, a constant or a Go option's, that does not say
+  why, or such a reason on a value a setting reaches or one derived from another
+  (`VAL-009`, issue 958).
 - **With a recorded decision**: a holding taken across keys (`INV-005`); a process
   partner switched off with the per-key limit it stands beside (`INV-015`), which is the
   one zero another row decides that passes without a finding (`RTC-007`, issue 951); and
@@ -184,7 +187,7 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   (`INV-010`); an in-band code of the server's own that mirrors no status the gate
   answers its class of next action with (`INV-012`); any other zero that does not mean
   off (`INV-015`); a reason whose unit differs from its key or misstates its own
-  (`INV-016`); a value only an environment variable or a Go option reaches (`INV-017`);
+  (`INV-016`); a value only an environment variable reaches (`INV-017`);
   and a ceiling nothing bounds (`INV-018`).
 
 - **INV-001 Identity from the credential.** A limit derives who a caller is from the
@@ -518,20 +521,20 @@ requirement, none declared twice and none missing (its rules `unique` and `compl
 every row answering VAL-001 to VAL-009 with a value and naming only rows and findings that
 exist (`well-formed`).
 
-| Item    | The question                                                                                           | Answered by                                                                                               |
-| ------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| VAL-001 | Which of the five questions it answers                                                                 | `Question`                                                                                                |
-| VAL-002 | Its key, and that key's mint cost; a new key amends the vocabulary                                     | `Key`, with `MintCost` and `Evidence`                                                                     |
-| VAL-003 | Its class; a class D limit needs a finding and a reason to ship anyway                                 | `Class`, checked against `Disagrees`; `StatedUnit` against `ReasonUnit`                                   |
-| VAL-004 | Whether it is a ceiling or a share; a share on a mintable key is refused                               | `Kind`                                                                                                    |
-| VAL-005 | If it protects a process resource, its process partner and why that partner is not configurable        | `ProtectsProcess`, `Partner`                                                                              |
-| VAL-006 | What happens at capacity, and why                                                                      | `AtCapacity`, held to the capacity rule below, and `Table` for a structure keyed on a caller-chosen value |
-| VAL-007 | Its refusal: channel, code, status, `Retry-After`, message and class, per method and era, and on stdio | `Refusals`                                                                                                |
-| VAL-008 | What it charges, and that nothing unjudged is charged                                                  | `Refusals[].Charged`, and `Failures` for an admission path                                                |
-| VAL-009 | Its value, source, bounds, zero meaning and malformed-value policy                                     | `Values`, `Source`, `Zero`, `SettingZeros`, `ZeroBy`, `Malformed`                                         |
-| VAL-010 | Its telemetry: the reason only                                                                         | The pull request                                                                                          |
-| VAL-011 | Its behavior on stdio                                                                                  | `StdioKey`                                                                                                |
-| VAL-012 | Its measurement, when it claims to protect one population from another                                 | The pull request, with `make bench-fairness`                                                              |
+| Item    | The question                                                                                                | Answered by                                                                                               |
+| ------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| VAL-001 | Which of the five questions it answers                                                                      | `Question`                                                                                                |
+| VAL-002 | Its key, and that key's mint cost; a new key amends the vocabulary                                          | `Key`, with `MintCost` and `Evidence`                                                                     |
+| VAL-003 | Its class; a class D limit needs a finding and a reason to ship anyway                                      | `Class`, checked against `Disagrees`; `StatedUnit` against `ReasonUnit`                                   |
+| VAL-004 | Whether it is a ceiling or a share; a share on a mintable key is refused                                    | `Kind`                                                                                                    |
+| VAL-005 | If it protects a process resource, its process partner and why that partner is not configurable             | `ProtectsProcess`, `Partner`                                                                              |
+| VAL-006 | What happens at capacity, and why                                                                           | `AtCapacity`, held to the capacity rule below, and `Table` for a structure keyed on a caller-chosen value |
+| VAL-007 | Its refusal: channel, code, status, `Retry-After`, message and class, per method and era, and on stdio      | `Refusals`                                                                                                |
+| VAL-008 | What it charges, and that nothing unjudged is charged                                                       | `Refusals[].Charged`, and `Failures` for an admission path                                                |
+| VAL-009 | Its value, source, bounds, zero meaning and malformed-value policy, and for a value no setting reaches, why | `Values`, `Source`, `Fixed`, `Zero`, `SettingZeros`, `ZeroBy`, `Malformed`                                |
+| VAL-010 | Its telemetry: the reason only                                                                              | The pull request                                                                                          |
+| VAL-011 | Its behavior on stdio                                                                                       | `StdioKey`                                                                                                |
+| VAL-012 | Its measurement, when it claims to protect one population from another                                      | The pull request, with `make bench-fairness`                                                              |
 
 **The capacity rule** (issue 958, rule `capacity-fits`) says which behavior at capacity
 a row may name, read off its kind, its key and whether it holds a record per key, and
@@ -553,6 +556,19 @@ verified OAuth identity (`ADM-005`, issue 950). Where more than one behavior fit
 rule does not choose between them: the row names one, and its comment says why, as the
 rejected-token cache's says why it evicts rather than refuse and the authentication
 tables' why they stop counting rather than refuse.
+
+**A value no setting reaches says why** (issue 958, rule `fixed-reasoned`). Every row
+whose value is a constant, or one only a Go option reaches, states in `Fixed` what the
+value is set against and what a setting that moved it would cost or undo. `Validate`
+refuses, with no exception, such a row that states none, and a `Fixed` reason on a value
+a setting reaches or one derived from another. The process partners and the process's own
+ceilings had a reason, `INV-004`'s, written beside some of them in the code; the others
+had none a reader could tell from an accident, and the next constant copied whichever
+neighbor it was written beside. A Go option no operator reaches is not configuration and
+departs from nothing in `INV-017`: it is a constant to every operator, and it is held to
+its reason as one is (`ADM-008`, the credential age ceiling, whose option exists for the
+tests, and the watcher manager's ceiling and cadence, `HLD-003` and `HLD-007`, whose
+`Options` fields only the tests set).
 
 ## Findings
 
@@ -591,7 +607,18 @@ option's, under its measure that each zero left departing is an exception with i
 (see `INV-015`). F-34 stays on the four whose zero a change of code answers: the
 OAuth cache TTL's flag, which selects the default where its variable refuses (`ADM-005`),
 the fast lockout's window, whose zero also switches the distinct-credential budget off
-(`AUB-001`, `AUB-003`), and the session timeout's variable (`END-005`). F-35
+(`AUB-001`, `AUB-003`), and the session timeout's variable (`END-005`). F-16, of the same
+issue, recorded bounds no setting reaches with no reason stated, and defaults and
+fallbacks written in two places. Issue 958 stated a reason for every value no setting
+reaches (see [Validation checklist](#validation-checklist)), so the rejected-token
+cache, the credential age ceiling, the unexplained-401 interval, the probe bound and the
+upstream retries (`ADM-006`, `ADM-008`, `ADM-010`, `POL-006`, `RTC-006`) record the
+issue and carry the finding no longer. It stays on the four written twice: the
+revalidation interval, the pool size and the idle timeout, which the pool states a
+second time (`ADM-009`, `POL-001`, `POL-004`), and the transport-source budget's window
+fallback (`AUB-002`), whose `500` states its reason now. F-16, like F-11, now records a
+departure from no invariant: the `INV-017` departure it covered, a value only a Go option
+reached, is none, since a Go option is not configuration. F-35
 ([issue 982](https://github.com/jmrplens/gitlab-mcp-server/issues/982)) recorded the
 transport-source budget's map of charged (source, key) pairs, which only the sweep bounded,
 since a source the full failure table never tracks is never blocked (`AUB-002`), a

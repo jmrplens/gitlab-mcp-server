@@ -311,10 +311,38 @@ func TestValidate_ThroughConfig(t *testing.T) {
 		{"no malformed policy", row(func(d *Decision) { configurable(d); d.Malformed = MalformedNone }), "no malformed-value policy"},
 		{"an unprefixed variable", row(func(d *Decision) { d.Envs = []string{"MAX_THINGS"} }), "MAX_THINGS does not carry"},
 		{"an environment variable alone", row(func(d *Decision) { d.Source = EnvOnly }), "outside the configuration package"},
-		{"a Go option alone", row(func(d *Decision) { d.Source = OptionOnly }), "outside the configuration package"},
 		{"an environment variable alone, recorded", row(func(d *Decision) { d.Source, d.Findings = EnvOnly, []string{"F-13"} }), ""},
-		{"a Go option alone, recorded", row(func(d *Decision) { d.Source, d.Findings = OptionOnly, []string{"F-16"} }), ""},
+		// F-16 recorded bounds with no reason and defaults written twice, and
+		// no longer the value only a Go option reached, so it excuses no value
+		// only an environment variable reaches.
+		{
+			"an environment variable alone, carrying F-16",
+			row(func(d *Decision) { d.Source, d.Findings = EnvOnly, []string{"F-16"} }), "outside the configuration package",
+		},
+		// A value only a Go option reaches is no operator's configuration:
+		// checkFixedReasoned holds it to its reason, as it holds a constant.
+		{"a Go option alone", row(func(d *Decision) { d.Source = OptionOnly }), ""},
 		{"a constant", row(func(d *Decision) { d.Source = Constant }), ""},
+	})
+}
+
+// TestValidate_FixedReasoned holds a value no operator setting reaches, a
+// constant or a Go option's, to saying why (issue 958), and refuses that
+// reason on a value a setting reaches or one derived from another's.
+func TestValidate_FixedReasoned(t *testing.T) {
+	from := func(source Source, fixed string) func(d *Decision) {
+		return func(d *Decision) { d.Source, d.Fixed = source, fixed }
+	}
+	runRule(t, checkFixedReasoned, []ruleCase{
+		{"a constant with its reason", row(from(Constant, "why")), ""},
+		{"a constant with none", row(from(Constant, "")), "no reason it is fixed"},
+		{"a Go option with its reason", row(from(OptionOnly, "why")), ""},
+		{"a Go option with none", row(from(OptionOnly, "")), "no reason it is fixed"},
+		{"a configurable value", row(from(Configurable, "")), ""},
+		{"a configurable value said to be fixed", row(from(Configurable, "why")), "is not a constant or a Go option's"},
+		{"an environment variable said to be fixed", row(from(EnvOnly, "why")), "is not a constant or a Go option's"},
+		{"a derived value said to be fixed", row(from(Derived, "why")), "is not a constant or a Go option's"},
+		{"no value", row(nil), ""},
 	})
 }
 

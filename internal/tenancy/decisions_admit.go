@@ -150,6 +150,8 @@ func admitDecisions() []Decision {
 			Resource: "admission of an OAuth token at the read_api minimum",
 			Key:      KeyVerified, StdioKey: KeyNone,
 			Values: []string{"UpstreamRetryAfter"}, Source: Constant, Zero: ZeroNotApplicable,
+			Fixed: "it is a hint of when to come back and bounds nothing, so no deployment has a figure of its " +
+				"own for it; where GitLab says when, GitLab's Retry-After is advertised instead",
 			// The verification's round trips to GitLab run under ADM-014's
 			// slots, which answered F-30 (issue 950). The minimum is the
 			// legacy door's too since issue 952 (ADM-001), the predicate
@@ -300,6 +302,9 @@ func admitDecisions() []Decision {
 			Resource: "how long, and how many, rejected tokens are remembered",
 			Key:      KeyRefused, StdioKey: KeyNone, Table: true,
 			Values: []string{"RejectedTokenTTL", "RejectedTokenCapacity"}, Source: Constant, Zero: ZeroNotApplicable,
+			Fixed: "it remembers GitLab's own verdicts to spare GitLab a request: the lifetime is how long a token " +
+				"fixed at GitLab stays refused here and the capacity is the memory a flood of invented tokens may " +
+				"take, both set against GitLab and the process rather than against a deployment's traffic",
 			// Full, it evicts the record nearest its expiry, which the
 			// capacity rule allows a table kept before admission (issue 958):
 			// a record is GitLab's verdict against a token, so evicting one
@@ -311,7 +316,6 @@ func admitDecisions() []Decision {
 			// are the ones a retrying client presents next.
 			AtCapacity: EvictOldest,
 			Decided:    []string{"issue 958"},
-			Findings:   []string{"F-16"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{MethodGate}, Channel: Gate, Code: CodeUnauthorized, Status: 401,
@@ -371,9 +375,11 @@ func admitDecisions() []Decision {
 			Resource: "the longest an entry serves on one credential check",
 			Key:      KeyEntry, StdioKey: KeyNone,
 			Values: []string{"CredentialMaxAge", "CredentialMaxAgeCeiling"}, Source: OptionOnly, Zero: ZeroSelectsDefault,
-			ZeroBy:   "issue 958",
-			Decided:  []string{"issue 958"},
-			Findings: []string{"F-16"},
+			Fixed: "it is the floor under every setting that turns re-checking off, --revalidate-interval 0 among " +
+				"them, and bounds how long a revoked token's surface stays served, so a setting that raised it would " +
+				"widen the one window nothing else bounds; the option exists for the tests, and no operator reaches it",
+			ZeroBy:  "issue 958",
+			Decided: []string{"issue 958"},
 			// An entry past the age is evicted on its next request, and its
 			// open listens are told the credential was reset.
 			Refusals: []Refusal{
@@ -410,7 +416,10 @@ func admitDecisions() []Decision {
 			Resource: "how often a 401 that named no cause is confirmed with a probe",
 			Key:      KeyEntry, StdioKey: KeyNone,
 			Values: []string{"UnexplainedRefusalCooldown"}, Source: Constant, Zero: ZeroNotApplicable,
-			Findings: []string{"F-16"},
+			Fixed: "it paces the probe a 401 that named no cause triggers to one per credential per window and must " +
+				"outlast that probe, so it is set against the probe's own timeout rather than against a deployment: " +
+				"shorter would let two refusals confirm twice, and longer would leave a deleted token served longer",
+			Decided: []string{"issue 958"},
 			Refusals: []Refusal{
 				listenEnd("credential_revoked", Reauthorize, refuse(pkgServer, "endOfCredentialRevocation")),
 			},
@@ -470,6 +479,8 @@ func admitDecisions() []Decision {
 			ReasonAt:   reasonAt(pkgOAuth, "verificationSlots"),
 			ReasonUnit: KeyProcess, ProtectsProcess: true,
 			Values: []string{"OAuthVerifications", "OAuthVerificationWait"}, Source: Constant, Zero: ZeroNotApplicable,
+			Fixed: "a ceiling on the process's own work with no per-caller number beside it, which an operator who " +
+				"could raise it could undo (INV-004), as the code beside it says",
 			AtCapacity: WaitThenRefuse,
 			Decided:    []string{"issue 950"},
 			Refusals: []Refusal{
@@ -555,6 +566,9 @@ func admitDecisions() []Decision {
 			// F-35 recorded.
 			Table:  true,
 			Values: []string{"TransportSourceDistinctKeys"}, Source: Constant, Zero: ZeroNotApplicable,
+			Fixed: "no legitimate traffic reaches it: five hundred distinct failing identities inside a window from " +
+				"one transport source is a rotation or an incident, so a setting could only loosen the bound on a " +
+				"proxy that forwards what it is told",
 			AtCapacity: ReclaimOwnThenRefuse,
 			// Whether the budget exists is TransportSourceBudgetOn's answer.
 			Functions: []string{"TransportSourceBudgetOn"},
@@ -615,6 +629,9 @@ func admitDecisions() []Decision {
 			Key:      KeyProcess, StdioKey: KeyNone,
 			ReasonUnit: KeyProcess, ProtectsProcess: true,
 			Values: []string{"AuthTrackedSources"}, Source: Constant, Zero: ZeroNotApplicable,
+			Fixed: "it bounds tables keyed on addresses a caller mints, at a few hundred kilobytes, and the " +
+				"transport-source budget sizes its own record against it (AUB-002): raising it lets a flood hold " +
+				"more, and lowering it leaves more newcomers uncounted, neither of which a deployment's traffic asks for",
 			AtCapacity: StopCounting,
 			Decided:    []string{"issue 958"},
 			// The one value caps the three tables, and each stops counting a
@@ -657,6 +674,8 @@ func admitDecisions() []Decision {
 			Resource: "how often the authentication tables and the discovery documents' table are swept",
 			Key:      KeyProcess, StdioKey: KeyNone,
 			Values: []string{"AuthSweepInterval"}, Source: Constant, Zero: ZeroNotApplicable,
+			Fixed: "the sweep gives back the memory of records that have lapsed, which a full table also clears for " +
+				"itself before it stops counting, so its interval is housekeeping a deployment has no figure for",
 			// A var rather than a const, so a test can make the tick arrive;
 			// nothing at runtime writes it.
 			Sites: []Site{alias(pkgServer, "periodicCleanupInterval", "AuthSweepInterval")},
@@ -681,6 +700,9 @@ func admitDecisions() []Decision {
 			Resource: "distinct IPv6 /64s with a credential refused one /48 may produce in AUB-003's window",
 			Key:      KeyNetwork, StdioKey: KeyNone,
 			Values: []string{"AuthNetworkFailingPrefixes"}, Source: Constant, Zero: ZeroNotApplicable,
+			Fixed: "issue 954 decided the figure is the register's and no operator's: it bounds the rotation across " +
+				"a /48's /64s that keying the address budgets on the /64 opened, and a setting would let a " +
+				"deployment reopen it",
 			Decided:  []string{"issue 954"},
 			Refusals: blockedRefusals,
 			Sites: []Site{
@@ -697,11 +719,14 @@ func admitDecisions() []Decision {
 			ReasonAt:   reasonAt(pkgPool, "maxConcurrentCredentialProbes"),
 			ReasonUnit: KeyProcess, ProtectsProcess: true,
 			Values: []string{"CredentialProbes", "CredentialProbeWait"}, Source: Constant, Zero: ZeroNotApplicable,
+			Fixed: "a ceiling on the probes the process sends GitLab for credentials it has never met, keyed on the " +
+				"process with no per-caller number beside it, which an operator who could raise it could undo " +
+				"(INV-004), as ADM-014's is for the OAuth verifications",
 			AtCapacity: WaitThenRefuse,
 			// In oauth mode its probe is the second GET /user; the verifier's
 			// round trips before it run under ADM-014's slots (F-30, answered
 			// by issue 950).
-			Findings: []string{"F-16"},
+			Decided: []string{"issue 958"},
 			Refusals: []Refusal{
 				gateRefusal(503, CodeUnavailable, "Could not initialize a GitLab session for this token.", RetryLater, gateClassify),
 			},

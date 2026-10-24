@@ -107,6 +107,10 @@ func authorizeDecisions() []Decision {
 			Key:      KeyEntry, StdioKey: KeyProcess,
 			Values: []string{"TierNamespacePageSize", "TierNamespaceMaxPages", "TierMembershipPageSize", "TierMembershipMaxPages"},
 			Source: Constant, Zero: ZeroNotApplicable,
+			Fixed: "the pages bound what detecting the tier costs at every entry build, and a caller past them " +
+				"resolves lower than it should, which --tier answers, while a warning says so only when an " +
+				"enterprise instance falls back to Free: the operator's lever is the tier itself rather than the " +
+				"pages read to guess it",
 			Flags: []string{"--tier"}, Envs: []string{"GITLAB_MCP_TIER"}, Malformed: RefuseStartup,
 			// Issue 956 answered F-10: the actions the tier filter removed are
 			// recorded beside the scope and operator narrowings, so a call for

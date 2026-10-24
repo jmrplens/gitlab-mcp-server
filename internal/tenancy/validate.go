@@ -102,6 +102,7 @@ func rowRules() []rowRule {
 		{"stated-unit", invUnitsAgree, checkStatedUnit},
 		{"class-consistent", "VAL-003", checkClassConsistent},
 		{"through-config", "INV-017", checkThroughConfig},
+		{"fixed-reasoned", "VAL-009", checkFixedReasoned},
 		{"capacity-stated", "VAL-006", checkCapacityStated},
 		{"capacity-fits", "VAL-006", checkCapacityFits},
 		{"bounded-table", "INV-010", checkBoundedTable},
@@ -335,7 +336,9 @@ func checkClassConsistent(d Decision, _ map[string]Decision) []string {
 
 // checkThroughConfig holds a configurable value to a flag, a GITLAB_MCP_
 // variable and a malformed-value policy, and a value only an environment
-// variable or a Go option reaches to a finding.
+// variable reaches to a finding. A value only a Go option reaches is no
+// operator's configuration: it is a constant to every operator, and
+// checkFixedReasoned holds it to its reason as it holds one (issue 958).
 func checkThroughConfig(d Decision, _ map[string]Decision) []string {
 	var out []string
 	for _, env := range d.Envs {
@@ -354,12 +357,30 @@ func checkThroughConfig(d Decision, _ map[string]Decision) []string {
 		if d.Malformed == MalformedNone {
 			out = append(out, "configurable with no malformed-value policy")
 		}
-	case EnvOnly, OptionOnly:
+	case EnvOnly:
 		if !d.RecordsDeparture("INV-017") {
 			out = append(out, "configurable outside the configuration package, with no finding")
 		}
 	}
 	return out
+}
+
+// checkFixedReasoned holds a value no operator setting reaches, a constant or
+// a Go option's, to saying why (issue 958). The process partners had a
+// reason, INV-004's, and the other constants had none a reader could tell
+// from an accident, so the next one copied whichever neighbor it was written
+// beside. A reason on a value a setting reaches, or on one derived from
+// another value or from a limit the process starts under, says something
+// false about it, and is refused too.
+func checkFixedReasoned(d Decision, _ map[string]Decision) []string {
+	fixed := d.Source == Constant || d.Source == OptionOnly
+	switch {
+	case fixed && d.Fixed == "":
+		return []string{"a value no setting reaches, with no reason it is fixed"}
+	case !fixed && d.Fixed != "":
+		return []string{"says why no setting reaches its value, which is not a constant or a Go option's"}
+	}
+	return nil
 }
 
 // checkCapacityStated holds a ceiling to saying what happens when it is full.

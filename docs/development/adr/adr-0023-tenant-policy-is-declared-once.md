@@ -86,7 +86,8 @@ the code; the layers keep enforcing.**
   zero means (`INV-015`); a variable without the `GITLAB_MCP_` prefix, or a
   configurable value with no flag, variable or malformed-value policy (`INV-017`); and,
   since issue 958, a behavior at capacity its kind, key and table do not allow (the
-  capacity rule, `VAL-006`). With a
+  capacity rule, `VAL-006`), and a value no setting reaches whose row does not say why
+  (`Fixed`, `VAL-009`). With a
   recorded decision: a holding taken across keys (`INV-005`), which is how the pool
   (`POL-001`) and, since issue 950, the OAuth identity cache (`ADM-005`) make room; a
   process partner switched off with the per-key row it stands beside (`INV-015`), where
@@ -99,7 +100,7 @@ the code; the layers keep enforcing.**
   mintable value with no capacity, an in-band code of the server's own that mirrors no
   status the gate answers its class of next action with (`INV-012`), any other zero that does not mean off, a reason
   whose unit differs from its key or misstates its own, a value only an environment
-  variable or a Go option reaches, and a ceiling nothing bounds.
+  variable reaches, and a ceiling nothing bounds.
 
 **The gate**, `cmd/audit_tenancy`, loads `./cmd/server` and `./internal/...` through the
 type checker and holds the register to the code: each site aliases, pins or reads what its

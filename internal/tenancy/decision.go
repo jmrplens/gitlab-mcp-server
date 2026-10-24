@@ -477,6 +477,12 @@ type Decision struct {
 	Functions []string
 	// Source is where its value comes from.
 	Source Source
+	// Fixed is why no operator setting reaches the value, on a row whose
+	// Source is Constant or OptionOnly, in the register's own words: what the
+	// value is set against, and what a setting that moved it would cost or
+	// undo. Bounds no setting reaches used to carry no reason a reader could
+	// tell from an accident, which F-16 recorded (issue 958).
+	Fixed string
 	// Flags are the command-line flags that set it.
 	Flags []string
 	// Envs are the environment variables that set it.
@@ -606,6 +612,13 @@ func (f Finding) Records(invariant string) bool {
 // process partner beside it, since a bucket the whole process shared would let
 // a flood from many addresses deny discovery to every caller, and the finding
 // is how RTC-008 records that departure from INV-004.
+//
+// F-16 records a departure from no invariant a rule reads. It used to record
+// INV-017's for a value only a Go option reaches, which issue 958 stopped
+// reading as configuration, and what it still covers, defaults and fallbacks
+// written twice, no rule of Validate holds; listed for INV-017, it would let a
+// value only an environment variable reaches pass on a finding about
+// something else.
 func AllFindings() []Finding {
 	return []Finding{
 		{ID: "F-01", Issue: 955},
@@ -623,7 +636,7 @@ func AllFindings() []Finding {
 		{ID: "F-13", Issue: 957, Invariants: []string{"INV-017"}},
 		{ID: "F-14", Issue: 954},
 		{ID: "F-15", Issue: 953},
-		{ID: "F-16", Issue: 958, Invariants: []string{"INV-017"}},
+		{ID: "F-16", Issue: 958},
 		{ID: "F-17", Issue: 952},
 		{ID: "F-18", Issue: 955, Invariants: []string{"INV-018"}},
 		{ID: "F-19", Issue: 959},

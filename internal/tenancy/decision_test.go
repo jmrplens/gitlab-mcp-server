@@ -235,7 +235,7 @@ func TestFinding_Records(t *testing.T) {
 		{"INV-012", "F-07,F-10"},
 		{"INV-015", "F-34"},
 		{"INV-016", "F-02,F-03,F-05,F-06"},
-		{"INV-017", "F-13,F-16"},
+		{"INV-017", "F-13"},
 		{"INV-018", "F-18,F-30,F-31"},
 	} {
 		t.Run(tc.invariant, func(t *testing.T) {
