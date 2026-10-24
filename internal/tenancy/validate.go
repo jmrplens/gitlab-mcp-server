@@ -374,13 +374,13 @@ func checkThroughConfig(d Decision, _ map[string]Decision) []string {
 // false about it, and is refused too.
 func checkFixedReasoned(d Decision, _ map[string]Decision) []string {
 	fixed := d.Source == Constant || d.Source == OptionOnly
-	switch {
-	case fixed && d.Fixed == "":
-		return []string{"a value no setting reaches, with no reason it is fixed"}
-	case !fixed && d.Fixed != "":
-		return []string{"says why no setting reaches its value, which is not a constant or a Go option's"}
+	if fixed == (d.Fixed != "") {
+		return nil
 	}
-	return nil
+	if fixed {
+		return []string{"a value no setting reaches, with no reason it is fixed"}
+	}
+	return []string{"says why no setting reaches its value, which is not a constant or a Go option's"}
 }
 
 // checkCapacityStated holds a ceiling to saying what happens when it is full.
@@ -560,13 +560,8 @@ func danglingReferences(d Decision, rows map[string]Decision) []string {
 		}
 	}
 	for _, s := range d.SettingZeros {
-		switch {
-		case !has(d.Config, s.Config):
-			out = append(out, fmt.Sprintf("it states the zero of %s, which is not one of its settings", s.Config))
-		case s.Zero == ZeroUnset:
-			out = append(out, fmt.Sprintf("it states the zero of %s and does not say what it means", s.Config))
-		case s.Zero == d.Zero:
-			out = append(out, fmt.Sprintf("the zero of %s means what the row's own does", s.Config))
+		if fault := settingZeroFault(d, s); fault != "" {
+			out = append(out, fault)
 		}
 	}
 	for _, id := range d.Findings {
@@ -575,6 +570,22 @@ func danglingReferences(d Decision, rows map[string]Decision) []string {
 		}
 	}
 	return out
+}
+
+// settingZeroFault is what is wrong with one of a row's SettingZeros, or
+// nothing: the setting must be one of the row's, and its zero must say
+// something the row's own does not.
+func settingZeroFault(d Decision, s SettingZero) string {
+	if !has(d.Config, s.Config) {
+		return fmt.Sprintf("it states the zero of %s, which is not one of its settings", s.Config)
+	}
+	if s.Zero == ZeroUnset {
+		return fmt.Sprintf("it states the zero of %s and does not say what it means", s.Config)
+	}
+	if s.Zero == d.Zero {
+		return fmt.Sprintf("the zero of %s means what the row's own does", s.Config)
+	}
+	return ""
 }
 
 // checkCodeMirrorsStatus holds every in-band code this server allocates to the
