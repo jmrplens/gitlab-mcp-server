@@ -295,8 +295,10 @@ func (a *supplyChainAudit) readScript(at reach, written string, resolved place, 
 		)}
 	}
 	body = stripComments(body)
+	inside := at.inside(subject, at.directory, resolved)
 	problems := a.matchFile(at, subject, body)
-	return append(problems, a.followReferences(at.inside(subject, at.directory, resolved), body, seen)...)
+	problems = append(problems, a.judgeGoCommands(inside, body)...)
+	return append(problems, a.followReferences(inside, body, seen)...)
 }
 
 // readPlace reads a file a job reaches: from this repository, or from the
@@ -335,6 +337,7 @@ func (a *supplyChainAudit) followTarget(at reach, run makeRun, target string, in
 	recipe := stripComments(strings.Join(rule.recipe, "\n"))
 	problems := a.matchFile(at, subject, recipe)
 	inside := at.inside(subject, run.directory, place{})
+	problems = append(problems, a.judgeGoCommands(inside, recipe)...)
 	for _, prerequisite := range rule.prerequisites {
 		problems = append(problems, a.followTarget(inside, run, prerequisite, false, seen)...)
 	}

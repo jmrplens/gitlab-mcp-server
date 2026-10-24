@@ -635,12 +635,68 @@ func TestCheckCredentialedJob_DownloadedTool_MustBePinned(t *testing.T) {
 				"permissions": map[string]any{"id-token": "write"},
 				"steps":       []any{map[string]any{"uses": testCase.action + "@" + testSHA, "with": testCase.with}},
 			}
-			problems := newAudit(".", tables{}).checkCredentialedJob("wf.yml", "release", job, nil)
+			problems := newAudit(goreleaserRoot(t), tables{}).checkCredentialedJob("wf.yml", "release", job, nil)
 			if gotProblem := len(problems) > 0; gotProblem != testCase.wantProblem {
 				t.Errorf("checkCredentialedJob() problem = %t, want %t (%v)", gotProblem, testCase.wantProblem, problems)
 			}
 		})
 	}
+}
+
+// TestCheckCredentialedJob_SetupGo_MustNotRestoreACache verifies that a
+// credentialed job sets up Go with the Actions cache off.
+//
+// setup-go restores ~/go/pkg/mod and the build cache by default, keyed on
+// go.sum, and a tag run restores what a run on main saved. Nothing this job
+// verifies covers what that cache holds, so a job holding a write credential
+// downloads its modules fresh and checks them against go.sum instead, as the
+// release job already did; this holds every credentialed job to it.
+func TestCheckCredentialedJob_SetupGo_MustNotRestoreACache(t *testing.T) {
+	t.Parallel()
+
+	const want = "wf.yml: job release: step 0: actions/setup-go must set cache: false: " +
+		"the module and build caches it would restore were saved by whichever run wrote them last, " +
+		"and nothing this job checks covers what they hold"
+	cases := []struct {
+		with map[string]any
+		name string
+		want []string
+	}{
+		{name: "cache off", with: map[string]any{"go-version-file": "go.mod", "cache": false}},
+		{name: "cache off as a string", with: map[string]any{"cache": "false"}},
+		{name: "cache on", with: map[string]any{"cache": true}, want: []string{want}},
+		{name: "cache left to its default", with: map[string]any{"go-version-file": "go.mod"}, want: []string{want}},
+		{name: "no inputs at all", want: []string{want}},
+		{name: "cache written as an expression", with: map[string]any{"cache": "${{ env.CACHE }}"}, want: []string{want}},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			step := map[string]any{"uses": "actions/setup-go@" + testSHA}
+			if testCase.with != nil {
+				step["with"] = testCase.with
+			}
+			job := map[string]any{"permissions": map[string]any{"contents": "write"}, "steps": []any{step}}
+			problems := newAudit(".", tables{}).checkCredentialedJob("wf.yml", "release", job, nil)
+			if strings.Join(problems, "\n") != strings.Join(testCase.want, "\n") {
+				t.Errorf("checkCredentialedJob() = %v, want %v", problems, testCase.want)
+			}
+		})
+	}
+
+	t.Run("a job holding no credential", func(t *testing.T) {
+		t.Parallel()
+
+		doc := map[string]any{"jobs": map[string]any{"lint": map[string]any{
+			"permissions": map[string]any{"contents": "read"},
+			"steps":       []any{map[string]any{"uses": "actions/setup-go@" + testSHA}},
+		}}}
+		if problems := newAudit(".", tables{}).checkWorkflowJobs("wf.yml", doc, nil); len(problems) != 0 {
+			t.Errorf("checkWorkflowJobs() = %v, want nothing for a job holding no credential", problems)
+		}
+	})
 }
 
 // TestCheckCredentialedJob_GoreleaserVersion_IsQuotedLikePython verifies the
@@ -657,7 +713,7 @@ func TestCheckCredentialedJob_GoreleaserVersion_IsQuotedLikePython(t *testing.T)
 			"with": map[string]any{"version": "~> v2"},
 		}},
 	}
-	problems := newAudit(".", tables{}).checkCredentialedJob("release.yml", "release", job, nil)
+	problems := newAudit(goreleaserRoot(t), tables{}).checkCredentialedJob("release.yml", "release", job, nil)
 	want := "release.yml: job release: step 0: goreleaser-action version '~> v2' is not an exact vX.Y.Z — " +
 		"pinning the action does not pin the binary it downloads"
 	if len(problems) != 1 || problems[0] != want {
@@ -701,7 +757,7 @@ func TestCheckCredentialedJob_EnvDeclaredVersion_IsResolved(t *testing.T) {
 					"with": map[string]any{"version": "${{ env.GORELEASER_VERSION }}"},
 				}},
 			}
-			problems := newAudit(".", tables{}).checkCredentialedJob("wf.yml", "release", job, doc)
+			problems := newAudit(goreleaserRoot(t), tables{}).checkCredentialedJob("wf.yml", "release", job, doc)
 			if gotProblem := len(problems) > 0; gotProblem != testCase.wantProblem {
 				t.Errorf("checkCredentialedJob() problem = %t, want %t (%v)", gotProblem, testCase.wantProblem, problems)
 			}
@@ -732,7 +788,7 @@ func TestCheckCredentialedJob_RunBlock_RejectsRunTimeCode(t *testing.T) {
 		{name: "pip install hashed", run: "pip install --require-hashes -r req.txt", wantProblem: false},
 		{name: "comment about npx", run: "# Pinned, not @latest: npx would resolve at run time\nnpm ci", wantProblem: false},
 		{name: "pinned npm install", run: "npm install -g npm@11.5.1", wantProblem: false},
-		{name: "plain build", run: "go build ./...", wantProblem: false},
+		{name: "plain vet", run: "go vet ./...", wantProblem: false},
 	}
 
 	for _, testCase := range cases {
@@ -849,6 +905,14 @@ func TestUnlockedCode_PackageInstalls_AreJudgedByWhatTheyFix(t *testing.T) {
 		{name: "a separator right after install", text: "go install;echo user@main"},
 		{name: "go install at latest is the latest rule's", text: "go install example.test/tool@latest", want: "latest"},
 		{name: "go install at latest and a branch", text: "go install a.test/x@latest b.test/y@main", want: "latest go-install"},
+		{name: "go run at an exact version", text: "go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...", want: "go-run-module"},
+		{name: "go run at a version behind its options", text: "GOFLAGS=-mod=mod go run -tags e2e -exec env example.test/tool@v1", want: "go-run-module"},
+		{name: "go run at latest is the latest rule's", text: "go run example.test/tool@latest", want: "latest"},
+		{name: "go run of this module", text: "go run ./cmd/audit_supply_chain"},
+		{name: "go run of files, an @ among the program's arguments", text: "go run ./tool.go user@host"},
+		{name: "go run of a package, an @ among the program's arguments", text: "go run ./cmd/x --to user@host"},
+		{name: "go run at a version in prose", text: `echo "never go run x.test/y@v1"`},
+		{name: "go build at a version is not go run", text: "go build example.test/tool@v1.2.3"},
 		{name: "a download piped to iex", text: "iwr https://example.test/i.ps1 -UseBasicParsing | iex", want: "invoke-expression"},
 		{name: "Invoke-RestMethod piped to Invoke-Expression", text: "Invoke-RestMethod -Uri $u | Invoke-Expression", want: "invoke-expression"},
 		{name: "irm piped to iex in capitals", text: "IRM https://example.test/i.ps1 | IEX", want: "invoke-expression"},
@@ -1060,6 +1124,11 @@ func TestCheckCredentialedJob_EachRule_NamesItsPatternAndReason(t *testing.T) {
 			run:  "pip install pyyaml",
 			want: where + `'\\bpip\\s+install\\b(?![^\\n]*--require-hashes)'` +
 				": pip install without --require-hashes resolves at run time",
+		},
+		{
+			name: "go run at a version",
+			run:  "go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...",
+			want: where + goRunModuleFinding,
 		},
 	}
 
@@ -3862,7 +3931,7 @@ const (
 )
 
 // The names a declaration may give a rule, as a declaration finding lists them.
-const ruleNameList = "npx, latest, curl-pipe-shell, pip-unhashed, cargo-binstall, cargo-install, go-install, invoke-expression"
+const ruleNameList = "npx, latest, curl-pipe-shell, pip-unhashed, cargo-binstall, cargo-install, go-install, go-run-module, invoke-expression"
 
 // renderMake renders what scanMake reads in a text: each invocation as its -C
 // directories, its -f makefiles, its refusal in parentheses and its targets in

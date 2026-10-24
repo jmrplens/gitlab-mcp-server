@@ -38,30 +38,78 @@
 //     to an exact version, because SHA-pinning the action that fetches a
 //     binary does not pin the binary.
 //
+// Of a Go command a credentialed job runs (go run, go build, go install or go
+// test, wherever rule 2 reads a command), rule 2 demands that every package
+// it builds, or the .go files it is handed, is this module's and imports,
+// however deep, nothing outside the standard library and this module, since
+// any code the job runs can mint the job's OIDC token or use its write. The
+// imports are read from the source, every file whatever its build constraints
+// and test files for go test alone, against the module the root's go.mod
+// names; the meta-patterns all, tool and work name other modules' packages and
+// are refused, std and cmd being the toolchain's own. go generate, which runs
+// what its directives name, and a go tool the toolchain does not ship are
+// refused, and so is go run of a package at a version (go-run-module), which
+// builds a module this checkout does not hold. So is an option that runs
+// another program or builds what the source does not show (-toolexec, -exec,
+// -overlay, -modfile, -pkgdir, -linkshared, and go vet's -vettool), on the
+// command line or on GOFLAGS, which every later go command reads: GOFLAGS is
+// read wherever a text rule 2 reads assigns it as a word, and in the env of
+// the workflow, the job and every step. actions/setup-go in such a job sets
+// cache: false, so what it builds is downloaded and checked against go.sum
+// rather than restored from a cache another run saved. A tool another job of
+// the workflow builds with go build or go install and uploads is taken only by
+// a job that needs that job, from this run, built from a checkout of this
+// run's commit, and checked in the step right after its download with
+// sha256sum against an output of the builder that a step of it computed with
+// sha256sum; and the builder is held to rule 2 as the job running its tool is,
+// however long the chain of builders, since what it builds runs with that
+// job's credential and the digest vouches for whatever it built. Only its
+// checkout is not held to persist-credentials, since the token it would leave
+// there writes nothing. The configuration a step of
+// goreleaser/goreleaser-action runs is read too, the file --config or -f names
+// or the first of GoReleaser's six names in its workdir: every hook, the
+// binary every upx entry runs, and the command and arguments of every sign,
+// sbom and publisher, each judged in the directory GoReleaser runs it in (an
+// sbom in dist, anything else in its own dir or where GoReleaser runs), which
+// is how the go run of cmd/gen_third_party_notices in the release job's sboms
+// entry is judged; a build made by a builder other than go's or by a tool other
+// than the go command, an option on a build's flags rule 2 refuses on a
+// command line, and a GOFLAGS any of its env lists sets are findings too.
+//
 // Rule 2 refuses what it cannot read rather than passing over it: a script
 // reference that resolves to no readable file in the repository, one rooted in
 // a variable or an expression whose value only the run knows, a make target
 // with no rule, a make that names no target, passes an option it does not read
 // or --eval, or reads more than one makefile, a make behind a wrapper written
-// in a way it does not read (env -C, xargs, eval), a secret the table does not
-// declare and an expression that reads every secret at once are each a
-// finding. Its tables are held to the tree as well: a secret the workflows no
-// longer read, and a declaration in any table of declarations.go that excuses
-// nothing, are reported as stale.
+// in a way it does not read (env -C, xargs, eval), a go command behind one, a
+// go option it does not know, a package only the run knows, a GoReleaser
+// configuration it cannot find or parse, a secret the table does not declare
+// and an expression that reads every secret at once are each a finding. Its
+// tables are held to the tree as well: a secret the workflows no longer read,
+// and a declaration in any table of declarations.go that excuses nothing, are
+// reported as stale.
 //
 // What rule 2 does not see, by construction, is a command that is not written
 // as one: a make or a script handed to a language's process or path API as an
 // argument (spawnSync("make", ...), subprocess.run(["make", ...]),
 // os.path.join(ROOT, "scripts", "x.sh"), path.join(__dirname, "x.mjs")), and a
-// make run through a shell function or a variable holding its name
-// (run_check make target, "$MAKE" target). A make mentioned in prose is not a
-// command either, which is why a mention it does not read is not a finding:
-// the files a credentialed job reaches mention make in their messages. A test
-// pins each of these as not followed. Each pattern also reads one line, and an
-// install one command of it: a download kept in a variable or a file and run
-// on a later line is not matched, while an install whose --locked or
-// --require-hashes sits on a continuation line is refused, since the line is
-// all the pattern reads.
+// make or a go command run through a shell function or a variable holding its
+// name (run_check make target, "$MAKE" target, "$GO" run). A cd in front of a
+// go command is not followed, so its packages are resolved from the directory
+// the text runs in, and one that resolves to no package there is a finding. A
+// tool a builder makes through a make target or a script of its own, rather
+// than in its run blocks, is not recognized as one, and what GoReleaser's
+// builds compile is the release itself, which no step runs and
+// cmd/audit_binary_vulns judges. A GOFLAGS a command writes from a value it
+// builds (printf 'GOFLAGS=%s'), rather than as GOFLAGS=value, is not read
+// either. A make or a go command mentioned in prose is
+// not a command either, which is why a mention it does not read is not a
+// finding: the files a credentialed job reaches mention make in their
+// messages. A test pins each of these as not followed. Each pattern also reads
+// one line, and an install one command of it: a download kept in a variable
+// or a file and run on a later line is not matched, while an install whose
+// --locked or --require-hashes sits on a continuation line is refused, since
+// the line is all the pattern reads.
 //  3. Dependabot states its cooldown instead of inheriting a platform default
 //     that GitHub can change under us.
 //  4. SECURITY.md names the major version the repository actually ships.

@@ -303,7 +303,7 @@ runs:
 	want := []string{
 		composedKey + "/action.yml:5: uses: cargo-bins/cargo-binstall@main is not pinned to a 40-character commit SHA",
 		origin + "1: " + nestedKey + " step 1: run block matches " + curlFinding,
-		checkStepAction(origin+"2", "actions/checkout", nil, nil)[0],
+		checkStepAction(origin+"2", "actions/checkout", nil, nil, true)[0],
 		origin + "3: run block matches " + cargoBinstallFinding,
 		release + ": " + composedKey + "/create.py matches '\\\\bpip\\\\s+install\\\\b(?![^\\\\n]*--require-hashes)': pip install without --require-hashes resolves at run time",
 		release + ": " + composedKey + "/lib.sh (via " + composedKey + "/run.sh) matches " + latestFinding,
@@ -807,6 +807,63 @@ func TestFollowReferences_PowerShellEnvDrive_IsReadLikeTheVariable(t *testing.T)
 	problems := newAudit(root, tables{}).checkCredentialedJob("wf.yml", "j", job, nil)
 	if strings.Join(problems, "\n") != strings.Join(want, "\n") {
 		t.Errorf("checkCredentialedJob() =\n%s\nwant\n%s", strings.Join(problems, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// TestJudgeActionStep_GoCommandsAndGoReleaser_AreHeldLikeAWorkflowStep
+// verifies that a composite action's step in a credentialed job is held to
+// the Go-command rules and has the GoReleaser configuration it runs read, as a
+// step the workflow wrote would be, and that in a job holding no credential
+// neither applies.
+func TestJudgeActionStep_GoCommandsAndGoReleaser_AreHeldLikeAWorkflowStep(t *testing.T) {
+	t.Parallel()
+
+	root := goModuleRoot(t)
+	writeFile(t, root, ".goreleaser.yml", "before:\n  hooks:\n    - npx --yes thing\n")
+	action := openedAction{name: "./.github/actions/release", writer: "./.github/actions/release", root: place{path: ".github/actions/release"}}
+	const where = "wf.yml: job release: step 0: ./.github/actions/release step 0"
+	cases := []struct {
+		step         map[string]any
+		name         string
+		want         []string
+		credentialed bool
+		toolOnly     bool
+	}{
+		{
+			name: "a go command", credentialed: true, step: map[string]any{"run": "go run ./cmd/dirty"},
+			want: []string{where + ": go run ./cmd/dirty imports " + dirtyImports + ", outside the standard library and this module: " + goGraphReason},
+		},
+		{
+			name: "GOFLAGS in the step's env", credentialed: true,
+			step: map[string]any{"run": "go build ./cmd/clean", "env": map[string]any{"GOFLAGS": "-toolexec=/tmp/wrap"}},
+			want: []string{where + ": env: GOFLAGS passes -toolexec, which runs every tool of the build through a program this audit " +
+				"does not read, so what it builds cannot be judged"},
+		},
+		{
+			name: "a checkout in a job holding a write credential", credentialed: true, step: map[string]any{"uses": "actions/checkout"},
+			want: []string{where + ": actions/checkout must set persist-credentials: false \U00002014 the job's write-capable token would " +
+				"otherwise sit in .git/config while the rest of the steps run"},
+		},
+		{name: "a checkout in a job that only builds a tool", credentialed: true, toolOnly: true, step: map[string]any{"uses": "actions/checkout"}},
+		{
+			name: "GoReleaser", credentialed: true,
+			step: map[string]any{"uses": "goreleaser/goreleaser-action", "with": map[string]any{"version": "v2.13.0"}},
+			want: []string{"wf.yml: job release: .goreleaser.yml:before.hooks[0] matches " + npxFinding},
+		},
+		{name: "a go command in a job holding no credential", step: map[string]any{"run": "go run ./cmd/dirty"}},
+		{name: "GoReleaser in a job holding no credential", step: map[string]any{"uses": "goreleaser/goreleaser-action"}},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			walk := actionWalk{seen: map[string]bool{}, job: "wf.yml: job release", credentialed: testCase.credentialed, toolOnly: testCase.toolOnly}
+			problems := newAudit(root, tables{}).judgeActionStep(walk, where, action, 0, testCase.step)
+			if strings.Join(problems, "\n") != strings.Join(testCase.want, "\n") {
+				t.Errorf("judgeActionStep() =\n%s\nwant\n%s", strings.Join(problems, "\n"), strings.Join(testCase.want, "\n"))
+			}
+		})
 	}
 }
 

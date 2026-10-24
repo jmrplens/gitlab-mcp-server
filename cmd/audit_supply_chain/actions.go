@@ -63,14 +63,16 @@ type openedAction struct {
 }
 
 // actionWalk is one job's walk through the actions its steps name: the job,
-// whether it holds a credential, the workflow it is in, and what it has read
+// whether rule 2 holds it, the workflow it is in, and what it has read
 // already, shared with the job's own rule-2 reading so a script both reach is
-// judged once.
+// judged once. toolOnly says the job is held only because it builds a tool a
+// credentialed job runs, so the token it holds writes nothing.
 type actionWalk struct {
 	doc          map[string]any
 	seen         map[string]bool
 	job          string
 	credentialed bool
+	toolOnly     bool
 }
 
 // checkJobActions judges what the actions a job's steps name run, as though
@@ -84,7 +86,8 @@ func (a *supplyChainAudit) checkJobActions(pathLabel, jobID string, job, doc map
 	if a.store == nil {
 		return nil
 	}
-	walk := actionWalk{doc: doc, seen: seen, job: pathLabel + ": job " + jobID, credentialed: credentialed}
+	_, toolOnly := a.toolFor[jobKey(pathLabel, jobID)]
+	walk := actionWalk{doc: doc, seen: seen, job: a.jobLabel(pathLabel, jobID), credentialed: credentialed, toolOnly: toolOnly}
 	steps, _ := job["steps"].([]any)
 	var problems []string
 	for index, rawStep := range steps {
@@ -308,7 +311,8 @@ func (a *supplyChainAudit) judgeActionStep(walk actionWalk, where string, action
 		return problems
 	}
 	uses, _, _ := strings.Cut(rawUses, "@")
-	problems = append(problems, checkStepAction(where, uses, with, walk.doc)...)
+	problems = append(problems, checkStepAction(where, uses, with, walk.doc, !walk.toolOnly)...)
+	problems = append(problems, goFlagsInEnv(where, step["env"])...)
 	runSource, _ := step["run"].(string)
 	runText := stripComments(runSource)
 	for _, rule := range unlockedCode {
@@ -319,7 +323,12 @@ func (a *supplyChainAudit) judgeActionStep(walk actionWalk, where string, action
 	directory, _ := step["working-directory"].(string)
 	root := action.root
 	reached := reach{actionDir: &root, job: walk.job, origin: where, directory: directory}
-	return append(problems, a.followReferences(reached, runText, walk.seen)...)
+	problems = append(problems, a.judgeGoCommands(reached, runText)...)
+	problems = append(problems, a.followReferences(reached, runText, walk.seen)...)
+	if uses == goreleaserAction {
+		problems = append(problems, a.followGoReleaser(reached, with, walk.seen)...)
+	}
+	return problems
 }
 
 // excusedByGuard reports whether a declared guarded match excuses rule in
