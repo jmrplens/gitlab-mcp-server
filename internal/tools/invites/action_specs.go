@@ -29,9 +29,14 @@ func inviteReadSpec(name string, route toolutil.ActionRoute, individualTool stri
 	return toolutil.NewReadActionSpec(name, route, options)
 }
 
+// inviteCreateSpec builds an invitation, whose email takes one address or
+// several separated by commas (GitLab splits the value and checks each one),
+// so it is published with none of the email format every other endpoint's
+// email carries, which names a single address (issue 1272).
 func inviteCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := inviteOptions(individualTool)
 	decorateInviteMeta(&options, individualTool)
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{toolutil.SchemaNoFormatOverride("email")}
 	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
@@ -82,7 +87,7 @@ func inviteGuidance(scopeParam string, scope toolutil.ParameterGuidance) map[str
 		scopeParam: scope,
 		"email": {
 			SemanticRole:     "invite_email",
-			ValueSource:      "Email address of the person to invite when they may not have an account yet.",
+			ValueSource:      "Email address of the person to invite when they may not have an account yet, or several addresses separated by commas to invite each of them.",
 			ExampleBinding:   `params.email:"newhire@example.com"`,
 			CommonConfusions: []string{"Provide either email or user_id. Supply email for people who are not yet GitLab users."},
 		},

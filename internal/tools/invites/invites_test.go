@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1880,6 +1881,63 @@ func TestInvites_Refusal_NamesTheScopeItWasCalledOn(t *testing.T) {
 				if strings.Contains(hint, reject) {
 					t.Errorf("hint %q names %q, which belongs to the other scope", hint, reject)
 				}
+			}
+		})
+	}
+}
+
+// TestInvites_SeveralEmails_ReachGitLabAsWritten verifies that both
+// invitations send a comma-separated list of addresses in the one email
+// field as written, which is the form GitLab splits into one invitation per
+// address, and which the schema therefore publishes with no single-address
+// format.
+func TestInvites_SeveralEmails_ReachGitLabAsWritten(t *testing.T) {
+	const emails = "first@example.com,second@example.com"
+	cases := []struct {
+		name   string
+		path   string
+		invite func(ctx context.Context, client *gitlabclient.Client) error
+	}{
+		{
+			name: "project",
+			path: "/api/v4/projects/42/invitations",
+			invite: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := ProjectInvites(ctx, client, ProjectInvitesInput{ProjectID: "42", Email: emails, AccessLevel: 30})
+				return err
+			},
+		},
+		{
+			name: "group",
+			path: "/api/v4/groups/7/invitations",
+			invite: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := GroupInvites(ctx, client, GroupInvitesInput{GroupID: "7", Email: emails, AccessLevel: 30})
+				return err
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var sent atomic.Value
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != tc.path {
+					http.NotFound(w, r)
+					return
+				}
+				var body struct {
+					Email string `json:"email"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				sent.Store(body.Email)
+				testutil.RespondJSON(w, http.StatusCreated, `{"status":"success"}`)
+			}))
+			if err := tc.invite(t.Context(), client); err != nil {
+				t.Fatalf("the %s invitation error = %v", tc.name, err)
+			}
+			if got := sent.Load(); got != emails {
+				t.Errorf("the %s invitation sent email %v, want %q", tc.name, got, emails)
 			}
 		})
 	}

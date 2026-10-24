@@ -523,6 +523,29 @@ func TestActionSpecs_InputSchemaOverrides_ConstrainTheServedInputSchema(t *testi
 	}
 }
 
+// TestActionSpecs_ApplicationCreate_RedirectURI_StatesSeveralOnePerLine
+// verifies that admin.application_create publishes redirect_uri with no
+// format and a description naming the form GitLab takes: Doorkeeper's
+// redirect URI validator splits the value on whitespace and checks each URI,
+// so an application takes several, one per line, and the uri format, which
+// names one URI, would misdescribe it (issue 1272).
+func TestActionSpecs_ApplicationCreate_RedirectURI_StatesSeveralOnePerLine(t *testing.T) {
+	for _, spec := range ActionSpecs(nil) {
+		if spec.Name != "application_create" {
+			continue
+		}
+		property := schemaPropertyAt(t, spec.Route.InputSchema, "redirect_uri")
+		if format, set := property["format"]; set {
+			t.Errorf("application_create redirect_uri carries format %v, want none", format)
+		}
+		if description, _ := property["description"].(string); !strings.Contains(description, "one per line") {
+			t.Errorf("application_create redirect_uri description = %q, want it to name several, one per line", description)
+		}
+		return
+	}
+	t.Fatal("ActionSpecs serves no application_create")
+}
+
 // TestActionSpecs_InputSchemaOverrides_CoverExactlyTheDocumentedActions verifies
 // that the admin actions carrying an input-schema override are exactly the ones
 // the test above states the served schema for. An override added for a new

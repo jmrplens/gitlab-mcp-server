@@ -311,16 +311,19 @@ func firstSchemaBranch(schema map[string]any) map[string]any {
 }
 
 // placeholderForParam returns the value an example uses for a parameter by
-// its name alone: a path for a project or group, a branch name, a URL, a
-// color, an access level, a SHA, a duration, an identifier or a date.
-// [exampleValue] starts from it and keeps it wherever the parameter's schema
-// allows. A name GitLab gives a meaning its schema does not state is here for
-// that reason: a label's color is a free string to its schema, and an access
-// level an integer. So is a SHA where the route also takes a ref name, and a
-// duration, both published with no pattern because one would refuse values
-// GitLab takes (issue 1272); and a container repository's path pattern, which
-// GitLab holds to the project's own path, a rule across two parameters that
-// no pattern can state. A commit is a SHA as well: it is the name
+// its name alone: a path for a project or group, a branch name, a URL, an
+// email address, a color, an access level, a SHA, a duration, an identifier
+// or a date. [exampleValue] starts from it and keeps it wherever the
+// parameter's schema allows. A name GitLab gives a meaning its schema does
+// not state is here for that reason: a label's color is a free string to its
+// schema, and an access level an integer. So is a SHA where the route also
+// takes a ref name, and a duration, both published with no pattern because
+// one would refuse values GitLab takes (issue 1272); a container
+// repository's path pattern, which GitLab holds to the project's own path, a
+// rule across two parameters that no pattern can state; and an OAuth
+// redirect URI and an invitation's email, which take several values in one
+// string and so publish no format, since a format names one, while the
+// example still sends one. A commit is a SHA as well: it is the name
 // [exampleValue] gives the element of a list of commits, which is what
 // merge_request.context_commits_create and context_commits_delete send.
 func placeholderForParam(name string) any {
@@ -339,8 +342,10 @@ func placeholderForParam(name string) any {
 		return "path/to/file"
 	case "ref", "branch", "branch_name", "target_branch", "source_branch":
 		return "main"
-	case "url", "remote_url", "external_url", "web_url":
+	case "url", "remote_url", "external_url", "web_url", "redirect_uri":
 		return exampleURL
+	case "email":
+		return exampleEmail
 	case "color":
 		return exampleHexColor
 	case "access_level", "group_access", "base_access_level":

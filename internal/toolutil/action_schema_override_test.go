@@ -139,27 +139,84 @@ func TestApplyCanonicalParamFormats_TypeGuard(t *testing.T) {
 	}
 }
 
-// TestApplyCanonicalParamFormats_EmailAndRedirectURI verifies the two names
-// issue 1272 added to the central formats: an email is published as an email
-// address and an OAuth redirect URI as an absolute URL, so a model reading
-// the schema knows the form GitLab checks and find's example fills each with
-// a value of it rather than "value".
-func TestApplyCanonicalParamFormats_EmailAndRedirectURI(t *testing.T) {
+// TestApplyCanonicalParamFormats_EmailIsAnAddressAndARedirectURIIsNone
+// verifies what issue 1272 left in the central formats: an email is
+// published as an email address, so a model reading the schema knows the
+// form GitLab checks and find's example fills it with one rather than
+// "value". An OAuth redirect URI gets no central format: the one endpoint
+// that takes it splits the value on whitespace and checks each URI, so it
+// takes several, one per line, which the uri format does not describe.
+func TestApplyCanonicalParamFormats_EmailIsAnAddressAndARedirectURIIsNone(t *testing.T) {
 	cases := []struct {
 		name string
-		want string
+		want any
 	}{
 		{name: "email", want: formatEmail},
-		{name: "redirect_uri", want: formatURI},
+		{name: "redirect_uri", want: nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			property := map[string]any{"type": "string"}
 			applyCanonicalParamFormats(map[string]any{"properties": map[string]any{tc.name: property}})
 			if got := property["format"]; got != tc.want {
-				t.Errorf("%s.format = %v, want %s", tc.name, got, tc.want)
+				t.Errorf("%s.format = %v, want %v", tc.name, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestSchemaNoFormatOverride_KeepsTheCentralFormatOffItsParameter verifies
+// the override a parameter named like a universal one takes when its
+// endpoint takes more than the central format describes, as an invitation's
+// email takes several addresses separated by commas: the published property
+// carries no format key at all, null included, while a parameter of the same
+// name without the override keeps the central one. A nil value of any
+// override is the same request for any keyword, at any depth, whatever put
+// the keyword there, and the schema it was derived from is left as it was.
+func TestSchemaNoFormatOverride_KeepsTheCentralFormatOffItsParameter(t *testing.T) {
+	if got, want := SchemaNoFormatOverride(" email "), (InputSchemaOverride{PropertyPath: "email", Values: map[string]any{"format": nil}}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("SchemaNoFormatOverride() = %#v, want %#v", got, want)
+	}
+	schema := func() map[string]any {
+		return map[string]any{"type": "object", "properties": map[string]any{
+			"email": map[string]any{"type": "string", "description": "Address"},
+			"configuration": map[string]any{"type": "object", "properties": map[string]any{
+				"url": map[string]any{"type": "string", "format": "uri", "description": "Source instance"},
+			}},
+		}}
+	}
+	property := func(published map[string]any, path ...string) map[string]any {
+		node := published
+		for _, name := range path {
+			properties, _ := node["properties"].(map[string]any)
+			node, _ = properties[name].(map[string]any)
+		}
+		return node
+	}
+
+	plain := specInputSchema(schema(), nil)
+	if got := property(plain, "email")["format"]; got != formatEmail {
+		t.Errorf("email without the override: format = %v, want %s", got, formatEmail)
+	}
+
+	source := schema()
+	published := specInputSchema(source, []InputSchemaOverride{
+		SchemaNoFormatOverride("email"),
+		SchemaPropertyOverride("configuration.url", map[string]any{"format": nil}),
+	})
+	for _, path := range [][]string{{"email"}, {"configuration", "url"}} {
+		t.Run(strings.Join(path, "."), func(t *testing.T) {
+			node := property(published, path...)
+			if format, has := node["format"]; has {
+				t.Errorf("%v carries format %v, want no format key", path, format)
+			}
+			if node["description"] == nil {
+				t.Errorf("%v lost its description: %v", path, node)
+			}
+		})
+	}
+	if got := property(source, "configuration", "url")["format"]; got != "uri" {
+		t.Errorf("the source schema's configuration.url format = %v, want it left as uri", got)
 	}
 }
 

@@ -195,7 +195,8 @@ func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) Actio
 }
 
 // specInputSchema returns schema with overrides and the canonical parameter
-// enums, formats and ranges applied. The overrides are part of the transform
+// enums, formats and ranges applied, and the keywords an override unsets
+// removed. The overrides are part of the transform
 // name because they are part of the result: two specs over one type with
 // different overrides must not share a schema.
 func specInputSchema(schema map[string]any, overrides []InputSchemaOverride) map[string]any {
@@ -208,6 +209,7 @@ func specInputSchema(schema map[string]any, overrides []InputSchemaOverride) map
 		applyCanonicalParamEnums(out)
 		applyCanonicalParamFormats(out)
 		applyCanonicalParamRanges(out)
+		removeUnsetSchemaKeywords(out, overrides)
 		return out
 	}
 	key, nameable := inputSchemaOverridesKey(overrides)

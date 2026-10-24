@@ -124,6 +124,16 @@ var fullSHAParams = map[string]string{
 	"repository.commit_statuses sha":                  "GitLab finds the commit by any revision and then selects the statuses whose pipeline sha equals the value, so a branch name or an abbreviated SHA answers an empty list",
 }
 
+// severalPerValueParams are the parameters that take several values of their
+// kind in one string, each with the reason, keyed as "action path". A format
+// names a single value, so they declare none, and their example is still one
+// value of the kind. An invitation's email, which takes several addresses
+// separated by commas, is not here only because no example fills it. A key
+// no catalog fills fails the test.
+var severalPerValueParams = map[string]string{
+	"admin.application_create redirect_uri": "Doorkeeper splits the value on whitespace and checks each URI, so an application takes several, one per line",
+}
+
 // formatBearingExemptions are the parameters a kind's name or description
 // matches that do not hold it, each with the reason, keyed as "action path".
 // A key no catalog serves any more fails the test.
@@ -139,13 +149,13 @@ var formatBearingKinds = []formatBearingKind{
 		what:         "an email address",
 		names:        regexp.MustCompile(`^(.+_)?email$`),
 		descriptions: regexp.MustCompile(`(?i)\bemail address\b`),
-		declared:     declaresFormat("email"),
+		declared:     declaresFormatOfOne("email"),
 		example:      satisfiesFormat("email"),
 	},
 	{
 		what:     "an absolute URL",
 		names:    regexp.MustCompile(`^(.+_)?(url|uri)$`),
-		declared: declaresFormat("uri"),
+		declared: declaresFormatOfOne("uri"),
 		example:  satisfiesFormat("uri"),
 	},
 	{
@@ -268,6 +278,21 @@ func declaresFormat(format string) func(id, path string, schema map[string]any) 
 	return declaresOneOfFormats(format)
 }
 
+// declaresFormatOfOne returns a declared check requiring the format given,
+// which names one value, of every parameter but those severalPerValueParams
+// names, which take several in one string and declare no format.
+func declaresFormatOfOne(format string) func(id, path string, schema map[string]any) error {
+	return func(id, path string, schema map[string]any) error {
+		if reason, several := severalPerValueParams[id+" "+path]; several {
+			if declared, ok := schema["format"]; ok {
+				return fmt.Errorf("declares format %v, and it should declare none: %s", declared, reason)
+			}
+			return nil
+		}
+		return declaresFormat(format)(id, path, schema)
+	}
+}
+
 // declaresOneOfFormats returns a declared check requiring one of the formats
 // given.
 func declaresOneOfFormats(formats ...string) func(id, path string, schema map[string]any) error {
@@ -349,10 +374,12 @@ func matches(expression string) func(value string, params map[string]any) error 
 // The kinds are formatBearingKinds. Each states what the schema declares, a
 // format, or a pattern held to values GitLab takes and refuses, and what the
 // example sends. A duration declares no pattern, since GitLab also takes forms
-// such as 1 hour, and a SHA declares one only where GitLab holds it to a full
-// SHA, fullSHAParams, which also fails on an entry no catalog serves. Only
-// the parameters find's example fills are held, the required ones and the
-// first alternative group, as decided on the issue.
+// such as 1 hour, a SHA declares one only where GitLab holds it to a full
+// SHA, fullSHAParams, and a parameter that takes several values of its kind
+// in one string declares no format, severalPerValueParams; each table also
+// fails on an entry no catalog fills. Only the parameters find's example
+// fills are held, the required ones and the first alternative group, as
+// decided on the issue.
 func TestFind_FormatBearingParams_DeclareTheirFormatAndExampleIt(t *testing.T) {
 	seen := map[string]bool{}
 	for _, served := range servedCatalogs {
@@ -368,7 +395,7 @@ func TestFind_FormatBearingParams_DeclareTheirFormatAndExampleIt(t *testing.T) {
 			}
 		})
 	}
-	for table, declared := range map[string]map[string]string{"fullSHAParams": fullSHAParams, "formatBearingExemptions": formatBearingExemptions} {
+	for table, declared := range map[string]map[string]string{"fullSHAParams": fullSHAParams, "severalPerValueParams": severalPerValueParams, "formatBearingExemptions": formatBearingExemptions} {
 		t.Run(table, func(t *testing.T) {
 			for key := range declared {
 				if !seen[key] {
@@ -846,6 +873,8 @@ func TestExampleValue_SatisfiesEachConstraint(t *testing.T) {
 		{name: "an unknown format keeps the placeholder", param: "title", schema: map[string]any{"type": "string", "format": "markdown"}, want: "value"},
 		{name: "an email format takes an address", param: "email", schema: map[string]any{"type": "string", "format": "email"}, want: exampleEmail},
 		{name: "an email format takes an address whatever the name", param: "bitbucket_email", schema: map[string]any{"type": "string", "format": "email"}, want: exampleEmail},
+		{name: "an email with no format is an address by its name", param: "email", schema: map[string]any{"type": "string"}, want: exampleEmail},
+		{name: "a redirect URI with no format is a URL by its name", param: "redirect_uri", schema: map[string]any{"type": "string"}, want: exampleURL},
 		{name: "a hostname format takes a host name", param: "domain", schema: map[string]any{"type": "string", "format": "hostname"}, want: exampleHostname},
 		{name: "a SHA is a full hex SHA", param: "sha", schema: map[string]any{"type": "string"}, want: exampleSHA},
 		{name: "a name ending in a SHA is a full hex SHA", param: "commit_sha", schema: map[string]any{"type": "string"}, want: exampleSHA},

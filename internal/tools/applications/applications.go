@@ -76,7 +76,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // CreateInput is the input for creating an application.
 type CreateInput struct {
 	Name         string `json:"name" jsonschema:"Application name,required"`
-	RedirectURI  string `json:"redirect_uri" jsonschema:"OAuth2 redirect URI,required"`
+	RedirectURI  string `json:"redirect_uri" jsonschema:"OAuth2 redirect URI, an absolute URL such as https://example.com/callback. Several are written one per line, separated by a newline,required"`
 	Scopes       string `json:"scopes" jsonschema:"Space-separated list of scopes,required"`
 	Confidential *bool  `json:"confidential,omitempty" jsonschema:"Whether application is confidential"`
 }

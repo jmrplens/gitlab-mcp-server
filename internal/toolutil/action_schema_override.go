@@ -7,6 +7,9 @@ import (
 )
 
 // SchemaPropertyOverride returns an input-schema override for a property path.
+// A nil value removes its keyword from the property the action publishes,
+// whatever put it there, a central format of [canonicalParamFormats]
+// included, as [SchemaNoFormatOverride] does.
 func SchemaPropertyOverride(propertyPath string, values map[string]any) InputSchemaOverride {
 	return InputSchemaOverride{PropertyPath: strings.TrimSpace(propertyPath), Values: cloneSchemaMap(values)}
 }
@@ -29,6 +32,15 @@ func SchemaEnumOverride(propertyPath string, values ...string) InputSchemaOverri
 // YYYY-MM-DD field or "uri" for a URL field).
 func SchemaFormatOverride(propertyPath, format string) InputSchemaOverride {
 	return SchemaPropertyOverride(propertyPath, map[string]any{"format": format})
+}
+
+// SchemaNoFormatOverride returns an input-schema override that publishes the
+// string parameter at propertyPath with no `format`, for a parameter named
+// like a universal one whose endpoint takes more under that name than the
+// central format of [canonicalParamFormats] describes: an invitation's email
+// takes several addresses separated by commas, and an email format names one.
+func SchemaNoFormatOverride(propertyPath string) InputSchemaOverride {
+	return SchemaPropertyOverride(propertyPath, map[string]any{"format": nil})
 }
 
 // SchemaPatternOverride returns an input-schema override that sets the JSON
@@ -292,6 +304,23 @@ func applyInputSchemaOverrides(schema map[string]any, overrides []InputSchemaOve
 	}
 }
 
+// removeUnsetSchemaKeywords deletes from schema every keyword an override
+// sets to nil. [applyInputSchemaOverrides] writes the nil first, so the
+// canonical passes, which leave a keyword a property already carries alone,
+// put nothing in its place; this pass, run after them, removes the nil, so
+// the published schema carries no null where JSON Schema wants a value.
+// Deleting from a nil map, a path the schema does not reach, is a no-op.
+func removeUnsetSchemaKeywords(schema map[string]any, overrides []InputSchemaOverride) {
+	for _, override := range overrides {
+		target := overrideTarget(schema, override)
+		for key, value := range override.Values {
+			if value == nil {
+				delete(target, key)
+			}
+		}
+	}
+}
+
 // canonicalParamEnums maps GitLab-universal input parameter names to their fixed
 // value set. These parameters carry the SAME enum across every endpoint that
 // accepts them, so the enum is injected centrally (single source of truth) into
@@ -315,7 +344,7 @@ const (
 )
 
 // canonicalParamFormats maps GitLab-universal input parameters, dates and
-// times, URLs and email addresses, to their JSON Schema `format`. GitLab
+// times, URLs and an email address, to their JSON Schema `format`. GitLab
 // dates are always ISO 8601, never locale ordered (DD/MM vs MM/DD):
 // timestamp filters take an ISO 8601 date-time and date-only fields take
 // YYYY-MM-DD. These names carry the same format across
@@ -356,13 +385,16 @@ var canonicalParamFormats = map[string]string{
 	"external_url":         formatURI,
 	"remote_url":           formatURI,
 	"bitbucket_server_url": formatURI,
-	// An OAuth application's redirect URI is an absolute URL wherever GitLab
-	// takes one, and an email is an address on every endpoint that names a
-	// parameter so: a user's, an invitation's, a service account's. Both
-	// used to carry no format, and find's example filled them with "value",
-	// which GitLab refuses (issue 1272).
-	"redirect_uri": formatURI,
-	"email":        formatEmail,
+	// An email is one address on the endpoints that name a parameter so, a
+	// user's, a user email's, an avatar lookup's, a service account's. It
+	// used to carry no format, and find's example filled it with "value",
+	// which GitLab refuses (issue 1272). An invitation's email is the
+	// exception: GitLab takes several addresses there, separated by commas,
+	// so the two invite actions publish theirs with [SchemaNoFormatOverride].
+	// An OAuth application's redirect_uri is not here at all: Doorkeeper
+	// splits it on whitespace and checks each URI, so it takes several, one
+	// per line, which a uri format would describe as one.
+	"email": formatEmail,
 }
 
 // canonicalParamRange is an inclusive integer bound for a numeric parameter.
