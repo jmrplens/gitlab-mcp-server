@@ -86,10 +86,13 @@ the code; the layers keep enforcing.**
   zero means (`INV-015`); and a variable without the `GITLAB_MCP_` prefix, or a
   configurable value with no flag, variable or malformed-value policy (`INV-017`). With a
   recorded decision: a holding taken across keys (`INV-005`), which is how the pool
-  (`POL-001`) and, since issue 950, the OAuth identity cache (`ADM-005`) make room, and
-  a process partner switched off with the per-key row it stands beside (`INV-015`),
-  where the decision is the one the row's `OffWithBy` names, which is how `RTC-007`
-  follows `RTC-003` (issue 951). Only through a finding recorded for the invariant: a
+  (`POL-001`) and, since issue 950, the OAuth identity cache (`ADM-005`) make room; a
+  process partner switched off with the per-key row it stands beside (`INV-015`), where
+  the decision is the one the row's `OffWithBy` names, which is how `RTC-007` follows
+  `RTC-003` (issue 951); and, since issue 958, a zero refused at startup or replaced by
+  the default, where the decision is the one the row's `ZeroBy` names, which is how the
+  pool size, the tool-call burst, the credential age ceiling and the watcher ceiling
+  state theirs. Only through a finding recorded for the invariant: a
   per-caller number protecting a process resource with no partner, a structure keyed on a
   mintable value with no capacity, an in-band code of the server's own that mirrors no
   status the gate answers its class of next action with (`INV-012`), any other zero that does not mean off, a reason

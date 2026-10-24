@@ -147,6 +147,15 @@ const (
 	ZeroSelectsDefault
 )
 
+// SettingZero is what a zero means for one setting of a row whose settings do
+// not all mean the same by it (INV-015).
+type SettingZero struct {
+	// Config is the setting, named as the row's Config names it.
+	Config string
+	// Zero is what a zero written in it means.
+	Zero Zero
+}
+
 // Capacity is what a structure or a ceiling does when it is full (VAL-006).
 type Capacity uint8
 
@@ -478,6 +487,20 @@ type Decision struct {
 	Malformed Malformed
 	// Zero is what a value of zero means.
 	Zero Zero
+	// SettingZeros are the settings whose zero means something other than
+	// Zero, on a row whose settings disagree, each named once, and Zero is
+	// then the meaning of the rest, of which there is at least one: a zero
+	// rate switches RTC-001's bucket off, and a zero burst beside a positive
+	// rate is refused.
+	SettingZeros []SettingZero
+	// ZeroBy is the record that decided a zero that does not mean off, which
+	// is the stated exception INV-015 lets through in place of a finding
+	// (issue 958): a zero refused at startup where neither no limit nor a
+	// limit of nothing is a meaning an operator could want, or one replaced by
+	// the default where zero must not switch the limit off. It decides the
+	// row's Zero and every one of its SettingZeros, and it is one of Decided;
+	// a row whose every zero means off has nothing for it to decide.
+	ZeroBy string
 	// OffWith is the ID of another row which, switched off, switches this one
 	// off too: AUB-003's step is AUB-001's window (F-34, issue 958), and
 	// RTC-007 follows the row it is the process partner of (issue 951).

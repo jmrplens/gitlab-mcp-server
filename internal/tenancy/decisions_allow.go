@@ -67,8 +67,14 @@ func allowDecisions() []Decision {
 			Envs: []string{"GITLAB_MCP_RATE_LIMIT_RPS", "GITLAB_MCP_RATE_LIMIT_BURST"},
 			// A zero rate switches the bucket off. A zero burst beside a positive
 			// rate is refused at startup by both validators rather than meaning
-			// off, the INV-015 departure F-34 records (issue 958).
+			// off, which issue 958 decided: the rate is the setting that says
+			// off, and a bucket of no size beside a rate would refuse every
+			// call (INV-015), so the pair contradicts itself and is refused
+			// rather than guessed at. The discovery documents' bucket reads
+			// either zero as off (RTC-008, issue 1053); this one keeps the
+			// refusal it had, as issue 958 decided.
 			Config: []string{"RateLimitRPS", "RateLimitBurst"}, Malformed: RefuseStartup, Zero: ZeroOff,
+			SettingZeros: []SettingZero{{Config: "RateLimitBurst", Zero: ZeroRefused}}, ZeroBy: "issue 958",
 			// This row is how the server meets MCP's one mandatory limit,
 			// "Rate limit tool invocations", and issue 959 decided where it
 			// stands on it (F-19): on by default in HTTP mode, off by default
@@ -82,8 +88,8 @@ func allowDecisions() []Decision {
 			// (toolutil.LabelForRevision), which answers F-20 as part of
 			// issue 961's work while that issue stays open for F-21, F-22
 			// and F-24.
-			Decided:  []string{"issue 959", "issue 961"},
-			Findings: []string{"F-01", "F-02", "F-21", "F-32", "F-34"},
+			Decided:  []string{"issue 959", "issue 961", "issue 958"},
+			Findings: []string{"F-01", "F-02", "F-21", "F-32"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{"tools/call"}, Channel: ToolError, Prefix: "rate limit exceeded for ",
@@ -477,11 +483,20 @@ func allowDecisions() []Decision {
 			Reason:   "ten watchers at a five-second interval would consume such a user's entire budget",
 			ReasonAt: reasonAt(pkgSubscriptions, "DefaultMaxWatchers"),
 			Values:   []string{"WatchersPerCredential"}, Source: Constant, Zero: ZeroSelectsDefault,
+			// No operator sets it: a zero reaches it only as the Go zero of an
+			// Options field the code left unset, which selects the default.
+			// Issue 958 lists that zero among those that do not mean off and
+			// holds each to an exception stated with its reason, and this one
+			// is stated rather than read as off: off would leave one
+			// credential's watchers bounded by nothing but the process's
+			// (HLD-004), spending a GitLab user's budget past what this row's
+			// reason sizes it to.
+			ZeroBy:     "issue 958",
 			AtCapacity: ReclaimOwnThenRefuse,
 			// The refusal says the caller holds too many and carries 429's
 			// code (issue 956).
-			Decided:  []string{"issue 956"},
-			Findings: []string{"F-05", "F-21", "F-34"},
+			Decided:  []string{"issue 956", "issue 958"},
+			Findings: []string{"F-05", "F-21"},
 			// Reclaiming ends the longest-demoted watch of the same manager,
 			// whose listens are told so.
 			Refusals: []Refusal{
@@ -794,15 +809,22 @@ func allowDecisions() []Decision {
 			},
 		},
 		{
+			// A zero is refused at startup by the flag and the variable
+			// alike, which issue 958 decided rather than reading it as off:
+			// the pool's entries are keyed on credentials a caller mints, so a
+			// pool with no bound would grow with every token presented
+			// (INV-010), and a pool that kept none would have no entry to
+			// serve a request on (INV-015). Neither is a deployment an operator
+			// asking for zero could want.
 			ID: "POL-001", Question: Allow, Kind: Ceiling, Class: ClassP, Disposition: Valued,
 			Resource: "pool entries",
 			Key:      KeyProcess, StdioKey: KeyNone, Table: true,
 			Values: []string{"PoolSize", "PoolSizeMax"},
 			Source: Configurable, Flags: []string{"--max-http-clients"}, Envs: []string{"GITLAB_MCP_MAX_HTTP_CLIENTS"},
-			Config: []string{"MaxHTTPClients"}, Malformed: RefuseStartup, Zero: ZeroRefused,
+			Config: []string{"MaxHTTPClients"}, Malformed: RefuseStartup, Zero: ZeroRefused, ZeroBy: "issue 958",
 			AtCapacity: EvictAcrossKeys,
-			Decided:    []string{"ADR-0020", "issue 561"},
-			Findings:   []string{"F-16", "F-34"},
+			Decided:    []string{"ADR-0020", "issue 561", "issue 958"},
+			Findings:   []string{"F-16"},
 			// The pool keeps its own fallback, stated a second time (issue
 			// 958); it is held equal rather than aliased.
 			Sites: []Site{

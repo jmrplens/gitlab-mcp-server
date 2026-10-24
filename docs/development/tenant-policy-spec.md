@@ -168,16 +168,20 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   does not say it protects one (`INV-004`); a valued row that does not say what zero means (`INV-015`); and a variable without the
   `GITLAB_MCP_` prefix, or a configurable value with no flag, variable or malformed-value
   policy (`INV-017`).
-- **With a recorded decision**: a holding taken across keys (`INV-005`); and a process
+- **With a recorded decision**: a holding taken across keys (`INV-005`); a process
   partner switched off with the per-key limit it stands beside (`INV-015`), which is the
-  one zero another row decides that passes without a finding (`RTC-007`, issue 951). The
-  decision is the one the row's `OffWithBy` names, among those it records: a row whose
-  decisions are about something else does not pass that way.
+  one zero another row decides that passes without a finding (`RTC-007`, issue 951); and
+  a zero refused at startup or replaced by the default, the row's own or one of its
+  settings' (`INV-015`), which is how the exceptions issue 958 states pass (`POL-001`,
+  `RTC-001`'s burst, `ADM-008`, `HLD-003`). The decision is the one the
+  row's `OffWithBy` or `ZeroBy` names, among those it records: a row whose decisions are
+  about something else does not pass that way, and a `ZeroBy` on a row whose every zero
+  means off decides nothing and is refused.
 - **With a finding recorded for the invariant**: a per-key ceiling on a process resource
   with no partner (`INV-004`); a table keyed on a mintable value with no capacity
   (`INV-010`); an in-band code of the server's own that mirrors no status the gate
-  answers its class of next action with (`INV-012`); a zero that does not mean off
-  (`INV-015`); a reason whose unit differs from its key or misstates its own
+  answers its class of next action with (`INV-012`); any other zero that does not mean
+  off (`INV-015`); a reason whose unit differs from its key or misstates its own
   (`INV-016`); a value only an environment variable or a Go option reaches (`INV-017`);
   and a ceiling nothing bounds (`INV-018`).
 
@@ -257,6 +261,17 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   partner (`RTC-007`) is off wherever `RTC-003` is, which is when `--rate-limit-rps` is
   `0`, so a deployment that turned rate limiting off has turned all of it off (issue 951).
   The listen and watcher partners keep counting when their per-key ceilings are off.
+  Where zero must not mean off, the exception is stated with its reason and the decision
+  that made it, never left as a silent normalization (issue 958): the pool size refuses a
+  zero, since a pool with no bound would grow with every credential presented and one
+  that kept no entry could serve nothing (`POL-001`); the tool-call bucket's burst
+  refuses a zero beside a positive rate, the rate being the setting that says off
+  (`RTC-001`); and the credential age ceiling and the per-credential watcher ceiling,
+  which no operator sets, keep their default for a Go option's zero, the first because
+  it exists so that every credential is re-checked whatever else is off (`ADM-008`) and
+  the second because off would leave one credential's watchers bounded only by the
+  process's (`HLD-003`). A row whose settings mean different things by zero states each
+  that differs once (`SettingZeros`), and its own `Zero` is the meaning of the rest.
 - **INV-016 Every limit states its key, mint cost and reason, and the units agree.** The
   reason's unit matches the key, or the mismatch is recorded as a finding before the limit
   merges, and the reason states its own unit correctly.
@@ -509,7 +524,7 @@ exist (`well-formed`).
 | VAL-006 | What happens at capacity, and why                                                                      | `AtCapacity`, and `Table` for a structure keyed on a caller-chosen value |
 | VAL-007 | Its refusal: channel, code, status, `Retry-After`, message and class, per method and era, and on stdio | `Refusals`                                                               |
 | VAL-008 | What it charges, and that nothing unjudged is charged                                                  | `Refusals[].Charged`, and `Failures` for an admission path               |
-| VAL-009 | Its value, source, bounds, zero meaning and malformed-value policy                                     | `Values`, `Source`, `Zero`, `Malformed`                                  |
+| VAL-009 | Its value, source, bounds, zero meaning and malformed-value policy                                     | `Values`, `Source`, `Zero`, `SettingZeros`, `ZeroBy`, `Malformed`        |
 | VAL-010 | Its telemetry: the reason only                                                                         | The pull request                                                         |
 | VAL-011 | Its behavior on stdio                                                                                  | `StdioKey`                                                               |
 | VAL-012 | Its measurement, when it claims to protect one population from another                                 | The pull request, with `make bench-fairness`                             |
@@ -543,7 +558,15 @@ against the code as a whole. F-34 ([issue 958](https://github.com/jmrplens/gitla
 also records the idle session timeout's variable, which refuses a zero its flag accepts
 (`END-005`), and the tool-call bucket's burst, whose zero beside a positive rate refuses
 startup rather than meaning off (`RTC-001`); both are departures from `INV-015` of the
-kind the issue is about. F-35
+kind the issue is about. Issue 958 then settled four of the zeros F-34 recorded as stated
+exceptions, which their rows record through `ZeroBy` and no longer carry the finding for:
+the pool size's and the burst's, which its decision of 2026-09-28 keeps refused; the
+credential age ceiling's, the exception its own text keeps; and the watcher ceiling's
+option's, under its measure that each zero left departing is an exception with its reason
+(see `INV-015`). F-34 stays on the four whose zero a change of code answers: the
+OAuth cache TTL's flag, which selects the default where its variable refuses (`ADM-005`),
+the fast lockout's window, whose zero also switches the distinct-credential budget off
+(`AUB-001`, `AUB-003`), and the session timeout's variable (`END-005`). F-35
 ([issue 982](https://github.com/jmrplens/gitlab-mcp-server/issues/982)) recorded the
 transport-source budget's map of charged (source, key) pairs, which only the sweep bounded,
 since a source the full failure table never tracks is never blocked (`AUB-002`), a

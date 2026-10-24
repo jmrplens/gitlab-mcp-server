@@ -190,6 +190,12 @@ func TestValidate_CodeRanges(t *testing.T) {
 // whose decisions are about something else, not one naming a decision it does
 // not record, not a decided row following a row it does not partner, and not
 // one following a row that names another partner.
+//
+// A zero refused at startup or replaced by the default passes without a
+// finding too when the record its ZeroBy names decided it and the row records
+// that decision (issue 958), whether it is the row's own zero or the zero of
+// one of its settings, and not when the row records something else. A ZeroBy
+// on a row whose every zero means off decides nothing, and is refused.
 func TestValidate_ZeroStated(t *testing.T) {
 	valued := func(d *Decision) { d.Disposition, d.Values = Valued, []string{"V"} }
 	follows := func(offWith, by string, decided ...string) func(d *Decision) {
@@ -198,6 +204,14 @@ func TestValidate_ZeroStated(t *testing.T) {
 			d.Key, d.Zero, d.OffWith, d.OffWithBy, d.Decided = KeyProcess, ZeroNotApplicable, offWith, by, decided
 		}
 	}
+	decidedZero := func(zero Zero, settings []SettingZero, by string, decided ...string) func(d *Decision) {
+		return func(d *Decision) {
+			valued(d)
+			d.Config = []string{"A", "B"}
+			d.Zero, d.SettingZeros, d.ZeroBy, d.Decided = zero, settings, by, decided
+		}
+	}
+	refusedBurst := []SettingZero{{Config: "B", Zero: ZeroRefused}}
 	runRule(t, checkZeroStated, []ruleCase{
 		{"a valued row with no zero meaning", row(valued), "does not say what zero means"},
 		{"zero switches it off", row(func(d *Decision) { valued(d); d.Zero = ZeroOff }), ""},
@@ -205,6 +219,29 @@ func TestValidate_ZeroStated(t *testing.T) {
 		{"zero selects the default", row(func(d *Decision) { valued(d); d.Zero = ZeroSelectsDefault }), "does not mean off"},
 		{"another row's zero", row(func(d *Decision) { valued(d); d.Zero, d.OffWith = ZeroOff, "PROC" }), "does not mean off"},
 		{"recorded", row(func(d *Decision) { valued(d); d.Zero, d.Findings = ZeroRefused, []string{"F-34"} }), ""},
+		{"zero refuses startup, decided", row(decidedZero(ZeroRefused, nil, "issue 958", "issue 958")), ""},
+		{"zero selects the default, decided", row(decidedZero(ZeroSelectsDefault, nil, "issue 958", "ADR-0020", "issue 958")), ""},
+		{"zero refuses startup, undecided", row(decidedZero(ZeroRefused, nil, "")), "does not mean off"},
+		{
+			"zero refuses startup, by a decision it does not record",
+			row(decidedZero(ZeroRefused, nil, "issue 958", "ADR-0020")), "does not mean off",
+		},
+		{"a setting's zero refuses startup", row(decidedZero(ZeroOff, refusedBurst, "")), "does not mean off"},
+		{
+			"a setting's zero selects the default",
+			row(decidedZero(ZeroOff, []SettingZero{{Config: "B", Zero: ZeroSelectsDefault}}, "")), "does not mean off",
+		},
+		{"a setting's zero refuses startup, decided", row(decidedZero(ZeroOff, refusedBurst, "issue 958", "issue 958")), ""},
+		{
+			"a setting's zero refuses startup, recorded",
+			row(func(d *Decision) { decidedZero(ZeroOff, refusedBurst, "")(d); d.Findings = []string{"F-34"} }), "",
+		},
+		{"a decision for a zero that means off", row(decidedZero(ZeroOff, nil, "issue 958", "issue 958")), "every zero it states means off"},
+		{
+			"a decision for a setting's zero that means off",
+			row(decidedZero(ZeroOff, []SettingZero{{Config: "B", Zero: ZeroOffKeepsCount}}, "issue 958", "issue 958")),
+			"every zero it states means off",
+		},
 		{"a ruled row", row(nil), ""},
 		{"a partner following its row, decided", row(follows("PAIRED", "issue 951", "issue 951")), ""},
 		{"a partner following its row, undecided", row(follows("PAIRED", "")), "does not mean off"},
@@ -346,6 +383,68 @@ func TestValidate_WellFormed(t *testing.T) {
 		{"a refusal with no answer", row(func(d *Decision) { d.Refusals = []Refusal{{Channel: RPC}} }), "no channel or no answer"},
 		{"an unknown partner", row(func(d *Decision) { d.Partner = "NONE" }), "partner NONE names no row"},
 		{"an unknown zero partner", row(func(d *Decision) { d.OffWith = "NONE" }), "follows NONE"},
+		{
+			"a zero decided by a record it keeps",
+			row(func(d *Decision) {
+				d.OffWithBy, d.ZeroBy, d.Decided = "issue 951", "issue 958", []string{"issue 951", "issue 958"}
+			}), "",
+		},
+		{
+			"a partner's zero decided by a record it does not keep",
+			row(func(d *Decision) { d.OffWithBy = "issue 951" }), "decided by issue 951, which it does not record",
+		},
+		{
+			"a zero decided by a record it does not keep",
+			row(func(d *Decision) { d.ZeroBy, d.Decided = "issue 958", []string{"ADR-0020"} }), "decided by issue 958, which it does not record",
+		},
+		{
+			"a setting's zero",
+			row(func(d *Decision) {
+				d.Config, d.SettingZeros = []string{"A", "B"}, []SettingZero{{Config: "B", Zero: ZeroRefused}}
+			}), "",
+		},
+		{
+			"the zero of a setting it does not have",
+			row(func(d *Decision) {
+				d.Config, d.SettingZeros = []string{"A", "B"}, []SettingZero{{Config: "C", Zero: ZeroRefused}}
+			}),
+			"the zero of C, which is not one of its settings",
+		},
+		{
+			"a setting's zero left unsaid",
+			row(func(d *Decision) { d.Config, d.SettingZeros = []string{"A", "B"}, []SettingZero{{Config: "B"}} }),
+			"the zero of B and does not say what it means",
+		},
+		{
+			"a setting's zero that agrees with the row's",
+			row(func(d *Decision) {
+				d.Config, d.Zero, d.SettingZeros = []string{"A", "B"}, ZeroOff, []SettingZero{{Config: "B", Zero: ZeroOff}}
+			}),
+			"the zero of B means what the row's own does",
+		},
+		{
+			"a setting's zero stated twice",
+			row(func(d *Decision) {
+				d.Config, d.Zero = []string{"A", "B"}, ZeroOff
+				d.SettingZeros = []SettingZero{{Config: "B", Zero: ZeroRefused}, {Config: "B", Zero: ZeroSelectsDefault}}
+			}),
+			"it states the zero of B twice",
+		},
+		{
+			"the zero of every setting",
+			row(func(d *Decision) {
+				d.Config, d.Zero = []string{"A"}, ZeroRefused
+				d.SettingZeros = []SettingZero{{Config: "A", Zero: ZeroOff}}
+			}),
+			"leaves none of its settings to the row's own zero",
+		},
+		{
+			"the zero of every setting but one",
+			row(func(d *Decision) {
+				d.Config, d.Zero = []string{"A", "B", "C"}, ZeroOff
+				d.SettingZeros = []SettingZero{{Config: "A", Zero: ZeroRefused}, {Config: "C", Zero: ZeroRefused}}
+			}), "",
+		},
 		{"an unknown finding", row(func(d *Decision) { d.Findings = []string{"F-99"} }), "F-99, which is not a finding"},
 		{"promoted with no function", row(func(d *Decision) { d.Disposition = Promoted }), "promoted with no function"},
 		{"promoted with a function", row(func(d *Decision) { d.Disposition, d.Functions = Promoted, []string{"F"} }), ""},

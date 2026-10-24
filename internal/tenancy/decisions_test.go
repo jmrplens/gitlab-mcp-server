@@ -830,6 +830,50 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	}
 }
 
+// TestDecisions_ZeroExceptions_AreDecidedByIssue958 pins the zeros issue 958
+// states as exceptions rather than switching them off, each recorded through
+// ZeroBy in place of F-34: the pool size's zero refused at startup
+// (POL-001), the tool-call bucket's burst refused beside a positive rate
+// while a zero rate still switches the bucket off (RTC-001), and the
+// credential age ceiling and the watcher ceiling, two Go options whose zero
+// selects the default (ADM-008, HLD-003). The rows that carry F-34 still are
+// the four whose zero a change of code answers next: the OAuth cache TTL's
+// flag, which selects the default where its variable refuses, the failure
+// window that switches the distinct-credential budget off with it, and the
+// session timeout's variable, which refuses the zero its flag reads as off.
+func TestDecisions_ZeroExceptions_AreDecidedByIssue958(t *testing.T) {
+	for _, tc := range []struct {
+		id       string
+		zero     Zero
+		settings []SettingZero
+	}{
+		{"POL-001", ZeroRefused, nil},
+		{"RTC-001", ZeroOff, []SettingZero{{Config: "RateLimitBurst", Zero: ZeroRefused}}},
+		{"ADM-008", ZeroSelectsDefault, nil},
+		{"HLD-003", ZeroSelectsDefault, nil},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			d, _ := Lookup(tc.id)
+			if d.Zero != tc.zero || !slices.Equal(d.SettingZeros, tc.settings) {
+				t.Errorf("%s: zero %d, settings %v; want %d and %v", tc.id, d.Zero, d.SettingZeros, tc.zero, tc.settings)
+			}
+			if d.ZeroBy != "issue 958" || !slices.Contains(d.Decided, "issue 958") || d.Carries("F-34") {
+				t.Errorf("%s: zero by %q, decided %v, findings %v; want issue 958 recorded as the decision and no F-34",
+					tc.id, d.ZeroBy, d.Decided, d.Findings)
+			}
+		})
+	}
+	var carrying []string
+	for _, d := range Decisions() {
+		if d.Carries("F-34") {
+			carrying = append(carrying, d.ID)
+		}
+	}
+	if want := []string{"ADM-005", "AUB-001", "AUB-003", "END-005"}; !slices.Equal(carrying, want) {
+		t.Errorf("F-34 is carried by %v, want %v", carrying, want)
+	}
+}
+
 // TestLookup_FindsARowAndRefusesAnUnknownID reads one row back and asks for one
 // that does not exist.
 func TestLookup_FindsARowAndRefusesAnUnknownID(t *testing.T) {

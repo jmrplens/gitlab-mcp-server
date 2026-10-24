@@ -254,7 +254,7 @@ func inLegacyRange(code int) bool {
 }
 
 // checkZeroStated holds a valued decision to saying what zero means, and a
-// zero that is not "off" to a finding.
+// zero that is not "off" to a finding or a recorded decision.
 //
 // One zero decided by another row passes without a finding: a process partner
 // switched off with the row it stands beside, when a recorded decision says
@@ -263,17 +263,39 @@ func inLegacyRange(code int) bool {
 // the register records rather than a defect it carries (RTC-007, issue 951).
 // The decision is the one OffWithBy names, and it must be among the row's
 // Decided: a row carrying a decision about something else does not pass.
+//
+// A zero refused at startup, or one that selects the default, passes the same
+// way when the record ZeroBy names decided it and the row records that
+// decision (issue 958), whether it is the row's own zero or the zero of one of
+// its settings: it is then a stated exception with its reason, rather than a
+// silent normalization the register carries as a finding. A ZeroBy on a row
+// whose every zero means off decides nothing, and is refused, so a decision
+// cannot stay on a row after the zero it decided has gone.
 func checkZeroStated(d Decision, rows map[string]Decision) []string {
 	var out []string
 	if d.Disposition == Valued && d.Zero == ZeroUnset {
 		out = append(out, "a valued decision that does not say what zero means")
 	}
+	departing := zeroDeparts(d.Zero)
+	for _, s := range d.SettingZeros {
+		departing = departing || zeroDeparts(s.Zero)
+	}
+	decided := d.ZeroBy != "" && has(d.Decided, d.ZeroBy)
 	followsPartnered := rows[d.OffWith].Partner == d.ID && has(d.Decided, d.OffWithBy)
-	departs := d.Zero == ZeroRefused || d.Zero == ZeroSelectsDefault || (d.OffWith != "" && !followsPartnered)
+	departs := (departing && !decided) || (d.OffWith != "" && !followsPartnered)
 	if departs && !d.RecordsDeparture("INV-015") {
-		out = append(out, "a zero that does not mean off, with no finding")
+		out = append(out, "a zero that does not mean off, with no decision or finding")
+	}
+	if d.ZeroBy != "" && !departing {
+		out = append(out, fmt.Sprintf("its zero is decided by %s, and every zero it states means off", d.ZeroBy))
 	}
 	return out
+}
+
+// zeroDeparts reports whether a zero meaning departs from INV-015: a zero
+// refused at startup, or one replaced by the default.
+func zeroDeparts(z Zero) bool {
+	return z == ZeroRefused || z == ZeroSelectsDefault
 }
 
 // checkUnitsAgree holds a class D disagreement to a finding.
@@ -392,6 +414,7 @@ func checkWellFormed(d Decision, rows map[string]Decision) []string {
 		}
 	}
 	out = append(out, danglingReferences(d, rows)...)
+	out = append(out, settingZerosContradict(d)...)
 	if d.Disposition == Promoted && len(d.Functions) == 0 {
 		out = append(out, "promoted with no function")
 	}
@@ -404,9 +427,38 @@ func checkWellFormed(d Decision, rows map[string]Decision) []string {
 	return out
 }
 
+// settingZerosContradict is what a row's SettingZeros say against each other
+// and against its Zero: a setting whose zero is stated twice has two meanings,
+// and SettingZeros that name every one of the row's settings leave its Zero,
+// the meaning of the rest, the meaning of none.
+func settingZerosContradict(d Decision) []string {
+	var out, stated []string
+	for _, s := range d.SettingZeros {
+		if has(stated, s.Config) {
+			out = append(out, fmt.Sprintf("it states the zero of %s twice", s.Config))
+		}
+		stated = append(stated, s.Config)
+	}
+	if len(stated) > 0 && !leavesASetting(d.Config, stated) {
+		out = append(out, "it states the zero of each setting, and leaves none of its settings to the row's own zero")
+	}
+	return out
+}
+
+// leavesASetting reports whether one of settings is not among stated.
+func leavesASetting(settings, stated []string) bool {
+	for _, c := range settings {
+		if !has(stated, c) {
+			return true
+		}
+	}
+	return false
+}
+
 // danglingReferences is the half of [checkWellFormed] that follows a row's
-// references: a partner and a zero partner must be rows, and a finding must
-// be one of the specification's.
+// references: a partner and a zero partner must be rows, a record said to
+// decide its zero must be one it records, a setting whose zero it states must
+// be one of its settings, and a finding must be one of the specification's.
 func danglingReferences(d Decision, rows map[string]Decision) []string {
 	var out []string
 	if _, ok := rows[d.Partner]; d.Partner != "" && !ok {
@@ -414,6 +466,21 @@ func danglingReferences(d Decision, rows map[string]Decision) []string {
 	}
 	if _, ok := rows[d.OffWith]; d.OffWith != "" && !ok {
 		out = append(out, fmt.Sprintf("its zero follows %s, which names no row", d.OffWith))
+	}
+	for _, by := range []string{d.OffWithBy, d.ZeroBy} {
+		if by != "" && !has(d.Decided, by) {
+			out = append(out, fmt.Sprintf("its zero is decided by %s, which it does not record", by))
+		}
+	}
+	for _, s := range d.SettingZeros {
+		switch {
+		case !has(d.Config, s.Config):
+			out = append(out, fmt.Sprintf("it states the zero of %s, which is not one of its settings", s.Config))
+		case s.Zero == ZeroUnset:
+			out = append(out, fmt.Sprintf("it states the zero of %s and does not say what it means", s.Config))
+		case s.Zero == d.Zero:
+			out = append(out, fmt.Sprintf("the zero of %s means what the row's own does", s.Config))
+		}
 	}
 	for _, id := range d.Findings {
 		if FindingIssue(id) == 0 {

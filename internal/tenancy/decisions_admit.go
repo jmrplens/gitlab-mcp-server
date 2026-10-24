@@ -351,11 +351,19 @@ func admitDecisions() []Decision {
 			},
 		},
 		{
+			// A zero, or less, passed to the pool's option keeps the default,
+			// which issue 958 keeps and states as an exception rather than
+			// reading it as off: the ceiling exists so that every credential
+			// is re-checked, whatever else an operator turns off
+			// (--revalidate-interval 0 among them), so a zero must not switch
+			// it off.
 			ID: "ADM-008", Question: Admit, Kind: Lifetime, Class: ClassC, Disposition: Valued,
 			Resource: "the longest an entry serves on one credential check",
 			Key:      KeyEntry, StdioKey: KeyNone,
 			Values: []string{"CredentialMaxAge", "CredentialMaxAgeCeiling"}, Source: OptionOnly, Zero: ZeroSelectsDefault,
-			Findings: []string{"F-16", "F-34"},
+			ZeroBy:   "issue 958",
+			Decided:  []string{"issue 958"},
+			Findings: []string{"F-16"},
 			// An entry past the age is evicted on its next request, and its
 			// open listens are told the credential was reset.
 			Refusals: []Refusal{
