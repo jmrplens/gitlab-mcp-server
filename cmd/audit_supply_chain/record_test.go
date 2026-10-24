@@ -21,6 +21,22 @@ const (
 	nestedKey   = "example/tools/setup@" + testSHA
 )
 
+// TestActionRecordAbout_NamesTheCommandThatWritesIt verifies that the
+// sentence at the top of the record names the command a finding about the
+// record tells its reader to run, and the bound -record holds a file to: the
+// sentence is written out whole rather than joined with recordCommand, so a
+// change to one of them that left the other behind would otherwise go unseen.
+func TestActionRecordAbout_NamesTheCommandThatWritesIt(t *testing.T) {
+	t.Parallel()
+
+	if !strings.Contains(actionRecordAbout, "Written by "+recordCommand+", which") {
+		t.Errorf("actionRecordAbout = %q, want it to name %q as what writes the record", actionRecordAbout, recordCommand)
+	}
+	if maxRecordedFile != 1<<20 {
+		t.Errorf("maxRecordedFile = %d, want one mebibyte", maxRecordedFile)
+	}
+}
+
 // TestLoadActionRecord_MissingFileOrActions_IsEmpty verifies that a tree
 // without a record, and a record that names no actions, are read as one that
 // records nothing, so every pinned action in it is reported as unjudged rather

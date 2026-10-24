@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 	"unicode/utf16"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
@@ -34,20 +33,14 @@ const recordCommand = "go run ./cmd/audit_supply_chain -record"
 
 // actionRecordAbout is the sentence the record carries at its top, since JSON
 // has no comments and a reader opening the file should not have to find this
-// command to learn what it is.
-const actionRecordAbout = "What each action the workflows pin holds at its commit: the metadata file of " +
-	"every action a step reaches, and the files a credentialed job's steps read from an action's own " +
-	"directory. Written by " + recordCommand + ", which reads them from raw.githubusercontent.com; " +
-	"read offline by make check-supply-chain, which judges a composite action's steps from it and " +
-	"refuses a pin it holds no entry for. Every file is kept as its lines, in ASCII."
+// command to learn what it is. It is written out whole, recordCommand
+// included, and a test holds it to naming recordCommand.
+const actionRecordAbout = "What each action the workflows pin holds at its commit: the metadata file of every action a step reaches, and the files a credentialed job's steps read from an action's own directory. Written by go run ./cmd/audit_supply_chain -record, which reads them from raw.githubusercontent.com; read offline by make check-supply-chain, which judges a composite action's steps from it and refuses a pin it holds no entry for. Every file is kept as its lines, in ASCII."
 
-// maxRecordedFile bounds one file -record fetches. An action's metadata and
-// the scripts beside it are a few kilobytes; anything near this is not one,
-// and is refused rather than committed.
-const maxRecordedFile = 1 << 20
-
-// recordFetchTimeout bounds one request -record makes.
-const recordFetchTimeout = 30 * time.Second
+// maxRecordedFile bounds one file -record fetches, at one mebibyte. An
+// action's metadata and the scripts beside it are a few kilobytes; anything
+// near this is not one, and is refused rather than committed.
+const maxRecordedFile = 1_048_576
 
 // actionRecord is the committed record: for each pinned reference, in the
 // spelling a uses: line carries it, what that commit holds.

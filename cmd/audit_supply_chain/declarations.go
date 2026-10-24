@@ -45,11 +45,7 @@ type declaration struct {
 var declaredRunTimeCode = map[string]declaration{
 	"scripts/validate-npm.mjs npx": {
 		category: categoryHeldOffline,
-		reason: "stopUnderNpx starts the launcher the way a client configured with npx does, to prove a SIGTERM " +
-			"sent to npx alone ends the server, and passes --offline in the arguments it spawns npx with, so npx " +
-			"resolves the package from the project the job installed from the tarballs it just packed and cannot " +
-			"fetch a published one; serverUnder then holds the process to that project's binary. The other " +
-			"matches are comments and the child process variable named after the tool",
+		reason:   "stopUnderNpx starts the launcher the way a client configured with npx does, to prove a SIGTERM sent to npx alone ends the server, and passes --offline in the arguments it spawns npx with, so npx resolves the package from the project the job installed from the tarballs it just packed and cannot fetch a published one; serverUnder then holds the process to that project's binary. The other matches are comments and the child process variable named after the tool",
 	},
 }
 
@@ -79,12 +75,7 @@ var actionCategories = map[string]string{
 var declaredUnjudgedActions = map[string]declaration{
 	"pypa/gh-action-pypi-publish ./.github/.tmp/.generated-actions/run-pypi-publish-in-docker-container": {
 		category: categoryGeneratedAtRunTime,
-		reason: "create-docker-action.py, which the record holds for the pinned commit, writes this directory as a " +
-			"container action whose image is docker://ghcr.io/pypa/gh-action-pypi-publish:<the commit the workflow " +
-			"pins>, the image pypa's own release workflow publishes for that commit. The image is named by a " +
-			"registry tag, which a push to pypa's ghcr.io namespace can move and this audit cannot see, so the " +
-			"pypi job trusts that namespace as far as it trusts the action's repository; replacing the action " +
-			"with an upload of our own is the fix, which is issue 1243",
+		reason:   "create-docker-action.py, which the record holds for the pinned commit, writes this directory as a container action whose image is docker://ghcr.io/pypa/gh-action-pypi-publish:<the commit the workflow pins>, the image pypa's own release workflow publishes for that commit. The image is named by a registry tag, which a push to pypa's ghcr.io namespace can move and this audit cannot see, so the pypi job trusts that namespace as far as it trusts the action's repository; replacing the action with an upload of our own is the fix, which is issue 1243",
 	},
 }
 
@@ -132,11 +123,7 @@ var declaredGuardedMatches = map[string]guardedMatch{
 		category: categoryInputGuarded,
 		input:    "cosign-release",
 		value:    "main",
-		reason: "the step's script runs go install github.com/sigstore/cosign/v3/cmd/cosign@main only inside " +
-			"if [[ \"${input_cosign_release}\" == \"main\" ]], which builds cosign from its main branch and exits; " +
-			"any other release is a bootstrap binary held to a SHA-256 the action commits, which then verifies " +
-			"the requested release against a public key whose SHA-256 the action commits too. Every step here " +
-			"names an exact cosign-release",
+		reason:   "the step's script runs go install github.com/sigstore/cosign/v3/cmd/cosign@main only inside if [[ \"${input_cosign_release}\" == \"main\" ]], which builds cosign from its main branch and exits; any other release is a bootstrap binary held to a SHA-256 the action commits, which then verifies the requested release against a public key whose SHA-256 the action commits too. Every step here names an exact cosign-release",
 	},
 }
 

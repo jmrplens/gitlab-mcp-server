@@ -43,15 +43,27 @@ const ownPath = `\$\{?(?:0|BASH_SOURCE(?:\[0\])?)\}?`
 //
 // Group 1 is the root as written, group 2 the inside of a workflow
 // expression, group 3 a variable's name, and group 4 the path under the root.
-var variableScript = regexp.MustCompile(`(\$\{\{\s*([^}]*?)\s*\}\}|\$[({]?(?:(?i:env):)?([A-Za-z_][A-Za-z0-9_]*|[0-9])[)}]?|\$\([ \t]*dirname[ \t]+"?` +
-	ownPath + `"?[ \t]*\))"?/((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.(?:sh|mjs|py|ps1))\b`)
+var variableScript = regexp.MustCompile(variableScriptPattern())
+
+// variableScriptPattern is variableScript's expression, assembled in a
+// function so ownPath is joined in where a test runs it.
+func variableScriptPattern() string {
+	return `(\$\{\{\s*([^}]*?)\s*\}\}|\$[({]?(?:(?i:env):)?([A-Za-z_][A-Za-z0-9_]*|[0-9])[)}]?|\$\([ \t]*dirname[ \t]+"?` +
+		ownPath + `"?[ \t]*\))"?/((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.(?:sh|mjs|py|ps1))\b`
+}
 
 // selfDirectory is a shell assignment of a script's own directory, or of one
 // above it: NAME="$(cd "$(dirname "$0")/.." && pwd)", with BASH_SOURCE for $0,
 // without the cd, and behind export, local, readonly or declare. Group 1 is the
 // name and group 2 the steps up.
-var selfDirectory = regexp.MustCompile(`(?m)^[ \t]*(?:(?:export|local|readonly|declare(?:[ \t]+-[A-Za-z]+)*)[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=.*?dirname[ \t]+"?` +
-	ownPath + `"?[ \t]*\)((?:/\.\.)*)(?:["' \t)]|$)`)
+var selfDirectory = regexp.MustCompile(selfDirectoryPattern())
+
+// selfDirectoryPattern is selfDirectory's expression, assembled the way
+// variableScriptPattern is.
+func selfDirectoryPattern() string {
+	return `(?m)^[ \t]*(?:(?:export|local|readonly|declare(?:[ \t]+-[A-Za-z]+)*)[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=.*?dirname[ \t]+"?` +
+		ownPath + `"?[ \t]*\)((?:/\.\.)*)(?:["' \t)]|$)`
+}
 
 // place is where a file lives: in this repository, or in the directory of a
 // pinned action at its commit, which the record holds. path is relative to the

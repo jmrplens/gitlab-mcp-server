@@ -35,16 +35,13 @@ type secretDeclaration struct {
 var declaredSecrets = map[string]secretDeclaration{
 	"DOCKERHUB_TOKEN": {
 		writes: true,
-		where: "pushes, overwrites and deletes the images of the Docker Hub repository jmrplens/gitlab-mcp-server " +
-			"and rewrites its description: a personal access token with the read, write and delete scope, " +
-			"which is the narrowest the descriptions API accepts",
+		where:  "pushes, overwrites and deletes the images of the Docker Hub repository jmrplens/gitlab-mcp-server and rewrites its description: a personal access token with the read, write and delete scope, which is the narrowest the descriptions API accepts",
 	},
 	"DOCKERHUB_USERNAME": {
 		where: "the account name the Docker Hub login pairs with DOCKERHUB_TOKEN, and no credential on its own",
 	},
 	"GITHUB_TOKEN": {
-		where: "the job's own token, which can write only what the job's permissions grant; " +
-			"those are judged as permissions, so naming the token here adds nothing to them",
+		where: "the job's own token, which can write only what the job's permissions grant; those are judged as permissions, so naming the token here adds nothing to them",
 	},
 	"GITLAB_API_TOKEN": {
 		writes: true,
@@ -55,18 +52,15 @@ var declaredSecrets = map[string]secretDeclaration{
 		where:  "force-pushes and prunes every branch and tag of the GitLab.com mirror",
 	},
 	"INDEXNOW_KEY": {
-		where: "asks search engines to recrawl pages that are already public; IndexNow checks the key " +
-			"against a copy published at the site's root, so it proves nothing a reader of the site does not hold",
+		where: "asks search engines to recrawl pages that are already public; IndexNow checks the key against a copy published at the site's root, so it proves nothing a reader of the site does not hold",
 	},
 	"RELEASE_DEPLOY_KEY_B64": {
 		writes: true,
-		where: "pushes the release stamp to main as a deploy key, which the Protect main ruleset " +
-			"lets past its required review (SC-01 in docs/development/repository-settings.md)",
+		where:  "pushes the release stamp to main as a deploy key, which the Protect main ruleset lets past its required review (SC-01 in docs/development/repository-settings.md)",
 	},
 	"SONAR_TOKEN": {
 		writes: true,
-		where: "publishes analyses to the SonarCloud project, and with them the quality gate verdict " +
-			"the project reports for a branch or a pull request",
+		where:  "publishes analyses to the SonarCloud project, and with them the quality gate verdict the project reports for a branch or a pull request",
 	},
 	"TAP_DEPLOY_KEY_B64": {
 		writes: true,
@@ -74,8 +68,7 @@ var declaredSecrets = map[string]secretDeclaration{
 	},
 	"WINGET_TOKEN": {
 		writes: true,
-		where: "pushes branches to the jmrplens/winget-pkgs fork and opens pull requests against " +
-			"microsoft/winget-pkgs under the maintainer's account",
+		where:  "pushes branches to the jmrplens/winget-pkgs fork and opens pull requests against microsoft/winget-pkgs under the maintainer's account",
 	},
 }
 

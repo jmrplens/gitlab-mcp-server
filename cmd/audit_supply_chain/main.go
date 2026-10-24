@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	yaml "go.yaml.in/yaml/v3"
 
@@ -122,29 +123,25 @@ var unlockedCode = []unlockedRule{
 		match:   regexpMatcher(cargoBinstall),
 		name:    "cargo-binstall",
 		display: `'\\bcargo[ -]binstall\\b'`,
-		why: "cargo binstall installs a prebuilt binary from a release asset or QuickInstall whatever version " +
-			"it names, which nothing committed here fixes (download the binary and hold it to a recorded SHA-256)",
+		why:     "cargo binstall installs a prebuilt binary from a release asset or QuickInstall whatever version it names, which nothing committed here fixes (download the binary and hold it to a recorded SHA-256)",
 	},
 	{
 		match:   cargoInstallUnlocked,
 		name:    "cargo-install",
 		display: `'\\bcargo\\s+install\\b'`,
-		why: "cargo install resolves a crate and its dependencies at run time unless its command carries " +
-			"--locked and an exact version or a --path",
+		why:     "cargo install resolves a crate and its dependencies at run time unless its command carries --locked and an exact version or a --path",
 	},
 	{
 		match:   goInstallUnpinned,
 		name:    "go-install",
 		display: `'\\bgo\\s+install\\b'`,
-		why: "go install at anything but an exact version or a full commit (a branch, a version query, " +
-			"a value only the run knows) resolves at run time",
+		why:     "go install at anything but an exact version or a full commit (a branch, a version query, a value only the run knows) resolves at run time",
 	},
 	{
 		match:   regexpMatcher(downloadInvokeExpression),
 		name:    "invoke-expression",
 		display: `'(?i)\\b(?:iex|invoke-expression)\\b'`,
-		why: "handing a download (iwr, irm, Invoke-WebRequest, Invoke-RestMethod, DownloadString) to " +
-			"Invoke-Expression on the same line runs unreviewed code",
+		why:     "handing a download (iwr, irm, Invoke-WebRequest, Invoke-RestMethod, DownloadString) to Invoke-Expression on the same line runs unreviewed code",
 	},
 }
 
@@ -155,10 +152,7 @@ var cargoBinstall = regexp.MustCompile(`(?m)\bcargo(?:[ \t]+binstall|-binstall(?
 // downloadInvokeExpression is a download PowerShell runs as code on the same
 // line: piped into Invoke-Expression, or handed to it as its argument.
 // PowerShell's names are case-insensitive, and so is the match.
-var downloadInvokeExpression = regexp.MustCompile(
-	`(?i)\b(?:iwr|irm|invoke-webrequest|invoke-restmethod)\b[^\n|]*\|\s*(?:iex|invoke-expression)\b` +
-		`|\b(?:iex|invoke-expression)\b[^\n]*\b(?:iwr|irm|invoke-webrequest|invoke-restmethod|downloadstring)\b`,
-)
+var downloadInvokeExpression = regexp.MustCompile(`(?i)\b(?:iwr|irm|invoke-webrequest|invoke-restmethod)\b[^\n|]*\|\s*(?:iex|invoke-expression)\b|\b(?:iex|invoke-expression)\b[^\n]*\b(?:iwr|irm|invoke-webrequest|invoke-restmethod|downloadstring)\b`)
 
 // cargoInstall and goInstall find an install and the rest of its line, which
 // installCommand cuts at the first shell separator so a word of the next
@@ -489,16 +483,20 @@ func unpinnedReason(reference string) string {
 // it names. A document that does not parse ends the reading there, leaving
 // the rest to the line scan; the failure itself is reported where the
 // document's structure is read.
+//
+// A stream holds at most one document per byte of it, which bounds the loop
+// whatever the decoder answers.
 func parsedUses(text string) []usesReference {
 	decoder := yaml.NewDecoder(strings.NewReader(text))
 	var found []usesReference
-	for {
+	for range len(text) {
 		var document yaml.Node
 		if decoder.Decode(&document) != nil {
-			return found
+			break
 		}
 		found = appendUsesKeys(found, &document)
 	}
+	return found
 }
 
 // appendUsesKeys appends every uses key under node whose value is a scalar.
@@ -1040,10 +1038,11 @@ func recordAndAudit(root string, declared tables, stdout io.Writer) ([]string, e
 // every file of a public repository at a commit there, with no token.
 const rawContentBase = "https://raw.githubusercontent.com"
 
-// recordClient is the HTTP client -record fetches with, bounded so a host
-// that stops answering ends the run rather than hanging it.
+// recordClient is the HTTP client -record fetches with, each request bounded
+// at thirty seconds so a host that stops answering ends the run rather than
+// hanging it.
 func recordClient() *http.Client {
-	return &http.Client{Timeout: recordFetchTimeout}
+	return &http.Client{Timeout: 30 * time.Second}
 }
 
 // newRecordFetcher is a seam over how -record reaches the network, so a test

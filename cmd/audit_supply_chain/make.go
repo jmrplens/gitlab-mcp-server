@@ -32,11 +32,7 @@ const (
 	// adjustment, timeout with its signal options and a duration, and sudo
 	// with its flags and a user or group. Any other option leaves the make
 	// behind it to makeBehindWrapper.
-	commandWrapper = `(?:env(?:[ \t]+(?:-[i0]+|--ignore-environment|--null|-u[ \t]*[A-Za-z_][A-Za-z0-9_]*|--unset=[A-Za-z_][A-Za-z0-9_]*|-))*` +
-		`|exec(?:[ \t]+-[cl]+)*|command(?:[ \t]+-p)?|nohup|time(?:[ \t]+-p)?` +
-		`|nice(?:[ \t]+(?:-n[ \t]*-?[0-9]+|--adjustment=-?[0-9]+|-[0-9]+))?` +
-		`|timeout(?:[ \t]+(?:--preserve-status|--foreground|-v|--verbose|-[sk][ \t]*[A-Z0-9.]+[smhd]?|--(?:signal|kill-after)=[A-Z0-9.]+[smhd]?))*[ \t]+[0-9.]+[smhd]?` +
-		`|sudo(?:[ \t]+(?:-[EHnPS]+|-[ug][ \t]*[A-Za-z0-9_-]+))*)`
+	commandWrapper = `(?:env(?:[ \t]+(?:-[i0]+|--ignore-environment|--null|-u[ \t]*[A-Za-z_][A-Za-z0-9_]*|--unset=[A-Za-z_][A-Za-z0-9_]*|-))*|exec(?:[ \t]+-[cl]+)*|command(?:[ \t]+-p)?|nohup|time(?:[ \t]+-p)?|nice(?:[ \t]+(?:-n[ \t]*-?[0-9]+|--adjustment=-?[0-9]+|-[0-9]+))?|timeout(?:[ \t]+(?:--preserve-status|--foreground|-v|--verbose|-[sk][ \t]*[A-Z0-9.]+[smhd]?|--(?:signal|kill-after)=[A-Z0-9.]+[smhd]?))*[ \t]+[0-9.]+[smhd]?|sudo(?:[ \t]+(?:-[EHnPS]+|-[ug][ \t]*[A-Za-z0-9_-]+))*)`
 )
 
 // makeCommand finds make where the shell runs it: in command position, behind
@@ -45,14 +41,24 @@ const (
 // written, since that spelling only ever runs make, including through a shell
 // function a recipe wraps it in. A make inside an echo or a quoted suggestion
 // is prose and does not match.
-var makeCommand = regexp.MustCompile(`(?m)` + commandStart + commandKeywords +
-	`(?:(?:` + assignmentWord + `|` + commandWrapper + `)[ \t]+)*make|\$\(MAKE\)|\$\{MAKE\}`)
+var makeCommand = regexp.MustCompile(makeCommandPattern())
+
+// makeCommandPattern is makeCommand's expression, assembled in a function so
+// the pieces it is built from are joined where a test runs them.
+func makeCommandPattern() string {
+	return `(?m)` + commandStart + commandKeywords + `(?:(?:` + assignmentWord + `|` + commandWrapper + `)[ \t]+)*make|\$\(MAKE\)|\$\{MAKE\}`
+}
 
 // makeBehindWrapper finds a wrapper in command position, group 2 naming it, so
 // that a make it runs in a spelling makeCommand does not read (env -C, xargs,
 // eval, a timeout signal it does not know) is reported rather than passed over.
-var makeBehindWrapper = regexp.MustCompile(`(?m)` + commandStart + commandKeywords +
-	`(?:` + assignmentWord + `[ \t]+)*(env|exec|command|nohup|time|nice|timeout|sudo|xargs|eval|(?:ba|da|k|z)?sh)(?:[ \t]|$)`)
+var makeBehindWrapper = regexp.MustCompile(makeBehindWrapperPattern())
+
+// makeBehindWrapperPattern is makeBehindWrapper's expression, assembled the
+// way makeCommandPattern is.
+func makeBehindWrapperPattern() string {
+	return `(?m)` + commandStart + commandKeywords + `(?:` + assignmentWord + `[ \t]+)*(env|exec|command|nohup|time|nice|timeout|sudo|xargs|eval|(?:ba|da|k|z)?sh)(?:[ \t]|$)`
+}
 
 // makeRuleLine is a rule line of a Makefile: one or more targets, one or two
 // colons, and the prerequisites after them, with a recipe after a semicolon.
@@ -248,19 +254,22 @@ func wrappersUnread(text string, read map[int]bool) []string {
 // makeWordEnds returns where each make between from and to in a text ends: the
 // word itself, not part of cmake, makefile or make-thing. from is past the
 // wrapper in front of the command, so a character always precedes it.
+//
+// Every position is asked whether a make starts there, a range whose end
+// nothing in the loop can move; make cannot overlap itself, so this finds what
+// a search resumed after each match finds.
 func makeWordEnds(text string, from, to int) []int {
 	var ends []int
-	for offset := from; ; {
-		index := strings.Index(text[offset:to], "make")
-		if index < 0 {
-			return ends
+	for offset := range to - from {
+		start := from + offset
+		if !strings.HasPrefix(text[start:to], "make") || partOfWord(text[start-1]) {
+			continue
 		}
-		start := offset + index
-		offset = start + len("make")
-		if !partOfWord(text[start-1]) && !continuesWord(text[offset:to]) {
-			ends = append(ends, offset)
+		if end := start + len("make"); !continuesWord(text[end:to]) {
+			ends = append(ends, end)
 		}
 	}
+	return ends
 }
 
 // partOfWord reports whether a character next to make makes it part of a
@@ -288,16 +297,19 @@ func cutAtQuote(rest string, quote byte) string {
 // sits, or -1 when the line ends first. A backslash escapes the next character
 // inside double quotes and nowhere inside single ones.
 func closingQuote(text string, from int, quote byte) int {
+	escaped := false
 	for index := from; index < len(text); index++ {
+		if escaped {
+			escaped = false
+			continue
+		}
 		switch text[index] {
 		case quote:
 			return index
 		case '\n':
 			return -1
 		case '\\':
-			if quote == '"' {
-				index++
-			}
+			escaped = quote == '"'
 		}
 	}
 	return -1
@@ -481,24 +493,30 @@ func (invocation *makeInvocation) option(option makeOption, spelled, value strin
 func parseMakefile(text string) map[string]*makeRule {
 	rules := map[string]*makeRule{}
 	var current []*makeRule
-	lines := splitLines(text)
-	continued := false
-	for index := 0; index < len(lines); index++ {
-		line := lines[index]
-		if continued || strings.HasPrefix(line, "\t") {
+	settle := func(line string) {
+		if !leavesRuleOpen(line) {
+			current = openRules(rules, line)
+		}
+	}
+	continued, joining, joined := false, false, ""
+	for _, line := range splitLines(text) {
+		if joining {
+			line, joining = joined+" "+line, false
+		} else if continued || strings.HasPrefix(line, "\t") {
 			for _, rule := range current {
 				rule.recipe = append(rule.recipe, line)
 			}
 			continued = strings.HasSuffix(line, "\\")
 			continue
 		}
-		for strings.HasSuffix(line, "\\") && index+1 < len(lines) {
-			index++
-			line = strings.TrimSuffix(line, "\\") + " " + lines[index]
+		if before, found := strings.CutSuffix(line, "\\"); found {
+			joined, joining = before, true
+			continue
 		}
-		if !leavesRuleOpen(line) {
-			current = openRules(rules, line)
-		}
+		settle(line)
+	}
+	if joining {
+		settle(joined + "\\")
 	}
 	return rules
 }
