@@ -329,6 +329,51 @@ func TestValidate_CapacityStated(t *testing.T) {
 	})
 }
 
+// TestValidate_CapacityFits puts each capacity behavior to the rule issue 958
+// stated for when it applies: only what can fill states one; a wait is a
+// ceiling's; reclaiming is from a key a caller holds; the oldest record is
+// evicted only from a table kept before admission whose records have a
+// lifetime or a refill; counting stops only where the newcomer it no longer
+// counts is let through silently; and a holding is taken across keys only
+// from a table, whose decision checkAcrossKeys asks for.
+func TestValidate_CapacityFits(t *testing.T) {
+	at := func(kind Kind, key Key, table bool, capacity Capacity) func(d *Decision) {
+		return func(d *Decision) { d.Kind, d.Key, d.Table, d.AtCapacity = kind, key, table, capacity }
+	}
+	silent := func(change func(d *Decision)) func(d *Decision) {
+		return func(d *Decision) {
+			change(d)
+			d.Refusals = []Refusal{{Methods: []string{MethodGate}, Channel: Silent, Answer: NoAnswer}}
+		}
+	}
+	runRule(t, checkCapacityFits, []ruleCase{
+		{"no capacity", row(nil), ""},
+		{"a ceiling refusing the newcomer", row(at(Ceiling, KeyProcess, false, RefuseNewcomer)), ""},
+		{"a rate refusing the newcomer", row(at(Rate, KeyProcess, false, RefuseNewcomer)), ""},
+		{"a table refusing the newcomer", row(at(Rule, KeySession, true, RefuseNewcomer)), ""},
+		{"a rule refusing the newcomer", row(at(Rule, KeySession, false, RefuseNewcomer)), "holds nothing that fills"},
+		{"a lifetime that is no table", row(at(Lifetime, KeyEntry, false, EvictOldest)), "holds nothing that fills"},
+		{"a ceiling waiting for a slot", row(at(Ceiling, KeyProcess, false, WaitThenRefuse)), ""},
+		{"a rate waiting for room", row(at(Rate, KeyProcess, false, WaitThenRefuse)), "waits for room, and is not a ceiling"},
+		{"reclaiming on the entry", row(at(Ceiling, KeyEntry, true, ReclaimOwnThenRefuse)), ""},
+		{"reclaiming on a source", row(at(Budget, KeySource, true, ReclaimOwnThenRefuse)), ""},
+		{"reclaiming on the process", row(at(Ceiling, KeyProcess, false, ReclaimOwnThenRefuse)), "on the process key, which no caller holds"},
+		{"reclaiming on a request", row(at(Ceiling, KeyRequest, false, ReclaimOwnThenRefuse)), "on the request key, which no caller holds"},
+		{"evicting a refused token's oldest record", row(at(Lifetime, KeyRefused, true, EvictOldest)), ""},
+		{"evicting an address's oldest bucket", row(at(Rate, KeyAddress, true, EvictOldest)), ""},
+		{
+			"evicting the oldest verified identity",
+			row(at(Lifetime, KeyVerified, true, EvictOldest)), "on the verified key, where a record is a holding",
+		},
+		{"evicting the oldest count of a budget", row(at(Budget, KeyAddress, true, EvictOldest)), "a lifetime or a refill"},
+		{"evicting the oldest bucket of no table", row(at(Rate, KeyAddress, false, EvictOldest)), "a lifetime or a refill"},
+		{"stopping counting silently", row(silent(at(Ceiling, KeyProcess, false, StopCounting))), ""},
+		{"stopping counting aloud", row(at(Ceiling, KeyProcess, false, StopCounting)), "declares no silent refusal"},
+		{"taking across keys from a table", row(at(Ceiling, KeyProcess, true, EvictAcrossKeys)), ""},
+		{"taking across keys from no table", row(at(Ceiling, KeyProcess, false, EvictAcrossKeys)), "is not a table one is taken from"},
+	})
+}
+
 // TestValidate_BoundedTable holds a structure keyed on a mintable value to a
 // bound, or to a finding.
 func TestValidate_BoundedTable(t *testing.T) {

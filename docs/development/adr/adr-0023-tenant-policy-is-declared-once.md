@@ -83,8 +83,10 @@ the code; the layers keep enforcing.**
   range among them since issue 956 (`INV-011`); a process partner
   that is configurable or not keyed on the process, and a reason about the process on a
   row that does not say it protects one (`INV-004`); a valued row that does not say what
-  zero means (`INV-015`); and a variable without the `GITLAB_MCP_` prefix, or a
-  configurable value with no flag, variable or malformed-value policy (`INV-017`). With a
+  zero means (`INV-015`); a variable without the `GITLAB_MCP_` prefix, or a
+  configurable value with no flag, variable or malformed-value policy (`INV-017`); and,
+  since issue 958, a behavior at capacity its kind, key and table do not allow (the
+  capacity rule, `VAL-006`). With a
   recorded decision: a holding taken across keys (`INV-005`), which is how the pool
   (`POL-001`) and, since issue 950, the OAuth identity cache (`ADM-005`) make room; a
   process partner switched off with the per-key row it stands beside (`INV-015`), where

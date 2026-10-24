@@ -103,6 +103,7 @@ func rowRules() []rowRule {
 		{"class-consistent", "VAL-003", checkClassConsistent},
 		{"through-config", "INV-017", checkThroughConfig},
 		{"capacity-stated", "VAL-006", checkCapacityStated},
+		{"capacity-fits", "VAL-006", checkCapacityFits},
 		{"bounded-table", "INV-010", checkBoundedTable},
 		{"charged-exists", invNotJudgedNotCharged, checkChargedExists},
 		{"stdio", "VAL-011", checkStdio},
@@ -367,6 +368,71 @@ func checkCapacityStated(d Decision, _ map[string]Decision) []string {
 		return nil
 	}
 	return []string{"a ceiling that does not say what happens when it is full"}
+}
+
+// checkCapacityFits is the capacity rule issue 958 stated: which of the
+// behaviors at capacity a row may name, read off its kind, its key and
+// whether it holds a record per key.
+//
+// Only what fills can state one: a ceiling, a rate, a budget, a share or a
+// table. A wait is a ceiling's, for a slot another request frees. Reclaiming
+// takes back what the same key holds, so it needs a key a caller holds. The
+// oldest record is evicted only from a table kept before admission, where no
+// tenant exists yet to hold anything and a record is a count or a verdict
+// against its key, so evicting one takes nothing from another key (INV-005);
+// and only where a record has a lifetime or a refill to be the oldest by,
+// which is how EvictOldest reads. Counting stops only where the newcomer it no
+// longer counts is let through, which a row says by declaring that silent
+// refusal. And a holding is taken across keys only from a table, by the
+// recorded decision checkAcrossKeys asks for (INV-005: the pool entry, POL-001
+// and POL-002, and the verified OAuth identity, ADM-005). Refusing the
+// newcomer fits anything that fills. Where more than one behavior fits, the
+// rule does not choose between them: the row names one, and its comment says
+// why.
+func checkCapacityFits(d Decision, _ map[string]Decision) []string {
+	if d.AtCapacity == CapacityNone {
+		return nil
+	}
+	if !d.Kind.IsAllowance() && !d.Table {
+		return []string{"states what it does when full, and holds nothing that fills: a ceiling, a rate, a budget, a share or a table"}
+	}
+	switch d.AtCapacity {
+	case WaitThenRefuse:
+		if d.Kind != Ceiling {
+			return []string{"waits for room, and is not a ceiling a slot frees in"}
+		}
+	case ReclaimOwnThenRefuse:
+		if axis := d.Key.Axis(); axis != AxisRequester && axis != AxisPreAdmission {
+			return []string{fmt.Sprintf("reclaims its own holding on the %s key, which no caller holds", d.Key)}
+		}
+	case EvictOldest:
+		if !d.Table || (d.Kind != Lifetime && d.Kind != Rate) {
+			return []string{"evicts its oldest record, and is not a table of records with a lifetime or a refill"}
+		}
+		if d.Key.Axis() != AxisPreAdmission {
+			return []string{fmt.Sprintf("evicts the oldest record on the %s key, where a record is a holding a caller has (INV-005)", d.Key)}
+		}
+	case StopCounting:
+		if !declaresSilentRefusal(d) {
+			return []string{"stops counting, and declares no silent refusal where the newcomer goes uncounted"}
+		}
+	case EvictAcrossKeys:
+		if !d.Table {
+			return []string{"takes a holding across keys, and is not a table one is taken from"}
+		}
+	}
+	return nil
+}
+
+// declaresSilentRefusal reports whether one of the row's refusals reaches the
+// caller as nothing at all.
+func declaresSilentRefusal(d Decision) bool {
+	for _, r := range d.Refusals {
+		if r.Channel == Silent {
+			return true
+		}
+	}
+	return false
 }
 
 // checkBoundedTable refuses a structure keyed on a value a caller can mint

@@ -165,9 +165,11 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   or with a status, a code, a `Retry-After` or a challenge the channel forbids, a code
   in the legacy `-32000` range among them (`INV-011`); a process partner that is
   configurable or not keyed on the process, and a reason about the process on a row that
-  does not say it protects one (`INV-004`); a valued row that does not say what zero means (`INV-015`); and a variable without the
+  does not say it protects one (`INV-004`); a valued row that does not say what zero means (`INV-015`); a variable without the
   `GITLAB_MCP_` prefix, or a configurable value with no flag, variable or malformed-value
-  policy (`INV-017`).
+  policy (`INV-017`); and a behavior at capacity the capacity rule does not allow for the
+  row's kind, key and table, which is how `INV-005` and `INV-010` are read for what each
+  structure holds (`VAL-006`, issue 958; see [Validation checklist](#validation-checklist)).
 - **With a recorded decision**: a holding taken across keys (`INV-005`); a process
   partner switched off with the per-key limit it stands beside (`INV-015`), which is the
   one zero another row decides that passes without a finding (`RTC-007`, issue 951); and
@@ -238,8 +240,10 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   authorization on the request and never with the connection or other requests on it, and
   a listing is never shrunk to express a refusal.
 - **INV-010 Caller-chosen values never grow a structure that does not evict.** A cache or
-  table keyed on a caller-chosen value either evicts or refuses new keys at a bound. The
-  shape key holds nothing about the credential's identity beyond what changes the catalog.
+  table keyed on a caller-chosen value either evicts or refuses new keys at a bound, and
+  the capacity rule says which it may do (see [Validation checklist](#validation-checklist),
+  issue 958). The shape key holds nothing about the credential's identity beyond what
+  changes the catalog.
 - **INV-011 Every refusal uses a channel the protocol and the SDK carry** (see
   [Refusal channels](#refusal-channels)).
 - **INV-012 One class and one next action per refusal, and the code the standard gives
@@ -514,20 +518,41 @@ requirement, none declared twice and none missing (its rules `unique` and `compl
 every row answering VAL-001 to VAL-009 with a value and naming only rows and findings that
 exist (`well-formed`).
 
-| Item    | The question                                                                                           | Answered by                                                              |
-| ------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| VAL-001 | Which of the five questions it answers                                                                 | `Question`                                                               |
-| VAL-002 | Its key, and that key's mint cost; a new key amends the vocabulary                                     | `Key`, with `MintCost` and `Evidence`                                    |
-| VAL-003 | Its class; a class D limit needs a finding and a reason to ship anyway                                 | `Class`, checked against `Disagrees`; `StatedUnit` against `ReasonUnit`  |
-| VAL-004 | Whether it is a ceiling or a share; a share on a mintable key is refused                               | `Kind`                                                                   |
-| VAL-005 | If it protects a process resource, its process partner and why that partner is not configurable        | `ProtectsProcess`, `Partner`                                             |
-| VAL-006 | What happens at capacity, and why                                                                      | `AtCapacity`, and `Table` for a structure keyed on a caller-chosen value |
-| VAL-007 | Its refusal: channel, code, status, `Retry-After`, message and class, per method and era, and on stdio | `Refusals`                                                               |
-| VAL-008 | What it charges, and that nothing unjudged is charged                                                  | `Refusals[].Charged`, and `Failures` for an admission path               |
-| VAL-009 | Its value, source, bounds, zero meaning and malformed-value policy                                     | `Values`, `Source`, `Zero`, `SettingZeros`, `ZeroBy`, `Malformed`        |
-| VAL-010 | Its telemetry: the reason only                                                                         | The pull request                                                         |
-| VAL-011 | Its behavior on stdio                                                                                  | `StdioKey`                                                               |
-| VAL-012 | Its measurement, when it claims to protect one population from another                                 | The pull request, with `make bench-fairness`                             |
+| Item    | The question                                                                                           | Answered by                                                                                               |
+| ------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| VAL-001 | Which of the five questions it answers                                                                 | `Question`                                                                                                |
+| VAL-002 | Its key, and that key's mint cost; a new key amends the vocabulary                                     | `Key`, with `MintCost` and `Evidence`                                                                     |
+| VAL-003 | Its class; a class D limit needs a finding and a reason to ship anyway                                 | `Class`, checked against `Disagrees`; `StatedUnit` against `ReasonUnit`                                   |
+| VAL-004 | Whether it is a ceiling or a share; a share on a mintable key is refused                               | `Kind`                                                                                                    |
+| VAL-005 | If it protects a process resource, its process partner and why that partner is not configurable        | `ProtectsProcess`, `Partner`                                                                              |
+| VAL-006 | What happens at capacity, and why                                                                      | `AtCapacity`, held to the capacity rule below, and `Table` for a structure keyed on a caller-chosen value |
+| VAL-007 | Its refusal: channel, code, status, `Retry-After`, message and class, per method and era, and on stdio | `Refusals`                                                                                                |
+| VAL-008 | What it charges, and that nothing unjudged is charged                                                  | `Refusals[].Charged`, and `Failures` for an admission path                                                |
+| VAL-009 | Its value, source, bounds, zero meaning and malformed-value policy                                     | `Values`, `Source`, `Zero`, `SettingZeros`, `ZeroBy`, `Malformed`                                         |
+| VAL-010 | Its telemetry: the reason only                                                                         | The pull request                                                                                          |
+| VAL-011 | Its behavior on stdio                                                                                  | `StdioKey`                                                                                                |
+| VAL-012 | Its measurement, when it claims to protect one population from another                                 | The pull request, with `make bench-fairness`                                                              |
+
+**The capacity rule** (issue 958, rule `capacity-fits`) says which behavior at capacity
+a row may name, read off its kind, its key and whether it holds a record per key, and
+`Validate` holds every row to it with no exception. Refusing the newcomer fits anything
+that fills, which is a ceiling, a rate, a budget, a share or a table, and nothing else
+names a capacity. Waiting for room is a ceiling's, for a slot another request frees
+(`ADM-014`, `POL-006`). Reclaiming takes back what the same key holds, so it needs a key a
+caller holds (`AUB-002`'s source, `HLD-003`'s entry). The oldest record is evicted only
+from a table kept before admission whose records have a lifetime or a refill: before
+admission no tenant exists to hold anything, a record there is a count or a verdict
+against its key, and evicting one takes nothing from another key (`INV-005`), which is
+the rejected-token cache (`ADM-006`) and the discovery documents' buckets (`RTC-008`).
+Counting stops only where the newcomer it no longer counts is let through, which the row
+declares as a silent refusal: the authentication tables (`AUB-004`), where evicting a
+count would release the block it holds and refusing would refuse every new address while
+a flood lasts. And a holding is taken across keys only from a table, by the recorded
+decision `INV-005` asks for: the pool entry (`POL-001`, `POL-002`, ADR-0020) and the
+verified OAuth identity (`ADM-005`, issue 950). Where more than one behavior fits, the
+rule does not choose between them: the row names one, and its comment says why, as the
+rejected-token cache's says why it evicts rather than refuse and the authentication
+tables' why they stop counting rather than refuse.
 
 ## Findings
 
@@ -699,7 +724,7 @@ caller as a TCP proxy does, and the host guard reads the same set. The two pairi
 trust nobody refuse startup: a socket listener whose list names addresses and no `unix`,
 which used to start with its header inert, and `unix` on a TCP listener.
 
-Fifteen findings are answered, and stay in the list with their issues. F-03, the listing
+Sixteen findings are answered, and stay in the list with their issues. F-03, the listing
 bucket with no process partner, is answered by `RTC-007`, the first of issue 951's three
 changes: a `tools/list` bucket keyed on the process and counted in the tools a listing
 carries, which `RTC-003` names as its partner and which no row carries F-03 for any
@@ -997,7 +1022,12 @@ reason first, from what GitLab 19.5 answered, then the key, the `/48` aggregate
 (`AUB-006`) and the named unix-socket key. F-35 is answered by issue 982, as the
 paragraph that records it says: the transport-source budget's pairs are bounded per
 source, and across sources to three times what its limiter's table holds, and `AUB-002`
-records the issue and carries the finding no longer. Four
+records the issue and carries the finding no longer. F-11 is answered by issue 958's
+capacity rule (see [Validation checklist](#validation-checklist)): the rejected-token
+cache's eviction of its oldest record and the authentication tables' stop at a full
+table are behaviors the rule allows for what each holds, each row says why it names the
+one it does, and `ADM-006` and `AUB-004` record the issue and carry the finding no
+longer. Four
 more
 have been carried by no row since the register landed, because each records something no
 row decides: F-18 a budget GitLab.com keeps that the process does not account for, F-24 a

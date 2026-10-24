@@ -300,8 +300,18 @@ func admitDecisions() []Decision {
 			Resource: "how long, and how many, rejected tokens are remembered",
 			Key:      KeyRefused, StdioKey: KeyNone, Table: true,
 			Values: []string{"RejectedTokenTTL", "RejectedTokenCapacity"}, Source: Constant, Zero: ZeroNotApplicable,
+			// Full, it evicts the record nearest its expiry, which the
+			// capacity rule allows a table kept before admission (issue 958):
+			// a record is GitLab's verdict against a token, so evicting one
+			// takes nothing a tenant holds and sends that token to GitLab once
+			// more, where the authentication budgets count it. The rule allows
+			// refusing the newcomer too, and this row chooses eviction because
+			// refusing would let a flood of invented tokens fill the cache and
+			// leave every later refusal unremembered, while the newest verdicts
+			// are the ones a retrying client presents next.
 			AtCapacity: EvictOldest,
-			Findings:   []string{"F-11", "F-16"},
+			Decided:    []string{"issue 958"},
+			Findings:   []string{"F-16"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{MethodGate}, Channel: Gate, Code: CodeUnauthorized, Status: 401,
@@ -538,8 +548,11 @@ func admitDecisions() []Decision {
 			// window between two sweeps. A source that arrives once that
 			// table is full is given no place, and is not blocked by this
 			// budget either: that saturation is left to the /48 aggregate
-			// (AUB-006) and issue 958. The map used to be bounded by its
-			// sweep alone, which F-35 recorded.
+			// (AUB-006), and it stays under the capacity rule issue 958
+			// stated, which allows a full table to stop counting, the behavior
+			// AUB-004 chooses rather than evicting a count that blocks
+			// somebody. The map used to be bounded by its sweep alone, which
+			// F-35 recorded.
 			Table:  true,
 			Values: []string{"TransportSourceDistinctKeys"}, Source: Constant, Zero: ZeroNotApplicable,
 			AtCapacity: ReclaimOwnThenRefuse,
@@ -603,9 +616,18 @@ func admitDecisions() []Decision {
 			ReasonUnit: KeyProcess, ProtectsProcess: true,
 			Values: []string{"AuthTrackedSources"}, Source: Constant, Zero: ZeroNotApplicable,
 			AtCapacity: StopCounting,
-			Findings:   []string{"F-11"},
+			Decided:    []string{"issue 958"},
 			// The one value caps the three tables, and each stops counting a
-			// new key once it is full. The /48 table of AUB-006 is a
+			// new key once it is full. The capacity rule allows that to a row
+			// that declares the silent refusal its uncounted newcomer gets
+			// (issue 958), as it allows refusing the newcomer, and this row
+			// chooses it: evicting a record would let a flood of fresh
+			// addresses push out the counts that block the one it rotates
+			// from, and refusing the newcomer would refuse every new address
+			// while the flood lasts. What stopping costs is a newcomer past
+			// the bound going uncounted until the table has room, which the
+			// /48 aggregate (AUB-006) and the transport-source budget (AUB-002)
+			// narrow and do not close. The /48 table of AUB-006 is a
 			// DistinctTokenBudget of its own, so its refusal is the second
 			// below; keying the address on the /64 lowers the keys a caller
 			// can mint against all three. The transport-source budget reads

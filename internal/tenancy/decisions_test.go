@@ -797,7 +797,8 @@ var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
 // /64 with a /48 aggregate and a named unix-socket key, and stated the
 // distinct-credential budget's reason as GitLab 19.5 answered it, and F-35 did
 // when issue 982 bounded the transport-source budget's record of charged pairs
-// per source and to the sources its limiter recorded.
+// per source and to the sources its limiter recorded, and F-11 did when issue
+// 958 stated the rule for what a row does at capacity.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	carried := map[string]bool{}
 	decided := map[string]bool{}
@@ -825,7 +826,7 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-03,F-07,F-08,F-09,F-10,F-14,F-17,F-19,F-20,F-25,F-29,F-30,F-31,F-33,F-35"; got != want {
+	if got, want := strings.Join(answered, ","), "F-03,F-07,F-08,F-09,F-10,F-11,F-14,F-17,F-19,F-20,F-25,F-29,F-30,F-31,F-33,F-35"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }
@@ -871,6 +872,39 @@ func TestDecisions_ZeroExceptions_AreDecidedByIssue958(t *testing.T) {
 	}
 	if want := []string{"ADM-005", "AUB-001", "AUB-003", "END-005"}; !slices.Equal(carrying, want) {
 		t.Errorf("F-34 is carried by %v, want %v", carrying, want)
+	}
+}
+
+// TestDecisions_CapacityRule_AnswersF11UnderIssue958 pins the rows F-11 was
+// carried by, the two whose behavior at capacity no rule judged before issue
+// 958 stated one: the rejected-token cache evicts its oldest record, which a
+// table kept before admission may, and the authentication tables stop
+// counting a new key, which their silent refusals say. Each records the
+// issue, no row carries F-11 any longer, and F-11 stays in the register's
+// list, filed as issue 958's.
+func TestDecisions_CapacityRule_AnswersF11UnderIssue958(t *testing.T) {
+	for _, tc := range []struct {
+		id       string
+		capacity Capacity
+	}{
+		{"ADM-006", EvictOldest},
+		{"AUB-004", StopCounting},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			d, _ := Lookup(tc.id)
+			if d.AtCapacity != tc.capacity || !slices.Contains(d.Decided, "issue 958") || d.Carries("F-11") {
+				t.Errorf("%s: at capacity %d, decided %v, findings %v; want %d, issue 958 recorded and no F-11",
+					tc.id, d.AtCapacity, d.Decided, d.Findings, tc.capacity)
+			}
+		})
+	}
+	for _, d := range Decisions() {
+		if d.Carries("F-11") {
+			t.Errorf("%s carries F-11, which the capacity rule answers", d.ID)
+		}
+	}
+	if FindingIssue("F-11") != 958 {
+		t.Errorf("F-11 is filed as issue %d, want it kept as issue 958's", FindingIssue("F-11"))
 	}
 }
 
