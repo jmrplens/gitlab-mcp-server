@@ -346,7 +346,7 @@ readable without opening the tracker:
 | 95 | client-go | [`ListGroupMilestonesOptions` misspells `include_descendants` and `GroupMilestone` drops the web URL and project](#listgroupmilestonesoptions-misspells-include_descendants-and-groupmilestone-drops-the-web-url-and-project) | `web_url`: yes, by another contributor; the rest: no | `web_url`: [gitlab-org/api/client-go!3126](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3126), merged | **`web_url`: v3.26.0**, not ours | No | Retired for `web_url` at the v3.29.0 pin; yes for `include_descendants` and `project_id` |
 | 96 | client-go | [`CreateGroupIssueBoardListOptions` models only `label_id` where GitLab takes four list types](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), open, commit 8 | No | No; it narrows `group.group_board_create_list` to label lists | None, by decision |
 | 97 | gobco | [gobco cannot instrument a package whose `export_test.go` feeds its external test package](#gobco-cannot-instrument-a-package-whose-export_testgo-feeds-its-external-test-package) | Yes, [rillig/gobco#42](https://github.com/rillig/gobco/issues/42) | Yes, [rillig/gobco#43](https://github.com/rillig/gobco/pull/43), open | No | No; the condition gate cannot measure a package it reaches | None, by decision |
-| 98 | client-go | [`UpdateGroupIssueBoardOptions` models neither list switch the group board update takes](#updategroupissueboardoptions-models-neither-list-switch-the-group-board-update-takes) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), open, commit 7, beside row 96 | No | No; a group board's Open and Closed lists cannot be hidden or shown through this server | Not yet, with [issue 1241](https://github.com/jmrplens/gitlab-mcp-server/issues/1241) |
+| 98 | client-go | [`UpdateGroupIssueBoardOptions` models neither list switch the group board update takes](#updategroupissueboardoptions-models-neither-list-switch-the-group-board-update-takes) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), open, commit 7, beside row 96 | No | No; the switches go out in a body of this server's own | Yes, since [issue 1241](https://github.com/jmrplens/gitlab-mcp-server/issues/1241); `group.group_board_update` sends both in a body that embeds `UpdateGroupIssueBoardOptions` |
 | 99 | gitlab-org/gitlab | [The roles and permissions page does not say when a Guest or a Planner can view pipelines and merge requests](#the-roles-and-permissions-page-does-not-say-when-a-guest-or-a-planner-can-view-pipelines-and-merge-requests) | Yes, by another user, [gitlab-org/gitlab#632031](https://gitlab.com/gitlab-org/gitlab/-/issues/632031), which the merge request closes, closed by its author on 2026-10-11 | Yes, [gitlab-org/gitlab!260353](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260353), merged | **Yes, 19.5.0** | No | Not needed; `pipeline.latest`'s refusal names the role the policy names |
 | 100 | gitlab-org/gitlab | [The roles and permissions page gives Guest, Planner and Reporter the pipeline security report](#the-roles-and-permissions-page-gives-guest-planner-and-reporter-the-pipeline-security-report) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260471](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260471), merged | **Yes, 19.5.0** | No | Not needed; no hint of this server names who can view a pipeline's findings |
 | 101 | client-go | [The board structs miss keys GitLab sends on a board and its lists](#the-board-structs-miss-keys-gitlab-sends-on-a-board-and-its-lists) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), open, commit 6, beside rows 96 and 98 | No | No; the keys are read around the SDK | Yes; four requests of our own on the group board routes, and the captured response everywhere else; [issue 1283](https://github.com/jmrplens/gitlab-mcp-server/issues/1283) moves three of the four to client-go |
@@ -6134,16 +6134,26 @@ the body only when set.
   the project side (`boards.go` and its test).
 - **In review**: yes, in the same merge request, open.
 - **Merged**: no.
-- **Blocking**: no. A group board's Open and Closed lists cannot be hidden or
-  shown through this server, while a project board's can.
-- **Workaround**: not yet.
-  [Issue 1241](https://github.com/jmrplens/gitlab-mcp-server/issues/1241) is
-  this server's side: `groupboards.UpdateGroupBoard`
-  (`internal/tools/groupboards/group_boards.go`) already sends a request of its
-  own, `rawUpdateGroupBoard`, so that the board it answers with carries what
-  `gl.GroupIssueBoard` does not model, and the two switches can go in a body
-  struct of this server's own rather than in `gl.UpdateGroupIssueBoardOptions`.
-  That struct retires when a release models them.
+- **Blocking**: no. This server sends the two switches in a body of its own,
+  so a group board's Open and Closed lists can be hidden and shown as a
+  project board's can.
+- **Workaround**: yes, since
+  [issue 1241](https://github.com/jmrplens/gitlab-mcp-server/issues/1241).
+  `groupboards.UpdateGroupBoard`
+  (`internal/tools/groupboards/group_boards.go`) sends a request of its own,
+  `rawUpdateGroupBoard`, so that the board it answers with carries what
+  `gl.GroupIssueBoard` does not model
+  ([row 101](#the-board-structs-miss-keys-gitlab-sends-on-a-board-and-its-lists)),
+  and its body is `updateGroupBoardBody`, which embeds
+  `gl.UpdateGroupIssueBoardOptions` and adds `hide_backlog_list` and
+  `hide_closed_list`, each a `*bool` sent whenever the caller sets it and
+  left out otherwise. `UpdateGroupBoardInput` offers both on every tier,
+  which `TestCentralTierFilter_BoardScopeInputsArePremium` holds on a Free
+  catalog; `TestUpdateGroupBoard_ListSwitches_ReachTheBodyOnlyWhenSet` holds
+  the body, and the common end-to-end scenario
+  `TestGroupBoards_ListSwitches_HideAndShowTheOpenAndClosedLists` sends each
+  switch as true and as false and reads both back on every surface. That
+  body struct retires when a release models them.
 
 **Where**: client-go v3.15.0 to v3.30.0, the version `go.mod` pins, which
 leave the file unchanged, `group_boards.go:158-164`:
@@ -6180,8 +6190,8 @@ own; that half is
 **How we found it**: reviewing the change for
 [issue 1233](https://github.com/jmrplens/gitlab-mcp-server/issues/1233), where
 the next step a group board card offers had to leave the list visibility out,
-since `UpdateGroupBoardInput` offers only `name` and the four scope fields; issue
-1241 records the gap on this server's side.
+since `UpdateGroupBoardInput` offered only `name` and the four scope fields;
+issue 1241 recorded the gap on this server's side and closed it.
 
 **Effort**: trivial. Two fields with `omitempty` on both halves of the tag,
 copied from `UpdateIssueBoardOptions`, and a test that each reaches the body
@@ -6226,10 +6236,11 @@ only when set.
   `limit_metric`. The four group board requests are the case ADR-0021 gives
   to the captured response too, since client-go has a method for each
   (`ListGroupIssueBoards`, `GetGroupIssueBoard`, `CreateGroupIssueBoard`,
-  `UpdateIssueBoard`). The update keeps a request of its own on purpose for
-  now: [issue 1241](https://github.com/jmrplens/gitlab-mcp-server/issues/1241)
-  sends through it the two list switches `UpdateGroupIssueBoardOptions` does
-  not model ([row 98](#updategroupissueboardoptions-models-neither-list-switch-the-group-board-update-takes)).
+  `UpdateIssueBoard`). The update keeps a request of its own on purpose:
+  since [issue 1241](https://github.com/jmrplens/gitlab-mcp-server/issues/1241)
+  it sends through it, in `updateGroupBoardBody`, the two list switches
+  `UpdateGroupIssueBoardOptions` does not model
+  ([row 98](#updategroupissueboardoptions-models-neither-list-switch-the-group-board-update-takes)).
   Moving the list, get and create needs a reader for the four board keys
   `groupIssueBoardAPI` adds, which `toolutil.BoardExtra` does not carry, and
   is left to a change of its own,
