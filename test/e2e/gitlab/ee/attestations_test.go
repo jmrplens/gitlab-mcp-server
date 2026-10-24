@@ -80,8 +80,16 @@ func TestAttestations_UnattestedProject_RefusedWithTheFlagOffAndListsNothingWith
 
 		// A digest GitLab's route would not match is refused by name: sent
 		// as written, GitLab's 404 for it could not be told from the flag.
-		harness.ExpectToolError(s, actionAttestationList,
-			map[string]any{"project_id": project.IDParam(), "subject_digest": "sha256:abc123"}, "64 hex characters")
+		// The individual tool publishes the digest's pattern, so the SDK
+		// refuses the call before the handler runs; the meta and dynamic
+		// dispatchers validate no pattern and the handler names the form.
+		malformed := map[string]any{"project_id": project.IDParam(), "subject_digest": "sha256:abc123"}
+		if surface == harness.SurfaceIndividual {
+			refusedDigest := harness.Refused(s, actionAttestationList, malformed, harness.FailureInvalidParams)
+			assertMentions(e, "the refusal of a malformed digest", refusedDigest, "subject_digest", "sha256:abc123")
+		} else {
+			harness.ExpectToolError(s, actionAttestationList, malformed, "64 hex characters")
+		}
 
 		refused := harness.Refused(s, actionAttestationDownload,
 			map[string]any{"project_id": project.IDParam(), "attestation_iid": missingID}, harness.FailureNotFound)
