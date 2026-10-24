@@ -233,6 +233,14 @@ func TestValidate_ZeroStated(t *testing.T) {
 		},
 		{"a setting's zero refuses startup, decided", row(decidedZero(ZeroOff, refusedBurst, "issue 958", "issue 958")), ""},
 		{
+			"zero refuses startup beside a setting it switches off, undecided",
+			row(decidedZero(ZeroRefused, []SettingZero{{Config: "B", Zero: ZeroOff}}, "")), "does not mean off",
+		},
+		{
+			"zero refuses startup beside a setting it switches off, decided",
+			row(decidedZero(ZeroRefused, []SettingZero{{Config: "B", Zero: ZeroOff}}, "issue 958", "issue 958")), "",
+		},
+		{
 			"a setting's zero refuses startup, recorded",
 			row(func(d *Decision) { decidedZero(ZeroOff, refusedBurst, "")(d); d.Findings = []string{"F-34"} }), "",
 		},
@@ -368,10 +376,12 @@ func TestValidate_CapacityFits(t *testing.T) {
 	at := func(kind Kind, key Key, table bool, capacity Capacity) func(d *Decision) {
 		return func(d *Decision) { d.Kind, d.Key, d.Table, d.AtCapacity = kind, key, table, capacity }
 	}
-	silent := func(change func(d *Decision)) func(d *Decision) {
+	refusing := func(change func(d *Decision), channels ...Channel) func(d *Decision) {
 		return func(d *Decision) {
 			change(d)
-			d.Refusals = []Refusal{{Methods: []string{MethodGate}, Channel: Silent, Answer: NoAnswer}}
+			for _, c := range channels {
+				d.Refusals = append(d.Refusals, Refusal{Methods: []string{MethodGate}, Channel: c, Answer: NoAnswer})
+			}
 		}
 	}
 	runRule(t, checkCapacityFits, []ruleCase{
@@ -395,8 +405,16 @@ func TestValidate_CapacityFits(t *testing.T) {
 		},
 		{"evicting the oldest count of a budget", row(at(Budget, KeyAddress, true, EvictOldest)), "a lifetime or a refill"},
 		{"evicting the oldest bucket of no table", row(at(Rate, KeyAddress, false, EvictOldest)), "a lifetime or a refill"},
-		{"stopping counting silently", row(silent(at(Ceiling, KeyProcess, false, StopCounting))), ""},
-		{"stopping counting aloud", row(at(Ceiling, KeyProcess, false, StopCounting)), "declares no silent refusal"},
+		{"stopping counting silently", row(refusing(at(Ceiling, KeyProcess, false, StopCounting), Silent)), ""},
+		{
+			"stopping counting, silently among others",
+			row(refusing(at(Ceiling, KeyProcess, false, StopCounting), Gate, Silent)), "",
+		},
+		{"stopping counting, saying nothing", row(at(Ceiling, KeyProcess, false, StopCounting)), "declares no silent refusal"},
+		{
+			"stopping counting aloud",
+			row(refusing(at(Ceiling, KeyProcess, false, StopCounting), Gate)), "declares no silent refusal",
+		},
 		{"taking across keys from a table", row(at(Ceiling, KeyProcess, true, EvictAcrossKeys)), ""},
 		{"taking across keys from no table", row(at(Ceiling, KeyProcess, false, EvictAcrossKeys)), "is not a table one is taken from"},
 	})
