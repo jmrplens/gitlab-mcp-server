@@ -209,7 +209,7 @@ type UpdateInput struct {
 	Name                  string                         `json:"name,omitempty"                    jsonschema:"New environment tier (production, staging, testing, development, other)"`
 	DeployAccessLevels    []UpdateDeployAccessLevelInput `json:"deploy_access_levels,omitempty"    jsonschema:"Deploy access levels to add, change or remove: each entry names an existing one by id or exactly one of access_level, user_id or group_id, and never two of them"`
 	RequiredApprovalCount *int64                         `json:"required_approval_count,omitempty" jsonschema:"Deprecated: GitLab refuses any value but 0. Require approvals with required_approvals on approval_rules instead."`
-	ApprovalRules         []UpdateApprovalRuleInput      `json:"approval_rules,omitempty"          jsonschema:"Approval rules to add, change or remove: each rule names at least one of access_level, user_id or group_id unless _destroy is true"`
+	ApprovalRules         []UpdateApprovalRuleInput      `json:"approval_rules,omitempty"          jsonschema:"Approval rules to add, change or remove: unless _destroy is true, each rule names at least one of access_level, user_id or group_id"`
 }
 
 // UnprotectInput defines parameters for the Unprotect action which removes a group-level protected environment.
