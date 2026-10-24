@@ -657,11 +657,14 @@ func TestRegisterIndividualCatalogTools_InputRequiredResultSurfaced(t *testing.T
 }
 
 // TestMustIndividualToolFromCatalogAction_DescriptionFallbacks verifies
-// individual tool descriptions use callbacks, usage text, then title fallback.
+// individual tool descriptions use the individual snapshot's description,
+// then callbacks, usage text, then title fallback.
 //
 // Each table case constructs a catalog action with different description inputs
 // and expects the projected MCP tool description to follow the fallback order
-// used by generated individual tools.
+// used by generated individual tools. The snapshot case names a tool the
+// embedded individual snapshot describes and also carries a callback and a
+// usage line, so the snapshot's description is held to win over both.
 func TestMustIndividualToolFromCatalogAction_DescriptionFallbacks(t *testing.T) {
 	newAction := func(name, usage string) actioncatalog.Action {
 		return actioncatalog.Action{
@@ -679,6 +682,13 @@ func TestMustIndividualToolFromCatalogAction_DescriptionFallbacks(t *testing.T) 
 			},
 		}
 	}
+	const snapshotTool = "gitlab_create_user"
+	snapshotDescription := catalogIndividualToolDescriptions[snapshotTool]
+	if snapshotDescription == "" {
+		t.Fatalf("the embedded individual snapshot holds no description for %s", snapshotTool)
+	}
+	snapshotAction := newAction("snapshot", "Use this catalog action.")
+	snapshotAction.IndividualTool.Name = snapshotTool
 
 	tests := []struct {
 		name string
@@ -686,6 +696,14 @@ func TestMustIndividualToolFromCatalogAction_DescriptionFallbacks(t *testing.T) 
 		opts IndividualCatalogRegisterOptions
 		want string
 	}{
+		{
+			name:   "snapshot description before the callback",
+			Action: snapshotAction,
+			opts: IndividualCatalogRegisterOptions{DescriptionForTool: func(actioncatalog.Action) string {
+				return "Generated description."
+			}},
+			want: snapshotDescription,
+		},
 		{
 			name:   "custom description callback",
 			Action: newAction("custom", ""),
@@ -732,6 +750,121 @@ func TestMustIndividualToolFromCatalogAction_InvalidActionPanics(t *testing.T) {
 		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_broken", Title: "Broken"},
 	}
 	assertPanics(t, func() { _ = mustIndividualToolFromCatalogAction(action, nil, IndividualCatalogRegisterOptions{}) })
+}
+
+// TestActionSpecFromCatalogAction_FormatTheCatalogLeftOff_StaysOff verifies
+// that a spec rebuilt from a catalog action keeps the input schema the catalog
+// holds, and that the individual tool projected from it serves that schema.
+//
+// The catalog action's schema is the one its spec derived, overrides included,
+// and the action carries no overrides of its own. A property named email with
+// no format is what an invitation's spec leaves after unsetting the central
+// email format, since its email takes several addresses. Deriving the schema
+// again from the action would run the central formats over it with no
+// override to stop them and put the format back, on the individual surface
+// alone, while meta and dynamic serve the catalog's schema as it is.
+func TestActionSpecFromCatalogAction_FormatTheCatalogLeftOff_StaysOff(t *testing.T) {
+	email := map[string]any{"type": "string", "description": "Email address to invite, or several separated by commas"}
+	schema := map[string]any{"type": "object", "properties": map[string]any{"email": email}}
+	action := actioncatalog.Action{
+		Name: "invite",
+		Route: toolutil.ActionRoute{
+			Handler:      func(context.Context, map[string]any) (any, error) { return struct{}{}, nil },
+			InputSchema:  schema,
+			OutputSchema: map[string]any{"type": "object"},
+		},
+		OwnerPackage:   "tools",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_invite", Title: "Invite"},
+	}
+
+	spec := actionSpecFromCatalogAction(action)
+	specProps, _ := spec.Route.InputSchema["properties"].(map[string]any)
+	specEmail, _ := specProps["email"].(map[string]any)
+	if format, has := specEmail["format"]; has {
+		t.Errorf("rebuilt spec's email format = %v, want none: the catalog's schema carries none", format)
+	}
+	if specEmail["description"] != email["description"] {
+		t.Errorf("rebuilt spec's email description = %v, want the catalog's %v", specEmail["description"], email["description"])
+	}
+
+	tool := mustIndividualToolFromCatalogAction(action, nil, IndividualCatalogRegisterOptions{})
+	served, err := json.Marshal(tool.InputSchema)
+	if err != nil {
+		t.Fatalf("marshal served input schema: %v", err)
+	}
+	if strings.Contains(string(served), `"format"`) {
+		t.Errorf("served individual input schema = %s, want no format on email", served)
+	}
+
+	if _, has := email["format"]; has {
+		t.Error("the catalog action's own email property was given a format")
+	}
+}
+
+// TestRegisterIndividualCatalogTools_InvitationEmail_PublishesNoFormat verifies
+// that the two invitation tools the individual surface serves publish their
+// email with no format, as the meta and dynamic surfaces do, while a tool
+// whose email is one address keeps the central email format.
+//
+// GitLab splits an invitation's email on commas and checks each address, so
+// a format, which names one value, would describe the list it takes as a
+// single address. The golden snapshot parity tests hold the same schemas, but
+// only with the freshness comparisons checked, and the stack that unset the
+// format shipped with them deferred.
+func TestRegisterIndividualCatalogTools_InvitationEmail_PublishesNoFormat(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
+	})
+	session := newMCPSession(t, handler, true)
+	result, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	served := make(map[string]*mcp.Tool, len(result.Tools))
+	for _, tool := range result.Tools {
+		served[tool.Name] = tool
+	}
+
+	tests := []struct {
+		name       string
+		wantFormat string
+	}{
+		{name: "gitlab_group_invite"},
+		{name: "gitlab_project_invite"},
+		{name: "gitlab_create_user", wantFormat: "email"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tool, ok := served[tt.name]
+			if !ok {
+				t.Fatalf("the individual surface serves no %s", tt.name)
+			}
+			schema, marshalErr := json.Marshal(tool.InputSchema)
+			if marshalErr != nil {
+				t.Fatalf("marshal %s input schema: %v", tt.name, marshalErr)
+			}
+			var decoded struct {
+				Properties map[string]map[string]any `json:"properties"`
+			}
+			if decodeErr := json.Unmarshal(schema, &decoded); decodeErr != nil {
+				t.Fatalf("decode %s input schema: %v", tt.name, decodeErr)
+			}
+			email, ok := decoded.Properties["email"]
+			if !ok {
+				t.Fatalf("%s publishes no email parameter", tt.name)
+			}
+			format, has := email["format"]
+			if tt.wantFormat == "" {
+				if has {
+					t.Errorf("%s email format = %v, want none: it takes several addresses separated by commas", tt.name, format)
+				}
+				return
+			}
+			if format != tt.wantFormat {
+				t.Errorf("%s email format = %v (declared %t), want %q", tt.name, format, has, tt.wantFormat)
+			}
+		})
+	}
 }
 
 // TestIndividualCatalogActionReadOnly_AnnotationOverride verifies that the

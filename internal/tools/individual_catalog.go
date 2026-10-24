@@ -284,8 +284,17 @@ func mustIndividualToolFromCatalogAction(action actioncatalog.Action, icons []mc
 // is used when callers want to feed the projection pipeline with a
 // catalog action that has already been validated against the canonical
 // schema.
+//
+// The spec keeps the input schema the catalog holds, which is the one the
+// action's own spec derived, its overrides included. The catalog action
+// carries no overrides, and [toolutil.NewActionSpec] derives the schema it is
+// given again: with none to stop them, the central enums, formats and ranges
+// would return wherever an override had removed one. An invitation's email,
+// which takes several addresses separated by commas and whose spec unsets
+// the central email format, was served with that format on the individual
+// surface alone while meta and dynamic served the catalog's schema.
 func actionSpecFromCatalogAction(action actioncatalog.Action) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(action.Name, action.Route, toolutil.ActionSpecOptions{
+	spec := toolutil.NewActionSpec(action.Name, action.Route, toolutil.ActionSpecOptions{
 		Aliases:                action.Aliases,
 		Tags:                   action.Tags,
 		Usage:                  action.Usage,
@@ -307,6 +316,8 @@ func actionSpecFromCatalogAction(action actioncatalog.Action) toolutil.ActionSpe
 		SchemaValidationNotes:  action.SchemaValidationNotes,
 		RuntimeValidationNotes: action.RuntimeValidationNotes,
 	})
+	spec.Route.InputSchema = action.Route.InputSchema
+	return spec
 }
 
 // individualCatalogHandler returns the handler bound to one individual
