@@ -127,7 +127,9 @@ var fullSHAParams = map[string]string{
 // formatBearingExemptions are the parameters a kind's name or description
 // matches that do not hold it, each with the reason, keyed as "action path".
 // A key no catalog serves any more fails the test.
-var formatBearingExemptions = map[string]string{}
+var formatBearingExemptions = map[string]string{
+	"project.dependency_firewall_evaluate version": "a package's version is free text to GitLab, any string of at most 255 characters, since each package type writes its own",
+}
 
 // formatBearingKinds are the kinds of string GitLab checks the form of that a
 // required parameter of the catalog holds. A duration and a SHA on a route
@@ -187,6 +189,18 @@ var formatBearingKinds = []formatBearingKind{
 			[]string{"every day", "daily", "0 1 * *", "0 1 * * * * *", "@reboot", "@DAILY", ""},
 		),
 		example: matches(`^[0-9*/,-]+( [0-9*/,-]+){4}$`),
+	},
+	{
+		// GitLab matches Gitlab::Regex.unbounded_semver_regex anywhere in
+		// the value, so a prefix and a fourth number are taken.
+		what:         "a semantic version",
+		names:        regexp.MustCompile(`^version$`),
+		descriptions: regexp.MustCompile(`(?i)\bsemantic versioning\b`),
+		declared: declaresPattern(
+			[]string{"1.0.0", "v1.2.3", "1.0.0-rc.1+build.5", "release-10.20.30", "1.2.3.4"},
+			[]string{"value", "1.0", "v1", "1.02.3", ""},
+		),
+		example: matches(`^[0-9]+\.[0-9]+\.[0-9]+$`),
 	},
 	{
 		what:     "a duration",
@@ -594,8 +608,9 @@ func TestFind_PublishedAlternativesAreCopies(t *testing.T) {
 // the example filled with "value": an email address, a redirect or site URL,
 // a cron expression, a duration, a Pages domain, a digest, a commit SHA where
 // a full one is required and where a ref would do, a key fingerprint, a
-// container path pattern starting with the project's path, and the access
-// levels and the check status GitLab lists. The catalog-wide rule over the
+// container path pattern starting with the project's path, the access
+// levels and the check status GitLab lists, and a changelog's semantic
+// version. The catalog-wide rule over the
 // same strings is TestFind_FormatBearingParams_DeclareTheirFormatAndExampleIt;
 // these name the value each action is offered.
 func TestFind_ExamplesUseValuesGitLabAccepts(t *testing.T) {
@@ -641,6 +656,8 @@ func TestFind_ExamplesUseValuesGitLabAccepts(t *testing.T) {
 		{action: "package.registry_rule_create", param: "minimum_access_level_for_push", want: "maintainer"},
 		{action: "package.registry_tag_rule_create", param: "minimum_access_level_for_push", want: "maintainer"},
 		{action: "package.registry_tag_rule_create", param: "minimum_access_level_for_delete", want: "maintainer"},
+		{action: "repository.changelog_add", param: "version", want: exampleVersion},
+		{action: "repository.changelog_generate", param: "version", want: exampleVersion},
 	}
 	for _, tc := range tests {
 		t.Run(tc.action+" "+tc.param, func(t *testing.T) {
@@ -807,6 +824,12 @@ func TestExampleValue_SatisfiesEachConstraint(t *testing.T) {
 		{name: "a duration is an hour", param: "duration", schema: map[string]any{"type": "string"}, want: exampleDuration},
 		{name: "a digest pattern takes a digest", param: "subject_digest", schema: map[string]any{"type": "string", "pattern": `^(sha256:)?[0-9A-Fa-f]{64}$`}, want: exampleDigest},
 		{name: "a cron pattern takes a cron expression", param: "freeze_start", schema: map[string]any{"type": "string", "pattern": toolutil.CronPattern}, want: exampleCron},
+		{
+			name:   "a semantic version pattern takes a version",
+			param:  "version",
+			schema: map[string]any{"type": "string", "pattern": `(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)`},
+			want:   exampleVersion,
+		},
 		{
 			name:   "a fingerprint pattern takes the SHA256 form",
 			param:  "fingerprint",

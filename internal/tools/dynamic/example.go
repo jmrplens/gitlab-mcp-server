@@ -19,8 +19,8 @@ import (
 // a commit SHA, a cron expression, a duration and a redirect URI among them
 // (issue 1272). A SHA is the 40 hex digits of a full SHA-1, which a route
 // taking any revision takes as well, the digest the 64 of a SHA-256, the
-// fingerprint the SHA256 form ssh-keygen prints, and the duration one GitLab
-// reads as an hour.
+// fingerprint the SHA256 form ssh-keygen prints, the duration one GitLab
+// reads as an hour, and the version a release's first semantic version.
 const (
 	exampleDate        = "2030-01-31"
 	exampleDateTime    = "2030-01-31T00:00:00Z"
@@ -33,6 +33,7 @@ const (
 	exampleCron        = "0 1 * * *"
 	exampleDuration    = "1h"
 	exampleFingerprint = "SHA256:ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8"
+	exampleVersion     = "1.0.0"
 	exampleProjectPath = "group/project"
 	// examplePathPattern starts with exampleProjectPath, as GitLab requires
 	// of a container repository path pattern. It is spelled out rather than
@@ -54,8 +55,9 @@ const (
 // refuses its placeholder: one per pattern shape the catalog declares (the hex
 // color of a security attribute, the absolute URL of a release link, the
 // digest of an attestation's subject, the cron expression of a schedule or a
-// deploy freeze, the fingerprint of an SSH key).
-var patternExamples = []string{exampleHexColor, exampleURL, exampleDigest, exampleCron, exampleFingerprint}
+// deploy freeze, the fingerprint of an SSH key, the semantic version of a
+// changelog).
+var patternExamples = []string{exampleHexColor, exampleURL, exampleDigest, exampleCron, exampleFingerprint, exampleVersion}
 
 // exampleFor builds the gitlab_execute_action call find and describe offer for
 // an action: every parameter the schema's root requires and the first

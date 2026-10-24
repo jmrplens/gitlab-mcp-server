@@ -101,16 +101,36 @@ func repositoryOptionsForAction(individualTool string) toolutil.ActionSpecOption
 		options.Aliases = []string{"preview changelog notes", "generate release notes from commits", "build changelog for version", "render changelog without committing"}
 		options.RelatedActions = []string{actionChangelogAdd, actionReleaseCreate, actionTagList}
 		options.IndividualTool.Description = "Generate changelog notes for a version range without committing. Returns: the rendered changelog notes (read-only preview). See also: gitlab_repository_changelog_add, gitlab_release_create."
-		// GitLab takes the release date as a DateTime and the handler sends
-		// the instant it is given.
-		options.InputSchemaOverrides = append(options.InputSchemaOverrides, toolutil.SchemaFormatOverride("date", "date-time"))
+		// GitLab takes the release date as a DateTime, which the handler
+		// sends as the instant it is given, and the version as a semantic
+		// version.
+		options.InputSchemaOverrides = append(options.InputSchemaOverrides, changelogOverrides()...)
 	case "gitlab_repository_changelog_add":
 		options.Usage = "Create or append changelog entries in the repository for a version. Use in release workflows when structured changelog updates are requested."
 		options.Aliases = []string{"add changelog", "update changelog", "write release notes file"}
 		options.RelatedActions = []string{actionChangelogGenerate, actionReleaseCreate, actionTagCreate}
 		options.IndividualTool.Description = "Add changelog data to a changelog file by committing the generated entries. Returns: a success confirmation with the version. See also: gitlab_repository_changelog_generate, gitlab_release_create."
-		options.InputSchemaOverrides = append(options.InputSchemaOverrides, toolutil.SchemaFormatOverride("date", "date-time"))
+		options.InputSchemaOverrides = append(options.InputSchemaOverrides, changelogOverrides()...)
 	}
 
 	return options
+}
+
+// semanticVersionPattern is the form GitLab holds a changelog's version to:
+// both changelog routes declare it with Gitlab::Regex.unbounded_semver_regex,
+// which Grape matches anywhere in the value, so the value has to hold a
+// MAJOR.MINOR.PATCH whose numbers carry no leading zero. The prerelease and
+// build parts the regular expression goes on to read are optional, and so
+// refuse nothing; the pattern is the core alone, unanchored as GitLab's is.
+// find's example wrote "value", which GitLab answers with 400 (issue 1272).
+const semanticVersionPattern = `(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)`
+
+// changelogOverrides are the input-schema overrides both changelog actions
+// carry: the release date as an instant, and the version as the semantic
+// version GitLab requires.
+func changelogOverrides() []toolutil.InputSchemaOverride {
+	return []toolutil.InputSchemaOverride{
+		toolutil.SchemaFormatOverride("date", "date-time"),
+		toolutil.SchemaPatternOverride("version", semanticVersionPattern),
+	}
 }

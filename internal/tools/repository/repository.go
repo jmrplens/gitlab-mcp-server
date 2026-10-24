@@ -615,7 +615,7 @@ func Archive(ctx context.Context, client *gitlabclient.Client, input ArchiveInpu
 // AddChangelogInput defines parameters for adding changelog data to a changelog file.
 type AddChangelogInput struct {
 	ProjectID  toolutil.StringOrInt `json:"project_id"           jsonschema:"Project ID or URL-encoded path,required"`
-	Version    string               `json:"version"              jsonschema:"Version string for the changelog,required"`
+	Version    string               `json:"version"              jsonschema:"Version of the release the changelog is for, in semantic versioning format such as 1.0.0. GitLab requires a MAJOR.MINOR.PATCH version in the value, so v1.0.0 and 1.0.0-rc.1 are taken and 1.0 is not,required"`
 	Branch     string               `json:"branch,omitempty"     jsonschema:"Branch to commit the changelog to (default: default branch)"`
 	ConfigFile string               `json:"config_file,omitempty" jsonschema:"Path to the changelog config file in the project"`
 	Date       string               `json:"date,omitempty"       jsonschema:"Date and time of the release, an ISO 8601 timestamp such as 2026-03-01T10:00:00Z. A date such as 2026-03-01 is read as midnight UTC (default: the current time)"`
@@ -691,7 +691,7 @@ func AddChangelog(ctx context.Context, client *gitlabclient.Client, input AddCha
 // GenerateChangelogInput defines parameters for generating changelog data.
 type GenerateChangelogInput struct {
 	ProjectID  toolutil.StringOrInt `json:"project_id"            jsonschema:"Project ID or URL-encoded path,required"`
-	Version    string               `json:"version"               jsonschema:"Version string,required"`
+	Version    string               `json:"version"               jsonschema:"Version of the release the notes are for, in semantic versioning format such as 1.0.0. GitLab requires a MAJOR.MINOR.PATCH version in the value, so v1.0.0 and 1.0.0-rc.1 are taken and 1.0 is not,required"`
 	ConfigFile string               `json:"config_file,omitempty"  jsonschema:"Path to the changelog config file"`
 	Date       string               `json:"date,omitempty"        jsonschema:"Date and time of the release, an ISO 8601 timestamp such as 2026-03-01T10:00:00Z. A date such as 2026-03-01 is read as midnight UTC (default: the current time)"`
 	From       string               `json:"from,omitempty"        jsonschema:"Start of the range (commit SHA or tag)"`
