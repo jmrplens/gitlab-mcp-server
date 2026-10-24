@@ -78,8 +78,12 @@ type keyActionMetaEntry struct {
 // fingerprintPattern is the form of the fingerprint the lookup takes: SHA256:
 // (or sha256:, which GitLab reads alike) and the 43 base64 characters of a
 // SHA-256 digest, the padding allowed, or the 16 colon-separated hex pairs of
-// an MD5 digest, after the MD5: label the handler removes. GitLab refuses any
-// other form with 400, and find's example wrote "value" (issue 1272).
+// an MD5 digest in either case, after an optional MD5: label. The handler
+// removes the label and lowers the pairs, which is how GitLab stores them,
+// and GitLab decodes the base64 before it compares the digest, so every value
+// the pattern takes finds the key it names.
+// GitLab refuses any other form with 400, and find's example wrote "value"
+// (issue 1272).
 const fingerprintPattern = `^((sha256|SHA256):[A-Za-z0-9+/]{43}=?|(MD5:)?[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){15})$`
 
 // keyActionMeta maps each individual key-lookup tool to its discovery

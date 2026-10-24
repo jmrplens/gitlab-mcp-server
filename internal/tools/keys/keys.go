@@ -30,6 +30,28 @@ type GetByFingerprintInput struct {
 // character), so a fingerprint copied with the label is refused there.
 const md5Prefix = "MD5:"
 
+// The two labels GitLab tells a SHA256 fingerprint by: KeysFinder matches
+// sha256: or SHA256: and reads every other value as MD5.
+const (
+	sha256Prefix      = "SHA256:"
+	sha256PrefixLower = "sha256:"
+)
+
+// storedFingerprint returns a fingerprint in the form GitLab finds a key by,
+// so that every form the schema takes finds the key it names. An MD5
+// fingerprint loses its MD5: label and is lowered: GitLab compares it with
+// the stored hex pairs as written, and writes them in lower case, so an
+// upper-case one used to answer 404 for a key that exists. A SHA256 one is
+// sent as written: GitLab decodes its base64 into the digest it stores
+// before comparing (Gitlab::Database::Sha256Attribute), so the padding is
+// read alike, and the case of the base64 is part of the digest.
+func storedFingerprint(fingerprint string) string {
+	if strings.HasPrefix(fingerprint, sha256Prefix) || strings.HasPrefix(fingerprint, sha256PrefixLower) {
+		return fingerprint
+	}
+	return strings.ToLower(strings.TrimPrefix(fingerprint, md5Prefix))
+}
+
 // fingerprintHint is what a lookup GitLab answered 400 or 404 is told: the
 // two forms GitLab reads a fingerprint in, since it refuses any other with
 // 400, and that a fingerprint in either form that names no key answers 404.
@@ -78,13 +100,13 @@ func GetKeyWithUser(ctx context.Context, client *gitlabclient.Client, input GetB
 
 // GetKeyByFingerprint retrieves an SSH key by its fingerprint via the
 // GitLab admin Keys API (GET /keys). The fingerprint may be in the
-// modern SHA256:base64 form or the legacy MD5 hex-pairs form, whose MD5:
-// label is removed before the request, since GitLab reads the pairs alone.
+// modern SHA256:base64 form or the legacy MD5 hex-pairs form, and is sent
+// in the form GitLab finds a key by ([storedFingerprint]).
 func GetKeyByFingerprint(ctx context.Context, client *gitlabclient.Client, input GetByFingerprintInput) (Output, error) {
 	if input.Fingerprint == "" {
 		return Output{}, toolutil.WrapErrWithMessage("key_get_by_fingerprint", toolutil.ErrFieldRequired("fingerprint"))
 	}
-	opts := &gl.GetKeyByFingerprintOptions{Fingerprint: strings.TrimPrefix(input.Fingerprint, md5Prefix)}
+	opts := &gl.GetKeyByFingerprintOptions{Fingerprint: storedFingerprint(input.Fingerprint)}
 	key, _, err := client.GL().Keys.GetKeyByFingerprint(opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) || toolutil.IsHTTPStatus(err, http.StatusNotFound) {

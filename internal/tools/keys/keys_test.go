@@ -378,13 +378,22 @@ func TestGetKeyByFingerprint_RefusedOrUnmatched_HintsAtTheFingerprintForms(t *te
 	}
 }
 
-// TestGetKeyByFingerprint_MD5Label_IsRemovedBeforeTheRequest asserts that an
-// MD5 fingerprint copied as ssh-keygen -l -E md5 prints it, after its MD5:
-// label, reaches GitLab as the hex pairs alone, the form GitLab reads, and
-// that a SHA256 fingerprint keeps the label GitLab tells the two forms apart
-// by.
-func TestGetKeyByFingerprint_MD5Label_IsRemovedBeforeTheRequest(t *testing.T) {
-	const pairs = "ba:81:59:68:d7:6c:cd:02:02:bf:6a:9b:55:4e:af:d1"
+// TestGetKeyByFingerprint_EachForm_ReachesGitLabAsItFindsAKeyBy asserts that
+// every form of a fingerprint the schema takes reaches GitLab in the form
+// GitLab finds a key by: an MD5 fingerprint copied as ssh-keygen -l -E md5
+// prints it, after its MD5: label, as the hex pairs alone, and in lower case
+// when it was written in upper case, since GitLab compares the pairs as
+// written and stores them in lower case, so an upper-case one answered 404
+// for a key that exists; and a SHA256 fingerprint as written, either
+// spelling of its label and its padding included, since GitLab decodes the
+// base64 before it compares the digest, and the case of the base64 is part
+// of it.
+func TestGetKeyByFingerprint_EachForm_ReachesGitLabAsItFindsAKeyBy(t *testing.T) {
+	const (
+		pairs  = "ba:81:59:68:d7:6c:cd:02:02:bf:6a:9b:55:4e:af:d1"
+		upper  = "BA:81:59:68:D7:6C:CD:02:02:BF:6A:9B:55:4E:AF:D1"
+		digest = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
+	)
 	cases := []struct {
 		name string
 		sent string
@@ -392,7 +401,12 @@ func TestGetKeyByFingerprint_MD5Label_IsRemovedBeforeTheRequest(t *testing.T) {
 	}{
 		{name: "an MD5 fingerprint after its label", sent: "MD5:" + pairs, want: pairs},
 		{name: "an MD5 fingerprint without one", sent: pairs, want: pairs},
-		{name: "a SHA256 fingerprint", sent: "SHA256:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8", want: "SHA256:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"},
+		{name: "an upper-case MD5 fingerprint after its label", sent: "MD5:" + upper, want: pairs},
+		{name: "an upper-case MD5 fingerprint without one", sent: upper, want: pairs},
+		{name: "a SHA256 fingerprint", sent: "SHA256:" + digest, want: "SHA256:" + digest},
+		{name: "a SHA256 fingerprint with its padding", sent: "SHA256:" + digest + "=", want: "SHA256:" + digest + "="},
+		{name: "a sha256 fingerprint with its padding", sent: "sha256:" + digest + "=", want: "sha256:" + digest + "="},
+		{name: "a sha256 fingerprint", sent: "sha256:" + digest, want: "sha256:" + digest},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
