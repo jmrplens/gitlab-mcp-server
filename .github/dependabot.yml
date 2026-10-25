@@ -80,6 +80,33 @@ updates:
           - "patch"
     open-pull-requests-limit: 5
 
+  # The tools release.yml's pypi job installs beside its OIDC token
+  # (.github/requirements: pypi-publish.in and the hash-pinned lock compiled
+  # from it). Dependabot recompiles the lock with the pip-compile command its
+  # header names, so every hash stays the one of the file it pins.
+  - package-ecosystem: "pip"
+    directory: "/.github/requirements"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      timezone: "Europe/Madrid"
+    cooldown:
+      default-days: 7
+      semver-minor-days: 14
+      semver-major-days: 30
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "distribution"
+    groups:
+      pypi-publish:
+        applies-to: version-updates
+        patterns:
+          - "*"
+    open-pull-requests-limit: 5
+
   # GitHub Actions workflows
   - package-ecosystem: "github-actions"
     directory: "/"

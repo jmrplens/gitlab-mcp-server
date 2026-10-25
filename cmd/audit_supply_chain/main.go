@@ -60,8 +60,9 @@ var credentialedPermissions = []string{"contents", "id-token", "packages"}
 // cooldownEcosystems are the ecosystems where an explicit cooldown is
 // meaningful. docker-compose is among them since examples/telemetry/compose.yaml
 // pins the backend image a reader runs, which Dependabot moves with a pull
-// request like any other dependency.
-var cooldownEcosystems = []string{"gomod", "npm", "github-actions", "docker", "docker-compose"}
+// request like any other dependency, and pip since .github/requirements locks
+// what the PyPI upload installs beside the release job's OIDC token.
+var cooldownEcosystems = []string{"gomod", "npm", "github-actions", "docker", "docker-compose", "pip"}
 
 // minCooldownDays is the shortest release window this repository accepts before
 // Dependabot may propose a dependency.

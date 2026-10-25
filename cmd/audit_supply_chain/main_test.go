@@ -2432,6 +2432,21 @@ func TestCheckDependabot_CooldownEcosystem_MustStateItsWindow(t *testing.T) {
 			wantProblem: true,
 		},
 		{
+			// .github/requirements locks what the PyPI upload installs beside
+			// the job's OIDC token, so its updates wait out the window too.
+			name:        "pip without cooldown",
+			entry:       map[string]any{"package-ecosystem": "pip", "directory": "/.github/requirements"},
+			wantProblem: true,
+		},
+		{
+			name: "pip with semver keys",
+			entry: map[string]any{
+				"package-ecosystem": "pip", "directory": "/.github/requirements",
+				"cooldown": map[string]any{"default-days": 7, "semver-minor-days": 14, "semver-major-days": 30},
+			},
+			wantProblem: false,
+		},
+		{
 			name: "cooldown is not a mapping",
 			entry: map[string]any{
 				"package-ecosystem": "npm", "directory": "/npm",
